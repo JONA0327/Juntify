@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\RegisterController;
+use App\Http\Controllers\DriveController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -29,4 +30,9 @@ Route::get('/dashboard', function () {
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
+
+    Route::post('/drive/authorize', [DriveController::class, 'authorizeService']);
+    Route::post('/drive/main-folder', [DriveController::class, 'createMainFolder']);
+    Route::post('/drive/set-main-folder', [DriveController::class, 'setMainFolder']);
+    Route::post('/drive/subfolder', [DriveController::class, 'createSubfolder']);
 });

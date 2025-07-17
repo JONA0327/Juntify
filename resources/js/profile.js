@@ -89,44 +89,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Functions for Google Drive connection simulation
 function connectDrive() {
-  // Simulate connection process
   const btn = document.getElementById('connect-drive-btn');
   const status = document.getElementById('drive-status');
   const lastSync = document.getElementById('last-sync');
   const folderCard = document.getElementById('folder-config-card');
-  
+
   btn.textContent = '🔄 Conectando...';
   btn.disabled = true;
-  
-  setTimeout(() => {
-    status.textContent = 'Conectado';
-    status.className = 'status-badge status-active';
-    lastSync.textContent = 'Hace unos segundos';
-    btn.textContent = '✅ Conectado';
-    btn.className = 'btn btn-secondary';
-    folderCard.style.display = 'block';
-  }, 2000);
+
+  axios.post('/drive/authorize')
+    .then(() => {
+      status.textContent = 'Conectado';
+      status.className = 'status-badge status-active';
+      lastSync.textContent = 'Hace unos segundos';
+      btn.textContent = '✅ Conectado';
+      btn.className = 'btn btn-secondary';
+      folderCard.style.display = 'block';
+    })
+    .catch(() => {
+      btn.textContent = 'Error';
+    });
 }
 
 function createMainFolder() {
   const input = document.getElementById('main-folder-input');
-  input.value = 'Juntify-Reuniones-' + Date.now();
-  
-  // Simulate folder creation
-  setTimeout(() => {
-    alert('Carpeta principal creada exitosamente: ' + input.value);
-  }, 1000);
+  const name = 'Juntify-Reuniones-' + Date.now();
+
+  axios.post('/drive/main-folder', { name })
+    .then(res => {
+      input.value = res.data.id;
+      alert('Carpeta principal creada exitosamente');
+    });
 }
 
 function setMainFolder() {
   const input = document.getElementById('main-folder-input');
   const subfolderCard = document.getElementById('subfolder-card');
   const mainFolderName = document.getElementById('main-folder-name');
-  
+
   if (input.value.trim()) {
-    mainFolderName.textContent = input.value;
-    subfolderCard.style.display = 'block';
-    alert('Carpeta principal establecida: ' + input.value);
+    axios.post('/drive/set-main-folder', { id: input.value })
+      .then(() => {
+        mainFolderName.textContent = input.value;
+        subfolderCard.style.display = 'block';
+        alert('Carpeta principal establecida');
+      });
   } else {
     alert('Por favor ingresa el ID de la carpeta o crea una nueva');
   }
@@ -135,16 +142,19 @@ function setMainFolder() {
 function createSubfolder() {
   const input = document.getElementById('subfolder-input');
   const subfoldersList = document.getElementById('subfolders-list');
-  
+
   if (input.value.trim()) {
-    const subfolderDiv = document.createElement('div');
-    subfolderDiv.style.cssText = 'margin: 0.5rem 0; padding: 0.75rem; background: rgba(59,130,246,0.1); border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
-    subfolderDiv.innerHTML = `
-      <span style="color: #e2e8f0;">${input.value}</span>
-      <button onclick="this.parentElement.remove()" style="background: rgba(239,68,68,0.2); color: #ef4444; border: none; border-radius: 4px; padding: 0.25rem 0.5rem; cursor: pointer;">🗑️</button>
-    `;
-    subfoldersList.appendChild(subfolderDiv);
-    input.value = '';
+    axios.post('/drive/subfolder', { name: input.value })
+      .then(res => {
+        const subfolderDiv = document.createElement('div');
+        subfolderDiv.style.cssText = 'margin: 0.5rem 0; padding: 0.75rem; background: rgba(59,130,246,0.1); border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
+        subfolderDiv.innerHTML = `
+          <span style="color: #e2e8f0;">${res.data.id}</span>
+          <button onclick="this.parentElement.remove()" style="background: rgba(239,68,68,0.2); color: #ef4444; border: none; border-radius: 4px; padding: 0.25rem 0.5rem; cursor: pointer;">🗑️</button>
+        `;
+        subfoldersList.appendChild(subfolderDiv);
+        input.value = '';
+      });
   } else {
     alert('Por favor ingresa el nombre de la subcarpeta');
   }

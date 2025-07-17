@@ -64,3 +64,14 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## Google Drive Integration
+
+Configure the path to your service account credentials and the root folder where user folders should be created:
+
+```env
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service.json
+GOOGLE_DRIVE_ROOT_FOLDER=
+```
+
+`GOOGLE_DRIVE_ROOT_FOLDER` may be left empty to create folders at the Drive root.
