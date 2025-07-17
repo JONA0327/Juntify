@@ -11,15 +11,6 @@
   <nav class="nav">
     <a href="/" class="logo">Juntify</a>
     
-    <!-- Mobile menu button for navbar -->
-    <button class="mobile-nav-btn" onclick="toggleMobileNav()" id="mobile-nav-btn">
-      <div class="hamburger-nav">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
-    </button>
-    
 <ul class="nav-links" id="nav-links">
   <li>
     <a href="{{ $isHome

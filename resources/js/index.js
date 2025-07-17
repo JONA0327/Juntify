@@ -67,9 +67,9 @@
         }
 
         // Toggle mobile navbar
-        function toggleMobileNav() {
+        function toggleMobileNavbar() {
             const navLinks = document.getElementById('nav-links');
-            const hamburger = document.querySelector('.hamburger-nav');
+            const hamburger = document.querySelector('.hamburger-navbar');
             if (navLinks) {
                 navLinks.classList.toggle('show');
             }
@@ -79,7 +79,6 @@
         }
 
         // Make function global
-        window.toggleMobileNav = toggleMobileNav;
 
         // Pricing toggle functionality
         function setupPricingToggle() {
