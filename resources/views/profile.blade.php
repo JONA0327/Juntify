@@ -26,12 +26,13 @@
     <div class="app-container">
         <!-- Sidebar -->
         <button class="mobile-menu-btn" onclick="toggleSidebar()">
-            ←
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
         </button>
         <aside class="sidebar" id="sidebar">
-                <button class="mobile-menu-btn" onclick="toggleSidebar()">
-                    ←
-                </button>
             <div class="sidebar-header">
                 <div class="logo">Panel de Usuario</div>
 
@@ -255,27 +256,562 @@
 
                     </div>
               </div>
+
                 {{-- SECCIÓN CONECTAR (oculta) --}}
                 <div id="section-connect" class="content-section" style="display:none">
-                    <h2>Conectar</h2>
-                    <p>Aquí irá el contenido de “Conectar”…</p>
+                    <!-- Header -->
+                    <div class="content-header">
+                        <div>
+                            <h1 class="page-title">Conectar con Google Drive</h1>
+                            <p class="page-subtitle">Conecta tu cuenta de Google Drive para sincronizar tus reuniones</p>
+                        </div>
+                        <div class="user-avatar">
+                            <span style="font-size: 3rem;">🔗</span>
+                        </div>
+                    </div>
+
+                    <!-- Content Grid -->
+                    <div class="content-grid">
+                        <!-- Conexión Google Drive -->
+                        <div class="info-card" id="drive-connection-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">📁</span>
+                                Google Drive
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Estado</span>
+                                <span class="status-badge status-warning" id="drive-status">Desconectado</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Última sincronización</span>
+                                <span class="info-value" id="last-sync">Nunca</span>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="btn btn-primary" id="connect-drive-btn" onclick="connectDrive()">
+                                    🔗 Conectar con Google Drive
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Configuración de Carpetas (oculta inicialmente) -->
+                        <div class="info-card" id="folder-config-card" style="display:none;">
+                            <h2 class="card-title">
+                                <span class="card-icon">📂</span>
+                                Configuración de Carpetas
+                            </h2>
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label class="info-label" style="display: block; margin-bottom: 0.5rem;">Carpeta Principal</label>
+                                <input type="text" id="main-folder-input" class="form-input" placeholder="Pega aquí el ID de la carpeta o crea una nueva" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; color: #fff;">
+                            </div>
+                            <div class="action-buttons">
+                                <button class="btn btn-secondary" onclick="createMainFolder()">
+                                    ➕ Crear Carpeta Principal
+                                </button>
+                                <button class="btn btn-primary" onclick="setMainFolder()">
+                                    ✅ Establecer Carpeta
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Gestión de Subcarpetas (oculta inicialmente) -->
+                        <div class="info-card" id="subfolder-card" style="display:none;">
+                            <h2 class="card-title">
+                                <span class="card-icon">📁</span>
+                                Subcarpetas
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Carpeta Principal</span>
+                                <span class="info-value" id="main-folder-name">Juntify Reuniones</span>
+                            </div>
+                            <div class="form-group" style="margin: 1rem 0;">
+                                <label class="info-label" style="display: block; margin-bottom: 0.5rem;">Nueva Subcarpeta</label>
+                                <input type="text" id="subfolder-input" class="form-input" placeholder="Nombre de la subcarpeta" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; color: #fff;">
+                            </div>
+                            <div class="action-buttons">
+                                <button class="btn btn-primary" onclick="createSubfolder()">
+                                    ➕ Crear Subcarpeta
+                                </button>
+                            </div>
+                            <div id="subfolders-list" style="margin-top: 1rem;">
+                                <!-- Lista de subcarpetas se llenará dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {{-- SECCIÓN PLANES (oculta) --}}
                 <div id="section-plans" class="content-section" style="display:none">
-                    <h2>Planes</h2>
-                    <p>Contenido de planes…</p>
+                    <!-- Header -->
+                    <div class="content-header">
+                        <div>
+                            <h1 class="page-title">Planes de Suscripción</h1>
+                            <p class="page-subtitle">Elige el plan que mejor se adapte a tus necesidades</p>
+                        </div>
+                        <div class="user-avatar">
+                            <span style="font-size: 3rem;">💎</span>
+                        </div>
+                    </div>
+
+                    <!-- Pricing Toggle -->
+                    <div class="pricing-toggle" style="display: flex; justify-content: center; margin-bottom: 3rem;">
+                        <button class="toggle-btn active">Anual</button>
+                        <button class="toggle-btn">Mensual</button>
+                        <button class="toggle-btn">Reuniones Individuales</button>
+                    </div>
+
+                    <!-- Pricing Grid -->
+                    <div class="pricing-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; max-width: 1200px; margin: 0 auto;">
+                        <div class="pricing-card">
+                            <h3 class="pricing-title">Freemium</h3>
+                            <div class="pricing-price">$0</div>
+                            <div class="pricing-period">mes</div>
+                            <p style="color: #cbd5e1; margin-bottom: 2rem; font-size: 0.9rem;">
+                                Ideal para uso personal y equipos pequeños que buscan optimizar sus reuniones básicas.
+                            </p>
+                            <ul class="pricing-features">
+                                <li>Hasta 3 reuniones por mes</li>
+                                <li>Transcripción básica</li>
+                                <li>Resúmenes automáticos (30 minutos)</li>
+                                <li>Exportar como texto</li>
+                                <li>Soporte por email</li>
+                            </ul>
+                            <a href="#" class="pricing-btn secondary">Empezar gratis</a>
+                        </div>
+
+                        <div class="pricing-card popular">
+                            <h3 class="pricing-title">Básico</h3>
+                            <div class="pricing-price">$499</div>
+                            <div class="pricing-period">mes</div>
+                            <p style="color: #cbd5e1; margin-bottom: 2rem; font-size: 0.9rem;">
+                                Ideal para equipos medianos que buscan optimizar sus reuniones y aumentar la productividad.
+                            </p>
+                            <ul class="pricing-features">
+                                <li>Reuniones ilimitadas</li>
+                                <li>Transcripción avanzada</li>
+                                <li>Resúmenes inteligentes</li>
+                                <li>Identificación de hablantes</li>
+                                <li>Exportar múltiples formatos</li>
+                                <li>Integraciones básicas</li>
+                                <li>Soporte prioritario</li>
+                            </ul>
+                            <a href="#" class="pricing-btn">Seleccionar Plan</a>
+                        </div>
+
+                        <div class="pricing-card">
+                            <h3 class="pricing-title">Negocios</h3>
+                            <div class="pricing-price">$999</div>
+                            <div class="pricing-period">mes</div>
+                            <p style="color: #cbd5e1; margin-bottom: 2rem; font-size: 0.9rem;">
+                                Ideal para empresas que buscan una solución completa para optimizar todas sus reuniones.
+                            </p>
+                            <ul class="pricing-features">
+                                <li>Todo lo del plan Básico</li>
+                                <li>IA avanzada para análisis</li>
+                                <li>Análisis de sentimientos</li>
+                                <li>Dashboards ejecutivos</li>
+                                <li>Integraciones avanzadas</li>
+                                <li>API personalizada</li>
+                                <li>Soporte 24/7</li>
+                                <li>Capacitación incluida</li>
+                            </ul>
+                            <a href="#" class="pricing-btn">Seleccionar Plan</a>
+                        </div>
+
+                        <div class="pricing-card">
+                            <h3 class="pricing-title">Empresas</h3>
+                            <div class="pricing-price">$2999</div>
+                            <div class="pricing-period">mes</div>
+                            <p style="color: #cbd5e1; margin-bottom: 2rem; font-size: 0.9rem;">
+                                Ideal para grandes empresas y corporaciones que necesitan máxima personalización y control.
+                            </p>
+                            <ul class="pricing-features">
+                                <li>Todo lo del plan Negocios</li>
+                                <li>Implementación personalizada</li>
+                                <li>Seguridad empresarial</li>
+                                <li>Cumplimiento normativo</li>
+                                <li>Análisis predictivo avanzado</li>
+                                <li>Integraciones ilimitadas</li>
+                                <li>Gerente de cuenta dedicado</li>
+                                <li>SLA garantizado</li>
+                            </ul>
+                            <a href="#" class="pricing-btn">Contactar Ventas</a>
+                        </div>
+                    </div>
                 </div>
 
-                {{-- Repite para “Mis Compras”, “Noticias”, “Acerca de”… --}}
+                {{-- SECCIÓN MIS COMPRAS --}}
                 <div id="section-purchases" class="content-section" style="display:none">
-                    <h2>Mis Compras</h2><p>…</p>
+                    <!-- Header -->
+                    <div class="content-header">
+                        <div>
+                            <h1 class="page-title">Historial de Compras</h1>
+                            <p class="page-subtitle">Revisa tu historial de suscripciones y pagos</p>
+                        </div>
+                        <div class="user-avatar">
+                            <span style="font-size: 3rem;">🛒</span>
+                        </div>
+                    </div>
+
+                    <!-- Content Grid -->
+                    <div class="content-grid">
+                        <!-- Compra Reciente -->
+                        <div class="info-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">💳</span>
+                                Plan Básico - Anual
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Precio</span>
+                                <span class="info-value">$4,990.00 MXN</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Estado</span>
+                                <span class="status-badge status-active">Activo</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Fecha de Compra</span>
+                                <span class="info-value">15 Enero 2025</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Vence</span>
+                                <span class="info-value">15 Enero 2026</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Método de Pago</span>
+                                <span class="info-value">•••• •••• •••• 4532</span>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="btn btn-secondary">
+                                    📄 Descargar Factura
+                                </button>
+                                <button class="btn btn-primary">
+                                    🔄 Renovar Plan
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Compra Anterior -->
+                        <div class="info-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">💳</span>
+                                Plan Free - Upgrade
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Precio</span>
+                                <span class="info-value">$0.00 MXN</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Estado</span>
+                                <span class="status-badge status-expired">Expirado</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Fecha de Compra</span>
+                                <span class="info-value">10 Diciembre 2024</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Expiró</span>
+                                <span class="info-value">14 Enero 2025</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Método de Pago</span>
+                                <span class="info-value">Gratuito</span>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="btn btn-secondary">
+                                    📄 Ver Detalles
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Resumen de Gastos -->
+                        <div class="info-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">📊</span>
+                                Resumen de Gastos
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Total Gastado</span>
+                                <span class="info-value">$4,990.00 MXN</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Próximo Pago</span>
+                                <span class="info-value">15 Enero 2026</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Ahorro Anual</span>
+                                <span class="info-value">$1,998.00 MXN</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Reuniones Procesadas</span>
+                                <span class="info-value">47 reuniones</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+
+                {{-- SECCIÓN NOTICIAS --}}
                 <div id="section-news" class="content-section" style="display:none">
-                    <h2>Noticias</h2><p>…</p>
+                    <!-- Header -->
+                    <div class="content-header">
+                        <div>
+                            <h1 class="page-title">Actualizaciones de Juntify</h1>
+                            <p class="page-subtitle">Mantente al día con las últimas mejoras y novedades</p>
+                        </div>
+                        <div class="user-avatar">
+                            <span style="font-size: 3rem;">📰</span>
+                        </div>
+                    </div>
+
+                    <!-- Content Grid -->
+                    <div class="content-grid">
+                        <!-- Actualización Reciente -->
+                        <div class="info-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">🚀</span>
+                                Juntify 2.1 - IA Mejorada
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Versión</span>
+                                <span class="info-value">2.1.0</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Fecha</span>
+                                <span class="info-value">20 Enero 2025</span>
+                            </div>
+                            <div style="margin: 1rem 0; color: #cbd5e1; line-height: 1.6;">
+                                <p><strong>Nuevas características:</strong></p>
+                                <ul style="margin-left: 1rem; margin-top: 0.5rem;">
+                                    <li>• Reconocimiento de emociones en tiempo real</li>
+                                    <li>• Mejoras en la precisión de transcripción (95%)</li>
+                                    <li>• Nueva integración con Microsoft Teams</li>
+                                    <li>• Dashboard de analytics renovado</li>
+                                </ul>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="btn btn-primary">
+                                    📖 Ver Detalles Completos
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Actualización Anterior -->
+                        <div class="info-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">⚡</span>
+                                Juntify 2.0 - Rediseño Completo
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Versión</span>
+                                <span class="info-value">2.0.0</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Fecha</span>
+                                <span class="info-value">15 Enero 2025</span>
+                            </div>
+                            <div style="margin: 1rem 0; color: #cbd5e1; line-height: 1.6;">
+                                <p><strong>Cambios principales:</strong></p>
+                                <ul style="margin-left: 1rem; margin-top: 0.5rem;">
+                                    <li>• Interfaz completamente rediseñada</li>
+                                    <li>• Nuevo sistema de autenticación</li>
+                                    <li>• Integración con Google Drive</li>
+                                    <li>• Mejoras de rendimiento del 40%</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Próximas Actualizaciones -->
+                        <div class="info-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">🔮</span>
+                                Próximamente - Juntify 2.2
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Versión</span>
+                                <span class="info-value">2.2.0 (Beta)</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Fecha Estimada</span>
+                                <span class="info-value">Febrero 2025</span>
+                            </div>
+                            <div style="margin: 1rem 0; color: #cbd5e1; line-height: 1.6;">
+                                <p><strong>Características en desarrollo:</strong></p>
+                                <ul style="margin-left: 1rem; margin-top: 0.5rem;">
+                                    <li>• Traducción automática en tiempo real</li>
+                                    <li>• Integración con Slack y Discord</li>
+                                    <li>• API pública para desarrolladores</li>
+                                    <li>• Modo offline para transcripciones</li>
+                                </ul>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="btn btn-secondary">
+                                    🧪 Unirse a Beta
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+
+                {{-- SECCIÓN ACERCA DE --}}
                 <div id="section-about" class="content-section" style="display:none">
-                    <h2>Acerca de</h2><p>…</p>
+                    <!-- Header -->
+                    <div class="content-header">
+                        <div>
+                            <h1 class="page-title">Acerca de Juntify</h1>
+                            <p class="page-subtitle">Conoce al equipo y la visión detrás de Juntify</p>
+                        </div>
+                        <div class="user-avatar">
+                            <span style="font-size: 3rem;">ℹ️</span>
+                        </div>
+                    </div>
+
+                    <!-- Content Grid -->
+                    <div class="content-grid">
+                        <!-- Información de la Empresa -->
+                        <div class="info-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">🏢</span>
+                                Juntify Technologies
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Fundada</span>
+                                <span class="info-value">2024</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Ubicación</span>
+                                <span class="info-value">Ciudad de México, México</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Misión</span>
+                                <span class="info-value">Revolucionar la forma en que las empresas gestionan sus reuniones</span>
+                            </div>
+                            <div style="margin: 1rem 0; color: #cbd5e1; line-height: 1.6;">
+                                <p>Juntify nació de la necesidad de hacer más eficientes las reuniones empresariales. Utilizamos inteligencia artificial de vanguardia para transformar conversaciones en acciones concretas, ahorrando tiempo valioso a equipos de todo el mundo.</p>
+                            </div>
+                        </div>
+
+                        <!-- Desarrollador Principal -->
+                        <div class="info-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">👨‍💻</span>
+                                Desarrollador Principal
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Nombre</span>
+                                <span class="info-value">Alex Rodriguez</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Cargo</span>
+                                <span class="info-value">CTO & Lead Developer</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Experiencia</span>
+                                <span class="info-value">8+ años en IA y Machine Learning</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Especialidades</span>
+                                <span class="info-value">NLP, Speech Recognition, Full-Stack</span>
+                            </div>
+                            <div style="margin: 1rem 0; color: #cbd5e1; line-height: 1.6;">
+                                <p>Experto en procesamiento de lenguaje natural y reconocimiento de voz. Anteriormente trabajó en Google AI y Microsoft Research, especializándose en sistemas de transcripción en tiempo real.</p>
+                            </div>
+                        </div>
+
+                        <!-- Equipo de Desarrollo -->
+                        <div class="info-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">👥</span>
+                                Equipo de Desarrollo
+                            </h2>
+                            <div style="margin: 1rem 0;">
+                                <div style="margin-bottom: 1rem; padding: 1rem; background: rgba(59,130,246,0.1); border-radius: 8px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <strong style="color: #3b82f6;">María González</strong>
+                                            <p style="color: #cbd5e1; font-size: 0.9rem;">Frontend Developer & UX Designer</p>
+                                        </div>
+                                        <span style="font-size: 1.5rem;">🎨</span>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 1rem; padding: 1rem; background: rgba(59,130,246,0.1); border-radius: 8px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <strong style="color: #3b82f6;">Carlos Mendoza</strong>
+                                            <p style="color: #cbd5e1; font-size: 0.9rem;">Backend Developer & DevOps</p>
+                                        </div>
+                                        <span style="font-size: 1.5rem;">⚙️</span>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 1rem; padding: 1rem; background: rgba(59,130,246,0.1); border-radius: 8px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <strong style="color: #3b82f6;">Ana Jiménez</strong>
+                                            <p style="color: #cbd5e1; font-size: 0.9rem;">AI Engineer & Data Scientist</p>
+                                        </div>
+                                        <span style="font-size: 1.5rem;">🤖</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Información Técnica -->
+                        <div class="info-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">🔧</span>
+                                Información Técnica
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Versión Actual</span>
+                                <span class="info-value">Juntify 2.1.0</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Tecnologías</span>
+                                <span class="info-value">Laravel, Vue.js, Python, TensorFlow</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Base de Datos</span>
+                                <span class="info-value">MySQL, Redis</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Infraestructura</span>
+                                <span class="info-value">AWS, Docker, Kubernetes</span>
+                            </div>
+                            <div class="action-buttons">
+                                <button class="btn btn-secondary">
+                                    📧 Contactar Soporte
+                                </button>
+                                <button class="btn btn-primary">
+                                    🌐 Visitar GitHub
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Contacto y Legal -->
+                        <div class="info-card">
+                            <h2 class="card-title">
+                                <span class="card-icon">📞</span>
+                                Contacto y Legal
+                            </h2>
+                            <div class="info-item">
+                                <span class="info-label">Email</span>
+                                <span class="info-value">contacto@juntify.com</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Soporte</span>
+                                <span class="info-value">soporte@juntify.com</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Teléfono</span>
+                                <span class="info-value">+52 55 1234 5678</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Licencia</span>
+                                <span class="info-value">Propietaria - Todos los derechos reservados</span>
+                            </div>
+                            <div style="margin: 1rem 0; color: #cbd5e1; font-size: 0.8rem; line-height: 1.4;">
+                                <p>© 2024-2025 Juntify Technologies. Todos los derechos reservados. Juntify es una marca registrada de Juntify Technologies S.A. de C.V.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
         </main>
     </div>
