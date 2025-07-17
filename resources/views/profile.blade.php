@@ -16,21 +16,25 @@
 
 </head>
 <body>
-    @include('partials.navbar')
     <!-- Animated particles background -->
     <div class="particles" id="particles"></div>
 
-    <!-- Mobile menu button -->
+    <!-- Header con navbar -->
+    @include('partials.navbar')
 
+    <!-- Botón hamburguesa para navbar (móvil) - esquina superior derecha -->
+    <button class="mobile-navbar-btn" onclick="toggleMobileNavbar()" id="mobile-navbar-btn">
+        <div class="hamburger-navbar">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    </button>
 
     <div class="app-container">
-        <!-- Sidebar -->
-        <button class="mobile-menu-btn" onclick="toggleSidebar()">
-            <div class="hamburger">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
+        <!-- Botón flecha para sidebar (móvil) - esquina superior izquierda -->
+        <button class="mobile-sidebar-btn" onclick="toggleSidebar()" id="mobile-sidebar-btn">
+            <span class="arrow-right">›</span>
         </button>
         
         <!-- Overlay para cerrar sidebar en móvil -->
@@ -38,6 +42,11 @@
         
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
+                <!-- Botón X para cerrar sidebar (solo móvil) -->
+                <button class="sidebar-close-btn" onclick="closeSidebar()" id="sidebar-close-btn">
+                    <span>×</span>
+                </button>
+                
                 <div class="logo">Panel de Usuario</div>
 
             </div>

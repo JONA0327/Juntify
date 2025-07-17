@@ -20,6 +20,16 @@
 <body class="smooth-scroll">
     <!-- Animated particles background -->
     <div class="particles" id="particles"></div>
+    
+    <!-- Botón hamburguesa para navbar (móvil) -->
+    <button class="mobile-navbar-btn" onclick="toggleMobileNavbar()" id="mobile-navbar-btn">
+        <div class="hamburger-navbar">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    </button>
+    
     @if (Auth::check())
         <!-- Include the navbar partial if the user is authenticated -->
         @include('partials.navbar')

@@ -17,23 +17,24 @@ function createParticles() {
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sidebar-overlay').classList.toggle('show');
-  
-  // Toggle hamburger animation
-  const hamburger = document.querySelector('.hamburger');
-  if (hamburger) {
-    hamburger.classList.toggle('active');
-  }
 }
 
 // Close sidebar
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('show');
+}
+
+// Toggle mobile navbar
+function toggleMobileNavbar() {
+  const navLinks = document.getElementById('nav-links');
+  const hamburger = document.querySelector('.hamburger-navbar');
   
-  // Reset hamburger animation
-  const hamburger = document.querySelector('.hamburger');
+  if (navLinks) {
+    navLinks.classList.toggle('show');
+  }
   if (hamburger) {
-    hamburger.classList.remove('active');
+    hamburger.classList.toggle('active');
   }
 }
 // Click fuera cierra sidebar en móvil
@@ -151,6 +152,7 @@ function createSubfolder() {
 
 window.toggleSidebar = toggleSidebar;
 window.closeSidebar = closeSidebar;
+window.toggleMobileNavbar = toggleMobileNavbar;
 window.connectDrive = connectDrive;
 window.createMainFolder = createMainFolder;
 window.setMainFolder = setMainFolder;
