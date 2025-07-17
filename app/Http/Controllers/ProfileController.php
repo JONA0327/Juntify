@@ -11,6 +11,13 @@ use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
+        public function show()
+    {
+        $user = Auth::user();
+
+        // Asume que tu Blade está en resources/views/profile.blade.php
+        return view('profile', compact('user'));
+    }
     /**
      * Display the user's profile form.
      */

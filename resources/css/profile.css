@@ -38,12 +38,9 @@ body {
     50% { transform: translateY(-30px) rotate(180deg); opacity: 0.8; }
 }
 
-/* Layout */
+/* Mueve todo el layout de perfil abajo del header */
 .app-container {
-    display: flex;
-    min-height: 100vh;
-    position: relative;
-    z-index: 10;
+  margin-top: 4rem; /* igual a la altura total de tu header */
 }
 
 /* Sidebar */
@@ -546,3 +543,78 @@ body {
 }
 
 
+/* ======================
+   Layout general
+   ====================== */
+.header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 999;
+}
+.app-container {
+  display: flex;
+  margin-top: 4rem; /* altura de tu header */
+}
+.sidebar {
+  width: 16rem;
+  background: #1f2937;
+  color: #fff;
+  transition: transform .3s ease;
+}
+.main-content {
+  flex: 1;
+  padding: 1rem;
+  overflow-x: hidden;
+}
+
+/* ===============
+   Mobile First
+   =============== */
+/* Botón hamburguesa oculto por defecto */
+.mobile-menu-btn {
+  display: none;
+}
+
+/* Secciones de contenido */
+.content-section {
+  padding: 1rem;
+}
+
+/* =============================
+   Responsive para móviles (<768px)
+   ============================= */
+@media (max-width: 768px) {
+  /* Sidebar inicialmente fuera de pantalla */
+  .sidebar {
+    position: fixed;
+    height: 100vh;
+    top: 0; left: 0;
+    transform: translateX(-100%);
+    z-index: 1000;
+  }
+  /* Con .open vuelve a su sitio */
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  /* Main ocupa todo el ancho */
+  .main-content {
+    margin-left: 0;
+    padding: 1rem;
+  }
+  /* Aparece el botón hamburguesa */
+  .mobile-menu-btn {
+    display: block;
+    position: fixed;
+    top: 4.5rem;
+    left: 1rem;
+    z-index: 1001;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 1.5rem;
+  }
+  /* Oculta los enlaces del header en móvil */
+  .header .nav-links {
+    display: none;
+  }
+}

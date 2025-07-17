@@ -20,21 +20,12 @@
 <body class="smooth-scroll">
     <!-- Animated particles background -->
     <div class="particles" id="particles"></div>
-
+    @if (Auth::check())
+        <!-- Include the navbar partial if the user is authenticated -->
+        @include('partials.navbar')
+    @endif
     <!-- Header -->
-    <header class="header">
-        <nav class="nav">
-            <a href="#" class="logo">Juntify</a>
-            <ul class="nav-links">
-                <li><a href="#reuniones">📅 Reuniones</a></li>
-                <li><a href="#nueva-reunion">➕ Nueva Reunión</a></li>
-                <li><a href="#tareas">✅ Tareas</a></li>
-                <li><a href="#exportar">📤 Exportar</a></li>
-                <li><a href="#asistente">🤖 Asistente IA</a></li>
-                <li><a href="#perfil">👤 Perfil</a></li>
-            </ul>
-        </nav>
-    </header>
+
 
     <!-- Hero Section with 3D Sphere -->
     <section class="hero">
@@ -54,7 +45,12 @@
                 <div class="sphere-text">
                     <h1 class="sphere-title">Juntify</h1>
                     <p class="sphere-subtitle">Bienvenido al futuro de las reuniones.</p>
-                    <a href="{{ route('login') }}" class="sphere-btn">Pruébalo gratis</a>
+                    @if (Auth::check())
+                        <a href="{{ route('profile.show') }}" class="sphere-btn">Ir a mi perfil</a>
+                    @else
+                        <a href="{{ route('login') }}" class="sphere-btn">Iniciar Sesión</a>
+                    @endif
+
                 </div>
             </div>
         </div>
