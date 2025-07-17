@@ -54,6 +54,9 @@ body {
     height: 100vh;
     overflow-y: auto;
     transition: transform 0.3s ease;
+   top: 0;
+   left: 0;
+   z-index: 999;
 }
 
 .sidebar-header {
@@ -512,9 +515,9 @@ body {
 .mobile-menu-btn {
   display: none;
   position: fixed;
-  top: 4.5rem;
+  top: 1rem;
   left: 1rem;
-  z-index: 1001;
+  z-index: 1002;
   background: rgba(59, 130, 246, 0.2);
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 12px;
@@ -525,7 +528,7 @@ body {
   font-size: 1.2rem;
   width: 48px;
   height: 48px;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
@@ -572,10 +575,6 @@ body {
         display: block;
     }
     
-    /* Oculta los enlaces del header en móvil */
-    .header .nav-links {
-        display: none;
-    }
 }
 
 /* Logout button */
@@ -799,13 +798,19 @@ body {
    Responsive para móviles (<768px)
    ============================= */
 @media (max-width: 768px) {
+  /* Ajustar el container principal */
+  .app-container {
+    margin-top: 0;
+  }
+  
   /* Sidebar inicialmente fuera de pantalla */
   .sidebar {
     position: fixed;
     height: 100vh;
     top: 0; left: 0;
     transform: translateX(-100%);
-    z-index: 1000;
+    z-index: 1001;
+    width: 280px;
   }
   /* Con .open vuelve a su sitio */
   .sidebar.open {
@@ -815,13 +820,30 @@ body {
   .main-content {
     margin-left: 0;
     padding: 1rem;
+    padding-top: 5rem;
   }
   /* Aparece el botón hamburguesa */
   .mobile-menu-btn {
-    display: block;
+    display: flex !important;
   }
   
   .pricing-grid {
     grid-template-columns: 1fr;
+  }
+  
+  /* Overlay para cerrar sidebar */
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+  }
+  
+  .sidebar-overlay.show {
+    display: block;
   }
 }

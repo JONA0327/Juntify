@@ -66,6 +66,21 @@
             }
         }
 
+        // Toggle mobile navbar
+        function toggleMobileNav() {
+            const navLinks = document.getElementById('nav-links');
+            const hamburger = document.querySelector('.hamburger-nav');
+            if (navLinks) {
+                navLinks.classList.toggle('show');
+            }
+            if (hamburger) {
+                hamburger.classList.toggle('active');
+            }
+        }
+
+        // Make function global
+        window.toggleMobileNav = toggleMobileNav;
+
         // Pricing toggle functionality
         function setupPricingToggle() {
             const toggleBtns = document.querySelectorAll('.toggle-btn');

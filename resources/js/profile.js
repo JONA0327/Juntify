@@ -16,6 +16,7 @@ function createParticles() {
 // Toggle sidebar open/close
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
   
   // Toggle hamburger animation
   const hamburger = document.querySelector('.hamburger');
@@ -24,6 +25,17 @@ function toggleSidebar() {
   }
 }
 
+// Close sidebar
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+  
+  // Reset hamburger animation
+  const hamburger = document.querySelector('.hamburger');
+  if (hamburger) {
+    hamburger.classList.remove('active');
+  }
+}
 // Click fuera cierra sidebar en móvil
 document.addEventListener('click', e => {
   const sidebar = document.getElementById('sidebar');
@@ -34,12 +46,7 @@ document.addEventListener('click', e => {
     !sidebar.contains(e.target) &&
     !btn.contains(e.target)
   ) {
-    sidebar.classList.remove('open');
-    // Reset hamburger animation
-    const hamburger = document.querySelector('.hamburger');
-    if (hamburger) {
-      hamburger.classList.remove('active');
-    }
+    closeSidebar();
   }
 });
 
@@ -65,12 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // 3) cierra sidebar en móvil
       if (window.innerWidth <= 768) {
-        document.getElementById('sidebar').classList.remove('open');
-        // Reset hamburger animation
-        const hamburger = document.querySelector('.hamburger');
-        if (hamburger) {
-          hamburger.classList.remove('active');
-        }
+        closeSidebar();
       }
     });
   });
@@ -148,6 +150,7 @@ function createSubfolder() {
 }
 
 window.toggleSidebar = toggleSidebar;
+window.closeSidebar = closeSidebar;
 window.connectDrive = connectDrive;
 window.createMainFolder = createMainFolder;
 window.setMainFolder = setMainFolder;
