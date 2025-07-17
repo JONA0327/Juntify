@@ -32,10 +32,10 @@
                 <span></span>
             </div>
         </button>
-        
+
         <!-- Overlay para cerrar sidebar en móvil -->
         <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
-        
+
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="logo">Panel de Usuario</div>
