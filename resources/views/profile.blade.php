@@ -46,7 +46,7 @@
                 <button class="sidebar-close-btn" onclick="closeSidebar()" id="sidebar-close-btn">
                     <span>×</span>
                 </button>
-                
+
                 <div class="logo">Panel de Usuario</div>
 
             </div>
