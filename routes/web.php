@@ -10,29 +10,26 @@ Route::get('/', function () {
     return view('index');
 });
 
-// Login
-Route::get('/login', function () {
-    return view('auth.login');
-})->name('login');
+// Rutas de Auth
+Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
+Route::post('/login', [LoginController::class, 'login']);
+Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
+Route::post('/register', [RegisterController::class, 'register']);
 
-Route::post('/login', [LoginController::class, 'login'])->name('login');
-
-// Registro
-Route::get('/register', [RegisterController::class, 'show'])->name('register');
-Route::post('/register', [RegisterController::class, 'register'])->name('register');
-
-// Dashboard (ejemplo protegido)
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
-
-// Perfil (requiere estar logueado)
 Route::middleware('auth')->group(function () {
+    // Perfil
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
-    Route::post('/drive/authorize', [DriveController::class, 'authorizeService']);
-    Route::post('/drive/main-folder', [DriveController::class, 'createMainFolder']);
-    Route::post('/drive/set-main-folder', [DriveController::class, 'setMainFolder']);
-    Route::post('/drive/subfolder', [DriveController::class, 'createSubfolder']);
+    // Ahora permitimos tanto GET como POST a /drive/authorize
+    Route::match(['get', 'post'], '/drive/authorize', [DriveController::class, 'authorizeService'])
+         ->name('drive.authorize');
+
+    // Rutas POST para manejo de carpetas
+    Route::post('/drive/main-folder',    [DriveController::class, 'createMainFolder'])
+         ->name('drive.createMainFolder');
+    Route::post('/drive/set-main-folder',[DriveController::class, 'setMainFolder'])
+         ->name('drive.setMainFolder');
+    Route::post('/drive/subfolder',      [DriveController::class, 'createSubfolder'])
+         ->name('drive.createSubfolder');
 });

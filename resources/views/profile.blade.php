@@ -300,7 +300,11 @@
                                 <span class="info-value" id="last-sync">Nunca</span>
                             </div>
                             <div class="action-buttons">
-                                <button class="btn btn-primary" id="connect-drive-btn" onclick="connectDrive()">
+                                <button
+                                    type="button"
+                                    id="connect-drive-btn"
+                                    class="btn btn-primary"
+                                >
                                     🔗 Conectar con Google Drive
                                 </button>
                             </div>
