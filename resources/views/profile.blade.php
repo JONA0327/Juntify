@@ -293,25 +293,29 @@
                             </h2>
                             <div class="info-item">
                                 <span class="info-label">Estado</span>
-                                <span class="status-badge status-warning" id="drive-status">Desconectado</span>
+                                <span class="status-badge {{ $driveConnected ? 'status-active' : 'status-warning' }}" id="drive-status">
+                                    {{ $driveConnected ? 'Conectado' : 'Desconectado' }}
+                                </span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Última sincronización</span>
                                 <span class="info-value" id="last-sync">Nunca</span>
                             </div>
-                            <div class="action-buttons">
-                                <button
-                                    type="button"
-                                    id="connect-drive-btn"
-                                    class="btn btn-primary"
-                                >
-                                    🔗 Conectar con Google Drive
-                                </button>
-                            </div>
+                            @unless($driveConnected)
+                                <div class="action-buttons">
+                                    <button
+                                        type="button"
+                                        id="connect-drive-btn"
+                                        class="btn btn-primary"
+                                    >
+                                        🔗 Conectar con Google Drive
+                                    </button>
+                                </div>
+                            @endunless
                         </div>
 
                         <!-- Configuración de Carpetas (oculta inicialmente) -->
-                        <div class="info-card" id="folder-config-card" style="display:none;">
+                        <div class="info-card" id="folder-config-card" @unless($driveConnected) style="display:none;" @endunless>
                             <h2 class="card-title">
                                 <span class="card-icon">📂</span>
                                 Configuración de Carpetas
@@ -331,7 +335,7 @@
                         </div>
 
                         <!-- Gestión de Subcarpetas (oculta inicialmente) -->
-                        <div class="info-card" id="subfolder-card" style="display:none;">
+                        <div class="info-card" id="subfolder-card" @unless($driveConnected) style="display:none;" @endunless>
                             <h2 class="card-title">
                                 <span class="card-icon">📁</span>
                                 Subcarpetas

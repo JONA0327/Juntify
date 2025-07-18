@@ -14,9 +14,10 @@ class ProfileController extends Controller
         public function show()
     {
         $user = Auth::user();
+        $driveConnected = $user->googleToken()->exists();
 
         // Asume que tu Blade está en resources/views/profile.blade.php
-        return view('profile', compact('user'));
+        return view('profile', compact('user', 'driveConnected'));
     }
     /**
      * Display the user's profile form.
