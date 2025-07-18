@@ -13,13 +13,10 @@ class GoogleDriveService
 
     public function __construct()
     {
-        $credentialsPath = config('drive.credentials_path');
-        if (! file_exists($credentialsPath)) {
-            throw new \RuntimeException("Credenciales de Google no encontradas en: $credentialsPath");
-        }
-
         $this->client = new Client();
-        $this->client->setAuthConfig($credentialsPath);
+        $this->client->setClientId(config('services.google.client_id'));
+        $this->client->setClientSecret(config('services.google.client_secret'));
+        $this->client->setRedirectUri(config('services.google.redirect'));
         $this->client->setScopes([Drive::DRIVE]);
         $this->client->setAccessType('offline');
 

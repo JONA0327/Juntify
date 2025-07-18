@@ -66,28 +66,7 @@ document.addEventListener('click', e => {
  * Llama al endpoint para autorizar Google Drive
  */
 function connectDrive() {
-  const btn        = document.getElementById('connect-drive-btn');
-  const status     = document.getElementById('drive-status');
-  const lastSync   = document.getElementById('last-sync');
-  const folderCard = document.getElementById('folder-config-card');
-
-  btn.textContent = '🔄 Conectando...';
-  btn.disabled    = true;
-
-  axios.post('/drive/authorize')
-    .then(() => {
-      status.textContent      = 'Conectado';
-      status.className        = 'status-badge status-active';
-      lastSync.textContent    = 'Hace unos segundos';
-      btn.textContent         = '✅ Conectado';
-      btn.className           = 'btn btn-secondary';
-      folderCard.style.display= 'block';
-    })
-    .catch(err => {
-      console.error('Error al conectar Drive:', err.response?.data || err.message);
-      btn.textContent = '⚠️ Error';
-      btn.disabled    = false;
-    });
+  window.location.href = '/drive/authorize';
 }
 
 /**

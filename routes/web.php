@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\DriveController;
+use App\Http\Controllers\GoogleAuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -21,9 +22,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
-    // Ahora permitimos tanto GET como POST a /drive/authorize
-    Route::match(['get', 'post'], '/drive/authorize', [DriveController::class, 'authorizeService'])
+    // OAuth Google Drive
+    Route::get('/drive/authorize', [GoogleAuthController::class, 'redirect'])
          ->name('drive.authorize');
+    Route::get('/drive/callback', [GoogleAuthController::class, 'callback'])
+         ->name('drive.callback');
 
     // Rutas POST para manejo de carpetas
     Route::post('/drive/main-folder',    [DriveController::class, 'createMainFolder'])
