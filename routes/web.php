@@ -22,7 +22,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
 
-    // OAuth Google Drive routes removed
+    Route::post('/drive/disconnect', [GoogleAuthController::class, 'disconnect'])->name('drive.disconnect');
 
     // Rutas POST para manejo de carpetas
     Route::post('/drive/main-folder',     [DriveController::class, 'createMainFolder'])

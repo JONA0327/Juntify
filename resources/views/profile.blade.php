@@ -301,7 +301,7 @@
                                 <span class="info-label">Última sincronización</span>
                                 <span class="info-value" id="last-sync">Nunca</span>
                             </div>
-                            @unless($driveConnected)
+                            @if(!$driveConnected)
                                 <div class="action-buttons">
                                     <button
                                         type="button"
@@ -311,7 +311,16 @@
                                         🔗 Conectar con Google Drive
                                     </button>
                                 </div>
-                            @endunless
+                            @else
+                                <div class="action-buttons">
+                                    <form method="POST" action="{{ route('drive.disconnect') }}">
+                                        @csrf
+                                        <button type="submit" class="btn btn-secondary">
+                                            🔌 Cerrar sesión de Drive
+                                        </button>
+                                    </form>
+                                </div>
+                            @endif
                         </div>
 
                         <!-- Configuración de Carpetas (oculta inicialmente) -->
