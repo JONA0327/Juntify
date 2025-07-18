@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GoogleToken;
+use App\Models\Folder;
 use App\Services\GoogleDriveService;
 use App\Services\GoogleServiceAccount;
 use Carbon\Carbon;
@@ -48,7 +49,7 @@ class DriveController extends Controller
 
     public function createMainFolder(Request $request)
     {
-        $this->applyUserToken();
+        $token = $this->applyUserToken();
         $this->serviceAccount->impersonate(Auth::user()->email);
         $folderId = $this->serviceAccount->createFolder(
             $request->input('name'),
@@ -57,6 +58,13 @@ class DriveController extends Controller
 
         GoogleToken::where('username', Auth::user()->username)
             ->update(['recordings_folder_id' => $folderId]);
+
+        Folder::create([
+            'google_token_id' => $token->id,
+            'google_id'       => $folderId,
+            'name'            => $request->input('name'),
+            'parent_id'       => null,
+        ]);
 
         return response()->json(['id' => $folderId]);
     }
