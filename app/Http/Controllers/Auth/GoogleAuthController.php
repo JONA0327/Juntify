@@ -72,4 +72,25 @@ class GoogleAuthController extends Controller
         return redirect()->route('profile.show')
                          ->with('success', 'Google Drive conectado');
     }
+
+    public function disconnect()
+    {
+        $user  = Auth::user();
+        $token = $user->googleToken;
+
+        if ($token) {
+            $client = $this->createClient();
+            if ($token->access_token) {
+                try {
+                    $client->revokeToken($token->access_token);
+                } catch (\Throwable $e) {
+                    // Ignore revoke errors
+                }
+            }
+
+            $token->delete();
+        }
+
+        return redirect()->back()->with('success', 'Google Drive desconectado');
+    }
 }
