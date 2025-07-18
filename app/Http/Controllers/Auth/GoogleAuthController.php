@@ -1,15 +1,16 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Auth;
 
-use App\Models\GoogleToken;
-use App\Models\User;
+use App\Http\Controllers\Controller;     // ← Importa el controlador base
 use Google\Client;
-use Google\Service\Drive;
 use Google\Service\Oauth2;
+use Google\Service\Drive;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use App\Models\User;
+use App\Models\GoogleToken;
 
 class GoogleAuthController extends Controller
 {
@@ -62,12 +63,13 @@ class GoogleAuthController extends Controller
         GoogleToken::updateOrCreate(
             ['username' => $user->username],
             [
-                'access_token' => $token['access_token'] ?? '',
+                'access_token'  => $token['access_token'] ?? '',
                 'refresh_token' => $token['refresh_token'] ?? '',
-                'expiry_date' => now()->addSeconds($token['expires_in'] ?? 3600),
+                'expiry_date'   => now()->addSeconds($token['expires_in'] ?? 3600),
             ]
         );
 
-        return redirect()->route('profile.show')->with('success', 'Google Drive conectado');
+        return redirect()->route('profile.show')
+                         ->with('success', 'Google Drive conectado');
     }
 }

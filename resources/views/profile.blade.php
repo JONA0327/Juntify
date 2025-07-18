@@ -122,7 +122,7 @@
                                     <img src="{{ asset('badges/superadmin-badge.png') }}" alt="Avatar Superadmin" class="avatar">
                                     @break
                                 @case('creative')
-                                    <img src="{{ asset('badges/creativ-badge.png') }}" alt="Avatar Creativos" class="avatar">
+                                    <img src="{{ asset('badges/creative-badge.png') }}" alt="Avatar Creativos" class="avatar">
                                     @break
 
                                 @break
