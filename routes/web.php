@@ -22,11 +22,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
 
-    // OAuth Google Drive
-    Route::get('/drive/authorize', [GoogleAuthController::class, 'redirect'])
-         ->name('drive.authorize');
-    Route::get('/drive/callback',  [GoogleAuthController::class, 'callback'])
-         ->name('drive.callback');
+    // OAuth Google Drive routes removed
 
     // Rutas POST para manejo de carpetas
     Route::post('/drive/main-folder',     [DriveController::class, 'createMainFolder'])

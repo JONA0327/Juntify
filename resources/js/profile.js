@@ -66,7 +66,7 @@ document.addEventListener('click', e => {
  * Llama al endpoint para autorizar Google Drive
  */
 function connectDrive() {
-  window.location.href = '/drive/authorize';
+  window.location.href = '/api/auth/google/redirect';
 }
 
 /**

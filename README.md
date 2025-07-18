@@ -72,7 +72,7 @@ Configure your Google OAuth credentials and the root folder where user folders s
 ```env
 GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
-GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:8000/api/auth/google/callback
 GOOGLE_DRIVE_ROOT_FOLDER=
 ```
 
