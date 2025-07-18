@@ -100,4 +100,63 @@ class DriveController extends Controller
 
         return response()->json(['id' => $folderId]);
     }
+
+    public function syncDriveSubfolders()
+    {
+        // 1. Obtener el GoogleToken del usuario autenticado
+        $username = Auth::user()->username;
+        $token    = GoogleToken::where('username', $username)->firstOrFail();
+
+        // 2. Validar que recordings_folder_id no sea nulo
+        if (!$token->recordings_folder_id) {
+            abort(400, 'El usuario no tiene configurada la carpeta principal');
+        }
+
+        // 3. Crear cliente de Drive usando GoogleAuthController::createClient()
+        $authController = app(\App\Http\Controllers\Auth\GoogleAuthController::class);
+        $clientMethod   = new \ReflectionMethod($authController, 'createClient');
+        $clientMethod->setAccessible(true);
+        /** @var \Google\Client $client */
+        $client = $clientMethod->invoke($authController);
+
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expiry_date'   => $token->expiry_date,
+        ]);
+
+        $drive = new \Google\Service\Drive($client);
+
+        // 4. Garantizar la existencia de la carpeta raíz
+        $rootFolder = Folder::firstOrCreate([
+            'google_token_id' => $token->id,
+            'google_id'       => $token->recordings_folder_id,
+            'name'            => "recordings_{$username}",
+            'parent_id'       => null,
+        ]);
+
+        // 5. Listar subcarpetas de primer nivel dentro de recordings_folder_id
+        $query   = 'mimeType="application/vnd.google-apps.folder" and "' . $token->recordings_folder_id . '" in parents';
+        $results = $drive->files->listFiles([
+            'q'      => $query,
+            'fields' => 'files(id,name)',
+        ]);
+
+        $subfolders = [];
+        foreach ($results->getFiles() as $file) {
+            $subfolders[] = Subfolder::updateOrCreate(
+                [
+                    'folder_id' => $rootFolder->id,
+                    'google_id' => $file->getId(),
+                ],
+                ['name' => $file->getName()]
+            );
+        }
+
+        // 7. Devolver JSON con la carpeta raíz y subcarpetas sincronizadas
+        return response()->json([
+            'root_folder' => $rootFolder,
+            'subfolders'  => $subfolders,
+        ]);
+    }
 }
