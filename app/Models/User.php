@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Models\GoogleToken;
 
 class User extends Authenticatable
 {
@@ -33,5 +35,10 @@ class User extends Authenticatable
                 $u->{$u->getKeyName()} = (string) Str::uuid();
             }
         });
+    }
+
+    public function googleToken(): HasOne
+    {
+        return $this->hasOne(GoogleToken::class, 'username', 'username');
     }
 }
