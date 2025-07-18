@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\GoogleToken;
 use App\Models\Folder;
+use App\Models\Subfolder;
 use App\Services\GoogleDriveService;
 use App\Services\GoogleServiceAccount;
 use Carbon\Carbon;
@@ -88,6 +89,14 @@ class DriveController extends Controller
 
         $this->serviceAccount->impersonate(Auth::user()->email);
         $folderId = $this->serviceAccount->createFolder($request->input('name'), $parentId);
+
+        if ($folder = Folder::where('google_id', $parentId)->first()) {
+            Subfolder::create([
+                'folder_id' => $folder->id,
+                'google_id' => $folderId,
+                'name'      => $request->input('name'),
+            ]);
+        }
 
         return response()->json(['id' => $folderId]);
     }
