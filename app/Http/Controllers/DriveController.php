@@ -4,9 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\GoogleToken;
 use App\Services\GoogleDriveService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class DriveController extends Controller
 {
@@ -17,25 +17,35 @@ class DriveController extends Controller
         $this->drive = $drive;
     }
 
-    public function authorizeService()
+    protected function applyUserToken(): GoogleToken
     {
+        $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
+
         $client = $this->drive->getClient();
-        $token  = $client->fetchAccessTokenWithAssertion();
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expires_in'    => max(1, Carbon::parse($token->expiry_date)->timestamp - time()),
+            'created'       => time(),
+        ]);
 
-        GoogleToken::updateOrCreate(
-            ['username' => Auth::user()->username],
-            [
-                'access_token'  => $token['access_token'] ?? '',
-                'refresh_token' => $token['refresh_token'] ?? '',
-                'expiry_date'   => now()->addSeconds($token['expires_in'] ?? 3600),
-            ]
-        );
+        if ($client->isAccessTokenExpired() && $token->refresh_token) {
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (!isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
+        }
 
-        return response()->json(['status' => 'authorized']);
+        return $token;
     }
 
     public function createMainFolder(Request $request)
     {
+        $this->applyUserToken();
         $folderId = $this->drive->createFolder($request->input('name'), config('drive.root_folder_id'));
 
         GoogleToken::where('username', Auth::user()->username)
@@ -46,6 +56,8 @@ class DriveController extends Controller
 
     public function setMainFolder(Request $request)
     {
+        $this->applyUserToken();
+
         GoogleToken::updateOrCreate(
             ['username' => Auth::user()->username],
             ['recordings_folder_id' => $request->input('id')]
@@ -56,7 +68,8 @@ class DriveController extends Controller
 
     public function createSubfolder(Request $request)
     {
-        $parentId = GoogleToken::where('username', Auth::user()->username)->value('recordings_folder_id');
+        $token = $this->applyUserToken();
+        $parentId = $token->recordings_folder_id;
         $folderId = $this->drive->createFolder($request->input('name'), $parentId);
 
         return response()->json(['id' => $folderId]);

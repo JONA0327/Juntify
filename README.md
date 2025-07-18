@@ -67,10 +67,12 @@ The Laravel framework is open-sourced software licensed under the [MIT license](
 
 ## Google Drive Integration
 
-Configure the path to your service account credentials and the root folder where user folders should be created:
+Configure your Google OAuth credentials and the root folder where user folders should be created:
 
 ```env
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service.json
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 GOOGLE_DRIVE_ROOT_FOLDER=
 ```
 
