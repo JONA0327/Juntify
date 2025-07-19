@@ -363,7 +363,15 @@
                                 </button>
                             </div>
                             <div id="subfolders-list" style="margin-top: 1rem;">
-                                <!-- Lista de subcarpetas se llenará dinámicamente -->
+                                @foreach ($subfolders as $sf)
+                                    <div style="margin: 0.5rem 0; padding: 0.75rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(59, 130, 246, 0.2);">
+                                        <div>
+                                            <div style="color: #ffffff; font-weight: 600;">{{ $sf->name }}</div>
+                                            <div style="color: #94a3b8; font-size: 0.8rem;">{{ $sf->google_id }}</div>
+                                        </div>
+                                        <button type="button" class="btn-remove-subfolder" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 0.5rem; border-radius: 8px; cursor: pointer;">🗑️</button>
+                                    </div>
+                                @endforeach
                             </div>
                         </div>
                     </div>
