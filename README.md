@@ -82,3 +82,6 @@ GOOGLE_SERVICE_ACCOUNT_JSON=
 used to create folders. The service account will impersonate the authenticated
 user so that folders are created in the user's Drive and the user has full
 permissions.
+
+After authorizing Google Drive from the profile page, return to the same page and
+use the **Crear Carpeta Principal** option to create your recordings folder.
