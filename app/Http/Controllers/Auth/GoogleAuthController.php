@@ -34,6 +34,8 @@ class GoogleAuthController extends Controller
     public function callback(Request $request)
     {
         $client = $this->createClient();
+        // This method only stores the OAuth tokens. Folder creation is handled
+        // from the profile page once the user is connected.
         $token = $client->fetchAccessTokenWithAuthCode($request->input('code'));
 
         if (isset($token['error'])) {
@@ -59,7 +61,10 @@ class GoogleAuthController extends Controller
         );
 
         return redirect()->route('profile.show')
-                         ->with('success', 'Google Drive conectado');
+                         ->with(
+                             'success',
+                             'Google Drive conectado. Crea tu carpeta principal desde tu perfil.'
+                         );
     }
 
     public function disconnect()
