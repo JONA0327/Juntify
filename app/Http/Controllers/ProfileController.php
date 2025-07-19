@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
 use App\Models\Folder;
+use App\Models\Subfolder;
 use App\Models\GoogleToken;
 use App\Services\GoogleDriveService;
 use App\Http\Controllers\Auth\GoogleAuthController;
@@ -21,11 +22,12 @@ class ProfileController extends Controller
         $user = Auth::user();
 
         $token = GoogleToken::where('username', $user->username)->first();
+        $subfolders = collect();
 
         if (!$token) {
             $driveConnected = false;
             $folder         = null;
-            return view('profile', compact('user', 'driveConnected', 'folder'));
+            return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders'));
         }
 
         $client = $drive->getClient();
@@ -50,7 +52,7 @@ class ProfileController extends Controller
         if (!$token->recordings_folder_id) {
             $driveConnected = true;
             $folder         = null;
-            return view('profile', compact('user', 'driveConnected', 'folder'));
+            return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders'));
         }
 
         try {
@@ -76,7 +78,9 @@ class ProfileController extends Controller
 
         $driveConnected = true;
 
-        return view('profile', compact('user', 'driveConnected', 'folder'));
+        $subfolders = Subfolder::where('folder_id', $folder->id)->get();
+
+        return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders'));
     }
     /**
      * Display the user's profile form.
