@@ -1,6 +1,13 @@
 <?php
 
 use App\Models\User;
+use App\Models\GoogleToken;
+use App\Models\Folder;
+use App\Services\GoogleDriveService;
+use Google\Client;
+use Google\Service\Drive;
+use Google\Service\Drive\DriveFile;
+use Mockery;
 
 test('profile page is displayed', function () {
     $user = User::factory()->create();
@@ -82,4 +89,48 @@ test('correct password must be provided to delete account', function () {
         ->assertRedirect('/profile');
 
     $this->assertNotNull($user->fresh());
+});
+
+test('profile page shows when google token exists and folder is stored', function () {
+    $user = User::factory()->create(['username' => 'testuser']);
+
+    $token = GoogleToken::create([
+        'username'            => $user->username,
+        'access_token'        => 'token',
+        'refresh_token'       => 'refresh',
+        'expiry_date'         => now()->addHour(),
+        'recordings_folder_id'=> 'folder123',
+    ]);
+
+    $client = Mockery::mock(Client::class);
+    $client->shouldReceive('setAccessToken');
+    $client->shouldReceive('isAccessTokenExpired')->andReturnFalse();
+
+    $file = Mockery::mock(DriveFile::class);
+    $file->shouldReceive('getName')->andReturn('My Recordings');
+
+    $filesResource = Mockery::mock();
+    $filesResource->shouldReceive('get')
+        ->with('folder123', ['fields' => 'name'])
+        ->andReturn($file);
+
+    $drive = Mockery::mock(Drive::class);
+    $drive->files = $filesResource;
+
+    $service = Mockery::mock(GoogleDriveService::class);
+    $service->shouldReceive('getClient')->andReturn($client);
+    $service->shouldReceive('getDrive')->andReturn($drive);
+
+    $this->app->instance(GoogleDriveService::class, $service);
+
+    $response = $this->actingAs($user)->get('/profile');
+
+    $response->assertOk();
+
+    $this->assertDatabaseHas('folders', [
+        'google_token_id' => $token->id,
+        'google_id'       => 'folder123',
+        'name'            => 'My Recordings',
+        'parent_id'       => null,
+    ]);
 });
