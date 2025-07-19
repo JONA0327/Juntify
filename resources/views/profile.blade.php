@@ -334,7 +334,7 @@
                                 <input type="text" id="main-folder-input" class="form-input" placeholder="Pega aquí el ID de la carpeta o crea una nueva" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; color: #fff;" value="{{ $folder->google_id ?? '' }}" data-id="{{ $folder->google_id ?? '' }}">
                             </div>
                             <div class="action-buttons">
-                                <button class="btn btn-secondary" onclick="createMainFolder()">
+                                <button class="btn btn-secondary" onclick="showCreateFolderModal()">
                                     ➕ Crear Carpeta Principal
                                 </button>
                                 <button class="btn btn-primary" onclick="setMainFolder()">
@@ -358,7 +358,7 @@
                                 <input type="text" id="subfolder-input" class="form-input" placeholder="Nombre de la subcarpeta" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; color: #fff;">
                             </div>
                             <div class="action-buttons">
-                                <button class="btn btn-primary" onclick="createSubfolder()">
+                                <button class="btn btn-primary" onclick="showCreateSubfolderModal()">
                                     ➕ Crear Subcarpeta
                                 </button>
                             </div>
@@ -844,6 +844,82 @@
                     </div>
                 </div>
         </main>
+    </div>
+
+    <!-- Modal para crear carpeta principal -->
+    <div class="modal" id="create-folder-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <span class="modal-icon">📁</span>
+                    Crear Carpeta Principal
+                </h2>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">
+                    Ingresa el nombre para tu carpeta principal de reuniones en Google Drive.
+                </p>
+                <div class="form-group">
+                    <label for="folder-name-input" class="form-label">Nombre de la carpeta</label>
+                    <input 
+                        type="text" 
+                        id="folder-name-input" 
+                        class="form-input modal-input" 
+                        placeholder="Ej: Juntify-Reuniones-2025"
+                        maxlength="100"
+                    >
+                    <div class="input-hint">
+                        Se creará en tu Google Drive raíz
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeCreateFolderModal()">
+                    ❌ Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="confirmCreateFolder()" id="confirm-create-btn">
+                    ✅ Crear Carpeta
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para crear subcarpeta -->
+    <div class="modal" id="create-subfolder-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <span class="modal-icon">📂</span>
+                    Crear Subcarpeta
+                </h2>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">
+                    Ingresa el nombre para la nueva subcarpeta dentro de tu carpeta principal.
+                </p>
+                <div class="form-group">
+                    <label for="subfolder-name-input" class="form-label">Nombre de la subcarpeta</label>
+                    <input 
+                        type="text" 
+                        id="subfolder-name-input" 
+                        class="form-input modal-input" 
+                        placeholder="Ej: Reuniones-Enero-2025"
+                        maxlength="100"
+                    >
+                    <div class="input-hint">
+                        Se creará dentro de tu carpeta principal
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeCreateSubfolderModal()">
+                    ❌ Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="confirmCreateSubfolder()" id="confirm-create-sub-btn">
+                    ✅ Crear Subcarpeta
+                </button>
+            </div>
+        </div>
     </div>
 
     <div class="modal" id="drive-loading-modal">
