@@ -17,6 +17,10 @@ Route::post('/login',   [LoginController::class, 'login']);
 Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
 Route::post('/register',[RegisterController::class, 'register']);
 
+// Google OAuth routes
+Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
+
 Route::middleware('auth')->group(function () {
     // Perfil
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');

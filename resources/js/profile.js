@@ -73,14 +73,14 @@ function connectDrive() {
     .then(res => {
       if (!res.data.connected) {
         alert('Conecta tu cuenta de drive para crear una carpeta');
-        window.location.href = '/api/auth/google/redirect';
+        window.location.href = '/auth/google/redirect';
       } else {
         window.location.reload();
       }
     })
     .catch(() => {
       alert('Error verificando Drive');
-      window.location.href = '/api/auth/google/redirect';
+      window.location.href = '/auth/google/redirect';
     })
     .finally(() => {
       if (modal) modal.classList.remove('show');
