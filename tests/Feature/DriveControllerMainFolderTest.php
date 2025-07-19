@@ -3,7 +3,7 @@
 use App\Models\User;
 use App\Models\GoogleToken;
 use App\Models\Folder;
-use App\Services\GoogleServiceAccount;
+use App\Services\GoogleDriveService;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use Google\Client;
 use Illuminate\Support\Facades\Config;
@@ -22,12 +22,16 @@ it('creates main folder', function () {
         'expiry_date'   => now()->addHour(),
     ]);
 
-    $service = Mockery::mock(GoogleServiceAccount::class);
-    $service->shouldReceive('impersonate')->once()->with($user->email);
+    $client = Mockery::mock(Client::class);
+    $client->shouldReceive('setAccessToken');
+    $client->shouldReceive('isAccessTokenExpired')->andReturnFalse();
+
+    $service = Mockery::mock(GoogleDriveService::class);
+    $service->shouldReceive('getClient')->andReturn($client);
     $service->shouldReceive('createFolder')
         ->once()->with('MainFolder', 'root123')->andReturn('folder123');
 
-    app()->instance(GoogleServiceAccount::class, $service);
+    app()->instance(GoogleDriveService::class, $service);
 
     $response = $this->actingAs($user)->post('/drive/main-folder', [
         'name' => 'MainFolder',
@@ -49,9 +53,8 @@ it('creates main folder', function () {
     $this->assertDatabaseCount('folders', 1);
 });
 
-it('returns 400 when service account json path is invalid', function () {
+it('returns 400 when drive service throws a runtime exception', function () {
     Config::set('drive.root_folder_id', 'root123');
-    Config::set('services.google.service_account_json', '/invalid/path.json');
 
     $user = User::factory()->create(['username' => 'testuser']);
 
@@ -61,6 +64,18 @@ it('returns 400 when service account json path is invalid', function () {
         'refresh_token' => 'refresh',
         'expiry_date'   => now()->addHour(),
     ]);
+
+    $client = Mockery::mock(Client::class);
+    $client->shouldReceive('setAccessToken');
+    $client->shouldReceive('isAccessTokenExpired')->andReturnFalse();
+
+    $service = Mockery::mock(GoogleDriveService::class);
+    $service->shouldReceive('getClient')->andReturn($client);
+    $service->shouldReceive('createFolder')
+        ->once()->with('MainFolder', 'root123')
+        ->andThrow(new RuntimeException('Service account JSON path is invalid'));
+
+    app()->instance(GoogleDriveService::class, $service);
 
     $response = $this->actingAs($user)->post('/drive/main-folder', [
         'name' => 'MainFolder',

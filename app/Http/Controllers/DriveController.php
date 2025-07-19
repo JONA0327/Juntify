@@ -6,7 +6,6 @@ use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\Subfolder;
 use App\Services\GoogleDriveService;
-use App\Services\GoogleServiceAccount;
 use Carbon\Carbon;
 use RuntimeException;
 use Illuminate\Http\Request;
@@ -56,9 +55,7 @@ class DriveController extends Controller
         $token = $this->applyUserToken();
 
         try {
-            $serviceAccount = app(GoogleServiceAccount::class);
-            $serviceAccount->impersonate(Auth::user()->email);
-            $folderId = $serviceAccount->createFolder(
+            $folderId = $this->drive->createFolder(
                 $request->input('name'),
                 config('drive.root_folder_id')
             );
@@ -96,9 +93,7 @@ class DriveController extends Controller
         $token = $this->applyUserToken();
         $parentId = $token->recordings_folder_id;
 
-        $serviceAccount = app(GoogleServiceAccount::class);
-        $serviceAccount->impersonate(Auth::user()->email);
-        $folderId = $serviceAccount->createFolder($request->input('name'), $parentId);
+        $folderId = $this->drive->createFolder($request->input('name'), $parentId);
 
         if ($folder = Folder::where('google_id', $parentId)->first()) {
             Subfolder::create([
