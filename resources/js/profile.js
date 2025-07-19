@@ -88,25 +88,75 @@ function connectDrive() {
 }
 
 /**
- * Crea la carpeta principal en Drive y muestra su ID
+ * Muestra el modal para crear carpeta principal
  */
-function createMainFolder() {
-  const input = document.getElementById('main-folder-input');
-  const name  = 'Juntify-Reuniones-' + Date.now();
-  const btn   = document.getElementById('create-main-folder-btn');
+function showCreateFolderModal() {
+  const modal = document.getElementById('create-folder-modal');
+  const input = document.getElementById('folder-name-input');
+  
+  // Generar nombre sugerido
+  const suggestedName = `Juntify-Reuniones-${new Date().getFullYear()}`;
+  input.value = suggestedName;
+  
+  modal.classList.add('show');
+  
+  // Focus en el input después de la animación
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 300);
+}
 
+/**
+ * Cierra el modal de crear carpeta principal
+ */
+function closeCreateFolderModal() {
+  const modal = document.getElementById('create-folder-modal');
+  const input = document.getElementById('folder-name-input');
+  
+  modal.classList.remove('show');
+  input.value = '';
+}
+
+/**
+ * Confirma la creación de la carpeta principal
+ */
+function confirmCreateFolder() {
+  const input = document.getElementById('folder-name-input');
+  const name = input.value.trim();
+  const btn = document.getElementById('confirm-create-btn');
+  const mainInput = document.getElementById('main-folder-input');
+  
+  if (!name) {
+    alert('Por favor ingresa un nombre para la carpeta');
+    input.focus();
+    return;
+  }
+  
   btn.disabled = true;
+  btn.textContent = '⏳ Creando...';
+  
   axios.post('/drive/main-folder', { name })
     .then(res => {
-      input.value = res.data.id;
-      alert('Carpeta principal creada: ' + res.data.id);
+      mainInput.value = res.data.id;
+      closeCreateFolderModal();
+      
+      // Mostrar mensaje de éxito
+      showSuccessMessage(`Carpeta "${name}" creada exitosamente`);
+      
+      // Mostrar la sección de subcarpetas
+      const subfolderCard = document.getElementById('subfolder-card');
+      if (subfolderCard) {
+        subfolderCard.style.display = 'block';
+      }
     })
     .catch(err => {
       console.error('Error creando carpeta principal:', err.response?.data || err.message);
-      alert('No se pudo crear la carpeta principal.');
+      showErrorMessage('No se pudo crear la carpeta principal. Inténtalo de nuevo.');
     })
     .finally(() => {
       btn.disabled = false;
+      btn.textContent = '✅ Crear Carpeta';
     });
 }
 
@@ -141,55 +191,218 @@ function setMainFolder() {
 }
 
 /**
- * Crea una subcarpeta dentro de la carpeta principal
+ * Muestra el modal para crear subcarpeta
  */
-function createSubfolder() {
-  const input        = document.getElementById('subfolder-input');
-  const name         = input.value.trim();
+function showCreateSubfolderModal() {
+  const modal = document.getElementById('create-subfolder-modal');
+  const input = document.getElementById('subfolder-name-input');
   const mainFolderId = document.getElementById('main-folder-input').value.trim();
-  const list         = document.getElementById('subfolders-list');
-  const btn          = document.getElementById('create-subfolder-btn');
+  
+  if (!mainFolderId) {
+    showErrorMessage('Primero debes establecer la carpeta principal');
+    return;
+  }
+  
+  // Generar nombre sugerido
+  const currentDate = new Date();
+  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const suggestedName = `Reuniones-${monthNames[currentDate.getMonth()]}-${currentDate.getFullYear()}`;
+  input.value = suggestedName;
+  
+  modal.classList.add('show');
+  
+  // Focus en el input después de la animación
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 300);
+}
+
+/**
+ * Cierra el modal de crear subcarpeta
+ */
+function closeCreateSubfolderModal() {
+  const modal = document.getElementById('create-subfolder-modal');
+  const input = document.getElementById('subfolder-name-input');
+  
+  modal.classList.remove('show');
+  input.value = '';
+}
+
+/**
+ * Confirma la creación de la subcarpeta
+ */
+function confirmCreateSubfolder() {
+  const input = document.getElementById('subfolder-name-input');
+  const name = input.value.trim();
+  const mainFolderId = document.getElementById('main-folder-input').value.trim();
+  const list = document.getElementById('subfolders-list');
+  const btn = document.getElementById('confirm-create-sub-btn');
 
   if (!name) {
-    return alert('Por favor ingresa el nombre de la subcarpeta.');
+    alert('Por favor ingresa un nombre para la subcarpeta');
+    input.focus();
+    return;
   }
+  
   if (!mainFolderId) {
-    return alert('Primero debes establecer la carpeta principal.');
+    showErrorMessage('Primero debes establecer la carpeta principal');
+    closeCreateSubfolderModal();
+    return;
   }
 
   btn.disabled = true;
+  btn.textContent = '⏳ Creando...';
+  
   axios.post('/drive/subfolder', { name, parentId: mainFolderId })
     .then(res => {
       const div = document.createElement('div');
       div.style.cssText = `
         margin: 0.5rem 0;
         padding: 0.75rem;
-        background: rgba(59,130,246,0.1);
+        background: rgba(59, 130, 246, 0.1);
         border-radius: 8px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        border: 1px solid rgba(59, 130, 246, 0.2);
       `;
       div.innerHTML = `
-        <span style="color: #1e293b;">${res.data.id}</span>
-        <button type="button" class="btn-remove-subfolder">🗑️</button>
+        <div>
+          <div style="color: #ffffff; font-weight: 600;">${name}</div>
+          <div style="color: #94a3b8; font-size: 0.8rem;">${res.data.id}</div>
+        </div>
+        <button type="button" class="btn-remove-subfolder" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 0.5rem; border-radius: 8px; cursor: pointer;">🗑️</button>
       `;
       list.appendChild(div);
-      input.value = '';
+      
+      closeCreateSubfolderModal();
+      showSuccessMessage(`Subcarpeta "${name}" creada exitosamente`);
     })
     .catch(err => {
       console.error('Error creando subcarpeta:', err.response?.data || err.message);
-      alert('No se pudo crear la subcarpeta.');
+      showErrorMessage('No se pudo crear la subcarpeta. Inténtalo de nuevo.');
     })
     .finally(() => {
       btn.disabled = false;
+      btn.textContent = '✅ Crear Subcarpeta';
     });
 }
+
+/**
+ * Muestra mensaje de éxito
+ */
+function showSuccessMessage(message) {
+  // Crear elemento de notificación
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 2rem;
+    right: 2rem;
+    background: rgba(16, 185, 129, 0.9);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+    z-index: 1001;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    animation: slideInRight 0.3s ease;
+  `;
+  notification.textContent = `✅ ${message}`;
+  
+  document.body.appendChild(notification);
+  
+  // Remover después de 3 segundos
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
+}
+
+/**
+ * Muestra mensaje de error
+ */
+function showErrorMessage(message) {
+  // Crear elemento de notificación
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 2rem;
+    right: 2rem;
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3);
+    z-index: 1001;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    animation: slideInRight 0.3s ease;
+  `;
+  notification.textContent = `❌ ${message}`;
+  
+  document.body.appendChild(notification);
+  
+  // Remover después de 4 segundos
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 4000);
+}
+
+// Agregar estilos de animación para las notificaciones
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  
+  @keyframes slideOutRight {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+  }
+`;
+document.head.appendChild(style);
 
 // Delegación para eliminar subcarpeta
 document.addEventListener('click', e => {
   if (e.target.matches('.btn-remove-subfolder')) {
-    e.target.closest('div').remove();
+    const folderDiv = e.target.closest('div');
+    const folderName = folderDiv.querySelector('div > div').textContent;
+    
+    if (confirm(`¿Estás seguro de que quieres eliminar la subcarpeta "${folderName}"?`)) {
+      folderDiv.remove();
+      showSuccessMessage(`Subcarpeta "${folderName}" eliminada`);
+    }
+  }
+});
+
+// Cerrar modales con ESC
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeCreateFolderModal();
+    closeCreateSubfolderModal();
+  }
+});
+
+// Cerrar modales al hacer click fuera
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal')) {
+    closeCreateFolderModal();
+    closeCreateSubfolderModal();
   }
 });
 
@@ -226,9 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Vincular botones de Drive
   const connectBtn    = document.getElementById('connect-drive-btn');
-  const createMainBtn = document.getElementById('create-main-folder-btn');
   const setMainBtn    = document.getElementById('set-main-folder-btn');
-  const createSubBtn  = document.getElementById('create-subfolder-btn');
   const mainInput     = document.getElementById('main-folder-input');
   const mainName      = document.getElementById('main-folder-name');
 
@@ -243,9 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (connectBtn)    connectBtn.addEventListener('click', connectDrive);
-  if (createMainBtn) createMainBtn.addEventListener('click', createMainFolder);
   if (setMainBtn)    setMainBtn.addEventListener('click', setMainFolder);
-  if (createSubBtn)  createSubBtn.addEventListener('click', createSubfolder);
 });
 
 // Exponer funciones para handlers inline (si aún usas onclick en HTML)
@@ -253,6 +462,10 @@ window.toggleSidebar       = toggleSidebar;
 window.closeSidebar        = closeSidebar;
 window.toggleMobileNavbar = toggleMobileNavbar;
 window.connectDrive        = connectDrive;
-window.createMainFolder    = createMainFolder;
+window.showCreateFolderModal = showCreateFolderModal;
+window.closeCreateFolderModal = closeCreateFolderModal;
+window.confirmCreateFolder = confirmCreateFolder;
+window.showCreateSubfolderModal = showCreateSubfolderModal;
+window.closeCreateSubfolderModal = closeCreateSubfolderModal;
+window.confirmCreateSubfolder = confirmCreateSubfolder;
 window.setMainFolder       = setMainFolder;
-window.createSubfolder     = createSubfolder;
