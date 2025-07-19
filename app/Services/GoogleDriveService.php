@@ -5,6 +5,7 @@ namespace App\Services;
 use Google\Client;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
+use Google\Service\Drive\Permission;
 
 class GoogleDriveService
 {
@@ -63,5 +64,20 @@ class GoogleDriveService
         ]);
 
         return $results->getFiles();
+    }
+
+    public function shareFolder(string $folderId, string $email): void
+    {
+        $permission = new Permission([
+            'type'         => 'user',
+            'role'         => 'writer',
+            'emailAddress' => $email,
+        ]);
+
+        $this->drive->permissions->create(
+            $folderId,
+            $permission,
+            ['sendNotificationEmail' => false]
+        );
     }
 }

@@ -53,6 +53,39 @@ it('creates main folder', function () {
     $this->assertDatabaseCount('folders', 1);
 });
 
+it('shares main folder with the service account email', function () {
+    Config::set('drive.root_folder_id', 'root123');
+    Config::set('services.google.service_account_email', 'svc@example.com');
+
+    $user = User::factory()->create(['username' => 'testuser']);
+
+    GoogleToken::create([
+        'username'      => $user->username,
+        'access_token'  => 'access',
+        'refresh_token' => 'refresh',
+        'expiry_date'   => now()->addHour(),
+    ]);
+
+    $client = Mockery::mock(Client::class);
+    $client->shouldReceive('setAccessToken');
+    $client->shouldReceive('isAccessTokenExpired')->andReturnFalse();
+
+    $service = Mockery::mock(GoogleDriveService::class);
+    $service->shouldReceive('getClient')->andReturn($client);
+    $service->shouldReceive('createFolder')
+        ->once()->with('MainFolder', 'root123')->andReturn('folder123');
+    $service->shouldReceive('shareFolder')
+        ->once()->with('folder123', 'svc@example.com');
+
+    app()->instance(GoogleDriveService::class, $service);
+
+    $response = $this->actingAs($user)->post('/drive/main-folder', [
+        'name' => 'MainFolder',
+    ]);
+
+    $response->assertOk();
+});
+
 it('returns 400 when drive service throws a runtime exception', function () {
     Config::set('drive.root_folder_id', 'root123');
 
