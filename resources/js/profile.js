@@ -144,7 +144,7 @@ function confirmCreateFolder() {
       // Mostrar mensaje de éxito
       showSuccessMessage(`Carpeta "${name}" creada exitosamente`);
 
-      // Mostrar la sección de subcarpetas
+      // Mostrar la sección de subcarpetas sin auto-completar
       const subfolderCard = document.getElementById('subfolder-card');
       if (subfolderCard) {
         subfolderCard.style.display = 'block';
