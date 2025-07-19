@@ -11,7 +11,7 @@ class RegisterController extends Controller
     /**
      * Mostrar el formulario de registro.
      */
-    public function show()
+    public function showRegistrationForm()
     {
         return view('auth.register');
     }
