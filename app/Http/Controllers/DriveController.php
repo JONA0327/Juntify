@@ -67,21 +67,7 @@ class DriveController extends Controller
             'parent_id'       => null,
         ]);
 
-        $subfoldersData = [];
-        foreach (config('drive.default_subfolders', []) as $subName) {
-            $subId = $this->serviceAccount->createFolder($subName, $folderId);
-            Subfolder::create([
-                'folder_id' => $folder->id,
-                'google_id' => $subId,
-                'name'      => $subName,
-            ]);
-            $subfoldersData[] = ['name' => $subName, 'id' => $subId];
-        }
-
-        return response()->json([
-            'id'         => $folderId,
-            'subfolders' => $subfoldersData,
-        ]);
+        return response()->json(['id' => $folderId]);
     }
 
     public function setMainFolder(Request $request)

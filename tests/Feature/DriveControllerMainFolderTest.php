@@ -10,8 +10,8 @@ use Google\Client;
 use Illuminate\Support\Facades\Config;
 use Mockery;
 
-// Test creation of main folder and default subfolders
-it('creates main folder and subfolders', function () {
+// Test creation of main folder only
+it('creates main folder', function () {
     Config::set('drive.root_folder_id', 'root123');
 
     $user = User::factory()->create(['username' => 'testuser']);
@@ -27,12 +27,6 @@ it('creates main folder and subfolders', function () {
     $service->shouldReceive('impersonate')->once()->with($user->email);
     $service->shouldReceive('createFolder')
         ->once()->with('MainFolder', 'root123')->andReturn('folder123');
-    $service->shouldReceive('createFolder')
-        ->once()->with('Audios', 'folder123')->andReturn('audios123');
-    $service->shouldReceive('createFolder')
-        ->once()->with('Transcripciones', 'folder123')->andReturn('trans123');
-    $service->shouldReceive('createFolder')
-        ->once()->with('Resúmenes', 'folder123')->andReturn('summary123');
 
     app()->instance(GoogleServiceAccount::class, $service);
 
@@ -42,11 +36,6 @@ it('creates main folder and subfolders', function () {
 
     $response->assertOk()->assertJson([
         'id' => 'folder123',
-        'subfolders' => [
-            ['name' => 'Audios', 'id' => 'audios123'],
-            ['name' => 'Transcripciones', 'id' => 'trans123'],
-            ['name' => 'Resúmenes', 'id' => 'summary123'],
-        ],
     ]);
 
     $this->assertDatabaseHas('google_tokens', [
@@ -61,18 +50,7 @@ it('creates main folder and subfolders', function () {
         'parent_id' => null,
     ]);
 
-    $this->assertDatabaseHas('subfolders', [
-        'name' => 'Audios',
-        'google_id' => 'audios123',
-    ]);
-    $this->assertDatabaseHas('subfolders', [
-        'name' => 'Transcripciones',
-        'google_id' => 'trans123',
-    ]);
-    $this->assertDatabaseHas('subfolders', [
-        'name' => 'Resúmenes',
-        'google_id' => 'summary123',
-    ]);
+    $this->assertDatabaseCount('subfolders', 0);
 });
 
 // Test Google OAuth callback does not create folders
