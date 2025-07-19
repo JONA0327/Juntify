@@ -149,11 +149,6 @@ function confirmCreateFolder() {
       if (subfolderCard) {
         subfolderCard.style.display = 'block';
       }
-      if (Array.isArray(res.data.subfolders)) {
-        res.data.subfolders.forEach(sf => {
-          addSubfolderToList(sf.name, sf.id);
-        });
-      }
     })
     .catch(err => {
       console.error('Error creando carpeta principal:', err.response?.data || err.message);
