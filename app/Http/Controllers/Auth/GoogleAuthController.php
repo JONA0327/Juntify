@@ -8,8 +8,6 @@ use Google\Service\Oauth2;
 use Google\Service\Drive;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
-use App\Models\User;
 use App\Models\GoogleToken;
 
 class GoogleAuthController extends Controller
@@ -43,25 +41,16 @@ class GoogleAuthController extends Controller
                 ->withErrors(['drive' => 'No se pudo autorizar Google']);
         }
 
+        if (!Auth::check()) {
+            return redirect()->route('login')->withErrors([
+                'auth' => 'Debes iniciar sesi\xC3\xB3n para conectar Google Drive',
+            ]);
+        }
+
         $client->setAccessToken($token);
-        $oauth2 = new Oauth2($client);
-        $googleUser = $oauth2->userinfo->get();
-
-        $user = User::firstOrCreate(
-            ['email' => $googleUser->getEmail()],
-            [
-                'id' => (string) Str::uuid(),
-                'username' => $googleUser->getId(),
-                'full_name' => $googleUser->getName() ?: $googleUser->getEmail(),
-                'password' => '',
-                'roles' => 'free',
-            ]
-        );
-
-        Auth::login($user);
 
         GoogleToken::updateOrCreate(
-            ['username' => $user->username],
+            ['username' => Auth::user()->username],
             [
                 'access_token'  => $token['access_token'] ?? '',
                 'refresh_token' => $token['refresh_token'] ?? '',
