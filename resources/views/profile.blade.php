@@ -331,7 +331,7 @@
                             </h2>
                             <div class="form-group" style="margin-bottom: 1rem;">
                                 <label class="info-label" style="display: block; margin-bottom: 0.5rem;">Carpeta Principal</label>
-                                <input type="text" id="main-folder-input" class="form-input" placeholder="Pega aquí el ID de la carpeta o crea una nueva" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; color: #fff;">
+                                <input type="text" id="main-folder-input" class="form-input" placeholder="Pega aquí el ID de la carpeta o crea una nueva" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; color: #fff;" value="{{ $folder->google_id ?? '' }}" data-id="{{ $folder->google_id ?? '' }}">
                             </div>
                             <div class="action-buttons">
                                 <button class="btn btn-secondary" onclick="createMainFolder()">
@@ -351,7 +351,7 @@
                             </h2>
                             <div class="info-item">
                                 <span class="info-label">Carpeta Principal</span>
-                                <span class="info-value" id="main-folder-name">Juntify Reuniones</span>
+                                <span class="info-value" id="main-folder-name" data-name="{{ $folder->name ?? '' }}" data-id="{{ $folder->google_id ?? '' }}">{{ isset($folder) ? ($folder->name . ' (' . $folder->google_id . ')') : '' }}</span>
                             </div>
                             <div class="form-group" style="margin: 1rem 0;">
                                 <label class="info-label" style="display: block; margin-bottom: 0.5rem;">Nueva Subcarpeta</label>

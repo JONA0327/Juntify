@@ -3,6 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\Folder;
+use App\Models\GoogleToken;
+use App\Services\GoogleDriveService;
+use App\Http\Controllers\Auth\GoogleAuthController;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -11,13 +16,56 @@ use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
-        public function show()
+        public function show(GoogleDriveService $drive, GoogleAuthController $auth)
     {
         $user = Auth::user();
-        $driveConnected = $user->googleToken()->exists();
 
-        // Asume que tu Blade está en resources/views/profile.blade.php
-        return view('profile', compact('user', 'driveConnected'));
+        $token = GoogleToken::where('username', $user->username)->first();
+        if (!$token) {
+            return $auth->redirect();
+        }
+
+        $client = $drive->getClient();
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expires_in'    => max(1, Carbon::parse($token->expiry_date)->timestamp - time()),
+            'created'       => time(),
+        ]);
+
+        if ($client->isAccessTokenExpired() && $token->refresh_token) {
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (!isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
+        }
+
+        if (!$token->recordings_folder_id) {
+            return $auth->redirect();
+        }
+
+        $folder = Folder::firstOrCreate(
+            [
+                'google_token_id' => $token->id,
+                'google_id'       => $token->recordings_folder_id,
+            ]
+        );
+
+        try {
+            $file = $drive->getDrive()->files->get($token->recordings_folder_id, ['fields' => 'name']);
+            $folder->name = $file->getName();
+            $folder->save();
+        } catch (\Throwable $e) {
+            // Ignore errors fetching folder name
+        }
+
+        $driveConnected = true;
+
+        return view('profile', compact('user', 'driveConnected', 'folder'));
     }
     /**
      * Display the user's profile form.

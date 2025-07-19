@@ -211,6 +211,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const createMainBtn = document.getElementById('create-main-folder-btn');
   const setMainBtn    = document.getElementById('set-main-folder-btn');
   const createSubBtn  = document.getElementById('create-subfolder-btn');
+  const mainInput     = document.getElementById('main-folder-input');
+  const mainName      = document.getElementById('main-folder-name');
+
+  if (mainInput && mainInput.dataset.id) {
+    mainInput.value = mainInput.dataset.id;
+  }
+
+  if (mainName && mainName.dataset.name) {
+    const name = mainName.dataset.name;
+    const id   = mainName.dataset.id;
+    mainName.textContent = name ? `${name} (${id})` : '';
+  }
 
   if (connectBtn)    connectBtn.addEventListener('click', connectDrive);
   if (createMainBtn) createMainBtn.addEventListener('click', createMainFolder);
