@@ -60,14 +60,28 @@ class DriveController extends Controller
         GoogleToken::where('username', Auth::user()->username)
             ->update(['recordings_folder_id' => $folderId]);
 
-        Folder::create([
+        $folder = Folder::create([
             'google_token_id' => $token->id,
             'google_id'       => $folderId,
             'name'            => $request->input('name'),
             'parent_id'       => null,
         ]);
 
-        return response()->json(['id' => $folderId]);
+        $subfoldersData = [];
+        foreach (config('drive.default_subfolders', []) as $subName) {
+            $subId = $this->serviceAccount->createFolder($subName, $folderId);
+            Subfolder::create([
+                'folder_id' => $folder->id,
+                'google_id' => $subId,
+                'name'      => $subName,
+            ]);
+            $subfoldersData[] = ['name' => $subName, 'id' => $subId];
+        }
+
+        return response()->json([
+            'id'         => $folderId,
+            'subfolders' => $subfoldersData,
+        ]);
     }
 
     public function setMainFolder(Request $request)
