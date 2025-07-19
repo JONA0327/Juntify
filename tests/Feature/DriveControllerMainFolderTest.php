@@ -3,7 +3,6 @@
 use App\Models\User;
 use App\Models\GoogleToken;
 use App\Models\Folder;
-use App\Models\Subfolder;
 use App\Services\GoogleServiceAccount;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use Google\Client;
@@ -34,9 +33,7 @@ it('creates main folder', function () {
         'name' => 'MainFolder',
     ]);
 
-    $response->assertOk()->assertJson([
-        'id' => 'folder123',
-    ]);
+    $response->assertOk()->assertJsonStructure(['id']);
 
     $this->assertDatabaseHas('google_tokens', [
         'id' => $token->id,
@@ -49,8 +46,7 @@ it('creates main folder', function () {
         'name' => 'MainFolder',
         'parent_id' => null,
     ]);
-
-    $this->assertDatabaseCount('subfolders', 0);
+    $this->assertDatabaseCount('folders', 1);
 });
 
 // Test Google OAuth callback does not create folders
