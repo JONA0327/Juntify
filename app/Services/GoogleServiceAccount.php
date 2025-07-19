@@ -19,7 +19,13 @@ class GoogleServiceAccount
         $this->client = new Client();
         $jsonPath = config('services.google.service_account_json');
 
-        if ($jsonPath && !Str::startsWith($jsonPath, '/') && !preg_match('/^[A-Za-z]:[\\\/]/', $jsonPath)) {
+        // Si la ruta no es absoluta (ni Unix ni Windows), la convertimos
+        if (
+            $jsonPath
+            && !Str::startsWith($jsonPath, '/')
+            // ahora usamos '#' como delimitador y escapamos '\\' correctamente
+            && !preg_match('#^[A-Za-z]:(\\\\|/)#', $jsonPath)
+        ) {
             $jsonPath = base_path($jsonPath);
         }
 
@@ -51,7 +57,7 @@ class GoogleServiceAccount
     public function createFolder(string $name, ?string $parentId = null): string
     {
         $fileMetadata = new DriveFile([
-            'name' => $name,
+            'name'     => $name,
             'mimeType' => 'application/vnd.google-apps.folder',
         ]);
 
