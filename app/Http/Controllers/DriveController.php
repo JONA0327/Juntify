@@ -72,11 +72,22 @@ class DriveController extends Controller
 
     public function setMainFolder(Request $request)
     {
-        $this->applyUserToken();
+        $token = $this->applyUserToken();
 
         GoogleToken::updateOrCreate(
             ['username' => Auth::user()->username],
             ['recordings_folder_id' => $request->input('id')]
+        );
+
+        Folder::updateOrCreate(
+            [
+                'google_token_id' => $token->id,
+                'google_id'       => $request->input('id'),
+            ],
+            [
+                'name'      => $request->input('name'),
+                'parent_id' => null,
+            ]
         );
 
         return response()->json(['id' => $request->input('id')]);
