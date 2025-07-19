@@ -159,4 +159,11 @@ class DriveController extends Controller
             'subfolders'  => $subfolders,
         ]);
     }
+
+    public function status()
+    {
+        $connected = GoogleToken::where('username', Auth::user()->username)->exists();
+
+        return response()->json(['connected' => $connected]);
+    }
 }

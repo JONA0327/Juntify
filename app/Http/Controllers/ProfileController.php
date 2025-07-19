@@ -16,13 +16,16 @@ use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
-        public function show(GoogleDriveService $drive, GoogleAuthController $auth)
+    public function show(GoogleDriveService $drive, GoogleAuthController $auth)
     {
         $user = Auth::user();
 
         $token = GoogleToken::where('username', $user->username)->first();
+
         if (!$token) {
-            return $auth->redirect();
+            $driveConnected = false;
+            $folder         = null;
+            return view('profile', compact('user', 'driveConnected', 'folder'));
         }
 
         $client = $drive->getClient();
@@ -45,7 +48,9 @@ class ProfileController extends Controller
         }
 
         if (!$token->recordings_folder_id) {
-            return $auth->redirect();
+            $driveConnected = true;
+            $folder         = null;
+            return view('profile', compact('user', 'driveConnected', 'folder'));
         }
 
         try {

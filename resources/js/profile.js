@@ -66,7 +66,25 @@ document.addEventListener('click', e => {
  * Llama al endpoint para autorizar Google Drive
  */
 function connectDrive() {
-  window.location.href = '/api/auth/google/redirect';
+  const modal = document.getElementById('drive-loading-modal');
+  if (modal) modal.classList.add('show');
+
+  axios.get('/drive/status')
+    .then(res => {
+      if (!res.data.connected) {
+        alert('Conecta tu cuenta de drive para crear una carpeta');
+        window.location.href = '/api/auth/google/redirect';
+      } else {
+        window.location.reload();
+      }
+    })
+    .catch(() => {
+      alert('Error verificando Drive');
+      window.location.href = '/api/auth/google/redirect';
+    })
+    .finally(() => {
+      if (modal) modal.classList.remove('show');
+    });
 }
 
 /**

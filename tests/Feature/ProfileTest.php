@@ -134,3 +134,12 @@ test('profile page shows when google token exists and folder is stored', functio
         'parent_id'       => null,
     ]);
 });
+
+test('profile page renders when google token is missing', function () {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->get('/profile');
+
+    $response->assertOk();
+    $response->assertSee('Conectar con Google Drive');
+});
