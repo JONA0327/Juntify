@@ -22,6 +22,7 @@ class ProfileController extends Controller
         $user = Auth::user();
 
         $token = GoogleToken::where('username', $user->username)->first();
+        $lastSync = optional($token)->updated_at;
         $subfolders = collect();
 
         if (!$token) {
@@ -80,7 +81,7 @@ class ProfileController extends Controller
 
         $subfolders = Subfolder::where('folder_id', $folder->id)->get();
 
-        return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders'));
+        return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders','lastSync' ));
     }
     /**
      * Display the user's profile form.

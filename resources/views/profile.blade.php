@@ -299,7 +299,13 @@
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Última sincronización</span>
-                                <span class="info-value" id="last-sync">Nunca</span>
+                                <span class="info-value" id="last-sync">
+                                    @if($lastSync)
+                                        {{ $lastSync->format('d/m/Y H:i:s') }}
+                                    @else
+                                        Nunca
+                                    @endif
+                                </span>
                             </div>
                             @if(!$driveConnected)
                                 <div class="action-buttons">
@@ -869,10 +875,10 @@
                 </p>
                 <div class="form-group">
                     <label for="folder-name-input" class="form-label">Nombre de la carpeta</label>
-                    <input 
-                        type="text" 
-                        id="folder-name-input" 
-                        class="form-input modal-input" 
+                    <input
+                        type="text"
+                        id="folder-name-input"
+                        class="form-input modal-input"
                         placeholder="Ej: Juntify-Reuniones-2025"
                         maxlength="100"
                     >
@@ -907,10 +913,10 @@
                 </p>
                 <div class="form-group">
                     <label for="subfolder-name-input" class="form-label">Nombre de la subcarpeta</label>
-                    <input 
-                        type="text" 
-                        id="subfolder-name-input" 
-                        class="form-input modal-input" 
+                    <input
+                        type="text"
+                        id="subfolder-name-input"
+                        class="form-input modal-input"
                         placeholder="Ej: Reuniones-Enero-2025"
                         maxlength="100"
                     >
