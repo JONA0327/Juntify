@@ -846,6 +846,12 @@
         </main>
     </div>
 
+    <div class="modal" id="drive-loading-modal">
+        <div class="modal-content">
+            <div class="modal-icon">⏳</div>
+            <h2 class="modal-title">Verificando conexión...</h2>
+        </div>
+    </div>
 
 </body>
 </html>
