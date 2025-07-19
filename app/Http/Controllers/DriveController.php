@@ -49,6 +49,10 @@ class DriveController extends Controller
 
     public function createMainFolder(Request $request)
     {
+        $request->validate([
+            'name' => 'required|string',
+        ]);
+
         $token = $this->applyUserToken();
 
         try {
