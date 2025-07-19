@@ -4,7 +4,8 @@ use App\Models\User;
 use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\Subfolder;
-use App\Services\GoogleServiceAccount;
+use App\Services\GoogleDriveService;
+use Google\Client;
 use Illuminate\Support\Facades\Config;
 use Mockery;
 
@@ -28,12 +29,16 @@ it('creates subfolder', function () {
         'parent_id'       => null,
     ]);
 
-    $service = Mockery::mock(GoogleServiceAccount::class);
-    $service->shouldReceive('impersonate')->once()->with($user->email);
+    $client = Mockery::mock(Client::class);
+    $client->shouldReceive('setAccessToken');
+    $client->shouldReceive('isAccessTokenExpired')->andReturnFalse();
+
+    $service = Mockery::mock(GoogleDriveService::class);
+    $service->shouldReceive('getClient')->andReturn($client);
     $service->shouldReceive('createFolder')
         ->once()->with('SubFolder', 'main123')->andReturn('sub123');
 
-    app()->instance(GoogleServiceAccount::class, $service);
+    app()->instance(GoogleDriveService::class, $service);
 
     $response = $this->actingAs($user)->post('/drive/subfolder', [
         'name' => 'SubFolder',

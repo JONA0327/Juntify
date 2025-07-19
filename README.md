@@ -74,15 +74,9 @@ GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
 GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback
 GOOGLE_DRIVE_ROOT_FOLDER=
-GOOGLE_SERVICE_ACCOUNT_JSON=
 ```
 
 `GOOGLE_DRIVE_ROOT_FOLDER` may be left empty to create folders at the Drive root.
-`GOOGLE_SERVICE_ACCOUNT_JSON` must point to the service account credentials file
-used to create folders. The value may be an absolute path or a path relative to
-Laravel's base directory. The service account will impersonate the authenticated
-user so that folders are created in the user's Drive and the user has full
-permissions.
 
 After authorizing Google Drive from the profile page, return to the same page and
 use the **Crear Carpeta Principal** option to create your recordings folder.
