@@ -152,7 +152,8 @@ function confirmCreateFolder() {
     })
     .catch(err => {
       console.error('Error creando carpeta principal:', err.response?.data || err.message);
-      showErrorMessage('No se pudo crear la carpeta principal. Inténtalo de nuevo.');
+      const serverMessage = err.response?.data?.message;
+      showErrorMessage(serverMessage ?? 'No se pudo crear la carpeta principal. Inténtalo de nuevo.');
     })
     .finally(() => {
       btn.disabled = false;
