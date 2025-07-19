@@ -49,6 +49,27 @@ it('creates main folder', function () {
     $this->assertDatabaseCount('folders', 1);
 });
 
+it('returns 400 when service account json path is invalid', function () {
+    Config::set('drive.root_folder_id', 'root123');
+    Config::set('services.google.service_account_json', '/invalid/path.json');
+
+    $user = User::factory()->create(['username' => 'testuser']);
+
+    GoogleToken::create([
+        'username'      => $user->username,
+        'access_token'  => 'access',
+        'refresh_token' => 'refresh',
+        'expiry_date'   => now()->addHour(),
+    ]);
+
+    $response = $this->actingAs($user)->post('/drive/main-folder', [
+        'name' => 'MainFolder',
+    ]);
+
+    $response->assertStatus(400);
+    $response->assertJson(['message' => 'Service account JSON path is invalid']);
+});
+
 // Test Google OAuth callback does not create folders
 it('does not create folders on oauth callback', function () {
     $user = User::factory()->create(['username' => 'testuser']);
