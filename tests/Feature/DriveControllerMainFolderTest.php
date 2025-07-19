@@ -101,3 +101,29 @@ it('does not create folders on oauth callback', function () {
     $this->assertDatabaseCount('folders', 0);
 });
 
+it('requires a name to create main folder', function () {
+    $user = User::factory()->create();
+
+    $response = $this
+        ->actingAs($user)
+        ->from('/profile')
+        ->post('/drive/main-folder', []);
+
+    $response
+        ->assertSessionHasErrors('name')
+        ->assertRedirect('/profile');
+});
+
+it('validates name is a string when creating main folder', function () {
+    $user = User::factory()->create();
+
+    $response = $this
+        ->actingAs($user)
+        ->from('/profile')
+        ->post('/drive/main-folder', ['name' => ['array']]);
+
+    $response
+        ->assertSessionHasErrors('name')
+        ->assertRedirect('/profile');
+});
+
