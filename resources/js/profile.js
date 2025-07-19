@@ -140,14 +140,19 @@ function confirmCreateFolder() {
     .then(res => {
       mainInput.value = res.data.id;
       closeCreateFolderModal();
-      
+
       // Mostrar mensaje de éxito
       showSuccessMessage(`Carpeta "${name}" creada exitosamente`);
-      
+
       // Mostrar la sección de subcarpetas
       const subfolderCard = document.getElementById('subfolder-card');
       if (subfolderCard) {
         subfolderCard.style.display = 'block';
+      }
+      if (Array.isArray(res.data.subfolders)) {
+        res.data.subfolders.forEach(sf => {
+          addSubfolderToList(sf.name, sf.id);
+        });
       }
     })
     .catch(err => {
@@ -237,7 +242,6 @@ function confirmCreateSubfolder() {
   const input = document.getElementById('subfolder-name-input');
   const name = input.value.trim();
   const mainFolderId = document.getElementById('main-folder-input').value.trim();
-  const list = document.getElementById('subfolders-list');
   const btn = document.getElementById('confirm-create-sub-btn');
 
   if (!name) {
@@ -257,26 +261,8 @@ function confirmCreateSubfolder() {
   
   axios.post('/drive/subfolder', { name, parentId: mainFolderId })
     .then(res => {
-      const div = document.createElement('div');
-      div.style.cssText = `
-        margin: 0.5rem 0;
-        padding: 0.75rem;
-        background: rgba(59, 130, 246, 0.1);
-        border-radius: 8px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border: 1px solid rgba(59, 130, 246, 0.2);
-      `;
-      div.innerHTML = `
-        <div>
-          <div style="color: #ffffff; font-weight: 600;">${name}</div>
-          <div style="color: #94a3b8; font-size: 0.8rem;">${res.data.id}</div>
-        </div>
-        <button type="button" class="btn-remove-subfolder" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 0.5rem; border-radius: 8px; cursor: pointer;">🗑️</button>
-      `;
-      list.appendChild(div);
-      
+      addSubfolderToList(name, res.data.id);
+
       closeCreateSubfolderModal();
       showSuccessMessage(`Subcarpeta "${name}" creada exitosamente`);
     })
@@ -288,6 +274,30 @@ function confirmCreateSubfolder() {
       btn.disabled = false;
       btn.textContent = '✅ Crear Subcarpeta';
     });
+}
+
+function addSubfolderToList(name, id) {
+  const list = document.getElementById('subfolders-list');
+  if (!list) return;
+  const div = document.createElement('div');
+  div.style.cssText = `
+    margin: 0.5rem 0;
+    padding: 0.75rem;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  `;
+  div.innerHTML = `
+    <div>
+      <div style="color: #ffffff; font-weight: 600;">${name}</div>
+      <div style="color: #94a3b8; font-size: 0.8rem;">${id}</div>
+    </div>
+    <button type="button" class="btn-remove-subfolder" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 0.5rem; border-radius: 8px; cursor: pointer;">🗑️</button>
+  `;
+  list.appendChild(div);
 }
 
 /**
@@ -469,3 +479,4 @@ window.showCreateSubfolderModal = showCreateSubfolderModal;
 window.closeCreateSubfolderModal = closeCreateSubfolderModal;
 window.confirmCreateSubfolder = confirmCreateSubfolder;
 window.setMainFolder       = setMainFolder;
+window.addSubfolderToList = addSubfolderToList;
