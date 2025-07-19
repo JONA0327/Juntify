@@ -5,6 +5,8 @@ namespace App\Services;
 use Google\Client;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
+use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class GoogleServiceAccount
 {
@@ -14,7 +16,14 @@ class GoogleServiceAccount
     public function __construct()
     {
         $this->client = new Client();
-        $this->client->setAuthConfig(config('services.google.service_account_json'));
+        $jsonPath = config('services.google.service_account_json');
+
+        if (!$jsonPath || !is_file($jsonPath)) {
+            Log::error('Invalid Google service account JSON path', ['path' => $jsonPath]);
+            throw new RuntimeException('Service account JSON path is invalid');
+        }
+
+        $this->client->setAuthConfig($jsonPath);
         $this->client->setScopes([Drive::DRIVE]);
         $this->drive = new Drive($this->client);
     }

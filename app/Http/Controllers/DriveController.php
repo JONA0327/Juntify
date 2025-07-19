@@ -8,18 +8,17 @@ use App\Models\Subfolder;
 use App\Services\GoogleDriveService;
 use App\Services\GoogleServiceAccount;
 use Carbon\Carbon;
+use RuntimeException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class DriveController extends Controller
 {
     protected GoogleDriveService $drive;
-    protected GoogleServiceAccount $serviceAccount;
 
-    public function __construct(GoogleDriveService $drive, GoogleServiceAccount $serviceAccount)
+    public function __construct(GoogleDriveService $drive)
     {
         $this->drive = $drive;
-        $this->serviceAccount = $serviceAccount;
     }
 
     protected function applyUserToken(): GoogleToken
@@ -51,11 +50,17 @@ class DriveController extends Controller
     public function createMainFolder(Request $request)
     {
         $token = $this->applyUserToken();
-        $this->serviceAccount->impersonate(Auth::user()->email);
-        $folderId = $this->serviceAccount->createFolder(
-            $request->input('name'),
-            config('drive.root_folder_id')
-        );
+
+        try {
+            $serviceAccount = app(GoogleServiceAccount::class);
+            $serviceAccount->impersonate(Auth::user()->email);
+            $folderId = $serviceAccount->createFolder(
+                $request->input('name'),
+                config('drive.root_folder_id')
+            );
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
 
         GoogleToken::where('username', Auth::user()->username)
             ->update(['recordings_folder_id' => $folderId]);
@@ -87,8 +92,9 @@ class DriveController extends Controller
         $token = $this->applyUserToken();
         $parentId = $token->recordings_folder_id;
 
-        $this->serviceAccount->impersonate(Auth::user()->email);
-        $folderId = $this->serviceAccount->createFolder($request->input('name'), $parentId);
+        $serviceAccount = app(GoogleServiceAccount::class);
+        $serviceAccount->impersonate(Auth::user()->email);
+        $folderId = $serviceAccount->createFolder($request->input('name'), $parentId);
 
         if ($folder = Folder::where('google_id', $parentId)->first()) {
             Subfolder::create([
