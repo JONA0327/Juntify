@@ -6,6 +6,7 @@ use Google\Client;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class GoogleServiceAccount
@@ -18,7 +19,11 @@ class GoogleServiceAccount
         $this->client = new Client();
         $jsonPath = config('services.google.service_account_json');
 
-        if (!$jsonPath || !is_file($jsonPath)) {
+        if ($jsonPath && !Str::startsWith($jsonPath, '/') && !preg_match('/^[A-Za-z]:[\\\/]/', $jsonPath)) {
+            $jsonPath = base_path($jsonPath);
+        }
+
+        if (!$jsonPath || !is_file($jsonPath) || !is_readable($jsonPath)) {
             Log::error('Invalid Google service account JSON path', ['path' => $jsonPath]);
             throw new RuntimeException('Service account JSON path is invalid');
         }

@@ -79,7 +79,8 @@ GOOGLE_SERVICE_ACCOUNT_JSON=
 
 `GOOGLE_DRIVE_ROOT_FOLDER` may be left empty to create folders at the Drive root.
 `GOOGLE_SERVICE_ACCOUNT_JSON` must point to the service account credentials file
-used to create folders. The service account will impersonate the authenticated
+used to create folders. The value may be an absolute path or a path relative to
+Laravel's base directory. The service account will impersonate the authenticated
 user so that folders are created in the user's Drive and the user has full
 permissions.
 
