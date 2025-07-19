@@ -48,20 +48,26 @@ class ProfileController extends Controller
             return $auth->redirect();
         }
 
-        $folder = Folder::firstOrCreate(
+        try {
+            $file       = $drive->getDrive()->files->get(
+                $token->recordings_folder_id,
+                ['fields' => 'name']
+            );
+            $folderName = $file->getName() ?? "recordings_{$user->username}";
+        } catch (\Throwable $e) {
+            $folderName = "recordings_{$user->username}";
+        }
+
+        $folder = Folder::updateOrCreate(
             [
                 'google_token_id' => $token->id,
                 'google_id'       => $token->recordings_folder_id,
+            ],
+            [
+                'name'      => $folderName,
+                'parent_id' => null,
             ]
         );
-
-        try {
-            $file = $drive->getDrive()->files->get($token->recordings_folder_id, ['fields' => 'name']);
-            $folder->name = $file->getName();
-            $folder->save();
-        } catch (\Throwable $e) {
-            // Ignore errors fetching folder name
-        }
 
         $driveConnected = true;
 
