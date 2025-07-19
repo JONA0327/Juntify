@@ -74,9 +74,11 @@ GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
 GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback
 GOOGLE_DRIVE_ROOT_FOLDER=
+GOOGLE_SERVICE_ACCOUNT_EMAIL=
 ```
 
 `GOOGLE_DRIVE_ROOT_FOLDER` may be left empty to create folders at the Drive root.
+When a main folder is created it will be shared with `GOOGLE_SERVICE_ACCOUNT_EMAIL`.
 
 After authorizing Google Drive from the profile page, return to the same page and
 use the **Crear Carpeta Principal** option to create your recordings folder.

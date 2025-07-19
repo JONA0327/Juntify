@@ -73,6 +73,8 @@ class DriveController extends Controller
             'parent_id'       => null,
         ]);
 
+        $this->drive->shareFolder($folderId, config('services.google.service_account_email'));
+
         return response()->json(['id' => $folderId]);
     }
 
