@@ -31,4 +31,6 @@ Route::middleware('auth')->group(function () {
          ->name('drive.setMainFolder');
     Route::post('/drive/subfolder',       [DriveController::class, 'createSubfolder'])
          ->name('drive.createSubfolder');
+    Route::get('/drive/sync-subfolders', [DriveController::class, 'syncDriveSubfolders'])
+         ->name('drive.syncSubfolders');
 });
