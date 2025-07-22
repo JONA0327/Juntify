@@ -11,7 +11,7 @@
     <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
     <!-- Styles -->
-    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/new-meeting.css', 'resources/js/new-meeting.js','resources/css/index.css'])
+    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css'])
 </head>
 <body>
     <!-- Animated particles background -->
@@ -83,7 +83,7 @@
                         <div class="checkbox-group">
                             <input type="checkbox" id="speaker-detection" class="form-checkbox" checked>
                             <label for="speaker-detection" class="checkbox-label">
-                                <span class="checkbox-title">🔵 Detección automática de hablantes</span>
+                                <span class="checkbox-title">🎯 Detección automática de hablantes</span>
                                 <span class="checkbox-description">El sistema detectará automáticamente los diferentes hablantes en la conversación. Para mejores resultados, asegúrate de que el audio sea claro y que haya diferencias notables entre las voces.</span>
                             </label>
                         </div>
@@ -104,7 +104,7 @@
                         </div>
                         
                         <div class="mode-option" data-mode="upload" onclick="selectRecordingMode('upload')">
-                            <div class="mode-icon">⬆️</div>
+                            <div class="mode-icon">📁</div>
                             <div class="mode-content">
                                 <h3 class="mode-title">Subir audio</h3>
                                 <p class="mode-description">Sube un archivo de audio existente</p>
@@ -112,7 +112,7 @@
                         </div>
                         
                         <div class="mode-option" data-mode="meeting" onclick="selectRecordingMode('meeting')">
-                            <div class="mode-icon">📹</div>
+                            <div class="mode-icon">💻</div>
                             <div class="mode-content">
                                 <h3 class="mode-title">Grabar reunión</h3>
                                 <p class="mode-description">Graba reuniones desde plataformas externas</p>
@@ -123,39 +123,43 @@
 
                 <!-- Grabador de Audio -->
                 <div class="info-card recorder-card">
-                    <h2 class="card-title">Grabador de audio extendido</h2>
+                    <h2 class="card-title" id="recorder-title">🎙️ Grabador de audio</h2>
                     
-                    <div class="recorder-interface">
+                    <!-- Interfaz de Grabación -->
+                    <div class="recorder-interface" id="audio-recorder">
                         <div class="recorder-visual">
-                            <div class="microphone-icon" id="microphone-visual">
-                                <div class="mic-circle">
-                                    <span class="mic-symbol">🎤</span>
+                            <!-- Micrófono central -->
+                            <div class="microphone-container">
+                                <div class="volume-rings" id="volume-rings">
+                                    <div class="volume-ring ring-1"></div>
+                                    <div class="volume-ring ring-2"></div>
+                                    <div class="volume-ring ring-3"></div>
                                 </div>
-                                <!-- Espectro de audio en tiempo real -->
-                                <div class="audio-spectrum" id="audio-spectrum">
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
-                                    <div class="spectrum-bar"></div>
+                                <div class="mic-circle" id="mic-circle">
+                                    <span class="mic-symbol">🎤</span>
                                 </div>
                             </div>
                             
+                            <!-- Visualizador de audio -->
+                            <div class="audio-visualizer" id="audio-visualizer">
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                                <div class="audio-bar"></div>
+                            </div>
+                            
+                            <!-- Timer -->
                             <div class="timer-display">
                                 <span class="time-counter" id="timer-counter">00:00</span>
                                 <span class="timer-label" id="timer-label">Listo para grabar</span>
@@ -166,6 +170,141 @@
                             <button class="btn btn-primary recorder-btn" id="start-recording" onclick="toggleRecording()">
                                 ▶️ Iniciar grabación
                             </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Interfaz de Subir Audio -->
+                    <div class="upload-interface" id="audio-uploader" style="display: none;">
+                        <div class="upload-area" id="upload-area">
+                            <div class="upload-icon">📁</div>
+                            <h3 class="upload-title">Arrastra y suelta tu archivo de audio aquí</h3>
+                            <p class="upload-subtitle">O haz clic para seleccionar un archivo de audio</p>
+                            <p class="upload-formats">Formatos soportados: MP3, WAV, M4A, FLAC, OGG, AAC</p>
+                            <input type="file" id="audio-file-input" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,audio/*" style="display: none;">
+                            <button class="btn btn-primary upload-btn" onclick="document.getElementById('audio-file-input').click()">
+                                📁 Seleccionar archivo
+                            </button>
+                        </div>
+                        
+                        <!-- Archivo seleccionado -->
+                        <div class="selected-file" id="selected-file" style="display: none;">
+                            <div class="file-info">
+                                <div class="file-icon">🎵</div>
+                                <div class="file-details">
+                                    <div class="file-name" id="file-name"></div>
+                                    <div class="file-size" id="file-size"></div>
+                                </div>
+                                <button class="remove-file-btn" onclick="removeSelectedFile()">❌</button>
+                            </div>
+                            <div class="upload-progress" id="upload-progress" style="display: none;">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="progress-fill"></div>
+                                </div>
+                                <div class="progress-text" id="progress-text">0%</div>
+                            </div>
+                            <button class="btn btn-primary process-btn" onclick="processAudioFile()">
+                                🚀 Procesar archivo
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Interfaz de Reunión -->
+                    <div class="meeting-interface" id="meeting-recorder" style="display: none;">
+                        <div class="meeting-recorder-container">
+                            <div class="meeting-header">
+                                <h3 class="meeting-title">Grabador de audio de reuniones</h3>
+                                <p class="meeting-subtitle">Captura el audio de una reunión o llamada, combinando el audio del sistema y tu micrófono</p>
+                            </div>
+                            
+                            <!-- Controles de fuentes de audio -->
+                            <div class="audio-sources-controls">
+                                <button class="audio-source-btn system-audio" id="system-audio-btn" onclick="toggleSystemAudio()">
+                                    <span class="source-icon">🖥️</span>
+                                    <span class="source-text">Sistema activado</span>
+                                </button>
+                                <button class="audio-source-btn microphone-audio active" id="microphone-audio-btn" onclick="toggleMicrophoneAudio()">
+                                    <span class="source-icon">🎤</span>
+                                    <span class="source-text">Micrófono activado</span>
+                                </button>
+                            </div>
+                            
+                            <!-- Visualizadores de audio -->
+                            <div class="meeting-audio-visualizers">
+                                <!-- Audio del sistema -->
+                                <div class="audio-source-container">
+                                    <div class="source-header">
+                                        <span class="source-icon">🖥️</span>
+                                        <span class="source-label">Audio del sistema</span>
+                                        <button class="mute-btn" id="system-mute-btn" onclick="muteSystemAudio()">
+                                            <span class="mute-icon">🔊</span>
+                                        </button>
+                                    </div>
+                                    <div class="audio-visualizer-container">
+                                        <div class="meeting-audio-visualizer" id="system-audio-visualizer">
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Audio del micrófono -->
+                                <div class="audio-source-container">
+                                    <div class="source-header">
+                                        <span class="source-icon">🎤</span>
+                                        <span class="source-label">Audio del micrófono</span>
+                                        <button class="mute-btn" id="microphone-mute-btn" onclick="muteMicrophoneAudio()">
+                                            <span class="mute-icon">🔊</span>
+                                        </button>
+                                    </div>
+                                    <div class="audio-visualizer-container">
+                                        <div class="meeting-audio-visualizer" id="microphone-audio-visualizer">
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                            <div class="meeting-audio-bar"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Timer y controles -->
+                            <div class="meeting-timer-section">
+                                <div class="meeting-timer-display">
+                                    <span class="meeting-time-counter" id="meeting-timer-counter">00:00</span>
+                                    <span class="meeting-timer-label" id="meeting-timer-label">Listo para grabar</span>
+                                </div>
+                                
+                                <div class="meeting-controls">
+                                    <button class="btn btn-primary meeting-record-btn" id="meeting-record-btn" onclick="toggleMeetingRecording()">
+                                        <span class="btn-icon">🎬</span>
+                                        <span class="btn-text">Seleccionar fuente de audio</span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -194,9 +333,9 @@
                         <div class="form-group">
                             <label class="form-label">Dispositivo de micrófono</label>
                             <select class="form-select" id="microphone-device">
-                                <option value="default">Predeterminado - Micrófono (USB Audio Device) (4c4a:4155)</option>
-                                <option value="builtin">Micrófono integrado</option>
-                                <option value="external">Micrófono externo</option>
+                                <option value="default">🎤 Predeterminado - Micrófono (USB Audio Device)</option>
+                                <option value="builtin">🔊 Micrófono integrado</option>
+                                <option value="external">🎧 Micrófono externo</option>
                             </select>
                         </div>
 
@@ -205,9 +344,9 @@
                             <div class="slider-container">
                                 <input type="range" class="form-slider" id="mic-sensitivity" min="0" max="100" value="75">
                                 <div class="slider-labels">
-                                    <span>Baja</span>
+                                    <span>🔇 Baja</span>
                                     <span class="slider-value">75%</span>
-                                    <span>Alta</span>
+                                    <span>🔊 Alta</span>
                                 </div>
                             </div>
                         </div>
@@ -215,19 +354,19 @@
                         <div class="form-group">
                             <label class="form-label">Calidad de grabación</label>
                             <select class="form-select" id="recording-quality">
-                                <option value="medium">Media (128 kbps)</option>
-                                <option value="high">Alta (256 kbps)</option>
-                                <option value="low">Baja (64 kbps)</option>
+                                <option value="medium">📻 Media (128 kbps)</option>
+                                <option value="high">🎵 Alta (256 kbps)</option>
+                                <option value="low">📢 Baja (64 kbps)</option>
                             </select>
                         </div>
 
                         <div class="form-group">
                             <label class="form-label">Reducción de ruido</label>
                             <select class="form-select" id="noise-reduction">
-                                <option value="auto">Automático</option>
-                                <option value="high">Alto</option>
-                                <option value="medium">Medio</option>
-                                <option value="off">Desactivado</option>
+                                <option value="auto">🤖 Automático</option>
+                                <option value="high">🛡️ Alto</option>
+                                <option value="medium">⚖️ Medio</option>
+                                <option value="off">❌ Desactivado</option>
                             </select>
                         </div>
                     </div>
@@ -236,208 +375,7 @@
         </main>
     </div>
 
-    <script>
-        // Variables globales
-        let isRecording = false;
-        let isPaused = false;
-        let recordingTimer = null;
-        let startTime = null;
-        let selectedMode = 'audio';
-        let mediaRecorder = null;
-        let audioContext = null;
-        let analyser = null;
-        let dataArray = null;
-
-        // Función para seleccionar modo de grabación
-        function selectRecordingMode(mode) {
-            document.querySelectorAll('.mode-option').forEach(option => {
-                option.classList.remove('active');
-            });
-            document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
-            selectedMode = mode;
-        }
-
-        // Función para alternar opciones avanzadas
-        function toggleAdvancedOptions() {
-            const content = document.getElementById('advanced-content');
-            const icon = document.getElementById('expand-icon');
-            
-            if (content.classList.contains('collapsed')) {
-                content.classList.remove('collapsed');
-                icon.textContent = '▲';
-            } else {
-                content.classList.add('collapsed');
-                icon.textContent = '▼';
-            }
-        }
-
-        // Función para iniciar/detener grabación
-        function toggleRecording() {
-            if (!isRecording) {
-                startRecording();
-            } else {
-                stopRecording();
-            }
-        }
-
-        // Función para iniciar grabación
-        async function startRecording() {
-            try {
-                // Solicitar acceso al micrófono
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                // Configurar Web Audio API para análisis de frecuencias
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                const source = audioContext.createMediaStreamSource(stream);
-                source.connect(analyser);
-                
-                analyser.fftSize = 64;
-                const bufferLength = analyser.frequencyBinCount;
-                dataArray = new Uint8Array(bufferLength);
-                
-                // Configurar MediaRecorder
-                mediaRecorder = new MediaRecorder(stream);
-                mediaRecorder.start();
-                
-                isRecording = true;
-                startTime = Date.now();
-                
-                // Actualizar UI
-                document.getElementById('start-recording').innerHTML = '⏹️ Detener grabación';
-                document.getElementById('start-recording').classList.add('recording');
-                document.getElementById('timer-label').textContent = 'Grabando...';
-                document.getElementById('microphone-visual').classList.add('recording');
-                
-                // Iniciar timer y análisis de audio
-                recordingTimer = setInterval(updateTimer, 1000);
-                startAudioAnalysis();
-                
-            } catch (error) {
-                console.error('Error al acceder al micrófono:', error);
-                alert('No se pudo acceder al micrófono. Por favor, permite el acceso.');
-            }
-        }
-        
-        // Función para analizar audio en tiempo real
-        function startAudioAnalysis() {
-            if (!isRecording) return;
-            
-            analyser.getByteFrequencyData(dataArray);
-            
-            // Actualizar barras del espectro
-            const spectrumBars = document.querySelectorAll('.spectrum-bar');
-            const step = Math.floor(dataArray.length / spectrumBars.length);
-            
-            spectrumBars.forEach((bar, index) => {
-                const value = dataArray[index * step];
-                const height = (value / 255) * 100;
-                bar.style.height = Math.max(height, 2) + '%';
-                
-                // Cambiar color según intensidad
-                if (height > 70) {
-                    bar.style.background = '#ef4444'; // Rojo para volumen alto
-                } else if (height > 40) {
-                    bar.style.background = '#f59e0b'; // Amarillo para volumen medio
-                } else {
-                    bar.style.background = '#3b82f6'; // Azul para volumen bajo
-                }
-            });
-            
-            requestAnimationFrame(startAudioAnalysis);
-        }
-        
-        // Función original actualizada
-        function startRecordingOriginal() {
-            isRecording = true;
-            startTime = Date.now();
-            
-            // Actualizar UI
-            document.getElementById('start-recording').innerHTML = '⏹️ Detener grabación';
-            document.getElementById('start-recording').classList.add('recording');
-            document.getElementById('timer-label').textContent = 'Grabando...';
-            document.getElementById('microphone-visual').classList.add('recording');
-            document.getElementById('audio-spectrum').classList.add('active');
-            
-            // Iniciar timer
-            recordingTimer = setInterval(updateTimer, 1000);
-        }
-
-        // Función para detener grabación
-        function stopRecording() {
-            isRecording = false;
-            isPaused = false;
-            
-            // Detener MediaRecorder y AudioContext
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            if (audioContext) {
-                audioContext.close();
-            }
-            
-            // Limpiar timer
-            if (recordingTimer) {
-                clearInterval(recordingTimer);
-                recordingTimer = null;
-            }
-            
-            // Resetear UI
-            document.getElementById('start-recording').innerHTML = '▶️ Iniciar grabación';
-            document.getElementById('start-recording').classList.remove('recording');
-            document.getElementById('timer-label').textContent = 'Listo para grabar';
-            document.getElementById('timer-counter').textContent = '00:00';
-            document.getElementById('microphone-visual').classList.remove('recording');
-            document.getElementById('audio-spectrum').classList.remove('active');
-            
-            // Resetear barras del espectro
-            const spectrumBars = document.querySelectorAll('.spectrum-bar');
-            spectrumBars.forEach(bar => {
-                bar.style.height = '2%';
-                bar.style.background = '#3b82f6';
-            });
-            
-            // Aquí iría la lógica para procesar la grabación
-            alert('Grabación finalizada. Procesando transcripción...');
-        }
-
-        // Función para actualizar el timer
-        function updateTimer() {
-            if (isPaused) return;
-            
-            const elapsed = Date.now() - startTime;
-            const minutes = Math.floor(elapsed / 60000);
-            const seconds = Math.floor((elapsed % 60000) / 1000);
-            
-            const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            document.getElementById('timer-counter').textContent = timeString;
-        }
-
-        // Actualizar valor del slider
-        document.getElementById('mic-sensitivity').addEventListener('input', function() {
-            document.querySelector('.slider-value').textContent = this.value + '%';
-        });
-
-        // Función para alternar navbar móvil
-        function toggleMobileNavbar() {
-            // Implementar lógica del navbar móvil
-        }
-
-        // Crear partículas animadas
-        function createParticles() {
-            const particles = document.getElementById('particles');
-            for (let i = 0; i < 50; i++) {
-                const particle = document.createElement('div');
-                particle.className = 'particle';
-                particle.style.left = Math.random() * 100 + '%';
-                particle.style.animationDelay = Math.random() * 20 + 's';
-                particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
-                particles.appendChild(particle);
-            }
-        }
-
-        // Inicializar partículas al cargar la página
-        document.addEventListener('DOMContentLoaded', createParticles);
-    </script>
+    <!-- JavaScript -->
+    @vite(['resources/js/new-meeting.js'])
 </body>
 </html>

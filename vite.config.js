@@ -15,6 +15,8 @@ export default defineConfig({
                 'resources/js/auth/register.js',
                 'resources/css/profile.css',
                 'resources/js/profile.js',
+                'resources/css/new-meeting.css',
+                'resources/js/new-meeting.js'
             ],
             refresh: true,
         }),
