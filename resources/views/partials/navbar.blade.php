@@ -5,6 +5,8 @@
   $currentUri = request()->getRequestUri();
   // ¿estamos en la home sin ancla?
   $isHome   = $currentUri === '/';
+  // ¿estamos en nueva reunión?
+  $isNewMeeting = request()->routeIs('new-meeting');
 @endphp
 
 <header class="header">
@@ -20,9 +22,7 @@
     </a>
   </li>
   <li>
-    <a href="{{ $isHome
-                  ? '#nueva-reunion'
-                  : $homeUrl . '#nueva-reunion' }}">
+    <a href="{{ route('new-meeting') }}" class="{{ $isNewMeeting ? 'active' : '' }}">
       ➕ Nueva Reunión
     </a>
   </li>

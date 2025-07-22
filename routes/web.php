@@ -40,3 +40,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/drive/status', [DriveController::class, 'status'])
          ->name('drive.status');
 });
+
+Route::get('/new-meeting', function () {
+    return view('new-meeting');
+})->name('new-meeting');

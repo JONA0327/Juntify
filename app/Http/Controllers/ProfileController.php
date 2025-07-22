@@ -28,7 +28,7 @@ class ProfileController extends Controller
         if (!$token) {
             $driveConnected = false;
             $folder         = null;
-            return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders'));
+            return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders', 'lastSync'));
         }
 
         $client = $drive->getClient();
@@ -53,7 +53,7 @@ class ProfileController extends Controller
         if (!$token->recordings_folder_id) {
             $driveConnected = true;
             $folder         = null;
-            return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders'));
+            return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders', 'lastSync'));
         }
 
         try {
@@ -81,8 +81,9 @@ class ProfileController extends Controller
 
         $subfolders = Subfolder::where('folder_id', $folder->id)->get();
 
-        return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders','lastSync' ));
+        return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders', 'lastSync'));
     }
+
     /**
      * Display the user's profile form.
      */
