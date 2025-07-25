@@ -11,8 +11,9 @@
 
 <header class="header">
   <nav class="nav">
-    <a href="/" class="logo">Juntify</a>
-    
+    <a href="/" class="logo nav-brand">Juntify</a>
+
+
 <ul class="nav-links" id="nav-links">
   <li>
     <a href="{{ $isHome

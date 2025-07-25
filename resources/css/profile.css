@@ -44,7 +44,7 @@ body {
     top: 0;
     left: 0;
     right: 0;
-    z-index: 1003;
+    z-index: 2000 !important;
     padding: 1rem 2rem;
     background: rgba(10, 14, 39, 0.9);
     backdrop-filter: blur(20px);

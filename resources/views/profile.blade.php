@@ -11,7 +11,16 @@
     <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
     <!-- Styles -->
-    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/profile.css', 'resources/js/profile.js'])
+    @vite([
+    'resources/css/app.css',
+    'resources/js/app.js',
+    'resources/css/index.css',    // <— añade esto
+    'resources/js/index.js',      // <— añade esto
+    'resources/css/profile.css',
+    'resources/js/profile.js'
+    ])
+
+
 </head>
 <body>
     <!-- Animated particles background -->
