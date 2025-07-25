@@ -12,7 +12,9 @@ class CalendarController extends Controller
 {
     protected function applyToken(GoogleCalendarService $calendar): GoogleToken
     {
-        $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
+        $token = GoogleToken::where('username', Auth::user()->username)
+            ->whereNotNull('access_token')
+            ->firstOrFail();
 
         $client = $calendar->getClient();
         $client->setAccessToken([

@@ -83,7 +83,10 @@ class GoogleAuthController extends Controller
                 }
             }
 
-            $token->delete();
+            $token->update([
+                'access_token'  => null,
+                'refresh_token' => null,
+            ]);
         }
 
         return redirect()->back()->with('success', 'Google Drive desconectado');
