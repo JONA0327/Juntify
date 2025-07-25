@@ -51,4 +51,48 @@ it('creates subfolder', function () {
         'google_id' => 'sub123',
         'name'      => 'SubFolder',
     ]);
+    it('deletes subfolder record', function () {
+    Config::set('drive.root_folder_id', 'root123');
+
+    $user = User::factory()->create(['username' => 'testuser']);
+
+    $token = GoogleToken::create([
+        'username'      => $user->username,
+        'access_token'  => 'access',
+        'refresh_token' => 'refresh',
+        'expiry_date'   => now()->addHour(),
+        'recordings_folder_id' => 'main123',
+    ]);
+
+    $folder = Folder::create([
+        'google_token_id' => $token->id,
+        'google_id'       => 'main123',
+        'name'            => 'MainFolder',
+        'parent_id'       => null,
+    ]);
+
+    $sub = Subfolder::create([
+        'folder_id' => $folder->id,
+        'google_id' => 'sub123',
+        'name'      => 'SubFolder',
+    ]);
+
+    $client = Mockery::mock(Client::class);
+    $client->shouldReceive('setAccessToken');
+    $client->shouldReceive('isAccessTokenExpired')->andReturnFalse();
+
+    $service = Mockery::mock(GoogleDriveService::class);
+    $service->shouldReceive('getClient')->andReturn($client);
+    $service->shouldReceive('deleteFile')->once()->with('sub123');
+
+    app()->instance(GoogleDriveService::class, $service);
+
+    $response = $this->actingAs($user)->delete('/drive/subfolder/sub123');
+
+    $response->assertOk()->assertJson(['deleted' => true]);
+
+    $this->assertDatabaseMissing('subfolders', [
+        'id' => $sub->id,
+    ]);
+});
 });
