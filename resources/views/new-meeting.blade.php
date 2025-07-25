@@ -27,11 +27,11 @@
             <span class="nav-label">Reuniones</span>
         </div>
         <div class="nav-item active">
-            <div class="nav-icon">➕</div>
+            <div class="nav-icon">🤖</div>
             <span class="nav-label">Nueva</span>
         </div>
         <div class="nav-item nav-center">
-            <div class="nav-icon-center">🎬</div>
+            <div class="nav-icon-center">+</div>
         </div>
         <div class="nav-item">
             <div class="nav-icon">✅</div>
