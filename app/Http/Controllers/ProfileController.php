@@ -54,6 +54,7 @@ class ProfileController extends Controller
         if (!$token->recordings_folder_id) {
             $driveConnected    = true;
             $calendarConnected = false;
+            $folder = null;
             return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync'));
         }
 
