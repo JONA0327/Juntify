@@ -178,8 +178,41 @@ class DriveController extends Controller
 
     public function status()
     {
-        $connected = GoogleToken::where('username', Auth::user()->username)->exists();
+        $token = GoogleToken::where('username', Auth::user()->username)->first();
+        if (!$token) {
+            return response()->json(['connected' => false, 'calendar' => false]);
+        }
 
-        return response()->json(['connected' => $connected]);
+        $client = $this->drive->getClient();
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expires_in'    => max(1, Carbon::parse($token->expiry_date)->timestamp - time()),
+            'created'       => time(),
+        ]);
+
+        if ($client->isAccessTokenExpired() && $token->refresh_token) {
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (!isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
+        }
+
+        $calendarService = new \App\Services\GoogleCalendarService();
+        $calendarClient  = $calendarService->getClient();
+        $calendarClient->setAccessToken($client->getAccessToken());
+
+        try {
+            $calendarService->getCalendar()->calendarList->get('primary');
+            $calendarConnected = true;
+        } catch (\Throwable $e) {
+            $calendarConnected = false;
+        }
+
+        return response()->json(['connected' => true, 'calendar' => $calendarConnected]);
     }
 }

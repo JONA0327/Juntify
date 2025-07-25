@@ -71,8 +71,8 @@ function connectDrive() {
 
   axios.get('/drive/status')
     .then(res => {
-      if (!res.data.connected) {
-        alert('Conecta tu cuenta de drive para crear una carpeta');
+      if (!res.data.connected || !res.data.calendar) {
+        alert('Conecta tu cuenta de drive y calendar');
         window.location.href = '/auth/google/redirect';
       } else {
         window.location.reload();

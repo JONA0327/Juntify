@@ -26,9 +26,10 @@ class ProfileController extends Controller
         $subfolders = collect();
 
         if (!$token) {
-            $driveConnected = false;
-            $folder         = null;
-            return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders', 'lastSync'));
+            $driveConnected    = false;
+            $calendarConnected = false;
+            $folder           = null;
+            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync'));
         }
 
         $client = $drive->getClient();
@@ -51,9 +52,9 @@ class ProfileController extends Controller
         }
 
         if (!$token->recordings_folder_id) {
-            $driveConnected = true;
-            $folder         = null;
-            return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders', 'lastSync'));
+            $driveConnected    = true;
+            $calendarConnected = false;
+            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync'));
         }
 
         try {
@@ -79,9 +80,20 @@ class ProfileController extends Controller
 
         $driveConnected = true;
 
+        $calendarService = new \App\Services\GoogleCalendarService();
+        $calendarClient  = $calendarService->getClient();
+        $calendarClient->setAccessToken($client->getAccessToken());
+
+        try {
+            $calendarService->getCalendar()->calendarList->get('primary');
+            $calendarConnected = true;
+        } catch (\Throwable $e) {
+            $calendarConnected = false;
+        }
+
         $subfolders = Subfolder::where('folder_id', $folder->id)->get();
 
-        return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders', 'lastSync'));
+        return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync'));
     }
 
     /**
