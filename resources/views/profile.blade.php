@@ -32,34 +32,53 @@
     <!-- Barra de navegación móvil exclusiva -->
     <div class="mobile-bottom-nav">
         <div class="nav-item">
-            <div class="nav-icon">📅</div>
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v1.5M17.25 3v1.5M3.75 7.5h16.5M21 6.75A2.25 2.25 0 0018.75 4.5H5.25A2.25 2.25 0 003 6.75v12A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V6.75z" />
+            </svg>
             <span class="nav-label">Reuniones</span>
         </div>
         <div class="nav-item">
-            <div class="nav-icon">🤖</div>
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
             <span class="nav-label">Nueva</span>
         </div>
         <div class="nav-item nav-center">
-            <div class="nav-icon-center">+</div>
+            <svg class="nav-icon-center" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
         </div>
         <div class="nav-item">
-            <div class="nav-icon">✅</div>
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2.25 2.25L15 10.5m6 1.5a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <span class="nav-label">Tareas</span>
         </div>
         <div class="nav-item dropdown-trigger" onclick="toggleMobileDropdown()">
-            <div class="nav-icon">⋯</div>
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm7.5 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm7.5 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+            </svg>
             <span class="nav-label">Más</span>
             <div class="mobile-dropdown" id="mobile-dropdown">
                 <a href="{{ route('profile.show') }}" class="dropdown-item">
-                    <span class="dropdown-icon">👤</span>
+                    <svg class="dropdown-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9A3.75 3.75 0 1112 5.25 3.75 3.75 0 0115.75 9zM18 21H6a2.25 2.25 0 01-2.25-2.25v-1.5a2.25 2.25 0 012.25-2.25h12a2.25 2.25 0 012.25 2.25v1.5A2.25 2.25 0 0118 21z" />
+                    </svg>
                     <span class="dropdown-text">Perfil</span>
                 </a>
                 <a href="#" class="dropdown-item">
-                    <span class="dropdown-icon">📤</span>
+                    <svg class="dropdown-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 10.5L12 6m0 0l4.5 4.5M12 6v12" />
+                    </svg>
                     <span class="dropdown-text">Compartir</span>
                 </a>
                 <a href="#" class="dropdown-item">
-                    <span class="dropdown-icon">🤖</span>
+                    <svg class="dropdown-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <rect x="5" y="7" width="14" height="10" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="9" cy="12" r="1" fill="currentColor"/>
+                        <circle cx="15" cy="12" r="1" fill="currentColor"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 7V4m-6 6H4m16 0h-2" />
+                    </svg>
                     <span class="dropdown-text">Asistente IA</span>
                 </a>
             </div>
@@ -91,37 +110,51 @@
                 <ul>
                     <li class="nav-item">
                         <a href="#" class="nav-link active" data-section="info">
-                            <span class="nav-icon">👤</span>
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9A3.75 3.75 0 1112 5.25 3.75 3.75 0 0115.75 9zM18 21H6a2.25 2.25 0 01-2.25-2.25v-1.5a2.25 2.25 0 012.25-2.25h12a2.25 2.25 0 012.25 2.25v1.5A2.25 2.25 0 0118 21z" />
+                            </svg>
                             Información
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="#" class="nav-link" data-section="connect">
-                            <span class="nav-icon">🔗</span>
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 015.657 5.657l-3.536 3.536a4 4 0 01-5.657 0m-3.536-3.536a4 4 0 015.657-5.657l3.536 3.536" />
+                            </svg>
                             Conectar
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="#" class="nav-link" data-section="plans">
-                            <span class="nav-icon">💎</span>
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.639 5.033a1 1 0 00.95.69h5.287c.969 0 1.371 1.24.588 1.81l-4.278 3.11a1 1 0 00-.364 1.118l1.64 5.034c.3.921-.755 1.688-1.54 1.118l-4.279-3.11a1 1 0 00-1.175 0l-4.279 3.11c-.784.57-1.838-.197-1.539-1.118l1.639-5.034a1 1 0 00-.364-1.118l-4.278-3.11c-.783-.57-.38-1.81.588-1.81h5.287a1 1 0 00.951-.69l1.639-5.034z" />
+                            </svg>
                             Planes
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="#" class="nav-link" data-section="purchases">
-                            <span class="nav-icon">🛒</span>
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 2.25h1.386c.51 0 .96.36 1.07.86l.507 2.454a.563.563 0 00.55.436h11.614a.563.563 0 00.551-.436L19.294 3.11a1.125 1.125 0 011.07-.86H21.75M5.25 12.75h14.25m-14.25 0l-.75 3.75m0 0h15.75m-15.75 0L5.25 21m0 0a1.5 1.5 0 103 0m10.5 0a1.5 1.5 0 103 0" />
+                            </svg>
                             Mis Compras
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="#" class="nav-link" data-section="notifications">
-                            <span class="nav-icon">🔔</span>
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 10v-.25A2.75 2.75 0 0011.75 7h-.5A2.75 2.75 0 008.5 9.75v.25c0 2.827-1.842 5.222-4.5 6v1.25h15v-1.25c-2.658-.778-4.5-3.173-4.5-6z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.25a2.25 2.25 0 01-4.5 0" />
+                            </svg>
                             Notificaciones
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="#" class="nav-link" data-section="about">
-                            <span class="nav-icon">ℹ️</span>
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h1.5m-1.5 0v5.25m.75-9.75h.008v.008H12" />
+                                <circle cx="12" cy="12" r="9" />
+                            </svg>
                             Acerca de
                         </a>
                     </li>
@@ -131,7 +164,10 @@
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" class="btn logout-btn">
-                            <span class="nav-icon">🚪</span>
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6A2.25 2.25 0 005.25 5.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                            </svg>
                             Cerrar Sesión
                         </button>
                     </form>

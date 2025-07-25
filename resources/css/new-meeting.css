@@ -887,7 +887,9 @@ body {
 }
 
 .nav-icon {
-    font-size: 1.2rem;
+    width: 20px;
+    height: 20px;
+    stroke-width: 1.5;
     color: #94a3b8;
     transition: color 0.3s ease;
 }
@@ -924,7 +926,9 @@ body {
 }
 
 .nav-icon-center {
-    font-size: 1.5rem;
+    width: 24px;
+    height: 24px;
+    stroke-width: 1.5;
     color: white;
 }
 
@@ -975,8 +979,9 @@ body {
 }
 
 .dropdown-icon {
-    font-size: 1.1rem;
     width: 20px;
+    height: 20px;
+    stroke-width: 1.5;
     text-align: center;
 }
 
