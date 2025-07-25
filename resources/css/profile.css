@@ -726,17 +726,17 @@ body {
     .header {
         display: none;
     }
-    
+
     /* Mostrar barra móvil */
     .mobile-bottom-nav {
         display: grid;
     }
-    
+
     /* Ajustar app container */
     .app-container {
         margin-top: 0;
     }
-    
+
     /* Sidebar móvil */
     .sidebar {
         position: fixed;
@@ -747,11 +747,11 @@ body {
         z-index: 1001;
         width: 280px;
     }
-    
+
     .sidebar.open {
         transform: translateX(0);
     }
-    
+
     /* Main content móvil */
     .main-content {
         margin-left: 0;
@@ -772,7 +772,7 @@ body {
     .action-buttons {
         flex-direction: column;
     }
-}
+
 
     .content-header {
         flex-direction: column;
@@ -911,38 +911,38 @@ body {
     .mobile-navbar-btn {
         display: flex;
     }
-    
+
     .mobile-sidebar-btn {
         display: flex;
     }
-    
+
     .sidebar-close-btn {
         display: flex;
     }
-    
+
    .info-item {
        flex-direction: column;
        align-items: flex-start;
        gap: 0.25rem;
    }
-   
+
    .info-label {
        min-width: auto;
    }
-   
+
    .info-value {
        text-align: left;
    }
-   
+
    .subfolder-item {
        flex-direction: column;
        align-items: stretch;
    }
-   
+
    .card-title {
        font-size: 1.1rem;
    }
-   
+
    .content-grid {
        grid-template-columns: 1fr;
    }
@@ -1183,7 +1183,7 @@ body {
   .app-container {
     margin-top: 0;
   }
-  
+
   /* Sidebar inicialmente fuera de pantalla */
   .sidebar {
     position: fixed;
@@ -1207,11 +1207,11 @@ body {
   .mobile-menu-btn {
     display: flex !important;
   }
-  
+
   .pricing-grid {
     grid-template-columns: 1fr;
   }
-  
+
   /* Overlay para cerrar sidebar */
   .sidebar-overlay {
     display: none;
@@ -1223,7 +1223,7 @@ body {
     background: rgba(0, 0, 0, 0.5);
     z-index: 1000;
   }
-  
+
   .sidebar-overlay.show {
     display: block;
   }
@@ -1357,13 +1357,13 @@ body {
 }
 
 @keyframes slideIn {
-  from { 
-    transform: translateY(-50px) scale(0.9); 
-    opacity: 0; 
+  from {
+    transform: translateY(-50px) scale(0.9);
+    opacity: 0;
   }
-  to { 
-    transform: translateY(0) scale(1); 
-    opacity: 1; 
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
   }
 }
 
@@ -1374,24 +1374,24 @@ body {
     width: 90%;
     margin: 1rem;
   }
-  
+
   .modal-header {
     padding: 1.5rem 1.5rem 1rem;
   }
-  
+
   .modal-body {
     padding: 1.5rem;
   }
-  
+
   .modal-footer {
     padding: 1rem 1.5rem;
     flex-direction: column;
   }
-  
+
   .modal-footer .btn {
     width: 100%;
   }
-  
+
   .modal-title {
     font-size: 1.3rem;
   }
