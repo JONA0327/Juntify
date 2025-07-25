@@ -209,6 +209,9 @@ body {
     border-radius: 20px;
     padding: 2rem;
     transition: all 0.3s ease;
+   word-wrap: break-word;
+   overflow-wrap: break-word;
+   min-width: 0;
 }
 
 .info-card:hover {
@@ -225,6 +228,8 @@ body {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+   flex-wrap: wrap;
+   word-break: break-word;
 }
 
 .card-icon {
@@ -232,6 +237,7 @@ body {
     height: 24px;
     font-size: 1.2rem;
     color: #3b82f6;
+   flex-shrink: 0;
 }
 
 .info-item {
@@ -240,6 +246,9 @@ body {
     align-items: center;
     padding: 0.75rem 0;
     border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+   flex-wrap: wrap;
+   gap: 0.5rem;
+   min-height: 2.5rem;
 }
 
 .info-item:last-child {
@@ -250,13 +259,92 @@ body {
     color: #94a3b8;
     font-size: 0.9rem;
     font-weight: 500;
+   flex-shrink: 0;
+   min-width: 120px;
 }
 
 .info-value {
     color: #e2e8f0;
     font-weight: 600;
+   word-break: break-all;
+   text-align: right;
+   flex: 1;
+   min-width: 0;
 }
 
+/* Mejoras para el contenido de Drive */
+.drive-folder-display {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    word-break: break-all;
+}
+
+.drive-folder-name {
+    color: #ffffff;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    word-break: break-word;
+}
+
+.drive-folder-id {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    font-family: 'Courier New', monospace;
+    word-break: break-all;
+    line-height: 1.4;
+}
+
+/* Mejoras para subcarpetas */
+.subfolder-item {
+    margin: 0.5rem 0;
+    padding: 0.75rem;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    gap: 1rem;
+}
+
+.subfolder-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.subfolder-name {
+    color: #ffffff;
+    font-weight: 600;
+    word-break: break-word;
+    margin-bottom: 0.25rem;
+}
+
+.subfolder-id {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    font-family: 'Courier New', monospace;
+    word-break: break-all;
+    line-height: 1.3;
+}
+
+.btn-remove-subfolder {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    padding: 0.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+.btn-remove-subfolder:hover {
+    background: rgba(239, 68, 68, 0.3);
+    transform: scale(1.05);
+}
 .status-badge {
     padding: 0.25rem 0.75rem;
     border-radius: 20px;
@@ -644,6 +732,32 @@ body {
         display: flex;
     }
     
+   .info-item {
+       flex-direction: column;
+       align-items: flex-start;
+       gap: 0.25rem;
+   }
+   
+   .info-label {
+       min-width: auto;
+   }
+   
+   .info-value {
+       text-align: left;
+   }
+   
+   .subfolder-item {
+       flex-direction: column;
+       align-items: stretch;
+   }
+   
+   .card-title {
+       font-size: 1.1rem;
+   }
+   
+   .content-grid {
+       grid-template-columns: 1fr;
+   }
 }
 
 /* Logout button */
@@ -813,6 +927,8 @@ body {
     font-size: 0.95rem;
     transition: all 0.3s ease;
     backdrop-filter: blur(10px);
+   word-break: break-all;
+   font-family: 'Courier New', monospace;
 }
 
 .form-input:focus {
@@ -824,8 +940,16 @@ body {
 
 .form-input::placeholder {
     color: #94a3b8;
+   font-family: inherit;
 }
 
+.form-label {
+    display: block;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
 /* ======================
    Layout general
    ====================== */
