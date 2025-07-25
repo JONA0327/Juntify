@@ -844,6 +844,19 @@ body {
     .action-buttons {
         flex-direction: column;
     }
+
+    .sidebar-nav ul {
+        text-align: center;
+    }
+
+    .sidebar-nav .nav-link {
+        justify-content: center;
+    }
+
+    .sidebar-nav .action-buttons {
+        align-items: center;
+        justify-content: center;
+    }
 }
 
 /* Botón hamburguesa para navbar - esquina superior derecha */
