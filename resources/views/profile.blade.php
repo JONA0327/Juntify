@@ -359,10 +359,6 @@
                                 <span class="info-label">Carpeta Principal</span>
                                 <span class="info-value" id="main-folder-name" data-name="{{ $folder->name ?? '' }}" data-id="{{ $folder->google_id ?? '' }}">{{ isset($folder) ? ($folder->name . ' (' . $folder->google_id . ')') : '' }}</span>
                             </div>
-                            <div class="form-group" style="margin: 1rem 0;">
-                                <label class="info-label" style="display: block; margin-bottom: 0.5rem;">Nueva Subcarpeta</label>
-                                <input type="text" id="subfolder-input" class="form-input" placeholder="Nombre de la subcarpeta" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; color: #fff;">
-                            </div>
                             <div class="action-buttons">
                                 <button class="btn btn-primary" onclick="showCreateSubfolderModal()">
                                     ➕ Crear Subcarpeta
