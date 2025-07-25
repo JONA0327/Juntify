@@ -944,9 +944,23 @@ body {
   transform: scale(1.05);
 }
 
-.arrow-right {
+
+.icon-open,
+.icon-close {
+  fill: currentColor;
   display: block;
-  transform: translateX(1px); /* centrar visualmente */
+}
+
+.icon-open {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: #3b82f6;
+}
+
+.icon-close {
+  width: 1.2rem;
+  height: 1.2rem;
+  color: #ef4444;
 }
 
 /* Botón X para cerrar sidebar */
