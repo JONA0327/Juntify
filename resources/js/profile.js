@@ -495,3 +495,20 @@ window.closeCreateSubfolderModal = closeCreateSubfolderModal;
 window.confirmCreateSubfolder = confirmCreateSubfolder;
 window.setMainFolder       = setMainFolder;
 window.addSubfolderToList = addSubfolderToList;
+
+// Funciones para navbar móvil
+window.toggleMobileDropdown = function() {
+  const dropdown = document.getElementById('mobile-dropdown');
+  const overlay = document.getElementById('mobile-dropdown-overlay');
+  
+  dropdown.classList.toggle('show');
+  overlay.classList.toggle('show');
+};
+
+window.closeMobileDropdown = function() {
+  const dropdown = document.getElementById('mobile-dropdown');
+  const overlay = document.getElementById('mobile-dropdown-overlay');
+  
+  dropdown.classList.remove('show');
+  overlay.classList.remove('show');
+};

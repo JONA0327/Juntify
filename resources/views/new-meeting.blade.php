@@ -17,17 +17,48 @@
     <!-- Animated particles background -->
     <div class="particles" id="particles"></div>
 
-    <!-- Header con navbar -->
+    <!-- Navbar principal arriba de todo -->
     @include('partials.navbar')
 
-    <!-- Botón hamburguesa para navbar (móvil) -->
-    <button class="mobile-navbar-btn" onclick="toggleMobileNavbar()" id="mobile-navbar-btn">
-        <div class="hamburger-navbar">
-            <span></span>
-            <span></span>
-            <span></span>
+    <!-- Barra de navegación móvil exclusiva -->
+    <div class="mobile-bottom-nav">
+        <div class="nav-item">
+            <div class="nav-icon">📅</div>
+            <span class="nav-label">Reuniones</span>
         </div>
-    </button>
+        <div class="nav-item active">
+            <div class="nav-icon">➕</div>
+            <span class="nav-label">Nueva</span>
+        </div>
+        <div class="nav-item nav-center">
+            <div class="nav-icon-center">🎬</div>
+        </div>
+        <div class="nav-item">
+            <div class="nav-icon">✅</div>
+            <span class="nav-label">Tareas</span>
+        </div>
+        <div class="nav-item dropdown-trigger" onclick="toggleMobileDropdown()">
+            <div class="nav-icon">⋯</div>
+            <span class="nav-label">Más</span>
+            <div class="mobile-dropdown" id="mobile-dropdown">
+                <a href="{{ route('profile.show') }}" class="dropdown-item">
+                    <span class="dropdown-icon">👤</span>
+                    <span class="dropdown-text">Perfil</span>
+                </a>
+                <a href="#compartir" class="dropdown-item">
+                    <span class="dropdown-icon">📤</span>
+                    <span class="dropdown-text">Compartir</span>
+                </a>
+                <a href="#asistente" class="dropdown-item">
+                    <span class="dropdown-icon">🤖</span>
+                    <span class="dropdown-text">Asistente IA</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay para cerrar dropdown -->
+    <div class="mobile-dropdown-overlay" id="mobile-dropdown-overlay" onclick="closeMobileDropdown()"></div>
 
     <div class="app-container">
         <!-- Main Content -->

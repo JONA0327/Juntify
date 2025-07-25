@@ -17,32 +17,52 @@
     <!-- Animated particles background -->
     <div class="particles" id="particles"></div>
 
-    <!-- Header con navbar -->
+    <!-- Navbar principal arriba de todo -->
     @include('partials.navbar')
 
-    <!-- Header con navbar -->
-    @include('partials.navbar')
-
-    <!-- Botón hamburguesa para navbar (móvil) -->
-    <button class="mobile-navbar-btn" onclick="toggleMobileNavbar()" id="mobile-navbar-btn">
-        <div class="hamburger-navbar">
-            <span></span>
-            <span></span>
-            <span></span>
+    <!-- Barra de navegación móvil exclusiva -->
+    <div class="mobile-bottom-nav">
+        <div class="nav-item">
+            <div class="nav-icon">📅</div>
+            <span class="nav-label">Reuniones</span>
         </div>
-    </button>
+        <div class="nav-item">
+            <div class="nav-icon">➕</div>
+            <span class="nav-label">Nueva</span>
+        </div>
+        <div class="nav-item nav-center">
+            <div class="nav-icon-center">🎬</div>
+        </div>
+        <div class="nav-item">
+            <div class="nav-icon">✅</div>
+            <span class="nav-label">Tareas</span>
+        </div>
+        <div class="nav-item dropdown-trigger" onclick="toggleMobileDropdown()">
+            <div class="nav-icon">⋯</div>
+            <span class="nav-label">Más</span>
+            <div class="mobile-dropdown" id="mobile-dropdown">
+                <a href="{{ route('profile.show') }}" class="dropdown-item">
+                    <span class="dropdown-icon">👤</span>
+                    <span class="dropdown-text">Perfil</span>
+                </a>
+                <a href="#compartir" class="dropdown-item">
+                    <span class="dropdown-icon">📤</span>
+                    <span class="dropdown-text">Compartir</span>
+                </a>
+                <a href="#asistente" class="dropdown-item">
+                    <span class="dropdown-icon">🤖</span>
+                    <span class="dropdown-text">Asistente IA</span>
+                </a>
+            </div>
+        </div>
+    </div>
 
-    <!-- Botón flecha para sidebar (móvil) -->
-    <button class="mobile-sidebar-btn" onclick="toggleSidebar()" id="mobile-sidebar-btn">
-        <span class="arrow-right">→</span>
-    </button>
+    <!-- Overlay para cerrar dropdown -->
+    <div class="mobile-dropdown-overlay" id="mobile-dropdown-overlay" onclick="closeMobileDropdown()"></div>
 
     <div class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
-            <!-- Botón X para cerrar sidebar (móvil) -->
-            <button class="sidebar-close-btn" onclick="closeSidebar()">×</button>
-
             <div class="sidebar-header">
                 <h1 class="logo">Juntify</h1>
                 <p class="logo-subtitle">Panel de usuario</p>
@@ -105,9 +125,6 @@
                 </div>
             </div>
         </aside>
-
-        <!-- Overlay para cerrar sidebar en móvil -->
-        <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
         <!-- Main Content -->
         <main class="main-content">
@@ -177,14 +194,6 @@
                             <span class="status-badge status-{{ strtolower($user->roles ?? 'free') }}">
                                 {{ ucfirst($user->roles ?? 'free') }}
                             </span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Estado</span>
-                            @if($user->plan_expires_at && $user->plan_expires_at->isPast())
-                                <span class="status-badge status-expired">Expirado</span>
-                            @else
-                                <span class="status-badge status-active">Activo</span>
-                            @endif
                         </div>
                         @if($user->plan_expires_at)
                         <div class="info-item">
