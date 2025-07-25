@@ -200,32 +200,19 @@
             <!-- Conectar Servicios -->
             <div class="content-section" id="section-connect" style="display: none;">
                 <div class="content-grid">
-                    <!-- Header principal con logos -->
-                    <div class="info-card">
-                        <h2 class="card-title">
-                            <span style="display: flex; align-items: center; gap: 0.5rem;">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866.549 3.921 1.453l2.814-2.814C17.503 2.988 15.139 2 12.545 2 7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748L12.545 10.239z" fill="#4285F4"/>
-                                </svg>
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z" fill="#34A853"/>
-                                </svg>
-                                Conectar con Drive y Calendar
-                            </span>
-                        </h2>
-                        <p style="color: #cbd5e1; margin-bottom: 1.5rem; line-height: 1.6;">
-                            Conecta tu cuenta de Google Drive y Calendar para sincronizar tus reuniones y archivos automáticamente.
-                        </p>
-                    </div>
-
                     @if(!$driveConnected)
                         <!-- No conectado -->
                         <div class="info-card">
                             <h3 class="card-title">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866.549 3.921 1.453l2.814-2.814C17.503 2.988 15.139 2 12.545 2 7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748L12.545 10.239z" fill="#4285F4"/>
-                                </svg>
-                                Google Drive
+                                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866.549 3.921 1.453l2.814-2.814C17.503 2.988 15.139 2 12.545 2 7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748L12.545 10.239z" fill="#4285F4"/>
+                                    </svg>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z" fill="#34A853"/>
+                                    </svg>
+                                    Drive y Calendar
+                                </span>
                             </h3>
                             <div class="info-item">
                                 <span class="info-label">Estado</span>
@@ -235,7 +222,7 @@
                             </div>
                             <div class="action-buttons">
                                 <button class="btn btn-primary" id="connect-drive-btn">
-                                    🔗 Conectar Drive
+                                    🔗 Conectar Drive y Calendar
                                 </button>
                             </div>
                         </div>
@@ -243,10 +230,15 @@
                         <!-- Conectado - Estado de Drive -->
                         <div class="info-card">
                             <h3 class="card-title">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866.549 3.921 1.453l2.814-2.814C17.503 2.988 15.139 2 12.545 2 7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748L12.545 10.239z" fill="#4285F4"/>
-                                </svg>
-                                Google Drive
+                                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866.549 3.921 1.453l2.814-2.814C17.503 2.988 15.139 2 12.545 2 7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748L12.545 10.239z" fill="#4285F4"/>
+                                    </svg>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z" fill="#34A853"/>
+                                    </svg>
+                                    Drive y Calendar
+                                </span>
                             </h3>
                             <div class="info-item">
                                 <span class="info-label">Estado</span>
@@ -262,7 +254,7 @@
                                 <form method="POST" action="{{ route('drive.disconnect') }}">
                                     @csrf
                                     <button type="submit" class="btn btn-secondary">
-                                        🔌 Cerrar sesión de Drive
+                                        🔌 Cerrar sesión de Drive y Calendar
                                     </button>
                                 </form>
                             </div>
@@ -338,15 +330,6 @@
                                         <button type="button" class="btn-remove-subfolder" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 0.5rem; border-radius: 8px; cursor: pointer; margin-left: 1rem; flex-shrink: 0;">🗑️</button>
                                     </div>
                                     @endforeach
-                                </div>
-                            </div>
-
-                            <div style="background: rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 1rem; border: 1px solid rgba(255, 255, 255, 0.1);">
-                                <h4 style="color: #ffffff; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                                    📄 Documentos
-                                </h4>
-                                <div style="color: #94a3b8; font-size: 0.8rem; font-family: monospace; word-break: break-all;">
-                                    1oj8rl9XuzjpexHAkb9VXQVi9ICYUJ2r
                                 </div>
                             </div>
                         </div>
