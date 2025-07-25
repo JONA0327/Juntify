@@ -167,6 +167,7 @@ function confirmCreateFolder() {
 function setMainFolder() {
   const input         = document.getElementById('main-folder-input');
   const mainFolderId  = input.value.trim();
+  const currentId     = input.dataset.id;
   const subfolderCard = document.getElementById('subfolder-card');
   const mainFolderName= document.getElementById('main-folder-name');
   const btn           = document.getElementById('set-main-folder-btn');
@@ -175,12 +176,21 @@ function setMainFolder() {
     return alert('Por favor ingresa el ID de la carpeta o créala primero.');
   }
 
+  if (currentId && currentId !== mainFolderId) {
+    const confirmMsg =
+      'Al cambiar la carpeta principal, deberás mover manualmente los archivos de audio existentes a la nueva carpeta. ¿Deseas continuar?';
+    if (!confirm(confirmMsg)) {
+      return; // Abort if user cancels
+    }
+  }
+
   btn.disabled = true;
   axios.post('/drive/set-main-folder', { id: mainFolderId })
     .then(() => {
       mainFolderName.textContent  = mainFolderId;
       subfolderCard.style.display = 'block';
       alert('Carpeta principal establecida: ' + mainFolderId);
+      input.dataset.id = mainFolderId;
     })
     .catch(err => {
       console.error('Error estableciendo carpeta principal:', err.response?.data || err.message);
