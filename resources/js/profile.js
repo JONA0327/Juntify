@@ -286,6 +286,7 @@ function addSubfolderToList(name, id) {
   const list = document.getElementById('subfolders-list');
   if (!list) return;
   const div = document.createElement('div');
+  div.dataset.id = id;
   div.style.cssText = `
     margin: 0.5rem 0;
     padding: 0.75rem;
@@ -398,10 +399,18 @@ document.addEventListener('click', e => {
   if (e.target.matches('.btn-remove-subfolder')) {
     const folderDiv = e.target.closest('div');
     const folderName = folderDiv.querySelector('div > div').textContent;
-    
+    const id = folderDiv.dataset.id;
+
     if (confirm(`¿Estás seguro de que quieres eliminar la subcarpeta "${folderName}"?`)) {
-      folderDiv.remove();
-      showSuccessMessage(`Subcarpeta "${folderName}" eliminada`);
+      axios.delete('/drive/subfolder/' + id)
+        .then(() => {
+          folderDiv.remove();
+          showSuccessMessage(`Subcarpeta "${folderName}" eliminada`);
+        })
+        .catch(err => {
+          console.error('Error eliminando subcarpeta:', err.response?.data || err.message);
+          showErrorMessage('No se pudo eliminar la subcarpeta. Inténtalo de nuevo.');
+        });
     }
   }
 });
