@@ -66,15 +66,7 @@
                     </svg>
                     <span class="dropdown-text">Compartir</span>
                 </a>
-                <a href="#asistente" class="dropdown-item">
-                    <svg class="dropdown-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <rect x="5" y="7" width="14" height="10" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <circle cx="9" cy="12" r="1" fill="currentColor"/>
-                        <circle cx="15" cy="12" r="1" fill="currentColor"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 7V4m-6 6H4m16 0h-2" />
-                    </svg>
-                    <span class="dropdown-text">Asistente IA</span>
-                </a>
+
             </div>
         </div>
     </div>
@@ -119,7 +111,7 @@
                 <!-- Configuración de Transcripción -->
                 <div class="info-card">
                     <h2 class="card-title">Configuración de transcripción</h2>
-                    
+
                     <div class="form-group">
                         <label class="form-label">Idioma de la grabación</label>
                         <select class="form-select" id="transcription-language">
@@ -146,7 +138,7 @@
                 <!-- Modo de Grabación -->
                 <div class="info-card">
                     <h2 class="card-title">Seleccionar modo de grabación</h2>
-                    
+
                     <div class="recording-modes">
                         <div class="mode-option active" data-mode="audio" onclick="selectRecordingMode('audio')">
                             <div class="mode-icon">🎤</div>
@@ -155,7 +147,7 @@
                                 <p class="mode-description">Graba audio directamente desde tu dispositivo</p>
                             </div>
                         </div>
-                        
+
                         <div class="mode-option" data-mode="upload" onclick="selectRecordingMode('upload')">
                             <div class="mode-icon">📁</div>
                             <div class="mode-content">
@@ -163,7 +155,7 @@
                                 <p class="mode-description">Sube un archivo de audio existente</p>
                             </div>
                         </div>
-                        
+
                         <div class="mode-option" data-mode="meeting" onclick="selectRecordingMode('meeting')">
                             <div class="mode-icon">💻</div>
                             <div class="mode-content">
@@ -177,7 +169,7 @@
                 <!-- Grabador de Audio -->
                 <div class="info-card recorder-card">
                     <h2 class="card-title" id="recorder-title">🎙️ Grabador de audio</h2>
-                    
+
                     <!-- Interfaz de Grabación -->
                     <div class="recorder-interface" id="audio-recorder">
                         <div class="recorder-visual">
@@ -192,7 +184,7 @@
                                     <span class="mic-symbol">🎤</span>
                                 </div>
                             </div>
-                            
+
                             <!-- Visualizador de audio -->
                             <div class="audio-visualizer" id="audio-visualizer">
                                 <div class="audio-bar"></div>
@@ -211,21 +203,21 @@
                                 <div class="audio-bar"></div>
                                 <div class="audio-bar"></div>
                             </div>
-                            
+
                             <!-- Timer -->
                             <div class="timer-display">
                                 <span class="time-counter" id="timer-counter">00:00</span>
                                 <span class="timer-label" id="timer-label">Listo para grabar</span>
                             </div>
                         </div>
-                        
+
                         <div class="recorder-controls">
                             <button class="btn btn-primary recorder-btn" id="start-recording" onclick="toggleRecording()">
                                 ▶️ Iniciar grabación
                             </button>
                         </div>
                     </div>
-                    
+
                     <!-- Interfaz de Subir Audio -->
                     <div class="upload-interface" id="audio-uploader" style="display: none;">
                         <div class="upload-area" id="upload-area">
@@ -238,7 +230,7 @@
                                 📁 Seleccionar archivo
                             </button>
                         </div>
-                        
+
                         <!-- Archivo seleccionado -->
                         <div class="selected-file" id="selected-file" style="display: none;">
                             <div class="file-info">
@@ -260,7 +252,7 @@
                             </button>
                         </div>
                     </div>
-                    
+
                     <!-- Interfaz de Reunión -->
                     <div class="meeting-interface" id="meeting-recorder" style="display: none;">
                         <div class="meeting-recorder-container">
@@ -268,7 +260,7 @@
                                 <h3 class="meeting-title">Grabador de audio de reuniones</h3>
                                 <p class="meeting-subtitle">Captura el audio de una reunión o llamada, combinando el audio del sistema y tu micrófono</p>
                             </div>
-                            
+
                             <!-- Controles de fuentes de audio -->
                             <div class="audio-sources-controls">
                                 <button class="audio-source-btn system-audio" id="system-audio-btn" onclick="toggleSystemAudio()">
@@ -280,7 +272,7 @@
                                     <span class="source-text">Micrófono activado</span>
                                 </button>
                             </div>
-                            
+
                             <!-- Visualizadores de audio -->
                             <div class="meeting-audio-visualizers">
                                 <!-- Audio del sistema -->
@@ -312,7 +304,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <!-- Audio del micrófono -->
                                 <div class="audio-source-container">
                                     <div class="source-header">
@@ -343,14 +335,14 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <!-- Timer y controles -->
                             <div class="meeting-timer-section">
                                 <div class="meeting-timer-display">
                                     <span class="meeting-time-counter" id="meeting-timer-counter">00:00</span>
                                     <span class="meeting-timer-label" id="meeting-timer-label">Listo para grabar</span>
                                 </div>
-                                
+
                                 <div class="meeting-controls">
                                     <button class="btn btn-primary meeting-record-btn" id="meeting-record-btn" onclick="toggleMeetingRecording()">
                                         <span class="btn-icon">🎬</span>
@@ -371,7 +363,7 @@
                             <span class="expand-icon" id="expand-icon">▲</span>
                         </button>
                     </h2>
-                    
+
                     <div class="advanced-content" id="advanced-content">
                         <div class="form-group">
                             <label class="form-label">Idioma de transcripción</label>
