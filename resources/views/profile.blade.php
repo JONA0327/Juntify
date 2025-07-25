@@ -39,9 +39,12 @@
         </div>
         <div class="nav-item">
             <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                <rect x="5" y="7" width="14" height="10" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="9" cy="12" r="1" fill="currentColor"/>
+                <circle cx="15" cy="12" r="1" fill="currentColor"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 7V4m-6 6H4m16 0h-2" />
             </svg>
-            <span class="nav-label">Nueva</span>
+            <span class="nav-label">Asistente IA</span>
         </div>
         <div class="nav-item nav-center">
             <svg class="nav-icon-center" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
