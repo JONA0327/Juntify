@@ -141,5 +141,5 @@ test('profile page renders when google token is missing', function () {
     $response = $this->actingAs($user)->get('/profile');
 
     $response->assertOk();
-    $response->assertSee('Conectar con Google Drive');
+    $response->assertSee('Conectar Drive y Calendar');
 });

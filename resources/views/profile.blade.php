@@ -303,9 +303,22 @@
                                 </span>
                             </h3>
                             <div class="info-item">
-                                <span class="info-label">Estado</span>
+                                <span class="info-label">Drive</span>
                                 <span class="status-badge status-active">Conectado</span>
                             </div>
+                            <div class="info-item">
+                                <span class="info-label">Calendar</span>
+                                @if($calendarConnected)
+                                <span class="status-badge status-active">Conectado</span>
+                                @else
+                                <span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">Sin acceso</span>
+                                @endif
+                            </div>
+                            @unless($calendarConnected)
+                            <div class="info-item">
+                                <span class="info-value">Vuelve a conectar a través de Google OAuth.</span>
+                            </div>
+                            @endunless
                             @if($lastSync)
                             <div class="info-item">
                                 <span class="info-label">Última sincronización</span>
