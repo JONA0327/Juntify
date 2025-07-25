@@ -820,3 +820,19 @@ window.muteSystemAudio = muteSystemAudio;
 window.muteMicrophoneAudio = muteMicrophoneAudio;
 window.toggleMeetingRecording = toggleMeetingRecording;
 
+// Funciones para navbar móvil
+window.toggleMobileDropdown = function() {
+  const dropdown = document.getElementById('mobile-dropdown');
+  const overlay = document.getElementById('mobile-dropdown-overlay');
+  
+  dropdown.classList.toggle('show');
+  overlay.classList.toggle('show');
+};
+
+window.closeMobileDropdown = function() {
+  const dropdown = document.getElementById('mobile-dropdown');
+  const overlay = document.getElementById('mobile-dropdown-overlay');
+  
+  dropdown.classList.remove('show');
+  overlay.classList.remove('show');
+};

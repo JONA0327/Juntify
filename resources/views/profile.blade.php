@@ -27,11 +27,11 @@
             <span class="nav-label">Reuniones</span>
         </div>
         <div class="nav-item">
-            <div class="nav-icon">➕</div>
+            <div class="nav-icon">🤖</div>
             <span class="nav-label">Nueva</span>
         </div>
         <div class="nav-item nav-center">
-            <div class="nav-icon-center">🎬</div>
+            <div class="nav-icon-center">+</div>
         </div>
         <div class="nav-item">
             <div class="nav-icon">✅</div>
@@ -60,9 +60,13 @@
     <!-- Overlay para cerrar dropdown -->
     <div class="mobile-dropdown-overlay" id="mobile-dropdown-overlay" onclick="closeMobileDropdown()"></div>
 
+    <button class="mobile-sidebar-btn mobile-menu-btn" onclick="toggleSidebar()">
+        <span class="arrow-right"></span>
+    </button>
     <div class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
+            <button class="sidebar-close-btn" onclick="closeSidebar()"></button>
             <div class="sidebar-header">
                 <h1 class="logo">Juntify</h1>
                 <p class="logo-subtitle">Panel de usuario</p>
@@ -125,6 +129,7 @@
                 </div>
             </div>
         </aside>
+        <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
         <!-- Main Content -->
         <main class="main-content">
