@@ -25,7 +25,7 @@ class ProfileController extends Controller
         $lastSync = optional($token)->updated_at;
         $subfolders = collect();
 
-        if (!$token) {
+        if (!$token || !$token->access_token) {
             $driveConnected    = false;
             $calendarConnected = false;
             $folder           = null;

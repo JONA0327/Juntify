@@ -22,7 +22,9 @@ class DriveController extends Controller
 
     protected function applyUserToken(): GoogleToken
     {
-        $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
+        $token = GoogleToken::where('username', Auth::user()->username)
+            ->whereNotNull('access_token')
+            ->firstOrFail();
 
         $client = $this->drive->getClient();
         $client->setAccessToken([
@@ -121,7 +123,9 @@ class DriveController extends Controller
     {
         // 1. Obtener el GoogleToken del usuario autenticado
         $username = Auth::user()->username;
-        $token    = GoogleToken::where('username', $username)->firstOrFail();
+        $token    = GoogleToken::where('username', $username)
+            ->whereNotNull('access_token')
+            ->firstOrFail();
 
         // 2. Validar que recordings_folder_id no sea nulo
         if (!$token->recordings_folder_id) {
@@ -179,7 +183,7 @@ class DriveController extends Controller
     public function status()
     {
         $token = GoogleToken::where('username', Auth::user()->username)->first();
-        if (!$token) {
+        if (!$token || !$token->access_token) {
             return response()->json(['connected' => false, 'calendar' => false]);
         }
 
