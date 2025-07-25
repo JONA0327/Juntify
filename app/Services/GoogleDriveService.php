@@ -80,4 +80,9 @@ class GoogleDriveService
             ['sendNotificationEmail' => false]
         );
     }
+
+    public function deleteFile(string $id): void
+    {
+        $this->drive->files->delete($id);
+    }
 }

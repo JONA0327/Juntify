@@ -108,6 +108,15 @@ class DriveController extends Controller
         return response()->json(['id' => $folderId]);
     }
 
+    public function deleteSubfolder(string $id)
+    {
+        $this->applyUserToken();
+        $this->drive->deleteFile($id);
+        Subfolder::where('google_id', $id)->delete();
+
+        return response()->json(['deleted' => true]);
+    }
+
     public function syncDriveSubfolders()
     {
         // 1. Obtener el GoogleToken del usuario autenticado
