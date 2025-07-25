@@ -20,6 +20,9 @@
     <!-- Header con navbar -->
     @include('partials.navbar')
 
+    <!-- Header con navbar -->
+    @include('partials.navbar')
+
     <!-- Botón hamburguesa para navbar (móvil) -->
     <button class="mobile-navbar-btn" onclick="toggleMobileNavbar()" id="mobile-navbar-btn">
         <div class="hamburger-navbar">
@@ -172,6 +175,8 @@
                         <div class="info-item">
                             <span class="info-label">Tipo de plan</span>
                             <span class="status-badge status-{{ strtolower($user->roles ?? 'free') }}">
+                                {{ ucfirst($user->roles ?? 'free') }}
+                            </span>
                                 {{ ucfirst($user->roles ?? 'free') }}
                             </span>
                         </div>
