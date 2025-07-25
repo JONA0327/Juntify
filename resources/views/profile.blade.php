@@ -39,7 +39,7 @@
         <aside class="sidebar" id="sidebar">
             <!-- Botón X para cerrar sidebar (móvil) -->
             <button class="sidebar-close-btn" onclick="closeSidebar()">×</button>
-            
+
             <div class="sidebar-header">
                 <h1 class="logo">Juntify</h1>
                 <p class="logo-subtitle">Panel de usuario</p>
@@ -118,7 +118,7 @@
                     @php
                         $roleColors = [
                             'free' => '#F472B6',
-                            'basic' => '#64748B', 
+                            'basic' => '#64748B',
                             'business' => '#06B6D4',
                             'developer' => '#A855F7',
                             'enterprise' => '#A855F7',
@@ -129,15 +129,15 @@
                         $userRole = $user->roles ?? 'free';
                         $badgeColor = $roleColors[$userRole] ?? '#64748B';
                     @endphp
-                    <img src="/badges/{{ $userRole }}-badge.png" 
-                         alt="{{ ucfirst($userRole) }} Badge" 
+                    <img src="/badges/{{ $userRole }}-badge.png"
+                         alt="{{ ucfirst($userRole) }} Badge"
                          class="avatar"
                          style="filter: drop-shadow(0 0 10px {{ $badgeColor }}40);">
                 </div>
             </div>
 
             <!-- Content Sections -->
-            
+
             <!-- Información del Usuario -->
             <div class="content-section" id="section-info">
                 <div class="content-grid">
@@ -274,7 +274,7 @@
                                 <span class="card-icon">📁</span>
                                 Configuración de Carpetas
                             </h3>
-                            
+
                             <div style="margin-bottom: 1.5rem;">
                                 <label class="form-label">Carpeta Principal</label>
                                 @if($folder)
@@ -292,16 +292,16 @@
                                         </div>
                                     </div>
                                 @endif
-                                
-                                <input 
-                                    type="text" 
-                                    class="form-input" 
+
+                                <input
+                                    type="text"
+                                    class="form-input"
                                     id="main-folder-input"
                                     placeholder="ID de la carpeta principal"
                                     data-id="{{ $folder->google_id ?? '' }}"
                                     style="margin-bottom: 1rem;"
                                 >
-                                
+
                                 <div class="action-buttons">
                                     <button class="btn btn-primary" onclick="showCreateFolderModal()">
                                         ➕ Crear Carpeta Principal
@@ -320,14 +320,14 @@
                                 <span class="card-icon">📂</span>
                                 Subcarpetas
                             </h3>
-                            
+
                             <div style="margin-bottom: 1.5rem;">
                                 <div class="action-buttons" style="margin-bottom: 1rem;">
                                     <button class="btn btn-primary" onclick="showCreateSubfolderModal()">
                                         ➕ Crear Subcarpeta
                                     </button>
                                 </div>
-                                
+
                                 <div id="subfolders-list">
                                     @foreach($subfolders as $subfolder)
                                     <div data-id="{{ $subfolder->google_id }}" style="margin: 0.5rem 0; padding: 0.75rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(59, 130, 246, 0.2);">
@@ -340,7 +340,7 @@
                                     @endforeach
                                 </div>
                             </div>
-                            
+
                             <div style="background: rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 1rem; border: 1px solid rgba(255, 255, 255, 0.1);">
                                 <h4 style="color: #ffffff; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
                                     📄 Documentos
@@ -436,7 +436,7 @@
                         Acerca de Juntify
                     </h2>
                     <p style="color: #cbd5e1; line-height: 1.6; margin-bottom: 1rem;">
-                        Juntify es la plataforma líder en transcripción y análisis de reuniones, 
+                        Juntify es la plataforma líder en transcripción y análisis de reuniones,
                         diseñada para maximizar la productividad de tu equipo.
                     </p>
                     <div class="info-item">
@@ -453,7 +453,7 @@
     </div>
 
     <!-- Modales -->
-    
+
     <!-- Modal para crear carpeta principal -->
     <div class="modal" id="create-folder-modal">
         <div class="modal-content">
