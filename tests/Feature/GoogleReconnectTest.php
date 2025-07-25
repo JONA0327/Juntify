@@ -41,6 +41,7 @@ it('reconnects without losing folders', function () {
         'access_token' => null,
         'refresh_token' => null,
     ]);
+    $this->assertDatabaseCount('google_tokens', 1);
     $this->assertDatabaseHas('folders', ['id' => $folder->id]);
     $this->assertDatabaseHas('subfolders', ['id' => $sub->id]);
 
@@ -64,6 +65,7 @@ it('reconnects without losing folders', function () {
         'access_token' => 'new-token',
         'refresh_token' => 'new-refresh',
     ]);
+    $this->assertDatabaseCount('google_tokens', 1);
     $this->assertDatabaseHas('folders', ['id' => $folder->id]);
     $this->assertDatabaseHas('subfolders', ['id' => $sub->id]);
 });

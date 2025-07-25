@@ -52,8 +52,10 @@ class GoogleAuthController extends Controller
 
         $client->setAccessToken($token);
 
-        GoogleToken::updateOrCreate(
-            ['username' => Auth::user()->username],
+        $user = Auth::user();
+
+        $user->googleToken()->updateOrCreate(
+            [],
             [
                 'access_token'  => $token['access_token'] ?? '',
                 'refresh_token' => $token['refresh_token'] ?? '',
