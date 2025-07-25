@@ -84,11 +84,33 @@ class DriveController extends Controller
     {
         $token = $this->applyUserToken();
 
-        $token->update([
-            'recordings_folder_id' => $request->input('id'),
-        ]);
+        $folderId = $request->input('id');
 
-        return response()->json(['id' => $request->input('id')]);
+        $token->update(['recordings_folder_id' => $folderId]);
+
+        $folderName = Folder::where('google_id', $folderId)->value('name');
+
+        if (!$folderName) {
+            try {
+                $file = $this->drive->getDrive()->files->get($folderId, ['fields' => 'name']);
+                $folderName = $file->getName();
+            } catch (\Throwable $e) {
+                $folderName = 'recordings_' . Auth::user()->username;
+            }
+        }
+
+        Folder::updateOrCreate(
+            [
+                'google_token_id' => $token->id,
+                'google_id'       => $folderId,
+            ],
+            [
+                'name'      => $folderName,
+                'parent_id' => null,
+            ]
+        );
+
+        return response()->json(['id' => $folderId, 'name' => $folderName]);
     }
 
     public function createSubfolder(Request $request)
@@ -146,13 +168,24 @@ class DriveController extends Controller
 
         $drive = new \Google\Service\Drive($client);
 
-        // 4. Garantizar la existencia de la carpeta raíz
-        $rootFolder = Folder::firstOrCreate([
-            'google_token_id' => $token->id,
-            'google_id'       => $token->recordings_folder_id,
-            'name'            => "recordings_{$username}",
-            'parent_id'       => null,
-        ]);
+        // 4. Garantizar la existencia de la carpeta raíz con su nombre correcto
+        try {
+            $file       = $drive->files->get($token->recordings_folder_id, ['fields' => 'name']);
+            $folderName = $file->getName() ?? "recordings_{$username}";
+        } catch (\Throwable $e) {
+            $folderName = "recordings_{$username}";
+        }
+
+        $rootFolder = Folder::updateOrCreate(
+            [
+                'google_token_id' => $token->id,
+                'google_id'       => $token->recordings_folder_id,
+            ],
+            [
+                'name'      => $folderName,
+                'parent_id' => null,
+            ]
+        );
 
         // 5. Listar subcarpetas de primer nivel dentro de recordings_folder_id
         $query   = 'mimeType="application/vnd.google-apps.folder" and "' . $token->recordings_folder_id . '" in parents';

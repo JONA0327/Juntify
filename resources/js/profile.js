@@ -186,11 +186,15 @@ function setMainFolder() {
 
   btn.disabled = true;
   axios.post('/drive/set-main-folder', { id: mainFolderId })
-    .then(() => {
-      mainFolderName.textContent  = mainFolderId;
+    .then(() => axios.get('/drive/sync-subfolders'))
+    .then(res => {
+      const folder = res.data.root_folder;
+      if (folder && mainFolderName) {
+        mainFolderName.textContent = `${folder.name} (${folder.google_id})`;
+      }
       subfolderCard.style.display = 'block';
-      alert('Carpeta principal establecida: ' + mainFolderId);
-      input.dataset.id = mainFolderId;
+      alert('Carpeta principal establecida: ' + (folder?.name || mainFolderId));
+      input.dataset.id = folder?.google_id || mainFolderId;
     })
     .catch(err => {
       console.error('Error estableciendo carpeta principal:', err.response?.data || err.message);
