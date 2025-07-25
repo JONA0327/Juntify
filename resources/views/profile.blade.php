@@ -177,8 +177,6 @@
                             <span class="status-badge status-{{ strtolower($user->roles ?? 'free') }}">
                                 {{ ucfirst($user->roles ?? 'free') }}
                             </span>
-                                {{ ucfirst($user->roles ?? 'free') }}
-                            </span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Estado</span>

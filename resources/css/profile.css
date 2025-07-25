@@ -144,63 +144,11 @@ body {
 
 /* Main Content */
 .main-content {
-    margin-left: 280px;
-    padding: 6rem 2rem 2rem; /* Espacio superior para la navbar */
+    margin-left: 280px; /* Espacio para sidebar en desktop */
+    padding: 6rem 2rem 2rem; /* Espacio superior para navbar */
     min-height: 100vh;
+    transition: margin-left 0.3s ease;
 }
-
-/* Header navbar styles */
-.header {
-    position: fixed;
-    top: 0;
-    left: 280px; /* Dejar espacio para el sidebar */
-    right: 0;
-    z-index: 1000;
-    padding: 1rem 2rem;
-    background: rgba(10, 14, 39, 0.9);
-    backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(59, 130, 246, 0.1);
-    transition: left 0.3s ease;
-}
-
-.nav {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    max-width: 1400px;
-    margin: 0 auto;
-}
-
-.nav .logo {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #ffffff;
-    text-decoration: none;
-}
-
-.nav-links {
-    display: flex;
-    gap: 2rem;
-    list-style: none;
-    align-items: center;
-}
-
-.nav-links a {
-    color: #e2e8f0;
-    text-decoration: none;
-    font-weight: 400;
-    font-size: 0.9rem;
-    transition: color 0.3s ease;
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.nav-links a:hover {
-    color: #3b82f6;
-}
-
 .content-header {
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(20px);
@@ -624,12 +572,6 @@ body {
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
-    /* La navbar ocupa todo el ancho en móvil */
-    .header {
-        left: 0;
-        right: 0;
-    }
-    
     .mobile-navbar-btn {
         display: flex;
     }
@@ -672,7 +614,7 @@ body {
     .sidebar {
         transform: translateX(-100%);
         z-index: 1000;
-        top: 0; /* El sidebar va desde arriba en móvil también */
+        top: 0;
     }
 
     .sidebar.open {
@@ -697,11 +639,6 @@ body {
 
     .action-buttons {
         flex-direction: column;
-    }
-    
-    /* Ocultar el icono de perfil en la navbar móvil */
-    .nav-links a[href*="profile"] {
-        display: none;
     }
 }
 
