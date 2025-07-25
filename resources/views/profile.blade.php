@@ -45,11 +45,11 @@
                     <span class="dropdown-icon">👤</span>
                     <span class="dropdown-text">Perfil</span>
                 </a>
-                <a href="#compartir" class="dropdown-item">
+                <a href="#" class="dropdown-item">
                     <span class="dropdown-icon">📤</span>
                     <span class="dropdown-text">Compartir</span>
                 </a>
-                <a href="#asistente" class="dropdown-item">
+                <a href="#" class="dropdown-item">
                     <span class="dropdown-icon">🤖</span>
                     <span class="dropdown-text">Asistente IA</span>
                 </a>
