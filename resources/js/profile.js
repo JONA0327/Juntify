@@ -87,6 +87,34 @@ function connectDrive() {
     });
 }
 
+function refreshCalendarStatus() {
+  axios.get('/drive/status')
+    .then(res => {
+      const badge  = document.getElementById('calendar-status');
+      const advice = document.getElementById('calendar-advice');
+      if (!badge) return;
+
+      if (res.data.calendar) {
+        badge.textContent = 'Conectado';
+        badge.classList.add('status-active');
+        badge.style.background = '';
+        badge.style.color = '';
+        badge.style.border = '';
+        if (advice) advice.style.display = 'none';
+      } else {
+        badge.textContent = 'Sin acceso';
+        badge.classList.remove('status-active');
+        badge.style.background = 'rgba(239, 68, 68, 0.2)';
+        badge.style.color = '#ef4444';
+        badge.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+        if (advice) advice.style.display = '';
+      }
+    })
+    .catch(err => {
+      console.error('Error verificando Calendar:', err);
+    });
+}
+
 /**
  * Muestra el modal para crear carpeta principal
  */
@@ -484,6 +512,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (connectBtn)    connectBtn.addEventListener('click', connectDrive);
   if (setMainBtn)    setMainBtn.addEventListener('click', setMainFolder);
+
+  refreshCalendarStatus();
 });
 
 // Exponer funciones para handlers inline (si aún usas onclick en HTML)
@@ -499,6 +529,7 @@ window.closeCreateSubfolderModal = closeCreateSubfolderModal;
 window.confirmCreateSubfolder = confirmCreateSubfolder;
 window.setMainFolder       = setMainFolder;
 window.addSubfolderToList = addSubfolderToList;
+window.refreshCalendarStatus = refreshCalendarStatus;
 
 // Funciones para navbar móvil
 window.toggleMobileDropdown = function() {
