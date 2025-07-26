@@ -308,17 +308,13 @@
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Calendar</span>
-                                @if($calendarConnected)
-                                <span class="status-badge status-active">Conectado</span>
-                                @else
-                                <span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">Sin acceso</span>
-                                @endif
+                                <span id="calendar-status" class="status-badge {{ $calendarConnected ? 'status-active' : '' }}" @unless($calendarConnected) style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);" @endunless>
+                                    {{ $calendarConnected ? 'Conectado' : 'Sin acceso' }}
+                                </span>
                             </div>
-                            @unless($calendarConnected)
-                            <div class="info-item">
+                            <div class="info-item" id="calendar-advice" @if($calendarConnected) style="display:none;" @endif>
                                 <span class="info-value">Vuelve a conectar a través de Google OAuth.</span>
                             </div>
-                            @endunless
                             @if($lastSync)
                             <div class="info-item">
                                 <span class="info-label">Última sincronización</span>
