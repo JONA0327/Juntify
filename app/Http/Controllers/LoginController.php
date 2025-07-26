@@ -35,7 +35,9 @@ class LoginController extends Controller
                  ->with('success', 'Bienvenido, ' . $user->full_name . '!');
         }
 
-        return back()->withErrors(['auth' => 'Credenciales inválidas']);
+        return back()
+            ->withErrors(['login' => 'Credenciales inválidas'])
+            ->withInput($request->only('login'));
     }
 
     public function logout(Request $request)
