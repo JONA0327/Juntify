@@ -11,7 +11,7 @@ let analysisResults = null;
 function createParticles() {
     const particles = document.getElementById('particles');
     const particleCount = window.innerWidth < 768 ? 30 : 50;
-    
+
     for (let i = 0; i < particleCount; i++) {
         const particle = document.createElement('div');
         particle.className = 'particle';
@@ -28,7 +28,7 @@ function showStep(stepNumber) {
     document.querySelectorAll('.processing-step').forEach(step => {
         step.classList.remove('active');
     });
-    
+
     // Mostrar el paso actual
     const targetStep = document.getElementById(`step-${getStepId(stepNumber)}`);
     if (targetStep) {
@@ -41,7 +41,7 @@ function showStep(stepNumber) {
 function getStepId(stepNumber) {
     const stepIds = [
         'audio-processing',
-        'transcription', 
+        'transcription',
         'edit-transcription',
         'select-analysis',
         'analysis-processing',
@@ -56,19 +56,19 @@ function getStepId(stepNumber) {
 
 function startAudioProcessing() {
     showStep(1);
-    
+
     const progressBar = document.getElementById('audio-progress');
     const progressText = document.getElementById('audio-progress-text');
     const progressPercent = document.getElementById('audio-progress-percent');
-    
+
     let progress = 0;
     const interval = setInterval(() => {
         progress += Math.random() * 8 + 2;
         if (progress > 100) progress = 100;
-        
+
         progressBar.style.width = progress + '%';
         progressPercent.textContent = Math.round(progress) + '%';
-        
+
         // Actualizar estados de procesamiento
         if (progress > 30) {
             document.getElementById('audio-quality-status').textContent = '✅';
@@ -82,7 +82,7 @@ function startAudioProcessing() {
             document.getElementById('noise-reduction-status').textContent = '✅';
             progressText.textContent = 'Finalizando procesamiento...';
         }
-        
+
         if (progress >= 100) {
             clearInterval(interval);
             setTimeout(() => {
@@ -96,12 +96,12 @@ function startAudioProcessing() {
 
 function startTranscription() {
     showStep(2);
-    
+
     const progressBar = document.getElementById('transcription-progress');
     const progressText = document.getElementById('transcription-progress-text');
     const progressPercent = document.getElementById('transcription-progress-percent');
     const typingText = document.getElementById('typing-text');
-    
+
     const sampleTexts = [
         "Buenos días a todos, gracias por acompañarnos...",
         "Perfecto, me parece una excelente propuesta...",
@@ -110,18 +110,18 @@ function startTranscription() {
         "Excelente punto, María. Tomemos nota de eso...",
         "Para el próximo trimestre necesitamos..."
     ];
-    
+
     let progress = 0;
     let textIndex = 0;
     let charIndex = 0;
-    
+
     const interval = setInterval(() => {
         progress += Math.random() * 5 + 1;
         if (progress > 100) progress = 100;
-        
+
         progressBar.style.width = progress + '%';
         progressPercent.textContent = Math.round(progress) + '%';
-        
+
         // Simular escritura de texto
         if (textIndex < sampleTexts.length) {
             const currentText = sampleTexts[textIndex];
@@ -136,7 +136,7 @@ function startTranscription() {
                 }
             }
         }
-        
+
         if (progress >= 100) {
             clearInterval(interval);
             progressText.textContent = 'Transcripción completada';
@@ -164,14 +164,14 @@ function generateTranscriptionSegments() {
             avatar: 'H1'
         },
         {
-            speaker: 'Hablante 2', 
+            speaker: 'Hablante 2',
             time: '00:45 - 01:30',
             text: 'Perfecto, me parece una excelente propuesta. Creo que deberíamos enfocarnos en los objetivos principales que discutimos la semana pasada, especialmente en el incremento de ventas y el lanzamiento de la nueva línea de productos.',
             avatar: 'H2'
         },
         {
             speaker: 'Hablante 3',
-            time: '01:30 - 02:15', 
+            time: '01:30 - 02:15',
             text: '¿Podríamos revisar el presupuesto para este proyecto? Me gustaría entender mejor cómo vamos a financiar la contratación de los nuevos desarrolladores y la campaña de marketing digital que mencionaste.',
             avatar: 'H3'
         },
@@ -182,7 +182,7 @@ function generateTranscriptionSegments() {
             avatar: 'H1'
         }
     ];
-    
+
     container.innerHTML = segments.map((segment, index) => `
         <div class="transcript-segment" data-segment="${index}">
             <div class="segment-header">
@@ -205,7 +205,7 @@ function generateTranscriptionSegments() {
                     </button>
                 </div>
             </div>
-            
+
             <div class="segment-audio">
                 <div class="audio-player-mini">
                     <button class="play-btn-mini" onclick="playSegmentAudio(${index})">
@@ -217,13 +217,13 @@ function generateTranscriptionSegments() {
                     <span class="audio-duration-mini">${segment.time.split(' - ')[1]}</span>
                 </div>
             </div>
-            
+
             <div class="segment-content">
                 <textarea class="transcript-text" placeholder="Texto de la transcripción...">${segment.text}</textarea>
             </div>
         </div>
     `).join('');
-    
+
     // Guardar datos de transcripción
     transcriptionData = segments;
 }
@@ -304,10 +304,10 @@ function seekAudio(segmentIndex, event) {
     const rect = timeline.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     const percentage = (clickX / rect.width) * 100;
-    
+
     const progress = timeline.querySelector('.timeline-progress-mini');
     progress.style.width = percentage + '%';
-    
+
     console.log(`Buscando en el audio del segmento ${segmentIndex} al ${percentage.toFixed(1)}%`);
 }
 
@@ -317,23 +317,30 @@ function playFullAudio() {
 }
 
 function saveTranscriptionAndContinue() {
-    // Recopilar datos editados
     const segments = document.querySelectorAll('.transcript-segment');
+
     segments.forEach((segment, index) => {
         const nameEl = segment.querySelector('.speaker-name');
         const textEl = segment.querySelector('.transcript-text');
+
+        if (!transcriptionData[index]) {
+            console.warn(`Segmento faltante en transcriptionData[${index}]`);
+            return;
+        }
+
         const speakerName = nameEl ? nameEl.textContent : transcriptionData[index].speaker;
         const transcriptText = textEl ? textEl.value : transcriptionData[index].text;
 
         transcriptionData[index].speaker = speakerName;
         transcriptionData[index].text = transcriptText;
     });
-    
+
     showNotification('Transcripción guardada correctamente', 'success');
     setTimeout(() => {
         showAnalysisSelector();
     }, 1000);
 }
+
 
 // ===== PASO 4: SELECTOR DE ANÁLISIS =====
 
@@ -346,11 +353,11 @@ function selectAnalyzer(analyzerType) {
     document.querySelectorAll('.analyzer-card').forEach(card => {
         card.classList.remove('active');
     });
-    
+
     // Seleccionar nuevo analizador
     document.querySelector(`[data-analyzer="${analyzerType}"]`).classList.add('active');
     selectedAnalyzer = analyzerType;
-    
+
     console.log('Analizador seleccionado:', analyzerType);
 }
 
@@ -359,7 +366,7 @@ function startAnalysis() {
         showNotification('Por favor selecciona un tipo de análisis', 'error');
         return;
     }
-    
+
     showNotification(`Iniciando análisis: ${selectedAnalyzer}`, 'info');
     setTimeout(() => {
         processAnalysis();
@@ -370,19 +377,19 @@ function startAnalysis() {
 
 function processAnalysis() {
     showStep(5);
-    
+
     const progressBar = document.getElementById('analysis-progress');
     const progressText = document.getElementById('analysis-progress-text');
     const progressPercent = document.getElementById('analysis-progress-percent');
-    
+
     let progress = 0;
     const interval = setInterval(() => {
         progress += Math.random() * 6 + 2;
         if (progress > 100) progress = 100;
-        
+
         progressBar.style.width = progress + '%';
         progressPercent.textContent = Math.round(progress) + '%';
-        
+
         // Actualizar estados de análisis
         if (progress > 25) {
             document.getElementById('summary-status').textContent = '✅';
@@ -396,7 +403,7 @@ function processAnalysis() {
             document.getElementById('tasks-status').textContent = '✅';
             progressText.textContent = 'Finalizando análisis...';
         }
-        
+
         if (progress >= 100) {
             clearInterval(interval);
             progressText.textContent = 'Análisis completado';
@@ -423,7 +430,7 @@ function loadDriveFolders() {
 function toggleAudioPlayback() {
     const playBtn = document.querySelector('.play-btn');
     const playIcon = playBtn.querySelector('.play-icon');
-    
+
     if (playIcon.textContent === '▶️') {
         playIcon.textContent = '⏸️';
         console.log('Reproduciendo audio');
@@ -438,11 +445,11 @@ function toggleAudioPlayback() {
 function simulateAudioProgress() {
     const timeline = document.querySelector('.timeline-progress');
     let progress = 0;
-    
+
     const interval = setInterval(() => {
         progress += 1;
         timeline.style.width = progress + '%';
-        
+
         if (progress >= 100) {
             clearInterval(interval);
             document.querySelector('.play-icon').textContent = '▶️';
@@ -459,12 +466,12 @@ function saveToDatabase() {
     const meetingName = document.getElementById('meeting-name').value.trim();
     const rootFolder = document.getElementById('root-folder-select').value;
     const subfolder = document.getElementById('subfolder-select').value;
-    
+
     if (!meetingName) {
         showNotification('Por favor ingresa un nombre para la reunión', 'error');
         return;
     }
-    
+
     showNotification('Iniciando guardado en base de datos...', 'info');
     setTimeout(() => {
         processDatabaseSave();
@@ -475,19 +482,19 @@ function saveToDatabase() {
 
 function processDatabaseSave() {
     showStep(7);
-    
+
     const progressBar = document.getElementById('save-progress');
     const progressText = document.getElementById('save-progress-text');
     const progressPercent = document.getElementById('save-progress-percent');
-    
+
     let progress = 0;
     const interval = setInterval(() => {
         progress += Math.random() * 8 + 3;
         if (progress > 100) progress = 100;
-        
+
         progressBar.style.width = progress + '%';
         progressPercent.textContent = Math.round(progress) + '%';
-        
+
         // Actualizar estados de guardado
         if (progress > 20) {
             document.getElementById('audio-upload-status').textContent = '✅';
@@ -505,7 +512,7 @@ function processDatabaseSave() {
             document.getElementById('tasks-save-status').textContent = '✅';
             progressText.textContent = 'Finalizando guardado...';
         }
-        
+
         if (progress >= 100) {
             clearInterval(interval);
             progressText.textContent = 'Guardado completado';
@@ -563,21 +570,21 @@ function createNewMeeting() {
 function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
-    
+
     const icons = {
         success: '✅',
         error: '❌',
         info: 'ℹ️',
         warning: '⚠️'
     };
-    
+
     notification.innerHTML = `
         <div class="notification-content">
             <span class="notification-icon">${icons[type]}</span>
             <span class="notification-message">${message}</span>
         </div>
     `;
-    
+
     notification.style.cssText = `
         position: fixed;
         top: 2rem;
@@ -593,9 +600,9 @@ function showNotification(message, type = 'info') {
         font-weight: 500;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => {
@@ -610,7 +617,7 @@ function showNotification(message, type = 'info') {
 function toggleMobileDropdown() {
     const dropdown = document.getElementById('mobile-dropdown');
     const overlay = document.getElementById('mobile-dropdown-overlay');
-    
+
     dropdown.classList.toggle('show');
     overlay.classList.toggle('show');
 }
@@ -618,7 +625,7 @@ function toggleMobileDropdown() {
 function closeMobileDropdown() {
     const dropdown = document.getElementById('mobile-dropdown');
     const overlay = document.getElementById('mobile-dropdown-overlay');
-    
+
     dropdown.classList.remove('show');
     overlay.classList.remove('show');
 }
@@ -642,7 +649,7 @@ document.addEventListener('click', e => {
 
 document.addEventListener('DOMContentLoaded', function() {
     createParticles();
-    
+
     // Iniciar automáticamente el procesamiento de audio
     setTimeout(() => {
         startAudioProcessing();
@@ -656,7 +663,7 @@ style.textContent = `
         from { transform: translateX(100%); opacity: 0; }
         to { transform: translateX(0); opacity: 1; }
     }
-    
+
     @keyframes slideOut {
         from { transform: translateX(0); opacity: 1; }
         to { transform: translateX(100%); opacity: 0; }
