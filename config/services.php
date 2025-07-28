@@ -39,4 +39,8 @@ return [
         'service_account_email' => env('GOOGLE_SERVICE_ACCOUNT_EMAIL'),
     ],
 
+    'assemblyai' => [
+        'api_key' => env('ASSEMBLYAI_API_KEY'),
+    ],
+
 ];

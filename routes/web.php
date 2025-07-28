@@ -6,6 +6,7 @@ use App\Http\Controllers\LoginController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\DriveController;
 use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Http\Controllers\TranscriptionController;
 
 Route::get('/', function () {
     return view('index');
@@ -53,3 +54,6 @@ Route::get('/new-meeting', function () {
 Route::get('/audio-processing', function () {
     return view('audio-processing');
 })->name('audio-processing');
+
+Route::post('/transcription', [TranscriptionController::class, 'store'])->name('transcription.store');
+Route::get('/transcription/{id}', [TranscriptionController::class, 'show'])->name('transcription.show');
