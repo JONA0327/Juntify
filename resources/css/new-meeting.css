@@ -581,6 +581,33 @@ body {
     background: #dc2626;
 }
 
+.pause-btn {
+    background: var(--warning-color);
+    color: black;
+}
+
+.pause-btn:hover {
+    background: #eab308;
+}
+
+.resume-btn {
+    background: var(--success-color);
+    color: white;
+}
+
+.resume-btn:hover {
+    background: #059669;
+}
+
+.discard-btn {
+    background: var(--danger-color);
+    color: white;
+}
+
+.discard-btn:hover {
+    background: #dc2626;
+}
+
 .recorder-btn {
     font-size: 1.1rem;
     padding: 1rem 2rem;
@@ -589,13 +616,14 @@ body {
     font-weight: 600;
 }
 
+
 .recorder-btn.recording {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
 }
 
 .recorder-btn.recording:hover {
-    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+    box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4);
 }
 
 /* Notificaciones */
@@ -1383,13 +1411,14 @@ body {
     box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
 }
 
+
 .meeting-record-btn.recording {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
 }
 
 .meeting-record-btn.recording:hover {
-    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+    box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4);
 }
 
 .btn-icon {
