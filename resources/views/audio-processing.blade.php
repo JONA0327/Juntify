@@ -585,6 +585,64 @@
         </main>
     </div>
 
+    <!-- Modales -->
+
+    <!-- Modal para cambiar hablante individual -->
+    <div class="modal" id="change-speaker-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <span class="modal-icon">👤</span>
+                    Cambiar Hablante
+                </h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">
+                    Ingresa el nuevo nombre para este hablante específico.
+                </p>
+                <div class="form-group">
+                    <label class="form-label">Nombre del hablante</label>
+                    <input type="text" class="modal-input" id="speaker-name-input" placeholder="Ej: María González">
+                    <div class="input-hint">Este cambio solo afectará a este segmento de la transcripción.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeChangeSpeakerModal()">Cancelar</button>
+                <button class="btn btn-primary" id="confirm-speaker-change" onclick="confirmSpeakerChange()">✅ Cambiar Hablante</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para cambiar hablantes globalmente -->
+    <div class="modal" id="change-global-speaker-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <span class="modal-icon">👥</span>
+                    Cambiar Hablante Globalmente
+                </h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">
+                    Cambia el nombre de este hablante en toda la transcripción.
+                </p>
+                <div class="form-group">
+                    <label class="form-label">Hablante actual</label>
+                    <input type="text" class="modal-input" id="current-speaker-name" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nuevo nombre</label>
+                    <input type="text" class="modal-input" id="global-speaker-name-input" placeholder="Ej: María González">
+                    <div class="input-hint">Este cambio afectará a todos los segmentos de este hablante.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeGlobalSpeakerModal()">Cancelar</button>
+                <button class="btn btn-primary" id="confirm-global-speaker-change" onclick="confirmGlobalSpeakerChange()">✅ Cambiar Globalmente</button>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript -->
     @vite(['resources/js/audio-processing.js'])
 </body>
