@@ -565,6 +565,21 @@ function closeMobileDropdown() {
 
 // ===== INICIALIZACIÓN =====
 
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        closeChangeSpeakerModal();
+        closeGlobalSpeakerModal();
+    }
+});
+
+// Cerrar modales al hacer click fuera
+document.addEventListener('click', e => {
+    if (e.target.classList.contains('modal')) {
+        closeChangeSpeakerModal();
+        closeGlobalSpeakerModal();
+    }
+});
+
 document.addEventListener('DOMContentLoaded', function() {
     createParticles();
     
