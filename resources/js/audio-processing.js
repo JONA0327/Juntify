@@ -2,6 +2,7 @@
 let currentStep = 1;
 let selectedAnalyzer = 'general';
 let audioData = null;
+let audioSegments = [];
 let transcriptionData = [];
 let analysisResults = null;
 
@@ -54,42 +55,54 @@ function getStepId(stepNumber) {
 
 // ===== PASO 1: PROCESAMIENTO DE AUDIO =====
 
-function startAudioProcessing() {
+async function startAudioProcessing() {
     showStep(1);
 
     const progressBar = document.getElementById('audio-progress');
     const progressText = document.getElementById('audio-progress-text');
     const progressPercent = document.getElementById('audio-progress-percent');
 
-    let progress = 0;
-    const interval = setInterval(() => {
-        progress += Math.random() * 8 + 2;
-        if (progress > 100) progress = 100;
+    progressBar.style.width = '0%';
+    progressPercent.textContent = '0%';
+    progressText.textContent = 'Unificando segmentos...';
 
-        progressBar.style.width = progress + '%';
-        progressPercent.textContent = Math.round(progress) + '%';
+    if (!audioSegments || audioSegments.length === 0) {
+        progressBar.style.width = '100%';
+        progressPercent.textContent = '100%';
+        progressText.textContent = 'No hay segmentos de audio';
+        document.getElementById('audio-quality-status').textContent = '⚠️';
+        return;
+    }
 
-        // Actualizar estados de procesamiento
-        if (progress > 30) {
-            document.getElementById('audio-quality-status').textContent = '✅';
-            progressText.textContent = 'Detectando hablantes...';
-        }
-        if (progress > 60) {
-            document.getElementById('speaker-detection-status').textContent = '✅';
-            progressText.textContent = 'Reduciendo ruido de fondo...';
-        }
-        if (progress > 90) {
-            document.getElementById('noise-reduction-status').textContent = '✅';
-            progressText.textContent = 'Finalizando procesamiento...';
-        }
+    audioData = await mergeAudioSegments(audioSegments);
 
-        if (progress >= 100) {
-            clearInterval(interval);
-            setTimeout(() => {
-                startTranscription();
-            }, 1000);
-        }
-    }, 150);
+    document.getElementById('audio-quality-status').textContent = '✅';
+    document.getElementById('speaker-detection-status').textContent = '✅';
+    document.getElementById('noise-reduction-status').textContent = '✅';
+
+    setTimeout(() => {
+        startTranscription();
+    }, 500);
+}
+
+async function mergeAudioSegments(segments) {
+    const progressBar = document.getElementById('audio-progress');
+    const progressPercent = document.getElementById('audio-progress-percent');
+
+    const totalBytes = segments.reduce((acc, s) => acc + s.size, 0);
+    let mergedBytes = 0;
+    const buffers = [];
+
+    for (const blob of segments) {
+        const buffer = await blob.arrayBuffer();
+        buffers.push(buffer);
+        mergedBytes += blob.size;
+        const percent = (mergedBytes / totalBytes) * 100;
+        progressBar.style.width = percent + '%';
+        progressPercent.textContent = Math.round(percent) + '%';
+    }
+
+    return new Blob(buffers, { type: segments[0]?.type || 'audio/webm;codecs=opus' });
 }
 
 // ===== PASO 2: TRANSCRIPCIÓN =====
@@ -613,6 +626,18 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
+function base64ToBlob(base64) {
+    const parts = base64.split(',');
+    const mime = parts[0].match(/:(.*?);/)[1] || 'audio/webm';
+    const binary = atob(parts[1]);
+    const len = binary.length;
+    const buffer = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        buffer[i] = binary.charCodeAt(i);
+    }
+    return new Blob([buffer], { type: mime });
+}
+
 // Funciones para navbar móvil
 function toggleMobileDropdown() {
     const dropdown = document.getElementById('mobile-dropdown');
@@ -653,6 +678,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const storedAudio = sessionStorage.getItem('recordingBlob');
     if (storedAudio) {
         audioData = storedAudio;
+    }
+
+    const segments = sessionStorage.getItem('recordingSegments');
+    if (segments) {
+        try {
+            const arr = JSON.parse(segments);
+            audioSegments = arr.map(base64ToBlob);
+        } catch (e) {
+            console.error('Error al cargar segmentos de audio', e);
+        }
     }
 
     const meta = sessionStorage.getItem('recordingMetadata');

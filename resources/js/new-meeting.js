@@ -314,7 +314,10 @@ async function finalizeRecording() {
     const finalBlob = new Blob(recordedSegments, { type: 'audio/webm;codecs=opus' });
     const base64 = await blobToBase64(finalBlob);
 
+    const segmentBase64 = await Promise.all(recordedSegments.map(blobToBase64));
+
     sessionStorage.setItem('recordingBlob', base64);
+    sessionStorage.setItem('recordingSegments', JSON.stringify(segmentBase64));
     sessionStorage.setItem('recordingMetadata', JSON.stringify({
         segmentCount: recordedSegments.length,
         durationMs: totalDuration
