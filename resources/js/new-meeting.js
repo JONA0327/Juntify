@@ -3,6 +3,7 @@ let isRecording = false;
 let isPaused = false;
 let recordingTimer = null;
 let startTime = null;
+let pauseStart = null;
 let selectedMode = 'audio';
 let mediaRecorder = null;
 let audioContext = null;
@@ -87,8 +88,26 @@ function toggleAdvancedOptions() {
 function toggleRecording() {
     if (!isRecording) {
         startRecording();
+        document.getElementById('pause-recording').style.display = 'inline-block';
+        document.getElementById('discard-recording').style.display = 'inline-block';
+        document.getElementById('resume-recording').style.display = 'none';
+        const mp = document.getElementById('meeting-pause');
+        const md = document.getElementById('meeting-discard');
+        const mr = document.getElementById('meeting-resume');
+        if (mp) mp.style.display = 'inline-block';
+        if (md) md.style.display = 'inline-block';
+        if (mr) mr.style.display = 'none';
     } else {
         stopRecording();
+        document.getElementById('pause-recording').style.display = 'none';
+        document.getElementById('resume-recording').style.display = 'none';
+        document.getElementById('discard-recording').style.display = 'none';
+        const mp = document.getElementById('meeting-pause');
+        const md = document.getElementById('meeting-discard');
+        const mr = document.getElementById('meeting-resume');
+        if (mp) mp.style.display = 'none';
+        if (md) md.style.display = 'none';
+        if (mr) mr.style.display = 'none';
     }
 }
 
@@ -146,6 +165,78 @@ async function startRecording() {
         console.error('Error al acceder al micrófono:', error);
         showError('No se pudo acceder al micrófono. Por favor, permite el acceso.');
     }
+}
+
+// Pausar grabación
+function pauseRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.pause();
+        isPaused = true;
+        pauseStart = Date.now();
+        const label = document.getElementById('timer-label');
+        if (label) label.textContent = 'Grabación pausada';
+        document.getElementById('pause-recording').style.display = 'none';
+        document.getElementById('resume-recording').style.display = 'inline-block';
+        const mp = document.getElementById('meeting-pause');
+        const mr = document.getElementById('meeting-resume');
+        if (mp) mp.style.display = 'none';
+        if (mr) mr.style.display = 'inline-block';
+    }
+}
+
+// Reanudar grabación
+function resumeRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'paused') {
+        mediaRecorder.resume();
+        isPaused = false;
+        if (pauseStart) {
+            startTime += Date.now() - pauseStart;
+            pauseStart = null;
+        }
+        const label = document.getElementById('timer-label');
+        if (label) label.textContent = 'Grabando...';
+        document.getElementById('resume-recording').style.display = 'none';
+        document.getElementById('pause-recording').style.display = 'inline-block';
+        const mp = document.getElementById('meeting-pause');
+        const mr = document.getElementById('meeting-resume');
+        if (mp) mp.style.display = 'inline-block';
+        if (mr) mr.style.display = 'none';
+    }
+}
+
+// Descartar grabación
+function discardRecording() {
+    isRecording = false;
+    isPaused = false;
+
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
+    if (audioContext && audioContext.state !== 'closed') {
+        audioContext.close();
+    }
+    if (recordingTimer) {
+        clearInterval(recordingTimer);
+        recordingTimer = null;
+    }
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+
+    updateRecordingUI(false);
+    resetAudioVisualizer();
+
+    document.getElementById('pause-recording').style.display = 'none';
+    document.getElementById('resume-recording').style.display = 'none';
+    document.getElementById('discard-recording').style.display = 'none';
+    const mp = document.getElementById('meeting-pause');
+    const md = document.getElementById('meeting-discard');
+    const mr = document.getElementById('meeting-resume');
+    if (mp) mp.style.display = 'none';
+    if (md) md.style.display = 'none';
+    if (mr) mr.style.display = 'none';
 }
 
 // Función para detener grabación
@@ -814,6 +905,9 @@ window.toggleRecording = toggleRecording;
 window.toggleMobileNavbar = toggleMobileNavbar;
 window.removeSelectedFile = removeSelectedFile;
 window.processAudioFile = processAudioFile;
+window.pauseRecording = pauseRecording;
+window.resumeRecording = resumeRecording;
+window.discardRecording = discardRecording;
 
 // Funciones del grabador de reuniones que faltaban
 window.toggleSystemAudio = toggleSystemAudio;

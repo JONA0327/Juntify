@@ -188,6 +188,15 @@
                             <button class="btn btn-primary recorder-btn" id="start-recording" onclick="toggleRecording()">
                                 ▶️ Iniciar grabación
                             </button>
+                            <button class="btn pause-btn" id="pause-recording" onclick="pauseRecording()" style="display: none;">
+                                ⏸️ Pausar
+                            </button>
+                            <button class="btn resume-btn" id="resume-recording" onclick="resumeRecording()" style="display: none;">
+                                ▶️ Reanudar
+                            </button>
+                            <button class="btn discard-btn" id="discard-recording" onclick="discardRecording()" style="display: none;">
+                                ❌ Descartar
+                            </button>
                         </div>
                     </div>
 
@@ -321,6 +330,9 @@
                                         <span class="btn-icon">🎬</span>
                                         <span class="btn-text">Seleccionar fuente de audio</span>
                                     </button>
+                                    <button class="btn pause-btn" id="meeting-pause" onclick="pauseRecording()" style="display: none;">⏸️ Pausar</button>
+                                    <button class="btn resume-btn" id="meeting-resume" onclick="resumeRecording()" style="display: none;">▶️ Reanudar</button>
+                                    <button class="btn discard-btn" id="meeting-discard" onclick="discardRecording()" style="display: none;">❌ Descartar</button>
                                 </div>
                             </div>
                         </div>
