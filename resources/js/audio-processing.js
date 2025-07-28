@@ -107,57 +107,72 @@ async function mergeAudioSegments(segments) {
 
 // ===== PASO 2: TRANSCRIPCIÓN =====
 
-function startTranscription() {
+async function startTranscription() {
     showStep(2);
 
     const progressBar = document.getElementById('transcription-progress');
     const progressText = document.getElementById('transcription-progress-text');
     const progressPercent = document.getElementById('transcription-progress-percent');
-    const typingText = document.getElementById('typing-text');
 
-    const sampleTexts = [
-        "Buenos días a todos, gracias por acompañarnos...",
-        "Perfecto, me parece una excelente propuesta...",
-        "Creo que deberíamos enfocarnos en los objetivos...",
-        "¿Podríamos revisar el presupuesto para este proyecto?",
-        "Excelente punto, María. Tomemos nota de eso...",
-        "Para el próximo trimestre necesitamos..."
-    ];
+    progressBar.style.width = '0%';
+    progressPercent.textContent = '0%';
+    progressText.textContent = 'Subiendo audio...';
 
-    let progress = 0;
-    let textIndex = 0;
-    let charIndex = 0;
+    const formData = new FormData();
+    formData.append('audio', audioData, 'recording.webm');
 
-    const interval = setInterval(() => {
-        progress += Math.random() * 5 + 1;
-        if (progress > 100) progress = 100;
-
-        progressBar.style.width = progress + '%';
-        progressPercent.textContent = Math.round(progress) + '%';
-
-        // Simular escritura de texto
-        if (textIndex < sampleTexts.length) {
-            const currentText = sampleTexts[textIndex];
-            if (charIndex < currentText.length) {
-                typingText.textContent = currentText.substring(0, charIndex + 1);
-                charIndex += Math.random() > 0.7 ? 2 : 1;
-            } else {
-                textIndex++;
-                charIndex = 0;
-                if (textIndex < sampleTexts.length) {
-                    typingText.textContent = '';
-                }
+    try {
+        const { data } = await axios.post('/transcription', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
             }
-        }
+        });
 
-        if (progress >= 100) {
-            clearInterval(interval);
-            progressText.textContent = 'Transcripción completada';
-            setTimeout(() => {
+        progressBar.style.width = '10%';
+        progressPercent.textContent = '10%';
+
+        pollTranscription(data.id);
+    } catch (e) {
+        console.error(e);
+        progressText.textContent = 'Error al subir audio';
+    }
+}
+
+function pollTranscription(id) {
+    const progressBar = document.getElementById('transcription-progress');
+    const progressText = document.getElementById('transcription-progress-text');
+    const progressPercent = document.getElementById('transcription-progress-percent');
+
+    let percent = 10;
+
+    const interval = setInterval(async () => {
+        try {
+            const { data } = await axios.get(`/transcription/${id}`);
+
+            if (data.status === 'queued') {
+                progressText.textContent = 'En cola...';
+            } else if (data.status === 'processing') {
+                progressText.textContent = 'Procesando...';
+                percent = Math.min(95, percent + 5);
+            } else if (data.status === 'completed') {
+                progressText.textContent = 'Transcripción completada';
+                percent = 100;
+                clearInterval(interval);
+                transcriptionData = data.utterances || [];
                 showTranscriptionEditor();
-            }, 1000);
+            } else if (data.status === 'error') {
+                progressText.textContent = 'Error en transcripción';
+                clearInterval(interval);
+            }
+
+            progressBar.style.width = percent + '%';
+            progressPercent.textContent = Math.round(percent) + '%';
+        } catch (err) {
+            console.error(err);
+            progressText.textContent = 'Error de servidor';
+            clearInterval(interval);
         }
-    }, 200);
+    }, 4000);
 }
 
 // ===== PASO 3: EDITOR DE TRANSCRIPCIÓN =====
@@ -169,32 +184,12 @@ function showTranscriptionEditor() {
 
 function generateTranscriptionSegments() {
     const container = document.getElementById('transcription-segments');
-    const segments = [
-        {
-            speaker: 'Hablante 1',
-            time: '00:00 - 00:45',
-            text: 'Buenos días a todos, gracias por acompañarnos en esta reunión de planificación para el primer trimestre del 2025. Hoy vamos a revisar los objetivos principales que queremos alcanzar y cómo vamos a distribuir los recursos disponibles.',
-            avatar: 'H1'
-        },
-        {
-            speaker: 'Hablante 2',
-            time: '00:45 - 01:30',
-            text: 'Perfecto, me parece una excelente propuesta. Creo que deberíamos enfocarnos en los objetivos principales que discutimos la semana pasada, especialmente en el incremento de ventas y el lanzamiento de la nueva línea de productos.',
-            avatar: 'H2'
-        },
-        {
-            speaker: 'Hablante 3',
-            time: '01:30 - 02:15',
-            text: '¿Podríamos revisar el presupuesto para este proyecto? Me gustaría entender mejor cómo vamos a financiar la contratación de los nuevos desarrolladores y la campaña de marketing digital que mencionaste.',
-            avatar: 'H3'
-        },
-        {
-            speaker: 'Hablante 1',
-            time: '02:15 - 03:00',
-            text: 'Excelente punto, María. Tomemos nota de eso para incluirlo en el documento final. Para el próximo trimestre necesitamos tener claridad total sobre el presupuesto y los recursos humanos disponibles.',
-            avatar: 'H1'
-        }
-    ];
+    const segments = transcriptionData.map(u => ({
+        speaker: `Hablante ${u.speaker}`,
+        time: `${formatTime(u.start)} - ${formatTime(u.end)}`,
+        text: u.text,
+        avatar: `H${u.speaker}`
+    }));
 
     container.innerHTML = segments.map((segment, index) => `
         <div class="transcript-segment" data-segment="${index}">
@@ -237,8 +232,12 @@ function generateTranscriptionSegments() {
         </div>
     `).join('');
 
-    // Guardar datos de transcripción
     transcriptionData = segments;
+    const speakerSet = new Set(segments.map(s => s.speaker));
+    const speakerCountEl = document.getElementById('speaker-count');
+    if (speakerCountEl) {
+        speakerCountEl.textContent = speakerSet.size;
+    }
 }
 
 function playSegmentAudio(segmentIndex) {
@@ -636,6 +635,13 @@ function base64ToBlob(base64) {
         buffer[i] = binary.charCodeAt(i);
     }
     return new Blob([buffer], { type: mime });
+}
+
+function formatTime(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
 }
 
 // Funciones para navbar móvil
