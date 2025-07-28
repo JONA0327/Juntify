@@ -650,6 +650,21 @@ document.addEventListener('click', e => {
 document.addEventListener('DOMContentLoaded', function() {
     createParticles();
 
+    const storedAudio = sessionStorage.getItem('recordingBlob');
+    if (storedAudio) {
+        audioData = storedAudio;
+    }
+
+    const meta = sessionStorage.getItem('recordingMetadata');
+    if (meta) {
+        try {
+            const parsed = JSON.parse(meta);
+            console.log('Segmentos grabados:', parsed.segmentCount, 'Duración:', parsed.durationMs, 'ms');
+        } catch (e) {
+            console.error('Error al leer metadata de grabación', e);
+        }
+    }
+
     // Iniciar automáticamente el procesamiento de audio
     setTimeout(() => {
         startAudioProcessing();

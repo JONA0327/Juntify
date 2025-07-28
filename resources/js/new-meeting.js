@@ -25,6 +25,13 @@ let systemDataArray = null;
 let microphoneDataArray = null;
 let meetingAnimationId = null;
 
+// ===== CONFIGURACIÓN DE GRABACIÓN =====
+const MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 horas
+const SEGMENT_MS = 10 * 60 * 1000; // 10 minutos
+let recordedSegments = [];
+let segmentTimeout = null;
+let recordingStream = null;
+
 // ===== FUNCIONES PRINCIPALES =====
 
 // Función para seleccionar modo de grabación
@@ -117,54 +124,80 @@ function toggleRecording() {
 async function startRecording() {
     try {
         // Solicitar acceso al micrófono
-        const stream = await navigator.mediaDevices.getUserMedia({ 
+        const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
                 echoCancellation: true,
                 noiseSuppression: true,
                 sampleRate: 44100
-            } 
+            }
         });
-        
+
+        recordingStream = stream;
+
         // Configurar Web Audio API para análisis de frecuencias
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         analyser = audioContext.createAnalyser();
         const source = audioContext.createMediaStreamSource(stream);
         source.connect(analyser);
-        
-        // Configuración del analizador
+
         analyser.fftSize = 256;
         analyser.smoothingTimeConstant = 0.8;
         const bufferLength = analyser.frequencyBinCount;
         dataArray = new Uint8Array(bufferLength);
-        
-        // Configurar MediaRecorder
-        mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'audio/webm;codecs=opus'
-        });
-        
-        mediaRecorder.ondataavailable = function(event) {
-            if (event.data.size > 0) {
-                // Aquí se procesaría el audio grabado
-                console.log('Chunk de audio recibido:', event.data.size, 'bytes');
-            }
-        };
-        
-        mediaRecorder.start(1000); // Guardar chunks cada segundo
-        
-        isRecording = true;
+
+        recordedSegments = [];
         startTime = Date.now();
-        
-        // Actualizar UI
+        isRecording = true;
+
         updateRecordingUI(true);
-        
-        // Iniciar timer y análisis de audio
+
         recordingTimer = setInterval(updateTimer, 100);
         startAudioAnalysis();
-        
+
+        startNewSegment();
     } catch (error) {
         console.error('Error al acceder al micrófono:', error);
         showError('No se pudo acceder al micrófono. Por favor, permite el acceso.');
     }
+}
+
+// Inicia la grabación de un nuevo segmento de 10 minutos
+function startNewSegment() {
+    if (!recordingStream) return;
+
+    let chunks = [];
+    mediaRecorder = new MediaRecorder(recordingStream, {
+        mimeType: 'audio/webm;codecs=opus'
+    });
+
+    mediaRecorder.ondataavailable = event => {
+        if (event.data && event.data.size > 0) {
+            chunks.push(event.data);
+        }
+    };
+
+    mediaRecorder.onstop = () => {
+        clearTimeout(segmentTimeout);
+        const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+        if (blob.size > 0) {
+            recordedSegments.push(blob);
+        }
+
+        const elapsed = Date.now() - startTime;
+        if (isRecording && elapsed < MAX_DURATION_MS) {
+            startNewSegment();
+        } else {
+            isRecording = false;
+            finalizeRecording();
+        }
+    };
+
+    mediaRecorder.start();
+    segmentTimeout = setTimeout(() => {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+        }
+    }, SEGMENT_MS);
 }
 
 // Pausar grabación
@@ -243,17 +276,28 @@ function discardRecording() {
 function stopRecording() {
     isRecording = false;
     isPaused = false;
-    
-    // Detener MediaRecorder y AudioContext
+
+    if (segmentTimeout) {
+        clearTimeout(segmentTimeout);
+        segmentTimeout = null;
+    }
+
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    } else {
+        finalizeRecording();
+    }
+}
+
+// Unir todos los segmentos y preparar redirección
+async function finalizeRecording() {
+    if (recordingStream) {
+        recordingStream.getTracks().forEach(track => track.stop());
+        recordingStream = null;
     }
     if (audioContext && audioContext.state !== 'closed') {
-        audioContext.close();
+        await audioContext.close();
     }
-    
-    // Limpiar timer y animación
     if (recordingTimer) {
         clearInterval(recordingTimer);
         recordingTimer = null;
@@ -262,15 +306,32 @@ function stopRecording() {
         cancelAnimationFrame(animationId);
         animationId = null;
     }
-    
-    // Actualizar UI
+
     updateRecordingUI(false);
     resetAudioVisualizer();
-    
-    // Redirigir al procesamiento de audio
+
+    const totalDuration = Date.now() - startTime;
+    const finalBlob = new Blob(recordedSegments, { type: 'audio/webm;codecs=opus' });
+    const base64 = await blobToBase64(finalBlob);
+
+    sessionStorage.setItem('recordingBlob', base64);
+    sessionStorage.setItem('recordingMetadata', JSON.stringify({
+        segmentCount: recordedSegments.length,
+        durationMs: totalDuration
+    }));
+
     setTimeout(() => {
         window.location.href = '/audio-processing';
     }, 500);
+}
+
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
 }
 
 // ===== FUNCIONES DE VISUALIZACIÓN =====
