@@ -16,7 +16,9 @@ export default defineConfig({
                 'resources/css/profile.css',
                 'resources/js/profile.js',
                 'resources/css/new-meeting.css',
-                'resources/js/new-meeting.js'
+                'resources/js/new-meeting.js',
+                'resources/css/audio-processing.css',
+                'resources/js/audio-processing.js'
             ],
             refresh: true,
         }),

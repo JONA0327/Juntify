@@ -49,3 +49,7 @@ Route::middleware('auth')->group(function () {
 Route::get('/new-meeting', function () {
     return view('new-meeting');
 })->name('new-meeting');
+
+Route::get('/audio-processing', function () {
+    return view('audio-processing');
+})->name('audio-processing');

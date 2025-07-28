@@ -108,33 +108,6 @@
 
             <!-- Content Grid -->
             <div class="content-grid">
-                <!-- Configuración de Transcripción -->
-                <div class="info-card">
-                    <h2 class="card-title">Configuración de transcripción</h2>
-
-                    <div class="form-group">
-                        <label class="form-label">Idioma de la grabación</label>
-                        <select class="form-select" id="transcription-language">
-                            <option value="es">Español</option>
-                            <option value="en">English</option>
-                            <option value="fr">Français</option>
-                            <option value="de">Deutsch</option>
-                            <option value="it">Italiano</option>
-                            <option value="pt">Português</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="speaker-detection" class="form-checkbox" checked>
-                            <label for="speaker-detection" class="checkbox-label">
-                                <span class="checkbox-title">🎯 Detección automática de hablantes</span>
-                                <span class="checkbox-description">El sistema detectará automáticamente los diferentes hablantes en la conversación. Para mejores resultados, asegúrate de que el audio sea claro y que haya diferencias notables entre las voces.</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Modo de Grabación -->
                 <div class="info-card">
                     <h2 class="card-title">Seleccionar modo de grabación</h2>

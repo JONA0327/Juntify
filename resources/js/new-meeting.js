@@ -176,9 +176,9 @@ function stopRecording() {
     updateRecordingUI(false);
     resetAudioVisualizer();
     
-    // Simular procesamiento
+    // Redirigir al procesamiento de audio
     setTimeout(() => {
-        showSuccess('¡Grabación finalizada! Procesando transcripción...');
+        window.location.href = '/audio-processing';
     }, 500);
 }
 
@@ -489,8 +489,7 @@ function processAudioFile() {
         if (progress >= 100) {
             clearInterval(interval);
             setTimeout(() => {
-                showSuccess('¡Archivo procesado exitosamente! Generando transcripción...');
-                progressContainer.style.display = 'none';
+                window.location.href = '/audio-processing';
             }, 500);
         }
     }, 200);
@@ -667,7 +666,10 @@ function stopMeetingRecording() {
     updateMeetingRecordingUI(false);
     resetMeetingAudioVisualizers();
     
-    showSuccess('¡Grabación de reunión finalizada! Procesando...');
+    // Redirigir al procesamiento de audio
+    setTimeout(() => {
+        window.location.href = '/audio-processing';
+    }, 500);
 }
 
 // Configurar análisis de audio para reunión
