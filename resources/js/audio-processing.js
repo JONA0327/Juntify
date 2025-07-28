@@ -189,7 +189,7 @@ function generateTranscriptionSegments() {
                 <div class="speaker-info">
                     <div class="speaker-avatar">${segment.avatar}</div>
                     <div class="speaker-details">
-                        <div class="speaker-name" contenteditable="true">${segment.speaker}</div>
+                        <div class="speaker-name">${segment.speaker}</div>
                         <div class="speaker-time">${segment.time}</div>
                     </div>
                 </div>
@@ -197,8 +197,11 @@ function generateTranscriptionSegments() {
                     <button class="control-btn" onclick="playSegmentAudio(${index})" title="Reproducir fragmento">
                         ▶️
                     </button>
-                    <button class="control-btn" onclick="changeSpeaker(${index})" title="Cambiar hablante">
-                        👤
+                    <button class="control-btn" onclick="openChangeSpeakerModal(${index})" title="Editar hablante">
+                        ✏️
+                    </button>
+                    <button class="control-btn" onclick="openGlobalSpeakerModal(${index})" title="Cambiar hablante globalmente">
+                        👥
                     </button>
                 </div>
             </div>
@@ -231,14 +234,69 @@ function playSegmentAudio(segmentIndex) {
     showNotification('Reproduciendo fragmento de audio', 'info');
 }
 
-function changeSpeaker(segmentIndex) {
-    const speakerName = prompt('Ingresa el nuevo nombre del hablante:');
-    if (speakerName && speakerName.trim()) {
-        const segment = document.querySelector(`[data-segment="${segmentIndex}"] .speaker-name`);
-        segment.textContent = speakerName.trim();
-        transcriptionData[segmentIndex].speaker = speakerName.trim();
-        showNotification('Hablante actualizado correctamente', 'success');
+let selectedSegmentIndex = null;
+
+function openChangeSpeakerModal(segmentIndex) {
+    selectedSegmentIndex = segmentIndex;
+    const currentName = transcriptionData[segmentIndex].speaker;
+    document.getElementById('speaker-name-input').value = currentName;
+    document.getElementById('change-speaker-modal').classList.add('show');
+}
+
+function closeChangeSpeakerModal() {
+    document.getElementById('change-speaker-modal').classList.remove('show');
+}
+
+function confirmSpeakerChange() {
+    const input = document.getElementById('speaker-name-input');
+    const newName = input.value.trim();
+    if (!newName) {
+        showNotification('Debes ingresar un nombre válido', 'warning');
+        return;
     }
+
+    transcriptionData[selectedSegmentIndex].speaker = newName;
+    const element = document.querySelector(`[data-segment="${selectedSegmentIndex}"] .speaker-name`);
+    if (element) {
+        element.textContent = newName;
+    }
+
+    closeChangeSpeakerModal();
+    showNotification('Hablante actualizado correctamente', 'success');
+}
+
+function openGlobalSpeakerModal(segmentIndex) {
+    selectedSegmentIndex = segmentIndex;
+    const currentName = transcriptionData[segmentIndex].speaker;
+    document.getElementById('current-speaker-name').value = currentName;
+    document.getElementById('global-speaker-name-input').value = '';
+    document.getElementById('change-global-speaker-modal').classList.add('show');
+}
+
+function closeGlobalSpeakerModal() {
+    document.getElementById('change-global-speaker-modal').classList.remove('show');
+}
+
+function confirmGlobalSpeakerChange() {
+    const newName = document.getElementById('global-speaker-name-input').value.trim();
+    const currentName = document.getElementById('current-speaker-name').value;
+    if (!newName) {
+        showNotification('Debes ingresar un nombre válido', 'warning');
+        return;
+    }
+
+    transcriptionData.forEach((segment, idx) => {
+        if (segment.speaker === currentName) {
+            segment.speaker = newName;
+            const el = document.querySelector(`[data-segment="${idx}"] .speaker-name`);
+            if (el) {
+                el.textContent = newName;
+            }
+        }
+    });
+
+    closeGlobalSpeakerModal();
+    showNotification('Hablantes actualizados correctamente', 'success');
 }
 
 function seekAudio(segmentIndex, event) {
@@ -262,9 +320,11 @@ function saveTranscriptionAndContinue() {
     // Recopilar datos editados
     const segments = document.querySelectorAll('.transcript-segment');
     segments.forEach((segment, index) => {
-        const speakerName = segment.querySelector('.speaker-name').textContent;
-        const transcriptText = segment.querySelector('.transcript-text').value;
-        
+        const nameEl = segment.querySelector('.speaker-name');
+        const textEl = segment.querySelector('.transcript-text');
+        const speakerName = nameEl ? nameEl.textContent : transcriptionData[index].speaker;
+        const transcriptText = textEl ? textEl.value : transcriptionData[index].text;
+
         transcriptionData[index].speaker = speakerName;
         transcriptionData[index].text = transcriptText;
     });
@@ -622,5 +682,10 @@ window.createNewMeeting = createNewMeeting;
 window.toggleMobileDropdown = toggleMobileDropdown;
 window.closeMobileDropdown = closeMobileDropdown;
 window.playSegmentAudio = playSegmentAudio;
-window.changeSpeaker = changeSpeaker;
+window.openChangeSpeakerModal = openChangeSpeakerModal;
+window.closeChangeSpeakerModal = closeChangeSpeakerModal;
+window.confirmSpeakerChange = confirmSpeakerChange;
+window.openGlobalSpeakerModal = openGlobalSpeakerModal;
+window.closeGlobalSpeakerModal = closeGlobalSpeakerModal;
+window.confirmGlobalSpeakerChange = confirmGlobalSpeakerChange;
 window.seekAudio = seekAudio;
