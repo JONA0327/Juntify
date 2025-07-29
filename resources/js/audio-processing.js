@@ -4,6 +4,7 @@ let selectedAnalyzer = 'general';
 let audioData = null;
 let audioSegments = [];
 let transcriptionData = [];
+let audioPlayer = null;
 let analysisResults = null;
 
 // ===== FUNCIONES PRINCIPALES =====
@@ -153,12 +154,20 @@ function pollTranscription(id) {
                 progressText.textContent = 'En cola...';
             } else if (data.status === 'processing') {
                 progressText.textContent = 'Procesando...';
-                percent = Math.min(95, percent + 5);
+                if (typeof data.progress === 'number') {
+                    percent = data.progress;
+                } else if (typeof data.processing_percent === 'number') {
+                    percent = data.processing_percent;
+                } else if (data.processed_duration && data.audio_duration) {
+                    percent = Math.min(99, (data.processed_duration / data.audio_duration) * 100);
+                } else {
+                    percent = Math.min(95, percent + 5);
+                }
             } else if (data.status === 'completed') {
                 progressText.textContent = 'Transcripción completada';
                 percent = 100;
                 clearInterval(interval);
-                transcriptionData = data.utterances || [];
+                transcriptionData = data;
                 showTranscriptionEditor();
             } else if (data.status === 'error') {
                 progressText.textContent = 'Error en transcripción';
@@ -184,11 +193,18 @@ function showTranscriptionEditor() {
 
 function generateTranscriptionSegments() {
     const container = document.getElementById('transcription-segments');
-    const segments = transcriptionData.map(u => ({
-        speaker: `Hablante ${u.speaker}`,
+
+    const utterances = Array.isArray(transcriptionData)
+        ? transcriptionData
+        : (transcriptionData.utterances || []);
+
+    const segments = utterances.map(u => ({
+        speaker: u.speaker ? u.speaker : `Hablante ${u.speaker}`,
         time: `${formatTime(u.start)} - ${formatTime(u.end)}`,
         text: u.text,
-        avatar: `H${u.speaker}`
+        avatar: u.speaker ? u.speaker.toString().slice(0,2).toUpperCase() : `H${u.speaker}`,
+        start: u.start / 1000,
+        end: u.end / 1000,
     }));
 
     container.innerHTML = segments.map((segment, index) => `
@@ -241,9 +257,27 @@ function generateTranscriptionSegments() {
 }
 
 function playSegmentAudio(segmentIndex) {
-    console.log('Reproduciendo audio del segmento:', segmentIndex);
-    // Aquí iría la lógica para reproducir el fragmento de audio específico
-    showNotification('Reproduciendo fragmento de audio', 'info');
+    const segment = transcriptionData[segmentIndex];
+    if (!segment) return;
+
+    if (!audioPlayer) {
+        const src = typeof audioData === 'string' ? audioData : URL.createObjectURL(audioData);
+        audioPlayer = new Audio(src);
+    }
+
+    audioPlayer.pause();
+    audioPlayer.currentTime = segment.start;
+    const stopTime = segment.end;
+
+    const onTimeUpdate = () => {
+        if (audioPlayer.currentTime >= stopTime) {
+            audioPlayer.pause();
+            audioPlayer.removeEventListener('timeupdate', onTimeUpdate);
+        }
+    };
+
+    audioPlayer.addEventListener('timeupdate', onTimeUpdate);
+    audioPlayer.play();
 }
 
 let selectedSegmentIndex = null;
@@ -320,7 +354,16 @@ function seekAudio(segmentIndex, event) {
     const progress = timeline.querySelector('.timeline-progress-mini');
     progress.style.width = percentage + '%';
 
-    console.log(`Buscando en el audio del segmento ${segmentIndex} al ${percentage.toFixed(1)}%`);
+    const segment = transcriptionData[segmentIndex];
+    if (!segment) return;
+    const duration = segment.end - segment.start;
+    const targetTime = segment.start + (duration * (percentage / 100));
+
+    if (!audioPlayer) {
+        const src = typeof audioData === 'string' ? audioData : URL.createObjectURL(audioData);
+        audioPlayer = new Audio(src);
+    }
+    audioPlayer.currentTime = targetTime;
 }
 
 function playFullAudio() {
