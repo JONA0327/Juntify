@@ -125,7 +125,7 @@ async function startTranscription() {
 
     try {
         const { data } = await axios.post('/transcription', formData);
-
+        console.log("✅ Transcripción iniciada:", data);
 
         progressBar.style.width = '10%';
         progressPercent.textContent = '10%';
