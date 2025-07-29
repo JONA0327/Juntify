@@ -16,7 +16,9 @@ class TranscriptionController extends Controller
             return response()->json(['error' => 'AssemblyAI API key missing'], 500);
         }
 
-        $upload = Http::withToken($apiKey)
+        $upload = Http::withHeaders([
+            'authorization' => $apiKey,
+        ])
             ->attach('file', fopen($request->file('audio')->getRealPath(), 'r'))
             ->post('https://api.assemblyai.com/v2/upload');
 
@@ -24,7 +26,9 @@ class TranscriptionController extends Controller
             return response()->json(['error' => 'Upload failed', 'details' => $upload->json()], 500);
         }
 
-        $transcription = Http::withToken($apiKey)
+        $transcription = Http::withHeaders([
+            'authorization' => $apiKey,
+        ])
             ->post('https://api.assemblyai.com/v2/transcript', [
                 'audio_url'      => $upload->json('upload_url'),
                 'speaker_labels' => true,
@@ -41,7 +45,9 @@ class TranscriptionController extends Controller
     {
         $apiKey = config('services.assemblyai.api_key');
 
-        $response = Http::withToken($apiKey)
+        $response = Http::withHeaders([
+            'authorization' => $apiKey,
+        ])
             ->get("https://api.assemblyai.com/v2/transcript/{$id}");
 
         if (!$response->successful()) {
