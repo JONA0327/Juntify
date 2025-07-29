@@ -122,19 +122,27 @@ async function startTranscription() {
     const formData = new FormData();
     formData.append('audio', audioData, 'recording.webm');
 
+
     try {
-        const { data } = await axios.post('/transcription', formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            }
-        });
+        const { data } = await axios.post('/transcription', formData);
+
 
         progressBar.style.width = '10%';
         progressPercent.textContent = '10%';
 
         pollTranscription(data.id);
     } catch (e) {
-        console.error(e);
+        console.error("❌ Error:", e);
+
+        if (e.response) {
+            console.error("📡 STATUS:", e.response.status);
+            console.error("📩 HEADERS:", e.response.headers);
+            console.error("📦 BODY:", e.response.data);
+            alert("🧠 Error del servidor: " + JSON.stringify(e.response.data));
+        } else {
+            alert("❌ Error desconocido. Revisa consola.");
+        }
+
         progressText.textContent = 'Error al subir audio';
     }
 }
