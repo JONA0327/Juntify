@@ -15,6 +15,10 @@ class TranscriptionController extends Controller
 
         $apiKey = config('services.assemblyai.api_key');
 
+        if (empty($apiKey)) {
+            return response()->json(['error' => 'AssemblyAI API key missing'], 500);
+        }
+
         $upload = Http::withToken($apiKey)
             ->attach('file', fopen($request->file('audio')->getRealPath(), 'r'))
             ->post('https://api.assemblyai.com/v2/upload');

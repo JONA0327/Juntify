@@ -82,3 +82,13 @@ When a main folder is created it will be shared with `GOOGLE_SERVICE_ACCOUNT_EMA
 
 After authorizing Google Drive from the profile page, return to the same page and
 use the **Crear Carpeta Principal** option to create your recordings folder.
+
+## Transcription Setup
+
+To enable audio transcription you must configure your AssemblyAI credentials:
+
+```env
+ASSEMBLYAI_API_KEY=
+```
+
+Requests to `/transcription` will fail with a 500 error if this key is not set.
