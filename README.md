@@ -92,3 +92,5 @@ ASSEMBLYAI_API_KEY=
 ```
 
 Requests to `/transcription` will fail with a 500 error if this key is not set.
+Obtain your API key from the AssemblyAI dashboard and set
+`ASSEMBLYAI_API_KEY=your_key` in your `.env` file.
