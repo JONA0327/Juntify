@@ -206,14 +206,22 @@ function generateTranscriptionSegments() {
         ? transcriptionData
         : (transcriptionData.utterances || []);
 
-    const segments = utterances.map(u => ({
-        speaker: u.speaker ? u.speaker : `Hablante ${u.speaker}`,
-        time: `${formatTime(u.start)} - ${formatTime(u.end)}`,
-        text: u.text,
-        avatar: u.speaker ? u.speaker.toString().slice(0,2).toUpperCase() : `H${u.speaker}`,
-        start: u.start / 1000,
-        end: u.end / 1000,
-    }));
+    const segments = utterances.map(u => {
+        const hasSpeaker = u.speaker !== undefined && u.speaker !== null;
+        const speaker = hasSpeaker ? u.speaker : `Hablante ${u.speaker}`;
+        const avatar = hasSpeaker
+            ? u.speaker.toString().slice(0, 2).toUpperCase()
+            : `H${u.speaker}`;
+
+        return {
+            speaker,
+            time: `${formatTime(u.start)} - ${formatTime(u.end)}`,
+            text: u.text,
+            avatar,
+            start: u.start / 1000,
+            end: u.end / 1000,
+        };
+    });
 
     container.innerHTML = segments.map((segment, index) => `
         <div class="transcript-segment" data-segment="${index}">
