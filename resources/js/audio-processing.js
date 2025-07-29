@@ -179,6 +179,10 @@ function pollTranscription(id) {
                 showTranscriptionEditor();
             } else if (data.status === 'error') {
                 progressText.textContent = 'Error en transcripción';
+                const message = data.error || data.message;
+                if (message) {
+                    showNotification(message, 'error');
+                }
                 clearInterval(interval);
             }
 
