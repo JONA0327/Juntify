@@ -218,17 +218,17 @@
                                 <span class="sr-only">Iniciar grabación</span>
                                 <span class="btn-text">Iniciar grabación</span>
                             </button>
-                            <button class="btn pause-btn" id="pause-recording" onclick="pauseRecording()" style="display: none;">
+                            <button class="btn pause-btn recorder-btn" id="pause-recording" onclick="pauseRecording()" style="display: none;">
                                 <x-icon name="pause" class="btn-icon" />
                                 <span class="sr-only">Pausar</span>
                                 <span class="btn-text">Pausar</span>
                             </button>
-                            <button class="btn resume-btn" id="resume-recording" onclick="resumeRecording()" style="display: none;">
+                            <button class="btn resume-btn recorder-btn" id="resume-recording" onclick="resumeRecording()" style="display: none;">
                                 <x-icon name="play" class="btn-icon" />
                                 <span class="sr-only">Reanudar</span>
                                 <span class="btn-text">Reanudar</span>
                             </button>
-                            <button class="btn discard-btn" id="discard-recording" onclick="discardRecording()" style="display: none;">
+                            <button class="btn discard-btn recorder-btn" id="discard-recording" onclick="discardRecording()" style="display: none;">
                                 <x-icon name="x" class="btn-icon" />
                                 <span class="sr-only">Descartar</span>
                                 <span class="btn-text">Descartar</span>
@@ -375,17 +375,17 @@
                                         <x-icon name="video" class="btn-icon" />
                                         <span class="btn-text">Seleccionar fuente de audio</span>
                                     </button>
-                                    <button class="btn pause-btn" id="meeting-pause" onclick="pauseRecording()" style="display: none;">
+                                    <button class="btn pause-btn recorder-btn" id="meeting-pause" onclick="pauseRecording()" style="display: none;">
                                         <x-icon name="pause" class="btn-icon" />
                                         <span class="sr-only">Pausar</span>
                                         <span class="btn-text">Pausar</span>
                                     </button>
-                                    <button class="btn resume-btn" id="meeting-resume" onclick="resumeRecording()" style="display: none;">
+                                    <button class="btn resume-btn recorder-btn" id="meeting-resume" onclick="resumeRecording()" style="display: none;">
                                         <x-icon name="play" class="btn-icon" />
                                         <span class="sr-only">Reanudar</span>
                                         <span class="btn-text">Reanudar</span>
                                     </button>
-                                    <button class="btn discard-btn" id="meeting-discard" onclick="discardRecording()" style="display: none;">
+                                    <button class="btn discard-btn recorder-btn" id="meeting-discard" onclick="discardRecording()" style="display: none;">
                                         <x-icon name="x" class="btn-icon" />
                                         <span class="sr-only">Descartar</span>
                                         <span class="btn-text">Descartar</span>
