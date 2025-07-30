@@ -40,6 +40,8 @@ class TranscriptionController extends Controller
             ->post('https://api.assemblyai.com/v2/transcript', [
                 'audio_url'      => $upload->json('upload_url'),
                 'speaker_labels' => true,
+                'punctuate'      => true,
+                'format_text'    => true,
                 'language_code'  => $language,
             ]);
 
