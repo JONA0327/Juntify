@@ -467,11 +467,11 @@ document.addEventListener('click', e => {
 document.addEventListener('DOMContentLoaded', () => {
   createParticles();
 
-  // Navegación del sidebar
-  document.querySelectorAll('.sidebar-nav .nav-link').forEach(link => {
+  // Navegación del sidebar sólo para enlaces con data-section
+  document.querySelectorAll('.sidebar-nav .nav-link[data-section]').forEach(link => {
     link.addEventListener('click', e => {
       e.preventDefault();
-      document.querySelectorAll('.sidebar-nav .nav-link')
+      document.querySelectorAll('.sidebar-nav .nav-link[data-section]')
         .forEach(l => l.classList.remove('active'));
       link.classList.add('active');
 
