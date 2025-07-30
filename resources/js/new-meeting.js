@@ -1,3 +1,5 @@
+import { saveAudioBlob } from './idb.js';
+
 // ===== VARIABLES GLOBALES =====
 let isRecording = false;
 let isPaused = false;
@@ -703,16 +705,20 @@ function processAudioFile() {
         }
     };
 
-    reader.onloadend = () => {
-        const base64 = reader.result;
-        sessionStorage.setItem('recordingBlob', base64);
-        sessionStorage.setItem('recordingSegments', JSON.stringify([base64]));
-        sessionStorage.setItem('recordingMetadata', JSON.stringify({ segmentCount: 1 }));
+    reader.onloadend = async () => {
+        const arrayBuffer = reader.result;
+        const blob = new Blob([arrayBuffer], { type: uploadedFile.type });
+        try {
+            const key = await saveAudioBlob(blob);
+            sessionStorage.setItem('uploadedAudioKey', key);
+        } catch (e) {
+            console.error('Error saving audio to IndexedDB', e);
+        }
         storeTranscriptionLanguage();
         window.location.href = '/audio-processing';
     };
 
-    reader.readAsDataURL(uploadedFile);
+    reader.readAsArrayBuffer(uploadedFile);
 }
 
 // Formatear tamaño de archivo
