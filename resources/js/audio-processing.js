@@ -275,7 +275,9 @@ function generateTranscriptionSegments() {
             <div class="segment-audio">
                 <div class="audio-player-mini">
                     <button class="play-btn-mini" onclick="playSegmentAudio(${index})">
-                        <span class="play-icon">▶️</span>
+                        <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" />
+                        </svg>
                     </button>
                     <div class="audio-timeline-mini" onclick="seekAudio(${index}, event)">
                         <div class="timeline-progress-mini" style="width: 0%"></div>
@@ -303,8 +305,11 @@ function playSegmentAudio(segmentIndex) {
     if (!segment) return;
 
     if (!audioPlayer) {
+        audioPlayer = document.getElementById('recorded-audio');
+    }
+    if (!audioPlayer.src) {
         const src = typeof audioData === 'string' ? audioData : URL.createObjectURL(audioData);
-        audioPlayer = new Audio(src);
+        audioPlayer.src = src;
     }
 
     audioPlayer.pause();
@@ -524,34 +529,51 @@ function loadDriveFolders() {
     // Aquí iría la llamada AJAX para obtener las carpetas reales
 }
 
+const playPath = 'M5.25 5.25l13.5 6.75-13.5 6.75V5.25z';
+const pausePath = 'M15.75 5.25v13.5m-7.5-13.5v13.5';
+
 function toggleAudioPlayback() {
     const playBtn = document.querySelector('.play-btn');
-    const playIcon = playBtn.querySelector('.play-icon');
+    const iconPath = playBtn.querySelector('path');
 
-    if (playIcon.textContent === '▶️') {
-        playIcon.textContent = '⏸️';
-        console.log('Reproduciendo audio');
-        // Simular progreso de reproducción
-        simulateAudioProgress();
+    if (!audioPlayer) {
+        audioPlayer = document.getElementById('recorded-audio');
+    }
+
+    if (!audioPlayer.src) {
+        const src = typeof audioData === 'string' ? audioData : URL.createObjectURL(audioData);
+        audioPlayer.src = src;
+    }
+
+    if (audioPlayer.paused) {
+        audioPlayer.play();
+        if (iconPath) iconPath.setAttribute('d', pausePath);
     } else {
-        playIcon.textContent = '▶️';
-        console.log('Pausando audio');
+        audioPlayer.pause();
+        if (iconPath) iconPath.setAttribute('d', playPath);
     }
 }
 
-function simulateAudioProgress() {
+function stopAudioPlayback() {
+    const playBtn = document.querySelector('.play-btn');
+    const iconPath = playBtn.querySelector('path');
+    if (!audioPlayer) return;
+    audioPlayer.pause();
+    audioPlayer.currentTime = 0;
+    resetAudioProgress();
+    if (iconPath) iconPath.setAttribute('d', playPath);
+}
+
+function resetAudioProgress() {
     const timeline = document.querySelector('.timeline-progress');
-    let progress = 0;
+    if (timeline) timeline.style.width = '0%';
+}
 
-    const interval = setInterval(() => {
-        progress += 1;
-        timeline.style.width = progress + '%';
-
-        if (progress >= 100) {
-            clearInterval(interval);
-            document.querySelector('.play-icon').textContent = '▶️';
-        }
-    }, 100);
+function updateAudioProgress() {
+    const timeline = document.querySelector('.timeline-progress');
+    if (!audioPlayer || !audioPlayer.duration) return;
+    const percent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+    if (timeline) timeline.style.width = percent + '%';
 }
 
 function downloadAudio() {
@@ -766,6 +788,12 @@ document.addEventListener('click', e => {
 document.addEventListener('DOMContentLoaded', function() {
     createParticles();
 
+    audioPlayer = document.getElementById('recorded-audio');
+    if (audioPlayer) {
+        audioPlayer.addEventListener('timeupdate', updateAudioProgress);
+        audioPlayer.addEventListener('ended', stopAudioPlayback);
+    }
+
     const storedAudio = sessionStorage.getItem('recordingBlob');
     if (storedAudio) {
         audioData = storedAudio;
@@ -822,6 +850,8 @@ window.goBackToTranscription = goBackToTranscription;
 window.goBackToAnalysis = goBackToAnalysis;
 window.cancelProcess = cancelProcess;
 window.toggleAudioPlayback = toggleAudioPlayback;
+window.stopAudioPlayback = stopAudioPlayback;
+window.resetAudioProgress = resetAudioProgress;
 window.downloadAudio = downloadAudio;
 window.saveToDatabase = saveToDatabase;
 window.viewMeetingDetails = viewMeetingDetails;
