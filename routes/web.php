@@ -62,7 +62,7 @@ Route::get('/transcription/{id}', [TranscriptionController::class, 'show'])->nam
 Route::middleware(['auth'])->group(function () {
     Route::get('/admin', function () {
         $user = auth()->user();
-        if (!in_array($user->roles, ['superadmin', 'founder', 'developer'])) {
+        if (!in_array($user->roles, ['superadmin', 'developer'])) {
             abort(403, 'No tienes permisos para acceder al panel administrativo');
         }
         return view('admin.dashboard');
@@ -70,7 +70,7 @@ Route::middleware(['auth'])->group(function () {
     
     Route::get('/admin/analyzers', function () {
         $user = auth()->user();
-        if (!in_array($user->roles, ['superadmin', 'founder', 'developer'])) {
+        if (!in_array($user->roles, ['superadmin', 'developer'])) {
             abort(403, 'No tienes permisos para acceder a esta sección');
         }
         return view('admin.analyzers');
