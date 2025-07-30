@@ -191,22 +191,22 @@
                             <button class="btn btn-primary recorder-btn" id="start-recording" onclick="toggleRecording()">
                                 <x-icon name="play" class="btn-icon" />
                                 <span class="sr-only">Iniciar grabación</span>
-                                Iniciar grabación
+                                <span class="btn-text">Iniciar grabación</span>
                             </button>
                             <button class="btn pause-btn" id="pause-recording" onclick="pauseRecording()" style="display: none;">
                                 <x-icon name="pause" class="btn-icon" />
                                 <span class="sr-only">Pausar</span>
-                                Pausar
+                                <span class="btn-text">Pausar</span>
                             </button>
                             <button class="btn resume-btn" id="resume-recording" onclick="resumeRecording()" style="display: none;">
                                 <x-icon name="play" class="btn-icon" />
                                 <span class="sr-only">Reanudar</span>
-                                Reanudar
+                                <span class="btn-text">Reanudar</span>
                             </button>
                             <button class="btn discard-btn" id="discard-recording" onclick="discardRecording()" style="display: none;">
                                 <x-icon name="x" class="btn-icon" />
                                 <span class="sr-only">Descartar</span>
-                                Descartar
+                                <span class="btn-text">Descartar</span>
                             </button>
                         </div>
                     </div>
@@ -353,17 +353,17 @@
                                     <button class="btn pause-btn" id="meeting-pause" onclick="pauseRecording()" style="display: none;">
                                         <x-icon name="pause" class="btn-icon" />
                                         <span class="sr-only">Pausar</span>
-                                        Pausar
+                                        <span class="btn-text">Pausar</span>
                                     </button>
                                     <button class="btn resume-btn" id="meeting-resume" onclick="resumeRecording()" style="display: none;">
                                         <x-icon name="play" class="btn-icon" />
                                         <span class="sr-only">Reanudar</span>
-                                        Reanudar
+                                        <span class="btn-text">Reanudar</span>
                                     </button>
                                     <button class="btn discard-btn" id="meeting-discard" onclick="discardRecording()" style="display: none;">
                                         <x-icon name="x" class="btn-icon" />
                                         <span class="sr-only">Descartar</span>
-                                        Descartar
+                                        <span class="btn-text">Descartar</span>
                                     </button>
                                 </div>
                             </div>

@@ -25,6 +25,22 @@ let systemDataArray = null;
 let microphoneDataArray = null;
 let meetingAnimationId = null;
 
+// SVG paths for dynamic icons
+const ICON_PATHS = {
+    play: 'M5.25 5.25l13.5 6.75-13.5 6.75V5.25z',
+    pause: 'M6.75 5.25h3v13.5h-3zM14.25 5.25h3v13.5h-3z',
+    stop: 'M5.25 5.25h13.5v13.5H5.25z',
+    video: 'M15 10.5l6-4.5v11l-6-4.5M3 6.75A2.25 2.25 0 015.25 4.5h6A2.25 2.25 0 0113.5 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-6A2.25 2.25 0 013 17.25V6.75z'
+};
+
+function setIcon(svgEl, name) {
+    if (!svgEl) return;
+    const path = ICON_PATHS[name];
+    if (path) {
+        svgEl.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="${path}" />`;
+    }
+}
+
 // ===== CONFIGURACIÓN DE GRABACIÓN =====
 const MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 horas
 const SEGMENT_MS = 10 * 60 * 1000; // 10 minutos
@@ -459,13 +475,16 @@ function updateVolumeRings(volumeLevel) {
 // Función para actualizar la UI de grabación
 function updateRecordingUI(recording) {
     const button = document.getElementById('start-recording');
+    const buttonIcon = button.querySelector('.btn-icon');
+    const buttonText = button.querySelector('.btn-text');
     const micCircle = document.getElementById('mic-circle');
     const timerCounter = document.getElementById('timer-counter');
     const timerLabel = document.getElementById('timer-label');
     const visualizer = document.getElementById('audio-visualizer');
-    
+
     if (recording) {
-        button.innerHTML = '⏹️ Detener grabación';
+        setIcon(buttonIcon, 'stop');
+        if (buttonText) buttonText.textContent = 'Detener grabación';
         button.classList.add('recording');
         micCircle.classList.add('recording');
         timerCounter.classList.add('recording');
@@ -473,7 +492,8 @@ function updateRecordingUI(recording) {
         timerLabel.classList.add('recording');
         visualizer.classList.add('active');
     } else {
-        button.innerHTML = '▶️ Iniciar grabación';
+        setIcon(buttonIcon, 'play');
+        if (buttonText) buttonText.textContent = 'Iniciar grabación';
         button.classList.remove('recording');
         micCircle.classList.remove('recording');
         timerCounter.classList.remove('recording');
@@ -987,15 +1007,15 @@ function updateMeetingRecordingUI(recording) {
     
     if (recording) {
         button.classList.add('recording');
-        buttonIcon.textContent = '⏹️';
-        buttonText.textContent = 'Detener grabación';
+        setIcon(buttonIcon, 'stop');
+        if (buttonText) buttonText.textContent = 'Detener grabación';
         timerCounter.classList.add('recording');
         timerLabel.textContent = 'Grabando reunión...';
         timerLabel.classList.add('recording');
     } else {
         button.classList.remove('recording');
-        buttonIcon.textContent = '🎬';
-        buttonText.textContent = 'Seleccionar fuente de audio';
+        setIcon(buttonIcon, 'video');
+        if (buttonText) buttonText.textContent = 'Seleccionar fuente de audio';
         timerCounter.classList.remove('recording');
         timerLabel.textContent = 'Listo para grabar';
         timerLabel.classList.remove('recording');
