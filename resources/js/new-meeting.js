@@ -24,6 +24,7 @@ let microphoneAnalyser = null;
 let systemDataArray = null;
 let microphoneDataArray = null;
 let meetingAnimationId = null;
+let discardRequested = false;
 
 // SVG paths for dynamic icons
 const ICON_PATHS = {
@@ -199,8 +200,13 @@ function startNewSegment() {
     mediaRecorder.onstop = () => {
         clearTimeout(segmentTimeout);
         const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
-        if (blob.size > 0) {
+        if (blob.size > 0 && !discardRequested) {
             recordedSegments.push(blob);
+        }
+
+        if (discardRequested) {
+            discardRequested = false;
+            return;
         }
 
         const elapsed = Date.now() - startTime;
@@ -259,8 +265,10 @@ function resumeRecording() {
 
 // Descartar grabación
 function discardRecording() {
+    discardRequested = true;
     isRecording = false;
     isPaused = false;
+    recordedSegments = [];
 
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();

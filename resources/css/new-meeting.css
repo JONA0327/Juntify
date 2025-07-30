@@ -585,31 +585,19 @@ body {
     background: #dc2626;
 }
 
-.pause-btn {
-    background: var(--warning-color);
-    color: black;
-}
-
-.pause-btn:hover {
-    background: #eab308;
-}
-
-.resume-btn {
-    background: var(--success-color);
-    color: white;
-}
-
-.resume-btn:hover {
-    background: #059669;
-}
-
+.pause-btn,
+.resume-btn,
 .discard-btn {
-    background: var(--danger-color);
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
     color: white;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
 }
 
+.pause-btn:hover,
+.resume-btn:hover,
 .discard-btn:hover {
-    background: #dc2626;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
 }
 
 .recorder-btn {
