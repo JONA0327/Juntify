@@ -117,7 +117,8 @@ body {
 }
 
 .alert-icon {
-    font-size: 1.2rem;
+    width: 1.2rem;
+    height: 1.2rem;
 }
 
 .alert-content {
@@ -143,7 +144,8 @@ body {
 }
 
 .analysis-icon {
-    font-size: 1.5rem;
+    width: 1.5rem;
+    height: 1.5rem;
 }
 
 .analysis-title {
@@ -196,7 +198,8 @@ body {
 }
 
 .card-icon {
-    font-size: 1.5rem;
+    width: 1.5rem;
+    height: 1.5rem;
 }
 
 /* Form Elements */
@@ -296,7 +299,8 @@ body {
 }
 
 .mode-icon {
-    font-size: 2rem;
+    width: 2rem;
+    height: 2rem;
     min-width: 60px;
     text-align: center;
 }
@@ -657,7 +661,8 @@ body {
 }
 
 .notification-icon {
-    font-size: 1.2rem;
+    width: 1.2rem;
+    height: 1.2rem;
 }
 
 .notification-message {
@@ -697,7 +702,8 @@ body {
 }
 
 .expand-icon {
-    font-size: 1.2rem;
+    width: 1.2rem;
+    height: 1.2rem;
     transition: transform 0.3s ease;
 }
 
@@ -798,7 +804,8 @@ body {
 }
 
 .modal-icon {
-    font-size: 1.5rem;
+    width: 1.5rem;
+    height: 1.5rem;
 }
 
 .modal-body {
@@ -1060,7 +1067,8 @@ body {
 }
 
 .upload-icon {
-    font-size: 4rem;
+    width: 4rem;
+    height: 4rem;
     margin-bottom: 1rem;
     opacity: 0.7;
 }
@@ -1107,7 +1115,8 @@ body {
 }
 
 .file-icon {
-    font-size: 2rem;
+    width: 2rem;
+    height: 2rem;
     min-width: 50px;
     text-align: center;
 }
@@ -1243,7 +1252,8 @@ body {
 }
 
 .source-icon {
-    font-size: 1.2rem;
+    width: 1.2rem;
+    height: 1.2rem;
 }
 
 /* Visualizadores de audio de reunión */
@@ -1295,7 +1305,7 @@ body {
 }
 
 .mute-btn.muted .mute-icon::before {
-    content: '🔇';
+    content: '';
 }
 
 /* Visualizador de audio para reuniones */
@@ -1422,7 +1432,8 @@ body {
 }
 
 .btn-icon {
-    font-size: 1.2rem;
+    width: 1.2rem;
+    height: 1.2rem;
 }
 
 /* Responsive Design */

@@ -86,7 +86,7 @@
 
             <!-- Status Alert - Drive conectado -->
             <div class="status-alert success">
-                <div class="alert-icon">✅</div>
+                <x-icon name="check" class="alert-icon" />
                 <div class="alert-content">
                     <span>Tu carpeta de Drive está conectada correctamente.</span>
                 </div>
@@ -95,7 +95,7 @@
             <!-- Análisis mensual -->
             <div class="analysis-banner">
                 <div class="analysis-content">
-                    <span class="analysis-icon">📊</span>
+                    <x-icon name="chart" class="analysis-icon" />
                     <div class="analysis-text">
                         <span class="analysis-title">Análisis mensuales</span>
                         <span class="analysis-subtitle">Has alcanzado el límite de análisis para este mes.</span>
@@ -114,7 +114,7 @@
 
                     <div class="recording-modes">
                         <div class="mode-option active" data-mode="audio" onclick="selectRecordingMode('audio')">
-                            <div class="mode-icon">🎤</div>
+                            <x-icon name="microphone" class="mode-icon" />
                             <div class="mode-content">
                                 <h3 class="mode-title">Grabar audio</h3>
                                 <p class="mode-description">Graba audio directamente desde tu dispositivo</p>
@@ -122,7 +122,7 @@
                         </div>
 
                         <div class="mode-option" data-mode="upload" onclick="selectRecordingMode('upload')">
-                            <div class="mode-icon">📁</div>
+                            <x-icon name="folder" class="mode-icon" />
                             <div class="mode-content">
                                 <h3 class="mode-title">Subir audio</h3>
                                 <p class="mode-description">Sube un archivo de audio existente</p>
@@ -130,7 +130,7 @@
                         </div>
 
                         <div class="mode-option" data-mode="meeting" onclick="selectRecordingMode('meeting')">
-                            <div class="mode-icon">💻</div>
+                            <x-icon name="computer" class="mode-icon" />
                             <div class="mode-content">
                                 <h3 class="mode-title">Grabar reunión</h3>
                                 <p class="mode-description">Graba reuniones desde plataformas externas</p>
@@ -141,7 +141,10 @@
 
                 <!-- Grabador de Audio -->
                 <div class="info-card recorder-card">
-                    <h2 class="card-title" id="recorder-title">🎙️ Grabador de audio</h2>
+                    <h2 class="card-title" id="recorder-title">
+                        <x-icon name="microphone" class="card-icon" />
+                        Grabador de audio
+                    </h2>
 
                     <!-- Interfaz de Grabación -->
                     <div class="recorder-interface" id="audio-recorder">
@@ -154,7 +157,7 @@
                                     <div class="volume-ring ring-3"></div>
                                 </div>
                                 <div class="mic-circle" id="mic-circle">
-                                    <span class="mic-symbol">🎤</span>
+                                    <x-icon name="microphone" class="mic-symbol" />
                                 </div>
                             </div>
 
@@ -186,16 +189,24 @@
 
                         <div class="recorder-controls">
                             <button class="btn btn-primary recorder-btn" id="start-recording" onclick="toggleRecording()">
-                                ▶️ Iniciar grabación
+                                <x-icon name="play" class="btn-icon" />
+                                <span class="sr-only">Iniciar grabación</span>
+                                Iniciar grabación
                             </button>
                             <button class="btn pause-btn" id="pause-recording" onclick="pauseRecording()" style="display: none;">
-                                ⏸️ Pausar
+                                <x-icon name="pause" class="btn-icon" />
+                                <span class="sr-only">Pausar</span>
+                                Pausar
                             </button>
                             <button class="btn resume-btn" id="resume-recording" onclick="resumeRecording()" style="display: none;">
-                                ▶️ Reanudar
+                                <x-icon name="play" class="btn-icon" />
+                                <span class="sr-only">Reanudar</span>
+                                Reanudar
                             </button>
                             <button class="btn discard-btn" id="discard-recording" onclick="discardRecording()" style="display: none;">
-                                ❌ Descartar
+                                <x-icon name="x" class="btn-icon" />
+                                <span class="sr-only">Descartar</span>
+                                Descartar
                             </button>
                         </div>
                     </div>
@@ -203,25 +214,30 @@
                     <!-- Interfaz de Subir Audio -->
                     <div class="upload-interface" id="audio-uploader" style="display: none;">
                         <div class="upload-area" id="upload-area">
-                            <div class="upload-icon">📁</div>
+                            <x-icon name="folder" class="upload-icon" />
                             <h3 class="upload-title">Arrastra y suelta tu archivo de audio aquí</h3>
                             <p class="upload-subtitle">O haz clic para seleccionar un archivo de audio</p>
                             <p class="upload-formats">Formatos soportados: MP3, WAV, M4A, FLAC, OGG, AAC</p>
                             <input type="file" id="audio-file-input" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,audio/*" style="display: none;">
                             <button class="btn btn-primary upload-btn" onclick="document.getElementById('audio-file-input').click()">
-                                📁 Seleccionar archivo
+                                <x-icon name="folder" class="btn-icon" />
+                                <span class="sr-only">Seleccionar archivo</span>
+                                Seleccionar archivo
                             </button>
                         </div>
 
                         <!-- Archivo seleccionado -->
                         <div class="selected-file" id="selected-file" style="display: none;">
                             <div class="file-info">
-                                <div class="file-icon">🎵</div>
+                                <x-icon name="note" class="file-icon" />
                                 <div class="file-details">
                                     <div class="file-name" id="file-name"></div>
                                     <div class="file-size" id="file-size"></div>
                                 </div>
-                                <button class="remove-file-btn" onclick="removeSelectedFile()">❌</button>
+                                <button class="remove-file-btn" onclick="removeSelectedFile()">
+                                    <x-icon name="x" class="btn-icon" />
+                                    <span class="sr-only">Eliminar</span>
+                                </button>
                             </div>
                             <div class="upload-progress" id="upload-progress" style="display: none;">
                                 <div class="progress-bar">
@@ -230,7 +246,9 @@
                                 <div class="progress-text" id="progress-text">0%</div>
                             </div>
                             <button class="btn btn-primary process-btn" onclick="processAudioFile()">
-                                🚀 Procesar archivo
+                                <x-icon name="rocket" class="btn-icon" />
+                                <span class="sr-only">Procesar archivo</span>
+                                Procesar archivo
                             </button>
                         </div>
                     </div>
@@ -246,11 +264,11 @@
                             <!-- Controles de fuentes de audio -->
                             <div class="audio-sources-controls">
                                 <button class="audio-source-btn system-audio" id="system-audio-btn" onclick="toggleSystemAudio()">
-                                    <span class="source-icon">🖥️</span>
+                                    <x-icon name="computer" class="source-icon" />
                                     <span class="source-text">Sistema activado</span>
                                 </button>
                                 <button class="audio-source-btn microphone-audio active" id="microphone-audio-btn" onclick="toggleMicrophoneAudio()">
-                                    <span class="source-icon">🎤</span>
+                                    <x-icon name="microphone" class="source-icon" />
                                     <span class="source-text">Micrófono activado</span>
                                 </button>
                             </div>
@@ -260,10 +278,11 @@
                                 <!-- Audio del sistema -->
                                 <div class="audio-source-container">
                                     <div class="source-header">
-                                        <span class="source-icon">🖥️</span>
+                                        <x-icon name="computer" class="source-icon" />
                                         <span class="source-label">Audio del sistema</span>
                                         <button class="mute-btn" id="system-mute-btn" onclick="muteSystemAudio()">
-                                            <span class="mute-icon">🔊</span>
+                                            <x-icon name="speaker" class="mute-icon" />
+                                            <span class="sr-only">Silenciar sistema</span>
                                         </button>
                                     </div>
                                     <div class="audio-visualizer-container">
@@ -290,10 +309,11 @@
                                 <!-- Audio del micrófono -->
                                 <div class="audio-source-container">
                                     <div class="source-header">
-                                        <span class="source-icon">🎤</span>
+                                        <x-icon name="microphone" class="source-icon" />
                                         <span class="source-label">Audio del micrófono</span>
                                         <button class="mute-btn" id="microphone-mute-btn" onclick="muteMicrophoneAudio()">
-                                            <span class="mute-icon">🔊</span>
+                                            <x-icon name="speaker" class="mute-icon" />
+                                            <span class="sr-only">Silenciar micrófono</span>
                                         </button>
                                     </div>
                                     <div class="audio-visualizer-container">
@@ -327,12 +347,24 @@
 
                                 <div class="meeting-controls">
                                     <button class="btn btn-primary meeting-record-btn" id="meeting-record-btn" onclick="toggleMeetingRecording()">
-                                        <span class="btn-icon">🎬</span>
+                                        <x-icon name="video" class="btn-icon" />
                                         <span class="btn-text">Seleccionar fuente de audio</span>
                                     </button>
-                                    <button class="btn pause-btn" id="meeting-pause" onclick="pauseRecording()" style="display: none;">⏸️ Pausar</button>
-                                    <button class="btn resume-btn" id="meeting-resume" onclick="resumeRecording()" style="display: none;">▶️ Reanudar</button>
-                                    <button class="btn discard-btn" id="meeting-discard" onclick="discardRecording()" style="display: none;">❌ Descartar</button>
+                                    <button class="btn pause-btn" id="meeting-pause" onclick="pauseRecording()" style="display: none;">
+                                        <x-icon name="pause" class="btn-icon" />
+                                        <span class="sr-only">Pausar</span>
+                                        Pausar
+                                    </button>
+                                    <button class="btn resume-btn" id="meeting-resume" onclick="resumeRecording()" style="display: none;">
+                                        <x-icon name="play" class="btn-icon" />
+                                        <span class="sr-only">Reanudar</span>
+                                        Reanudar
+                                    </button>
+                                    <button class="btn discard-btn" id="meeting-discard" onclick="discardRecording()" style="display: none;">
+                                        <x-icon name="x" class="btn-icon" />
+                                        <span class="sr-only">Descartar</span>
+                                        Descartar
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -342,10 +374,10 @@
                 <!-- Opciones Avanzadas -->
                 <div class="info-card advanced-options">
                     <h2 class="card-title">
-                        <span class="card-icon">⚙️</span>
+                        <x-icon name="shield" class="card-icon" />
                         Opciones avanzadas
                         <button class="expand-btn" onclick="toggleAdvancedOptions()">
-                            <span class="expand-icon" id="expand-icon">▲</span>
+                            <x-icon name="play" class="expand-icon" />
                         </button>
                     </h2>
 
@@ -372,9 +404,9 @@
                             <div class="slider-container">
                                 <input type="range" class="form-slider" id="mic-sensitivity" min="0" max="100" value="75">
                                 <div class="slider-labels">
-                                    <span>🔇 Baja</span>
+                                    <x-icon name="speaker-x" class="source-icon" />
                                     <span class="slider-value">75%</span>
-                                    <span>🔊 Alta</span>
+                                    <x-icon name="speaker" class="source-icon" />
                                 </div>
                             </div>
                         </div>
