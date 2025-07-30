@@ -305,8 +305,7 @@ function discardRecording() {
 
 // Guardar idioma de transcripción seleccionado
 function storeTranscriptionLanguage() {
-    const select = document.getElementById('advanced-language');
-    const lang = select && select.value ? select.value : 'es';
+    const lang = 'es'; // Idioma por defecto
     sessionStorage.setItem('transcriptionLanguage', lang);
 }
 

@@ -57,3 +57,22 @@ Route::get('/audio-processing', function () {
 
 Route::post('/transcription', [TranscriptionController::class, 'store'])->name('transcription.store');
 Route::get('/transcription/{id}', [TranscriptionController::class, 'show'])->name('transcription.show');
+
+// Admin routes (solo para roles específicos)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/admin', function () {
+        $user = auth()->user();
+        if (!in_array($user->roles, ['superadmin', 'founder', 'developer'])) {
+            abort(403, 'No tienes permisos para acceder al panel administrativo');
+        }
+        return view('admin.dashboard');
+    })->name('admin.dashboard');
+    
+    Route::get('/admin/analyzers', function () {
+        $user = auth()->user();
+        if (!in_array($user->roles, ['superadmin', 'founder', 'developer'])) {
+            abort(403, 'No tienes permisos para acceder a esta sección');
+        }
+        return view('admin.analyzers');
+    })->name('admin.analyzers');
+});
