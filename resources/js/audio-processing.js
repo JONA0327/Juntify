@@ -7,6 +7,13 @@ let transcriptionData = [];
 let audioPlayer = null;
 let analysisResults = null;
 
+// Mensajes que se mostrarán mientras se genera la transcripción
+const typingMessages = [
+    "Estoy trabajando en tu transcripción...",
+    "Sé paciente, esto puede tardar un tiempo..."
+];
+let typingInterval = null;
+
 // ===== FUNCIONES PRINCIPALES =====
 
 // Función para crear partículas animadas
@@ -111,6 +118,15 @@ async function mergeAudioSegments(segments) {
 async function startTranscription() {
     showStep(2);
 
+    const typingEl = document.getElementById('typing-text');
+    let messageIndex = 0;
+    typingEl.textContent = typingMessages[messageIndex];
+    clearInterval(typingInterval);
+    typingInterval = setInterval(() => {
+        messageIndex = (messageIndex + 1) % typingMessages.length;
+        typingEl.textContent = typingMessages[messageIndex];
+    }, 3000);
+
     const lang = sessionStorage.getItem('transcriptionLanguage') || 'es';
 
     const progressBar = document.getElementById('transcription-progress');
@@ -178,6 +194,7 @@ function pollTranscription(id) {
                 progressText.textContent = 'Transcripción completada';
                 percent = 100;
                 clearInterval(interval);
+                clearInterval(typingInterval);
                 transcriptionData = data;
                 showTranscriptionEditor();
             } else if (data.status === 'error') {
@@ -187,6 +204,7 @@ function pollTranscription(id) {
                     showNotification(message, 'error');
                 }
                 clearInterval(interval);
+                clearInterval(typingInterval);
             }
 
             progressBar.style.width = percent + '%';
@@ -195,6 +213,7 @@ function pollTranscription(id) {
             console.error(err);
             progressText.textContent = 'Error de servidor';
             clearInterval(interval);
+            clearInterval(typingInterval);
         }
     }, 4000);
 }
