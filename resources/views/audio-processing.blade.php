@@ -362,12 +362,15 @@
                             <div class="audio-info">
                                 <div class="audio-player">
                                     <button class="play-btn" onclick="toggleAudioPlayback()">
-                                        <span class="play-icon">▶️</span>
+                                        <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" />
+                                        </svg>
                                     </button>
                                     <div class="audio-timeline">
                                         <div class="timeline-progress"></div>
                                     </div>
                                     <span class="audio-duration">05:23</span>
+                                    <audio id="recorded-audio" class="hidden"></audio>
                                 </div>
                                 <button class="btn btn-secondary download-btn" onclick="downloadAudio()">
                                     <span class="btn-icon">⬇️</span>

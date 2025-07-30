@@ -815,7 +815,9 @@ body {
 }
 
 .play-icon {
-    font-size: 1.2rem;
+    width: 20px;
+    height: 20px;
+    stroke-width: 1.5;
 }
 
 .audio-timeline {
