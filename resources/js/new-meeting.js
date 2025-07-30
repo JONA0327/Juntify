@@ -120,16 +120,39 @@ function toggleRecording() {
 
 // ===== FUNCIONES DE GRABACIÓN =====
 
+// Obtener las restricciones de audio basadas en las opciones avanzadas
+async function getAudioConstraints() {
+    const deviceSelect = document.getElementById('microphone-device');
+    const sensitivity = document.getElementById('mic-sensitivity');
+    const noise = document.getElementById('noise-reduction');
+
+    // Calcular sampleRate en un rango de 16 kHz a 48 kHz
+    let sampleRate = 44100;
+    if (sensitivity) {
+        const val = parseInt(sensitivity.value, 10);
+        sampleRate = Math.round(16000 + (val / 100) * 32000);
+    }
+
+    const constraints = {
+        echoCancellation: true,
+        noiseSuppression: noise ? noise.value !== 'off' : true,
+        sampleRate: sampleRate
+    };
+
+    if (deviceSelect && deviceSelect.value) {
+        constraints.deviceId = { exact: deviceSelect.value };
+    }
+
+    return constraints;
+}
+
 // Función para iniciar grabación
 async function startRecording() {
     try {
+        const audioConstraints = await getAudioConstraints();
         // Solicitar acceso al micrófono
         const stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                sampleRate: 44100
-            }
+            audio: audioConstraints
         });
 
         recordingStream = stream;
@@ -166,8 +189,22 @@ function startNewSegment() {
     if (!recordingStream) return;
 
     let chunks = [];
+    let bitsPerSecond = 128000; // calidad media por defecto
+    const qualitySelect = document.getElementById('recording-quality');
+    if (qualitySelect) {
+        switch (qualitySelect.value) {
+            case 'high':
+                bitsPerSecond = 256000;
+                break;
+            case 'low':
+                bitsPerSecond = 64000;
+                break;
+        }
+    }
+
     mediaRecorder = new MediaRecorder(recordingStream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: bitsPerSecond
     });
 
     mediaRecorder.ondataavailable = event => {
@@ -537,6 +574,31 @@ function createParticles() {
     }
 }
 
+// Enumerar dispositivos de micrófono y poblar el selector
+async function populateMicrophoneDevices() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const select = document.getElementById('microphone-device');
+        if (!select) return;
+
+        // Conservar la opción por defecto
+        const placeholder = select.querySelector('option[value=""]');
+        select.innerHTML = '';
+        if (placeholder) select.appendChild(placeholder);
+
+        let count = 1;
+        devices.filter(d => d.kind === 'audioinput').forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.textContent = device.label || `Micrófono ${count++}`;
+            select.appendChild(option);
+        });
+    } catch (e) {
+        console.error('No se pudieron enumerar los micrófonos', e);
+    }
+}
+
 // ===== EVENT LISTENERS =====
 
 // Actualizar valor del slider de sensibilidad
@@ -553,6 +615,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Inicializar partículas
     createParticles();
+
+    // Cargar dispositivos de micrófono
+    populateMicrophoneDevices();
     
     // Colapsar opciones avanzadas por defecto
     const advancedContent = document.getElementById('advanced-content');
@@ -761,13 +826,10 @@ async function startMeetingRecording() {
     
     try {
         // Solicitar acceso a las fuentes de audio
+        const audioConstraints = await getAudioConstraints();
         if (microphoneAudioEnabled) {
-            microphoneAudioStream = await navigator.mediaDevices.getUserMedia({ 
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    sampleRate: 44100
-                } 
+            microphoneAudioStream = await navigator.mediaDevices.getUserMedia({
+                audio: audioConstraints
             });
         }
         
