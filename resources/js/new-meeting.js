@@ -1008,7 +1008,6 @@ window.addEventListener('beforeunload', function() {
 
 // Hacer las funciones globales para que funcionen con onclick en el HTML
 window.selectRecordingMode = selectRecordingMode;
-window.toggleAdvancedOptions = toggleAdvancedOptions;
 window.toggleRecording = toggleRecording;
 window.toggleMobileNavbar = toggleMobileNavbar;
 window.removeSelectedFile = removeSelectedFile;
