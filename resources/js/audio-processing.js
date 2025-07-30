@@ -1,3 +1,5 @@
+import { loadAudioBlob } from './idb.js';
+
 // ===== VARIABLES GLOBALES =====
 let currentStep = 1;
 let selectedAnalyzer = 'general';
@@ -810,7 +812,7 @@ document.addEventListener('click', e => {
     }
 });
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     createParticles();
 
     audioPlayer = document.getElementById('recorded-audio');
@@ -819,28 +821,37 @@ document.addEventListener('DOMContentLoaded', function() {
         audioPlayer.addEventListener('ended', stopAudioPlayback);
     }
 
-    const storedAudio = sessionStorage.getItem('recordingBlob');
-    if (storedAudio) {
-        audioData = storedAudio;
-    }
-
-    const segments = sessionStorage.getItem('recordingSegments');
-    if (segments) {
+    const uploadedKey = sessionStorage.getItem('uploadedAudioKey');
+    if (uploadedKey) {
         try {
-            const arr = JSON.parse(segments);
-            audioSegments = arr.map(base64ToBlob);
+            audioData = await loadAudioBlob(uploadedKey);
         } catch (e) {
-            console.error('Error al cargar segmentos de audio', e);
+            console.error('Error loading audio from IndexedDB', e);
         }
-    }
+    } else {
+        const storedAudio = sessionStorage.getItem('recordingBlob');
+        if (storedAudio) {
+            audioData = storedAudio;
+        }
 
-    const meta = sessionStorage.getItem('recordingMetadata');
-    if (meta) {
-        try {
-            const parsed = JSON.parse(meta);
-            console.log('Segmentos grabados:', parsed.segmentCount, 'Duración:', parsed.durationMs, 'ms');
-        } catch (e) {
-            console.error('Error al leer metadata de grabación', e);
+        const segments = sessionStorage.getItem('recordingSegments');
+        if (segments) {
+            try {
+                const arr = JSON.parse(segments);
+                audioSegments = arr.map(base64ToBlob);
+            } catch (e) {
+                console.error('Error al cargar segmentos de audio', e);
+            }
+        }
+
+        const meta = sessionStorage.getItem('recordingMetadata');
+        if (meta) {
+            try {
+                const parsed = JSON.parse(meta);
+                console.log('Segmentos grabados:', parsed.segmentCount, 'Duración:', parsed.durationMs, 'ms');
+            } catch (e) {
+                console.error('Error al leer metadata de grabación', e);
+            }
         }
     }
 
