@@ -25,6 +25,7 @@ let systemDataArray = null;
 let microphoneDataArray = null;
 let meetingAnimationId = null;
 let discardRequested = false;
+let uploadedFile = null;
 
 // SVG paths for dynamic icons
 const ICON_PATHS = {
@@ -661,6 +662,8 @@ function handleFileSelection(file) {
         return;
     }
     
+    uploadedFile = file;
+
     // Mostrar información del archivo
     document.getElementById('file-name').textContent = file.name;
     document.getElementById('file-size').textContent = formatFileSize(file.size);
@@ -675,6 +678,7 @@ function removeSelectedFile() {
     document.getElementById('selected-file').style.display = 'none';
     document.getElementById('upload-area').style.display = 'block';
     document.getElementById('audio-file-input').value = '';
+    uploadedFile = null;
 }
 
 // Procesar archivo de audio
@@ -682,26 +686,33 @@ function processAudioFile() {
     const progressContainer = document.getElementById('upload-progress');
     const progressFill = document.getElementById('progress-fill');
     const progressText = document.getElementById('progress-text');
-    
+
     progressContainer.style.display = 'block';
-    
-    // Simular progreso de subida
-    let progress = 0;
-    const interval = setInterval(() => {
-        progress += Math.random() * 15;
-        if (progress > 100) progress = 100;
-        
-        progressFill.style.width = progress + '%';
-        progressText.textContent = Math.round(progress) + '%';
-        
-        if (progress >= 100) {
-            clearInterval(interval);
-            setTimeout(() => {
-                storeTranscriptionLanguage();
-                window.location.href = '/audio-processing';
-            }, 500);
+    if (!uploadedFile) {
+        showError('Primero selecciona un archivo de audio');
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onprogress = (e) => {
+        if (e.lengthComputable) {
+            const percent = (e.loaded / e.total) * 100;
+            progressFill.style.width = percent + '%';
+            progressText.textContent = Math.round(percent) + '%';
         }
-    }, 200);
+    };
+
+    reader.onloadend = () => {
+        const base64 = reader.result;
+        sessionStorage.setItem('recordingBlob', base64);
+        sessionStorage.setItem('recordingSegments', JSON.stringify([base64]));
+        sessionStorage.setItem('recordingMetadata', JSON.stringify({ segmentCount: 1 }));
+        storeTranscriptionLanguage();
+        window.location.href = '/audio-processing';
+    };
+
+    reader.readAsDataURL(uploadedFile);
 }
 
 // Formatear tamaño de archivo
