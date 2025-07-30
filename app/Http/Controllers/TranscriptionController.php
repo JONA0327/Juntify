@@ -16,10 +16,13 @@ class TranscriptionController extends Controller
             return response()->json(['error' => 'AssemblyAI API key missing'], 500);
         }
 
+        $audioBinary = file_get_contents($request->file('audio')->getRealPath());
+
         $upload = Http::withHeaders([
             'authorization' => $apiKey,
+            'content-type'  => 'application/octet-stream',
         ])
-            ->attach('file', fopen($request->file('audio')->getRealPath(), 'r'))
+            ->withBody($audioBinary, 'application/octet-stream')
             ->post('https://api.assemblyai.com/v2/upload');
 
         if (!$upload->successful()) {
