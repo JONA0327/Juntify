@@ -9,8 +9,13 @@ class TranscriptionController extends Controller
 {
     public function store(Request $request)
     {
-      $request->validate(['audio' => 'required|file']);
-      $apiKey = config('services.assemblyai.api_key');
+        $request->validate([
+            'audio'    => 'required|file',
+            'language' => 'nullable|in:es,en,fr,de',
+        ]);
+
+        $language = $request->input('language', 'es');
+        $apiKey = config('services.assemblyai.api_key');
 
         if (empty($apiKey)) {
             return response()->json(['error' => 'AssemblyAI API key missing'], 500);
@@ -35,6 +40,7 @@ class TranscriptionController extends Controller
             ->post('https://api.assemblyai.com/v2/transcript', [
                 'audio_url'      => $upload->json('upload_url'),
                 'speaker_labels' => true,
+                'language_code'  => $language,
             ]);
 
         if (!$transcription->successful()) {
