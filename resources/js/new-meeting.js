@@ -80,14 +80,14 @@ function showRecordingInterface(mode) {
 // Función para alternar opciones avanzadas
 function toggleAdvancedOptions() {
     const content = document.getElementById('advanced-content');
-    const icon = document.getElementById('expand-icon');
+    const icon = document.querySelector('.expand-icon');
     
     if (content.classList.contains('collapsed')) {
         content.classList.remove('collapsed');
-        icon.textContent = '▲';
+        if (icon) icon.textContent = '▲';
     } else {
         content.classList.add('collapsed');
-        icon.textContent = '▼';
+        if (icon) icon.textContent = '▼';
     }
 }
 
@@ -623,7 +623,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const advancedContent = document.getElementById('advanced-content');
     if (advancedContent) {
         advancedContent.classList.add('collapsed');
-        document.getElementById('expand-icon').textContent = '▼';
+        const icon = document.querySelector('.expand-icon');
+        if (icon) icon.textContent = '▼';
     }
     
     // Inicializar con modo de audio por defecto
