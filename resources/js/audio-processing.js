@@ -111,6 +111,8 @@ async function mergeAudioSegments(segments) {
 async function startTranscription() {
     showStep(2);
 
+    const lang = sessionStorage.getItem('transcriptionLanguage') || 'es';
+
     const progressBar = document.getElementById('transcription-progress');
     const progressText = document.getElementById('transcription-progress-text');
     const progressPercent = document.getElementById('transcription-progress-percent');
@@ -121,6 +123,7 @@ async function startTranscription() {
 
     const formData = new FormData();
     formData.append('audio', audioData, 'recording.webm');
+    formData.append('language', lang);
 
 
     try {
