@@ -401,6 +401,65 @@ body {
     background: rgba(239, 68, 68, 0.3);
     transform: scale(1.05);
 }
+
+/* Admin Panel Styles */
+.admin-card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.admin-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(59, 130, 246, 0.5);
+    box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2);
+}
+
+/* Analyzer Cards */
+.analyzer-card {
+    position: relative;
+}
+
+.analyzer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.analyzer-actions {
+    display: flex;
+    gap: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.analyzer-card:hover .analyzer-actions {
+    opacity: 1;
+}
+
+.analyzer-description {
+    margin-bottom: 1.5rem;
+}
+
+.analyzer-description p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+.analyzer-details {
+    border-top: 1px solid rgba(59, 130, 246, 0.1);
+    padding-top: 1rem;
+}
+
+.delete-btn {
+    color: #ef4444;
+}
+
+.delete-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
 .status-badge {
     padding: 0.25rem 0.75rem;
     border-radius: 20px;
