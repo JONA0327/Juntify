@@ -72,7 +72,7 @@
             <!-- Paso 1: Procesando Audio -->
             <div class="processing-step active" id="step-audio-processing">
                 <div class="step-header">
-                    <div class="step-icon">🎵</div>
+                    <x-icon name="note" class="step-icon" />
                     <h1 class="step-title">Procesando Audio</h1>
                     <p class="step-subtitle">Analizando y optimizando la calidad del audio grabado</p>
                 </div>
@@ -110,17 +110,17 @@
 
                     <div class="processing-details">
                         <div class="detail-item">
-                            <span class="detail-icon">🔊</span>
+                            <x-icon name="speaker" class="detail-icon" />
                             <span class="detail-text">Optimizando calidad de audio</span>
                             <span class="detail-status" id="audio-quality-status">⏳</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-icon">🎯</span>
+                            <x-icon name="chart" class="detail-icon" />
                             <span class="detail-text">Detectando hablantes</span>
                             <span class="detail-status" id="speaker-detection-status">⏳</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-icon">🔇</span>
+                            <x-icon name="speaker-x" class="detail-icon" />
                             <span class="detail-text">Reduciendo ruido de fondo</span>
                             <span class="detail-status" id="noise-reduction-status">⏳</span>
                         </div>
@@ -131,7 +131,7 @@
             <!-- Paso 2: Transcripción -->
             <div class="processing-step" id="step-transcription">
                 <div class="step-header">
-                    <div class="step-icon">📝</div>
+                    <x-icon name="pencil" class="step-icon" />
                     <h1 class="step-title">Generando Transcripción</h1>
                     <p class="step-subtitle">Convirtiendo el audio a texto con IA avanzada</p>
                 </div>
@@ -159,7 +159,7 @@
             <!-- Paso 3: Editar Transcripción -->
             <div class="processing-step" id="step-edit-transcription">
                 <div class="step-header">
-                    <div class="step-icon">✏️</div>
+                    <x-icon name="pencil" class="step-icon" />
                     <h1 class="step-title">Revisar Transcripción</h1>
                     <p class="step-subtitle">Verifica y corrige la transcripción generada</p>
                 </div>
@@ -193,7 +193,7 @@
             <!-- Paso 4: Seleccionar Análisis -->
             <div class="processing-step" id="step-select-analysis">
                 <div class="step-header">
-                    <div class="step-icon">🧠</div>
+                    <x-icon name="shield" class="step-icon" />
                     <h1 class="step-title">Comenzar Análisis</h1>
                     <p class="step-subtitle">Selecciona el tipo de análisis que deseas realizar</p>
                 </div>
@@ -201,7 +201,7 @@
                 <div class="analysis-selector">
                     <div class="analyzer-grid">
                         <div class="analyzer-card active" data-analyzer="general" onclick="selectAnalyzer('general')">
-                            <div class="analyzer-icon">📊</div>
+                            <x-icon name="chart" class="analyzer-icon" />
                             <h3 class="analyzer-title">Análisis General</h3>
                             <p class="analyzer-description">Resumen completo, puntos clave y tareas identificadas automáticamente</p>
                             <div class="analyzer-features">
@@ -212,7 +212,7 @@
                         </div>
 
                         <div class="analyzer-card" data-analyzer="meeting" onclick="selectAnalyzer('meeting')">
-                            <div class="analyzer-icon">🤝</div>
+                            <x-icon name="users" class="analyzer-icon" />
                             <h3 class="analyzer-title">Análisis de Reunión</h3>
                             <p class="analyzer-description">Enfocado en decisiones, acuerdos y seguimientos de reuniones</p>
                             <div class="analyzer-features">
@@ -223,7 +223,7 @@
                         </div>
 
                         <div class="analyzer-card" data-analyzer="project" onclick="selectAnalyzer('project')">
-                            <div class="analyzer-icon">🎯</div>
+                            <x-icon name="chart" class="analyzer-icon" />
                             <h3 class="analyzer-title">Análisis de Proyecto</h3>
                             <p class="analyzer-description">Identifica objetivos, riesgos y próximos pasos del proyecto</p>
                             <div class="analyzer-features">
@@ -234,7 +234,7 @@
                         </div>
 
                         <div class="analyzer-card" data-analyzer="sales" onclick="selectAnalyzer('sales')">
-                            <div class="analyzer-icon">💼</div>
+                            <x-icon name="briefcase" class="analyzer-icon" />
                             <h3 class="analyzer-title">Análisis de Ventas</h3>
                             <p class="analyzer-description">Detecta oportunidades, objeciones y próximos pasos comerciales</p>
                             <div class="analyzer-features">
@@ -250,7 +250,8 @@
                             ← Volver a transcripción
                         </button>
                         <button class="btn btn-primary" onclick="startAnalysis()">
-                            <span class="btn-icon">🚀</span>
+                            <x-icon name="rocket" class="btn-icon" />
+                            <span class="sr-only">Comenzar análisis</span>
                             Comenzar análisis
                         </button>
                     </div>
@@ -260,7 +261,7 @@
             <!-- Paso 5: Procesando Análisis -->
             <div class="processing-step" id="step-analysis-processing">
                 <div class="step-header">
-                    <div class="step-icon">🧠</div>
+                    <x-icon name="shield" class="step-icon" />
                     <h1 class="step-title">Analizando Contenido</h1>
                     <p class="step-subtitle">La IA está procesando la transcripción para generar insights</p>
                 </div>
@@ -287,17 +288,17 @@
 
                     <div class="processing-details">
                         <div class="detail-item">
-                            <span class="detail-icon">📋</span>
+                            <x-icon name="clipboard" class="detail-icon" />
                             <span class="detail-text">Generando resumen ejecutivo</span>
                             <span class="detail-status" id="summary-status">⏳</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-icon">🎯</span>
+                            <x-icon name="chart" class="detail-icon" />
                             <span class="detail-text">Identificando puntos clave</span>
                             <span class="detail-status" id="keypoints-status">⏳</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-icon">✅</span>
+                            <x-icon name="check" class="detail-icon" />
                             <span class="detail-text">Extrayendo tareas y acciones</span>
                             <span class="detail-status" id="tasks-status">⏳</span>
                         </div>
@@ -308,7 +309,7 @@
             <!-- Paso 6: Guardar Resultados -->
             <div class="processing-step" id="step-save-results">
                 <div class="step-header">
-                    <div class="step-icon">💾</div>
+                    <x-icon name="briefcase" class="step-icon" />
                     <h1 class="step-title">Guardar Reunión</h1>
                     <p class="step-subtitle">Configura dónde y cómo guardar los resultados</p>
                 </div>
@@ -318,7 +319,7 @@
                     <div class="save-config">
                         <div class="config-section">
                             <h3 class="config-title">
-                                <span class="config-icon">📁</span>
+                                <x-icon name="folder" class="config-icon" />
                                 Ubicación de guardado
                             </h3>
                             
@@ -349,14 +350,14 @@
                     <!-- Vista previa de resultados -->
                     <div class="results-preview">
                         <h3 class="preview-title">
-                            <span class="preview-icon">👁️</span>
+                            <x-icon name="eye" class="preview-icon" />
                             Vista previa de resultados
                         </h3>
 
                         <!-- Información del audio -->
                         <div class="result-section">
                             <h4 class="section-title">
-                                <span class="section-icon">🎵</span>
+                                <x-icon name="note" class="section-icon" />
                                 Audio original
                             </h4>
                             <div class="audio-info">
@@ -382,7 +383,7 @@
                         <!-- Transcripción -->
                         <div class="result-section">
                             <h4 class="section-title">
-                                <span class="section-icon">📝</span>
+                                <x-icon name="pencil" class="section-icon" />
                                 Transcripción
                             </h4>
                             <div class="transcription-preview">
@@ -403,14 +404,14 @@
                         <!-- Análisis -->
                         <div class="result-section">
                             <h4 class="section-title">
-                                <span class="section-icon">🧠</span>
+                                <x-icon name="shield" class="section-icon" />
                                 Análisis generado
                             </h4>
                             
                             <!-- Resumen -->
                             <div class="analysis-item">
                                 <h5 class="analysis-subtitle">
-                                    <span class="analysis-icon">📋</span>
+                                    <x-icon name="clipboard" class="analysis-icon" />
                                     Resumen ejecutivo
                                 </h5>
                                 <div class="analysis-content">
@@ -421,7 +422,7 @@
                             <!-- Puntos clave -->
                             <div class="analysis-item">
                                 <h5 class="analysis-subtitle">
-                                    <span class="analysis-icon">🎯</span>
+                                    <x-icon name="chart" class="analysis-icon" />
                                     Puntos clave
                                 </h5>
                                 <div class="analysis-content">
@@ -437,7 +438,7 @@
                             <!-- Tareas -->
                             <div class="analysis-item">
                                 <h5 class="analysis-subtitle">
-                                    <span class="analysis-icon">✅</span>
+                                    <x-icon name="check" class="analysis-icon" />
                                     Tareas identificadas
                                 </h5>
                                 <div class="analysis-content">
@@ -447,21 +448,27 @@
                                                 <span class="task-title">Preparar propuesta de presupuesto Q1</span>
                                                 <span class="task-assignee">Asignado a: María González</span>
                                             </div>
-                                            <span class="task-deadline">📅 15/01/2025</span>
+                                            <span class="task-deadline">
+                                                <x-icon name="calendar" class="summary-icon" /> 15/01/2025
+                                            </span>
                                         </div>
                                         <div class="task-item">
                                             <div class="task-info">
                                                 <span class="task-title">Revisar estrategia de marketing digital</span>
                                                 <span class="task-assignee">Asignado a: Carlos Ruiz</span>
                                             </div>
-                                            <span class="task-deadline">📅 20/01/2025</span>
+                                            <span class="task-deadline">
+                                                <x-icon name="calendar" class="summary-icon" /> 20/01/2025
+                                            </span>
                                         </div>
                                         <div class="task-item">
                                             <div class="task-info">
                                                 <span class="task-title">Contactar proveedores para nueva línea</span>
                                                 <span class="task-assignee">Asignado a: Ana López</span>
                                             </div>
-                                            <span class="task-deadline">📅 25/01/2025</span>
+                                            <span class="task-deadline">
+                                                <x-icon name="calendar" class="summary-icon" /> 25/01/2025
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -475,10 +482,13 @@
                             ← Volver al análisis
                         </button>
                         <button class="btn btn-danger" onclick="cancelProcess()">
-                            ❌ Cancelar proceso
+                            <x-icon name="x" class="btn-icon" />
+                            <span class="sr-only">Cancelar proceso</span>
+                            Cancelar proceso
                         </button>
                         <button class="btn btn-primary" onclick="saveToDatabase()">
-                            <span class="btn-icon">💾</span>
+                            <x-icon name="briefcase" class="btn-icon" />
+                            <span class="sr-only">Guardar reunión</span>
                             Guardar reunión
                         </button>
                     </div>
@@ -488,7 +498,7 @@
             <!-- Paso 7: Guardando en BD -->
             <div class="processing-step" id="step-saving">
                 <div class="step-header">
-                    <div class="step-icon">💾</div>
+                    <x-icon name="briefcase" class="step-icon" />
                     <h1 class="step-title">Guardando Reunión</h1>
                     <p class="step-subtitle">Almacenando todos los datos en la base de datos</p>
                 </div>
@@ -515,22 +525,22 @@
 
                     <div class="processing-details">
                         <div class="detail-item">
-                            <span class="detail-icon">🎵</span>
+                            <x-icon name="note" class="detail-icon" />
                             <span class="detail-text">Subiendo archivo de audio</span>
                             <span class="detail-status" id="audio-upload-status">⏳</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-icon">📝</span>
+                            <x-icon name="pencil" class="detail-icon" />
                             <span class="detail-text">Guardando transcripción</span>
                             <span class="detail-status" id="transcription-save-status">⏳</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-icon">🧠</span>
+                            <x-icon name="shield" class="detail-icon" />
                             <span class="detail-text">Almacenando análisis</span>
                             <span class="detail-status" id="analysis-save-status">⏳</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-icon">✅</span>
+                            <x-icon name="check" class="detail-icon" />
                             <span class="detail-text">Creando tareas</span>
                             <span class="detail-status" id="tasks-save-status">⏳</span>
                         </div>
@@ -541,7 +551,7 @@
             <!-- Paso 8: Completado -->
             <div class="processing-step" id="step-completed">
                 <div class="step-header">
-                    <div class="step-icon">🎉</div>
+                    <x-icon name="check" class="step-icon" />
                     <h1 class="step-title">¡Reunión Guardada!</h1>
                     <p class="step-subtitle">Tu reunión ha sido procesada y guardada exitosamente</p>
                 </div>
@@ -555,32 +565,38 @@
 
                     <div class="completion-summary">
                         <div class="summary-item">
-                            <span class="summary-icon">📁</span>
+                            <x-icon name="folder" class="summary-icon" />
                             <span class="summary-text">Guardado en: <strong>Juntify-Reuniones-2025/Reuniones-Enero-2025</strong></span>
                         </div>
                         <div class="summary-item">
-                            <span class="summary-icon">⏱️</span>
+                            <x-icon name="calendar" class="summary-icon" />
                             <span class="summary-text">Duración: <strong>5:23 minutos</strong></span>
                         </div>
                         <div class="summary-item">
-                            <span class="summary-icon">👥</span>
+                            <x-icon name="users" class="summary-icon" />
                             <span class="summary-text">Hablantes: <strong>3 participantes</strong></span>
                         </div>
                         <div class="summary-item">
-                            <span class="summary-icon">✅</span>
+                            <x-icon name="check" class="summary-icon" />
                             <span class="summary-text">Tareas creadas: <strong>3 tareas</strong></span>
                         </div>
                     </div>
 
                     <div class="completion-actions">
                         <button class="btn btn-secondary" onclick="viewMeetingDetails()">
-                            👁️ Ver detalles completos
+                            <x-icon name="eye" class="btn-icon" />
+                            <span class="sr-only">Ver detalles completos</span>
+                            Ver detalles completos
                         </button>
                         <button class="btn btn-primary" onclick="goToMeetings()">
-                            📋 Ir a mis reuniones
+                            <x-icon name="clipboard" class="btn-icon" />
+                            <span class="sr-only">Ir a mis reuniones</span>
+                            Ir a mis reuniones
                         </button>
                         <button class="btn btn-primary" onclick="createNewMeeting()">
-                            ➕ Nueva reunión
+                            <x-icon name="plus" class="btn-icon" />
+                            <span class="sr-only">Nueva reunión</span>
+                            Nueva reunión
                         </button>
                     </div>
                 </div>
@@ -595,7 +611,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="modal-title">
-                    <span class="modal-icon">👤</span>
+                    <x-icon name="user" class="modal-icon" />
                     Cambiar Hablante
                 </h3>
             </div>
@@ -611,7 +627,11 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeChangeSpeakerModal()">Cancelar</button>
-                <button class="btn btn-primary" id="confirm-speaker-change" onclick="confirmSpeakerChange()">✅ Cambiar Hablante</button>
+                <button class="btn btn-primary" id="confirm-speaker-change" onclick="confirmSpeakerChange()">
+                    <x-icon name="check" class="btn-icon" />
+                    <span class="sr-only">Cambiar Hablante</span>
+                    Cambiar Hablante
+                </button>
             </div>
         </div>
     </div>
@@ -621,7 +641,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="modal-title">
-                    <span class="modal-icon">👥</span>
+                    <x-icon name="users" class="modal-icon" />
                     Cambiar Hablante Globalmente
                 </h3>
             </div>
@@ -641,7 +661,11 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeGlobalSpeakerModal()">Cancelar</button>
-                <button class="btn btn-primary" id="confirm-global-speaker-change" onclick="confirmGlobalSpeakerChange()">✅ Cambiar Globalmente</button>
+                <button class="btn btn-primary" id="confirm-global-speaker-change" onclick="confirmGlobalSpeakerChange()">
+                    <x-icon name="check" class="btn-icon" />
+                    <span class="sr-only">Cambiar Globalmente</span>
+                    Cambiar Globalmente
+                </button>
             </div>
         </div>
     </div>
