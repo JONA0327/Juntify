@@ -75,10 +75,22 @@ async function startAudioProcessing() {
     progressText.textContent = 'Unificando segmentos...';
 
     if (!audioSegments || audioSegments.length === 0) {
-        progressBar.style.width = '100%';
-        progressPercent.textContent = '100%';
-        progressText.textContent = 'No hay segmentos de audio';
-        document.getElementById('audio-quality-status').textContent = '⚠️';
+        if (audioData) {
+            progressBar.style.width = '100%';
+            progressPercent.textContent = '100%';
+            progressText.textContent = 'Archivo listo';
+            document.getElementById('audio-quality-status').textContent = '✅';
+            document.getElementById('speaker-detection-status').textContent = '✅';
+            document.getElementById('noise-reduction-status').textContent = '✅';
+            setTimeout(() => {
+                startTranscription();
+            }, 500);
+        } else {
+            progressBar.style.width = '100%';
+            progressPercent.textContent = '100%';
+            progressText.textContent = 'No hay segmentos de audio';
+            document.getElementById('audio-quality-status').textContent = '⚠️';
+        }
         return;
     }
 
@@ -138,7 +150,8 @@ async function startTranscription() {
     progressText.textContent = 'Subiendo audio...';
 
     const formData = new FormData();
-    formData.append('audio', audioData, 'recording.webm');
+    const audioBlob = typeof audioData === 'string' ? base64ToBlob(audioData) : audioData;
+    formData.append('audio', audioBlob, 'recording.webm');
     formData.append('language', lang);
 
 
