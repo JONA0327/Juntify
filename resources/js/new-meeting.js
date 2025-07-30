@@ -77,19 +77,6 @@ function showRecordingInterface(mode) {
     }
 }
 
-// Función para alternar opciones avanzadas
-function toggleAdvancedOptions() {
-    const content = document.getElementById('advanced-content');
-    const icon = document.querySelector('.expand-icon');
-    
-    if (content.classList.contains('collapsed')) {
-        content.classList.remove('collapsed');
-        if (icon) icon.textContent = '▲';
-    } else {
-        content.classList.add('collapsed');
-        if (icon) icon.textContent = '▼';
-    }
-}
 
 // Función para iniciar/detener grabación
 function toggleRecording() {
@@ -123,20 +110,11 @@ function toggleRecording() {
 // Obtener las restricciones de audio basadas en las opciones avanzadas
 async function getAudioConstraints() {
     const deviceSelect = document.getElementById('microphone-device');
-    const sensitivity = document.getElementById('mic-sensitivity');
-    const noise = document.getElementById('noise-reduction');
-
-    // Calcular sampleRate en un rango de 16 kHz a 48 kHz
-    let sampleRate = 44100;
-    if (sensitivity) {
-        const val = parseInt(sensitivity.value, 10);
-        sampleRate = Math.round(16000 + (val / 100) * 32000);
-    }
 
     const constraints = {
         echoCancellation: true,
-        noiseSuppression: noise ? noise.value !== 'off' : true,
-        sampleRate: sampleRate
+        noiseSuppression: true,
+        sampleRate: 44100
     };
 
     if (deviceSelect && deviceSelect.value) {
@@ -190,17 +168,6 @@ function startNewSegment() {
 
     let chunks = [];
     let bitsPerSecond = 128000; // calidad media por defecto
-    const qualitySelect = document.getElementById('recording-quality');
-    if (qualitySelect) {
-        switch (qualitySelect.value) {
-            case 'high':
-                bitsPerSecond = 256000;
-                break;
-            case 'low':
-                bitsPerSecond = 64000;
-                break;
-        }
-    }
 
     mediaRecorder = new MediaRecorder(recordingStream, {
         mimeType: 'audio/webm;codecs=opus',
@@ -603,30 +570,12 @@ async function populateMicrophoneDevices() {
 
 // Actualizar valor del slider de sensibilidad
 document.addEventListener('DOMContentLoaded', function() {
-    const sensitivitySlider = document.getElementById('mic-sensitivity');
-    if (sensitivitySlider) {
-        sensitivitySlider.addEventListener('input', function() {
-            const valueDisplay = document.querySelector('.slider-value');
-            if (valueDisplay) {
-                valueDisplay.textContent = this.value + '%';
-            }
-        });
-    }
-    
     // Inicializar partículas
     createParticles();
 
     // Cargar dispositivos de micrófono
     populateMicrophoneDevices();
-    
-    // Colapsar opciones avanzadas por defecto
-    const advancedContent = document.getElementById('advanced-content');
-    if (advancedContent) {
-        advancedContent.classList.add('collapsed');
-        const icon = document.querySelector('.expand-icon');
-        if (icon) icon.textContent = '▼';
-    }
-    
+
     // Inicializar con modo de audio por defecto
     showRecordingInterface('audio');
 });
