@@ -232,6 +232,12 @@ function generateTranscriptionSegments() {
         ? transcriptionData
         : (transcriptionData.utterances || []);
 
+    if (!utterances.length) {
+        showNotification('La transcripci\u00f3n no contiene informaci\u00f3n de hablantes', 'error');
+        container.innerHTML = '<p class="no-speakers">No se detectaron hablantes.</p>';
+        return;
+    }
+
     const segments = utterances.map(u => {
         const hasSpeaker = u.speaker !== undefined && u.speaker !== null;
         const speaker = hasSpeaker ? u.speaker : `Hablante ${u.speaker}`;
