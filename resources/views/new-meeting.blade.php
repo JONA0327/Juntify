@@ -363,9 +363,7 @@
                         <div class="form-group">
                             <label class="form-label">Dispositivo de micrófono</label>
                             <select class="form-select" id="microphone-device">
-                                <option value="default">🎤 Predeterminado - Micrófono (USB Audio Device)</option>
-                                <option value="builtin">🔊 Micrófono integrado</option>
-                                <option value="external">🎧 Micrófono externo</option>
+                                <option value="" disabled selected>🔍 Selecciona un micrófono...</option>
                             </select>
                         </div>
 
