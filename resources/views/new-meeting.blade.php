@@ -139,6 +139,31 @@
                     </div>
                 </div>
 
+                <!-- Configuración de grabación -->
+                <div class="info-card">
+                    <h2 class="card-title">
+                        <x-icon name="shield" class="card-icon" />
+                        Configuración
+                    </h2>
+
+                    <div class="form-group">
+                        <label class="form-label">Idioma de transcripción</label>
+                        <select class="form-select" id="advanced-language">
+                            <option value="es">Español</option>
+                            <option value="en">English</option>
+                            <option value="fr">Français</option>
+                            <option value="de">Deutsch</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Dispositivo de micrófono</label>
+                        <select class="form-select" id="microphone-device">
+                            <option value="" disabled selected>🔍 Selecciona un micrófono...</option>
+                        </select>
+                    </div>
+                </div>
+
                 <!-- Grabador de Audio -->
                 <div class="info-card recorder-card">
                     <h2 class="card-title" id="recorder-title">
@@ -371,66 +396,6 @@
                     </div>
                 </div>
 
-                <!-- Opciones Avanzadas -->
-                <div class="info-card advanced-options">
-                    <h2 class="card-title">
-                        <x-icon name="shield" class="card-icon" />
-                        Opciones avanzadas
-                        <button class="expand-btn" onclick="toggleAdvancedOptions()">
-                            <x-icon name="play" class="expand-icon" />
-                        </button>
-                    </h2>
-
-                    <div class="advanced-content" id="advanced-content">
-                        <div class="form-group">
-                            <label class="form-label">Idioma de transcripción</label>
-                            <select class="form-select" id="advanced-language">
-                                <option value="es">Español</option>
-                                <option value="en">English</option>
-                                <option value="fr">Français</option>
-                                <option value="de">Deutsch</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">Dispositivo de micrófono</label>
-                            <select class="form-select" id="microphone-device">
-                                <option value="" disabled selected>🔍 Selecciona un micrófono...</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">Sensibilidad del micrófono</label>
-                            <div class="slider-container">
-                                <input type="range" class="form-slider" id="mic-sensitivity" min="0" max="100" value="75">
-                                <div class="slider-labels">
-                                    <x-icon name="speaker-x" class="source-icon" />
-                                    <span class="slider-value">75%</span>
-                                    <x-icon name="speaker" class="source-icon" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">Calidad de grabación</label>
-                            <select class="form-select" id="recording-quality">
-                                <option value="medium">📻 Media (128 kbps)</option>
-                                <option value="high">🎵 Alta (256 kbps)</option>
-                                <option value="low">📢 Baja (64 kbps)</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">Reducción de ruido</label>
-                            <select class="form-select" id="noise-reduction">
-                                <option value="auto">🤖 Automático</option>
-                                <option value="high">🛡️ Alto</option>
-                                <option value="medium">⚖️ Medio</option>
-                                <option value="off">❌ Desactivado</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
             </div>
         </main>
     </div>
