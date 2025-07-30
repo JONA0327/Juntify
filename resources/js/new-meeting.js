@@ -272,8 +272,16 @@ function discardRecording() {
     if (mr) mr.style.display = 'none';
 }
 
+// Guardar idioma de transcripción seleccionado
+function storeTranscriptionLanguage() {
+    const select = document.getElementById('advanced-language');
+    const lang = select && select.value ? select.value : 'es';
+    sessionStorage.setItem('transcriptionLanguage', lang);
+}
+
 // Función para detener grabación
 function stopRecording() {
+    storeTranscriptionLanguage();
     isRecording = false;
     isPaused = false;
 
@@ -291,6 +299,8 @@ function stopRecording() {
 
 // Unir todos los segmentos y preparar redirección
 async function finalizeRecording() {
+    // Asegurar que el idioma de transcripción esté almacenado
+    storeTranscriptionLanguage();
     if (recordingStream) {
         recordingStream.getTracks().forEach(track => track.stop());
         recordingStream = null;
@@ -644,6 +654,7 @@ function processAudioFile() {
         if (progress >= 100) {
             clearInterval(interval);
             setTimeout(() => {
+                storeTranscriptionLanguage();
                 window.location.href = '/audio-processing';
             }, 500);
         }
@@ -823,6 +834,7 @@ function stopMeetingRecording() {
     
     // Redirigir al procesamiento de audio
     setTimeout(() => {
+        storeTranscriptionLanguage();
         window.location.href = '/audio-processing';
     }, 500);
 }
