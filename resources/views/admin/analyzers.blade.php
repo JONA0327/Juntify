@@ -363,7 +363,14 @@
             const url = editingAnalyzerId ? `/admin/analyzers/${editingAnalyzerId}` : '/admin/analyzers';
             const method = editingAnalyzerId ? 'put' : 'post';
 
-            axios[method](url, { name, description, prompt, icon, is_system: isSystem })
+            const data = { name, description, icon, is_system: isSystem };
+            if (isSystem === '1') {
+                data.system_prompt = prompt;
+            } else {
+                data.user_prompt_template = prompt;
+            }
+
+            axios[method](url, data)
                 .then(response => {
                     const action = editingAnalyzerId ? 'actualizado' : 'creado';
                     showNotification(`Analizador ${action} exitosamente`, 'success');
