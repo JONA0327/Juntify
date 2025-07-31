@@ -170,6 +170,14 @@
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label">Tipo de Analizador</label>
+                        <select class="modal-input" id="analyzer-type">
+                            <option value="1">Sistema</option>
+                            <option value="0">Personalizado</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label">Icono (Emoji)</label>
                         <input type="text" class="modal-input" id="analyzer-icon" placeholder="🧠" maxlength="2">
                         <div class="input-hint">Emoji que representará este analizador (opcional)</div>
@@ -278,25 +286,29 @@
                     name: 'Análisis General',
                     description: 'Realiza un análisis completo de la reunión identificando resumen, puntos clave y tareas automáticamente.',
                     prompt: 'Eres un asistente especializado en análisis de reuniones. Tu función es analizar transcripciones y generar un resumen ejecutivo, identificar puntos clave y extraer tareas específicas con asignaciones y fechas límite.',
-                    icon: '📊'
+                    icon: '📊',
+                    is_system: 1
                 },
                 'meeting': {
                     name: 'Análisis de Reunión',
                     description: 'Enfocado en decisiones, acuerdos y seguimientos específicos de reuniones corporativas.',
                     prompt: 'Eres un especialista en análisis de reuniones corporativas. Identifica decisiones tomadas, acuerdos establecidos y seguimientos necesarios.',
-                    icon: '👥'
+                    icon: '👥',
+                    is_system: 1
                 },
                 'project': {
                     name: 'Análisis de Proyecto',
                     description: 'Identifica objetivos, riesgos y próximos pasos específicos para la gestión de proyectos.',
                     prompt: 'Eres un experto en gestión de proyectos. Analiza la transcripción para identificar objetivos, riesgos potenciales y próximos pasos.',
-                    icon: '📋'
+                    icon: '📋',
+                    is_system: 1
                 },
                 'sales': {
                     name: 'Análisis de Ventas',
                     description: 'Detecta oportunidades, objeciones y próximos pasos comerciales en reuniones de ventas.',
                     prompt: 'Eres un especialista en análisis de ventas. Identifica oportunidades comerciales, objeciones del cliente y próximos pasos para cerrar la venta.',
-                    icon: '💼'
+                    icon: '💼',
+                    is_system: 1
                 }
             };
 
@@ -306,6 +318,7 @@
                 document.getElementById('analyzer-description').value = data.description;
                 document.getElementById('analyzer-prompt').value = data.prompt;
                 document.getElementById('analyzer-icon').value = data.icon;
+                document.getElementById('analyzer-type').value = data.is_system ? '1' : '0';
             }
 
             document.getElementById('analyzer-modal').classList.add('show');
@@ -331,6 +344,7 @@
             const description = document.getElementById('analyzer-description').value.trim();
             const prompt = document.getElementById('analyzer-prompt').value.trim();
             const icon = document.getElementById('analyzer-icon').value.trim();
+            const isSystem = document.getElementById('analyzer-type').value;
 
             if (!name || !description || !prompt) {
                 showNotification('Por favor completa todos los campos requeridos', 'error');
@@ -349,7 +363,7 @@
             const url = editingAnalyzerId ? `/admin/analyzers/${editingAnalyzerId}` : '/admin/analyzers';
             const method = editingAnalyzerId ? 'put' : 'post';
 
-            axios[method](url, { name, description, prompt, icon })
+            axios[method](url, { name, description, prompt, icon, is_system: isSystem })
                 .then(response => {
                     const action = editingAnalyzerId ? 'actualizado' : 'creado';
                     showNotification(`Analizador ${action} exitosamente`, 'success');
