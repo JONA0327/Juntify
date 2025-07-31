@@ -39,7 +39,6 @@ class AnalyzerController extends Controller
             'icon'                => 'nullable|string|max:50',
             'system_prompt'       => 'required|string',
             'user_prompt_template'=> 'required|string',
-            'userprotmp'          => 'nullable|string',
             'temperature'         => 'nullable|numeric|min:0|max:1',
             'is_system'           => 'nullable|boolean',
         ]);
@@ -63,7 +62,6 @@ class AnalyzerController extends Controller
             'icon'                => 'nullable|string|max:50',
             'system_prompt'       => 'sometimes|required|string',
             'user_prompt_template'=> 'sometimes|required|string',
-            'userprotmp'          => 'nullable|string',
             'temperature'         => 'nullable|numeric|min:0|max:1',
             'is_system'           => 'nullable|boolean',
         ]);
