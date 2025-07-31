@@ -169,6 +169,12 @@
                         <div class="input-hint">Instrucciones detalladas para ChatGPT sobre cómo debe comportarse este analizador</div>
                     </div>
 
+                    <div class="form-group">
+                        <label class="form-label">Prompt de Usuario</label>
+                        <textarea class="modal-input" id="analyzer-user-prompt" rows="4" placeholder="Ej: Dime el resumen ejecutivo de la reunión" required></textarea>
+                        <div class="input-hint">Plantilla de pregunta o texto que proporcionará el usuario</div>
+                    </div>
+
 
                     <div class="form-group">
                         <label class="form-label">Tipo de Analizador</label>
@@ -287,6 +293,7 @@
                     name: 'Análisis General',
                     description: 'Realiza un análisis completo de la reunión identificando resumen, puntos clave y tareas automáticamente.',
                     prompt: 'Eres un asistente especializado en análisis de reuniones. Tu función es analizar transcripciones y generar un resumen ejecutivo, identificar puntos clave y extraer tareas específicas con asignaciones y fechas límite.',
+                    user_prompt_template: '¿Cuál es el resumen ejecutivo de la reunión?',
                     icon: '📊',
                     is_system: 1
                 },
@@ -294,6 +301,7 @@
                     name: 'Análisis de Reunión',
                     description: 'Enfocado en decisiones, acuerdos y seguimientos específicos de reuniones corporativas.',
                     prompt: 'Eres un especialista en análisis de reuniones corporativas. Identifica decisiones tomadas, acuerdos establecidos y seguimientos necesarios.',
+                    user_prompt_template: 'Enumera las decisiones clave y acuerdos de la reunión.',
                     icon: '👥',
                     is_system: 1
                 },
@@ -301,6 +309,7 @@
                     name: 'Análisis de Proyecto',
                     description: 'Identifica objetivos, riesgos y próximos pasos específicos para la gestión de proyectos.',
                     prompt: 'Eres un experto en gestión de proyectos. Analiza la transcripción para identificar objetivos, riesgos potenciales y próximos pasos.',
+                    user_prompt_template: 'Lista los riesgos y próximos pasos del proyecto.',
                     icon: '📋',
                     is_system: 1
                 },
@@ -308,6 +317,7 @@
                     name: 'Análisis de Ventas',
                     description: 'Detecta oportunidades, objeciones y próximos pasos comerciales en reuniones de ventas.',
                     prompt: 'Eres un especialista en análisis de ventas. Identifica oportunidades comerciales, objeciones del cliente y próximos pasos para cerrar la venta.',
+                    user_prompt_template: '¿Qué oportunidades de venta se detectaron?',
                     icon: '💼',
                     is_system: 1
                 }
@@ -318,6 +328,7 @@
                 document.getElementById('analyzer-name').value = data.name;
                 document.getElementById('analyzer-description').value = data.description;
                 document.getElementById('analyzer-prompt').value = data.prompt;
+                document.getElementById('analyzer-user-prompt').value = data.user_prompt_template ?? '';
                 document.getElementById('analyzer-icon').value = data.icon;
                 document.getElementById('analyzer-type').value = data.is_system ? '1' : '0';
             }
@@ -344,10 +355,11 @@
             const name = document.getElementById('analyzer-name').value.trim();
             const description = document.getElementById('analyzer-description').value.trim();
             const prompt = document.getElementById('analyzer-prompt').value.trim();
+            const userPrompt = document.getElementById('analyzer-user-prompt').value.trim();
             const icon = document.getElementById('analyzer-icon').value.trim();
             const isSystem = document.getElementById('analyzer-type').value;
 
-            if (!name || !description || !prompt) {
+            if (!name || !description || !prompt || !userPrompt) {
                 showNotification('Por favor completa todos los campos requeridos', 'error');
                 return;
             }
@@ -370,7 +382,7 @@
                 icon,
                 is_system: isSystem,
                 system_prompt: prompt,
-                user_prompt_template: prompt
+                user_prompt_template: userPrompt
             };
 
             axios[method](url, data)
