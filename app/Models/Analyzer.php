@@ -16,7 +16,6 @@ class Analyzer extends Model
         'icon',
         'system_prompt',
         'user_prompt_template',
-        'userprotmp',
         'temperature',
         'is_system',
         'created_at',

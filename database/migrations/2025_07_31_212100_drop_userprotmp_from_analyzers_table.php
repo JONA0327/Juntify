@@ -9,8 +9,8 @@ return new class extends Migration
     public function up()
     {
         Schema::table('analyzers', function (Blueprint $table) {
-            if (!Schema::hasColumn('analyzers', 'userprotmp')) {
-                $table->text('userprotmp')->nullable()->after('user_prompt_template');
+            if (Schema::hasColumn('analyzers', 'userprotmp')) {
+                $table->dropColumn('userprotmp');
             }
         });
     }
@@ -18,8 +18,8 @@ return new class extends Migration
     public function down()
     {
         Schema::table('analyzers', function (Blueprint $table) {
-            if (Schema::hasColumn('analyzers', 'userprotmp')) {
-                $table->dropColumn('userprotmp');
+            if (!Schema::hasColumn('analyzers', 'userprotmp')) {
+                $table->text('userprotmp')->nullable()->after('user_prompt_template');
             }
         });
     }

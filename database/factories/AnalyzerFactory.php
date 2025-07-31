@@ -19,7 +19,6 @@ class AnalyzerFactory extends Factory
             'icon' => '🔍',
             'system_prompt' => 'system prompt',
             'user_prompt_template' => 'prompt template',
-            'userprotmp' => 'temp',
             'temperature' => 0.5,
             'is_system' => false,
             'created_by' => 'tester',
