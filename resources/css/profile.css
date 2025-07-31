@@ -150,8 +150,17 @@ body {
     list-style: none;
     margin: 0;
     padding: 0;
-    overflow-y: auto;
+    overflow-y: auto;      /* ya existente */
+
+    /* ---- Ocultar la barra pero permitir scroll ---- */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
+
+.sidebar-nav ul::-webkit-scrollbar {
+    display: none;
+}
+
 
 .nav-item {
     margin-bottom: 0.5rem;
@@ -938,7 +947,7 @@ body {
         padding: 1rem;
         padding-bottom: 6rem;
     }
-    
+
     .main-admin {
         margin-left: 0;
         padding: 1rem;
