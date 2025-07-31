@@ -242,7 +242,50 @@
         function loadAnalyzers() {
             axios.get('/admin/analyzers/list')
                 .then(res => {
-                    console.log('Loaded analyzers:', res.data);
+                    const grid = document.querySelector('.content-grid');
+                    grid.innerHTML = '';
+                    if (res.data.length === 0) {
+                        grid.innerHTML = '<p>No se encontraron analizadores</p>';
+                        return;
+                    }
+                    res.data.forEach(analyzer => {
+                        const badge = analyzer.is_system ? 'status-active' : 'status-inactive';
+                        grid.insertAdjacentHTML('beforeend', `
+                            <div class="info-card analyzer-card" data-analyzer-id="${analyzer.id}">
+                                <div class="analyzer-header">
+                                    <h3 class="card-title">
+                                        <span class="card-icon">${analyzer.icon ?? ''}</span>
+                                        ${analyzer.name}
+                                    </h3>
+                                    <div class="analyzer-actions">
+                                        <button class="control-btn" onclick="editAnalyzer('${analyzer.id}')" title="Editar analizador">
+                                            <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487l3.651 3.651-9.375 9.375-3.651.975.975-3.651 9.4-9.35zM5.25 18.75h13.5" />
+                                            </svg>
+                                        </button>
+                                        <button class="control-btn delete-btn" onclick="deleteAnalyzer('${analyzer.id}')" title="Eliminar analizador">
+                                            <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="analyzer-description">
+                                    <p>${analyzer.description ?? ''}</p>
+                                </div>
+                                <div class="analyzer-details">
+                                    <div class="info-item">
+                                        <span class="info-label">Tipo</span>
+                                        <span class="status-badge ${badge}">${analyzer.is_system ? 'Sistema' : 'Personalizado'}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Creado</span>
+                                        <span class="info-value">${new Date(analyzer.created_at).toLocaleDateString('es-ES')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `);
+                    });
                 })
                 .catch(err => {
                     console.error('Error loading analyzers:', err);
@@ -287,53 +330,21 @@
                 Actualizar Analizador
             `;
 
-            // Cargar datos del analizador (simulado)
-            const analyzerData = {
-                'general': {
-                    name: 'Análisis General',
-                    description: 'Realiza un análisis completo de la reunión identificando resumen, puntos clave y tareas automáticamente.',
-                    prompt: 'Eres un asistente especializado en análisis de reuniones. Tu función es analizar transcripciones y generar un resumen ejecutivo, identificar puntos clave y extraer tareas específicas con asignaciones y fechas límite.',
-                    user_prompt_template: '¿Cuál es el resumen ejecutivo de la reunión?',
-                    icon: '📊',
-                    is_system: 1
-                },
-                'meeting': {
-                    name: 'Análisis de Reunión',
-                    description: 'Enfocado en decisiones, acuerdos y seguimientos específicos de reuniones corporativas.',
-                    prompt: 'Eres un especialista en análisis de reuniones corporativas. Identifica decisiones tomadas, acuerdos establecidos y seguimientos necesarios.',
-                    user_prompt_template: 'Enumera las decisiones clave y acuerdos de la reunión.',
-                    icon: '👥',
-                    is_system: 1
-                },
-                'project': {
-                    name: 'Análisis de Proyecto',
-                    description: 'Identifica objetivos, riesgos y próximos pasos específicos para la gestión de proyectos.',
-                    prompt: 'Eres un experto en gestión de proyectos. Analiza la transcripción para identificar objetivos, riesgos potenciales y próximos pasos.',
-                    user_prompt_template: 'Lista los riesgos y próximos pasos del proyecto.',
-                    icon: '📋',
-                    is_system: 1
-                },
-                'sales': {
-                    name: 'Análisis de Ventas',
-                    description: 'Detecta oportunidades, objeciones y próximos pasos comerciales en reuniones de ventas.',
-                    prompt: 'Eres un especialista en análisis de ventas. Identifica oportunidades comerciales, objeciones del cliente y próximos pasos para cerrar la venta.',
-                    user_prompt_template: '¿Qué oportunidades de venta se detectaron?',
-                    icon: '💼',
-                    is_system: 1
-                }
-            };
-
-            const data = analyzerData[analyzerId];
-            if (data) {
-                document.getElementById('analyzer-name').value = data.name;
-                document.getElementById('analyzer-description').value = data.description;
-                document.getElementById('analyzer-prompt').value = data.prompt;
-                document.getElementById('analyzer-user-prompt').value = data.user_prompt_template ?? '';
-                document.getElementById('analyzer-icon').value = data.icon;
-                document.getElementById('analyzer-type').value = data.is_system ? '1' : '0';
-            }
-
-            document.getElementById('analyzer-modal').classList.add('show');
+            axios.get(`/admin/analyzers/${analyzerId}`)
+                .then(res => {
+                    const data = res.data;
+                    document.getElementById('analyzer-name').value = data.name;
+                    document.getElementById('analyzer-description').value = data.description ?? '';
+                    document.getElementById('analyzer-prompt').value = data.system_prompt ?? '';
+                    document.getElementById('analyzer-user-prompt').value = data.user_prompt_template ?? '';
+                    document.getElementById('analyzer-icon').value = data.icon ?? '';
+                    document.getElementById('analyzer-type').value = data.is_system ? '1' : '0';
+                    document.getElementById('analyzer-modal').classList.add('show');
+                })
+                .catch(err => {
+                    console.error('Error fetching analyzer:', err);
+                    showNotification('Error al cargar el analizador', 'error');
+                });
         }
 
         function deleteAnalyzer(analyzerId) {
@@ -390,6 +401,7 @@
                     const action = editingAnalyzerId ? 'actualizado' : 'creado';
                     showNotification(`Analizador ${action} exitosamente`, 'success');
                     closeAnalyzerModal();
+                    loadAnalyzers();
                 })
                 .catch(error => {
                     console.error('Error saving analyzer:', error);
@@ -420,11 +432,7 @@
                 .then(response => {
                     showNotification('Analizador eliminado exitosamente', 'success');
                     closeDeleteModal();
-                    // Opcional: remover la tarjeta del DOM
-                    const cardToRemove = document.querySelector(`.analyzer-card[data-analyzer-id="${deletingAnalyzerId}"]`);
-                    if (cardToRemove) {
-                        cardToRemove.remove();
-                    }
+                    loadAnalyzers();
                 })
                 .catch(error => {
                     console.error('Error deleting analyzer:', error);
