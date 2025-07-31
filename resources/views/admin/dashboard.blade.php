@@ -74,7 +74,7 @@
     <div class="mobile-dropdown-overlay" id="mobile-dropdown-overlay" onclick="closeMobileDropdown()"></div>
 
     <div class="app-container">
-        <main class="main-content">
+        <main class="main-admin">
             <!-- Header -->
             <div class="content-header">
                 <div>
