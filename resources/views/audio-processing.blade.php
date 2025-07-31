@@ -372,7 +372,7 @@
                                     Resumen ejecutivo
                                 </h5>
                                 <div class="analysis-content">
-                                    <p>Esta reunión se centró en la planificación estratégica del primer trimestre de 2025, donde se discutieron los objetivos principales, la asignación de recursos y los hitos clave a alcanzar...</p>
+                                    <p id="analysis-summary">...</p>
                                 </div>
                             </div>
 
@@ -383,12 +383,7 @@
                                     Puntos clave
                                 </h5>
                                 <div class="analysis-content">
-                                    <ul class="key-points-list">
-                                        <li>Incremento del 25% en ventas para Q1 2025</li>
-                                        <li>Lanzamiento de nueva línea de productos en marzo</li>
-                                        <li>Contratación de 5 nuevos desarrolladores</li>
-                                        <li>Implementación de nueva estrategia de marketing digital</li>
-                                    </ul>
+                                    <ul class="key-points-list" id="analysis-keypoints"></ul>
                                 </div>
                             </div>
 
@@ -399,35 +394,7 @@
                                     Tareas identificadas
                                 </h5>
                                 <div class="analysis-content">
-                                    <div class="tasks-list">
-                                        <div class="task-item">
-                                            <div class="task-info">
-                                                <span class="task-title">Preparar propuesta de presupuesto Q1</span>
-                                                <span class="task-assignee">Asignado a: María González</span>
-                                            </div>
-                                            <span class="task-deadline">
-                                                <x-icon name="calendar" class="summary-icon" /> 15/01/2025
-                                            </span>
-                                        </div>
-                                        <div class="task-item">
-                                            <div class="task-info">
-                                                <span class="task-title">Revisar estrategia de marketing digital</span>
-                                                <span class="task-assignee">Asignado a: Carlos Ruiz</span>
-                                            </div>
-                                            <span class="task-deadline">
-                                                <x-icon name="calendar" class="summary-icon" /> 20/01/2025
-                                            </span>
-                                        </div>
-                                        <div class="task-item">
-                                            <div class="task-info">
-                                                <span class="task-title">Contactar proveedores para nueva línea</span>
-                                                <span class="task-assignee">Asignado a: Ana López</span>
-                                            </div>
-                                            <span class="task-deadline">
-                                                <x-icon name="calendar" class="summary-icon" /> 25/01/2025
-                                            </span>
-                                        </div>
-                                    </div>
+                                    <div class="tasks-list" id="analysis-tasks"></div>
                                 </div>
                             </div>
                         </div>

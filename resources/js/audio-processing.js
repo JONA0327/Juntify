@@ -558,65 +558,99 @@ function startAnalysis() {
         showNotification('Por favor selecciona un tipo de análisis', 'error');
         return;
     }
-
-    const analyzer = availableAnalyzers.find(a => a.id === selectedAnalyzer);
-    if (analyzer) {
-        const prompt = buildChatGPTPrompt(analyzer.user_prompt_template);
-        console.log('Prompt for ChatGPT:', prompt);
-    }
-
     showNotification(`Iniciando análisis: ${selectedAnalyzer}`, 'info');
-    setTimeout(() => {
-        processAnalysis();
-    }, 1000);
+    processAnalysis();
 }
 
 // ===== PASO 5: PROCESAMIENTO DE ANÁLISIS =====
 
-function processAnalysis() {
+async function processAnalysis() {
     showStep(5);
 
     const progressBar = document.getElementById('analysis-progress');
     const progressText = document.getElementById('analysis-progress-text');
     const progressPercent = document.getElementById('analysis-progress-percent');
 
+    progressBar.style.width = '0%';
+    progressPercent.textContent = '0%';
+    progressText.textContent = 'Analizando contenido...';
+
     let progress = 0;
     const interval = setInterval(() => {
-        progress += Math.random() * 6 + 2;
-        if (progress > 100) progress = 100;
-
+        progress = Math.min(95, progress + 3);
         progressBar.style.width = progress + '%';
         progressPercent.textContent = Math.round(progress) + '%';
+    }, 1000);
 
-        // Actualizar estados de análisis
-        if (progress > 25) {
-            document.getElementById('summary-status').textContent = '✅';
-            progressText.textContent = 'Identificando puntos clave...';
-        }
-        if (progress > 60) {
-            document.getElementById('keypoints-status').textContent = '✅';
-            progressText.textContent = 'Extrayendo tareas y acciones...';
-        }
-        if (progress > 90) {
-            document.getElementById('tasks-status').textContent = '✅';
-            progressText.textContent = 'Finalizando análisis...';
-        }
+    try {
+        const res = await axios.post('/analysis', {
+            analyzer_id: selectedAnalyzer,
+            transcript: serializeTranscription(),
+        });
+        analysisResults = res.data;
 
-        if (progress >= 100) {
-            clearInterval(interval);
-            progressText.textContent = 'Análisis completado';
-            setTimeout(() => {
-                showSaveResults();
-            }, 1000);
-        }
-    }, 180);
+        document.getElementById('summary-status').textContent = '✅';
+        document.getElementById('keypoints-status').textContent = '✅';
+        document.getElementById('tasks-status').textContent = '✅';
+
+        progress = 100;
+        progressBar.style.width = '100%';
+        progressPercent.textContent = '100%';
+        progressText.textContent = 'Análisis completado';
+    } catch (e) {
+        console.error('Error en análisis', e);
+        progressText.textContent = 'Error en análisis';
+        showNotification('Error al analizar la reunión', 'error');
+        clearInterval(interval);
+        return;
+    }
+
+    clearInterval(interval);
+    setTimeout(() => {
+        showSaveResults();
+    }, 1000);
 }
 
 // ===== PASO 6: GUARDAR RESULTADOS =====
 
 function showSaveResults() {
     showStep(6);
+    updateAnalysisPreview();
     loadDriveFolders();
+}
+
+function updateAnalysisPreview() {
+    if (!analysisResults) return;
+
+    const summaryEl = document.getElementById('analysis-summary');
+    if (summaryEl) summaryEl.textContent = analysisResults.summary || '';
+
+    const kpList = document.getElementById('analysis-keypoints');
+    if (kpList) {
+        kpList.innerHTML = '';
+        (analysisResults.keyPoints || []).forEach(p => {
+            const li = document.createElement('li');
+            li.textContent = p;
+            kpList.appendChild(li);
+        });
+    }
+
+    const tasksList = document.getElementById('analysis-tasks');
+    if (tasksList) {
+        tasksList.innerHTML = '';
+        (analysisResults.tasks || []).forEach(t => {
+            const div = document.createElement('div');
+            div.className = 'task-item';
+            div.innerHTML = `
+                <div class="task-info">
+                    <span class="task-title">${t.text || t.title || ''}</span>
+                    ${t.assignee ? `<span class="task-assignee">Asignado a: ${t.assignee}</span>` : ''}
+                </div>
+                ${t.due_date ? `<span class="task-deadline">📅 ${t.due_date}</span>` : ''}
+            `;
+            tasksList.appendChild(div);
+        });
+    }
 }
 
 function loadDriveFolders() {

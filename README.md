@@ -94,3 +94,13 @@ ASSEMBLYAI_API_KEY=
 Requests to `/transcription` will fail with a 500 error if this key is not set.
 Obtain your API key from the AssemblyAI dashboard and set
 `ASSEMBLYAI_API_KEY=your_key` in your `.env` file.
+
+## Analysis Setup
+
+To enable meeting analysis you must also provide an OpenAI API key:
+
+```env
+OPENAI_API_KEY=
+```
+
+This key is used when calling `/analysis` to generate summaries, key points and tasks.

@@ -57,6 +57,7 @@ Route::get('/audio-processing', function () {
 
 Route::post('/transcription', [TranscriptionController::class, 'store'])->name('transcription.store');
 Route::get('/transcription/{id}', [TranscriptionController::class, 'show'])->name('transcription.show');
+Route::post('/analysis', [\App\Http\Controllers\AnalysisController::class, 'analyze'])->name('analysis');
 
 // Admin routes (solo para roles específicos)
 Route::middleware(['auth'])->group(function () {
