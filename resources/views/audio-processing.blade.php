@@ -199,51 +199,8 @@
                 </div>
 
                 <div class="analysis-selector">
-                    <div class="analyzer-grid">
-                        <div class="analyzer-card active" data-analyzer="general" onclick="selectAnalyzer('general')">
-                            <x-icon name="chart" class="analyzer-icon" />
-                            <h3 class="analyzer-title">Análisis General</h3>
-                            <p class="analyzer-description">Resumen completo, puntos clave y tareas identificadas automáticamente</p>
-                            <div class="analyzer-features">
-                                <span class="feature-tag">Resumen</span>
-                                <span class="feature-tag">Puntos clave</span>
-                                <span class="feature-tag">Tareas</span>
-                            </div>
-                        </div>
-
-                        <div class="analyzer-card" data-analyzer="meeting" onclick="selectAnalyzer('meeting')">
-                            <x-icon name="users" class="analyzer-icon" />
-                            <h3 class="analyzer-title">Análisis de Reunión</h3>
-                            <p class="analyzer-description">Enfocado en decisiones, acuerdos y seguimientos de reuniones</p>
-                            <div class="analyzer-features">
-                                <span class="feature-tag">Decisiones</span>
-                                <span class="feature-tag">Acuerdos</span>
-                                <span class="feature-tag">Seguimientos</span>
-                            </div>
-                        </div>
-
-                        <div class="analyzer-card" data-analyzer="project" onclick="selectAnalyzer('project')">
-                            <x-icon name="chart" class="analyzer-icon" />
-                            <h3 class="analyzer-title">Análisis de Proyecto</h3>
-                            <p class="analyzer-description">Identifica objetivos, riesgos y próximos pasos del proyecto</p>
-                            <div class="analyzer-features">
-                                <span class="feature-tag">Objetivos</span>
-                                <span class="feature-tag">Riesgos</span>
-                                <span class="feature-tag">Próximos pasos</span>
-                            </div>
-                        </div>
-
-                        <div class="analyzer-card" data-analyzer="sales" onclick="selectAnalyzer('sales')">
-                            <x-icon name="briefcase" class="analyzer-icon" />
-                            <h3 class="analyzer-title">Análisis de Ventas</h3>
-                            <p class="analyzer-description">Detecta oportunidades, objeciones y próximos pasos comerciales</p>
-                            <div class="analyzer-features">
-                                <span class="feature-tag">Oportunidades</span>
-                                <span class="feature-tag">Objeciones</span>
-                                <span class="feature-tag">Follow-ups</span>
-                            </div>
-                        </div>
-                    </div>
+                    <div class="analyzer-grid" id="analyzer-grid"></div>
+                    <p id="no-analyzers-msg" style="display:none">No se encontraron analizadores</p>
 
                     <div class="analysis-actions">
                         <button class="btn btn-secondary" onclick="goBackToTranscription()">

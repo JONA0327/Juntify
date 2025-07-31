@@ -68,15 +68,10 @@ Route::middleware(['auth'])->group(function () {
         return view('admin.dashboard');
     })->name('admin.dashboard');
     
-    Route::get('/admin/analyzers', function () {
-        $user = auth()->user();
-        if (!in_array($user->roles, ['superadmin', 'developer'])) {
-            abort(403, 'No tienes permisos para acceder a esta sección');
-        }
-        return view('admin.analyzers');
-    })->name('admin.analyzers');
+    Route::get('/admin/analyzers', [\App\Http\Controllers\AnalyzerController::class, 'index'])
+        ->name('admin.analyzers');
 
-    Route::get('/admin/analyzers/list', [\App\Http\Controllers\AnalyzerController::class, 'index']);
+    Route::get('/admin/analyzers/list', [\App\Http\Controllers\AnalyzerController::class, 'list']);
     Route::post('/admin/analyzers', [\App\Http\Controllers\AnalyzerController::class, 'store']);
     Route::put('/admin/analyzers/{analyzer}', [\App\Http\Controllers\AnalyzerController::class, 'update']);
     Route::delete('/admin/analyzers/{analyzer}', [\App\Http\Controllers\AnalyzerController::class, 'destroy']);
