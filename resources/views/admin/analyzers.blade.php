@@ -346,6 +346,18 @@
         let editingAnalyzerId = null;
         let deletingAnalyzerId = null;
 
+        function loadAnalyzers() {
+            axios.get('/admin/analyzers/list')
+                .then(res => {
+                    console.log('Loaded analyzers:', res.data);
+                })
+                .catch(err => {
+                    console.error('Error loading analyzers:', err);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', loadAnalyzers);
+
         function showCreateAnalyzerModal() {
             editingAnalyzerId = null;
             document.getElementById('modal-title').innerHTML = `
