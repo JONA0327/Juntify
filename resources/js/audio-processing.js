@@ -3,6 +3,7 @@ import { loadAudioBlob } from './idb.js';
 // ===== VARIABLES GLOBALES =====
 let currentStep = 1;
 let selectedAnalyzer = 'general';
+let availableAnalyzers = [];
 let audioData = null;
 let audioSegments = [];
 let transcriptionData = [];
@@ -61,6 +62,46 @@ function getStepId(stepNumber) {
         'completed'
     ];
     return stepIds[stepNumber - 1];
+}
+
+async function loadAvailableAnalyzers() {
+    try {
+        const res = await fetch('/api/analyzers');
+        availableAnalyzers = await res.json();
+        renderAnalyzerCards();
+    } catch (e) {
+        console.error('Error fetching analyzers', e);
+    }
+}
+
+function renderAnalyzerCards() {
+    const grid = document.getElementById('analyzer-grid');
+    const msg = document.getElementById('no-analyzers-msg');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    if (!availableAnalyzers.length) {
+        if (msg) msg.style.display = 'block';
+        return;
+    }
+    if (msg) msg.style.display = 'none';
+
+    availableAnalyzers.forEach((a, idx) => {
+        const card = document.createElement('div');
+        card.className = 'analyzer-card';
+        card.dataset.analyzer = a.id;
+        card.addEventListener('click', () => selectAnalyzer(a.id));
+        if ((selectedAnalyzer && selectedAnalyzer === a.id) || (!selectedAnalyzer && idx === 0)) {
+            card.classList.add('active');
+            selectedAnalyzer = a.id;
+        }
+        card.innerHTML = `
+            <div class="analyzer-icon">${a.icon || '🧠'}</div>
+            <h3 class="analyzer-title">${a.name}</h3>
+            <p class="analyzer-description">${a.description || ''}</p>
+        `;
+        grid.appendChild(card);
+    });
 }
 
 // ===== PASO 1: PROCESAMIENTO DE AUDIO =====
@@ -814,6 +855,7 @@ document.addEventListener('click', e => {
 
 document.addEventListener('DOMContentLoaded', async function() {
     createParticles();
+    await loadAvailableAnalyzers();
 
     audioPlayer = document.getElementById('recorded-audio');
     if (audioPlayer) {

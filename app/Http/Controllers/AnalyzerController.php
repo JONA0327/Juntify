@@ -19,6 +19,12 @@ class AnalyzerController extends Controller
     public function index()
     {
         $this->authorizeAdmin();
+        $analyzers = Analyzer::all();
+        return view('admin.analyzers', compact('analyzers'));
+    }
+
+    public function list()
+    {
         return response()->json(Analyzer::all());
     }
 

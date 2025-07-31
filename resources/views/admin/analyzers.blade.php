@@ -98,165 +98,43 @@
             </div>
 
             <div class="content-grid">
-                <div class="info-card analyzer-card">
-                    <div class="analyzer-header">
-                        <h3 class="card-title">
-                            <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-                            </svg>
-                            Análisis General
-                        </h3>
-                        <div class="analyzer-actions">
-                            <button class="control-btn" onclick="editAnalyzer('general')" title="Editar analizador">
-                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487l3.651 3.651-9.375 9.375-3.651.975.975-3.651 9.4-9.35zM5.25 18.75h13.5" />
-                                </svg>
-                            </button>
-                            <button class="control-btn delete-btn" onclick="deleteAnalyzer('general')" title="Eliminar analizador">
-                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                </svg>
-                            </button>
+                @forelse ($analyzers as $analyzer)
+                    <div class="info-card analyzer-card" data-analyzer-id="{{ $analyzer->id }}">
+                        <div class="analyzer-header">
+                            <h3 class="card-title">
+                                <span class="card-icon">{{ $analyzer->icon }}</span>
+                                {{ $analyzer->name }}
+                            </h3>
+                            <div class="analyzer-actions">
+                                <button class="control-btn" onclick="editAnalyzer('{{ $analyzer->id }}')" title="Editar analizador">
+                                    <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487l3.651 3.651-9.375 9.375-3.651.975.975-3.651 9.4-9.35zM5.25 18.75h13.5" />
+                                    </svg>
+                                </button>
+                                <button class="control-btn delete-btn" onclick="deleteAnalyzer('{{ $analyzer->id }}')" title="Eliminar analizador">
+                                    <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="analyzer-description">
+                            <p>{{ $analyzer->description }}</p>
+                        </div>
+                        <div class="analyzer-details">
+                            <div class="info-item">
+                                <span class="info-label">Tipo</span>
+                                <span class="status-badge {{ $analyzer->is_system ? 'status-active' : 'status-inactive' }}">{{ $analyzer->is_system ? 'Sistema' : 'Personalizado' }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Creado</span>
+                                <span class="info-value">{{ $analyzer->created_at->format('d/m/Y') }}</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="analyzer-description">
-                        <p>Realiza un análisis completo de la reunión identificando resumen, puntos clave y tareas automáticamente.</p>
-                    </div>
-                    <div class="analyzer-details">
-                        <div class="info-item">
-                            <span class="info-label">Tipo</span>
-                            <span class="status-badge status-active">Sistema</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Creado</span>
-                            <span class="info-value">15/01/2025</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Usos</span>
-                            <span class="info-value">1,247</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="info-card analyzer-card">
-                    <div class="analyzer-header">
-                        <h3 class="card-title">
-                            <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-                            </svg>
-                            Análisis de Reunión
-                        </h3>
-                        <div class="analyzer-actions">
-                            <button class="control-btn" onclick="editAnalyzer('meeting')" title="Editar analizador">
-                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487l3.651 3.651-9.375 9.375-3.651.975.975-3.651 9.4-9.35zM5.25 18.75h13.5" />
-                                </svg>
-                            </button>
-                            <button class="control-btn delete-btn" onclick="deleteAnalyzer('meeting')" title="Eliminar analizador">
-                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="analyzer-description">
-                        <p>Enfocado en decisiones, acuerdos y seguimientos específicos de reuniones corporativas.</p>
-                    </div>
-                    <div class="analyzer-details">
-                        <div class="info-item">
-                            <span class="info-label">Tipo</span>
-                            <span class="status-badge status-active">Sistema</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Creado</span>
-                            <span class="info-value">15/01/2025</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Usos</span>
-                            <span class="info-value">892</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="info-card analyzer-card">
-                    <div class="analyzer-header">
-                        <h3 class="card-title">
-                            <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0M12 12.75h.008v.008H12v-.008z" />
-                            </svg>
-                            Análisis de Proyecto
-                        </h3>
-                        <div class="analyzer-actions">
-                            <button class="control-btn" onclick="editAnalyzer('project')" title="Editar analizador">
-                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487l3.651 3.651-9.375 9.375-3.651.975.975-3.651 9.4-9.35zM5.25 18.75h13.5" />
-                                </svg>
-                            </button>
-                            <button class="control-btn delete-btn" onclick="deleteAnalyzer('project')" title="Eliminar analizador">
-                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="analyzer-description">
-                        <p>Identifica objetivos, riesgos y próximos pasos específicos para la gestión de proyectos.</p>
-                    </div>
-                    <div class="analyzer-details">
-                        <div class="info-item">
-                            <span class="info-label">Tipo</span>
-                            <span class="status-badge status-active">Sistema</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Creado</span>
-                            <span class="info-value">15/01/2025</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Usos</span>
-                            <span class="info-value">634</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="info-card analyzer-card">
-                    <div class="analyzer-header">
-                        <h3 class="card-title">
-                            <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0M12 12.75h.008v.008H12v-.008z" />
-                            </svg>
-                            Análisis de Ventas
-                        </h3>
-                        <div class="analyzer-actions">
-                            <button class="control-btn" onclick="editAnalyzer('sales')" title="Editar analizador">
-                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487l3.651 3.651-9.375 9.375-3.651.975.975-3.651 9.4-9.35zM5.25 18.75h13.5" />
-                                </svg>
-                            </button>
-                            <button class="control-btn delete-btn" onclick="deleteAnalyzer('sales')" title="Eliminar analizador">
-                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="analyzer-description">
-                        <p>Detecta oportunidades, objeciones y próximos pasos comerciales en reuniones de ventas.</p>
-                    </div>
-                    <div class="analyzer-details">
-                        <div class="info-item">
-                            <span class="info-label">Tipo</span>
-                            <span class="status-badge status-active">Sistema</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Creado</span>
-                            <span class="info-value">15/01/2025</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Usos</span>
-                            <span class="info-value">423</span>
-                        </div>
-                    </div>
-                </div>
+                @empty
+                    <p>No se encontraron analizadores</p>
+                @endforelse
             </div>
         </main>
     </div>
