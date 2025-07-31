@@ -6,6 +6,15 @@ let selectedAnalyzer = 'general';
 let availableAnalyzers = [];
 let audioData = null;
 let audioSegments = [];
+// Array que almacena la transcripción completa. Cada elemento
+// representa un segmento con propiedades como:
+// {
+//   speaker: 'Hablante 1',
+//   time: '00:00 - 00:05',    // o marca inicial en ms
+//   text: 'Contenido transcrito',
+//   start: 0,                 // segundos
+//   end: 5
+// }
 let transcriptionData = [];
 let audioPlayer = null;
 let analysisResults = null;
@@ -16,6 +25,19 @@ const typingMessages = [
     "Sé paciente, esto puede tardar un tiempo..."
 ];
 let typingInterval = null;
+
+// Convierte la transcripción en texto plano para incluirla en prompts
+function serializeTranscription() {
+    return transcriptionData
+        .map(seg => `${seg.speaker} [${typeof seg.start === 'number' ? formatTime(seg.start * 1000) : seg.time}]: ${seg.text}`)
+        .join('\n');
+}
+
+// Inserta la transcripción serializada en la plantilla de prompt
+function buildChatGPTPrompt(template = '') {
+    const serialized = serializeTranscription();
+    return template.replace('{transcription}', serialized);
+}
 
 // ===== FUNCIONES PRINCIPALES =====
 
@@ -537,6 +559,12 @@ function startAnalysis() {
         return;
     }
 
+    const analyzer = availableAnalyzers.find(a => a.id === selectedAnalyzer);
+    if (analyzer) {
+        const prompt = buildChatGPTPrompt(analyzer.user_prompt_template);
+        console.log('Prompt for ChatGPT:', prompt);
+    }
+
     showNotification(`Iniciando análisis: ${selectedAnalyzer}`, 'info');
     setTimeout(() => {
         processAnalysis();
@@ -945,3 +973,5 @@ window.openGlobalSpeakerModal = openGlobalSpeakerModal;
 window.closeGlobalSpeakerModal = closeGlobalSpeakerModal;
 window.confirmGlobalSpeakerChange = confirmGlobalSpeakerChange;
 window.seekAudio = seekAudio;
+// Hacer accesible la transcripción para otros scripts o para depuración
+window.transcriptionData = transcriptionData;
