@@ -12,6 +12,7 @@ it('creates an analyzer', function () {
         'description' => 'desc',
         'system_prompt' => 'sys',
         'user_prompt_template' => 'tmpl',
+        'userprotmp' => 'tmp2',
     ];
 
     $response = $this->actingAs($user)->post('/admin/analyzers', $data);

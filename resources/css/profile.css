@@ -1625,6 +1625,11 @@ body {
   color: #8093a2;
 }
 
+.modal-input option {
+  background: #0f172a;
+  color: #eee;
+}
+
 .input-hint {
   color: #8093a2;
   font-size: 0.8rem;

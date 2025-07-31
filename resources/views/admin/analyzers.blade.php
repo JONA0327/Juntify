@@ -170,6 +170,12 @@
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label">UserProTmp</label>
+                        <textarea class="modal-input" id="analyzer-userprotmp" rows="4" placeholder="Contenido adicional opcional"></textarea>
+                        <div class="input-hint">Texto opcional que se enviará como plantilla de usuario</div>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label">Tipo de Analizador</label>
                         <select class="modal-input" id="analyzer-type">
                             <option value="1">Sistema</option>
@@ -317,6 +323,7 @@
                 document.getElementById('analyzer-name').value = data.name;
                 document.getElementById('analyzer-description').value = data.description;
                 document.getElementById('analyzer-prompt').value = data.prompt;
+                document.getElementById('analyzer-userprotmp').value = data.userprotmp || '';
                 document.getElementById('analyzer-icon').value = data.icon;
                 document.getElementById('analyzer-type').value = data.is_system ? '1' : '0';
             }
@@ -343,6 +350,7 @@
             const name = document.getElementById('analyzer-name').value.trim();
             const description = document.getElementById('analyzer-description').value.trim();
             const prompt = document.getElementById('analyzer-prompt').value.trim();
+            const userprotmp = document.getElementById('analyzer-userprotmp').value.trim();
             const icon = document.getElementById('analyzer-icon').value.trim();
             const isSystem = document.getElementById('analyzer-type').value;
 
@@ -364,6 +372,9 @@
             const method = editingAnalyzerId ? 'put' : 'post';
 
             const data = { name, description, icon, is_system: isSystem };
+            if (userprotmp) {
+                data.userprotmp = userprotmp;
+            }
             if (isSystem === '1') {
                 data.system_prompt = prompt;
             } else {
