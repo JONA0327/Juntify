@@ -72,6 +72,7 @@ Route::middleware(['auth'])->group(function () {
         ->name('admin.analyzers');
 
     Route::get('/admin/analyzers/list', [\App\Http\Controllers\AnalyzerController::class, 'list']);
+    Route::get('/admin/analyzers/{analyzer}', [\App\Http\Controllers\AnalyzerController::class, 'show']);
     Route::post('/admin/analyzers', [\App\Http\Controllers\AnalyzerController::class, 'store']);
     Route::put('/admin/analyzers/{analyzer}', [\App\Http\Controllers\AnalyzerController::class, 'update']);
     Route::delete('/admin/analyzers/{analyzer}', [\App\Http\Controllers\AnalyzerController::class, 'destroy']);

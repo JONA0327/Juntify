@@ -28,6 +28,12 @@ class AnalyzerController extends Controller
         return response()->json(Analyzer::all());
     }
 
+    public function show(Analyzer $analyzer)
+    {
+        $this->authorizeAdmin();
+        return response()->json($analyzer);
+    }
+
     public function store(Request $request)
     {
         $this->authorizeAdmin();
