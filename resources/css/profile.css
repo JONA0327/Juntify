@@ -1,3 +1,8 @@
+:root {
+  /* tus colores principales (ajusta si los tienes en otro sitio) */
+  --primary-blue: #3b82f6;       /* blue-500 */
+  --primary-blue-light: #60a5fa; /* blue-400 */
+}
 /* Base Reset & Body */
 * {
     margin: 0;
@@ -478,42 +483,97 @@ body {
     box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2);
 }
 
-/* Analyzer Cards */
+/* ── 1) Card base: borde azul y sombra suave en azul ── */
 .analyzer-card {
-    position: relative;
+    /* Añadir borde azul tenue */
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    /* Reemplazar sombra negra por una sombra azul muy ligera */
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
 }
 
-.analyzer-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 1rem;
+
+/* ── 2) Efecto hover: sombra azul más intensa ── */
+.analyzer-card:hover {
+    /* Mantén el transform, pero cambia la sombra */
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
 }
 
+
+/* ── 3) Cabecera: título e ícono en azul vivo ── */
+.analyzer-header h3,
+.analyzer-header svg {
+    color: #3b82f6 !important;
+    stroke: #3b82f6 !important;
+}
+
+
+/* ── Botones de acción (aparecen al hover) ── */
 .analyzer-actions {
     display: flex;
     gap: 0.5rem;
     opacity: 0;
     transition: opacity 0.3s ease;
 }
-
 .analyzer-card:hover .analyzer-actions {
     opacity: 1;
 }
 
+/* ── Descripción ── */
 .analyzer-description {
     margin-bottom: 1.5rem;
+    /* opcional: un padding interior */
+    padding-bottom: 1rem;
 }
-
 .analyzer-description p {
     color: var(--text-secondary);
     line-height: 1.6;
     font-size: 0.95rem;
 }
 
+/* ── 4) Detalles: línea divisoria en azul claro ── */
 .analyzer-details {
-    border-top: 1px solid rgba(59, 130, 246, 0.1);
-    padding-top: 1rem;
+    /* Cambia el gris por un azul semitransparente */
+    border-top: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* ── Contenedor completo del modal ── */
+#analyzer-modal .modal-content {
+  background: var(--card-bg, #1f2937);  /* mismo fondo que tus cards */
+  border-radius: 0.75rem;              /* esquinas suaves */
+  overflow: hidden;                    /* que no se cuele otro fondo */
+}
+
+/* ── Header: mismo grisazulado del header de cards ── */
+#analyzer-modal .modal-header {
+  background-color: #374151;           /* gris-700 */
+  color: #f9fafb;                      /* text-white */
+  border-bottom: 1px solid #4b5563;    /* gris-600 */
+}
+
+/* ── Cuerpo: idéntico al fondo de la card ── */
+#analyzer-modal .modal-body {
+  background: var(--card-bg, #1f2937);
+  padding: 1.8rem 2rem 2.5rem;          /* conserva tus ajustes de espacio */
+  color: #d1d5db;                      /* text-gray-300 */
+}
+
+/* ── Footer: mismo color que el body para continuidad ── */
+#analyzer-modal .modal-footer {
+  background: var(--card-bg, #1f2937);
+  padding: 1rem 1.5rem 1.5rem;         /* separa del body y del borde */
+  border-top: 1px solid #4b5563;       /* línea divisoria gris-600 */
+}
+
+/* ── Scrollbar (invisible) dentro del body ── */
+#analyzer-modal .modal-body {
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+#analyzer-modal .modal-body::-webkit-scrollbar {
+  width: 0;
+  background: transparent;
 }
 
 .delete-btn {
@@ -1527,15 +1587,20 @@ body {
   opacity: 0.9;
 }
 
+/* 1) Apunta al contenedor que hace scroll (aquí .modal-body) */
 .modal-body {
-  padding: 1.8rem 1.5rem;
-  color: #ccc;
-  text-align: left;
-  overflow-y: auto;
-  flex-grow: 1;
-  font-size: 0.95rem;
-  line-height: 1.5;
+  overflow-y: auto;           /* mantiene el scroll funcional */
+  -ms-overflow-style: none;    /* IE y Edge */
+  scrollbar-width: none;       /* Firefox */
 }
+
+/* 2) Oculta la barra en Webkit (Chrome, Safari, Opera…) */
+.modal-body::-webkit-scrollbar {
+  width: 0;                    /* sin ancho */
+  background: transparent;     /* fondo transparente */
+}
+
+
 
 .modal-input {
   width: 100%;
@@ -1575,42 +1640,64 @@ body {
   margin-bottom: 0.4rem;
 }
 
+/* --- INICIO: Corrección de botones en el modal (v2) --- */
+
+/* --- Separación extra entre body y footer --- */
 .modal-footer {
-  padding: 1.2rem 1.5rem;
-  background: rgba(40, 40, 45, 0.85);
-  border-top: 1px solid rgba(90, 90, 95, 0.4);
+  padding: 1rem 1.5rem 1.5rem;
+  /* ↑ top 1rem, right/left 1.5rem, bottom 1.5rem */
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   justify-content: flex-end;
+  align-items: center;
 }
 
+
+/* Ajuste general para ambos botones para consistencia */
 .modal-footer .btn {
-  min-width: 120px;
-  padding: 0.65rem 1.3rem;
-  font-weight: 600;
-  border-radius: 8px;
-  cursor: pointer;
-  border: none;
-  transition: background-color 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1.2rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    gap: 0.5rem;
+    border-radius: 8px; /* Asegura el mismo radio en ambos */
+    line-height: 1.5; /* Altura de línea consistente */
+    min-height: 38px; /* ¡IMPORTANTE! Fija una altura mínima igual para ambos */
+    box-sizing: border-box; /* Asegura que el padding se calcule correctamente */
 }
 
+/* Define un tamaño fijo para el ícono */
+.modal-footer .btn .btn-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0; /* Evita que el ícono se encoja */
+}
+
+/* Colores y bordes consistentes */
 .modal-footer .btn-primary {
-  background-color: #4ba3ff;
+  background: #3b82f6;
+  border: 1px solid #3b82f6;
   color: #fff;
 }
 
 .modal-footer .btn-primary:hover {
-  background-color: #2f87ff;
+  background: #2563eb;
 }
 
 .modal-footer .btn-secondary {
-  background-color: #555960;
-  color: #ddd;
+  background-color: #4b5563;
+  border: 1px solid #6b7280;
+  color: #e5e7eb;
 }
 
 .modal-footer .btn-secondary:hover {
-  background-color: #6a6f75;
+  background-color: #6b7280;
 }
+
+/* --- FIN: Corrección de botones en el modal (v2) --- */
+
 
 /* Animaciones */
 @keyframes fadeIn {

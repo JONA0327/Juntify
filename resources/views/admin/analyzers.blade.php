@@ -6,11 +6,9 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Gestión de Analizadores - Juntify</title>
 
-    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
-    <!-- Styles -->
     @vite([
         'resources/css/app.css',
         'resources/js/app.js',
@@ -20,13 +18,10 @@
     ])
 </head>
 <body>
-    <!-- Animated particles background -->
     <div class="particles" id="particles"></div>
 
-    <!-- Navbar principal -->
     @include('partials.navbar')
 
-    <!-- Barra de navegación móvil -->
     <div class="mobile-bottom-nav">
         <div class="nav-item">
             <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -77,12 +72,10 @@
         </div>
     </div>
 
-    <!-- Overlay para cerrar dropdown -->
     <div class="mobile-dropdown-overlay" id="mobile-dropdown-overlay" onclick="closeMobileDropdown()"></div>
 
     <div class="app-container">
         <main class="main-admin">
-            <!-- Header -->
             <div class="content-header">
                 <div>
                     <h1 class="page-title">Gestión de Analizadores</h1>
@@ -104,9 +97,7 @@
                 </div>
             </div>
 
-            <!-- Analizadores existentes -->
             <div class="content-grid">
-                <!-- Analizador General -->
                 <div class="info-card analyzer-card">
                     <div class="analyzer-header">
                         <h3 class="card-title">
@@ -147,7 +138,6 @@
                     </div>
                 </div>
 
-                <!-- Analizador de Reuniones -->
                 <div class="info-card analyzer-card">
                     <div class="analyzer-header">
                         <h3 class="card-title">
@@ -188,7 +178,6 @@
                     </div>
                 </div>
 
-                <!-- Analizador de Proyectos -->
                 <div class="info-card analyzer-card">
                     <div class="analyzer-header">
                         <h3 class="card-title">
@@ -229,7 +218,6 @@
                     </div>
                 </div>
 
-                <!-- Analizador de Ventas -->
                 <div class="info-card analyzer-card">
                     <div class="analyzer-header">
                         <h3 class="card-title">
@@ -273,7 +261,6 @@
         </main>
     </div>
 
-    <!-- Modal para crear/editar analizador -->
     <div class="modal" id="analyzer-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -323,7 +310,6 @@
         </div>
     </div>
 
-    <!-- Modal de confirmación para eliminar -->
     <div class="modal" id="delete-analyzer-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -374,10 +360,10 @@
                 </svg>
                 Guardar Analizador
             `;
-            
+
             // Limpiar formulario
             document.getElementById('analyzer-form').reset();
-            
+
             document.getElementById('analyzer-modal').classList.add('show');
         }
 
@@ -470,20 +456,28 @@
                 Guardando...
             `;
 
-            // Simular guardado
-            setTimeout(() => {
-                const action = editingAnalyzerId ? 'actualizado' : 'creado';
-                showNotification(`Analizador ${action} exitosamente`, 'success');
-                closeAnalyzerModal();
-                
-                btn.disabled = false;
-                btn.innerHTML = `
-                    <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                    ${editingAnalyzerId ? 'Actualizar' : 'Guardar'} Analizador
-                `;
-            }, 1500);
+            const url = editingAnalyzerId ? `/admin/analyzers/${editingAnalyzerId}` : '/admin/analyzers';
+            const method = editingAnalyzerId ? 'put' : 'post';
+
+            axios[method](url, { name, description, prompt, icon })
+                .then(response => {
+                    const action = editingAnalyzerId ? 'actualizado' : 'creado';
+                    showNotification(`Analizador ${action} exitosamente`, 'success');
+                    closeAnalyzerModal();
+                })
+                .catch(error => {
+                    console.error('Error saving analyzer:', error);
+                    showNotification('Error al guardar el analizador', 'error');
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = `
+                        <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                        ${editingAnalyzerId ? 'Actualizar' : 'Guardar'} Analizador
+                    `;
+                });
         }
 
         function confirmDeleteAnalyzer() {
@@ -496,19 +490,29 @@
                 Eliminando...
             `;
 
-            // Simular eliminación
-            setTimeout(() => {
-                showNotification('Analizador eliminado exitosamente', 'success');
-                closeDeleteModal();
-                
-                btn.disabled = false;
-                btn.innerHTML = `
-                    <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+            axios.delete(`/admin/analyzers/${deletingAnalyzerId}`)
+                .then(response => {
+                    showNotification('Analizador eliminado exitosamente', 'success');
+                    closeDeleteModal();
+                    // Opcional: remover la tarjeta del DOM
+                    const cardToRemove = document.querySelector(`.analyzer-card[data-analyzer-id="${deletingAnalyzerId}"]`);
+                    if (cardToRemove) {
+                        cardToRemove.remove();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error deleting analyzer:', error);
+                    showNotification('Error al eliminar el analizador', 'error');
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = `
+                        <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                     </svg>
                     Eliminar Analizador
                 `;
-            }, 1500);
+                });
         }
 
         function showNotification(message, type = 'info') {
