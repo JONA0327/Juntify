@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Analyzer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use OpenAI\Laravel\Facade as OpenAI;
+use OpenAI;
 
 class AnalysisController extends Controller
 {
@@ -43,7 +43,7 @@ class AnalysisController extends Controller
                     ['role' => 'system', 'content' => $analyzer->system_prompt],
                     ['role' => 'user', 'content' => $userPrompt],
                 ],
-                'temperature' => $analyzer->temperature ?? 0.6,
+                'temperature' => isset($analyzer->temperature) ? (float)$analyzer->temperature : 0.6,
                 'response_format' => ['type' => 'json_object'],
             ]);
         } catch (\Exception $e) {

@@ -279,7 +279,7 @@
                                 <x-icon name="folder" class="config-icon" />
                                 Ubicación de guardado
                             </h3>
-                            
+
                             <div class="form-group">
                                 <label class="form-label">Carpeta principal</label>
                                 <select class="form-select" id="root-folder-select">
@@ -318,22 +318,7 @@
                                 Audio original
                             </h4>
                             <div class="audio-info">
-                                <div class="audio-player">
-                                    <button class="play-btn" onclick="toggleAudioPlayback()">
-                                        <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                            <path d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" />
-                                        </svg>
-                                    </button>
-                                    <div class="audio-timeline">
-                                        <div class="timeline-progress"></div>
-                                    </div>
-                                    <span class="audio-duration">05:23</span>
-                                    <audio id="recorded-audio" class="hidden"></audio>
-                                </div>
-                                <button class="btn btn-secondary download-btn" onclick="downloadAudio()">
-                                    <span class="btn-icon">⬇️</span>
-                                    Descargar audio
-                                </button>
+                        <div id="analysis-audio" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;"></div>
                             </div>
                         </div>
 
@@ -343,19 +328,10 @@
                                 <x-icon name="pencil" class="section-icon" />
                                 Transcripción
                             </h4>
-                            <div class="transcription-preview">
-                                <div class="transcript-segment">
-                                    <div class="speaker-label">Hablante 1</div>
-                                    <div class="transcript-text">Buenos días a todos, gracias por acompañarnos en esta reunión de planificación para el primer trimestre del 2025...</div>
-                                </div>
-                                <div class="transcript-segment">
-                                    <div class="speaker-label">Hablante 2</div>
-                                    <div class="transcript-text">Perfecto, me parece una excelente propuesta. Creo que deberíamos enfocarnos en los objetivos principales que discutimos la semana pasada...</div>
-                                </div>
-                                <div class="transcript-more">
-                                    <span>+ 15 segmentos más...</span>
-                                </div>
-                            </div>
+                        <div id="analysis-transcript" class="transcription-preview"></div>
+
+                        <!-- Carpetas y subcarpetas -->
+                        <div id="folders-section" class="folders-section" style="margin-top:2rem;"></div>
                         </div>
 
                         <!-- Análisis -->
@@ -364,7 +340,7 @@
                                 <x-icon name="shield" class="section-icon" />
                                 Análisis generado
                             </h4>
-                            
+
                             <!-- Resumen -->
                             <div class="analysis-item">
                                 <h5 class="analysis-subtitle">

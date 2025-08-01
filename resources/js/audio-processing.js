@@ -509,20 +509,22 @@ function playFullAudio() {
 }
 
 function saveTranscriptionAndContinue() {
-    const segments = document.querySelectorAll('.transcript-segment');
+    let segments = Array.from(document.querySelectorAll('.transcript-segment'));
     const domCount = segments.length;
     const dataCount = transcriptionData.length;
 
     if (domCount !== dataCount) {
-        const diff = dataCount - domCount;
-        const differenceMsg = diff > 0
-            ? `faltan ${diff} segmento(s)`
-            : `sobran ${Math.abs(diff)} segmento(s)`;
-        showNotification(
-            `No se puede guardar la transcripción: hay ${domCount} segmento(s) visibles y ${dataCount} en memoria; ${differenceMsg}.`,
-            'error'
-        );
-        return;
+        // Si hay más segmentos en la UI, recorta el NodeList para que coincida con transcriptionData
+        if (domCount > dataCount) {
+            segments = segments.slice(0, dataCount);
+
+            console.warn(`Había más segmentos en la interfaz de los que hay en memoria. Solo se guardarán los primeros ${dataCount}.`);
+        } else {
+            // Si hay menos en la UI, solo muestra advertencia en consola y no guarda
+            const diff = dataCount - domCount;
+            console.warn(`No se puede guardar la transcripción: hay ${domCount} segmento(s) visibles y ${dataCount} en memoria; faltan ${diff} segmento(s).`);
+            return;
+        }
     }
 
     segments.forEach((segment, index) => {
@@ -636,6 +638,7 @@ function showSaveResults() {
 function updateAnalysisPreview() {
     if (!analysisResults) return;
 
+    // Mostrar resumen, keypoints y tareas como antes
     const summaryEl = document.getElementById('analysis-summary');
     if (summaryEl) summaryEl.textContent = analysisResults.summary || '';
 
@@ -664,6 +667,66 @@ function updateAnalysisPreview() {
             `;
             tasksList.appendChild(div);
         });
+    }
+
+    // Mostrar transcripción real (no hardcodeada)
+    const transcriptEl = document.getElementById('analysis-transcript');
+    if (transcriptEl) {
+        transcriptEl.innerHTML = '';
+        // Usar transcriptionData real
+        if (Array.isArray(transcriptionData) && transcriptionData.length > 0) {
+            transcriptEl.innerHTML = transcriptionData.map(seg =>
+                `<div class="transcript-line"><span class="transcript-speaker">${seg.speaker}:</span> <span class="transcript-text">${seg.text}</span></div>`
+            ).join('');
+        } else {
+            transcriptEl.innerHTML = '<p>No hay transcripción disponible.</p>';
+        }
+    }
+
+    // Mostrar reproductor de audio original completo y botón de descarga con tiempo real
+    const audioSection = document.getElementById('analysis-audio');
+    if (audioSection) {
+        let audioUrl = '';
+        if (typeof audioData === 'string') {
+            // Si es base64
+            const blob = base64ToBlob(audioData);
+            audioUrl = URL.createObjectURL(blob);
+        } else if (audioData instanceof Blob) {
+            audioUrl = URL.createObjectURL(audioData);
+        }
+        audioSection.innerHTML = `
+            <audio id="full-audio-player" controls src="${audioUrl}"></audio>
+            <span id="audio-time" style="margin-left:10px; color:#aaa;"></span>
+            <button id="download-audio-btn" class="download-audio-btn">Descargar audio original</button>
+        `;
+        const audioPlayer = document.getElementById('full-audio-player');
+        const timeEl = document.getElementById('audio-time');
+        if (audioPlayer && timeEl) {
+            const updateTime = () => {
+                const current = formatTime(audioPlayer.currentTime * 1000);
+                const total = formatTime(audioPlayer.duration * 1000);
+                timeEl.textContent = `${current} / ${total}`;
+            };
+            audioPlayer.addEventListener('timeupdate', updateTime);
+            audioPlayer.addEventListener('loadedmetadata', updateTime);
+            updateTime();
+        }
+        const downloadBtn = document.getElementById('download-audio-btn');
+        if (downloadBtn) {
+            downloadBtn.onclick = function() {
+                let blob = (typeof audioData === 'string') ? base64ToBlob(audioData) : audioData;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'audio_reunion.webm';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+            };
+        }
     }
 }
 
