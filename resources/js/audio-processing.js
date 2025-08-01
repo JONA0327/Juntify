@@ -510,6 +510,20 @@ function playFullAudio() {
 
 function saveTranscriptionAndContinue() {
     const segments = document.querySelectorAll('.transcript-segment');
+    const domCount = segments.length;
+    const dataCount = transcriptionData.length;
+
+    if (domCount !== dataCount) {
+        const diff = dataCount - domCount;
+        const differenceMsg = diff > 0
+            ? `faltan ${diff} segmento(s)`
+            : `sobran ${Math.abs(diff)} segmento(s)`;
+        showNotification(
+            `No se puede guardar la transcripción: hay ${domCount} segmento(s) visibles y ${dataCount} en memoria; ${differenceMsg}.`,
+            'error'
+        );
+        return;
+    }
 
     segments.forEach((segment, index) => {
         const nameEl = segment.querySelector('.speaker-name');
