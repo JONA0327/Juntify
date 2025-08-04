@@ -41,6 +41,7 @@ return [
 
     'assemblyai' => [
         'api_key' => env('ASSEMBLYAI_API_KEY'),
+        'verify_ssl' => env('ASSEMBLYAI_VERIFY_SSL', true),
     ],
 
     'openai' => [

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Http\Client\RequestException;
 
 class TranscriptionController extends Controller
 {
@@ -33,16 +34,26 @@ class TranscriptionController extends Controller
             }
 
             try {
-                $response = Http::timeout(120)->connectTimeout(60)
+                $http = Http::timeout(120)->connectTimeout(60)
                     ->withHeaders([
                         'authorization' => $apiKey,
                         'content-type'  => 'application/octet-stream',
                     ])
-                    ->withBody($chunk, 'application/octet-stream')
-                    ->post($uploadUrl ?? 'https://api.assemblyai.com/v2/upload');
+                    ->withBody($chunk, 'application/octet-stream');
+
+                if (!config('services.assemblyai.verify_ssl', true)) {
+                    $http = $http->withoutVerifying();
+                } else {
+                    $http = $http->withOptions(['verify' => config('services.assemblyai.verify_ssl', true)]);
+                }
+
+                $response = $http->post($uploadUrl ?? 'https://api.assemblyai.com/v2/upload');
             } catch (\Illuminate\Http\Client\ConnectionException $e) {
                 fclose($handle);
                 return response()->json(['error' => 'Failed to connect to AssemblyAI'], 504);
+            } catch (RequestException $e) {
+                fclose($handle);
+                return response()->json(['error' => 'SSL certificate validation failed'], 500);
             }
 
             if (!$response->successful()) {
