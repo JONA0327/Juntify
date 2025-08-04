@@ -10,6 +10,8 @@ class TranscriptionController extends Controller
 {
     public function store(Request $request)
     {
+        set_time_limit(300);
+
         $request->validate([
             'audio'    => 'required|file',
             'language' => 'nullable|in:es,en,fr,de',
@@ -34,7 +36,7 @@ class TranscriptionController extends Controller
             }
 
             try {
-                $http = Http::timeout(120)->connectTimeout(60)
+                $http = Http::timeout(300)->connectTimeout(300)
                     ->withHeaders([
                         'authorization' => $apiKey,
                         'content-type'  => 'application/octet-stream',
