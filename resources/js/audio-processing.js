@@ -430,17 +430,6 @@ function generateTranscriptionSegments() {
     if (speakerCountEl) {
         speakerCountEl.textContent = speakerSet.size;
     }
-    renderFullTranscriptPreview();
-}
-
-function renderFullTranscriptPreview() {
-    const container = document.getElementById('full-transcript');
-    if (!container) return;
-    const serialized = serializeTranscription();
-    container.innerHTML = serialized
-        .split('\n')
-        .map(line => `<p>${line}</p>`)
-        .join('');
 }
 
 function getPlayIcon(cls) {
