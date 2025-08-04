@@ -616,6 +616,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function setupFileUpload() {
     const uploadArea = document.getElementById('upload-area');
     const fileInput = document.getElementById('audio-file-input');
+    const uploadButton = uploadArea.querySelector('.upload-btn');
     
     // Drag and drop
     uploadArea.addEventListener('dragover', (e) => {
@@ -638,6 +639,11 @@ function setupFileUpload() {
     
     // Click para seleccionar archivo
     uploadArea.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    uploadButton.addEventListener('click', (event) => {
+        event.stopPropagation();
         fileInput.click();
     });
     
