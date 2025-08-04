@@ -629,10 +629,10 @@ async function processAnalysis() {
 
 // ===== PASO 6: GUARDAR RESULTADOS =====
 
-function showSaveResults() {
+async function showSaveResults() {
+    await loadDriveFolders();
     showStep(6);
     updateAnalysisPreview();
-    loadDriveFolders();
 }
 
 function updateAnalysisPreview() {
@@ -730,10 +730,48 @@ function updateAnalysisPreview() {
     }
 }
 
-function loadDriveFolders() {
-    // Simular carga de carpetas desde Drive
-    console.log('Cargando carpetas de Drive...');
-    // Aquí iría la llamada AJAX para obtener las carpetas reales
+async function loadDriveFolders() {
+    try {
+        const res = await fetch('/drive/sync-subfolders');
+        const data = await res.json();
+
+        const rootSelect = document.getElementById('root-folder-select');
+        const subSelect = document.getElementById('subfolder-select');
+
+        if (rootSelect) {
+            rootSelect.innerHTML = '';
+            if (data.root_folder) {
+                const opt = document.createElement('option');
+                opt.value = data.root_folder.id;
+                opt.textContent = `\uD83D\uDCC1 ${data.root_folder.name}`;
+                rootSelect.appendChild(opt);
+            }
+        }
+
+        if (subSelect) {
+            subSelect.innerHTML = '';
+            const list = data.subfolders || [];
+            if (list.length) {
+                const noneOpt = document.createElement('option');
+                noneOpt.value = '';
+                noneOpt.textContent = 'Sin subcarpeta';
+                subSelect.appendChild(noneOpt);
+                list.forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f.id;
+                    opt.textContent = `\uD83D\uDCC2 ${f.name}`;
+                    subSelect.appendChild(opt);
+                });
+            } else {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = 'No se encontraron subcarpetas';
+                subSelect.appendChild(opt);
+            }
+        }
+    } catch (e) {
+        console.error('Error syncing subfolders', e);
+    }
 }
 
 const playPath = 'M5.25 5.25l13.5 6.75-13.5 6.75V5.25z';

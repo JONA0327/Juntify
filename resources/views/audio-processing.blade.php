@@ -282,19 +282,12 @@
 
                             <div class="form-group">
                                 <label class="form-label">Carpeta principal</label>
-                                <select class="form-select" id="root-folder-select">
-                                    <option value="main-recordings">📁 Juntify-Reuniones-2025</option>
-                                </select>
+                                <select class="form-select" id="root-folder-select"></select>
                             </div>
 
                             <div class="form-group">
                                 <label class="form-label">Subcarpeta (opcional)</label>
-                                <select class="form-select" id="subfolder-select">
-                                    <option value="">Sin subcarpeta</option>
-                                    <option value="enero">📂 Reuniones-Enero-2025</option>
-                                    <option value="febrero">📂 Reuniones-Febrero-2025</option>
-                                    <option value="proyectos">📂 Reuniones-Proyectos</option>
-                                </select>
+                                <select class="form-select" id="subfolder-select"></select>
                             </div>
 
                             <div class="form-group">
