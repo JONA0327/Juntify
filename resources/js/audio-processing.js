@@ -836,7 +836,8 @@ async function loadDriveFolders() {
         const data = await res.json();
 
         const rootSelect = document.getElementById('root-folder-select');
-        const subSelect = document.getElementById('subfolder-select');
+        const transcriptionSelect = document.getElementById('transcription-subfolder-select');
+        const audioSelect = document.getElementById('audio-subfolder-select');
 
         if (rootSelect) {
             rootSelect.innerHTML = '';
@@ -848,27 +849,31 @@ async function loadDriveFolders() {
             }
         }
 
-        if (subSelect) {
-            subSelect.innerHTML = '';
+        const populateSubSelect = (select) => {
+            if (!select) return;
+            select.innerHTML = '';
             const list = data.subfolders || [];
             if (list.length) {
                 const noneOpt = document.createElement('option');
                 noneOpt.value = '';
                 noneOpt.textContent = 'Sin subcarpeta';
-                subSelect.appendChild(noneOpt);
+                select.appendChild(noneOpt);
                 list.forEach(f => {
                     const opt = document.createElement('option');
                     opt.value = f.id;
                     opt.textContent = `\uD83D\uDCC2 ${f.name}`;
-                    subSelect.appendChild(opt);
+                    select.appendChild(opt);
                 });
             } else {
                 const opt = document.createElement('option');
                 opt.value = '';
                 opt.textContent = 'No se encontraron subcarpetas';
-                subSelect.appendChild(opt);
+                select.appendChild(opt);
             }
-        }
+        };
+
+        populateSubSelect(transcriptionSelect);
+        populateSubSelect(audioSelect);
     } catch (e) {
         console.error('Error syncing subfolders', e);
     }
@@ -943,7 +948,8 @@ function downloadAudio() {
 function saveToDatabase() {
     const meetingName = document.getElementById('meeting-name').value.trim();
     const rootFolder = document.getElementById('root-folder-select').value;
-    const subfolder = document.getElementById('subfolder-select').value;
+    const transcriptionSubfolder = document.getElementById('transcription-subfolder-select').value;
+    const audioSubfolder = document.getElementById('audio-subfolder-select').value;
 
     if (!meetingName) {
         showNotification('Por favor ingresa un nombre para la reunión', 'error');
@@ -951,9 +957,24 @@ function saveToDatabase() {
     }
 
     showNotification('Iniciando guardado en base de datos...', 'info');
-    setTimeout(() => {
-        processDatabaseSave();
-    }, 1000);
+
+    fetch('/drive/save-results', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify({
+            meetingName,
+            rootFolder,
+            transcriptionSubfolder,
+            audioSubfolder
+        })
+    }).finally(() => {
+        setTimeout(() => {
+            processDatabaseSave();
+        }, 1000);
+    });
 }
 
 // ===== PASO 7: GUARDANDO EN BD =====
@@ -1153,6 +1174,14 @@ document.addEventListener('DOMContentLoaded', async function() {
         audioPlayer.addEventListener('timeupdate', updateAudioProgress);
         audioPlayer.addEventListener('loadedmetadata', updateAudioProgress);
         audioPlayer.addEventListener('ended', stopAudioPlayback);
+    }
+
+    const toggleSubfolders = document.getElementById('toggle-subfolders');
+    const subfolderFields = document.getElementById('subfolder-fields');
+    if (toggleSubfolders && subfolderFields) {
+        toggleSubfolders.addEventListener('change', (e) => {
+            subfolderFields.style.display = e.target.checked ? 'block' : 'none';
+        });
     }
 
     const uploadedKey = sessionStorage.getItem('uploadedAudioKey');
