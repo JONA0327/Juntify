@@ -419,7 +419,7 @@ function generateTranscriptionSegments() {
             </div>
 
             <div class="segment-content">
-                <textarea class="transcript-text" placeholder="Texto de la transcripción...">${segment.text}</textarea>
+                <textarea class="transcript-text" placeholder="Texto de la transcripción..." readonly>${segment.text}</textarea>
             </div>
         </div>
     `).join('');
