@@ -23,12 +23,17 @@ class TranscriptionController extends Controller
 
         $audioBinary = file_get_contents($request->file('audio')->getRealPath());
 
-        $upload = Http::withHeaders([
-            'authorization' => $apiKey,
-            'content-type'  => 'application/octet-stream',
-        ])
-            ->withBody($audioBinary, 'application/octet-stream')
-            ->post('https://api.assemblyai.com/v2/upload');
+        try {
+            $upload = Http::timeout(120)->connectTimeout(60)
+                ->withHeaders([
+                    'authorization' => $apiKey,
+                    'content-type'  => 'application/octet-stream',
+                ])
+                ->withBody($audioBinary, 'application/octet-stream')
+                ->post('https://api.assemblyai.com/v2/upload');
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            return response()->json(['error' => 'Failed to connect to AssemblyAI'], 504);
+        }
 
         if (!$upload->successful()) {
             return response()->json(['error' => 'Upload failed', 'details' => $upload->json()], 500);
