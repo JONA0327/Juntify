@@ -42,6 +42,8 @@ Route::middleware('auth')->group(function () {
          ->name('drive.syncSubfolders');
     Route::get('/drive/status', [DriveController::class, 'status'])
          ->name('drive.status');
+    Route::post('/drive/save-results', [DriveController::class, 'saveResults'])
+         ->name('drive.saveResults');
 
     Route::post('/calendar/event', [\App\Http\Controllers\CalendarController::class, 'createEvent'])
          ->name('calendar.createEvent');

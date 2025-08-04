@@ -294,8 +294,21 @@
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">Subcarpeta (opcional)</label>
-                                <select class="form-select" id="subfolder-select"></select>
+                                <label class="form-label">
+                                    <input type="checkbox" id="toggle-subfolders">
+                                    ¿Deseas Guardar en una subcarpeta?
+                                </label>
+                            </div>
+
+                            <div id="subfolder-fields" style="display: none;">
+                                <div class="form-group">
+                                    <label class="form-label">Subcarpeta para transcripción</label>
+                                    <select class="form-select" id="transcription-subfolder-select"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Subcarpeta para audio</label>
+                                    <select class="form-select" id="audio-subfolder-select"></select>
+                                </div>
                             </div>
 
                             <div class="form-group">

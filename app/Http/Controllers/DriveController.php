@@ -251,4 +251,18 @@ class DriveController extends Controller
 
         return response()->json(['connected' => true, 'calendar' => $calendarConnected]);
     }
+
+    public function saveResults(Request $request)
+    {
+        $request->validate([
+            'meetingName'             => 'required|string',
+            'rootFolder'              => 'required|string',
+            'transcriptionSubfolder'  => 'nullable|string',
+            'audioSubfolder'          => 'nullable|string',
+        ]);
+
+        // Aquí iría la lógica para guardar los resultados en Drive o base de datos
+
+        return response()->json(['saved' => true]);
+    }
 }
