@@ -47,7 +47,7 @@ class TranscriptionController extends Controller
                     $http = $http->withOptions(['verify' => config('services.assemblyai.verify_ssl', true)]);
                 }
 
-                $response = $http->post($uploadUrl ?? 'https://api.assemblyai.com/v2/upload');
+               $response = $http->post('https://api.assemblyai.com/v2/upload');
             } catch (\Illuminate\Http\Client\ConnectionException $e) {
                 fclose($handle);
                 return response()->json(['error' => 'Failed to connect to AssemblyAI'], 504);
