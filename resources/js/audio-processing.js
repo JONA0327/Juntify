@@ -537,14 +537,25 @@ function seekAudio(segmentIndex, event) {
     const targetTime = segment.start + (duration * (percentage / 100));
 
     if (!audioPlayer) {
+        audioPlayer = document.getElementById('recorded-audio');
+    }
+    if (!audioPlayer.src) {
         const src = typeof audioData === 'string' ? audioData : URL.createObjectURL(audioData);
-        audioPlayer = new Audio(src);
+        audioPlayer.src = src;
     }
     audioPlayer.currentTime = targetTime;
 }
 
 function playFullAudio() {
-    console.log('Reproduciendo audio completo');
+    if (!audioPlayer) {
+        audioPlayer = document.getElementById('recorded-audio');
+    }
+    if (!audioPlayer.src) {
+        const src = typeof audioData === 'string' ? audioData : URL.createObjectURL(audioData);
+        audioPlayer.src = src;
+    }
+    audioPlayer.currentTime = 0;
+    audioPlayer.play();
     showNotification('Reproduciendo audio completo de la reunión', 'info');
 }
 

@@ -165,6 +165,7 @@
                 </div>
 
                 <div class="transcription-editor">
+                    <audio id="recorded-audio" style="display: none;"></audio>
                     <div class="editor-controls">
                         <button class="btn btn-secondary" onclick="playFullAudio()">
                             <span class="btn-icon">▶️</span>
