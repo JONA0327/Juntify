@@ -195,6 +195,9 @@ async function mergeAudioSegments(segments) {
 async function startTranscription() {
     showStep(2);
 
+    const existingRetry = document.getElementById('retry-transcription');
+    if (existingRetry) existingRetry.remove();
+
     const typingEl = document.getElementById('typing-text');
     let messageIndex = 0;
     typingEl.textContent = typingMessages[messageIndex];
@@ -240,17 +243,45 @@ async function startTranscription() {
     } catch (e) {
         console.error("❌ Error:", e);
 
-        if (e.response) {
+        let userMessage = '';
+        if (e.code === 'ERR_CONNECTION') {
+            userMessage = '⚠️ Problema de conexión. Verifica tu conexión e intenta nuevamente.';
+        } else if (e.code === 'ERR_TIMEOUT') {
+            userMessage = '⚠️ La solicitud tardó demasiado. Reintenta o revisa tu conexión.';
+        } else if (e.response) {
             console.error("📡 STATUS:", e.response.status);
             console.error("📩 HEADERS:", e.response.headers);
             console.error("📦 BODY:", e.response.data);
-            alert("🧠 Error del servidor: " + JSON.stringify(e.response.data));
+            userMessage = "🧠 Error del servidor: " + JSON.stringify(e.response.data);
         } else {
-            alert("❌ Error desconocido. Revisa consola.");
+            userMessage = "❌ Error desconocido. Revisa consola.";
         }
 
-        progressText.textContent = 'Error al subir audio';
+        alert(userMessage);
+
+        progressText.textContent = 'Error al subir audio. Reintenta o verifica tu conexión.';
+        showRetryTranscription();
     }
+}
+
+function showRetryTranscription() {
+    const progressSection = document.querySelector('#step-transcription .progress-section');
+    if (!progressSection) return;
+
+    let retry = document.getElementById('retry-transcription');
+    if (retry) return;
+
+    retry = document.createElement('button');
+    retry.id = 'retry-transcription';
+    retry.className = 'btn btn-link';
+    retry.textContent = 'Reintentar transcripción';
+    retry.addEventListener('click', (e) => {
+        e.preventDefault();
+        retry.remove();
+        startTranscription();
+    });
+
+    progressSection.appendChild(retry);
 }
 
 function pollTranscription(id) {
