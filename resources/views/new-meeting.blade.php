@@ -244,7 +244,7 @@
                             <p class="upload-subtitle">O haz clic para seleccionar un archivo de audio</p>
                             <p class="upload-formats">Formatos soportados: MP3, WAV, M4A, FLAC, OGG, AAC</p>
                             <input type="file" id="audio-file-input" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,audio/*" style="display: none;">
-                            <button class="btn btn-primary upload-btn" onclick="document.getElementById('audio-file-input').click()">
+                            <button class="btn btn-primary upload-btn">
                                 <x-icon name="folder" class="btn-icon" />
                                 <span class="sr-only">Seleccionar archivo</span>
                                 Seleccionar archivo
