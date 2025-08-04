@@ -28,6 +28,7 @@ let microphoneDataArray = null;
 let meetingAnimationId = null;
 let discardRequested = false;
 let uploadedFile = null;
+let fileUploadInitialized = false;
 
 // SVG paths for dynamic icons
 const ICON_PATHS = {
@@ -87,7 +88,6 @@ function showRecordingInterface(mode) {
         case 'upload':
             audioUploader.style.display = 'block';
             recorderTitle.innerHTML = '📁 Subir archivo de audio';
-            setupFileUpload();
             break;
         case 'meeting':
             meetingRecorder.style.display = 'block';
@@ -606,6 +606,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Cargar dispositivos de micrófono
     populateMicrophoneDevices();
 
+    // Configurar subida de archivos una sola vez
+    setupFileUpload();
+
     // Inicializar con modo de audio por defecto
     showRecordingInterface('audio');
 });
@@ -614,6 +617,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Configurar la funcionalidad de subir archivo
 function setupFileUpload() {
+    if (fileUploadInitialized) return;
+    fileUploadInitialized = true;
+
     const uploadArea = document.getElementById('upload-area');
     const fileInput = document.getElementById('audio-file-input');
     const uploadButton = uploadArea.querySelector('.upload-btn');
