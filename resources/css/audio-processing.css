@@ -411,7 +411,8 @@ body {
     align-items: center;
     gap: 1rem;
     padding: 1rem;
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
     border-radius: 8px;
 }
 
@@ -424,7 +425,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: var(--text-primary);
     cursor: pointer;
     transition: all 0.3s ease;
 }
@@ -437,7 +438,7 @@ body {
 .audio-timeline-mini {
     flex: 1;
     height: 4px;
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--surface-light);
     border-radius: 2px;
     position: relative;
     cursor: pointer;
@@ -797,7 +798,8 @@ body {
     align-items: center;
     gap: 1rem;
     padding: 1rem;
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
     border-radius: 8px;
 }
 
@@ -810,7 +812,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: var(--text-primary);
     cursor: pointer;
     transition: all 0.3s ease;
 }
@@ -829,7 +831,7 @@ body {
 .audio-timeline {
     flex: 1;
     height: 6px;
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--surface-light);
     border-radius: 3px;
     position: relative;
     cursor: pointer;
@@ -839,8 +841,12 @@ body {
     height: 100%;
     background: var(--primary-color);
     border-radius: 3px;
-    width: 35%;
+    width: 0%;
     transition: width 0.1s ease;
+}
+
+.timeline-progress.playing {
+    background: var(--primary-hover);
 }
 
 .audio-duration {
@@ -857,7 +863,8 @@ body {
 .transcription-preview {
     max-height: 300px;
     overflow-y: auto;
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
     border-radius: 8px;
     padding: 1rem;
 }

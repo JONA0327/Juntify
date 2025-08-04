@@ -167,14 +167,23 @@
                 <div class="transcription-editor">
                     <audio id="recorded-audio" style="display: none;"></audio>
                     <div class="editor-controls">
-                        <button class="btn btn-secondary" onclick="playFullAudio()">
-                            <span class="btn-icon">▶️</span>
-                            Reproducir audio completo
-                        </button>
+                        <div class="audio-player">
+                            <button class="play-btn" onclick="toggleAudioPlayback()">
+                                <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" />
+                                </svg>
+                            </button>
+                            <div class="audio-timeline" onclick="seekFullAudio(event)">
+                                <div class="timeline-progress"></div>
+                            </div>
+                            <span class="audio-duration" id="full-audio-time">00:00 / 00:00</span>
+                        </div>
                         <div class="speaker-count">
                             <span>Hablantes detectados: <strong id="speaker-count">3</strong></span>
                         </div>
                     </div>
+
+                    <div id="full-transcript" class="transcription-preview"></div>
 
                     <div class="transcription-segments" id="transcription-segments">
                         <!-- Los segmentos se generarán dinámicamente -->
