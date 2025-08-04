@@ -24,49 +24,38 @@ class TranscriptionController extends Controller
             return response()->json(['error' => 'AssemblyAI API key missing'], 500);
         }
 
-        $filePath = $request->file('audio')->getRealPath();
-        $handle   = fopen($filePath, 'rb');
-        $uploadUrl = null;
-
-        while (!feof($handle)) {
-            $chunk = fread($handle, 5 * 1024 * 1024); // 5MB chunks
-            if ($chunk === false) {
-                fclose($handle);
-                return response()->json(['error' => 'Failed to read audio file'], 500);
-            }
-
-            try {
-                $http = Http::timeout(300)->connectTimeout(300)
-                    ->withHeaders([
-                        'authorization' => $apiKey,
-                        'content-type'  => 'application/octet-stream',
-                    ])
-                    ->withBody($chunk, 'application/octet-stream');
-
-                if (!config('services.assemblyai.verify_ssl', true)) {
-                    $http = $http->withoutVerifying();
-                } else {
-                    $http = $http->withOptions(['verify' => config('services.assemblyai.verify_ssl', true)]);
-                }
-
-               $response = $http->post('https://api.assemblyai.com/v2/upload');
-            } catch (\Illuminate\Http\Client\ConnectionException $e) {
-                fclose($handle);
-                return response()->json(['error' => 'Failed to connect to AssemblyAI'], 504);
-            } catch (RequestException $e) {
-                fclose($handle);
-                return response()->json(['error' => 'SSL certificate validation failed'], 500);
-            }
-
-            if (!$response->successful()) {
-                fclose($handle);
-                return response()->json(['error' => 'Upload failed', 'details' => $response->json()], 500);
-            }
-
-            $uploadUrl = $response->json('upload_url');
+        $filePath  = $request->file('audio')->getRealPath();
+        $audioData = file_get_contents($filePath);
+        if ($audioData === false) {
+            return response()->json(['error' => 'Failed to read audio file'], 500);
         }
 
-        fclose($handle);
+        try {
+            $http = Http::timeout(300)->connectTimeout(300)
+                ->withHeaders([
+                    'authorization' => $apiKey,
+                    'content-type'  => 'application/octet-stream',
+                ])
+                ->withBody($audioData, 'application/octet-stream');
+
+            if (!config('services.assemblyai.verify_ssl', true)) {
+                $http = $http->withoutVerifying();
+            } else {
+                $http = $http->withOptions(['verify' => config('services.assemblyai.verify_ssl', true)]);
+            }
+
+            $response = $http->post('https://api.assemblyai.com/v2/upload');
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            return response()->json(['error' => 'Failed to connect to AssemblyAI'], 504);
+        } catch (RequestException $e) {
+            return response()->json(['error' => 'SSL certificate validation failed'], 500);
+        }
+
+        if (!$response->successful()) {
+            return response()->json(['error' => 'Upload failed', 'details' => $response->json()], 500);
+        }
+
+        $uploadUrl = $response->json('upload_url');
 
         $transcription = Http::withHeaders([
             'authorization' => $apiKey,
