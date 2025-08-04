@@ -430,6 +430,17 @@ function generateTranscriptionSegments() {
     if (speakerCountEl) {
         speakerCountEl.textContent = speakerSet.size;
     }
+    renderFullTranscriptPreview();
+}
+
+function renderFullTranscriptPreview() {
+    const container = document.getElementById('full-transcript');
+    if (!container) return;
+    const serialized = serializeTranscription();
+    container.innerHTML = serialized
+        .split('\n')
+        .map(line => `<p>${line}</p>`)
+        .join('');
 }
 
 function getPlayIcon(cls) {
@@ -591,17 +602,21 @@ function seekAudio(segmentIndex, event) {
     audioPlayer.currentTime = targetTime;
 }
 
-function playFullAudio() {
+function seekFullAudio(event) {
     if (!audioPlayer) {
         audioPlayer = document.getElementById('recorded-audio');
     }
-    if (!audioPlayer.src) {
-        const src = typeof audioData === 'string' ? audioData : URL.createObjectURL(audioData);
-        audioPlayer.src = src;
-    }
-    audioPlayer.currentTime = 0;
-    audioPlayer.play();
-    showNotification('Reproduciendo audio completo de la reunión', 'info');
+    if (!audioPlayer || !audioPlayer.duration) return;
+
+    const timeline = event.currentTarget;
+    const rect = timeline.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const percentage = (clickX / rect.width);
+
+    const progress = timeline.querySelector('.timeline-progress');
+    if (progress) progress.style.width = (percentage * 100) + '%';
+
+    audioPlayer.currentTime = audioPlayer.duration * percentage;
 }
 
 function saveTranscriptionAndContinue() {
@@ -874,8 +889,8 @@ const playPath = 'M5.25 5.25l13.5 6.75-13.5 6.75V5.25z';
 const pausePath = 'M15.75 5.25v13.5m-7.5-13.5v13.5';
 
 function toggleAudioPlayback() {
-    const playBtn = document.querySelector('.play-btn');
-    const iconPath = playBtn.querySelector('path');
+    const playBtn = document.querySelector('.processing-step.active .play-btn');
+    const iconPath = playBtn ? playBtn.querySelector('path') : null;
 
     if (!audioPlayer) {
         audioPlayer = document.getElementById('recorded-audio');
@@ -886,18 +901,21 @@ function toggleAudioPlayback() {
         audioPlayer.src = src;
     }
 
+    const progress = document.querySelector('.processing-step.active .timeline-progress');
     if (audioPlayer.paused) {
         audioPlayer.play();
         if (iconPath) iconPath.setAttribute('d', pausePath);
+        if (progress) progress.classList.add('playing');
     } else {
         audioPlayer.pause();
         if (iconPath) iconPath.setAttribute('d', playPath);
+        if (progress) progress.classList.remove('playing');
     }
 }
 
 function stopAudioPlayback() {
-    const playBtn = document.querySelector('.play-btn');
-    const iconPath = playBtn.querySelector('path');
+    const playBtn = document.querySelector('.processing-step.active .play-btn');
+    const iconPath = playBtn ? playBtn.querySelector('path') : null;
     if (!audioPlayer) return;
     audioPlayer.pause();
     audioPlayer.currentTime = 0;
@@ -906,15 +924,26 @@ function stopAudioPlayback() {
 }
 
 function resetAudioProgress() {
-    const timeline = document.querySelector('.timeline-progress');
+    const timeline = document.querySelector('.processing-step.active .timeline-progress');
     if (timeline) timeline.style.width = '0%';
+    const timeEl = document.getElementById('full-audio-time');
+    if (timeEl) {
+        const total = audioPlayer && audioPlayer.duration ? formatTime(audioPlayer.duration * 1000) : '00:00';
+        timeEl.textContent = `00:00 / ${total}`;
+    }
 }
 
 function updateAudioProgress() {
-    const timeline = document.querySelector('.timeline-progress');
+    const timeline = document.querySelector('.processing-step.active .timeline-progress');
+    const timeEl = document.getElementById('full-audio-time');
     if (!audioPlayer || !audioPlayer.duration) return;
     const percent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
     if (timeline) timeline.style.width = percent + '%';
+    if (timeEl) {
+        const current = formatTime(audioPlayer.currentTime * 1000);
+        const total = formatTime(audioPlayer.duration * 1000);
+        timeEl.textContent = `${current} / ${total}`;
+    }
 }
 
 function downloadAudio() {
@@ -1133,6 +1162,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     audioPlayer = document.getElementById('recorded-audio');
     if (audioPlayer) {
         audioPlayer.addEventListener('timeupdate', updateAudioProgress);
+        audioPlayer.addEventListener('loadedmetadata', updateAudioProgress);
         audioPlayer.addEventListener('ended', stopAudioPlayback);
     }
 
@@ -1194,13 +1224,13 @@ document.head.appendChild(style);
 // Exponer funciones globalmente
 window.selectAnalyzer = selectAnalyzer;
 window.startAnalysis = startAnalysis;
-window.playFullAudio = playFullAudio;
 window.saveTranscriptionAndContinue = saveTranscriptionAndContinue;
 window.goBackToRecording = goBackToRecording;
 window.goBackToTranscription = goBackToTranscription;
 window.goBackToAnalysis = goBackToAnalysis;
 window.cancelProcess = cancelProcess;
 window.toggleAudioPlayback = toggleAudioPlayback;
+window.seekFullAudio = seekFullAudio;
 window.stopAudioPlayback = stopAudioPlayback;
 window.resetAudioProgress = resetAudioProgress;
 window.downloadAudio = downloadAudio;
