@@ -17,6 +17,8 @@ let audioSegments = [];
 // }
 let transcriptionData = [];
 let audioPlayer = null;
+let currentSegmentIndex = null;
+let segmentEndHandler = null;
 let analysisResults = null;
 
 // Mensajes que se mostrarán mientras se genera la transcripción
@@ -430,6 +432,26 @@ function generateTranscriptionSegments() {
     }
 }
 
+function getPlayIcon(cls) {
+    return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" /></svg>`;
+}
+
+function getPauseIcon(cls) {
+    return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" /></svg>`;
+}
+
+function updateSegmentButtons(activeIndex) {
+    transcriptionData.forEach((_, idx) => {
+        const segmentEl = document.querySelector(`[data-segment="${idx}"]`);
+        if (!segmentEl) return;
+        const headerBtn = segmentEl.querySelector('.segment-controls .control-btn');
+        const miniBtn = segmentEl.querySelector('.play-btn-mini');
+        const isActive = idx === activeIndex;
+        if (headerBtn) headerBtn.innerHTML = isActive ? getPauseIcon('btn-icon') : getPlayIcon('btn-icon');
+        if (miniBtn) miniBtn.innerHTML = isActive ? getPauseIcon('play-icon') : getPlayIcon('play-icon');
+    });
+}
+
 function playSegmentAudio(segmentIndex) {
     const segment = transcriptionData[segmentIndex];
     if (!segment) return;
@@ -442,19 +464,42 @@ function playSegmentAudio(segmentIndex) {
         audioPlayer.src = src;
     }
 
-    audioPlayer.pause();
+    if (currentSegmentIndex === segmentIndex && !audioPlayer.paused) {
+        audioPlayer.pause();
+        if (segmentEndHandler) {
+            audioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+            segmentEndHandler = null;
+        }
+        updateSegmentButtons(null);
+        currentSegmentIndex = null;
+        return;
+    }
+
+    if (segmentEndHandler) {
+        audioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+        segmentEndHandler = null;
+    }
+
+    if (!audioPlayer.paused) {
+        audioPlayer.pause();
+    }
     audioPlayer.currentTime = segment.start;
     const stopTime = segment.end;
 
-    const onTimeUpdate = () => {
+    segmentEndHandler = () => {
         if (audioPlayer.currentTime >= stopTime) {
             audioPlayer.pause();
-            audioPlayer.removeEventListener('timeupdate', onTimeUpdate);
+            audioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+            segmentEndHandler = null;
+            updateSegmentButtons(null);
+            currentSegmentIndex = null;
         }
     };
 
-    audioPlayer.addEventListener('timeupdate', onTimeUpdate);
+    audioPlayer.addEventListener('timeupdate', segmentEndHandler);
     audioPlayer.play();
+    currentSegmentIndex = segmentIndex;
+    updateSegmentButtons(segmentIndex);
 }
 
 let selectedSegmentIndex = null;
