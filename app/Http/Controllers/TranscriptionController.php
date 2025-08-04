@@ -21,29 +21,45 @@ class TranscriptionController extends Controller
             return response()->json(['error' => 'AssemblyAI API key missing'], 500);
         }
 
-        $audioBinary = file_get_contents($request->file('audio')->getRealPath());
+        $filePath = $request->file('audio')->getRealPath();
+        $handle   = fopen($filePath, 'rb');
+        $uploadUrl = null;
 
-        try {
-            $upload = Http::timeout(120)->connectTimeout(60)
-                ->withHeaders([
-                    'authorization' => $apiKey,
-                    'content-type'  => 'application/octet-stream',
-                ])
-                ->withBody($audioBinary, 'application/octet-stream')
-                ->post('https://api.assemblyai.com/v2/upload');
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
-            return response()->json(['error' => 'Failed to connect to AssemblyAI'], 504);
+        while (!feof($handle)) {
+            $chunk = fread($handle, 5 * 1024 * 1024); // 5MB chunks
+            if ($chunk === false) {
+                fclose($handle);
+                return response()->json(['error' => 'Failed to read audio file'], 500);
+            }
+
+            try {
+                $response = Http::timeout(120)->connectTimeout(60)
+                    ->withHeaders([
+                        'authorization' => $apiKey,
+                        'content-type'  => 'application/octet-stream',
+                    ])
+                    ->withBody($chunk, 'application/octet-stream')
+                    ->post($uploadUrl ?? 'https://api.assemblyai.com/v2/upload');
+            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                fclose($handle);
+                return response()->json(['error' => 'Failed to connect to AssemblyAI'], 504);
+            }
+
+            if (!$response->successful()) {
+                fclose($handle);
+                return response()->json(['error' => 'Upload failed', 'details' => $response->json()], 500);
+            }
+
+            $uploadUrl = $response->json('upload_url');
         }
 
-        if (!$upload->successful()) {
-            return response()->json(['error' => 'Upload failed', 'details' => $upload->json()], 500);
-        }
+        fclose($handle);
 
         $transcription = Http::withHeaders([
             'authorization' => $apiKey,
         ])
             ->post('https://api.assemblyai.com/v2/transcript', [
-                'audio_url'      => $upload->json('upload_url'),
+                'audio_url'      => $uploadUrl,
                 'speaker_labels' => true,
                 'punctuate'      => true,
                 'format_text'    => true,
