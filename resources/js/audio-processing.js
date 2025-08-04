@@ -221,11 +221,20 @@ async function startTranscription() {
 
 
     try {
-        const { data } = await axios.post('/transcription', formData);
+        const { data } = await axios.post('/transcription', formData, {
+            onUploadProgress: (e) => {
+                if (e.total) {
+                    const percent = (e.loaded / e.total) * 10; // 0-10% of total
+                    progressBar.style.width = percent + '%';
+                    progressPercent.textContent = Math.round(percent) + '%';
+                }
+            }
+        });
         console.log("✅ Transcripción iniciada:", data);
 
         progressBar.style.width = '10%';
         progressPercent.textContent = '10%';
+        progressText.textContent = 'En cola...';
 
         pollTranscription(data.id);
     } catch (e) {
