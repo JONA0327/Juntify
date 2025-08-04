@@ -183,8 +183,6 @@
                         </div>
                     </div>
 
-                    <div id="full-transcript" class="transcription-preview"></div>
-
                     <div class="transcription-segments" id="transcription-segments">
                         <!-- Los segmentos se generarán dinámicamente -->
                     </div>
