@@ -6,6 +6,7 @@ use Google\Client;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
 use Google\Service\Drive\Permission;
+use Google\Service\Exception as GoogleServiceException;
 
 class GoogleDriveService
 {
@@ -79,6 +80,49 @@ class GoogleDriveService
             $permission,
             ['sendNotificationEmail' => false]
         );
+    }
+
+    /**
+     * @param string|resource $contents
+     */
+    public function uploadFile(string $name, string $mime, string $folderId, $contents): string
+    {
+        $fileMetadata = new DriveFile([
+            'name'    => $name,
+            'parents' => [$folderId],
+        ]);
+
+        try {
+            $file = $this->drive->files->create($fileMetadata, [
+                'data'       => $contents,
+                'mimeType'   => $mime,
+                'uploadType' => 'multipart',
+                'fields'     => 'id',
+            ]);
+        } catch (GoogleServiceException $e) {
+            throw new \RuntimeException('Google Drive upload failed: ' . $e->getMessage(), 0, $e);
+        }
+
+        return $file->getId();
+    }
+
+    public function getFileLink(string $fileId): string
+    {
+        try {
+            $file = $this->drive->files->get($fileId, [
+                'fields' => 'webContentLink,webViewLink',
+            ]);
+        } catch (GoogleServiceException $e) {
+            throw new \RuntimeException('Google Drive request failed: ' . $e->getMessage(), 0, $e);
+        }
+
+        $link = $file->getWebContentLink() ?: $file->getWebViewLink();
+
+        if (!$link) {
+            throw new \RuntimeException('No link available for the requested file.');
+        }
+
+        return $link;
     }
 
     public function deleteFile(string $id): void
