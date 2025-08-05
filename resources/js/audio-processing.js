@@ -688,6 +688,11 @@ function selectAnalyzer(analyzerType) {
 }
 
 function startAnalysis() {
+    const errorEl = document.getElementById('analysis-error-message');
+    if (errorEl) {
+        errorEl.style.display = 'none';
+        errorEl.textContent = '';
+    }
     if (!selectedAnalyzer) {
         showNotification('Por favor selecciona un tipo de análisis', 'error');
         return;
@@ -1032,7 +1037,6 @@ async function saveToDatabase() {
                 return;
             }
             console.error('Error al guardar los datos', response);
-
             let errorMsg = 'Error al guardar los datos';
             const contentType = response.headers.get('content-type') || '';
             if (contentType.includes('application/json')) {
@@ -1040,11 +1044,19 @@ async function saveToDatabase() {
                     const err = await response.json();
                     if (err && err.message) errorMsg = err.message;
                 } catch (_) {}
-                showNotification(errorMsg, 'error');
             } else {
-                showNotification('Respuesta inesperada del servidor', 'error');
+                errorMsg = 'Respuesta inesperada del servidor';
             }
 
+            showNotification(errorMsg, 'error');
+
+            const errorEl = document.getElementById('analysis-error-message');
+            if (errorEl) {
+                errorEl.textContent = errorMsg;
+                errorEl.style.display = 'block';
+            }
+
+            showStep(4);
             return;
         }
 
