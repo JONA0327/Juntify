@@ -986,7 +986,7 @@ function downloadAudio() {
     // Aquí iría la lógica para descargar el audio
 }
 
-async function saveToDatabase() {
+function saveToDatabase() {
     const meetingName = document.getElementById('meeting-name').value.trim();
     const rootFolder = document.getElementById('root-folder-select').value;
     const transcriptionSubfolder = document.getElementById('transcription-subfolder-select').value;
@@ -997,16 +997,41 @@ async function saveToDatabase() {
         return;
     }
 
-    // Obtener datos globales antes de la petición
+    showStep(7);
+    processDatabaseSave(meetingName, rootFolder, transcriptionSubfolder, audioSubfolder);
+}
+
+// ===== PASO 7: GUARDANDO EN BD =====
+
+async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfolder, audioSubfolder) {
+    const progressBar = document.getElementById('save-progress');
+    const progressText = document.getElementById('save-progress-text');
+    const progressPercent = document.getElementById('save-progress-percent');
+
+    const setProgress = (value, text) => {
+        progressBar.style.width = value + '%';
+        progressPercent.textContent = Math.round(value) + '%';
+        if (text) progressText.textContent = text;
+    };
+
+    setProgress(0, 'Subiendo archivo de audio...');
+    document.getElementById('audio-upload-status').textContent = '⏳';
+    document.getElementById('transcription-save-status').textContent = '⏳';
+    document.getElementById('analysis-save-status').textContent = '⏳';
+    document.getElementById('tasks-save-status').textContent = '⏳';
+
     const transcription = transcriptionData;
     const analysis = analysisResults;
     let audio = audioData;
+    let audioMimeType = 'audio/webm';
     if (audio && typeof audio !== 'string') {
+        audioMimeType = audio.type || audioMimeType;
         try {
             audio = await blobToBase64(audio);
         } catch (e) {
             console.error('Error al convertir audio a base64', e);
             showNotification('No se pudo procesar el audio', 'error');
+            showStep(4);
             return;
         }
     }
@@ -1027,7 +1052,8 @@ async function saveToDatabase() {
                 audioSubfolder,
                 transcriptionData: transcription,
                 analysisResults: analysis,
-                audioData: audio
+                audioData: audio,
+                audioMimeType
             })
         });
 
@@ -1060,59 +1086,23 @@ async function saveToDatabase() {
             return;
         }
 
-        showNotification('Guardado iniciado correctamente', 'success');
+        document.getElementById('audio-upload-status').textContent = '✅';
+        setProgress(33, 'Encriptando datos...');
+        await new Promise(r => setTimeout(r, 300));
+        document.getElementById('transcription-save-status').textContent = '✅';
+        setProgress(66, 'Guardando en base de datos...');
+        await new Promise(r => setTimeout(r, 300));
+        document.getElementById('analysis-save-status').textContent = '✅';
+        document.getElementById('tasks-save-status').textContent = '✅';
+        setProgress(100, 'Guardado completado');
         setTimeout(() => {
-            processDatabaseSave();
-        }, 1000);
+            showCompletion();
+        }, 500);
     } catch (e) {
         console.error('Error al guardar en base de datos', e);
         showNotification('No se pudo conectar con el servidor', 'error');
+        showStep(4);
     }
-}
-
-// ===== PASO 7: GUARDANDO EN BD =====
-
-function processDatabaseSave() {
-    showStep(7);
-
-    const progressBar = document.getElementById('save-progress');
-    const progressText = document.getElementById('save-progress-text');
-    const progressPercent = document.getElementById('save-progress-percent');
-
-    let progress = 0;
-    const interval = setInterval(() => {
-        progress += Math.random() * 8 + 3;
-        if (progress > 100) progress = 100;
-
-        progressBar.style.width = progress + '%';
-        progressPercent.textContent = Math.round(progress) + '%';
-
-        // Actualizar estados de guardado
-        if (progress > 20) {
-            document.getElementById('audio-upload-status').textContent = '✅';
-            progressText.textContent = 'Guardando transcripción...';
-        }
-        if (progress > 50) {
-            document.getElementById('transcription-save-status').textContent = '✅';
-            progressText.textContent = 'Almacenando análisis...';
-        }
-        if (progress > 80) {
-            document.getElementById('analysis-save-status').textContent = '✅';
-            progressText.textContent = 'Creando tareas...';
-        }
-        if (progress > 95) {
-            document.getElementById('tasks-save-status').textContent = '✅';
-            progressText.textContent = 'Finalizando guardado...';
-        }
-
-        if (progress >= 100) {
-            clearInterval(interval);
-            progressText.textContent = 'Guardado completado';
-            setTimeout(() => {
-                showCompletion();
-            }, 1000);
-        }
-    }, 200);
 }
 
 // ===== PASO 8: COMPLETADO =====
