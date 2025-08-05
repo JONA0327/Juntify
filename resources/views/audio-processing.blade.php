@@ -590,3 +590,7 @@
     @vite(['resources/js/audio-processing.js'])
 </body>
 </html>
+
+<?php
+Route::post('/drive/save-results', [DriveController::class, 'saveResults']);
+?>

@@ -42,8 +42,7 @@ Route::middleware('auth')->group(function () {
          ->name('drive.syncSubfolders');
     Route::get('/drive/status', [DriveController::class, 'status'])
          ->name('drive.status');
-    Route::post('/drive/save-results', [DriveController::class, 'saveResults'])
-         ->name('drive.saveResults');
+    Route::post('/drive/save-results', [DriveController::class, 'saveResults']);
 
     Route::post('/calendar/event', [\App\Http\Controllers\CalendarController::class, 'createEvent'])
          ->name('calendar.createEvent');
@@ -70,7 +69,7 @@ Route::middleware(['auth'])->group(function () {
         }
         return view('admin.dashboard');
     })->name('admin.dashboard');
-    
+
     Route::get('/admin/analyzers', [\App\Http\Controllers\AnalyzerController::class, 'index'])
         ->name('admin.analyzers');
 
