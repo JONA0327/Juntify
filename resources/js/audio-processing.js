@@ -1097,7 +1097,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         });
 
         if (!response.ok) {
-            if (response.status === 401 || response.status === 403) {
+            if (response.status === 401) {
                 window.location.href = '/login';
                 return { success: false, message: 'No autorizado' };
             }
