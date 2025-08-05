@@ -29,8 +29,6 @@ class DriveController extends Controller
         $request->validate([
             'name' => 'required|string',
         ]);
-
-        $this->drive->impersonate(Auth::user()->email);
         $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
 
         try {
@@ -59,11 +57,14 @@ class DriveController extends Controller
 
     public function setMainFolder(Request $request)
     {
-        $this->drive->impersonate(Auth::user()->email);
-
         GoogleToken::updateOrCreate(
             ['username' => Auth::user()->username],
             ['recordings_folder_id' => $request->input('id')]
+        );
+
+        $this->drive->shareFolder(
+            $request->input('id'),
+            config('services.google.service_account_email')
         );
 
         return response()->json(['id' => $request->input('id')]);
@@ -71,7 +72,6 @@ class DriveController extends Controller
 
     public function createSubfolder(Request $request)
     {
-        $this->drive->impersonate(Auth::user()->email);
         $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
         $parentId = $token->recordings_folder_id;
 
@@ -84,6 +84,11 @@ class DriveController extends Controller
                 'name'      => $request->input('name'),
             ]);
         }
+
+        $this->drive->shareFolder(
+            $folderId,
+            config('services.google.service_account_email')
+        );
 
         return response()->json(['id' => $folderId]);
     }
@@ -183,8 +188,6 @@ class DriveController extends Controller
 
     public function deleteSubfolder(string $id)
     {
-        $this->drive->impersonate(Auth::user()->email);
-
         $this->drive->deleteFile($id);
 
         Subfolder::where('google_id', $id)->delete();
@@ -193,9 +196,6 @@ class DriveController extends Controller
     }
     public function saveResults(Request $request)
     {
-        // Impersonate the authenticated user via the service account
-        $this->drive->impersonate(Auth::user()->email);
-
         // 1. Validación: ahora esperamos también el mime type del audio
         $v = $request->validate([
             'meetingName'            => 'required|string',
