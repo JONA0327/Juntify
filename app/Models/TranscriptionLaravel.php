@@ -12,6 +12,11 @@ class TranscriptionLaravel extends Model
 
     protected $fillable = [
         'username',
+        'meeting_name',
+        'audio_file_id',
+        'audio_file_url',
+        'transcript_file_id',
+        'transcript_file_url',
         'transcript',
     ];
 

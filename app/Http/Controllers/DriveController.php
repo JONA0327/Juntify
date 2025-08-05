@@ -5,11 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\Subfolder;
+use App\Models\TranscriptionLaravel;
 use App\Services\GoogleDriveService;
 use Carbon\Carbon;
 use RuntimeException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
+use Symfony\Component\Process\Process;
 
 class DriveController extends Controller
 {
@@ -259,10 +262,71 @@ class DriveController extends Controller
             'rootFolder'              => 'required|string',
             'transcriptionSubfolder'  => 'nullable|string',
             'audioSubfolder'          => 'nullable|string',
+            'transcriptionData'       => 'required',
+            'analysisResults'         => 'required',
+            'audioData'               => 'required|string',
         ]);
 
-        // Aquí iría la lógica para guardar los resultados en Drive o base de datos
+        $this->applyUserToken();
 
-        return response()->json(['saved' => true]);
+        try {
+            $meetingName            = $request->input('meetingName');
+            $transcriptionFolderId  = $request->input('transcriptionSubfolder') ?: $request->input('rootFolder');
+            $audioFolderId          = $request->input('audioSubfolder') ?: $request->input('rootFolder');
+
+            // Convertir audioData a AAC
+            $audioData = $request->input('audioData');
+            if (str_contains($audioData, ',')) {
+                [$meta, $audioData] = explode(',', $audioData, 2);
+            }
+            $rawAudio   = base64_decode($audioData);
+            $tmpInput   = tempnam(sys_get_temp_dir(), 'aud');
+            file_put_contents($tmpInput, $rawAudio);
+            $tmpAac = tempnam(sys_get_temp_dir(), 'aud') . '.aac';
+            $process = Process::fromShellCommandline("ffmpeg -y -i $tmpInput -acodec aac $tmpAac");
+            $process->run();
+            if (!$process->isSuccessful()) {
+                throw new RuntimeException('Audio conversion failed: ' . $process->getErrorOutput());
+            }
+            $audioContents = file_get_contents($tmpAac);
+            @unlink($tmpInput);
+            @unlink($tmpAac);
+
+            // Construir JSON y cifrar
+            $analysis = $request->input('analysisResults');
+            $payload  = [
+                'segments' => $request->input('transcriptionData'),
+                'summary'  => $analysis['summary'] ?? null,
+                'keyPoints'=> $analysis['keyPoints'] ?? [],
+                'tasks'    => $analysis['tasks'] ?? [],
+            ];
+            $encrypted = Crypt::encryptString(json_encode($payload));
+
+            // Subir archivos a Drive
+            $transcriptFileId = $this->drive->uploadFile("{$meetingName}.ju", 'application/json', $transcriptionFolderId, $encrypted);
+            $audioFileId      = $this->drive->uploadFile("{$meetingName}.aac", 'audio/aac', $audioFolderId, $audioContents);
+
+            $transcriptUrl = $this->drive->getFileLink($transcriptFileId);
+            $audioUrl      = $this->drive->getFileLink($audioFileId);
+
+            TranscriptionLaravel::create([
+                'username'           => Auth::user()->username,
+                'meeting_name'       => $meetingName,
+                'audio_file_id'      => $audioFileId,
+                'audio_file_url'     => $audioUrl,
+                'transcript_file_id' => $transcriptFileId,
+                'transcript_file_url'=> $transcriptUrl,
+            ]);
+
+            return response()->json([
+                'saved'              => true,
+                'audio_file_id'      => $audioFileId,
+                'audio_file_url'     => $audioUrl,
+                'transcript_file_id' => $transcriptFileId,
+                'transcript_file_url'=> $transcriptUrl,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 }
