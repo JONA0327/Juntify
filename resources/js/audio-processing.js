@@ -20,6 +20,10 @@ let audioPlayer = null;
 let currentSegmentIndex = null;
 let segmentEndHandler = null;
 let analysisResults = null;
+let finalDrivePath = '';
+let finalAudioDuration = 0;
+let finalSpeakerCount = 0;
+let finalTasks = [];
 
 // Mensajes que se mostrarán mientras se genera la transcripción
 const typingMessages = [
@@ -1074,7 +1078,45 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                 audioMimeType
             })
         });
+
+
+        if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+                window.location.href = '/login';
+                return;
+            }
+            console.error('Error al guardar los datos', response);
+            let errorMsg = 'Error al guardar los datos';
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                try {
+                    const err = await response.json();
+                    if (err && err.message) errorMsg = err.message;
+                } catch (_) {}
+            } else {
+                errorMsg = 'Respuesta inesperada del servidor';
+            }
+
+            showNotification(errorMsg, 'error');
+
+            const errorEl = document.getElementById('analysis-error-message');
+            if (errorEl) {
+                errorEl.textContent = errorMsg;
+                errorEl.style.display = 'block';
+            }
+
+            showStep(4);
+            return;
+        }
+
+        const result = await response.json();
+        finalDrivePath = result.drive_path || '';
+        finalAudioDuration = result.audio_duration || 0;
+        finalSpeakerCount = result.speaker_count || 0;
+        finalTasks = result.tasks || [];
+
         if (!audioRes.ok) throw new Error('Error al subir audio');
+
         document.getElementById('audio-upload-status').textContent = '✅';
         setProgress(33, 'Audio subido');
         addMessage('Archivo de audio subido correctamente');
@@ -1116,7 +1158,12 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         setProgress(100, 'Guardado completado');
         addMessage('Análisis y tareas almacenados con éxito');
         setTimeout(() => {
-            showCompletion();
+            showCompletion({
+                drivePath: finalDrivePath,
+                audioDuration: finalAudioDuration,
+                speakerCount: finalSpeakerCount,
+                tasks: finalTasks
+            });
         }, 500);
     } catch (e) {
         console.error('Error al guardar en base de datos', e);
@@ -1129,8 +1176,20 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
 
 // ===== PASO 8: COMPLETADO =====
 
-function showCompletion() {
+function showCompletion({ drivePath, audioDuration, speakerCount, tasks }) {
     showStep(8);
+
+    const pathEl = document.getElementById('completion-drive-path');
+    if (pathEl) pathEl.textContent = drivePath || '';
+
+    const durationEl = document.getElementById('completion-audio-duration');
+    if (durationEl) durationEl.textContent = `${formatTime((audioDuration || 0) * 1000)} minutos`;
+
+    const speakersEl = document.getElementById('completion-speaker-count');
+    if (speakersEl) speakersEl.textContent = `${speakerCount} participante${speakerCount === 1 ? '' : 's'}`;
+
+    const tasksEl = document.getElementById('completion-task-count');
+    if (tasksEl) tasksEl.textContent = `${(tasks ? tasks.length : 0)} tarea${tasks && tasks.length === 1 ? '' : 's'}`;
 }
 
 // ===== FUNCIONES DE NAVEGACIÓN =====

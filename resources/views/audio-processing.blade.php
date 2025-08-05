@@ -482,19 +482,19 @@
                     <div class="completion-summary">
                         <div class="summary-item">
                             <x-icon name="folder" class="summary-icon" />
-                            <span class="summary-text">Guardado en: <strong>Juntify-Reuniones-2025/Reuniones-Enero-2025</strong></span>
+                            <span class="summary-text">Guardado en: <strong id="completion-drive-path"></strong></span>
                         </div>
                         <div class="summary-item">
                             <x-icon name="calendar" class="summary-icon" />
-                            <span class="summary-text">Duración: <strong>5:23 minutos</strong></span>
+                            <span class="summary-text">Duración: <strong id="completion-audio-duration"></strong></span>
                         </div>
                         <div class="summary-item">
                             <x-icon name="users" class="summary-icon" />
-                            <span class="summary-text">Hablantes: <strong>3 participantes</strong></span>
+                            <span class="summary-text">Hablantes: <strong id="completion-speaker-count"></strong></span>
                         </div>
                         <div class="summary-item">
                             <x-icon name="check" class="summary-icon" />
-                            <span class="summary-text">Tareas creadas: <strong>3 tareas</strong></span>
+                            <span class="summary-text">Tareas creadas: <strong id="completion-task-count"></strong></span>
                         </div>
                     </div>
 
