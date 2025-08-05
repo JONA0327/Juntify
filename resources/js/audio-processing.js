@@ -1011,21 +1011,39 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
     const progressBar = document.getElementById('save-progress');
     const progressText = document.getElementById('save-progress-text');
     const progressPercent = document.getElementById('save-progress-percent');
-
     const setProgress = (value, text) => {
         progressBar.style.width = value + '%';
         progressPercent.textContent = Math.round(value) + '%';
         if (text) progressText.textContent = text;
     };
 
-    setProgress(0, 'Subiendo archivo de audio...');
+    // Crea contenedor de mensajes detallados
+    const addMessage = (msg) => {
+        const section = document.querySelector('#step-saving .progress-section');
+        if (!section) return;
+        let log = document.getElementById('save-progress-log');
+        if (!log) {
+            log = document.createElement('div');
+            log.id = 'save-progress-log';
+            log.className = 'progress-log';
+            section.appendChild(log);
+        }
+        const p = document.createElement('p');
+        p.textContent = msg;
+        log.appendChild(p);
+    };
+
+    // Estado inicial
+    setProgress(0, 'Preparando guardado...');
     document.getElementById('audio-upload-status').textContent = '⏳';
     document.getElementById('transcription-save-status').textContent = '⏳';
     document.getElementById('analysis-save-status').textContent = '⏳';
     document.getElementById('tasks-save-status').textContent = '⏳';
+    addMessage('Iniciando guardado de resultados');
 
     const transcription = transcriptionData;
     const analysis = analysisResults;
+
     let audio = audioData;
     let audioMimeType = 'audio/webm';
     if (audio && typeof audio !== 'string') {
@@ -1040,26 +1058,27 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         }
     }
 
-    showNotification('Iniciando guardado en base de datos...', 'info');
+    const headers = {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+    };
 
     try {
-        const response = await fetch('/drive/save-results', {
+        // 1. Subida de audio
+        setProgress(0, 'Subiendo archivo de audio...');
+        addMessage('Subiendo archivo de audio...');
+        const audioRes = await fetch('/drive/save-results?stage=audio', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            },
+            headers,
             body: JSON.stringify({
                 meetingName,
                 rootFolder,
-                transcriptionSubfolder,
                 audioSubfolder,
-                transcriptionData: transcription,
-                analysisResults: analysis,
                 audioData: audio,
                 audioMimeType
             })
         });
+
 
         if (!response.ok) {
             if (response.status === 401 || response.status === 403) {
@@ -1096,15 +1115,48 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         finalSpeakerCount = result.speaker_count || 0;
         finalTasks = result.tasks || [];
 
+        if (!audioRes.ok) throw new Error('Error al subir audio');
+
         document.getElementById('audio-upload-status').textContent = '✅';
-        setProgress(33, 'Encriptando datos...');
-        await new Promise(r => setTimeout(r, 300));
+        setProgress(33, 'Audio subido');
+        addMessage('Archivo de audio subido correctamente');
+
+        // 2. Guardado de transcripción
+        progressText.textContent = 'Guardando transcripción...';
+        addMessage('Guardando transcripción...');
+        const transRes = await fetch('/drive/save-results?stage=transcription', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                meetingName,
+                rootFolder,
+                transcriptionSubfolder,
+                transcriptionData: transcription
+            })
+        });
+        if (!transRes.ok) throw new Error('Error al guardar transcripción');
         document.getElementById('transcription-save-status').textContent = '✅';
-        setProgress(66, 'Guardando en base de datos...');
-        await new Promise(r => setTimeout(r, 300));
+        setProgress(66, 'Transcripción guardada');
+        addMessage('Transcripción guardada correctamente');
+
+        // 3. Guardado de análisis y tareas
+        progressText.textContent = 'Guardando análisis...';
+        addMessage('Guardando análisis y tareas...');
+        const analysisRes = await fetch('/drive/save-results?stage=analysis', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                meetingName,
+                rootFolder,
+                analysisResults: analysis,
+                tasks: analysis?.tasks || []
+            })
+        });
+        if (!analysisRes.ok) throw new Error('Error al guardar análisis');
         document.getElementById('analysis-save-status').textContent = '✅';
         document.getElementById('tasks-save-status').textContent = '✅';
         setProgress(100, 'Guardado completado');
+        addMessage('Análisis y tareas almacenados con éxito');
         setTimeout(() => {
             showCompletion({
                 drivePath: finalDrivePath,
@@ -1115,7 +1167,9 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         }, 500);
     } catch (e) {
         console.error('Error al guardar en base de datos', e);
-        showNotification('No se pudo conectar con el servidor', 'error');
+        const msg = e.message || 'No se pudo conectar con el servidor';
+        addMessage(`⚠️ ${msg}`);
+        showNotification(msg, 'error');
         showStep(4);
     }
 }
