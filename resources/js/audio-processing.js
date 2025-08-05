@@ -945,7 +945,7 @@ function downloadAudio() {
     // Aquí iría la lógica para descargar el audio
 }
 
-function saveToDatabase() {
+async function saveToDatabase() {
     const meetingName = document.getElementById('meeting-name').value.trim();
     const rootFolder = document.getElementById('root-folder-select').value;
     const transcriptionSubfolder = document.getElementById('transcription-subfolder-select').value;
@@ -956,25 +956,58 @@ function saveToDatabase() {
         return;
     }
 
+    // Obtener datos globales antes de la petición
+    const transcription = transcriptionData;
+    const analysis = analysisResults;
+    let audio = audioData;
+    if (audio && typeof audio !== 'string') {
+        try {
+            audio = await blobToBase64(audio);
+        } catch (e) {
+            console.error('Error al convertir audio a base64', e);
+            showNotification('No se pudo procesar el audio', 'error');
+            return;
+        }
+    }
+
     showNotification('Iniciando guardado en base de datos...', 'info');
 
-    fetch('/drive/save-results', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        },
-        body: JSON.stringify({
-            meetingName,
-            rootFolder,
-            transcriptionSubfolder,
-            audioSubfolder
-        })
-    }).finally(() => {
+    try {
+        const response = await fetch('/drive/save-results', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify({
+                meetingName,
+                rootFolder,
+                transcriptionSubfolder,
+                audioSubfolder,
+                transcriptionData: transcription,
+                analysisResults: analysis,
+                audioData: audio
+            })
+        });
+
+        if (!response.ok) {
+            let errorMsg = 'Error al guardar los datos';
+            try {
+                const err = await response.json();
+                if (err && err.message) errorMsg = err.message;
+            } catch (_) {}
+            showNotification(errorMsg, 'error');
+            return;
+        }
+
+        showNotification('Guardado iniciado correctamente', 'success');
         setTimeout(() => {
             processDatabaseSave();
         }, 1000);
-    });
+    } catch (e) {
+        console.error('Error al guardar en base de datos', e);
+        showNotification('No se pudo conectar con el servidor', 'error');
+    }
 }
 
 // ===== PASO 7: GUARDANDO EN BD =====
@@ -1122,6 +1155,15 @@ function base64ToBlob(base64) {
         buffer[i] = binary.charCodeAt(i);
     }
     return new Blob([buffer], { type: mime });
+}
+
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
 }
 
 function formatTime(ms) {
