@@ -283,6 +283,9 @@ class DriveController extends Controller
             $tmpInput   = tempnam(sys_get_temp_dir(), 'aud');
             file_put_contents($tmpInput, $rawAudio);
             $tmpAac = tempnam(sys_get_temp_dir(), 'aud') . '.aac';
+            if (!shell_exec('which ffmpeg')) {
+                throw new RuntimeException('FFmpeg no está instalado');
+            }
             $process = Process::fromShellCommandline("ffmpeg -y -i $tmpInput -acodec aac $tmpAac");
             $process->run();
             if (!$process->isSuccessful()) {
@@ -326,7 +329,7 @@ class DriveController extends Controller
                 'transcript_file_url'=> $transcriptUrl,
             ]);
         } catch (\Throwable $e) {
-            return response()->json(['message' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Error al guardar los resultados.'], 500);
         }
     }
 }
