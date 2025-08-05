@@ -220,6 +220,9 @@ class DriveController extends Controller
     }
     public function saveResults(Request $request)
     {
+        // Ensure the Google client uses the authenticated user's token
+        $this->applyUserToken();
+
         // 1. Validación: ahora esperamos también el mime type del audio
         $v = $request->validate([
             'meetingName'            => 'required|string',
