@@ -5,13 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\Subfolder;
-use App\Services\GoogleDriveService;
-use Carbon\Carbon;
+use App\Services\GoogleServiceAccount;
 use RuntimeException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Symfony\Component\Process\Process;
 use Illuminate\Support\Facades\Crypt;
 use App\Models\TranscriptionLaravel;
 use Illuminate\Support\Facades\Log;
@@ -20,37 +17,11 @@ use App\Http\Controllers\Auth\GoogleAuthController;
 
 class DriveController extends Controller
 {
-    protected GoogleDriveService $drive;
+    protected GoogleServiceAccount $drive;
 
-    public function __construct(GoogleDriveService $drive)
+    public function __construct(GoogleServiceAccount $drive)
     {
         $this->drive = $drive;
-    }
-
-    protected function applyUserToken(): GoogleToken
-    {
-        $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
-
-        $client = $this->drive->getClient();
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expires_in'    => max(1, Carbon::parse($token->expiry_date)->timestamp - time()),
-            'created'       => time(),
-        ]);
-
-        if ($client->isAccessTokenExpired() && $token->refresh_token) {
-            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
-            if (!isset($new['error'])) {
-                $token->update([
-                    'access_token' => $new['access_token'],
-                    'expiry_date'  => now()->addSeconds($new['expires_in']),
-                ]);
-                $client->setAccessToken($new);
-            }
-        }
-
-        return $token;
     }
 
     public function createMainFolder(Request $request)
@@ -59,7 +30,8 @@ class DriveController extends Controller
             'name' => 'required|string',
         ]);
 
-        $token = $this->applyUserToken();
+        $this->drive->impersonate(Auth::user()->email);
+        $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
 
         try {
             $folderId = $this->drive->createFolder(
@@ -87,7 +59,7 @@ class DriveController extends Controller
 
     public function setMainFolder(Request $request)
     {
-        $this->applyUserToken();
+        $this->drive->impersonate(Auth::user()->email);
 
         GoogleToken::updateOrCreate(
             ['username' => Auth::user()->username],
@@ -99,7 +71,8 @@ class DriveController extends Controller
 
     public function createSubfolder(Request $request)
     {
-        $token = $this->applyUserToken();
+        $this->drive->impersonate(Auth::user()->email);
+        $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
         $parentId = $token->recordings_folder_id;
 
         $folderId = $this->drive->createFolder($request->input('name'), $parentId);
@@ -210,7 +183,7 @@ class DriveController extends Controller
 
     public function deleteSubfolder(string $id)
     {
-        $this->applyUserToken();
+        $this->drive->impersonate(Auth::user()->email);
 
         $this->drive->deleteFile($id);
 
@@ -220,8 +193,8 @@ class DriveController extends Controller
     }
     public function saveResults(Request $request)
     {
-        // Ensure the Google client uses the authenticated user's token
-        $this->applyUserToken();
+        // Impersonate the authenticated user via the service account
+        $this->drive->impersonate(Auth::user()->email);
 
         // 1. Validación: ahora esperamos también el mime type del audio
         $v = $request->validate([
@@ -264,8 +237,7 @@ class DriveController extends Controller
             ];
             $encrypted = Crypt::encryptString(json_encode($payload));
 
-            // 6. Sube los archivos a Drive
-            //    Asume que en tu servicio GoogleDriveService tienes uploadFile()
+            // 6. Sube los archivos a Drive usando la cuenta de servicio
             $transcriptFileId = $this->drive
                 ->uploadFile("{$meetingName}.ju", 'application/json', $transcriptionFolderId, $encrypted);
 
