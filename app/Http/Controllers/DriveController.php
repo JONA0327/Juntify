@@ -238,15 +238,22 @@ class DriveController extends Controller
             $encrypted = Crypt::encryptString(json_encode($payload));
 
             // 6. Sube los archivos a Drive usando la cuenta de servicio
-            $transcriptFileId = $this->drive
-                ->uploadFile("{$meetingName}.ju", 'application/json', $transcriptionFolderId, $encrypted);
+            try {
+                $transcriptFileId = $this->drive
+                    ->uploadFile("{$meetingName}.ju", 'application/json', $transcriptionFolderId, $encrypted);
 
-            // extrae la extensión del mimeType, p.ej. "audio/webm" → "webm"
-            [$type, $sub]     = explode('/', $v['audioMimeType'], 2);
-            $ext              = preg_replace('/[^\w]/', '', $sub);
+                // extrae la extensión del mimeType, p.ej. "audio/webm" → "webm"
+                [$type, $sub]     = explode('/', $v['audioMimeType'], 2);
+                $ext              = preg_replace('/[^\w]/', '', $sub);
 
-            $audioFileId      = $this->drive
-                ->uploadFile("{$meetingName}.{$ext}", $v['audioMimeType'], $audioFolderId, $audio);
+                $audioFileId      = $this->drive
+                    ->uploadFile("{$meetingName}.{$ext}", $v['audioMimeType'], $audioFolderId, $audio);
+            } catch (RuntimeException $e) {
+                Log::error('saveResults drive failure', ['error' => $e->getMessage()]);
+                return response()->json([
+                    'message' => 'Error de Drive: ' . $e->getMessage(),
+                ], 502);
+            }
 
             $transcriptUrl = $this->drive->getFileLink($transcriptFileId);
             $audioUrl      = $this->drive->getFileLink($audioFileId);
@@ -277,14 +284,21 @@ class DriveController extends Controller
             $tasks        = $analysis['tasks'] ?? [];
 
             // 8. Guarda en BD y responde
-            TranscriptionLaravel::create([
-                'username'               => Auth::user()->username,
-                'meeting_name'           => $meetingName,
-                'audio_drive_id'         => $audioFileId,
-                'audio_download_url'     => $audioUrl,
-                'transcript_drive_id'    => $transcriptFileId,
-                'transcript_download_url' => $transcriptUrl,
-            ]);
+            try {
+                TranscriptionLaravel::create([
+                    'username'               => Auth::user()->username,
+                    'meeting_name'           => $meetingName,
+                    'audio_drive_id'         => $audioFileId,
+                    'audio_download_url'     => $audioUrl,
+                    'transcript_drive_id'    => $transcriptFileId,
+                    'transcript_download_url' => $transcriptUrl,
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('saveResults db failure', ['error' => $e->getMessage()]);
+                return response()->json([
+                    'message' => 'Error de base de datos: ' . $e->getMessage(),
+                ], 500);
+            }
 
             return response()->json([
                 'saved'                   => true,
