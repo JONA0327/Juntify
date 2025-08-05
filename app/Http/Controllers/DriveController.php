@@ -278,20 +278,20 @@ class DriveController extends Controller
 
             // 7. Guarda en BD y responde
             TranscriptionLaravel::create([
-                'username'            => Auth::user()->username,
-                'meeting_name'        => $meetingName,
-                'audio_file_id'       => $audioFileId,
-                'audio_file_url'      => $audioUrl,
-                'transcript_file_id'  => $transcriptFileId,
-                'transcript_file_url' => $transcriptUrl,
+                'username'               => Auth::user()->username,
+                'meeting_name'           => $meetingName,
+                'audio_drive_id'         => $audioFileId,
+                'audio_download_url'     => $audioUrl,
+                'transcript_drive_id'    => $transcriptFileId,
+                'transcript_download_url' => $transcriptUrl,
             ]);
 
             return response()->json([
-                'saved'               => true,
-                'audio_file_id'       => $audioFileId,
-                'audio_file_url'      => $audioUrl,
-                'transcript_file_id'  => $transcriptFileId,
-                'transcript_file_url' => $transcriptUrl,
+                'saved'                  => true,
+                'audio_drive_id'         => $audioFileId,
+                'audio_download_url'     => $audioUrl,
+                'transcript_drive_id'    => $transcriptFileId,
+                'transcript_download_url' => $transcriptUrl,
             ], 200);
 
         } catch (RuntimeException $e) {
