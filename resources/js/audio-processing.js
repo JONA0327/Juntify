@@ -91,10 +91,28 @@ function getStepId(stepNumber) {
 async function loadAvailableAnalyzers() {
     try {
         const res = await fetch('/api/analyzers');
+
+        if (res.status === 401 || res.status === 403) {
+            window.location.href = '/login';
+            return;
+        }
+
+        if (!res.ok) {
+            showNotification('No se pudieron cargar los analizadores', 'error');
+            return;
+        }
+
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            showNotification('Respuesta inesperada del servidor', 'error');
+            return;
+        }
+
         availableAnalyzers = await res.json();
         renderAnalyzerCards();
     } catch (e) {
         console.error('Error fetching analyzers', e);
+        showNotification('No se pudo conectar con el servidor', 'error');
     }
 }
 
@@ -833,6 +851,23 @@ function updateAnalysisPreview() {
 async function loadDriveFolders() {
     try {
         const res = await fetch('/drive/sync-subfolders');
+
+        if (res.status === 401 || res.status === 403) {
+            window.location.href = '/login';
+            return;
+        }
+
+        if (!res.ok) {
+            showNotification('No se pudieron cargar las carpetas de Drive', 'error');
+            return;
+        }
+
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            showNotification('Respuesta inesperada del servidor', 'error');
+            return;
+        }
+
         const data = await res.json();
 
         const rootSelect = document.getElementById('root-folder-select');
@@ -876,6 +911,7 @@ async function loadDriveFolders() {
         populateSubSelect(audioSelect);
     } catch (e) {
         console.error('Error syncing subfolders', e);
+        showNotification('No se pudo conectar con el servidor', 'error');
     }
 }
 
@@ -991,11 +1027,23 @@ async function saveToDatabase() {
         });
 
         if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+                window.location.href = '/login';
+                return;
+            }
+
             let errorMsg = 'Error al guardar los datos';
-            try {
-                const err = await response.json();
-                if (err && err.message) errorMsg = err.message;
-            } catch (_) {}
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                try {
+                    const err = await response.json();
+                    if (err && err.message) errorMsg = err.message;
+                } catch (_) {}
+            } else {
+                showNotification('Respuesta inesperada del servidor', 'error');
+                return;
+            }
+
             showNotification(errorMsg, 'error');
             return;
         }

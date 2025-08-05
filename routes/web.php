@@ -47,15 +47,15 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/calendar/event', [\App\Http\Controllers\CalendarController::class, 'createEvent'])
          ->name('calendar.createEvent');
+
+    Route::get('/audio-processing', function () {
+        return view('audio-processing');
+    })->name('audio-processing');
 });
 
 Route::get('/new-meeting', function () {
     return view('new-meeting');
 })->name('new-meeting');
-
-Route::get('/audio-processing', function () {
-    return view('audio-processing');
-})->name('audio-processing');
 
 Route::post('/transcription', [TranscriptionController::class, 'store'])->name('transcription.store');
 Route::get('/transcription/{id}', [TranscriptionController::class, 'show'])->name('transcription.show');
