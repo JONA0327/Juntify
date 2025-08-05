@@ -5,6 +5,7 @@ namespace App\Services;
 use Google\Client;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
+use Google\Service\Drive\Permission;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -70,5 +71,63 @@ class GoogleServiceAccount
         ]);
 
         return $folder->getId();
+    }
+
+    public function shareFolder(string $folderId, string $email): void
+    {
+        $permission = new Permission([
+            'type'         => 'user',
+            'role'         => 'writer',
+            'emailAddress' => $email,
+        ]);
+
+        $this->drive->permissions->create(
+            $folderId,
+            $permission,
+            ['sendNotificationEmail' => false]
+        );
+    }
+
+    public function deleteFile(string $id): void
+    {
+        $this->drive->files->delete($id);
+    }
+
+    public function uploadFile(
+        string $name,
+        string $mimeType,
+        string $parentId,
+        string $contents
+    ): string {
+        $fileMetadata = new DriveFile([
+            'name'    => $name,
+            'parents' => [$parentId],
+        ]);
+
+        $file = $this->drive->files->create($fileMetadata, [
+            'data'       => $contents,
+            'mimeType'   => $mimeType,
+            'uploadType' => 'multipart',
+            'fields'     => 'id',
+        ]);
+
+        if (! $file->id) {
+            throw new RuntimeException('No se obtuvo ID al subir el archivo.');
+        }
+
+        return $file->id;
+    }
+
+    public function getFileLink(string $fileId): string
+    {
+        $file = $this->drive->files->get($fileId, [
+            'fields' => 'webViewLink'
+        ]);
+
+        if (empty($file->webViewLink)) {
+            throw new RuntimeException("No se pudo obtener webViewLink para el archivo $fileId");
+        }
+
+        return $file->webViewLink;
     }
 }
