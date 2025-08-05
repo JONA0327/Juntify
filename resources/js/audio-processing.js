@@ -1031,6 +1031,7 @@ async function saveToDatabase() {
                 window.location.href = '/login';
                 return;
             }
+            console.error('Error al guardar los datos', response);
 
             let errorMsg = 'Error al guardar los datos';
             const contentType = response.headers.get('content-type') || '';
@@ -1039,12 +1040,11 @@ async function saveToDatabase() {
                     const err = await response.json();
                     if (err && err.message) errorMsg = err.message;
                 } catch (_) {}
+                showNotification(errorMsg, 'error');
             } else {
                 showNotification('Respuesta inesperada del servidor', 'error');
-                return;
             }
 
-            showNotification(errorMsg, 'error');
             return;
         }
 
