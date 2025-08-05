@@ -12,6 +12,7 @@ use RuntimeException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 
 class DriveController extends Controller
@@ -326,6 +327,12 @@ class DriveController extends Controller
                 'transcript_file_url'=> $transcriptUrl,
             ]);
         } catch (\Throwable $e) {
+            Log::error('saveResults failed', ['exception' => $e]);
+
+            if ($e instanceof RuntimeException) {
+                return response()->json(['message' => $e->getMessage()], 400);
+            }
+
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
