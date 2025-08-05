@@ -16,7 +16,7 @@ return new class extends Migration
             $table->text('transcript_download_url');
             $table->string('audio_drive_id', 255);
             $table->text('audio_download_url');
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamps();
 
             $table->foreign('username')
                   ->references('username')->on('users')

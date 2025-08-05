@@ -11,6 +11,11 @@ class TranscriptionLaravel extends Model
     use HasFactory;
 
     /**
+     * The table associated with the model.
+     */
+    protected $table = 'transcriptions_laravel';
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array<int, string>
@@ -18,11 +23,10 @@ class TranscriptionLaravel extends Model
     protected $fillable = [
         'username',
         'meeting_name',
-        'audio_file_id',
-        'audio_file_url',
-        'transcript_file_id',
-        'transcript_file_url',
-        'transcript',
+        'audio_drive_id',
+        'audio_download_url',
+        'transcript_drive_id',
+        'transcript_download_url',
     ];
 
     public function user(): BelongsTo
