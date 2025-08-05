@@ -317,6 +317,13 @@ class DriveController extends Controller
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Throwable $e) {
             Log::error('saveResults failed', ['exception' => $e->getMessage()]);
+
+            if (str_contains($e->getMessage(), 'unauthorized_client')) {
+                return response()->json([
+                    'message' => 'La cuenta de servicio no está autorizada para acceder a Google Drive'
+                ], 403);
+            }
+
             return response()->json(['message' => 'Error interno'], 500);
         }
     }
