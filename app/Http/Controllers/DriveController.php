@@ -8,6 +8,7 @@ use App\Models\Subfolder;
 use App\Models\TranscriptionLaravel;
 use App\Services\GoogleDriveService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use RuntimeException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -58,14 +59,17 @@ class DriveController extends Controller
             'name' => 'required|string',
         ]);
 
-        $token = $this->applyUserToken();
-
         try {
+            $token    = $this->applyUserToken();
             $folderId = $this->drive->createFolder(
                 $request->input('name'),
                 config('drive.root_folder_id')
             );
+        } catch (ModelNotFoundException $e) {
+            Log::error('createMainFolder token not found', ['exception' => $e]);
+            return response()->json(['message' => 'Unauthorized'], 403);
         } catch (RuntimeException $e) {
+            Log::error('createMainFolder failed', ['exception' => $e]);
             return response()->json(['message' => $e->getMessage()], 400);
         }
 
@@ -268,9 +272,8 @@ class DriveController extends Controller
             'audioData'               => 'required|string',
         ]);
 
-        $this->applyUserToken();
-
         try {
+            $this->applyUserToken();
             $meetingName            = $request->input('meetingName');
             $transcriptionFolderId  = $request->input('transcriptionSubfolder') ?: $request->input('rootFolder');
             $audioFolderId          = $request->input('audioSubfolder') ?: $request->input('rootFolder');
@@ -329,16 +332,15 @@ class DriveController extends Controller
                 'transcript_file_id' => $transcriptFileId,
                 'transcript_file_url'=> $transcriptUrl,
             ]);
-        } catch (\Throwable $e) {
-
+        } catch (ModelNotFoundException $e) {
+            Log::error('saveResults token not found', ['exception' => $e]);
+            return response()->json(['message' => 'Unauthorized'], 403);
+        } catch (RuntimeException $e) {
             Log::error('saveResults failed', ['exception' => $e]);
-
-            if ($e instanceof RuntimeException) {
-                return response()->json(['message' => $e->getMessage()], 400);
-            }
-
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Throwable $e) {
+            Log::error('saveResults failed', ['exception' => $e]);
             return response()->json(['message' => $e->getMessage()], 500);
-
         }
     }
 }
