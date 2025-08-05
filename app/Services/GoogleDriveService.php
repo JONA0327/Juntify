@@ -6,7 +6,8 @@ use Google\Client;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
 use Google\Service\Drive\Permission;
-use Google\Service\Exception as GoogleServiceException;
+
+use RuntimeException;
 
 class GoogleDriveService
 {
@@ -66,7 +67,18 @@ class GoogleDriveService
 
         return $results->getFiles();
     }
+        public function listSubfolders(string $parentId): array
+    {
+        $response = $this->drive->files->listFiles([
+            'q'      => sprintf(
+                "mimeType='application/vnd.google-apps.folder' and '%s' in parents and trashed=false",
+                $parentId
+            ),
+            'fields' => 'files(id,name)'
+        ]);
 
+        return $response->getFiles();
+    }
     public function shareFolder(string $folderId, string $email): void
     {
         $permission = new Permission([
@@ -81,52 +93,51 @@ class GoogleDriveService
             ['sendNotificationEmail' => false]
         );
     }
-
-    /**
-     * @param string|resource $contents
-     */
-    public function uploadFile(string $name, string $mime, string $folderId, $contents): string
-    {
-        $fileMetadata = new DriveFile([
-            'name'    => $name,
-            'parents' => [$folderId],
-        ]);
-
-        try {
-            $file = $this->drive->files->create($fileMetadata, [
-                'data'       => $contents,
-                'mimeType'   => $mime,
-                'uploadType' => 'multipart',
-                'fields'     => 'id',
-            ]);
-        } catch (GoogleServiceException $e) {
-            throw new \RuntimeException('Google Drive upload failed: ' . $e->getMessage(), 0, $e);
-        }
-
-        return $file->getId();
-    }
-
-    public function getFileLink(string $fileId): string
-    {
-        try {
-            $file = $this->drive->files->get($fileId, [
-                'fields' => 'webContentLink,webViewLink',
-            ]);
-        } catch (GoogleServiceException $e) {
-            throw new \RuntimeException('Google Drive request failed: ' . $e->getMessage(), 0, $e);
-        }
-
-        $link = $file->getWebContentLink() ?: $file->getWebViewLink();
-
-        if (!$link) {
-            throw new \RuntimeException('No link available for the requested file.');
-        }
-
-        return $link;
-    }
-
-    public function deleteFile(string $id): void
+        public function deleteFile(string $id): void
     {
         $this->drive->files->delete($id);
+    }
+        /**
+     * Sube un archivo a Google Drive y devuelve su ID.
+     */
+    public function uploadFile(
+        string $name,
+        string $mimeType,
+        string $parentId,
+        string $contents
+    ): string {
+        $fileMetadata = new DriveFile([
+            'name'    => $name,
+            'parents' => [$parentId],
+        ]);
+
+        $file = $this->drive->files->create($fileMetadata, [
+            'data'         => $contents,
+            'mimeType'     => $mimeType,
+            'uploadType'   => 'multipart',
+            'fields'       => 'id',
+        ]);
+
+        if (! $file->id) {
+            throw new RuntimeException('No se obtuvo ID al subir el archivo.');
+        }
+
+        return $file->id;
+    }
+
+    /**
+     * Obtiene el enlace webViewLink (para ver/compartir) de un archivo existente.
+     */
+    public function getFileLink(string $fileId): string
+    {
+        $file = $this->drive->files->get($fileId, [
+            'fields' => 'webViewLink'
+        ]);
+
+        if (empty($file->webViewLink)) {
+            throw new RuntimeException("No se pudo obtener webViewLink para el archivo $fileId");
+        }
+
+        return $file->webViewLink;
     }
 }
