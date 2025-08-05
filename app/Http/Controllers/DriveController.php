@@ -251,7 +251,32 @@ class DriveController extends Controller
             $transcriptUrl = $this->drive->getFileLink($transcriptFileId);
             $audioUrl      = $this->drive->getFileLink($audioFileId);
 
-            // 7. Guarda en BD y responde
+            // 7. Calcula información adicional
+            $rootName = Folder::where('google_id', $v['rootFolder'])->value('name');
+            $drivePath = $rootName ?? '';
+
+            $subfolderId = $v['transcriptionSubfolder'] ?: $v['audioSubfolder'];
+            if ($subfolderId) {
+                $subName = Subfolder::where('google_id', $subfolderId)->value('name');
+                if ($subName) {
+                    $drivePath .= "/{$subName}";
+                }
+            }
+
+            $duration = 0;
+            $speakers = [];
+            foreach ($v['transcriptionData'] as $seg) {
+                if (isset($seg['end']) && $seg['end'] > $duration) {
+                    $duration = $seg['end'];
+                }
+                if (!empty($seg['speaker'])) {
+                    $speakers[$seg['speaker']] = true;
+                }
+            }
+            $speakerCount = count($speakers);
+            $tasks        = $analysis['tasks'] ?? [];
+
+            // 8. Guarda en BD y responde
             TranscriptionLaravel::create([
                 'username'               => Auth::user()->username,
                 'meeting_name'           => $meetingName,
@@ -262,11 +287,15 @@ class DriveController extends Controller
             ]);
 
             return response()->json([
-                'saved'                  => true,
-                'audio_drive_id'         => $audioFileId,
-                'audio_download_url'     => $audioUrl,
-                'transcript_drive_id'    => $transcriptFileId,
+                'saved'                   => true,
+                'audio_drive_id'          => $audioFileId,
+                'audio_download_url'      => $audioUrl,
+                'transcript_drive_id'     => $transcriptFileId,
                 'transcript_download_url' => $transcriptUrl,
+                'drive_path'              => $drivePath,
+                'audio_duration'          => $duration,
+                'speaker_count'           => $speakerCount,
+                'tasks'                   => $tasks,
             ], 200);
 
         } catch (RuntimeException $e) {

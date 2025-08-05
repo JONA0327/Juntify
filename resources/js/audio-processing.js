@@ -20,6 +20,10 @@ let audioPlayer = null;
 let currentSegmentIndex = null;
 let segmentEndHandler = null;
 let analysisResults = null;
+let finalDrivePath = '';
+let finalAudioDuration = 0;
+let finalSpeakerCount = 0;
+let finalTasks = [];
 
 // Mensajes que se mostrarán mientras se genera la transcripción
 const typingMessages = [
@@ -1086,6 +1090,12 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
             return;
         }
 
+        const result = await response.json();
+        finalDrivePath = result.drive_path || '';
+        finalAudioDuration = result.audio_duration || 0;
+        finalSpeakerCount = result.speaker_count || 0;
+        finalTasks = result.tasks || [];
+
         document.getElementById('audio-upload-status').textContent = '✅';
         setProgress(33, 'Encriptando datos...');
         await new Promise(r => setTimeout(r, 300));
@@ -1096,7 +1106,12 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         document.getElementById('tasks-save-status').textContent = '✅';
         setProgress(100, 'Guardado completado');
         setTimeout(() => {
-            showCompletion();
+            showCompletion({
+                drivePath: finalDrivePath,
+                audioDuration: finalAudioDuration,
+                speakerCount: finalSpeakerCount,
+                tasks: finalTasks
+            });
         }, 500);
     } catch (e) {
         console.error('Error al guardar en base de datos', e);
@@ -1107,8 +1122,20 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
 
 // ===== PASO 8: COMPLETADO =====
 
-function showCompletion() {
+function showCompletion({ drivePath, audioDuration, speakerCount, tasks }) {
     showStep(8);
+
+    const pathEl = document.getElementById('completion-drive-path');
+    if (pathEl) pathEl.textContent = drivePath || '';
+
+    const durationEl = document.getElementById('completion-audio-duration');
+    if (durationEl) durationEl.textContent = `${formatTime((audioDuration || 0) * 1000)} minutos`;
+
+    const speakersEl = document.getElementById('completion-speaker-count');
+    if (speakersEl) speakersEl.textContent = `${speakerCount} participante${speakerCount === 1 ? '' : 's'}`;
+
+    const tasksEl = document.getElementById('completion-task-count');
+    if (tasksEl) tasksEl.textContent = `${(tasks ? tasks.length : 0)} tarea${tasks && tasks.length === 1 ? '' : 's'}`;
 }
 
 // ===== FUNCIONES DE NAVEGACIÓN =====
