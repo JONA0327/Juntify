@@ -990,7 +990,7 @@ function downloadAudio() {
     // Aquí iría la lógica para descargar el audio
 }
 
-function saveToDatabase() {
+async function saveToDatabase() {
     const meetingName = document.getElementById('meeting-name').value.trim();
     const rootFolder = document.getElementById('root-folder-select').value;
     const transcriptionSubfolder = document.getElementById('transcription-subfolder-select').value;
@@ -1002,7 +1002,15 @@ function saveToDatabase() {
     }
 
     showStep(7);
-    processDatabaseSave(meetingName, rootFolder, transcriptionSubfolder, audioSubfolder);
+    const result = await processDatabaseSave(meetingName, rootFolder, transcriptionSubfolder, audioSubfolder);
+    if (!result.success) {
+        const errorEl = document.getElementById('analysis-error-message');
+        if (errorEl) {
+            errorEl.textContent = result.message || 'Error al guardar los datos';
+            errorEl.style.display = 'block';
+        }
+        showStep(4);
+    }
 }
 
 // ===== PASO 7: GUARDANDO EN BD =====
@@ -1017,7 +1025,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         if (text) progressText.textContent = text;
     };
 
-    // Crea contenedor de mensajes detallados
+    // Contenedor de mensajes detallados
     const addMessage = (msg) => {
         const section = document.querySelector('#step-saving .progress-section');
         if (!section) return;
@@ -1033,12 +1041,17 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         log.appendChild(p);
     };
 
-    // Estado inicial
-    setProgress(0, 'Preparando guardado...');
-    document.getElementById('audio-upload-status').textContent = '⏳';
-    document.getElementById('transcription-save-status').textContent = '⏳';
-    document.getElementById('analysis-save-status').textContent = '⏳';
-    document.getElementById('tasks-save-status').textContent = '⏳';
+    const resetUI = () => {
+        setProgress(0, 'Preparando guardado...');
+        document.getElementById('audio-upload-status').textContent = '⏳';
+        document.getElementById('transcription-save-status').textContent = '⏳';
+        document.getElementById('analysis-save-status').textContent = '⏳';
+        document.getElementById('tasks-save-status').textContent = '⏳';
+        const log = document.getElementById('save-progress-log');
+        if (log) log.innerHTML = '';
+    };
+
+    resetUI();
     addMessage('Iniciando guardado de resultados');
 
     const transcription = transcriptionData;
@@ -1053,8 +1066,9 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         } catch (e) {
             console.error('Error al convertir audio a base64', e);
             showNotification('No se pudo procesar el audio', 'error');
+            resetUI();
             showStep(4);
-            return;
+            return { success: false, message: 'No se pudo procesar el audio' };
         }
     }
 
@@ -1064,28 +1078,30 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
     };
 
     try {
-        // 1. Subida de audio
-        setProgress(0, 'Subiendo archivo de audio...');
-        addMessage('Subiendo archivo de audio...');
-        const audioRes = await fetch('/drive/save-results?stage=audio', {
+        setProgress(10, 'Guardando resultados...');
+        addMessage('Enviando datos al servidor...');
+
+        const response = await fetch('/drive/save-results', {
             method: 'POST',
             headers,
             body: JSON.stringify({
                 meetingName,
                 rootFolder,
+                transcriptionSubfolder,
                 audioSubfolder,
+                transcriptionData: transcription,
+                analysisResults: analysis,
                 audioData: audio,
                 audioMimeType
             })
         });
 
-
         if (!response.ok) {
             if (response.status === 401 || response.status === 403) {
                 window.location.href = '/login';
-                return;
+                return { success: false, message: 'No autorizado' };
             }
-            console.error('Error al guardar los datos', response);
+
             let errorMsg = 'Error al guardar los datos';
             const contentType = response.headers.get('content-type') || '';
             if (contentType.includes('application/json')) {
@@ -1097,16 +1113,11 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                 errorMsg = 'Respuesta inesperada del servidor';
             }
 
+            addMessage(`⚠️ ${errorMsg}`);
             showNotification(errorMsg, 'error');
-
-            const errorEl = document.getElementById('analysis-error-message');
-            if (errorEl) {
-                errorEl.textContent = errorMsg;
-                errorEl.style.display = 'block';
-            }
-
+            resetUI();
             showStep(4);
-            return;
+            return { success: false, message: errorMsg };
         }
 
         const result = await response.json();
@@ -1115,48 +1126,13 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         finalSpeakerCount = result.speaker_count || 0;
         finalTasks = result.tasks || [];
 
-        if (!audioRes.ok) throw new Error('Error al subir audio');
-
         document.getElementById('audio-upload-status').textContent = '✅';
-        setProgress(33, 'Audio subido');
-        addMessage('Archivo de audio subido correctamente');
-
-        // 2. Guardado de transcripción
-        progressText.textContent = 'Guardando transcripción...';
-        addMessage('Guardando transcripción...');
-        const transRes = await fetch('/drive/save-results?stage=transcription', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                meetingName,
-                rootFolder,
-                transcriptionSubfolder,
-                transcriptionData: transcription
-            })
-        });
-        if (!transRes.ok) throw new Error('Error al guardar transcripción');
         document.getElementById('transcription-save-status').textContent = '✅';
-        setProgress(66, 'Transcripción guardada');
-        addMessage('Transcripción guardada correctamente');
-
-        // 3. Guardado de análisis y tareas
-        progressText.textContent = 'Guardando análisis...';
-        addMessage('Guardando análisis y tareas...');
-        const analysisRes = await fetch('/drive/save-results?stage=analysis', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                meetingName,
-                rootFolder,
-                analysisResults: analysis,
-                tasks: analysis?.tasks || []
-            })
-        });
-        if (!analysisRes.ok) throw new Error('Error al guardar análisis');
         document.getElementById('analysis-save-status').textContent = '✅';
         document.getElementById('tasks-save-status').textContent = '✅';
+
         setProgress(100, 'Guardado completado');
-        addMessage('Análisis y tareas almacenados con éxito');
+        addMessage('Resultados almacenados con éxito');
         setTimeout(() => {
             showCompletion({
                 drivePath: finalDrivePath,
@@ -1165,12 +1141,16 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                 tasks: finalTasks
             });
         }, 500);
+
+        return { success: true };
     } catch (e) {
         console.error('Error al guardar en base de datos', e);
         const msg = e.message || 'No se pudo conectar con el servidor';
         addMessage(`⚠️ ${msg}`);
         showNotification(msg, 'error');
+        resetUI();
         showStep(4);
+        return { success: false, message: msg };
     }
 }
 
