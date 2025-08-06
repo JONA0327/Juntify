@@ -904,7 +904,7 @@ async function loadDriveFolders() {
                 select.appendChild(noneOpt);
                 list.forEach(f => {
                     const opt = document.createElement('option');
-                    opt.value = f.id;
+                    opt.value = f.google_id; // Usar google_id para Drive
                     opt.textContent = `\uD83D\uDCC2 ${f.name}`;
                     select.appendChild(opt);
                 });

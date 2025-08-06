@@ -259,7 +259,10 @@ class DriveController extends Controller
     }
     public function saveResults(Request $request)
     {
+        // Permitir hasta 5 minutos de ejecución para cargas grandes
+        set_time_limit(300);
         // 1. Validación: ahora esperamos también el mime type del audio
+
         $v = $request->validate([
             'meetingName'            => 'required|string',
             'rootFolder'             => 'required|string',
@@ -271,10 +274,44 @@ class DriveController extends Controller
             'audioMimeType'          => 'required|string',      // p.ej. "audio/webm"
         ]);
 
-        $transcriptionFolderId = $v['transcriptionSubfolder'] ?: $v['rootFolder'];
-        $audioFolderId         = $v['audioSubfolder']       ?: $v['rootFolder'];
-        $accountEmail          = config('services.google.service_account_email');
 
+        // Permitir que rootFolder sea id interno o google_id
+        $rootFolder = Folder::where(function($q) use ($v) {
+            $q->where('google_id', $v['rootFolder'])
+              ->orWhere('id', $v['rootFolder']);
+        })->first();
+        if (!$rootFolder) {
+            return response()->json(['message' => 'Carpeta principal no encontrada en la base de datos'], 400);
+        }
+        // Si hay subcarpeta, obtener el ID real, si no, usar el de la raíz
+
+        // Permitir que los IDs de subcarpeta sean tanto google_id como id interno
+        $transcriptionFolderId = $rootFolder->google_id;
+        if ($v['transcriptionSubfolder']) {
+            $sub = Subfolder::where(function($q) use ($v) {
+                $q->where('google_id', $v['transcriptionSubfolder'])
+                  ->orWhere('id', $v['transcriptionSubfolder']);
+            })->first();
+            if ($sub) {
+                $transcriptionFolderId = $sub->google_id;
+            } else {
+                return response()->json(['message' => 'ID de carpeta o subcarpeta inválido'], 400);
+            }
+        }
+        $audioFolderId = $rootFolder->google_id;
+        if ($v['audioSubfolder']) {
+            $sub = Subfolder::where(function($q) use ($v) {
+                $q->where('google_id', $v['audioSubfolder'])
+                  ->orWhere('id', $v['audioSubfolder']);
+            })->first();
+            if ($sub) {
+                $audioFolderId = $sub->google_id;
+            } else {
+                return response()->json(['message' => 'ID de carpeta o subcarpeta inválido'], 400);
+            }
+        }
+
+        $accountEmail = config('services.google.service_account_email');
         $serviceAccount = app(GoogleServiceAccount::class);
 
         try {

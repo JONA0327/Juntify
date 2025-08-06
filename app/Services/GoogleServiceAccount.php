@@ -18,21 +18,10 @@ class GoogleServiceAccount
     public function __construct()
     {
         $this->client = new Client();
-        $jsonPath = config('services.google.service_account_json');
+        $jsonPath = env('GOOGLE_APPLICATION_CREDENTIALS');
 
-        // Si la ruta no es absoluta (ni Unix ni Windows), la convertimos
-        if (
-            $jsonPath
-            && !Str::startsWith($jsonPath, '/')
-            // ahora usamos '#' como delimitador y escapamos '\\' correctamente
-            && !preg_match('#^[A-Za-z]:(\\\\|/)#', $jsonPath)
-        ) {
-            $jsonPath = base_path($jsonPath);
-        }
-
-        if (!$jsonPath || !is_file($jsonPath) || !is_readable($jsonPath)) {
-            Log::error('Invalid Google service account JSON path', ['path' => $jsonPath]);
-            throw new RuntimeException('Service account JSON path is invalid');
+        if (!$jsonPath || !file_exists($jsonPath)) {
+            throw new \RuntimeException('Service account JSON path is invalid');
         }
 
         $this->client->setAuthConfig($jsonPath);
