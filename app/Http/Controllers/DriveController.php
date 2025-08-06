@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Crypt;
 use App\Models\TranscriptionLaravel;
 use Illuminate\Support\Facades\Log;
 use Google\Service\Drive as DriveService;
+use Google\Service\Exception as GoogleServiceException;
 use App\Http\Controllers\Auth\GoogleAuthController;
 
 class DriveController extends Controller
@@ -208,11 +209,13 @@ class DriveController extends Controller
             'audioMimeType'          => 'required|string',      // p.ej. "audio/webm"
         ]);
 
+        $transcriptionFolderId = $v['transcriptionSubfolder'] ?: $v['rootFolder'];
+        $audioFolderId         = $v['audioSubfolder']       ?: $v['rootFolder'];
+        $accountEmail          = config('services.google.service_account_email');
+
         try {
             // 2. Carpetas en Drive
-            $meetingName           = $v['meetingName'];
-            $transcriptionFolderId = $v['transcriptionSubfolder'] ?: $v['rootFolder'];
-            $audioFolderId         = $v['audioSubfolder']       ?: $v['rootFolder'];
+            $meetingName = $v['meetingName'];
 
             // 3. Decodifica Base64
             $b64    = $v['audioData'];
@@ -243,13 +246,42 @@ class DriveController extends Controller
                     ->uploadFile("{$meetingName}.ju", 'application/json', $transcriptionFolderId, $encrypted);
 
                 // extrae la extensión del mimeType, p.ej. "audio/webm" → "webm"
-                [$type, $sub]     = explode('/', $v['audioMimeType'], 2);
-                $ext              = preg_replace('/[^\w]/', '', $sub);
+                [$type, $sub] = explode('/', $v['audioMimeType'], 2);
+                $ext          = preg_replace('/[^\w]/', '', $sub);
 
-                $audioFileId      = $this->drive
+                $audioFileId = $this->drive
                     ->uploadFile("{$meetingName}.{$ext}", $v['audioMimeType'], $audioFolderId, $audio);
+            } catch (GoogleServiceException $e) {
+                Log::error('saveResults drive failure', [
+                    'error'                  => $e->getMessage(),
+                    'code'                   => $e->getCode(),
+                    'transcription_folder'   => $transcriptionFolderId,
+                    'audio_folder'           => $audioFolderId,
+                    'service_account_email'  => $accountEmail,
+                ]);
+
+                if (
+                    $e->getCode() === 404 ||
+                    $e->getCode() === 403 ||
+                    str_contains($e->getMessage(), 'File not found') ||
+                    str_contains($e->getMessage(), 'The caller does not have permission')
+                ) {
+                    return response()->json([
+                        'code'    => 'FOLDER_NOT_SHARED',
+                        'message' => "La carpeta no está compartida con la cuenta de servicio. Comparte la carpeta con {$accountEmail}",
+                    ], 403);
+                }
+
+                return response()->json([
+                    'message' => 'Error de Drive: ' . $e->getMessage(),
+                ], 502);
             } catch (RuntimeException $e) {
-                Log::error('saveResults drive failure', ['error' => $e->getMessage()]);
+                Log::error('saveResults drive failure', [
+                    'error'                 => $e->getMessage(),
+                    'transcription_folder'  => $transcriptionFolderId,
+                    'audio_folder'          => $audioFolderId,
+                    'service_account_email' => $accountEmail,
+                ]);
                 return response()->json([
                     'message' => 'Error de Drive: ' . $e->getMessage(),
                 ], 502);
@@ -294,7 +326,12 @@ class DriveController extends Controller
                     'transcript_download_url' => $transcriptUrl,
                 ]);
             } catch (\Throwable $e) {
-                Log::error('saveResults db failure', ['error' => $e->getMessage()]);
+                Log::error('saveResults db failure', [
+                    'error'                 => $e->getMessage(),
+                    'transcription_folder'  => $transcriptionFolderId,
+                    'audio_folder'          => $audioFolderId,
+                    'service_account_email' => $accountEmail,
+                ]);
                 return response()->json([
                     'message' => 'Error de base de datos: ' . $e->getMessage(),
                 ], 500);
@@ -313,14 +350,34 @@ class DriveController extends Controller
             ], 200);
 
         } catch (RuntimeException $e) {
-            Log::error('saveResults failed', ['error' => $e->getMessage()]);
+            Log::error('saveResults failed', [
+                'error'                 => $e->getMessage(),
+                'transcription_folder'  => $transcriptionFolderId,
+                'audio_folder'          => $audioFolderId,
+                'service_account_email' => $accountEmail,
+            ]);
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Throwable $e) {
-            Log::error('saveResults failed', ['exception' => $e->getMessage()]);
+            Log::error('saveResults failed', [
+                'exception'             => $e->getMessage(),
+                'transcription_folder'  => $transcriptionFolderId,
+                'audio_folder'          => $audioFolderId,
+                'service_account_email' => $accountEmail,
+            ]);
 
             if (str_contains($e->getMessage(), 'unauthorized_client')) {
                 return response()->json([
                     'message' => 'La cuenta de servicio no está autorizada para acceder a Google Drive'
+                ], 403);
+            }
+
+            if (
+                str_contains($e->getMessage(), 'File not found') ||
+                str_contains($e->getMessage(), 'The caller does not have permission')
+            ) {
+                return response()->json([
+                    'code'    => 'FOLDER_NOT_SHARED',
+                    'message' => "La carpeta no está compartida con la cuenta de servicio. Comparte la carpeta con {$accountEmail}",
                 ], 403);
             }
 
