@@ -20,9 +20,15 @@ class GoogleServiceAccount
         $this->client = new Client();
         $jsonPath = env('GOOGLE_APPLICATION_CREDENTIALS');
 
+        if ($jsonPath) {
+            $jsonPath = str_replace('\\', DIRECTORY_SEPARATOR, $jsonPath);
+            $jsonPath = realpath($jsonPath) ?: $jsonPath;
+        }
+
         if ($jsonPath && ! Str::startsWith($jsonPath, ['/', '\\'])) {
             $basePath = base_path($jsonPath);
             $jsonPath = file_exists($basePath) ? $basePath : storage_path($jsonPath);
+            $jsonPath = realpath($jsonPath) ?: $jsonPath;
         }
 
         if (! $jsonPath || ! file_exists($jsonPath)) {
