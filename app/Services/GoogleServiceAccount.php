@@ -107,28 +107,21 @@ class GoogleServiceAccount
 
 
 
-        // Si es un recurso, usar uploadType 'media', si no, 'multipart'
         if (is_resource($contentsOrPath)) {
-            $data = $contentsOrPath;
-            $uploadType = 'media';
+            $data = stream_get_contents($contentsOrPath);
+            fclose($contentsOrPath);
         } elseif (is_string($contentsOrPath) && is_file($contentsOrPath)) {
-            $data = fopen($contentsOrPath, 'rb');
-            $uploadType = 'media';
+            $data = file_get_contents($contentsOrPath);
         } else {
             $data = $contentsOrPath;
-            $uploadType = 'multipart';
         }
 
         $file = $this->drive->files->create($fileMetadata, [
             'data'       => $data,
             'mimeType'   => $mimeType,
-            'uploadType' => $uploadType,
+            'uploadType' => 'media',
             'fields'     => 'id',
         ]);
-
-        if (is_resource($data)) {
-            fclose($data);
-        }
 
         if (! $file->id) {
             throw new RuntimeException('No se obtuvo ID al subir el archivo.');
