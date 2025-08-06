@@ -20,8 +20,13 @@ class GoogleServiceAccount
         $this->client = new Client();
         $jsonPath = env('GOOGLE_APPLICATION_CREDENTIALS');
 
-        if (!$jsonPath || !file_exists($jsonPath)) {
-            throw new \RuntimeException('Service account JSON path is invalid');
+        if ($jsonPath && ! Str::startsWith($jsonPath, ['/', '\\'])) {
+            $basePath = base_path($jsonPath);
+            $jsonPath = file_exists($basePath) ? $basePath : storage_path($jsonPath);
+        }
+
+        if (! $jsonPath || ! file_exists($jsonPath)) {
+            throw new RuntimeException('Service account JSON path is invalid');
         }
 
         $this->client->setAuthConfig($jsonPath);
