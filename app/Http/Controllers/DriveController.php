@@ -1,7 +1,5 @@
 <?php
-
 namespace App\Http\Controllers;
-
 use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\Subfolder;
@@ -24,6 +22,7 @@ class DriveController extends Controller
     public function __construct(GoogleDriveService $drive)
     {
         $this->drive = $drive;
+        Log::info('DriveController constructor called', ['user' => Auth::user() ? Auth::user()->username : null]);
     }
 
     public function createMainFolder(Request $request)
@@ -259,6 +258,8 @@ class DriveController extends Controller
     }
     public function saveResults(Request $request)
     {
+        Log::info('saveResults reached', ['user' => Auth::user() ? Auth::user()->username : null]);
+        Log::info('saveResults before validation', ['request' => $request->all()]);
         // Permitir hasta 5 minutos de ejecución para cargas grandes
         set_time_limit(300);
         // 1. Validación: ahora esperamos también el mime type del audio
@@ -359,11 +360,10 @@ class DriveController extends Controller
             }
             $raw    = base64_decode($b64);
 
-            // 4. Guarda temporalmente y lee el binario
+            // 4. Guarda temporalmente el binario (NO lo cargues en memoria)
             $tmp   = tempnam(sys_get_temp_dir(), 'aud');
             file_put_contents($tmp, $raw);
-            $audio = file_get_contents($tmp);
-            @unlink($tmp);
+            // $audio = file_get_contents($tmp); // NO cargar en memoria
 
             // 5. Prepara payload de transcripción/análisis
             $analysis = $v['analysisResults'];
@@ -385,7 +385,8 @@ class DriveController extends Controller
                 $ext          = preg_replace('/[^\\w]/', '', $sub);
 
                 $audioFileId = $serviceAccount
-                    ->uploadFile("{$meetingName}.{$ext}", $v['audioMimeType'], $audioFolderId, $audio);
+                    ->uploadFile("{$meetingName}.{$ext}", $v['audioMimeType'], $audioFolderId, $tmp);
+                @unlink($tmp);
             } catch (GoogleServiceException $e) {
                 Log::error('saveResults drive failure', [
                     'error'                  => $e->getMessage(),

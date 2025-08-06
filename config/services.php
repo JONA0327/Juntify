@@ -1,7 +1,6 @@
 <?php
 
 return [
-
     /*
     |--------------------------------------------------------------------------
     | Third Party Services
@@ -35,7 +34,7 @@ return [
         'client_id' => env('GOOGLE_OAUTH_CLIENT_ID'),
         'client_secret' => env('GOOGLE_OAUTH_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_OAUTH_REDIRECT_URI'),
-        'service_account_json' => env('GOOGLE_SERVICE_ACCOUNT_JSON'),
+        'service_account_json' => env('GOOGLE_APPLICATION_CREDENTIALS'),
         'service_account_email' => env('GOOGLE_SERVICE_ACCOUNT_EMAIL'),
     ],
 
@@ -47,5 +46,4 @@ return [
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
     ],
-
 ];

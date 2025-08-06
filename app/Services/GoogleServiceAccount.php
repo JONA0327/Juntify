@@ -86,19 +86,37 @@ class GoogleServiceAccount
         string $name,
         string $mimeType,
         string $parentId,
-        string $contents
+        $contentsOrPath
     ): string {
         $fileMetadata = new DriveFile([
             'name'    => $name,
             'parents' => [$parentId],
         ]);
 
+
+
+        // Si es un recurso, usar uploadType 'media', si no, 'multipart'
+        if (is_resource($contentsOrPath)) {
+            $data = $contentsOrPath;
+            $uploadType = 'media';
+        } elseif (is_string($contentsOrPath) && is_file($contentsOrPath)) {
+            $data = fopen($contentsOrPath, 'rb');
+            $uploadType = 'media';
+        } else {
+            $data = $contentsOrPath;
+            $uploadType = 'multipart';
+        }
+
         $file = $this->drive->files->create($fileMetadata, [
-            'data'       => $contents,
+            'data'       => $data,
             'mimeType'   => $mimeType,
-            'uploadType' => 'multipart',
+            'uploadType' => $uploadType,
             'fields'     => 'id',
         ]);
+
+        if (is_resource($data)) {
+            fclose($data);
+        }
 
         if (! $file->id) {
             throw new RuntimeException('No se obtuvo ID al subir el archivo.');

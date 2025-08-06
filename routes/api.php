@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AnalyzerController;
+use App\Http\Controllers\DriveController;
 
 /*
 |--------------------------------------------------------------------------
@@ -20,3 +21,4 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 Route::get('/analyzers', [AnalyzerController::class, 'list']);
+Route::post('/drive/save-results', [DriveController::class, 'saveResults']);

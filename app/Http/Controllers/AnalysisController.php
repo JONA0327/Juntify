@@ -1,11 +1,12 @@
 <?php
-
 namespace App\Http\Controllers;
-
 use App\Models\Analyzer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use OpenAI;
+use Illuminate\Support\Facades\Auth;
+use OpenAI; // Importar el facade de OpenAI
+use App\Http\Controllers\Controller;
+
 
 class AnalysisController extends Controller
 {
@@ -36,9 +37,15 @@ class AnalysisController extends Controller
 
         $client = OpenAI::client(config('services.openai.api_key'));
 
+        $user = Auth::user();
+        $model = 'gpt-4o-mini';
+        if ($user && isset($user->role) && $user->role === 'free') {
+            $model = 'gpt-3.5-turbo';
+        }
+
         try {
             $response = $client->chat()->create([
-                'model' => 'gpt-3.5-turbo',
+                'model' => $model,
                 'messages' => [
                     ['role' => 'system', 'content' => $analyzer->system_prompt],
                     ['role' => 'user', 'content' => $userPrompt],
