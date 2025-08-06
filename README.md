@@ -104,3 +104,7 @@ OPENAI_API_KEY=
 ```
 
 This key is used when calling `/analysis` to generate summaries, key points and tasks.
+
+## Audio Upload Limits
+
+Audio files up to **100 MB** are supported (≈133 MB when Base64-encoded).

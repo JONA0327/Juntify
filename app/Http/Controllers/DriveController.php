@@ -266,6 +266,7 @@ class DriveController extends Controller
         // Permitir hasta 5 minutos de ejecución para cargas grandes
         set_time_limit(300);
         // 1. Validación: ahora esperamos también el mime type del audio
+        $maxAudioBytes = 100 * 1024 * 1024; // 100 MB
 
         $v = $request->validate([
             'meetingName'            => 'required|string',
@@ -274,8 +275,10 @@ class DriveController extends Controller
             'audioSubfolder'         => 'nullable|string',
             'transcriptionData'      => 'required',
             'analysisResults'        => 'required',
-            'audioData'              => 'required|string',      // Base64
+            'audioData'              => 'required|string|max:' . (int) ceil($maxAudioBytes * 4 / 3),      // Base64 (~133MB)
             'audioMimeType'          => 'required|string',      // p.ej. "audio/webm"
+        ], [
+            'audioData.max' => 'Archivo de audio demasiado grande (máx. 100 MB)',
         ]);
 
 
