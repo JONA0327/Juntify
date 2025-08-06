@@ -278,6 +278,40 @@ class DriveController extends Controller
         $serviceAccount = app(GoogleServiceAccount::class);
 
         try {
+            $serviceAccount->shareFolder($transcriptionFolderId, $accountEmail);
+        } catch (GoogleServiceException $e) {
+            if (! str_contains(strtolower($e->getMessage()), 'already')) {
+                Log::error('saveResults share failure', [
+                    'error'                 => $e->getMessage(),
+                    'transcription_folder'  => $transcriptionFolderId,
+                    'audio_folder'          => $audioFolderId,
+                    'service_account_email' => $accountEmail,
+                ]);
+
+                return response()->json([
+                    'message' => 'Error de Drive: ' . $e->getMessage(),
+                ], 502);
+            }
+        }
+
+        try {
+            $serviceAccount->shareFolder($audioFolderId, $accountEmail);
+        } catch (GoogleServiceException $e) {
+            if (! str_contains(strtolower($e->getMessage()), 'already')) {
+                Log::error('saveResults share failure', [
+                    'error'                 => $e->getMessage(),
+                    'transcription_folder'  => $transcriptionFolderId,
+                    'audio_folder'          => $audioFolderId,
+                    'service_account_email' => $accountEmail,
+                ]);
+
+                return response()->json([
+                    'message' => 'Error de Drive: ' . $e->getMessage(),
+                ], 502);
+            }
+        }
+
+        try {
             // 2. Carpetas en Drive
             $meetingName = $v['meetingName'];
 
@@ -306,9 +340,6 @@ class DriveController extends Controller
 
             // 6. Sube los archivos a Drive usando la cuenta de servicio
             try {
-                $serviceAccount->shareFolder($transcriptionFolderId, $accountEmail);
-                $serviceAccount->shareFolder($audioFolderId, $accountEmail);
-
                 $transcriptFileId = $serviceAccount
                     ->uploadFile("{$meetingName}.ju", 'application/json', $transcriptionFolderId, $encrypted);
 
