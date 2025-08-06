@@ -16,9 +16,7 @@
 
 <ul class="nav-links" id="nav-links">
   <li>
-    <a href="{{ $isHome
-                  ? '#reuniones'
-                  : $homeUrl . '#reuniones' }}">
+    <a href="{{ route('reuniones.index') }}">
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v1.5M17.25 3v1.5M3.75 7.5h16.5M21 6.75A2.25 2.25 0 0018.75 4.5H5.25A2.25 2.25 0 003 6.75v12A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V6.75z" />
       </svg>

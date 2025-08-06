@@ -7,6 +7,8 @@ use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\DriveController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\TranscriptionController;
+use App\Http\Controllers\MeetingController;
+
 
 Route::get('/', function () {
     return view('index');
@@ -26,6 +28,8 @@ Route::middleware('auth')->group(function () {
     // Perfil
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
+    Route::get('/reuniones', [MeetingController::class, 'index'])->name('reuniones.index');
+
 
     Route::post('/drive/disconnect', [GoogleAuthController::class, 'disconnect'])->name('drive.disconnect');
 
