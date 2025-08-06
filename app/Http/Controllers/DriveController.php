@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\Subfolder;
-use App\Services\GoogleServiceAccount;
+use App\Services\GoogleDriveService;
 use RuntimeException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,9 +18,9 @@ use App\Http\Controllers\Auth\GoogleAuthController;
 
 class DriveController extends Controller
 {
-    protected GoogleServiceAccount $drive;
+    protected GoogleDriveService $drive;
 
-    public function __construct(GoogleServiceAccount $drive)
+    public function __construct(GoogleDriveService $drive)
     {
         $this->drive = $drive;
     }
@@ -30,7 +30,16 @@ class DriveController extends Controller
         $request->validate([
             'name' => 'required|string',
         ]);
-        $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
+        $token  = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
+        $client = $this->drive->getClient();
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expiry_date'   => $token->expiry_date,
+        ]);
+        if ($client->isAccessTokenExpired()) {
+            $client->refreshToken($token->refresh_token);
+        }
 
         try {
             $folderId = $this->drive->createFolder(
@@ -58,9 +67,37 @@ class DriveController extends Controller
 
     public function setMainFolder(Request $request)
     {
-        GoogleToken::updateOrCreate(
-            ['username' => Auth::user()->username],
-            ['recordings_folder_id' => $request->input('id')]
+        $token = GoogleToken::where('username', Auth::user()->username)->first();
+        if (! $token) {
+            return response()->json([], 404);
+        }
+
+        $client = $this->drive->getClient();
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expiry_date'   => $token->expiry_date,
+        ]);
+        if ($client->isAccessTokenExpired()) {
+            $client->refreshToken($token->refresh_token);
+        }
+
+        $drive      = $this->drive->getDrive();
+        $folderData = $drive->files->get($request->input('id'), ['fields' => 'name']);
+        $folderName = $folderData->getName();
+
+        $token->recordings_folder_id = $request->input('id');
+        $token->save();
+
+        Folder::updateOrCreate(
+            [
+                'google_token_id' => $token->id,
+                'google_id'       => $request->input('id'),
+            ],
+            [
+                'name'      => $folderName,
+                'parent_id' => null,
+            ]
         );
 
         $this->drive->shareFolder(
@@ -68,13 +105,26 @@ class DriveController extends Controller
             config('services.google.service_account_email')
         );
 
-        return response()->json(['id' => $request->input('id')]);
+        return response()->json([
+            'id'   => $request->input('id'),
+            'name' => $folderName,
+        ]);
     }
 
     public function createSubfolder(Request $request)
     {
-        $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
+        $token  = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
         $parentId = $token->recordings_folder_id;
+
+        $client = $this->drive->getClient();
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expiry_date'   => $token->expiry_date,
+        ]);
+        if ($client->isAccessTokenExpired()) {
+            $client->refreshToken($token->refresh_token);
+        }
 
         $folderId = $this->drive->createFolder($request->input('name'), $parentId);
 
@@ -189,6 +239,17 @@ class DriveController extends Controller
 
     public function deleteSubfolder(string $id)
     {
+        $token  = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
+        $client = $this->drive->getClient();
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expiry_date'   => $token->expiry_date,
+        ]);
+        if ($client->isAccessTokenExpired()) {
+            $client->refreshToken($token->refresh_token);
+        }
+
         $this->drive->deleteFile($id);
 
         Subfolder::where('google_id', $id)->delete();
