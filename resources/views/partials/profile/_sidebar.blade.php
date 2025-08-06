@@ -12,7 +12,31 @@
 
     <nav class="sidebar-nav">
         <ul>
-            {{-- ... otros elementos del menú ... --}}
+            <li class="nav-item">
+                <a href="#" class="nav-link active" data-section="info">
+                    <x-icon name="user" class="nav-icon" /> Información
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-section="connect">
+                    <x-icon name="link" class="nav-icon" /> Conectar
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-section="plans">
+                    <x-icon name="star" class="nav-icon" /> Planes
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-section="purchases">
+                    <x-icon name="shopping-cart" class="nav-icon" /> Mis Compras
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-section="notifications">
+                    <x-icon name="bell" class="nav-icon" /> Notificaciones
+                </a>
+            </li>
             <li class="nav-item">
                 <a href="#" class="nav-link" data-section="about">
                     <x-icon name="information-circle" class="nav-icon" /> Acerca de
