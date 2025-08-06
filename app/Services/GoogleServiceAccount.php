@@ -31,8 +31,9 @@ class GoogleServiceAccount
             $jsonPath = realpath($jsonPath) ?: $jsonPath;
         }
 
-        if (! $jsonPath || ! file_exists($jsonPath)) {
-            throw new RuntimeException('Service account JSON path is invalid');
+        Log::debug('Service Account JSON Path', ['path' => $jsonPath, 'exists' => file_exists($jsonPath)]);
+        if (!file_exists($jsonPath)) {
+            throw new \RuntimeException('Service account JSON path is invalid');
         }
 
         $this->client->setAuthConfig($jsonPath);
