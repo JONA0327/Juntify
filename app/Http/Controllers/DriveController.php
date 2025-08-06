@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 use Google\Service\Drive as DriveService;
 use Google\Service\Exception as GoogleServiceException;
 use App\Http\Controllers\Auth\GoogleAuthController;
+use Carbon\Carbon;
 
 class DriveController extends Controller
 {
@@ -273,6 +274,26 @@ class DriveController extends Controller
         $transcriptionFolderId = $v['transcriptionSubfolder'] ?: $v['rootFolder'];
         $audioFolderId         = $v['audioSubfolder']       ?: $v['rootFolder'];
         $accountEmail          = config('services.google.service_account_email');
+
+        $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
+        $client = $this->drive->getClient();
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expires_in'    => max(1, Carbon::parse($token->expiry_date)->timestamp - time()),
+            'created'       => time(),
+        ]);
+
+        if ($client->isAccessTokenExpired() && $token->refresh_token) {
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (!isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
+        }
 
         try {
             // 2. Carpetas en Drive
