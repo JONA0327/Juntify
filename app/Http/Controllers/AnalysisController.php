@@ -33,7 +33,7 @@ class AnalysisController extends Controller
             return response()->json(['error' => 'Prompt de usuario vacío'], 400);
         }
 
-        Log::info('Prompt enviado a OpenAI', ['prompt' => $userPrompt]);
+        Log::info('Prompt enviado a OpenAI', ['prompt' => substr($userPrompt, 0, 100)]);
 
         $client = OpenAI::client(config('services.openai.api_key'));
 
