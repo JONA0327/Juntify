@@ -6,6 +6,7 @@ use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\Subfolder;
 use App\Services\GoogleDriveService;
+use App\Services\GoogleServiceAccount;
 use RuntimeException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,7 +16,6 @@ use Illuminate\Support\Facades\Log;
 use Google\Service\Drive as DriveService;
 use Google\Service\Exception as GoogleServiceException;
 use App\Http\Controllers\Auth\GoogleAuthController;
-use Carbon\Carbon;
 
 class DriveController extends Controller
 {
@@ -275,25 +275,7 @@ class DriveController extends Controller
         $audioFolderId         = $v['audioSubfolder']       ?: $v['rootFolder'];
         $accountEmail          = config('services.google.service_account_email');
 
-        $token = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
-        $client = $this->drive->getClient();
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expires_in'    => max(1, Carbon::parse($token->expiry_date)->timestamp - time()),
-            'created'       => time(),
-        ]);
-
-        if ($client->isAccessTokenExpired() && $token->refresh_token) {
-            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
-            if (!isset($new['error'])) {
-                $token->update([
-                    'access_token' => $new['access_token'],
-                    'expiry_date'  => now()->addSeconds($new['expires_in']),
-                ]);
-                $client->setAccessToken($new);
-            }
-        }
+        $serviceAccount = app(GoogleServiceAccount::class);
 
         try {
             // 2. Carpetas en Drive
@@ -324,14 +306,17 @@ class DriveController extends Controller
 
             // 6. Sube los archivos a Drive usando la cuenta de servicio
             try {
-                $transcriptFileId = $this->drive
+                $serviceAccount->shareFolder($transcriptionFolderId, $accountEmail);
+                $serviceAccount->shareFolder($audioFolderId, $accountEmail);
+
+                $transcriptFileId = $serviceAccount
                     ->uploadFile("{$meetingName}.ju", 'application/json', $transcriptionFolderId, $encrypted);
 
                 // extrae la extensión del mimeType, p.ej. "audio/webm" → "webm"
                 [$type, $sub] = explode('/', $v['audioMimeType'], 2);
-                $ext          = preg_replace('/[^\w]/', '', $sub);
+                $ext          = preg_replace('/[^\\w]/', '', $sub);
 
-                $audioFileId = $this->drive
+                $audioFileId = $serviceAccount
                     ->uploadFile("{$meetingName}.{$ext}", $v['audioMimeType'], $audioFolderId, $audio);
             } catch (GoogleServiceException $e) {
                 Log::error('saveResults drive failure', [
@@ -369,8 +354,8 @@ class DriveController extends Controller
                 ], 502);
             }
 
-            $transcriptUrl = $this->drive->getFileLink($transcriptFileId);
-            $audioUrl      = $this->drive->getFileLink($audioFileId);
+            $transcriptUrl = $serviceAccount->getFileLink($transcriptFileId);
+            $audioUrl      = $serviceAccount->getFileLink($audioFileId);
 
             // 7. Calcula información adicional
             $rootName = Folder::where('google_id', $v['rootFolder'])->value('name');
