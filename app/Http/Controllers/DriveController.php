@@ -259,7 +259,10 @@ class DriveController extends Controller
     public function saveResults(Request $request)
     {
         Log::info('saveResults reached', ['user' => Auth::user() ? Auth::user()->username : null]);
-        Log::info('saveResults before validation', ['request' => $request->all()]);
+        Log::debug('saveResults before validation', [
+            'meetingName' => $request->input('meetingName'),
+            'audioLength' => strlen($request->input('audioData', '')),
+        ]);
         // Permitir hasta 5 minutos de ejecución para cargas grandes
         set_time_limit(300);
         // 1. Validación: ahora esperamos también el mime type del audio
