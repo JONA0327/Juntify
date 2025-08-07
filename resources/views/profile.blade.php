@@ -49,7 +49,28 @@
                     <h1 class="page-title">Bienvenido, {{ $user->full_name }}</h1>
                     <p class="page-subtitle">Gestiona tu cuenta y configuraciones</p>
                 </div>
-                {{-- Aquí va el código del avatar del usuario --}}
+                
+                <!-- CÓDIGO DEL AVATAR/BADGE RESTAURADO -->
+                <div class="user-avatar">
+                    @php
+                        $roleColors = [
+                            'free' => '#F472B6',
+                            'basic' => '#64748B',
+                            'business' => '#06B6D4',
+                            'developer' => '#A855F7',
+                            'enterprise' => '#A855F7',
+                            'founder' => '#9CA3AF',
+                            'superadmin' => '#DC2626',
+                            'creative' => '#FF6B6B'
+                        ];
+                        $userRole = $user->roles ?? 'free';
+                        $badgeColor = $roleColors[$userRole] ?? '#64748B';
+                    @endphp
+                    <img src="/badges/{{ $userRole }}-badge.png"
+                         alt="{{ ucfirst($userRole) }} Badge"
+                         class="avatar"
+                         style="filter: drop-shadow(0 0 10px {{ $badgeColor }}40);">
+                </div>
             </div>
 
             <!-- Content Sections -->

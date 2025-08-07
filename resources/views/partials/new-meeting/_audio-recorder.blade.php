@@ -37,7 +37,7 @@
             <x-icon name="pause" class="btn-icon" />
             <span class="btn-text">Pausar</span>
         </button>
-        <button class="btn resume-btn recorder-btn" id="resume-recording" onclick="resumeRecording()" style="display: none;">
+        <button class="btn resume-btn" id="resume-recording" onclick="resumeRecording()" style="display: none;">
             <x-icon name="play" class="btn-icon" />
             <span class="btn-text">Reanudar</span>
         </button>
