@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\PendingFolder;
+use App\Models\User;
 use Google\Client;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
@@ -87,6 +89,26 @@ class GoogleServiceAccount
             $permission,
             ['sendNotificationEmail' => false]
         );
+    }
+
+    public function getOrCreatePendingFolder(User $user): string
+    {
+        $pendingFolder = PendingFolder::where('user_id', $user->id)->first();
+
+        if ($pendingFolder) {
+            return $pendingFolder->google_id;
+        }
+
+        $name = 'pending-' . $user->id;
+        $googleId = $this->createFolder($name);
+
+        PendingFolder::create([
+            'user_id'   => $user->id,
+            'google_id' => $googleId,
+            'name'      => $name,
+        ]);
+
+        return $googleId;
     }
 
     public function deleteFile(string $id): void
