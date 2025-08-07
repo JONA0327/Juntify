@@ -256,6 +256,59 @@ class DriveController extends Controller
 
         return response()->json(['deleted' => true]);
     }
+
+    /**
+     * Upload an audio file to the user's pending folder in Google Drive.
+     */
+    public function uploadPendingRecording(Request $request)
+    {
+        $v = $request->validate([
+            'meetingName'   => 'required|string',
+            'audioData'     => 'required|string',
+            'audioMimeType' => 'required|string',
+        ]);
+
+        // Resolve the service account and obtain (or create) the pending folder
+        $serviceAccount = app(GoogleServiceAccount::class);
+        $pendingFolderId = $serviceAccount->getOrCreatePendingFolder(Auth::user());
+
+        // Decode the base64 audio payload
+        $b64 = $v['audioData'];
+        if (str_contains($b64, ',')) {
+            [, $b64] = explode(',', $b64, 2);
+        }
+        $raw = base64_decode($b64);
+
+        $tmp = tempnam(sys_get_temp_dir(), 'aud');
+        file_put_contents($tmp, $raw);
+
+        // Determine a suitable extension from the mime type
+        $mime = strtolower($v['audioMimeType']);
+        $mimeToExt = [
+            'audio/mpeg' => 'mp3',
+            'audio/mp3'  => 'mp3',
+            'audio/webm' => 'webm',
+            'audio/ogg'  => 'ogg',
+            'audio/wav'  => 'wav',
+            'audio/x-wav' => 'wav',
+            'audio/wave' => 'wav',
+            'audio/mp4'  => 'mp4',
+        ];
+        $baseMime = explode(';', $mime)[0];
+        $ext = $mimeToExt[$baseMime] ?? preg_replace('/[^\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
+
+        // Upload the audio file to Drive using the pending folder as parent
+        $fileId = $serviceAccount->uploadFile(
+            $v['meetingName'] . '.' . $ext,
+            $v['audioMimeType'],
+            $pendingFolderId,
+            $tmp
+        );
+
+        @unlink($tmp);
+
+        return response()->json(['id' => $fileId]);
+    }
     public function saveResults(Request $request)
     {
         Log::info('saveResults reached', ['user' => Auth::user() ? Auth::user()->username : null]);
