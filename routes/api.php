@@ -22,3 +22,6 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::get('/analyzers', [AnalyzerController::class, 'list']);
 Route::post('/drive/save-results', [DriveController::class, 'saveResults']);
+
+Route::post('/drive/upload-pending-audio', [DriveController::class, 'uploadPendingAudio'])
+    ->middleware('auth:sanctum');
