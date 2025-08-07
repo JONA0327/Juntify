@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use App\Models\TranscriptionLaravel;
+use App\Models\PendingRecording;
 use Illuminate\Support\Facades\Log;
 use Google\Service\Drive as DriveService;
 use Google\Service\Exception as GoogleServiceException;
@@ -257,8 +258,56 @@ class DriveController extends Controller
         return response()->json(['deleted' => true]);
     }
 
+    public function uploadPendingAudio(Request $request)
+    {
+        try {
+            $v = $request->validate([
+                'meetingName' => 'required|string',
+                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4',
+            ]);
+
+            $serviceAccount   = app(GoogleServiceAccount::class);
+            $pendingFolderId  = $serviceAccount->getOrCreatePendingFolder(Auth::user());
+            $file             = $request->file('audioFile');
+            $mime             = $file->getMimeType() ?? 'application/octet-stream';
+            $extension        = $file->getClientOriginalExtension();
+            $fileName         = $v['meetingName'] . ($extension ? ('.' . $extension) : '');
+
+            $fileId = $serviceAccount->uploadFile(
+                $fileName,
+                $mime,
+                $pendingFolderId,
+                $file->getRealPath()
+            );
+
+            $pending = PendingRecording::create([
+                'user_id'        => Auth::id(),
+                'meeting_name'   => $v['meetingName'],
+                'audio_drive_id' => $fileId,
+                'status'         => 'PENDING',
+            ]);
+
+            return response()->json([
+                'id'                  => $fileId,
+                'pending_recording'   => $pending->id,
+                'status'              => $pending->status,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('uploadPendingAudio failed', [
+                'error' => $e->getMessage(),
+                'user'  => Auth::user()?->id,
+            ]);
+
+            return response()->json([
+                'message' => 'Error uploading audio file',
+            ], 500);
+        }
+    }
+
     /**
      * Upload an audio file to the user's pending folder in Google Drive.
+     *
+     * @deprecated Use uploadPendingAudio instead.
      */
     public function uploadPendingRecording(Request $request)
     {
