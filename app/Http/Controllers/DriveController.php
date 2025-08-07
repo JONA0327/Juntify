@@ -267,7 +267,8 @@ class DriveController extends Controller
             ]);
 
             $serviceAccount   = app(GoogleServiceAccount::class);
-            $pendingFolderId  = $serviceAccount->getOrCreatePendingFolder(Auth::user());
+            $pendingFolderId  = config('services.google.pending_folder_id')
+                ?: $serviceAccount->getOrCreatePendingFolder(Auth::user());
             $file             = $request->file('audioFile');
             $mime             = $file->getMimeType() ?? 'application/octet-stream';
             $extension        = $file->getClientOriginalExtension();
