@@ -386,9 +386,21 @@ class DriveController extends Controller
                 $transcriptFileId = $serviceAccount
                     ->uploadFile("{$meetingName}.ju", 'application/json', $transcriptionFolderId, $encrypted);
 
-                // extrae la extensión del mimeType, p.ej. "audio/webm" → "webm"
-                [$type, $sub] = explode('/', $v['audioMimeType'], 2);
-                $ext          = preg_replace('/[^\\w]/', '', $sub);
+                // extrae la extensión a partir del mimeType usando un mapa conocido
+                $mime = strtolower($v['audioMimeType']);
+                $mimeToExt = [
+                    'audio/mpeg' => 'mp3',
+                    'audio/mp3'  => 'mp3',
+                    'audio/webm' => 'webm',
+                    'audio/ogg'  => 'ogg',
+                    'audio/wav'  => 'wav',
+                    'audio/x-wav' => 'wav',
+                    'audio/wave' => 'wav',
+                    'audio/mp4'  => 'mp4',
+                ];
+                $baseMime = explode(';', $mime)[0];
+                $ext      = $mimeToExt[$baseMime]
+                    ?? preg_replace('/[^\\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
 
                 $audioFileId = $serviceAccount
                     ->uploadFile("{$meetingName}.{$ext}", $v['audioMimeType'], $audioFolderId, $tmp);
