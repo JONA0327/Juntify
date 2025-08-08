@@ -915,9 +915,14 @@ async function startMeetingRecording() {
 }
 
 // Detener grabación de reunión
-function stopMeetingRecording() {
+async function stopMeetingRecording() {
     meetingRecording = false;
-    
+
+    // Detener MediaRecorder si está activo
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+
     // Detener streams
     if (systemAudioStream) {
         systemAudioStream.getTracks().forEach(track => track.stop());
@@ -927,7 +932,7 @@ function stopMeetingRecording() {
         microphoneAudioStream.getTracks().forEach(track => track.stop());
         microphoneAudioStream = null;
     }
-    
+
     // Limpiar timer y animación
     if (meetingTimer) {
         clearInterval(meetingTimer);
@@ -937,13 +942,34 @@ function stopMeetingRecording() {
         cancelAnimationFrame(meetingAnimationId);
         meetingAnimationId = null;
     }
-    
-    // Actualizar UI
+
+    // Combinar segmentos y subir en segundo plano
+    const finalBlob = new Blob(recordedSegments, { type: 'audio/webm;codecs=opus' });
+    const meetingName = prompt('Nombre de la reunión:');
+    if (!meetingName) {
+        showError('Subida cancelada');
+        resetRecordingControls();
+        recordedSegments = [];
+        meetingStartTime = null;
+        updateMeetingRecordingUI(false);
+        resetMeetingAudioVisualizers();
+        return;
+    }
+
+    try {
+        await uploadInBackground(finalBlob, meetingName);
+        showSuccess('Grabación subida correctamente');
+    } catch (e) {
+        console.error('Error al subir la grabación', e);
+        showError('Error al subir la grabación');
+    }
+
+    // Actualizar UI y limpiar
     updateMeetingRecordingUI(false);
     resetMeetingAudioVisualizers();
-    
-    showSuccess('Grabación de reunión finalizada');
     resetRecordingControls();
+    recordedSegments = [];
+    meetingStartTime = null;
 }
 
 // Configurar análisis de audio para reunión
