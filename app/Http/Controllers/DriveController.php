@@ -282,7 +282,7 @@ class DriveController extends Controller
             );
 
             $pending = PendingRecording::create([
-                'user_id'        => Auth::id(),
+                'username'       => Auth::user()->username,
                 'meeting_name'   => $v['meetingName'],
                 'audio_drive_id' => $fileId,
                 'status'         => PendingRecording::STATUS_PENDING,

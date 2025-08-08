@@ -24,7 +24,7 @@ class PendingRecordingController extends Controller
 
     public function show(Request $request, PendingRecording $pendingRecording): JsonResponse
     {
-        if ($pendingRecording->user_id !== $request->user()->id) {
+        if ($pendingRecording->username !== $request->user()->username) {
             abort(403);
         }
 

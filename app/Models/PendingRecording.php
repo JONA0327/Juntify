@@ -13,7 +13,7 @@ class PendingRecording extends Model
     public const STATUS_FAILED     = 'FAILED';
 
     protected $fillable = [
-        'user_id',
+        'username',
         'meeting_name',
         'audio_drive_id',
         'status',
@@ -26,7 +26,7 @@ class PendingRecording extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'username', 'username');
     }
 
     public function isPending(): bool
