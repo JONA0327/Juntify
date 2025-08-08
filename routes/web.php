@@ -82,4 +82,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/admin/analyzers', [\App\Http\Controllers\AnalyzerController::class, 'store']);
     Route::put('/admin/analyzers/{analyzer}', [\App\Http\Controllers\AnalyzerController::class, 'update']);
     Route::delete('/admin/analyzers/{analyzer}', [\App\Http\Controllers\AnalyzerController::class, 'destroy']);
+
+    Route::post('/admin/pending-recordings/process', [\App\Http\Controllers\PendingRecordingController::class, 'process'])
+        ->name('admin.pending-recordings.process');
 });
