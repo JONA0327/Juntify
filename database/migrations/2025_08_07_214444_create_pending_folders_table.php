@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('pending_folders', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->string('username', 255); // Asociar por username, no por user_id
             $table->string('google_id')->unique();
             $table->string('name');
             $table->timestamps();

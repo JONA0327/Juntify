@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('pending_recordings', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->string('username', 255); // Asociar por username, no por user_id
             $table->string('meeting_name');
             $table->string('audio_drive_id');
             $table->string('status');
