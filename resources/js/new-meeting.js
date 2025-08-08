@@ -538,14 +538,16 @@ function showSuccess(message) {
 
 // Actualiza el ícono del navbar según el estado de subida
 function updateNavbarIcon(status) {
-    const icons = document.querySelectorAll('.upload-status-icon');
     const iconMap = {
         loading: '🔄',
         success: '✅',
         error: '❌'
     };
-    icons.forEach(icon => {
-        icon.textContent = iconMap[status] || '';
+
+    document.querySelectorAll('.upload-status-icon').forEach(icon => {
+        const symbol = iconMap[status] || '';
+        icon.textContent = symbol;
+        icon.classList.toggle('hidden', !symbol);
     });
 }
 
