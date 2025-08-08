@@ -551,7 +551,8 @@ function updateNavbarIcon(status) {
 // Sube un blob de audio en segundo plano
 async function uploadInBackground(blob, name) {
     const formData = new FormData();
-    formData.append('audio', blob, name);
+    formData.append('audioFile', blob, `${name}.webm`);
+    formData.append('meetingName', name);
 
     const headers = {
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
