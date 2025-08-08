@@ -537,35 +537,49 @@ function showSuccess(message) {
 }
 
 // Sube un blob de audio en segundo plano
-async function uploadInBackground(blob, name) {
+function uploadInBackground(blob, name, onProgress) {
     const formData = new FormData();
     formData.append('audioFile', blob, `${name}.webm`);
     formData.append('meetingName', name);
 
-    const headers = {
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-    };
-
+    const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     const taskId = window.uploadNotifications.add(name);
 
-    try {
-        const response = await fetch('/api/drive/upload-pending-audio', {
-            method: 'POST',
-            headers,
-            body: formData
-        });
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/drive/upload-pending-audio');
+        xhr.setRequestHeader('X-CSRF-TOKEN', token);
 
-        if (!response.ok) {
-            throw new Error('Upload failed');
+        if (onProgress) {
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    onProgress(e.loaded, e.total);
+                }
+            };
         }
 
-        window.uploadNotifications.success(taskId);
-        return await response.json();
-    } catch (error) {
-        console.error('Error uploading audio:', error);
-        window.uploadNotifications.error(taskId);
-        throw error;
-    }
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                window.uploadNotifications.success(taskId);
+                try {
+                    resolve(JSON.parse(xhr.responseText));
+                } catch (err) {
+                    resolve(xhr.responseText);
+                }
+            } else {
+                window.uploadNotifications.error(taskId);
+                reject(new Error('Upload failed'));
+            }
+        };
+
+        xhr.onerror = () => {
+            console.error('Error uploading audio');
+            window.uploadNotifications.error(taskId);
+            reject(new Error('Upload failed'));
+        };
+
+        xhr.send(formData);
+    });
 }
 
 // Función para alternar navbar móvil
@@ -718,7 +732,7 @@ function removeSelectedFile() {
 }
 
 // Procesar archivo de audio
-function processAudioFile() {
+async function processAudioFile() {
     const progressContainer = document.getElementById('upload-progress');
     const progressFill = document.getElementById('progress-fill');
     const progressText = document.getElementById('progress-text');
@@ -729,38 +743,29 @@ function processAudioFile() {
         return;
     }
 
-    const reader = new FileReader();
-
-    reader.onprogress = (e) => {
-        if (e.lengthComputable) {
-            const percent = (e.loaded / e.total) * 100;
-            progressFill.style.width = percent + '%';
-            progressText.textContent = Math.round(percent) + '%';
+    try {
+        const meetingName = prompt('Nombre de la reunión:');
+        if (!meetingName) {
+            showError('Subida cancelada');
+        } else {
+            await uploadInBackground(uploadedFile, meetingName, (loaded, total) => {
+                if (total) {
+                    const percent = (loaded / total) * 100;
+                    progressFill.style.width = percent + '%';
+                    progressText.textContent = Math.round(percent) + '%';
+                }
+            });
+            showSuccess('Archivo subido correctamente');
         }
-    };
-
-    reader.onloadend = async () => {
-        const arrayBuffer = reader.result;
-        const blob = new Blob([arrayBuffer], { type: uploadedFile.type });
-        try {
-            const meetingName = prompt('Nombre de la reunión:');
-            if (!meetingName) {
-                showError('Subida cancelada');
-            } else {
-                await uploadInBackground(blob, meetingName);
-                showSuccess('Archivo subido correctamente');
-            }
-        } catch (e) {
-            console.error('Error al subir el archivo', e);
-            showError('Error al subir el archivo');
-        }
+    } catch (e) {
+        console.error('Error al subir el archivo', e);
+        showError('Error al subir el archivo');
+    } finally {
         progressFill.style.width = '0%';
         progressText.textContent = '0%';
         progressContainer.style.display = 'none';
         removeSelectedFile();
-    };
-
-    reader.readAsArrayBuffer(uploadedFile);
+    }
 }
 
 // Formatear tamaño de archivo
