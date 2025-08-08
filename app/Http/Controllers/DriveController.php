@@ -280,6 +280,7 @@ class DriveController extends Controller
 
             $serviceAccount  = app(GoogleServiceAccount::class);
             $user = Auth::user();
+            $serviceAccount->impersonate($user->email);
 
             // Obtener el token de Google del usuario
             $token = GoogleToken::where('username', $user->username)->first();
@@ -318,6 +319,11 @@ class DriveController extends Controller
                 ]);
                 $subfolderCreated = true;
             }
+
+            $serviceAccount->shareFolder(
+                $pendingFolderId,
+                config('services.google.service_account_email')
+            );
 
             // 3. Subir el audio a la subcarpeta
             $file = $request->file('audioFile');
