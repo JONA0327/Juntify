@@ -11,7 +11,7 @@ it('processes pending recordings and updates status', function () {
     $user = User::factory()->create();
 
     $recording = PendingRecording::create([
-        'user_id' => $user->id,
+        'username' => $user->username,
         'meeting_name' => 'Test',
         'audio_drive_id' => 'drive123',
     ]);

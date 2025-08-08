@@ -93,17 +93,17 @@ class GoogleServiceAccount
 
     public function getOrCreatePendingFolder(User $user): string
     {
-        $pendingFolder = PendingFolder::where('user_id', $user->id)->first();
+        $pendingFolder = PendingFolder::where('username', $user->username)->first();
 
         if ($pendingFolder) {
             return $pendingFolder->google_id;
         }
 
-        $name = 'pending-' . $user->id;
+        $name = 'pending-' . $user->username;
         $googleId = $this->createFolder($name);
 
         PendingFolder::create([
-            'user_id'   => $user->id,
+            'username'  => $user->username,
             'google_id' => $googleId,
             'name'      => $name,
         ]);
