@@ -178,8 +178,33 @@
                         <span class="info-value">3</span>
                     </div>
                 </div>
+                <!-- Procesar Grabaciones Pendientes -->
+                <div class="info-card admin-card">
+                    <h2 class="card-title">
+                        <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h18v18H3z" />
+                        </svg>
+                        Grabaciones Pendientes
+                    </h2>
+                    <div class="info-item">
+                        <button id="process-pending-recordings" class="btn btn-secondary w-full">Procesar grabaciones</button>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
+    <script>
+        document.getElementById('process-pending-recordings')?.addEventListener('click', () => {
+            fetch('/admin/pending-recordings/process', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json'
+                }
+            })
+                .then(() => alert('Proceso iniciado'))
+                .catch(() => alert('Error al iniciar el proceso'));
+        });
+    </script>
 </body>
 </html>

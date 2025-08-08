@@ -16,7 +16,9 @@ const UploadNotifications = (() => {
     }
 
     function updateIndicator() {
-        const active = activeUploads.some(t => t.status === 'Subiendo...');
+        const active = activeUploads.some(t =>
+            ['Subiendo...', 'Procesando...'].includes(t.status)
+        );
         document.querySelectorAll('.upload-dot').forEach(dot => {
             dot.classList.toggle('hidden', !active);
         });
@@ -37,20 +39,29 @@ const UploadNotifications = (() => {
         }
     }
 
-    function success(id) {
+    function processing(id) {
         const task = activeUploads.find(t => t.id === id);
         if (task) {
-            task.status = 'Completado';
+            task.status = 'Procesando...';
+            task.progress = 1;
+            render();
+        }
+    }
+
+    function success(id, statusText = 'Completado') {
+        const task = activeUploads.find(t => t.id === id);
+        if (task) {
+            task.status = statusText;
             task.progress = 1;
             render();
             setTimeout(() => remove(id), 3000);
         }
     }
 
-    function error(id) {
+    function error(id, statusText = 'Error') {
         const task = activeUploads.find(t => t.id === id);
         if (task) {
-            task.status = 'Error';
+            task.status = statusText;
             render();
             setTimeout(() => remove(id), 3000);
         }
@@ -80,7 +91,7 @@ const UploadNotifications = (() => {
         render();
     });
 
-    return { add, progress, success, error, remove };
+    return { add, progress, processing, success, error, remove };
 })();
 
 window.uploadNotifications = UploadNotifications;

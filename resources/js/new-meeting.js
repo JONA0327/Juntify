@@ -561,12 +561,19 @@ function uploadInBackground(blob, name, onProgress) {
 
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-                window.uploadNotifications.success(taskId);
+                window.uploadNotifications.processing(taskId);
+                let response;
                 try {
-                    resolve(JSON.parse(xhr.responseText));
+                    response = JSON.parse(xhr.responseText);
                 } catch (err) {
-                    resolve(xhr.responseText);
+                    response = xhr.responseText;
                 }
+                if (response?.pending_recording) {
+                    pollPendingRecordingStatus(response.pending_recording, taskId);
+                } else {
+                    window.uploadNotifications.success(taskId);
+                }
+                resolve(response);
             } else {
                 window.uploadNotifications.error(taskId);
                 reject(new Error('Upload failed'));
@@ -581,6 +588,25 @@ function uploadInBackground(blob, name, onProgress) {
 
         xhr.send(formData);
     });
+}
+
+function pollPendingRecordingStatus(id, taskId) {
+    const check = () => {
+        fetch(`/api/pending-recordings/${id}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'COMPLETED') {
+                    window.uploadNotifications.success(taskId, 'Procesado');
+                } else if (data.status === 'FAILED') {
+                    const msg = data.error_message ? `Error: ${data.error_message}` : 'Error';
+                    window.uploadNotifications.error(taskId, msg);
+                } else {
+                    setTimeout(check, 5000);
+                }
+            })
+            .catch(() => setTimeout(check, 5000));
+    };
+    check();
 }
 
 // Función para alternar navbar móvil

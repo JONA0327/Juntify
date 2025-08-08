@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessPendingRecordingsJob;
+use App\Models\PendingRecording;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Http\JsonResponse;
 
 class PendingRecordingController extends Controller
 {
@@ -18,5 +20,18 @@ class PendingRecordingController extends Controller
         ProcessPendingRecordingsJob::dispatch();
 
         return response()->noContent();
+    }
+
+    public function show(Request $request, PendingRecording $pendingRecording): JsonResponse
+    {
+        if ($pendingRecording->user_id !== $request->user()->id) {
+            abort(403);
+        }
+
+        return response()->json([
+            'id'            => $pendingRecording->id,
+            'status'        => $pendingRecording->status,
+            'error_message' => $pendingRecording->error_message,
+        ]);
     }
 }
