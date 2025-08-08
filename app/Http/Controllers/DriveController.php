@@ -280,10 +280,24 @@ class DriveController extends Controller
 
             $serviceAccount  = app(GoogleServiceAccount::class);
             $user = Auth::user();
+
+            // Obtener el token de Google del usuario
+            $token = GoogleToken::where('username', $user->username)->first();
+            if (! $token) {
+                Log::error('uploadPendingAudio: google token not found', [
+                    'username' => $user->username,
+                ]);
+                return response()->json(['message' => 'Token de Google no encontrado'], 400);
+            }
+
             // 1. Obtener la carpeta raíz del usuario
-            $rootFolder = Folder::where('username', $user->username)->whereNull('parent_id')->first();
-            if (!$rootFolder) {
-                Log::error('uploadPendingAudio: root folder not found', ['username' => $user->username]);
+            $rootFolder = Folder::where('google_token_id', $token->id)
+                ->whereNull('parent_id')
+                ->first();
+            if (! $rootFolder) {
+                Log::error('uploadPendingAudio: root folder not found', [
+                    'username' => $user->username,
+                ]);
                 return response()->json(['message' => 'Carpeta raíz no encontrada'], 400);
             }
             $rootFolderId = $rootFolder->google_id;
