@@ -8,13 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PendingFolder extends Model
 {
     protected $fillable = [
-        'username',
+        'user_id',
         'google_id',
         'name',
     ];
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'username', 'username');
+        return $this->belongsTo(User::class);
     }
 }
