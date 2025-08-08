@@ -6,6 +6,6 @@
         <span class="upload-dot hidden"></span>
     </button>
     <div class="upload-panel hidden">
-        <ul class="upload-list"></ul>
+        <ul class="upload-list" data-upload-list></ul>
     </div>
 </div>

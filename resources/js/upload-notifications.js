@@ -9,6 +9,14 @@ const UploadNotifications = (() => {
                 const li = document.createElement('li');
                 const percent = Math.round(task.progress * 100);
                 li.textContent = `${task.name} - ${task.status} (${percent}%)`;
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.classList.add('upload-dismiss');
+                btn.textContent = '×';
+                btn.addEventListener('click', () => dismiss(task.id));
+                li.appendChild(btn);
+
                 list.appendChild(li);
             });
         });
@@ -54,7 +62,6 @@ const UploadNotifications = (() => {
             task.status = statusText;
             task.progress = 1;
             render();
-            setTimeout(() => remove(id), 3000);
         }
     }
 
@@ -63,7 +70,6 @@ const UploadNotifications = (() => {
         if (task) {
             task.status = statusText;
             render();
-            setTimeout(() => remove(id), 3000);
         }
     }
 
@@ -73,6 +79,10 @@ const UploadNotifications = (() => {
             activeUploads.splice(index, 1);
             render();
         }
+    }
+
+    function dismiss(id) {
+        remove(id);
     }
 
     function init() {
@@ -91,7 +101,7 @@ const UploadNotifications = (() => {
         render();
     });
 
-    return { add, progress, processing, success, error, remove };
+    return { add, progress, processing, success, error, dismiss };
 })();
 
 window.uploadNotifications = UploadNotifications;

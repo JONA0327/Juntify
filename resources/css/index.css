@@ -139,6 +139,21 @@
             font-size: 0.8rem;
             color: #e2e8f0;
             padding: 0.25rem 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .upload-dismiss {
+            background: none;
+            border: none;
+            color: #e2e8f0;
+            cursor: pointer;
+            margin-left: 0.5rem;
+        }
+
+        .upload-dismiss:hover {
+            color: #ef4444;
         }
 
         /* Mobile navbar button */
