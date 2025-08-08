@@ -9,9 +9,10 @@
   $isNewMeeting = request()->routeIs('new-meeting');
 @endphp
 
-<header class="header">
-  <nav class="nav">
-    <a href="/" class="logo nav-brand">Juntify</a>
+  <header class="header">
+    <nav class="nav">
+      <a href="/" class="logo nav-brand">Juntify</a>
+      <span id="upload-status-icon" class="hidden"></span>
 
 
 <ul class="nav-links" id="nav-links">
