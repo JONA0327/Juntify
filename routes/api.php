@@ -25,7 +25,7 @@ Route::get('/analyzers', [AnalyzerController::class, 'list']);
 Route::post('/drive/save-results', [DriveController::class, 'saveResults']);
 
 Route::post('/drive/upload-pending-audio', [DriveController::class, 'uploadPendingAudio'])
-    ->middleware('auth:sanctum');
+    ->middleware(['web', 'auth']);
 
 Route::get('/pending-recordings/{pendingRecording}', [PendingRecordingController::class, 'show'])
     ->middleware('auth:sanctum');
