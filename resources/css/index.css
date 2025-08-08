@@ -93,6 +93,54 @@
             opacity: 0.7;
         }
 
+        .upload-notifications {
+            position: relative;
+        }
+
+        .upload-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            position: relative;
+            color: inherit;
+        }
+
+        .upload-dot {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 8px;
+            height: 8px;
+            background: #ef4444;
+            border-radius: 50%;
+        }
+
+        .upload-panel {
+            position: absolute;
+            right: 0;
+            top: 120%;
+            background: rgba(10, 14, 39, 0.95);
+            border: 1px solid rgba(59, 130, 246, 0.1);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            width: 200px;
+            z-index: 1000;
+        }
+
+        .upload-panel ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .upload-panel li {
+            font-size: 0.8rem;
+            color: #e2e8f0;
+            padding: 0.25rem 0;
+        }
+
         /* Mobile navbar button */
         .mobile-navbar-btn {
             display: none;
