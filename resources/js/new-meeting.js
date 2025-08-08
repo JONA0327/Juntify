@@ -657,13 +657,14 @@ async function saveRecording() {
     }
 
     try {
+        let response;
         if (pendingSaveContext === 'upload') {
             const progressContainer = document.getElementById('upload-progress');
             const progressFill = document.getElementById('progress-fill');
             const progressText = document.getElementById('progress-text');
             if (progressContainer && progressFill && progressText) {
                 progressContainer.style.display = 'block';
-                await uploadInBackground(pendingAudioBlob, name, (loaded, total) => {
+                response = await uploadInBackground(pendingAudioBlob, name, (loaded, total) => {
                     if (total) {
                         const percent = (loaded / total) * 100;
                         progressFill.style.width = percent + '%';
@@ -674,12 +675,17 @@ async function saveRecording() {
                 progressText.textContent = '0%';
                 progressContainer.style.display = 'none';
             } else {
-                await uploadInBackground(pendingAudioBlob, name);
+                response = await uploadInBackground(pendingAudioBlob, name);
             }
             removeSelectedFile();
         } else {
-            await uploadInBackground(pendingAudioBlob, name);
+            response = await uploadInBackground(pendingAudioBlob, name);
         }
+
+        if (!response || (!response.saved && !response.pending_recording)) {
+            throw new Error('Invalid upload response');
+        }
+
         showSuccess('Grabación subida correctamente');
     } catch (e) {
         console.error('Error al subir la grabación', e);
