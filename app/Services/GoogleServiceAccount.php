@@ -93,7 +93,7 @@ class GoogleServiceAccount
 
     public function getOrCreatePendingFolder(User $user): array
     {
-        $pendingFolder = PendingFolder::where('user_id', $user->id)->first();
+        $pendingFolder = PendingFolder::where('username', $user->username)->first();
 
         if ($pendingFolder) {
             return [
@@ -102,12 +102,13 @@ class GoogleServiceAccount
             ];
         }
 
+        // Impersonar al usuario para crear la carpeta en su Drive
         $this->impersonate($user->email);
-        $name = 'audio-pendiente-' . $user->id;
+        $name = 'audio-pendiente-' . $user->username;
         $googleId = $this->createFolder($name);
 
         PendingFolder::updateOrCreate(
-            ['user_id' => $user->id],
+            ['username' => $user->username],
             ['google_id' => $googleId, 'name' => $name]
         );
 

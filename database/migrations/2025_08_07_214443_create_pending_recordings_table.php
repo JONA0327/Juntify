@@ -13,6 +13,7 @@ return new class extends Migration
             $table->string('username', 255); // Asociar por username, no por user_id
             $table->string('meeting_name');
             $table->string('audio_drive_id');
+            $table->text('audio_download_url')->nullable();
             $table->string('status');
             $table->text('error_message')->nullable();
             $table->timestamps();

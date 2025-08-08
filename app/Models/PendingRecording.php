@@ -16,6 +16,7 @@ class PendingRecording extends Model
         'username',
         'meeting_name',
         'audio_drive_id',
+        'audio_download_url',
         'status',
         'error_message',
     ];

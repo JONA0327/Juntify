@@ -260,6 +260,18 @@ class DriveController extends Controller
 
     public function uploadPendingAudio(Request $request)
     {
+        Log::info('uploadPendingAudio entry', [
+            'user' => Auth::user() ? Auth::user()->username : null,
+            'request_all' => $request->all(),
+            'has_file' => $request->hasFile('audioFile'),
+            'file_info' => $request->file('audioFile') ? [
+                'originalName' => $request->file('audioFile')->getClientOriginalName(),
+                'mimeType' => $request->file('audioFile')->getMimeType(),
+                'size' => $request->file('audioFile')->getSize(),
+            ] : null,
+        ]);
+        set_time_limit(300);
+        $maxAudioBytes = 100 * 1024 * 1024; // 100 MB
         try {
             $v = $request->validate([
                 'meetingName' => 'required|string',
@@ -267,44 +279,107 @@ class DriveController extends Controller
             ]);
 
             $serviceAccount  = app(GoogleServiceAccount::class);
-            $pendingFolder   = $serviceAccount->getOrCreatePendingFolder(Auth::user());
-            $pendingFolderId = $pendingFolder['id'];
-            $file            = $request->file('audioFile');
-            $mime             = $file->getMimeType() ?? 'application/octet-stream';
-            $extension        = $file->getClientOriginalExtension();
-            $fileName         = $v['meetingName'] . ($extension ? ('.' . $extension) : '');
+            $user = Auth::user();
+            // 1. Obtener la carpeta raíz del usuario
+            $rootFolder = Folder::where('username', $user->username)->whereNull('parent_id')->first();
+            if (!$rootFolder) {
+                Log::error('uploadPendingAudio: root folder not found', ['username' => $user->username]);
+                return response()->json(['message' => 'Carpeta raíz no encontrada'], 400);
+            }
+            $rootFolderId = $rootFolder->google_id;
 
+            // 2. Buscar o crear subcarpeta 'Audios Pospuestos' en la raíz
+            $pendingSubfolderName = 'Audios Pospuestos';
+            $subfolder = Subfolder::where('folder_id', $rootFolder->id)->where('name', $pendingSubfolderName)->first();
+            if ($subfolder) {
+                $pendingFolderId = $subfolder->google_id;
+                $subfolderCreated = false;
+            } else {
+                Log::info('uploadPendingAudio: creating Audios Pospuestos subfolder', ['name' => $pendingSubfolderName, 'rootFolderId' => $rootFolderId]);
+                $pendingFolderId = $serviceAccount->createFolder($pendingSubfolderName, $rootFolderId);
+                $subfolder = Subfolder::create([
+                    'folder_id' => $rootFolder->id,
+                    'google_id' => $pendingFolderId,
+                    'name'      => $pendingSubfolderName,
+                ]);
+                $subfolderCreated = true;
+            }
+
+            // 3. Subir el audio a la subcarpeta
+            $file = $request->file('audioFile');
+            if ($file->getSize() > $maxAudioBytes) {
+                return response()->json(['message' => 'Archivo de audio demasiado grande (máx. 100 MB)'], 413);
+            }
+            $filePath = $file->getRealPath();
+            $mime = $file->getMimeType();
+            $mimeToExt = [
+                'audio/mpeg' => 'mp3',
+                'audio/mp3'  => 'mp3',
+                'audio/webm' => 'webm',
+                'audio/ogg'  => 'ogg',
+                'audio/wav'  => 'wav',
+                'audio/x-wav' => 'wav',
+                'audio/wave' => 'wav',
+                'audio/mp4'  => 'mp4',
+            ];
+            $baseMime = explode(';', $mime)[0];
+            $ext = $mimeToExt[$baseMime] ?? preg_replace('/[^\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
+            $fileName = $v['meetingName'] . '.' . $ext;
+
+            Log::debug('uploadPendingAudio uploading to Drive', [
+                'fileName' => $fileName,
+                'mime' => $mime,
+                'pendingFolderId' => $pendingFolderId,
+                'filePath' => $filePath,
+            ]);
             $fileId = $serviceAccount->uploadFile(
                 $fileName,
                 $mime,
                 $pendingFolderId,
-                $file->getRealPath()
+                $filePath
             );
+            $audioUrl = $serviceAccount->getFileLink($fileId);
 
-            $pending = PendingRecording::create([
-                'username'       => Auth::user()->username,
-                'meeting_name'   => $v['meetingName'],
+            // 4. Guardar en la BD
+            Log::debug('uploadPendingAudio saving PendingRecording', [
+                'username' => $user->username,
+                'meeting_name' => $fileName,
                 'audio_drive_id' => $fileId,
-                'status'         => PendingRecording::STATUS_PENDING,
+                'audio_download_url' => $audioUrl,
+            ]);
+            $pending = PendingRecording::create([
+                'username'           => $user->username,
+                'meeting_name'       => $fileName,
+                'audio_drive_id'     => $fileId,
+                'audio_download_url' => $audioUrl,
+                'status'             => PendingRecording::STATUS_PENDING,
+                'error_message'      => null,
             ]);
 
             $response = [
-                'id'                => $fileId,
-                'pending_recording' => $pending->id,
-                'status'            => $pending->status,
+                'saved'              => true,
+                'audio_drive_id'     => $fileId,
+                'audio_download_url' => $audioUrl,
+                'pending_recording'  => $pending->id,
+                'status'             => $pending->status,
+                'audio_name'         => $fileName,
+                'subfolder_id'       => $subfolder->id,
+                'subfolder_created'  => $subfolderCreated,
             ];
-
-            if ($pendingFolder['created'] ?? false) {
-                $response['pending_folder_message'] = $pendingFolder['message'];
+            if ($subfolderCreated) {
+                \App\Models\PendingFolder::firstOrCreate([
+                    'username' => $user->username,
+                    'google_id' => $subfolder->google_id,
+                ], [
+                    'name' => $subfolder->name,
+                ]);
             }
-
             return response()->json($response);
         } catch (\Throwable $e) {
             Log::error('uploadPendingAudio failed', [
                 'error' => $e->getMessage(),
                 'username' => Auth::user()?->username,
             ]);
-
             return response()->json([
                 'message' => 'Error uploading audio file',
             ], 500);
