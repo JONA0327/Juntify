@@ -1,12 +1,14 @@
 const UploadNotifications = (() => {
-    const tasks = new Map();
+    const activeUploads = [];
+    window.activeUploads = activeUploads;
 
     function render() {
         document.querySelectorAll('.upload-list').forEach(list => {
             list.innerHTML = '';
-            tasks.forEach((task) => {
+            activeUploads.forEach((task) => {
                 const li = document.createElement('li');
-                li.textContent = `${task.name} - ${task.status}`;
+                const percent = Math.round(task.progress * 100);
+                li.textContent = `${task.name} - ${task.status} (${percent}%)`;
                 list.appendChild(li);
             });
         });
@@ -14,7 +16,7 @@ const UploadNotifications = (() => {
     }
 
     function updateIndicator() {
-        const active = Array.from(tasks.values()).some(t => t.status === 'Subiendo...');
+        const active = activeUploads.some(t => t.status === 'Subiendo...');
         document.querySelectorAll('.upload-dot').forEach(dot => {
             dot.classList.toggle('hidden', !active);
         });
@@ -22,30 +24,44 @@ const UploadNotifications = (() => {
 
     function add(name) {
         const id = Date.now().toString(36) + Math.random().toString(36).substring(2);
-        tasks.set(id, { name, status: 'Subiendo...' });
+        activeUploads.push({ id, name, status: 'Subiendo...', progress: 0 });
         render();
         return id;
     }
 
+    function progress(id, loaded, total) {
+        const task = activeUploads.find(t => t.id === id);
+        if (task && total > 0) {
+            task.progress = loaded / total;
+            render();
+        }
+    }
+
     function success(id) {
-        if (tasks.has(id)) {
-            tasks.get(id).status = 'Completado';
+        const task = activeUploads.find(t => t.id === id);
+        if (task) {
+            task.status = 'Completado';
+            task.progress = 1;
             render();
             setTimeout(() => remove(id), 3000);
         }
     }
 
     function error(id) {
-        if (tasks.has(id)) {
-            tasks.get(id).status = 'Error';
+        const task = activeUploads.find(t => t.id === id);
+        if (task) {
+            task.status = 'Error';
             render();
             setTimeout(() => remove(id), 3000);
         }
     }
 
     function remove(id) {
-        tasks.delete(id);
-        render();
+        const index = activeUploads.findIndex(t => t.id === id);
+        if (index !== -1) {
+            activeUploads.splice(index, 1);
+            render();
+        }
     }
 
     function init() {
@@ -59,9 +75,12 @@ const UploadNotifications = (() => {
         });
     }
 
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', () => {
+        init();
+        render();
+    });
 
-    return { add, success, error, remove };
+    return { add, progress, success, error, remove };
 })();
 
 window.uploadNotifications = UploadNotifications;

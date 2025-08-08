@@ -550,13 +550,14 @@ function uploadInBackground(blob, name, onProgress) {
         xhr.open('POST', '/api/drive/upload-pending-audio');
         xhr.setRequestHeader('X-CSRF-TOKEN', token);
 
-        if (onProgress) {
-            xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable) {
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+                window.uploadNotifications.progress(taskId, e.loaded, e.total);
+                if (onProgress) {
                     onProgress(e.loaded, e.total);
                 }
-            };
-        }
+            }
+        };
 
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
