@@ -296,7 +296,7 @@ class DriveController extends Controller
         } catch (\Throwable $e) {
             Log::error('uploadPendingAudio failed', [
                 'error' => $e->getMessage(),
-                'user'  => Auth::user()?->id,
+                'username' => Auth::user()?->username,
             ]);
 
             return response()->json([
