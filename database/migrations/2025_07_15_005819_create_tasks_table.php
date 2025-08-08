@@ -10,8 +10,9 @@ return new class extends Migration
     {
         Schema::create('tasks', function (Blueprint $table) {
             $table->increments('id');
-            $table->string('user_id', 255);
+            $table->string('username', 255);
             $table->string('supabase_user_id', 255);
+            $table->foreign('username')->references('username')->on('users')->onDelete('cascade');
             $table->unsignedInteger('meeting_id')->nullable();
             $table->string('text', 255);
             $table->text('description')->nullable();
