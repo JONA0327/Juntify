@@ -285,7 +285,7 @@ class DriveController extends Controller
                 'user_id'        => Auth::id(),
                 'meeting_name'   => $v['meetingName'],
                 'audio_drive_id' => $fileId,
-                'status'         => 'PENDING',
+                'status'         => PendingRecording::STATUS_PENDING,
             ]);
 
             return response()->json([

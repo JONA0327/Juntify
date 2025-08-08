@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PendingRecording extends Model
 {
+    public const STATUS_PENDING    = 'PENDING';
+    public const STATUS_PROCESSING = 'PROCESSING';
+    public const STATUS_COMPLETED  = 'COMPLETED';
+    public const STATUS_FAILED     = 'FAILED';
+
     protected $fillable = [
         'user_id',
         'meeting_name',
@@ -15,8 +20,17 @@ class PendingRecording extends Model
         'error_message',
     ];
 
+    protected $attributes = [
+        'status' => self::STATUS_PENDING,
+    ];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === self::STATUS_PENDING;
     }
 }
