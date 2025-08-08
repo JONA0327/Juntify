@@ -29,6 +29,8 @@ let meetingAnimationId = null;
 let discardRequested = false;
 let uploadedFile = null;
 let fileUploadInitialized = false;
+let pendingAudioBlob = null;
+let pendingSaveContext = null;
 
 // SVG paths for dynamic icons
 const ICON_PATHS = {
@@ -344,28 +346,10 @@ async function finalizeRecording() {
 
     updateRecordingUI(false);
     resetAudioVisualizer();
+    resetRecordingControls();
 
     const finalBlob = new Blob(recordedSegments, { type: 'audio/webm;codecs=opus' });
-    const meetingName = prompt('Nombre de la reunión:');
-    if (!meetingName) {
-        showError('Subida cancelada');
-        resetRecordingControls();
-        recordedSegments = [];
-        startTime = null;
-        return;
-    }
-
-    try {
-        await uploadInBackground(finalBlob, meetingName);
-        showSuccess('Grabación subida correctamente');
-    } catch (e) {
-        console.error('Error al subir la grabación', e);
-        showError('Error al subir la grabación');
-    }
-
-    resetRecordingControls();
-    recordedSegments = [];
-    startTime = null;
+    showSaveRecordingModal(finalBlob, 'recording');
 }
 
 // ===== FUNCIONES DE VISUALIZACIÓN =====
@@ -609,6 +593,137 @@ function pollPendingRecordingStatus(id, taskId) {
     check();
 }
 
+// ===== MODAL GUARDAR GRABACIÓN =====
+function showSaveRecordingModal(blob, context) {
+    pendingAudioBlob = blob;
+    pendingSaveContext = context;
+
+    const modal = document.getElementById('save-recording-modal');
+    const body = document.getElementById('save-modal-body');
+    const footer = document.getElementById('save-modal-footer');
+
+    if (!modal || !body || !footer) return;
+
+    body.innerHTML = '<p class="modal-description">¿Qué deseas hacer con la grabación?</p>';
+    footer.innerHTML = `
+        <button class="btn btn-primary" id="analyze-now-btn">Analizar ahora</button>
+        <button class="btn" id="postpone-btn">Posponer</button>
+    `;
+
+    document.getElementById('analyze-now-btn').onclick = analyzeNow;
+    document.getElementById('postpone-btn').onclick = showNameInput;
+
+    modal.style.display = 'flex';
+}
+
+async function analyzeNow() {
+    if (!pendingAudioBlob) return;
+    try {
+        const base64 = await blobToBase64(pendingAudioBlob);
+        sessionStorage.setItem('recordingBlob', base64);
+        sessionStorage.removeItem('recordingSegments');
+        sessionStorage.removeItem('recordingMetadata');
+    } catch (e) {
+        console.error('Error preparando audio', e);
+    }
+
+    handlePostActionCleanup();
+    closeSaveRecordingModal();
+    window.location.href = '/audio-processing';
+}
+
+function showNameInput() {
+    const body = document.getElementById('save-modal-body');
+    const footer = document.getElementById('save-modal-footer');
+    if (!body || !footer) return;
+
+    body.innerHTML = '<input type="text" id="meeting-name-input" class="form-input" placeholder="Nombre de la reunión" />';
+    footer.innerHTML = `
+        <button class="btn btn-primary" id="save-recording-btn">Guardar</button>
+        <button class="btn discard-btn" id="cancel-recording-btn">Cancelar</button>
+    `;
+
+    document.getElementById('save-recording-btn').onclick = saveRecording;
+    document.getElementById('cancel-recording-btn').onclick = cancelRecording;
+}
+
+async function saveRecording() {
+    const input = document.getElementById('meeting-name-input');
+    if (!input) return;
+    const name = input.value.trim();
+    if (!name) {
+        showError('Nombre de la reunión requerido');
+        return;
+    }
+
+    try {
+        if (pendingSaveContext === 'upload') {
+            const progressContainer = document.getElementById('upload-progress');
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            if (progressContainer && progressFill && progressText) {
+                progressContainer.style.display = 'block';
+                await uploadInBackground(pendingAudioBlob, name, (loaded, total) => {
+                    if (total) {
+                        const percent = (loaded / total) * 100;
+                        progressFill.style.width = percent + '%';
+                        progressText.textContent = Math.round(percent) + '%';
+                    }
+                });
+                progressFill.style.width = '0%';
+                progressText.textContent = '0%';
+                progressContainer.style.display = 'none';
+            } else {
+                await uploadInBackground(pendingAudioBlob, name);
+            }
+            removeSelectedFile();
+        } else {
+            await uploadInBackground(pendingAudioBlob, name);
+        }
+        showSuccess('Grabación subida correctamente');
+    } catch (e) {
+        console.error('Error al subir la grabación', e);
+        showError('Error al subir la grabación');
+    }
+
+    handlePostActionCleanup(true);
+    closeSaveRecordingModal();
+}
+
+function cancelRecording() {
+    showError('Subida cancelada');
+    handlePostActionCleanup();
+    closeSaveRecordingModal();
+}
+
+function handlePostActionCleanup(uploaded) {
+    if (pendingSaveContext === 'recording') {
+        recordedSegments = [];
+        startTime = null;
+    } else if (pendingSaveContext === 'meeting') {
+        recordedSegments = [];
+        meetingStartTime = null;
+    } else if (pendingSaveContext === 'upload' && !uploaded) {
+        removeSelectedFile();
+    }
+}
+
+function closeSaveRecordingModal() {
+    const modal = document.getElementById('save-recording-modal');
+    if (modal) modal.style.display = 'none';
+    pendingAudioBlob = null;
+    pendingSaveContext = null;
+}
+
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
 // Función para alternar navbar móvil
 function toggleMobileNavbar() {
     const navbar = document.querySelector('.mobile-navbar');
@@ -760,39 +875,12 @@ function removeSelectedFile() {
 
 // Procesar archivo de audio
 async function processAudioFile() {
-    const progressContainer = document.getElementById('upload-progress');
-    const progressFill = document.getElementById('progress-fill');
-    const progressText = document.getElementById('progress-text');
-
-    progressContainer.style.display = 'block';
     if (!uploadedFile) {
         showError('Primero selecciona un archivo de audio');
         return;
     }
 
-    try {
-        const meetingName = prompt('Nombre de la reunión:');
-        if (!meetingName) {
-            showError('Subida cancelada');
-        } else {
-            await uploadInBackground(uploadedFile, meetingName, (loaded, total) => {
-                if (total) {
-                    const percent = (loaded / total) * 100;
-                    progressFill.style.width = percent + '%';
-                    progressText.textContent = Math.round(percent) + '%';
-                }
-            });
-            showSuccess('Archivo subido correctamente');
-        }
-    } catch (e) {
-        console.error('Error al subir el archivo', e);
-        showError('Error al subir el archivo');
-    } finally {
-        progressFill.style.width = '0%';
-        progressText.textContent = '0%';
-        progressContainer.style.display = 'none';
-        removeSelectedFile();
-    }
+    showSaveRecordingModal(uploadedFile, 'upload');
 }
 
 // Formatear tamaño de archivo
@@ -963,34 +1051,12 @@ async function stopMeetingRecording() {
         cancelAnimationFrame(meetingAnimationId);
         meetingAnimationId = null;
     }
-
-    // Combinar segmentos y subir en segundo plano
-    const finalBlob = new Blob(recordedSegments, { type: 'audio/webm;codecs=opus' });
-    const meetingName = prompt('Nombre de la reunión:');
-    if (!meetingName) {
-        showError('Subida cancelada');
-        resetRecordingControls();
-        recordedSegments = [];
-        meetingStartTime = null;
-        updateMeetingRecordingUI(false);
-        resetMeetingAudioVisualizers();
-        return;
-    }
-
-    try {
-        await uploadInBackground(finalBlob, meetingName);
-        showSuccess('Grabación subida correctamente');
-    } catch (e) {
-        console.error('Error al subir la grabación', e);
-        showError('Error al subir la grabación');
-    }
-
-    // Actualizar UI y limpiar
     updateMeetingRecordingUI(false);
     resetMeetingAudioVisualizers();
     resetRecordingControls();
-    recordedSegments = [];
-    meetingStartTime = null;
+
+    const finalBlob = new Blob(recordedSegments, { type: 'audio/webm;codecs=opus' });
+    showSaveRecordingModal(finalBlob, 'meeting');
 }
 
 // Configurar análisis de audio para reunión

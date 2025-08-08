@@ -214,7 +214,8 @@ body {
     margin-bottom: 0.5rem;
 }
 
-.form-select {
+.form-select,
+.form-input {
     width: 100%;
     padding: 0.75rem 1rem;
     background: rgba(255, 255, 255, 0.05);
@@ -225,7 +226,8 @@ body {
     transition: all 0.3s ease;
 }
 
-.form-select:focus {
+.form-select:focus,
+.form-input:focus {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
@@ -234,6 +236,10 @@ body {
 .form-select option {
     background: var(--background-dark);
     color: var(--text-primary);
+}
+
+.form-input::placeholder {
+    color: var(--text-muted);
 }
 
 /* Checkbox Group */
