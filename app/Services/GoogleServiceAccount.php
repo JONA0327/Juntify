@@ -91,24 +91,31 @@ class GoogleServiceAccount
         );
     }
 
-    public function getOrCreatePendingFolder(User $user): string
+    public function getOrCreatePendingFolder(User $user): array
     {
-        $pendingFolder = PendingFolder::where('username', $user->username)->first();
+        $pendingFolder = PendingFolder::where('user_id', $user->id)->first();
 
         if ($pendingFolder) {
-            return $pendingFolder->google_id;
+            return [
+                'id'      => $pendingFolder->google_id,
+                'created' => false,
+            ];
         }
 
-        $name = 'pending-' . $user->username;
+        $this->impersonate($user->email);
+        $name = 'audio-pendiente-' . $user->id;
         $googleId = $this->createFolder($name);
 
-        PendingFolder::create([
-            'username'  => $user->username,
-            'google_id' => $googleId,
-            'name'      => $name,
-        ]);
+        PendingFolder::updateOrCreate(
+            ['user_id' => $user->id],
+            ['google_id' => $googleId, 'name' => $name]
+        );
 
-        return $googleId;
+        return [
+            'id'      => $googleId,
+            'created' => true,
+            'message' => 'Pending folder created',
+        ];
     }
 
     public function deleteFile(string $id): void

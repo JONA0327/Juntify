@@ -266,10 +266,10 @@ class DriveController extends Controller
                 'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4',
             ]);
 
-            $serviceAccount   = app(GoogleServiceAccount::class);
-            $pendingFolderId  = config('services.google.pending_folder_id')
-                ?: $serviceAccount->getOrCreatePendingFolder(Auth::user());
-            $file             = $request->file('audioFile');
+            $serviceAccount  = app(GoogleServiceAccount::class);
+            $pendingFolder   = $serviceAccount->getOrCreatePendingFolder(Auth::user());
+            $pendingFolderId = $pendingFolder['id'];
+            $file            = $request->file('audioFile');
             $mime             = $file->getMimeType() ?? 'application/octet-stream';
             $extension        = $file->getClientOriginalExtension();
             $fileName         = $v['meetingName'] . ($extension ? ('.' . $extension) : '');
@@ -288,11 +288,17 @@ class DriveController extends Controller
                 'status'         => PendingRecording::STATUS_PENDING,
             ]);
 
-            return response()->json([
-                'id'                  => $fileId,
-                'pending_recording'   => $pending->id,
-                'status'              => $pending->status,
-            ]);
+            $response = [
+                'id'                => $fileId,
+                'pending_recording' => $pending->id,
+                'status'            => $pending->status,
+            ];
+
+            if ($pendingFolder['created'] ?? false) {
+                $response['pending_folder_message'] = $pendingFolder['message'];
+            }
+
+            return response()->json($response);
         } catch (\Throwable $e) {
             Log::error('uploadPendingAudio failed', [
                 'error' => $e->getMessage(),
@@ -320,7 +326,8 @@ class DriveController extends Controller
 
         // Resolve the service account and obtain (or create) the pending folder
         $serviceAccount = app(GoogleServiceAccount::class);
-        $pendingFolderId = $serviceAccount->getOrCreatePendingFolder(Auth::user());
+        $pendingFolder  = $serviceAccount->getOrCreatePendingFolder(Auth::user());
+        $pendingFolderId = $pendingFolder['id'];
 
         // Decode the base64 audio payload
         $b64 = $v['audioData'];
