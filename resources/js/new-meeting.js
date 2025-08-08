@@ -538,14 +538,15 @@ function showSuccess(message) {
 
 // Actualiza el ícono del navbar según el estado de subida
 function updateNavbarIcon(status) {
-    const icon = document.getElementById('navbar-upload-icon');
-    if (!icon) return;
-    const icons = {
+    const icons = document.querySelectorAll('.upload-status-icon');
+    const iconMap = {
         loading: '🔄',
         success: '✅',
         error: '❌'
     };
-    icon.textContent = icons[status] || '';
+    icons.forEach(icon => {
+        icon.textContent = iconMap[status] || '';
+    });
 }
 
 // Sube un blob de audio en segundo plano

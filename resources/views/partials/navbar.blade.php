@@ -12,7 +12,7 @@
   <header class="header">
     <nav class="nav">
       <a href="/" class="logo nav-brand">Juntify</a>
-      <span id="upload-status-icon" class="hidden"></span>
+      <span class="upload-status-icon hidden"></span>
 
 
 <ul class="nav-links" id="nav-links">
