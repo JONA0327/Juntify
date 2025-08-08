@@ -1,4 +1,4 @@
-import { saveAudioBlob } from './idb.js';
+// import removed: audio is uploaded directly without IndexedDB
 
 // ===== VARIABLES GLOBALES =====
 let isRecording = false;
@@ -291,7 +291,10 @@ function discardRecording() {
 
     updateRecordingUI(false);
     resetAudioVisualizer();
+    resetRecordingControls();
+}
 
+function resetRecordingControls() {
     document.getElementById('pause-recording').style.display = 'none';
     document.getElementById('resume-recording').style.display = 'none';
     document.getElementById('discard-recording').style.display = 'none';
@@ -303,15 +306,9 @@ function discardRecording() {
     if (mr) mr.style.display = 'none';
 }
 
-// Guardar idioma de transcripción seleccionado
-function storeTranscriptionLanguage() {
-    const lang = 'es'; // Idioma por defecto
-    sessionStorage.setItem('transcriptionLanguage', lang);
-}
 
 // Función para detener grabación
 function stopRecording() {
-    storeTranscriptionLanguage();
     isRecording = false;
     isPaused = false;
 
@@ -327,10 +324,8 @@ function stopRecording() {
     }
 }
 
-// Unir todos los segmentos y preparar redirección
+// Unir todos los segmentos y subir en segundo plano
 async function finalizeRecording() {
-    // Asegurar que el idioma de transcripción esté almacenado
-    storeTranscriptionLanguage();
     if (recordingStream) {
         recordingStream.getTracks().forEach(track => track.stop());
         recordingStream = null;
@@ -350,31 +345,27 @@ async function finalizeRecording() {
     updateRecordingUI(false);
     resetAudioVisualizer();
 
-    const totalDuration = Date.now() - startTime;
     const finalBlob = new Blob(recordedSegments, { type: 'audio/webm;codecs=opus' });
-    const base64 = await blobToBase64(finalBlob);
+    const meetingName = prompt('Nombre de la reunión:');
+    if (!meetingName) {
+        showError('Subida cancelada');
+        resetRecordingControls();
+        recordedSegments = [];
+        startTime = null;
+        return;
+    }
 
-    const segmentBase64 = await Promise.all(recordedSegments.map(blobToBase64));
+    try {
+        await uploadInBackground(finalBlob, meetingName);
+        showSuccess('Grabación subida correctamente');
+    } catch (e) {
+        console.error('Error al subir la grabación', e);
+        showError('Error al subir la grabación');
+    }
 
-    sessionStorage.setItem('recordingBlob', base64);
-    sessionStorage.setItem('recordingSegments', JSON.stringify(segmentBase64));
-    sessionStorage.setItem('recordingMetadata', JSON.stringify({
-        segmentCount: recordedSegments.length,
-        durationMs: totalDuration
-    }));
-
-    setTimeout(() => {
-        window.location.href = '/audio-processing';
-    }, 500);
-}
-
-function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
+    resetRecordingControls();
+    recordedSegments = [];
+    startTime = null;
 }
 
 // ===== FUNCIONES DE VISUALIZACIÓN =====
@@ -763,13 +754,21 @@ function processAudioFile() {
         const arrayBuffer = reader.result;
         const blob = new Blob([arrayBuffer], { type: uploadedFile.type });
         try {
-            const key = await saveAudioBlob(blob);
-            sessionStorage.setItem('uploadedAudioKey', key);
+            const meetingName = prompt('Nombre de la reunión:');
+            if (!meetingName) {
+                showError('Subida cancelada');
+            } else {
+                await uploadInBackground(blob, meetingName);
+                showSuccess('Archivo subido correctamente');
+            }
         } catch (e) {
-            console.error('Error saving audio to IndexedDB', e);
+            console.error('Error al subir el archivo', e);
+            showError('Error al subir el archivo');
         }
-        storeTranscriptionLanguage();
-        window.location.href = '/audio-processing';
+        progressFill.style.width = '0%';
+        progressText.textContent = '0%';
+        progressContainer.style.display = 'none';
+        removeSelectedFile();
     };
 
     reader.readAsArrayBuffer(uploadedFile);
@@ -943,11 +942,8 @@ function stopMeetingRecording() {
     updateMeetingRecordingUI(false);
     resetMeetingAudioVisualizers();
     
-    // Redirigir al procesamiento de audio
-    setTimeout(() => {
-        storeTranscriptionLanguage();
-        window.location.href = '/audio-processing';
-    }, 500);
+    showSuccess('Grabación de reunión finalizada');
+    resetRecordingControls();
 }
 
 // Configurar análisis de audio para reunión
