@@ -275,7 +275,7 @@ class DriveController extends Controller
         try {
             $v = $request->validate([
                 'meetingName' => 'required|string',
-                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4',
+                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4',
             ]);
 
             $serviceAccount  = app(GoogleServiceAccount::class);
@@ -336,6 +336,7 @@ class DriveController extends Controller
                 'audio/mpeg' => 'mp3',
                 'audio/mp3'  => 'mp3',
                 'audio/webm' => 'webm',
+                'video/webm' => 'webm',
                 'audio/ogg'  => 'ogg',
                 'audio/wav'  => 'wav',
                 'audio/x-wav' => 'wav',
