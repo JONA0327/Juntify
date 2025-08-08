@@ -47,3 +47,22 @@
         </button>
     </div>
 </div>
+
+<!-- Modal Guardar Grabación -->
+<div class="modal" id="save-recording-modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">
+                <x-icon name="note" class="modal-icon" />
+                Guardar grabación
+            </h2>
+        </div>
+        <div class="modal-body" id="save-modal-body">
+            <p class="modal-description">¿Qué deseas hacer con la grabación?</p>
+        </div>
+        <div class="modal-footer" id="save-modal-footer">
+            <button class="btn btn-primary" id="analyze-now-btn">Analizar ahora</button>
+            <button class="btn" id="postpone-btn">Posponer</button>
+        </div>
+    </div>
+</div>
