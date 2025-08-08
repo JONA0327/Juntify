@@ -7,7 +7,6 @@
 
 <!-- Barra de navegación móvil exclusiva -->
 <div class="mobile-bottom-nav">
-    <span class="upload-status-icon hidden"></span>
     {{-- Enlace a la página de Reuniones --}}
     <a href="{{ route('reuniones.index') }}" class="nav-item {{ request()->routeIs('reuniones.index') ? 'active' : '' }}">
         <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -58,6 +57,9 @@
                 <x-icon name="share" class="dropdown-icon" />
                 <span class="dropdown-text">Exportar</span>
             </a>
+            <div class="dropdown-item">
+                <x-upload-notifications />
+            </div>
         </div>
     </div>
 </div>

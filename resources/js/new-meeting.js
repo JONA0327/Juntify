@@ -536,21 +536,6 @@ function showSuccess(message) {
     }, 5000);
 }
 
-// Actualiza el ícono del navbar según el estado de subida
-function updateNavbarIcon(status) {
-    const iconMap = {
-        loading: '🔄',
-        success: '✅',
-        error: '❌'
-    };
-
-    document.querySelectorAll('.upload-status-icon').forEach(icon => {
-        const symbol = iconMap[status] || '';
-        icon.textContent = symbol;
-        icon.classList.toggle('hidden', !symbol);
-    });
-}
-
 // Sube un blob de audio en segundo plano
 async function uploadInBackground(blob, name) {
     const formData = new FormData();
@@ -561,7 +546,7 @@ async function uploadInBackground(blob, name) {
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
     };
 
-    updateNavbarIcon('loading');
+    const taskId = window.uploadNotifications.add(name);
 
     try {
         const response = await fetch('/api/drive/upload-pending-audio', {
@@ -574,11 +559,11 @@ async function uploadInBackground(blob, name) {
             throw new Error('Upload failed');
         }
 
-        updateNavbarIcon('success');
+        window.uploadNotifications.success(taskId);
         return await response.json();
     } catch (error) {
         console.error('Error uploading audio:', error);
-        updateNavbarIcon('error');
+        window.uploadNotifications.error(taskId);
         throw error;
     }
 }

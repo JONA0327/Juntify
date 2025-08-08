@@ -12,7 +12,6 @@
   <header class="header">
     <nav class="nav">
       <a href="/" class="logo nav-brand">Juntify</a>
-      <span class="upload-status-icon hidden"></span>
 
 
 <ul class="nav-links" id="nav-links">
@@ -74,6 +73,9 @@
       </svg>
       Perfil
     </a>
+  </li>
+  <li>
+    <x-upload-notifications />
   </li>
 </ul>
 
