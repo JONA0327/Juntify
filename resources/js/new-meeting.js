@@ -545,6 +545,49 @@ function showSuccess(message) {
     }, 5000);
 }
 
+// Actualiza el ícono del navbar según el estado de subida
+function updateNavbarIcon(status) {
+    const icon = document.getElementById('navbar-upload-icon');
+    if (!icon) return;
+    const icons = {
+        loading: '🔄',
+        success: '✅',
+        error: '❌'
+    };
+    icon.textContent = icons[status] || '';
+}
+
+// Sube un blob de audio en segundo plano
+async function uploadInBackground(blob, name) {
+    const formData = new FormData();
+    formData.append('audio', blob, name);
+
+    const headers = {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+    };
+
+    updateNavbarIcon('loading');
+
+    try {
+        const response = await fetch('/api/drive/upload-pending-audio', {
+            method: 'POST',
+            headers,
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Upload failed');
+        }
+
+        updateNavbarIcon('success');
+        return await response.json();
+    } catch (error) {
+        console.error('Error uploading audio:', error);
+        updateNavbarIcon('error');
+        throw error;
+    }
+}
+
 // Función para alternar navbar móvil
 function toggleMobileNavbar() {
     const navbar = document.querySelector('.mobile-navbar');
