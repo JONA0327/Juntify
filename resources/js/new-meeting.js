@@ -647,7 +647,7 @@ function showNameInput() {
     document.getElementById('cancel-recording-btn').onclick = cancelRecording;
 }
 
-async function saveRecording() {
+function saveRecording() {
     const input = document.getElementById('meeting-name-input');
     if (!input) return;
     const name = input.value.trim();
@@ -656,42 +656,56 @@ async function saveRecording() {
         return;
     }
 
-    try {
-        let response;
-        if (pendingSaveContext === 'upload') {
-            const progressContainer = document.getElementById('upload-progress');
-            const progressFill = document.getElementById('progress-fill');
-            const progressText = document.getElementById('progress-text');
-            if (progressContainer && progressFill && progressText) {
-                progressContainer.style.display = 'block';
-                response = await uploadInBackground(pendingAudioBlob, name, (loaded, total) => {
-                    if (total) {
-                        const percent = (loaded / total) * 100;
-                        progressFill.style.width = percent + '%';
-                        progressText.textContent = Math.round(percent) + '%';
-                    }
-                });
+    if (pendingSaveContext === 'upload') {
+        const progressContainer = document.getElementById('upload-progress');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        if (progressContainer && progressFill && progressText) {
+            progressContainer.style.display = 'block';
+            uploadInBackground(pendingAudioBlob, name, (loaded, total) => {
+                if (total) {
+                    const percent = (loaded / total) * 100;
+                    progressFill.style.width = percent + '%';
+                    progressText.textContent = Math.round(percent) + '%';
+                }
+            }).then(response => {
                 progressFill.style.width = '0%';
                 progressText.textContent = '0%';
                 progressContainer.style.display = 'none';
-            } else {
-                response = await uploadInBackground(pendingAudioBlob, name);
-            }
-            removeSelectedFile();
+                if (!response || (!response.saved && !response.pending_recording)) {
+                    throw new Error('Invalid upload response');
+                }
+            }).catch(e => {
+                console.error('Error al subir la grabación', e);
+                showError('Error al subir la grabación');
+            });
         } else {
-            response = await uploadInBackground(pendingAudioBlob, name);
+            uploadInBackground(pendingAudioBlob, name)
+                .then(response => {
+                    if (!response || (!response.saved && !response.pending_recording)) {
+                        throw new Error('Invalid upload response');
+                    }
+                })
+                .catch(e => {
+                    console.error('Error al subir la grabación', e);
+                    showError('Error al subir la grabación');
+                });
         }
-
-        if (!response || (!response.saved && !response.pending_recording)) {
-            throw new Error('Invalid upload response');
-        }
-
-        showSuccess('Grabación subida correctamente');
-    } catch (e) {
-        console.error('Error al subir la grabación', e);
-        showError('Error al subir la grabación');
+        removeSelectedFile();
+    } else {
+        uploadInBackground(pendingAudioBlob, name)
+            .then(response => {
+                if (!response || (!response.saved && !response.pending_recording)) {
+                    throw new Error('Invalid upload response');
+                }
+            })
+            .catch(e => {
+                console.error('Error al subir la grabación', e);
+                showError('Error al subir la grabación');
+            });
     }
 
+    showSuccess('La subida continuará en segundo plano. El estado final se mostrará mediante uploadNotifications.');
     handlePostActionCleanup(true);
     closeSaveRecordingModal();
 }
