@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 use Google\Service\Drive as DriveService;
 use Google\Service\Exception as GoogleServiceException;
 use App\Http\Controllers\Auth\GoogleAuthController;
+use Throwable;
 
 class DriveController extends Controller
 {
@@ -139,10 +140,17 @@ class DriveController extends Controller
             ]
         );
 
-        $this->drive->shareFolder(
-            $request->input('id'),
-            config('services.google.service_account_email')
-        );
+        try {
+            $this->drive->shareFolder(
+                $request->input('id'),
+                config('services.google.service_account_email')
+            );
+        } catch (GoogleServiceException|Throwable $e) {
+            Log::warning('setMainFolder shareFolder failed', [
+                'id'    => $request->input('id'),
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'id'   => $request->input('id'),
