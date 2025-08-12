@@ -59,7 +59,12 @@ class DriveController extends Controller
                 Log::warning('createMainFolder invalid_grant', [
                     'username' => Auth::user()->username,
                 ]);
-                $token->delete();
+                $token->update([
+                    'access_token'  => null,
+                    'refresh_token' => null,
+                    'expiry_date'   => null,
+                    // recordings_folder_id se mantiene para reconexión
+                ]);
                 return response()->json([
                     'message' => 'Token de Google inválido, vuelve a conectar Google Drive.',
                 ], 401);
