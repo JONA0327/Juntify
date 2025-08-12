@@ -368,7 +368,29 @@ async function finalizeRecording() {
     resetRecordingControls();
 
     const finalBlob = new Blob(recordedSegments, { type: 'audio/webm;codecs=opus' });
-    showSaveRecordingModal(finalBlob, 'recording');
+
+    if (postponeMode) {
+        const now = new Date();
+        const name = `grabacion-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
+
+        uploadInBackground(finalBlob, name)
+            .then(response => {
+                if (!response || (!response.saved && !response.pending_recording)) {
+                    throw new Error('Invalid upload response');
+                }
+            })
+            .catch(e => {
+                console.error('Error al subir la grabación', e);
+                showError('Error al subir la grabación');
+            });
+
+        showSuccess('La subida continuará en segundo plano. El estado final se mostrará mediante uploadNotifications.');
+        handlePostActionCleanup(true);
+    } else {
+        pendingAudioBlob = finalBlob;
+        pendingSaveContext = 'recording';
+        analyzeNow();
+    }
 }
 
 // ===== FUNCIONES DE VISUALIZACIÓN =====
