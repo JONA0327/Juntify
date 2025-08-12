@@ -115,6 +115,10 @@ function toggleRecording() {
         if (mp) mp.style.display = 'inline-block';
         if (md) md.style.display = 'inline-block';
         if (mr) mr.style.display = 'none';
+        const postponeContainer = document.getElementById('postpone-switch');
+        const postponeToggle = document.getElementById('postpone-toggle');
+        if (postponeContainer) postponeContainer.style.display = 'none';
+        if (postponeToggle) postponeToggle.disabled = true;
     } else {
         stopRecording();
         document.getElementById('pause-recording').style.display = 'none';
