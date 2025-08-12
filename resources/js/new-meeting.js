@@ -137,15 +137,8 @@ function setPostponeMode(on) {
     if (label) label.textContent = postponeMode ? 'Modo posponer activo' : 'Activar modo posponer';
     if (checkbox && checkbox.checked !== postponeMode) checkbox.checked = postponeMode;
     if (track) {
-        // Reset
-        track.classList.remove('bg-gray-300','bg-gray-400','bg-blue-600','bg-gradient-to-r','from-blue-500','to-emerald-500');
-        if (postponeMode) {
-            // Encendido: degradado azul -> verde
-            track.classList.add('bg-gradient-to-r','from-blue-500','to-emerald-500');
-        } else {
-            // Apagado: gris con leve tinte morado si quieres (usa bg-gray-400 por simplicidad)
-            track.classList.add('bg-gray-400');
-        }
+        track.classList.toggle('bg-blue-500', postponeMode);
+        track.classList.toggle('bg-gray-400', !postponeMode);
     }
     window.postponeMode = postponeMode;
 }
