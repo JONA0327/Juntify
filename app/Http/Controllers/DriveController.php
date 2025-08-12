@@ -39,7 +39,14 @@ class DriveController extends Controller
             'expiry_date'   => $token->expiry_date,
         ]);
         if ($client->isAccessTokenExpired()) {
-            $client->refreshToken($token->refresh_token);
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (! isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
         }
 
         try {
@@ -80,7 +87,14 @@ class DriveController extends Controller
             'expiry_date'   => $token->expiry_date,
         ]);
         if ($client->isAccessTokenExpired()) {
-            $client->refreshToken($token->refresh_token);
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (! isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
         }
 
         $drive      = $this->drive->getDrive();
@@ -124,7 +138,14 @@ class DriveController extends Controller
             'expiry_date'   => $token->expiry_date,
         ]);
         if ($client->isAccessTokenExpired()) {
-            $client->refreshToken($token->refresh_token);
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (! isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
         }
 
         $folderId = $this->drive->createFolder($request->input('name'), $parentId);
@@ -170,7 +191,14 @@ class DriveController extends Controller
         ]);
         // Auto-refrescar si ya expiró
         if ($client->isAccessTokenExpired()) {
-            $client->refreshToken($token->refresh_token);
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (! isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
         }
 
         $drive = new DriveService($client);
@@ -248,7 +276,14 @@ class DriveController extends Controller
             'expiry_date'   => $token->expiry_date,
         ]);
         if ($client->isAccessTokenExpired()) {
-            $client->refreshToken($token->refresh_token);
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (! isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
         }
 
         $this->drive->deleteFile($id);
@@ -296,7 +331,14 @@ class DriveController extends Controller
                 'expiry_date'   => $token->expiry_date,
             ]);
             if ($client->isAccessTokenExpired()) {
-                $client->refreshToken($token->refresh_token);
+                $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+                if (! isset($new['error'])) {
+                    $token->update([
+                        'access_token' => $new['access_token'],
+                        'expiry_date'  => now()->addSeconds($new['expires_in']),
+                    ]);
+                    $client->setAccessToken($new);
+                }
             }
 
             // 1. Obtener la carpeta raíz del usuario
