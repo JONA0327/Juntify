@@ -129,22 +129,41 @@ function toggleRecording() {
     }
 }
 
-function togglePostponeMode() {
-    postponeMode = !postponeMode;
-    const btn = document.getElementById('postpone-mode-btn');
+function setPostponeMode(on) {
+    postponeMode = !!on;
     const label = document.getElementById('postpone-mode-label');
-    if (btn) {
+    const checkbox = document.getElementById('postpone-toggle');
+    const track = document.getElementById('postpone-track');
+    if (label) label.textContent = postponeMode ? 'Modo posponer activo' : 'Activar modo posponer';
+    if (checkbox && checkbox.checked !== postponeMode) checkbox.checked = postponeMode;
+    if (track) {
+        // Reset
+        track.classList.remove('bg-gray-300','bg-gray-400','bg-blue-600','bg-gradient-to-r','from-blue-500','to-emerald-500');
         if (postponeMode) {
-            btn.classList.add('btn-primary');
+            // Encendido: degradado azul -> verde
+            track.classList.add('bg-gradient-to-r','from-blue-500','to-emerald-500');
         } else {
-            btn.classList.remove('btn-primary');
+            // Apagado: gris con leve tinte morado si quieres (usa bg-gray-400 por simplicidad)
+            track.classList.add('bg-gray-400');
         }
-    }
-    if (label) {
-        label.textContent = postponeMode ? 'Modo posponer activo' : 'Activar modo posponer';
     }
     window.postponeMode = postponeMode;
 }
+
+function togglePostponeMode() {
+    const checkbox = document.getElementById('postpone-toggle');
+    const next = checkbox ? checkbox.checked : !postponeMode;
+    setPostponeMode(next);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const checkbox = document.getElementById('postpone-toggle');
+    if (checkbox) {
+        checkbox.addEventListener('change', () => setPostponeMode(checkbox.checked));
+        // Sync initial
+        setPostponeMode(checkbox.checked);
+    }
+});
 
 // ===== FUNCIONES DE GRABACIÓN =====
 

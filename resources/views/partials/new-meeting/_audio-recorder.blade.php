@@ -33,9 +33,15 @@
             <x-icon name="play" class="btn-icon" />
             <span class="btn-text">Iniciar grabación</span>
         </button>
-        <button class="btn postpone-mode-btn" id="postpone-mode-btn" onclick="togglePostponeMode()">
-            <span class="btn-text" id="postpone-mode-label">Activar modo posponer</span>
-        </button>
+    <div class="postpone-switch inline-flex items-center gap-3 mt-3">
+            <span id="postpone-mode-label" class="text-sm">Activar modo posponer</span>
+            <label for="postpone-toggle" class="inline-flex items-center cursor-pointer select-none">
+                <input id="postpone-toggle" type="checkbox" class="sr-only peer" onchange="togglePostponeMode()">
+                <span id="postpone-track" class="w-12 h-6 rounded-full bg-gray-400 transition-colors relative overflow-hidden">
+                    <span class="absolute top-1 left-1 h-4 w-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-6"></span>
+                </span>
+            </label>
+        </div>
         <button class="btn pause-btn recorder-btn" id="pause-recording" onclick="pauseRecording()" style="display: none;">
             <x-icon name="pause" class="btn-icon" />
             <span class="btn-text">Pausar</span>

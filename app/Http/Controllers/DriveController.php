@@ -463,6 +463,30 @@ class DriveController extends Controller
             $ext = $mimeToExt[$baseMime] ?? preg_replace('/[^\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
             $fileName = $v['meetingName'] . '.' . $ext;
 
+            // Si no es mp3, intentar convertir a mp3 con ffmpeg para que se pueda reproducir en Drive
+            $mp3Temp = null;
+            if ($baseMime !== 'audio/mpeg' && $ext !== 'mp3') {
+                $ffmpeg = env('FFMPEG_PATH', 'ffmpeg');
+                $mp3Temp = tempnam(sys_get_temp_dir(), 'mp3_');
+                $mp3TempMp3 = $mp3Temp . '.mp3';
+                @unlink($mp3Temp); // usaremos el mismo prefijo con .mp3
+                $cmd = $ffmpeg . ' -y -i ' . escapeshellarg($filePath) . ' -vn -acodec libmp3lame -b:a 128k ' . escapeshellarg($mp3TempMp3) . ' 2>&1';
+                Log::debug('uploadPendingAudio ffmpeg command', ['cmd' => $cmd]);
+                @exec($cmd, $out, $ret);
+                Log::debug('uploadPendingAudio ffmpeg result', ['code' => $ret]);
+                if ($ret === 0 && file_exists($mp3TempMp3) && filesize($mp3TempMp3) > 0) {
+                    $filePath = $mp3TempMp3;
+                    $mime = 'audio/mpeg';
+                    $ext = 'mp3';
+                    $fileName = $v['meetingName'] . '.mp3';
+                } else {
+                    Log::warning('uploadPendingAudio ffmpeg conversion failed; uploading original format', [
+                        'mime' => $baseMime,
+                        'meeting' => $v['meetingName']
+                    ]);
+                }
+            }
+
             Log::debug('uploadPendingAudio uploading to Drive', [
                 'fileName' => $fileName,
                 'mime' => $mime,
@@ -476,6 +500,10 @@ class DriveController extends Controller
                 $pendingFolderId,
                 $fileContents
             );
+            // Limpieza de temporales
+            if (isset($mp3Temp) && $mp3Temp && file_exists($mp3Temp . '.mp3')) {
+                @unlink($mp3Temp . '.mp3');
+            }
             $audioUrl = $serviceAccount->getFileLink($fileId);
 
             // 4. Guardar en la BD
