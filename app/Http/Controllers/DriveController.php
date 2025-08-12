@@ -351,31 +351,14 @@ class DriveController extends Controller
             ]);
 
             $user = Auth::user();
-
-            // Obtener el token de Google del usuario
+            $serviceAccount = app(GoogleServiceAccount::class);
+            // Obtener el token de Google del usuario (solo para localizar su carpeta raíz en BD)
             $token = GoogleToken::where('username', $user->username)->first();
             if (! $token) {
                 Log::error('uploadPendingAudio: google token not found', [
                     'username' => $user->username,
                 ]);
                 return response()->json(['message' => 'Token de Google no encontrado'], 400);
-            }
-
-            $client = $this->drive->getClient();
-            $client->setAccessToken([
-                'access_token'  => $token->access_token,
-                'refresh_token' => $token->refresh_token,
-                'expiry_date'   => $token->expiry_date,
-            ]);
-            if ($client->isAccessTokenExpired()) {
-                $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
-                if (! isset($new['error'])) {
-                    $token->update([
-                        'access_token' => $new['access_token'],
-                        'expiry_date'  => now()->addSeconds($new['expires_in']),
-                    ]);
-                    $client->setAccessToken($new);
-                }
             }
 
             // 1. Obtener la carpeta raíz del usuario
@@ -390,7 +373,27 @@ class DriveController extends Controller
             }
             $rootFolderId = $rootFolder->google_id;
 
-            // 2. Buscar o crear subcarpeta 'Audios Pospuestos' en la raíz
+            // 2. Asegurar acceso de la cuenta de servicio a la carpeta raíz
+            $serviceEmail = config('services.google.service_account_email');
+            try {
+                app(\App\Services\GoogleServiceAccount::class)->shareFolder($rootFolderId, $serviceEmail);
+            } catch (GoogleServiceException $e) {
+                // Si no tiene acceso, devolvemos instrucción para compartir
+                if (
+                    $e->getCode() === 404 ||
+                    $e->getCode() === 403 ||
+                    str_contains($e->getMessage(), 'File not found') ||
+                    str_contains($e->getMessage(), 'The caller does not have permission')
+                ) {
+                    return response()->json([
+                        'code'    => 'FOLDER_NOT_SHARED',
+                        'message' => "La carpeta principal no está compartida con la cuenta de servicio. Comparte la carpeta con {$serviceEmail}",
+                    ], 403);
+                }
+                // Otros errores se seguirán manejando abajo
+            }
+
+            // 3. Buscar o crear subcarpeta 'Audios Pospuestos' en la raíz
             $pendingSubfolderName = 'Audios Pospuestos';
             $subfolder = Subfolder::where('folder_id', $rootFolder->id)->where('name', $pendingSubfolderName)->first();
             if ($subfolder) {
@@ -398,7 +401,7 @@ class DriveController extends Controller
                 $subfolderCreated = false;
             } else {
                 Log::info('uploadPendingAudio: creating Audios Pospuestos subfolder', ['name' => $pendingSubfolderName, 'rootFolderId' => $rootFolderId]);
-                $pendingFolderId = $this->drive->createFolder($pendingSubfolderName, $rootFolderId);
+                $pendingFolderId = $serviceAccount->createFolder($pendingSubfolderName, $rootFolderId);
                 $subfolder = Subfolder::create([
                     'folder_id' => $rootFolder->id,
                     'google_id' => $pendingFolderId,
@@ -407,11 +410,8 @@ class DriveController extends Controller
                 $subfolderCreated = true;
             }
 
-            $this->drive->shareFolder($rootFolderId, config('services.google.service_account_email'));
-            $this->drive->shareFolder(
-                $pendingFolderId,
-                config('services.google.service_account_email')
-            );
+            // Nota: Si la cuenta de servicio no tiene acceso de escritura al folder raíz,
+            // la creación/subida fallará con 403/404. Pediremos que compartan con la SA.
 
             // 3. Subir el audio a la subcarpeta
             $file = $request->file('audioFile');
@@ -442,13 +442,13 @@ class DriveController extends Controller
                 'filePath' => $filePath,
             ]);
             $fileContents = file_get_contents($filePath);
-            $fileId = $this->drive->uploadFile(
+            $fileId = $serviceAccount->uploadFile(
                 $fileName,
                 $mime,
                 $pendingFolderId,
                 $fileContents
             );
-            $audioUrl = $this->drive->getFileLink($fileId);
+            $audioUrl = $serviceAccount->getFileLink($fileId);
 
             // 4. Guardar en la BD
             Log::debug('uploadPendingAudio saving PendingRecording', [
@@ -489,11 +489,24 @@ class DriveController extends Controller
             if (str_contains($e->getMessage(), 'invalid_grant')) {
                 Log::warning('uploadPendingAudio invalid_grant', [
                     'username' => $user->username,
+                    'error'    => $e->getMessage(),
                 ]);
                 $token?->delete();
                 return response()->json([
                     'message' => 'Autenticación de Google expirada. Reconecta tu Google Drive.',
                 ], 401);
+            }
+
+            if (
+                $e->getCode() === 404 ||
+                $e->getCode() === 403 ||
+                str_contains($e->getMessage(), 'File not found') ||
+                str_contains($e->getMessage(), 'The caller does not have permission')
+            ) {
+                return response()->json([
+                    'code'    => 'FOLDER_NOT_SHARED',
+                    'message' => 'La carpeta raíz no está compartida con la cuenta de servicio. Comparte la carpeta con ' . config('services.google.service_account_email'),
+                ], 403);
             }
 
             Log::error('uploadPendingAudio Google error', [
