@@ -390,10 +390,12 @@ async function finalizeRecording() {
                 if (!response || (!response.saved && !response.pending_recording)) {
                     throw new Error('Invalid upload response');
                 }
+                showSuccess('Grabación subida a Drive');
             })
             .catch(e => {
                 console.error('Error al subir la grabación', e);
-                showError('Error al subir la grabación');
+                showError('Error al subir la grabación. Se descargará el audio');
+                downloadBlob(finalBlob, name + '.webm');
             });
 
         showSuccess('La subida continuará en segundo plano. El estado final se mostrará mediante uploadNotifications.');
@@ -609,10 +611,12 @@ function uploadInBackground(blob, name, onProgress) {
                     pollPendingRecordingStatus(response.pending_recording, taskId);
                 } else {
                     window.uploadNotifications.success(taskId);
+                    showSuccess('Subida completada');
                 }
                 resolve(response);
             } else {
                 window.uploadNotifications.error(taskId);
+                showError('Fallo al subir el audio');
                 reject(new Error('Upload failed'));
             }
         };
@@ -620,6 +624,7 @@ function uploadInBackground(blob, name, onProgress) {
         xhr.onerror = () => {
             console.error('Error uploading audio');
             window.uploadNotifications.error(taskId);
+            showError('Fallo al subir el audio');
             reject(new Error('Upload failed'));
         };
 
@@ -634,9 +639,11 @@ function pollPendingRecordingStatus(id, taskId) {
             .then(data => {
                 if (data.status === 'COMPLETED') {
                     window.uploadNotifications.success(taskId, 'Procesado');
+                    showSuccess('Grabación procesada correctamente');
                 } else if (data.status === 'FAILED') {
                     const msg = data.error_message ? `Error: ${data.error_message}` : 'Error';
                     window.uploadNotifications.error(taskId, msg);
+                    showError('Error al procesar la grabación en Drive');
                 } else {
                     setTimeout(check, 5000);
                 }
@@ -680,6 +687,17 @@ function blobToBase64(blob) {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
     });
+}
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // Función para alternar navbar móvil
