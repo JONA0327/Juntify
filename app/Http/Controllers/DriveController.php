@@ -129,7 +129,7 @@ class DriveController extends Controller
         $token->recordings_folder_id = $request->input('id');
         $token->save();
 
-        Folder::updateOrCreate(
+        $folder = Folder::updateOrCreate(
             [
                 'google_token_id' => $token->id,
                 'google_id'       => $request->input('id'),
@@ -139,6 +139,15 @@ class DriveController extends Controller
                 'parent_id' => null,
             ]
         );
+
+        $files = $this->drive->listSubfolders($request->input('id'));
+        $subfolders = [];
+        foreach ($files as $file) {
+            $subfolders[] = Subfolder::updateOrCreate(
+                ['folder_id' => $folder->id, 'google_id' => $file->getId()],
+                ['name' => $file->getName()]
+            );
+        }
 
         try {
             $this->drive->shareFolder(
@@ -153,8 +162,9 @@ class DriveController extends Controller
         }
 
         return response()->json([
-            'id'   => $request->input('id'),
-            'name' => $folderName,
+            'id'         => $request->input('id'),
+            'name'       => $folderName,
+            'subfolders' => $subfolders,
         ]);
     }
 
