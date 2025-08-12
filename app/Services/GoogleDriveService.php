@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Google\Client;
 use Google\Service\Drive;
+use Google\Service\Calendar;
 use Google\Service\Drive\DriveFile;
 use Google\Service\Drive\Permission;
 
@@ -20,7 +21,7 @@ class GoogleDriveService
         $this->client->setClientId(config('services.google.client_id'));
         $this->client->setClientSecret(config('services.google.client_secret'));
         $this->client->setRedirectUri(config('services.google.redirect'));
-        $this->client->setScopes([Drive::DRIVE]);
+        $this->client->setScopes([Drive::DRIVE, Calendar::CALENDAR]);
         $this->client->setAccessType('offline');
 
         $this->drive = new Drive($this->client);
