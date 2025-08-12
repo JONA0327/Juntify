@@ -37,13 +37,18 @@ it('reconnects without losing folders', function () {
 
     $this->assertDatabaseHas('google_tokens', [
         'id' => $token->id,
-        'recordings_folder_id' => 'folder123',
+        'recordings_folder_id' => null,
         'access_token' => null,
         'refresh_token' => null,
+        'expiry_date' => null,
     ]);
     $this->assertDatabaseCount('google_tokens', 1);
     $this->assertDatabaseHas('folders', ['id' => $folder->id]);
     $this->assertDatabaseHas('subfolders', ['id' => $sub->id]);
+
+    $profile = $this->actingAs($user)->get('/profile');
+    $profile->assertViewHas('driveConnected', false);
+    $profile->assertViewHas('calendarConnected', false);
 
     $client = Mockery::mock(Client::class);
     $client->shouldReceive('fetchAccessTokenWithAuthCode')->with('code123')->andReturn([
@@ -68,4 +73,8 @@ it('reconnects without losing folders', function () {
     $this->assertDatabaseCount('google_tokens', 1);
     $this->assertDatabaseHas('folders', ['id' => $folder->id]);
     $this->assertDatabaseHas('subfolders', ['id' => $sub->id]);
+    $this->assertDatabaseHas('google_tokens', [
+        'id' => $token->id,
+        'recordings_folder_id' => null,
+    ]);
 });

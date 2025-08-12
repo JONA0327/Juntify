@@ -88,6 +88,8 @@ class GoogleAuthController extends Controller
             $token->update([
                 'access_token'  => null,
                 'refresh_token' => null,
+                'expiry_date'          => null,
+                'recordings_folder_id' => null,
             ]);
         }
 
