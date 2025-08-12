@@ -432,11 +432,11 @@ body {
 }
 
 @keyframes recordingPulse {
-    0%, 100% { 
+    0%, 100% {
         transform: scale(1);
         box-shadow: 0 8px 32px rgba(255, 107, 107, 0.4);
     }
-    50% { 
+    50% {
         transform: scale(1.05);
         box-shadow: 0 12px 40px rgba(255, 107, 107, 0.6);
     }
@@ -513,10 +513,10 @@ body {
 }
 
 @keyframes timerGlow {
-    0%, 100% { 
+    0%, 100% {
         text-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
     }
-    50% { 
+    50% {
         text-shadow: 0 0 30px rgba(239, 68, 68, 0.8);
     }
 }
@@ -676,6 +676,55 @@ body {
     color: var(--text-primary);
     font-weight: 500;
 }
+
+/* Animated ON/OFF switch for postpone mode */
+.switch-track {
+    position: relative;
+    display: inline-block;
+    width: 56px; /* ~w-14 */
+    height: 28px; /* ~h-7 */
+    border-radius: 9999px;
+    background: #6b7280; /* gray-500 */
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+    transition: background 200ms ease-in-out;
+}
+
+.switch-thumb {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 9999px;
+    background: rgba(255,255,255,0.95);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    transform: translateX(0);
+    transition: transform 200ms ease-in-out;
+}
+
+.switch-label {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: rgba(255,255,255,0.85);
+    user-select: none;
+    transition: opacity 180ms ease-in-out;
+}
+.switch-label.off { left: 8px; opacity: 0.9; }
+.switch-label.on { right: 8px; opacity: 0; }
+
+/* State when checked */
+input#postpone-toggle:checked + .switch-track {
+    background: #10b981; /* emerald-500 */
+}
+input#postpone-toggle:checked + .switch-track .switch-thumb {
+    transform: translateX(28px);
+}
+input#postpone-toggle:checked + .switch-track .switch-label.off { opacity: 0; }
+input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95; }
 
 @keyframes slideIn {
     from {
@@ -1367,66 +1416,66 @@ body {
     .header {
         display: none;
     }
-    
+
     /* Mostrar barra móvil */
     .mobile-bottom-nav {
         display: grid;
     }
-    
+
     /* Ajustar app container */
     .app-container {
         margin-top: 0;
         padding-bottom: 6rem;
     }
-    
+
     .main-content {
         padding: 1rem;
         padding-bottom: 6rem;
     }
-    
+
     .page-title {
         font-size: 2rem;
     }
-    
+
     .recording-modes {
         grid-template-columns: 1fr;
     }
-    
+
     .mode-option {
         flex-direction: column;
         text-align: center;
         gap: 0.75rem;
     }
-    
+
     .mic-circle {
         width: 100px;
         height: 100px;
         font-size: 2.5rem;
     }
-    
+
     .time-counter {
         font-size: 2.5rem;
     }
-    
+
     .modal-content {
         margin: 1rem;
         padding: 1.5rem;
     }
-    
+
     .modal-footer {
         flex-direction: column;
     }
-    
+
     .volume-rings .ring-1 {
         width: 120px;
         height: 120px;
     }
-    
+
     .volume-rings .ring-2 {
         width: 140px;
         height: 140px;
     }
-    
+
     .volume-rings .ring-3 {
         width: 160px;
         height: 160px;
@@ -1437,56 +1486,56 @@ body {
     .page-title {
         font-size: 1.75rem;
     }
-    
+
     .info-card {
         padding: 1.5rem;
     }
-    
+
     .mic-circle {
         width: 80px;
         height: 80px;
         font-size: 2rem;
     }
-    
+
     .time-counter {
         font-size: 2rem;
     }
-    
+
     .recorder-btn {
         min-width: auto;
         width: 100%;
     }
-    
+
     .platform-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .upload-area {
         padding: 2rem 1rem;
     }
-    
+
     .upload-title {
         font-size: 1.2rem;
     }
-    
+
     .audio-visualizer {
         height: 40px;
     }
-    
+
     .audio-bar {
         width: 3px;
     }
-    
+
     .volume-rings .ring-1 {
         width: 100px;
         height: 100px;
     }
-    
+
     .volume-rings .ring-2 {
         width: 120px;
         height: 120px;
     }
-    
+
     .volume-rings .ring-3 {
         width: 140px;
         height: 140px;

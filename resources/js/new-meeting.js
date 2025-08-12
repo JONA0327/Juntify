@@ -133,13 +133,8 @@ function setPostponeMode(on) {
     postponeMode = !!on;
     const label = document.getElementById('postpone-mode-label');
     const checkbox = document.getElementById('postpone-toggle');
-    const track = document.getElementById('postpone-track');
-    if (label) label.textContent = postponeMode ? 'Modo posponer activo' : 'Activar modo posponer';
+    if (label) label.textContent = `Modo posponer: ${postponeMode ? 'Encendido' : 'Apagado'}`;
     if (checkbox && checkbox.checked !== postponeMode) checkbox.checked = postponeMode;
-    if (track) {
-        track.classList.toggle('bg-blue-500', postponeMode);
-        track.classList.toggle('bg-gray-400', !postponeMode);
-    }
     window.postponeMode = postponeMode;
 }
 
