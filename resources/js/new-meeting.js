@@ -64,7 +64,7 @@ function selectRecordingMode(mode) {
     });
     document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
     selectedMode = mode;
-    
+
     // Mostrar la interfaz correspondiente
     showRecordingInterface(mode);
 }
@@ -75,12 +75,12 @@ function showRecordingInterface(mode) {
     const audioUploader = document.getElementById('audio-uploader');
     const meetingRecorder = document.getElementById('meeting-recorder');
     const recorderTitle = document.getElementById('recorder-title');
-    
+
     // Ocultar todas las interfaces
     audioRecorder.style.display = 'none';
     audioUploader.style.display = 'none';
     meetingRecorder.style.display = 'none';
-    
+
     // Mostrar la interfaz correspondiente
     switch(mode) {
         case 'audio':
@@ -357,9 +357,9 @@ async function finalizeRecording() {
 // Función para analizar audio en tiempo real
 function startAudioAnalysis() {
     if (!isRecording || !analyser) return;
-    
+
     analyser.getByteFrequencyData(dataArray);
-    
+
     // Calcular volumen promedio
     let sum = 0;
     for (let i = 0; i < dataArray.length; i++) {
@@ -367,13 +367,13 @@ function startAudioAnalysis() {
     }
     const average = sum / dataArray.length;
     const volumeLevel = average / 255;
-    
+
     // Actualizar visualizador de barras
     updateAudioBars(dataArray);
-    
+
     // Actualizar anillos de volumen
     updateVolumeRings(volumeLevel);
-    
+
     // Continuar análisis
     animationId = requestAnimationFrame(startAudioAnalysis);
 }
@@ -382,16 +382,16 @@ function startAudioAnalysis() {
 function updateAudioBars(frequencyData) {
     const bars = document.querySelectorAll('.audio-bar');
     const step = Math.floor(frequencyData.length / bars.length);
-    
+
     bars.forEach((bar, index) => {
         const value = frequencyData[index * step] || 0;
         const height = Math.max((value / 255) * 100, 8);
-        
+
         bar.style.height = height + '%';
-        
+
         // Aplicar clases según intensidad
         bar.classList.remove('low', 'medium', 'high', 'peak');
-        
+
         if (height > 80) {
             bar.classList.add('peak');
         } else if (height > 60) {
@@ -407,15 +407,15 @@ function updateAudioBars(frequencyData) {
 // Función para actualizar los anillos de volumen
 function updateVolumeRings(volumeLevel) {
     const rings = document.getElementById('volume-rings');
-    
+
     if (volumeLevel > 0.1) {
         rings.classList.add('active');
-        
+
         // Ajustar opacidad de los anillos según el volumen
         const ring1 = rings.querySelector('.ring-1');
         const ring2 = rings.querySelector('.ring-2');
         const ring3 = rings.querySelector('.ring-3');
-        
+
         ring1.style.opacity = Math.min(volumeLevel * 2, 1);
         ring2.style.opacity = Math.min(volumeLevel * 1.5, 0.8);
         ring3.style.opacity = Math.min(volumeLevel, 0.6);
@@ -460,12 +460,12 @@ function updateRecordingUI(recording) {
 function resetAudioVisualizer() {
     const bars = document.querySelectorAll('.audio-bar');
     const rings = document.getElementById('volume-rings');
-    
+
     bars.forEach(bar => {
         bar.style.height = '8px';
         bar.classList.remove('low', 'medium', 'high', 'peak');
     });
-    
+
     rings.classList.remove('active');
 }
 
@@ -474,11 +474,11 @@ function resetAudioVisualizer() {
 // Función para actualizar el timer
 function updateTimer() {
     if (isPaused || !startTime) return;
-    
+
     const elapsed = Date.now() - startTime;
     const minutes = Math.floor(elapsed / 60000);
     const seconds = Math.floor((elapsed % 60000) / 1000);
-    
+
     const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     document.getElementById('timer-counter').textContent = timeString;
 }
@@ -494,9 +494,9 @@ function showError(message) {
             <span class="notification-message">${message}</span>
         </div>
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.remove();
     }, 5000);
@@ -512,9 +512,9 @@ function showSuccess(message) {
             <span class="notification-message">${message}</span>
         </div>
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.remove();
     }, 5000);
@@ -734,7 +734,7 @@ function blobToBase64(blob) {
 function toggleMobileNavbar() {
     const navbar = document.querySelector('.mobile-navbar');
     const button = document.getElementById('mobile-navbar-btn');
-    
+
     if (navbar) {
         navbar.classList.toggle('active');
         button.classList.toggle('active');
@@ -745,7 +745,7 @@ function toggleMobileNavbar() {
 function createParticles() {
     const particles = document.getElementById('particles');
     const particleCount = window.innerWidth < 768 ? 30 : 50;
-    
+
     for (let i = 0; i < particleCount; i++) {
         const particle = document.createElement('div');
         particle.className = 'particle';
@@ -808,17 +808,17 @@ function setupFileUpload() {
     const uploadArea = document.getElementById('upload-area');
     const fileInput = document.getElementById('audio-file-input');
     const uploadButton = uploadArea.querySelector('.upload-btn');
-    
+
     // Drag and drop
     uploadArea.addEventListener('dragover', (e) => {
         e.preventDefault();
         uploadArea.classList.add('dragover');
     });
-    
+
     uploadArea.addEventListener('dragleave', () => {
         uploadArea.classList.remove('dragover');
     });
-    
+
     uploadArea.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadArea.classList.remove('dragover');
@@ -827,7 +827,7 @@ function setupFileUpload() {
             handleFileSelection(files[0]);
         }
     });
-    
+
     // Click para seleccionar archivo
     uploadArea.addEventListener('click', () => {
         fileInput.click();
@@ -837,7 +837,7 @@ function setupFileUpload() {
         event.stopPropagation();
         fileInput.click();
     });
-    
+
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
             handleFileSelection(e.target.files[0]);
@@ -853,13 +853,13 @@ function handleFileSelection(file) {
         showError('Tipo de archivo no soportado. Por favor selecciona un archivo de audio válido.');
         return;
     }
-    
+
     // Validar tamaño (máximo 100MB)
     if (file.size > 100 * 1024 * 1024) {
         showError('El archivo es demasiado grande. El tamaño máximo es 100MB.');
         return;
     }
-    
+
     uploadedFile = file;
 
     // Mostrar información del archivo
@@ -867,7 +867,7 @@ function handleFileSelection(file) {
     document.getElementById('file-size').textContent = formatFileSize(file.size);
     document.getElementById('selected-file').style.display = 'block';
     document.getElementById('upload-area').style.display = 'none';
-    
+
     showSuccess('Archivo seleccionado correctamente');
 }
 
@@ -905,7 +905,7 @@ function toggleSystemAudio() {
     systemAudioEnabled = !systemAudioEnabled;
     const btn = document.getElementById('system-audio-btn');
     const text = btn.querySelector('.source-text');
-    
+
     if (systemAudioEnabled) {
         btn.classList.add('active');
         text.textContent = 'Sistema activado';
@@ -920,7 +920,7 @@ function toggleMicrophoneAudio() {
     microphoneAudioEnabled = !microphoneAudioEnabled;
     const btn = document.getElementById('microphone-audio-btn');
     const text = btn.querySelector('.source-text');
-    
+
     if (microphoneAudioEnabled) {
         btn.classList.add('active');
         text.textContent = 'Micrófono activado';
@@ -935,7 +935,7 @@ function muteSystemAudio() {
     systemAudioMuted = !systemAudioMuted;
     const btn = document.getElementById('system-mute-btn');
     const icon = btn.querySelector('.mute-icon');
-    
+
     if (systemAudioMuted) {
         btn.classList.add('muted');
         icon.textContent = '🔇';
@@ -950,7 +950,7 @@ function muteMicrophoneAudio() {
     microphoneAudioMuted = !microphoneAudioMuted;
     const btn = document.getElementById('microphone-mute-btn');
     const icon = btn.querySelector('.mute-icon');
-    
+
     if (microphoneAudioMuted) {
         btn.classList.add('muted');
         icon.textContent = '🔇';
@@ -967,13 +967,13 @@ function toggleMeetingRecording() {
         showError('Tu navegador no soporta grabación de reuniones. Usa Chrome, Edge o Firefox actualizado.');
         return;
     }
-    
+
     // Verificar que se ejecute en HTTPS (requerido para getDisplayMedia)
     if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
         showError('La grabación de reuniones requiere HTTPS. Asegúrate de estar en una conexión segura.');
         return;
     }
-    
+
     if (!meetingRecording) {
         startMeetingRecording();
     } else {
@@ -986,7 +986,7 @@ async function startMeetingRecording() {
         showError('Debes activar al menos una fuente de audio');
         return;
     }
-    
+
     try {
         // Solicitar acceso a las fuentes de audio
         const audioConstraints = await getAudioConstraints();
@@ -995,7 +995,7 @@ async function startMeetingRecording() {
                 audio: audioConstraints
             });
         }
-        
+
         if (systemAudioEnabled) {
             // Solicitar captura de pantalla para obtener audio del sistema
             systemAudioStream = await navigator.mediaDevices.getDisplayMedia({
@@ -1007,22 +1007,22 @@ async function startMeetingRecording() {
                 }
             });
         }
-        
+
         // Configurar análisis de audio
         setupMeetingAudioAnalysis();
-        
+
         meetingRecording = true;
         meetingStartTime = Date.now();
-        
+
         // Actualizar UI
         updateMeetingRecordingUI(true);
-        
+
         // Iniciar timer y análisis
         meetingTimer = setInterval(updateMeetingTimer, 100);
         startMeetingAudioAnalysis();
-        
+
         showSuccess('¡Grabación de reunión iniciada!');
-        
+
     } catch (error) {
         console.error('Error al iniciar grabación de reunión:', error);
         showError('No se pudo acceder a las fuentes de audio. Verifica los permisos.');
@@ -1068,7 +1068,7 @@ async function stopMeetingRecording() {
 // Configurar análisis de audio para reunión
 function setupMeetingAudioAnalysis() {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    
+
     if (systemAudioStream) {
         systemAnalyser = audioContext.createAnalyser();
         const systemSource = audioContext.createMediaStreamSource(systemAudioStream);
@@ -1077,7 +1077,7 @@ function setupMeetingAudioAnalysis() {
         systemAnalyser.smoothingTimeConstant = 0.8;
         systemDataArray = new Uint8Array(systemAnalyser.frequencyBinCount);
     }
-    
+
     if (microphoneAudioStream) {
         microphoneAnalyser = audioContext.createAnalyser();
         const microphoneSource = audioContext.createMediaStreamSource(microphoneAudioStream);
@@ -1091,19 +1091,19 @@ function setupMeetingAudioAnalysis() {
 // Iniciar análisis de audio para reunión
 function startMeetingAudioAnalysis() {
     if (!meetingRecording) return;
-    
+
     // Analizar audio del sistema
     if (systemAnalyser && systemDataArray && !systemAudioMuted) {
         systemAnalyser.getByteFrequencyData(systemDataArray);
         updateMeetingAudioBars('system-audio-visualizer', systemDataArray);
     }
-    
+
     // Analizar audio del micrófono
     if (microphoneAnalyser && microphoneDataArray && !microphoneAudioMuted) {
         microphoneAnalyser.getByteFrequencyData(microphoneDataArray);
         updateMeetingAudioBars('microphone-audio-visualizer', microphoneDataArray);
     }
-    
+
     meetingAnimationId = requestAnimationFrame(startMeetingAudioAnalysis);
 }
 
@@ -1111,26 +1111,26 @@ function startMeetingAudioAnalysis() {
 function updateMeetingAudioBars(visualizerId, frequencyData) {
     const visualizer = document.getElementById(visualizerId);
     if (!visualizer) return;
-    
+
     const bars = visualizer.querySelectorAll('.meeting-audio-bar');
     const step = Math.floor(frequencyData.length / bars.length);
-    
+
     bars.forEach((bar, index) => {
         const value = frequencyData[index * step] || 0;
         const height = Math.max((value / 255) * 100, 8);
-        
+
         bar.style.height = height + '%';
-        
+
         // Aplicar clases según intensidad
         bar.classList.remove('active', 'high');
-        
+
         if (height > 70) {
             bar.classList.add('high');
         } else if (height > 30) {
             bar.classList.add('active');
         }
     });
-    
+
     // Activar visualizador si hay audio
     const hasAudio = Array.from(frequencyData).some(value => value > 30);
     if (hasAudio) {
@@ -1147,7 +1147,7 @@ function updateMeetingRecordingUI(recording) {
     const buttonIcon = button.querySelector('.btn-icon');
     const timerCounter = document.getElementById('meeting-timer-counter');
     const timerLabel = document.getElementById('meeting-timer-label');
-    
+
     if (recording) {
         button.classList.add('recording');
         setIcon(buttonIcon, 'stop');
@@ -1169,11 +1169,11 @@ function updateMeetingRecordingUI(recording) {
 // Actualizar timer de reunión
 function updateMeetingTimer() {
     if (!meetingStartTime) return;
-    
+
     const elapsed = Date.now() - meetingStartTime;
     const minutes = Math.floor(elapsed / 60000);
     const seconds = Math.floor((elapsed % 60000) / 1000);
-    
+
     const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     document.getElementById('meeting-timer-counter').textContent = timeString;
 }
@@ -1181,7 +1181,7 @@ function updateMeetingTimer() {
 // Resetear visualizadores de audio de reunión
 function resetMeetingAudioVisualizers() {
     const visualizers = document.querySelectorAll('.meeting-audio-visualizer');
-    
+
     visualizers.forEach(visualizer => {
         const bars = visualizer.querySelectorAll('.meeting-audio-bar');
         bars.forEach(bar => {
@@ -1221,7 +1221,7 @@ window.toggleMeetingRecording = toggleMeetingRecording;
 window.toggleMobileDropdown = function() {
   const dropdown = document.getElementById('mobile-dropdown');
   const overlay = document.getElementById('mobile-dropdown-overlay');
-  
+
   dropdown.classList.toggle('show');
   overlay.classList.toggle('show');
 };
@@ -1229,7 +1229,7 @@ window.toggleMobileDropdown = function() {
 window.closeMobileDropdown = function() {
   const dropdown = document.getElementById('mobile-dropdown');
   const overlay = document.getElementById('mobile-dropdown-overlay');
-  
+
   dropdown.classList.remove('show');
   overlay.classList.remove('show');
 };
