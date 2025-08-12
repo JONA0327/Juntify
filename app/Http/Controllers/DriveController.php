@@ -278,9 +278,7 @@ class DriveController extends Controller
                 'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4',
             ]);
 
-            $serviceAccount  = app(GoogleServiceAccount::class);
             $user = Auth::user();
-            $serviceAccount->impersonate($user->email);
 
             // Obtener el token de Google del usuario
             $token = GoogleToken::where('username', $user->username)->first();
@@ -289,6 +287,16 @@ class DriveController extends Controller
                     'username' => $user->username,
                 ]);
                 return response()->json(['message' => 'Token de Google no encontrado'], 400);
+            }
+
+            $client = $this->drive->getClient();
+            $client->setAccessToken([
+                'access_token'  => $token->access_token,
+                'refresh_token' => $token->refresh_token,
+                'expiry_date'   => $token->expiry_date,
+            ]);
+            if ($client->isAccessTokenExpired()) {
+                $client->refreshToken($token->refresh_token);
             }
 
             // 1. Obtener la carpeta raíz del usuario
@@ -311,7 +319,7 @@ class DriveController extends Controller
                 $subfolderCreated = false;
             } else {
                 Log::info('uploadPendingAudio: creating Audios Pospuestos subfolder', ['name' => $pendingSubfolderName, 'rootFolderId' => $rootFolderId]);
-                $pendingFolderId = $serviceAccount->createFolder($pendingSubfolderName, $rootFolderId);
+                $pendingFolderId = $this->drive->createFolder($pendingSubfolderName, $rootFolderId);
                 $subfolder = Subfolder::create([
                     'folder_id' => $rootFolder->id,
                     'google_id' => $pendingFolderId,
@@ -320,7 +328,8 @@ class DriveController extends Controller
                 $subfolderCreated = true;
             }
 
-            $serviceAccount->shareFolder(
+            $this->drive->shareFolder($rootFolderId, config('services.google.service_account_email'));
+            $this->drive->shareFolder(
                 $pendingFolderId,
                 config('services.google.service_account_email')
             );
@@ -353,13 +362,14 @@ class DriveController extends Controller
                 'pendingFolderId' => $pendingFolderId,
                 'filePath' => $filePath,
             ]);
-            $fileId = $serviceAccount->uploadFile(
+            $fileContents = file_get_contents($filePath);
+            $fileId = $this->drive->uploadFile(
                 $fileName,
                 $mime,
                 $pendingFolderId,
-                $filePath
+                $fileContents
             );
-            $audioUrl = $serviceAccount->getFileLink($fileId);
+            $audioUrl = $this->drive->getFileLink($fileId);
 
             // 4. Guardar en la BD
             Log::debug('uploadPendingAudio saving PendingRecording', [
