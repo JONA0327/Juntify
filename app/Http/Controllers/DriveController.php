@@ -278,7 +278,12 @@ class DriveController extends Controller
                 Log::warning('syncDriveSubfolders invalid_grant', [
                     'username' => $username,
                 ]);
-                GoogleToken::where('username', $username)->delete();
+                GoogleToken::where('username', $username)->update([
+                    'access_token'  => null,
+                    'refresh_token' => null,
+                    'expiry_date'   => null,
+                    // recordings_folder_id se mantiene para reconexión
+                ]);
                 return response()->json([
                     'message' => 'Autenticación de Google expirada. Reconecta tu Google Drive.',
                 ], 401);
