@@ -37,7 +37,7 @@ it('reconnects without losing folders', function () {
 
     $this->assertDatabaseHas('google_tokens', [
         'id' => $token->id,
-        'recordings_folder_id' => null,
+        'recordings_folder_id' => 'folder123',
         'access_token' => null,
         'refresh_token' => null,
         'expiry_date' => null,
@@ -75,6 +75,6 @@ it('reconnects without losing folders', function () {
     $this->assertDatabaseHas('subfolders', ['id' => $sub->id]);
     $this->assertDatabaseHas('google_tokens', [
         'id' => $token->id,
-        'recordings_folder_id' => null,
+        'recordings_folder_id' => 'folder123',
     ]);
 });
