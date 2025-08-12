@@ -21,10 +21,13 @@
                         Desconectado
                     </span>
                 </div>
+                <div class="info-item">
+                    <span class="info-value">Debes reconectar tu cuenta de Google.</span>
+                </div>
                 <div class="action-buttons">
-                    <button class="btn btn-primary" id="connect-drive-btn">
+                    <a href="{{ route('google.reauth') }}" class="btn btn-primary">
                         🔗 Conectar Drive y Calendar
-                    </button>
+                    </a>
                 </div>
             </div>
         @else
@@ -52,7 +55,7 @@
                     </span>
                 </div>
                 <div class="info-item" id="calendar-advice" @if($calendarConnected) style="display:none;" @endif>
-                    <span class="info-value">Vuelve a conectar a través de Google OAuth.</span>
+                    <span class="info-value">Vuelve a conectar a través de <a href="{{ route('google.reauth') }}" style="text-decoration: underline;">Google OAuth</a>.</span>
                 </div>
                 @if($lastSync)
                 <div class="info-item">

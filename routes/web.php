@@ -23,6 +23,7 @@ Route::post('/register',[RegisterController::class, 'register']);
 // Google OAuth routes
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
+Route::get('/google/reauth', [GoogleAuthController::class, 'redirect'])->name('google.reauth');
 
 Route::middleware('auth')->group(function () {
     // Perfil
