@@ -31,6 +31,8 @@ let uploadedFile = null;
 let fileUploadInitialized = false;
 let pendingAudioBlob = null;
 let pendingSaveContext = null;
+let postponeMode = false;
+window.postponeMode = postponeMode;
 
 // SVG paths for dynamic icons
 const ICON_PATHS = {
@@ -125,6 +127,23 @@ function toggleRecording() {
         if (md) md.style.display = 'none';
         if (mr) mr.style.display = 'none';
     }
+}
+
+function togglePostponeMode() {
+    postponeMode = !postponeMode;
+    const btn = document.getElementById('postpone-mode-btn');
+    const label = document.getElementById('postpone-mode-label');
+    if (btn) {
+        if (postponeMode) {
+            btn.classList.add('btn-primary');
+        } else {
+            btn.classList.remove('btn-primary');
+        }
+    }
+    if (label) {
+        label.textContent = postponeMode ? 'Modo posponer activo' : 'Activar modo posponer';
+    }
+    window.postponeMode = postponeMode;
 }
 
 // ===== FUNCIONES DE GRABACIÓN =====
@@ -1223,6 +1242,7 @@ window.processAudioFile = processAudioFile;
 window.pauseRecording = pauseRecording;
 window.resumeRecording = resumeRecording;
 window.discardRecording = discardRecording;
+window.togglePostponeMode = togglePostponeMode;
 
 // Funciones del grabador de reuniones que faltaban
 window.toggleSystemAudio = toggleSystemAudio;
