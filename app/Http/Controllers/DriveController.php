@@ -54,6 +54,25 @@ class DriveController extends Controller
                 $request->input('name'),
                 config('drive.root_folder_id')
             );
+        } catch (GoogleServiceException $e) {
+            if (str_contains($e->getMessage(), 'invalid_grant')) {
+                Log::warning('createMainFolder invalid_grant', [
+                    'username' => Auth::user()->username,
+                ]);
+                $token->delete();
+                return response()->json([
+                    'message' => 'Token de Google inválido, vuelve a conectar Google Drive.',
+                ], 401);
+            }
+
+            Log::error('createMainFolder Google error', [
+                'username' => Auth::user()->username,
+                'error'    => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Error de Drive: ' . $e->getMessage(),
+            ], 502);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }
@@ -249,6 +268,24 @@ class DriveController extends Controller
                 'subfolders'  => $subfolders,
             ], 200);
 
+        } catch (GoogleServiceException $e) {
+            if (str_contains($e->getMessage(), 'invalid_grant')) {
+                Log::warning('syncDriveSubfolders invalid_grant', [
+                    'username' => $username,
+                ]);
+                GoogleToken::where('username', $username)->delete();
+                return response()->json([
+                    'message' => 'Autenticación de Google expirada. Reconecta tu Google Drive.',
+                ], 401);
+            }
+
+            Log::error('syncDriveSubfolders Google error', [
+                'username' => $username,
+                'error'    => $e->getMessage(),
+            ]);
+            return response()->json([
+                'message' => 'Error de Drive: ' . $e->getMessage(),
+            ], 502);
         } catch (\Throwable $e) {
             Log::error('syncDriveSubfolders failed', [
                 'username' => $username,
@@ -448,6 +485,25 @@ class DriveController extends Controller
                 ]);
             }
             return response()->json($response);
+        } catch (GoogleServiceException $e) {
+            if (str_contains($e->getMessage(), 'invalid_grant')) {
+                Log::warning('uploadPendingAudio invalid_grant', [
+                    'username' => $user->username,
+                ]);
+                $token?->delete();
+                return response()->json([
+                    'message' => 'Autenticación de Google expirada. Reconecta tu Google Drive.',
+                ], 401);
+            }
+
+            Log::error('uploadPendingAudio Google error', [
+                'username' => $user->username,
+                'error'    => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Error de Drive: ' . $e->getMessage(),
+            ], 502);
         } catch (\Throwable $e) {
             Log::error('uploadPendingAudio failed', [
                 'error' => $e->getMessage(),
