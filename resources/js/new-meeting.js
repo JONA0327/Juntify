@@ -545,36 +545,19 @@ function uploadInBackground(blob, name, onProgress) {
 
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-                const contentType = xhr.getResponseHeader('Content-Type') || '';
-                if (contentType.includes('application/json')) {
-                    let response;
-                    try {
-                        response = JSON.parse(xhr.responseText);
-                    } catch (err) {
-                        window.uploadNotifications.error(taskId);
-                        const message = xhr.responseText ? `: ${xhr.responseText}` : '';
-                        reject(new Error(`Invalid upload response${message}`));
-                        return;
-                    }
-
-                    if (response && (response.saved || response.pending_recording)) {
-                        if (response.pending_recording) {
-                            window.uploadNotifications.processing(taskId);
-                            pollPendingRecordingStatus(response.pending_recording, taskId);
-                        } else {
-                            window.uploadNotifications.success(taskId);
-                        }
-                        resolve(response);
-                    } else {
-                        window.uploadNotifications.error(taskId);
-                        const message = response && response.message ? `: ${response.message}` : '';
-                        reject(new Error(`Invalid upload response${message}`));
-                    }
-                } else {
-                    window.uploadNotifications.error(taskId);
-                    const message = xhr.responseText ? `: ${xhr.responseText}` : '';
-                    reject(new Error(`Invalid upload response${message}`));
+                window.uploadNotifications.processing(taskId);
+                let response;
+                try {
+                    response = JSON.parse(xhr.responseText);
+                } catch (err) {
+                    response = xhr.responseText;
                 }
+                if (response?.pending_recording) {
+                    pollPendingRecordingStatus(response.pending_recording, taskId);
+                } else {
+                    window.uploadNotifications.success(taskId);
+                }
+                resolve(response);
             } else {
                 window.uploadNotifications.error(taskId);
                 reject(new Error('Upload failed'));
@@ -674,13 +657,14 @@ async function saveRecording() {
     }
 
     try {
+        let response;
         if (pendingSaveContext === 'upload') {
             const progressContainer = document.getElementById('upload-progress');
             const progressFill = document.getElementById('progress-fill');
             const progressText = document.getElementById('progress-text');
             if (progressContainer && progressFill && progressText) {
                 progressContainer.style.display = 'block';
-                await uploadInBackground(pendingAudioBlob, name, (loaded, total) => {
+                response = await uploadInBackground(pendingAudioBlob, name, (loaded, total) => {
                     if (total) {
                         const percent = (loaded / total) * 100;
                         progressFill.style.width = percent + '%';
@@ -691,17 +675,21 @@ async function saveRecording() {
                 progressText.textContent = '0%';
                 progressContainer.style.display = 'none';
             } else {
-                await uploadInBackground(pendingAudioBlob, name);
+                response = await uploadInBackground(pendingAudioBlob, name);
             }
             removeSelectedFile();
         } else {
-            await uploadInBackground(pendingAudioBlob, name);
+            response = await uploadInBackground(pendingAudioBlob, name);
+        }
+
+        if (!response || (!response.saved && !response.pending_recording)) {
+            throw new Error('Invalid upload response');
         }
 
         showSuccess('Grabación subida correctamente');
     } catch (e) {
         console.error('Error al subir la grabación', e);
-        showError(e.message);
+        showError('Error al subir la grabación');
     }
 
     handlePostActionCleanup(true);
