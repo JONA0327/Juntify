@@ -65,21 +65,25 @@
             </div>
 
             <div class="meeting-controls">
-                <button class="btn btn-primary meeting-record-btn" id="meeting-record-btn" onclick="toggleMeetingRecording()">
-                    <x-icon name="video" class="btn-icon" />
-                    <span class="btn-text">Seleccionar fuente de audio</span>
+                <button class="icon-btn" id="meeting-record-btn" onclick="toggleMeetingRecording()">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5l6-4.5v11l-6-4.5M3 6.75A2.25 2.25 0 015.25 4.5h6A2.25 2.25 0 0113.5 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-6A2.25 2.25 0 013 17.25V6.75z" />
+                    </svg>
                 </button>
-                <button class="btn pause-btn recorder-btn" id="meeting-pause" onclick="pauseRecording()" style="display: none;">
-                    <x-icon name="pause" class="btn-icon" />
-                    <span class="btn-text">Pausar</span>
+                <button class="icon-btn" id="meeting-pause" onclick="pauseRecording()" style="display: none;">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                    </svg>
                 </button>
-                <button class="btn resume-btn recorder-btn" id="meeting-resume" onclick="resumeRecording()" style="display: none;">
-                    <x-icon name="play" class="btn-icon" />
-                    <span class="btn-text">Reanudar</span>
+                <button class="icon-btn" id="meeting-resume" onclick="resumeRecording()" style="display: none;">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" />
+                    </svg>
                 </button>
-                <button class="btn discard-btn recorder-btn" id="meeting-discard" onclick="discardRecording()" style="display: none;">
-                    <x-icon name="x" class="btn-icon" />
-                    <span class="btn-text">Descartar</span>
+                <button class="icon-btn" id="meeting-discard" onclick="discardRecording()" style="display: none;">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                 </button>
             </div>
         </div>
