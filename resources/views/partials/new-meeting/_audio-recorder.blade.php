@@ -33,7 +33,7 @@
             <x-icon name="play" class="btn-icon" />
             <span class="btn-text">Iniciar grabación</span>
         </button>
-        <div class="postpone-switch flex flex-col items-center mt-3">
+        <div class="postpone-switch flex flex-col items-center mt-3" id="postpone-switch">
             <span id="postpone-mode-label" class="text-sm mb-1">Modo posponer: Apagado</span>
             <label for="postpone-toggle" class="cursor-pointer select-none">
                 <input id="postpone-toggle" type="checkbox" class="sr-only" onchange="togglePostponeMode()">
