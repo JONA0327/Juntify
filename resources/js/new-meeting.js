@@ -336,6 +336,10 @@ function resetRecordingControls() {
     if (mp) mp.style.display = 'none';
     if (md) md.style.display = 'none';
     if (mr) mr.style.display = 'none';
+    const postponeContainer = document.getElementById('postpone-switch');
+    const postponeToggle = document.getElementById('postpone-toggle');
+    if (postponeContainer) postponeContainer.style.display = 'flex'; // o ''
+    if (postponeToggle) postponeToggle.disabled = false;
 }
 
 
