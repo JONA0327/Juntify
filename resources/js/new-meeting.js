@@ -532,8 +532,6 @@ function updateVolumeRings(volumeLevel) {
 
 // Función para actualizar la UI de grabación
 function updateRecordingUI(recording) {
-    const button = document.getElementById('start-recording');
-    const buttonIcon = button.querySelector('.nav-icon');
     const micCircle = document.getElementById('mic-circle');
     const timerCounter = document.getElementById('timer-counter');
     const timerLabel = document.getElementById('timer-label');
@@ -541,24 +539,20 @@ function updateRecordingUI(recording) {
     const actions = document.getElementById('recorder-actions');
 
     if (recording) {
-        setIcon(buttonIcon, 'stop');
-        button.classList.add('recording');
         micCircle.classList.add('recording');
         timerCounter.classList.add('recording');
         timerLabel.textContent = 'Grabando...';
         timerLabel.classList.add('recording');
         visualizer.classList.add('active');
-    if (actions) actions.classList.add('show');
+        if (actions) actions.classList.add('show');
     } else {
-        setIcon(buttonIcon, 'play');
-        button.classList.remove('recording');
         micCircle.classList.remove('recording');
         timerCounter.classList.remove('recording');
         timerLabel.textContent = 'Listo para grabar';
         timerLabel.classList.remove('recording');
         timerCounter.textContent = '00:00';
         visualizer.classList.remove('active');
-    if (actions) actions.classList.remove('show');
+        if (actions) actions.classList.remove('show');
     }
 }
 
