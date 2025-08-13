@@ -2,14 +2,15 @@
 
 namespace App\Services;
 
+use App\Exceptions\GoogleDriveFileException;
 use Google\Client;
-use Google\Service\Drive;
 use Google\Service\Calendar;
+use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
 use Google\Service\Drive\Permission;
+use Google\Service\Exception as GoogleServiceException;
 use GuzzleHttp\Psr7\Response;
 use Illuminate\Support\Facades\Log;
-
 use RuntimeException;
 
 class GoogleDriveService
@@ -208,36 +209,32 @@ class GoogleDriveService
     /**
      * Descarga el contenido de un archivo de Google Drive
      */
-    public function downloadFileContent(string $fileId): string
+    public function downloadFileContent(string $fileId): ?string
     {
         try {
-            // Usar downloadContent en lugar de get con alt=media
             $response = $this->drive->files->get($fileId, [
                 'alt' => 'media',
                 'supportsAllDrives' => true,
             ]);
 
-            // Log para debug
             Log::info('Google Drive API response type', [
                 'type' => gettype($response),
                 'class' => is_object($response) ? get_class($response) : 'not_object'
             ]);
 
-            // Manejar GuzzleHttp\Psr7\Response
             if ($response instanceof Response) {
                 $body = $response->getBody();
                 return $body->getContents();
             }
 
-            // Si es otra cosa, intentar convertir a string
             return (string) $response;
+        } catch (GoogleServiceException $e) {
+            if ($e->getCode() === 404) {
+                Log::warning('File not found on Google Drive', ['file_id' => $fileId]);
+                return null;
+            }
 
-        } catch (\Exception $e) {
-            Log::error('Error downloading file from Google Drive', [
-                'file_id' => $fileId,
-                'error' => $e->getMessage()
-            ]);
-            throw new \RuntimeException('Failed to download file from Google Drive: ' . $e->getMessage());
+            throw new GoogleDriveFileException($fileId, (int) $e->getCode(), $e->getMessage(), $e);
         }
     }
 
