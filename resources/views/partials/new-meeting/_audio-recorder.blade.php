@@ -29,9 +29,10 @@
     </div>
 
     <div class="recorder-controls">
-        <button class="btn btn-primary recorder-btn" id="start-recording" onclick="toggleRecording()">
-            <x-icon name="play" class="btn-icon" />
-            <span class="btn-text">Iniciar grabación</span>
+        <button class="icon-btn" id="start-recording" onclick="toggleRecording()">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" />
+            </svg>
         </button>
         <div class="postpone-switch flex flex-col items-center mt-3" id="postpone-switch">
             <span id="postpone-mode-label" class="text-sm mb-1">Modo posponer: Apagado</span>
@@ -44,17 +45,20 @@
                 </span>
             </label>
         </div>
-        <button class="btn pause-btn recorder-btn" id="pause-recording" onclick="pauseRecording()" style="display: none;">
-            <x-icon name="pause" class="btn-icon" />
-            <span class="btn-text">Pausar</span>
+        <button class="icon-btn" id="pause-recording" onclick="pauseRecording()" style="display: none;">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+            </svg>
         </button>
-        <button class="btn resume-btn" id="resume-recording" onclick="resumeRecording()" style="display: none;">
-            <x-icon name="play" class="btn-icon" />
-            <span class="btn-text">Reanudar</span>
+        <button class="icon-btn" id="resume-recording" onclick="resumeRecording()" style="display: none;">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" />
+            </svg>
         </button>
-        <button class="btn discard-btn recorder-btn" id="discard-recording" onclick="discardRecording()" style="display: none;">
-            <x-icon name="x" class="btn-icon" />
-            <span class="btn-text">Descartar</span>
+        <button class="icon-btn" id="discard-recording" onclick="discardRecording()" style="display: none;">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
         </button>
     </div>
 </div>

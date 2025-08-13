@@ -895,6 +895,30 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
     color: #3b82f6;
 }
 
+.icon-btn {
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s ease;
+}
+
+.icon-btn:hover {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.icon-btn:hover .nav-icon {
+    color: #3b82f6;
+}
+
+.icon-btn.recording .nav-icon {
+    color: #f97316;
+}
+
 .nav-icon {
     width: 20px;
     height: 20px;
