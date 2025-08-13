@@ -89,12 +89,26 @@
                 </header>
 
                 <!-- Sistema de Reuniones -->
-                <div class="fade-in stagger-2">
-                    {{-- El contenido de las reuniones se cargará dinámicamente aquí --}}
-                    <div class="loading-card">
-                        <div class="loading-spinner"></div>
-                        <p>Cargando reuniones...</p>
-                    </div>
+                <div class="fade-in stagger-2" id="meetings-container">
+                    @isset($meetings)
+                        <div class="meetings-grid">
+                            @forelse ($meetings as $m)
+                                <x-meeting-card :id="$m['id']"
+                                    :meeting-name="$m['meeting_name']"
+                                    :created-at="$m['created_at']"
+                                    :audio-folder="$m['audio_folder'] ?? ''"
+                                    :transcript-folder="$m['transcript_folder'] ?? ''" />
+                            @empty
+                                <div class="loading-card"><p>No hay reuniones aún.</p></div>
+                            @endforelse
+                        </div>
+                    @else
+                        {{-- Fallback: el contenido se cargará dinámicamente por JS --}}
+                        <div class="loading-card">
+                            <div class="loading-spinner"></div>
+                            <p>Cargando reuniones...</p>
+                        </div>
+                    @endisset
                 </div>
 
             </div>

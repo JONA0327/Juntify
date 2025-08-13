@@ -121,4 +121,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/test-pending', function() {
         return view('test-pending');
     });
+
+    // Vista de prueba para limpieza de memoria de audio
+    Route::get('/test-memory-cleanup', function() {
+        return view('test-memory-cleanup');
+    })->name('test.memory-cleanup');
 });

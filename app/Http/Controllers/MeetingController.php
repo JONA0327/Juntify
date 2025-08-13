@@ -29,7 +29,30 @@ class MeetingController extends Controller
      */
     public function index(): View
     {
-        return view('reuniones');
+        // Server-side render of meetings list (keeps JS fallback too)
+        try {
+            $user = Auth::user();
+            $this->setGoogleDriveToken($user);
+
+            $meetings = \App\Models\TranscriptionLaravel::where('username', $user->username)
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($meeting) {
+                    return [
+                        'id' => $meeting->id,
+                        'meeting_name' => $meeting->meeting_name,
+                        'created_at' => $meeting->created_at->format('d/m/Y H:i'),
+                        'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
+                        'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
+                    ];
+                });
+
+            return view('reuniones', [ 'meetings' => $meetings ]);
+        } catch (\Throwable $e) {
+            // If anything fails, return view without meetings (JS will fetch)
+            \Log::warning('Meetings SSR failed: ' . $e->getMessage());
+            return view('reuniones');
+        }
     }
 
     /**
@@ -135,7 +158,7 @@ class MeetingController extends Controller
     {
         try {
             $request->validate([
-                'meeting_name' => 'required|string|max:255'
+                'name' => 'required|string|max:255'
             ]);
 
             $user = Auth::user();
@@ -143,18 +166,92 @@ class MeetingController extends Controller
                 ->where('username', $user->username)
                 ->firstOrFail();
 
-            $meeting->meeting_name = $request->meeting_name;
+            $newName = $request->name;
+            $oldName = $meeting->meeting_name;
+
+            // Si el nombre no cambió, no hacer nada
+            if ($newName === $oldName) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Nombre actualizado correctamente'
+                ]);
+            }
+
+            // Configurar el cliente de Google Drive con el token del usuario
+            $this->setGoogleDriveToken($user);
+
+            // Actualizar archivo .ju en Drive
+            if ($meeting->transcript_drive_id) {
+                try {
+                    $this->googleDriveService->renameFile(
+                        $meeting->transcript_drive_id,
+                        $newName . '.ju'
+                    );
+                    Log::info("Archivo .ju renombrado en Drive", [
+                        'file_id' => $meeting->transcript_drive_id,
+                        'old_name' => $oldName . '.ju',
+                        'new_name' => $newName . '.ju'
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Error al renombrar archivo .ju en Drive', [
+                        'file_id' => $meeting->transcript_drive_id,
+                        'error' => $e->getMessage()
+                    ]);
+                    throw new \Exception('Error al actualizar el archivo .ju en Drive: ' . $e->getMessage());
+                }
+            }
+
+            // Actualizar archivo de audio en Drive
+            if ($meeting->audio_drive_id) {
+                try {
+                    // Obtener información del archivo actual para mantener la extensión
+                    $fileInfo = $this->googleDriveService->getFileInfo($meeting->audio_drive_id);
+                    $extension = pathinfo($fileInfo['name'], PATHINFO_EXTENSION);
+
+                    $this->googleDriveService->renameFile(
+                        $meeting->audio_drive_id,
+                        $newName . '.' . $extension
+                    );
+                    Log::info("Archivo de audio renombrado en Drive", [
+                        'file_id' => $meeting->audio_drive_id,
+                        'old_name' => $oldName . '.' . $extension,
+                        'new_name' => $newName . '.' . $extension
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Error al renombrar archivo de audio en Drive', [
+                        'file_id' => $meeting->audio_drive_id,
+                        'error' => $e->getMessage()
+                    ]);
+                    throw new \Exception('Error al actualizar el archivo de audio en Drive: ' . $e->getMessage());
+                }
+            }
+
+            // Actualizar en la base de datos
+            $meeting->meeting_name = $newName;
             $meeting->save();
+
+            Log::info("Reunión renombrada correctamente", [
+                'meeting_id' => $id,
+                'old_name' => $oldName,
+                'new_name' => $newName,
+                'user' => $user->username
+            ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Nombre actualizado correctamente'
+                'message' => 'Nombre actualizado correctamente en Drive y base de datos'
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Error al actualizar nombre de reunión', [
+                'meeting_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar el nombre: ' . $e->getMessage()
+                'message' => $e->getMessage()
             ], 500);
         }
     }
@@ -163,6 +260,14 @@ class MeetingController extends Controller
      * Elimina una reunión
      */
     public function delete($id): JsonResponse
+    {
+        return $this->destroy($id);
+    }
+
+    /**
+     * Elimina una reunión (método para rutas DELETE)
+     */
+    public function destroy($id): JsonResponse
     {
         try {
             $user = Auth::user();
@@ -173,38 +278,80 @@ class MeetingController extends Controller
             // Configurar el cliente de Google Drive con el token del usuario
             $this->setGoogleDriveToken($user);
 
-            // Eliminar archivos de Google Drive
-            try {
-                if ($meeting->transcript_drive_id) {
+            Log::info("Iniciando eliminación de reunión", [
+                'meeting_id' => $id,
+                'meeting_name' => $meeting->meeting_name,
+                'user' => $user->username
+            ]);
+
+            // Eliminar archivos de Google Drive PRIMERO
+            $driveErrors = [];
+
+            // Eliminar archivo .ju de Drive
+            if ($meeting->transcript_drive_id) {
+                try {
                     $this->googleDriveService->deleteFile($meeting->transcript_drive_id);
+                    Log::info("Archivo .ju eliminado de Drive", [
+                        'file_id' => $meeting->transcript_drive_id
+                    ]);
+                } catch (\Exception $e) {
+                    $driveErrors[] = 'Error al eliminar archivo .ju: ' . $e->getMessage();
+                    Log::error('Error al eliminar archivo de transcripción de Drive', [
+                        'file_id' => $meeting->transcript_drive_id,
+                        'error' => $e->getMessage()
+                    ]);
                 }
-            } catch (\Exception $e) {
-                Log::warning('Error al eliminar archivo de transcripción de Drive', [
-                    'file_id' => $meeting->transcript_drive_id,
-                    'error' => $e->getMessage()
-                ]);
             }
 
-            try {
-                if ($meeting->audio_drive_id) {
+            // Eliminar archivo de audio de Drive
+            if ($meeting->audio_drive_id) {
+                try {
                     $this->googleDriveService->deleteFile($meeting->audio_drive_id);
+                    Log::info("Archivo de audio eliminado de Drive", [
+                        'file_id' => $meeting->audio_drive_id
+                    ]);
+                } catch (\Exception $e) {
+                    $driveErrors[] = 'Error al eliminar archivo de audio: ' . $e->getMessage();
+                    Log::error('Error al eliminar archivo de audio de Drive', [
+                        'file_id' => $meeting->audio_drive_id,
+                        'error' => $e->getMessage()
+                    ]);
                 }
-            } catch (\Exception $e) {
-                Log::warning('Error al eliminar archivo de audio de Drive', [
-                    'file_id' => $meeting->audio_drive_id,
-                    'error' => $e->getMessage()
+            }
+
+            // Si hubo errores en Drive pero no son críticos, continuar con la eliminación de BD
+            if (!empty($driveErrors)) {
+                Log::warning("Errores en Drive durante eliminación, pero continuando", [
+                    'errors' => $driveErrors,
+                    'meeting_id' => $id
                 ]);
             }
 
             // Eliminar registro de la base de datos
             $meeting->delete();
 
+            Log::info("Reunión eliminada completamente", [
+                'meeting_id' => $id,
+                'drive_errors' => $driveErrors
+            ]);
+
+            $message = 'Reunión eliminada correctamente';
+            if (!empty($driveErrors)) {
+                $message .= ', pero con algunos errores en Drive: ' . implode(', ', $driveErrors);
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Reunión eliminada correctamente'
+                'message' => $message
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Error crítico al eliminar reunión', [
+                'meeting_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Error al eliminar la reunión: ' . $e->getMessage()

@@ -282,4 +282,32 @@ class GoogleDriveService
         ]);
     }
 
+    /**
+     * Renombra un archivo en Google Drive
+     */
+    public function renameFile(string $fileId, string $newName): DriveFile
+    {
+        try {
+            $file = new DriveFile();
+            $file->setName($newName);
+
+            return $this->drive->files->update($fileId, $file, [
+                'supportsAllDrives' => true,
+                'fields' => 'id,name'
+            ]);
+        } catch (GoogleServiceException $e) {
+            Log::error('Error renaming file in Google Drive', [
+                'file_id' => $fileId,
+                'new_name' => $newName,
+                'error' => $e->getMessage(),
+                'errors' => $e->getErrors()
+            ]);
+            throw new GoogleDriveFileException(
+                'Failed to rename file: ' . $e->getMessage(),
+                $e->getCode(),
+                $e
+            );
+        }
+    }
+
 }

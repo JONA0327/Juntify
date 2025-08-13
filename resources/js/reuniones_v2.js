@@ -449,7 +449,15 @@ window.analyzePendingMeeting = analyzePendingMeeting;
 // RENDERIZADO DE REUNIONES
 // ===============================================
 function renderMeetings(meetings) {
-    const container = document.querySelector('.fade-in.stagger-2');
+    const container = document.querySelector('#meetings-container') || document.querySelector('.fade-in.stagger-2');
+    if (!container) return;
+
+    // Si ya hay tarjetas renderizadas por Blade (SSR), no sobreescribir el HTML.
+    const hasSSRContent = container.querySelector('.meeting-card');
+    if (hasSSRContent) {
+        attachMeetingEventListeners();
+        return;
+    }
 
     if (!meetings || meetings.length === 0) {
         container.innerHTML = `
@@ -509,9 +517,14 @@ function createMeetingCard(meeting) {
                 </div>
 
                 <div class="meeting-actions">
+                    <button class="action-btn edit-btn" onclick="editMeetingName(${meeting.id})" title="Editar nombre de reunión">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                    </button>
                     <button class="action-btn delete-btn" onclick="deleteMeeting(${meeting.id})" title="Eliminar reunión">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 </div>
@@ -527,8 +540,8 @@ function attachMeetingEventListeners() {
     const meetingCards = document.querySelectorAll('.meeting-card');
     meetingCards.forEach(card => {
         card.addEventListener('click', function(e) {
-            // No abrir modal si se hizo click en el botón de eliminar
-            if (e.target.closest('.delete-btn')) {
+            // No abrir modal si se hizo click en el botón de eliminar o editar
+            if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn')) {
                 return;
             }
 
@@ -1037,15 +1050,276 @@ async function saveMeetingTitle(meetingId, newTitle) {
 }
 
 async function deleteMeeting(meetingId) {
-    if (!confirm('¿Estás seguro de que quieres eliminar esta reunión? Esta acción no se puede deshacer.')) {
+    // Mostrar modal de confirmación personalizado
+    showDeleteConfirmationModal(meetingId);
+}
+
+function editMeetingName(meetingId) {
+    const meeting = currentMeetings.find(m => m.id == meetingId);
+    if (!meeting) return;
+
+    showEditNameModal(meetingId, meeting.meeting_name);
+}
+
+function showEditNameModal(meetingId, currentName) {
+    const modalHTML = `
+        <div class="meeting-modal active" id="editNameModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title-section">
+                        <h2 class="modal-title">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Editar Nombre de Reunión
+                        </h2>
+                        <p class="modal-subtitle">Cambia el nombre de la reunión y se actualizará en Drive y la base de datos</p>
+                    </div>
+
+                    <button class="close-btn" onclick="closeEditNameModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="modal-section">
+                        <div class="edit-name-content">
+                            <label class="form-label">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                </svg>
+                                Nombre de la reunión
+                            </label>
+                            <input
+                                type="text"
+                                id="newMeetingName"
+                                class="form-input"
+                                value="${escapeHtml(currentName)}"
+                                placeholder="Ingresa el nuevo nombre"
+                                maxlength="100"
+                            >
+                            <small class="form-help">
+                                Se actualizarán los archivos en Drive (.ju y audio) y la base de datos
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="action-btn secondary" onclick="closeEditNameModal()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Cancelar
+                        </button>
+                        <button class="action-btn primary" onclick="confirmEditMeetingName(${meetingId})">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Guardar Cambios
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    document.body.style.overflow = 'hidden';
+
+    // Enfocar y seleccionar el texto del input
+    setTimeout(() => {
+        const input = document.getElementById('newMeetingName');
+        input.focus();
+        input.select();
+    }, 100);
+}
+
+function closeEditNameModal() {
+    const modal = document.getElementById('editNameModal');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+
+        setTimeout(() => {
+            if (modal && !modal.classList.contains('active')) {
+                modal.remove();
+            }
+        }, 300);
+    }
+}
+
+async function confirmEditMeetingName(meetingId) {
+    const newName = document.getElementById('newMeetingName').value.trim();
+
+    if (!newName) {
+        showNotification('El nombre no puede estar vacío', 'error');
+        return;
+    }
+
+    const meeting = currentMeetings.find(m => m.id == meetingId);
+    if (!meeting) {
+        showNotification('Reunión no encontrada', 'error');
+        return;
+    }
+
+    if (newName === meeting.meeting_name) {
+        closeEditNameModal();
         return;
     }
 
     try {
+        closeEditNameModal();
+        showNotification('Actualizando nombre en Drive y base de datos...', 'info');
+
+        const response = await fetch(`/api/meetings/${meetingId}/name`, {
+            method: 'PUT',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                name: newName
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Error al actualizar el nombre');
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('Nombre actualizado correctamente en Drive y base de datos', 'success');
+            // Recargar la lista de reuniones para reflejar los cambios
+            loadMeetings();
+        } else {
+            throw new Error(data.message || 'Error al actualizar el nombre');
+        }
+
+    } catch (error) {
+        console.error('Error updating meeting name:', error);
+        showNotification('Error al actualizar el nombre: ' + error.message, 'error');
+    }
+}
+
+function showDeleteConfirmationModal(meetingId) {
+    const meeting = currentMeetings.find(m => m.id == meetingId);
+    const meetingName = meeting ? meeting.meeting_name : 'reunión';
+
+    const modalHTML = `
+        <div class="meeting-modal active" id="deleteConfirmationModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title-section">
+                        <h2 class="modal-title">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                            Confirmar Eliminación
+                        </h2>
+                        <p class="modal-subtitle">Esta acción no se puede deshacer</p>
+                    </div>
+
+                    <button class="close-btn" onclick="closeDeleteConfirmationModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="modal-section">
+                        <div class="delete-confirmation-content">
+                            <div class="warning-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </div>
+                            <h3 class="delete-title">¿Estás seguro?</h3>
+                            <p class="delete-message">
+                                Estás a punto de eliminar la reunión <strong>"${escapeHtml(meetingName)}"</strong>.
+                                Esta acción eliminará permanentemente:
+                            </p>
+                            <ul class="delete-items">
+                                <li>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 9v6l6-6" />
+                                    </svg>
+                                    Audio de la reunión
+                                </li>
+                                <li>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                                    </svg>
+                                    Transcripción completa
+                                </li>
+                                <li>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Análisis y resumen
+                                </li>
+                                <li>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                    </svg>
+                                    Puntos clave y tareas
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="action-btn secondary" onclick="closeDeleteConfirmationModal()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Cancelar
+                        </button>
+                        <button class="action-btn danger" onclick="confirmDeleteMeeting(${meetingId})">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Eliminar Reunión
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    document.body.style.overflow = 'hidden';
+}
+
+function closeDeleteConfirmationModal() {
+    const modal = document.getElementById('deleteConfirmationModal');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+
+        setTimeout(() => {
+            if (modal && !modal.classList.contains('active')) {
+                modal.remove();
+            }
+        }, 300);
+    }
+}
+
+async function confirmDeleteMeeting(meetingId) {
+    closeDeleteConfirmationModal();
+
+    try {
+        showNotification('Eliminando archivos de Drive...', 'info');
+
         const response = await fetch(`/api/meetings/${meetingId}`, {
             method: 'DELETE',
             headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                'Accept': 'application/json'
             }
         });
 
@@ -1053,16 +1327,22 @@ async function deleteMeeting(meetingId) {
             throw new Error('Error al eliminar la reunión');
         }
 
-        // Recargar la lista de reuniones
-        loadMeetings();
-        closeMeetingModal();
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('Reunión eliminada correctamente de Drive y base de datos', 'success');
+            // Recargar la lista de reuniones
+            loadMeetings();
+            closeMeetingModal();
+        } else {
+            throw new Error(data.message || 'Error al eliminar la reunión');
+        }
+
     } catch (error) {
         console.error('Error deleting meeting:', error);
-        alert('Error al eliminar la reunión');
+        showNotification('Error al eliminar la reunión: ' + error.message, 'error');
     }
-}
-
-// ===============================================
+}// ===============================================
 // FUNCIONES GLOBALES PARA HTML INLINE
 // ===============================================
 // Hacer funciones disponibles globalmente para onclick en HTML
@@ -1072,3 +1352,8 @@ window.downloadJuFile = downloadJuFile;
 window.downloadAudioFile = downloadAudioFile;
 window.saveMeetingTitle = saveMeetingTitle;
 window.deleteMeeting = deleteMeeting;
+window.editMeetingName = editMeetingName;
+window.closeDeleteConfirmationModal = closeDeleteConfirmationModal;
+window.confirmDeleteMeeting = confirmDeleteMeeting;
+window.closeEditNameModal = closeEditNameModal;
+window.confirmEditMeetingName = confirmEditMeetingName;

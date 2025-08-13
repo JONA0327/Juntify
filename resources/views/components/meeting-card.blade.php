@@ -1,0 +1,51 @@
+@props([
+    'id',
+    'meetingName',
+    'createdAt',
+    'audioFolder' => null,
+    'transcriptFolder' => null,
+])
+
+<div class="meeting-card" data-meeting-id="{{ $id }}">
+    <div class="meeting-card-header">
+        <div class="meeting-content">
+            <h3 class="meeting-title">{{ $meetingName }}</h3>
+            <p class="meeting-date">
+                <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {{ $createdAt }}
+            </p>
+
+            <div class="meeting-folders">
+                <div class="folder-info">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Transcripción:</span>
+                    <span class="folder-name">{{ $transcriptFolder }}</span>
+                </div>
+                <div class="folder-info">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728" />
+                    </svg>
+                    <span>Audio:</span>
+                    <span class="folder-name">{{ $audioFolder }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="meeting-actions">
+            <button class="action-btn edit-btn" onclick="editMeetingName({{ $id }})" aria-label="Editar reunión" title="Editar nombre de reunión">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+            </button>
+            <button class="action-btn delete-btn" onclick="deleteMeeting({{ $id }})" aria-label="Eliminar reunión" title="Eliminar reunión">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>

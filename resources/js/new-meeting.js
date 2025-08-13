@@ -1,4 +1,4 @@
-// import removed: audio is uploaded directly without IndexedDB
+import { saveAudioBlob, clearAllAudio } from './idb.js';
 
 // ===== VARIABLES GLOBALES =====
 let isRecording = false;
@@ -68,6 +68,39 @@ const SEGMENT_MS = 10 * 60 * 1000; // 10 minutos
 let recordedSegments = [];
 let segmentTimeout = null;
 let recordingStream = null;
+
+// ===== FUNCIONES DE LIMPIEZA =====
+
+// Función para limpiar completamente todos los datos de audio anteriores
+async function clearPreviousAudioData() {
+    try {
+        console.log('🧹 Limpiando datos de audio anteriores...');
+
+        // Limpiar IndexedDB
+        await clearAllAudio();
+
+        // Limpiar sessionStorage de audio
+        sessionStorage.removeItem('uploadedAudioKey');
+        sessionStorage.removeItem('recordingBlob');
+        sessionStorage.removeItem('recordingSegments');
+        sessionStorage.removeItem('recordingMetadata');
+        sessionStorage.removeItem('pendingAudioBlob');
+
+        // Limpiar localStorage de audios pendientes
+        localStorage.removeItem('pendingAudioData');
+
+        // Limpiar variables locales
+        uploadedFile = null;
+        pendingAudioBlob = null;
+        recordedSegments = [];
+
+        console.log('✅ Datos de audio limpiados correctamente');
+
+    } catch (error) {
+        console.error('❌ Error al limpiar datos de audio:', error);
+        // No lanzar error para no interrumpir el flujo
+    }
+}
 
 // ===== FUNCIONES PRINCIPALES =====
 
@@ -191,6 +224,9 @@ async function getAudioConstraints() {
 // Función para iniciar grabación
 async function startRecording() {
     try {
+        // LIMPIAR DATOS ANTERIORES ANTES DE INICIAR NUEVA GRABACIÓN
+        await clearPreviousAudioData();
+
         const audioConstraints = await getAudioConstraints();
         // Solicitar acceso al micrófono
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -870,6 +906,63 @@ async function processAudioFile() {
         showError('Primero selecciona un archivo de audio');
         return;
     }
+
+    try {
+        // Mostrar progreso
+        const progressContainer = document.getElementById('upload-progress');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+
+        if (progressContainer) {
+            progressContainer.style.display = 'block';
+            progressFill.style.width = '5%';
+            progressText.textContent = 'Limpiando datos anteriores...';
+        }
+
+        // LIMPIAR DATOS ANTERIORES ANTES DE PROCESAR EL NUEVO ARCHIVO
+        await clearPreviousAudioData();
+
+        if (progressContainer) {
+            progressFill.style.width = '20%';
+            progressText.textContent = 'Preparando archivo para procesamiento...';
+        }
+
+        // Guardar el archivo en IndexedDB
+        const audioKey = await saveAudioBlob(uploadedFile);
+        console.log('Audio guardado en IndexedDB con clave:', audioKey);
+
+        if (progressContainer) {
+            progressFill.style.width = '70%';
+            progressText.textContent = 'Archivo guardado...';
+        }
+
+        // Guardar la clave en sessionStorage para que audio-processing.js la pueda usar
+        sessionStorage.setItem('uploadedAudioKey', audioKey);
+
+        if (progressContainer) {
+            progressFill.style.width = '90%';
+            progressText.textContent = 'Redirigiendo al procesamiento...';
+        }
+
+        // Limpiar variables
+        uploadedFile = null;
+
+        // Pequeña pausa para que se vea el progreso
+        setTimeout(() => {
+            // Redireccionar a audio-processing
+            window.location.href = '/audio-processing';
+        }, 500);
+
+    } catch (error) {
+        console.error('Error al procesar archivo de audio:', error);
+        showError('Error al procesar el archivo de audio: ' + error.message);
+
+        // Ocultar progreso en caso de error
+        const progressContainer = document.getElementById('upload-progress');
+        if (progressContainer) {
+            progressContainer.style.display = 'none';
+        }
+    }
 }
 
 // Formatear tamaño de archivo
@@ -971,6 +1064,9 @@ async function startMeetingRecording() {
     }
 
     try {
+        // Limpiar datos de audio previos antes de iniciar nueva reunión
+        await clearPreviousAudioData();
+
         // Solicitar acceso a las fuentes de audio
         const audioConstraints = await getAudioConstraints();
         if (microphoneAudioEnabled) {
