@@ -368,6 +368,10 @@ body {
     justify-content: center;
 }
 
+.recorder-controls .microphone-container {
+    margin-bottom: 1rem;
+}
+
 /* Anillos de volumen */
 .volume-rings {
     position: absolute;
@@ -439,6 +443,7 @@ body {
     box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
     position: relative;
     z-index: 10;
+    cursor: pointer;
 }
 
 .mic-circle:hover {
