@@ -172,4 +172,111 @@ class GoogleServiceAccount
 
         return $file->webViewLink;
     }
+
+    /**
+     * Descarga el contenido de un archivo desde Google Drive
+     */
+    public function downloadFile(string $fileId): string
+    {
+        try {
+            $response = $this->drive->files->get($fileId, [
+                'alt' => 'media'
+            ]);
+
+            if ($response instanceof \GuzzleHttp\Psr7\Response) {
+                return $response->getBody()->getContents();
+            }
+
+            return $response->getBody();
+        } catch (\Exception $e) {
+            Log::error('Error downloading file from Google Drive', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage()
+            ]);
+            throw new RuntimeException('Error al descargar archivo: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Mueve un archivo a una nueva carpeta y opcionalmente lo renombra
+     */
+    public function moveAndRenameFile(string $fileId, string $newParentId, string $newName = null): string
+    {
+        try {
+            // Obtener información actual del archivo
+            $file = $this->drive->files->get($fileId, [
+                'fields' => 'parents,name'
+            ]);
+
+            $currentParents = $file->getParents();
+
+            // Preparar los datos para la actualización
+            $updateData = [];
+            $options = [];
+
+            // Si se proporciona un nuevo nombre
+            if ($newName) {
+                $updateData['name'] = $newName;
+            }
+
+            // Configurar el cambio de carpeta padre
+            if ($currentParents) {
+                $options['removeParents'] = implode(',', $currentParents);
+            }
+            $options['addParents'] = $newParentId;
+            $options['fields'] = 'id,name,parents';
+
+            // Crear objeto DriveFile con los nuevos datos
+            $fileMetadata = new DriveFile($updateData);
+
+            // Actualizar el archivo
+            $updatedFile = $this->drive->files->update($fileId, $fileMetadata, $options);
+
+            Log::info('File moved and renamed successfully', [
+                'file_id' => $fileId,
+                'new_parent' => $newParentId,
+                'new_name' => $newName,
+                'updated_file_id' => $updatedFile->getId()
+            ]);
+
+            return $updatedFile->getId();
+
+        } catch (\Exception $e) {
+            Log::error('Error moving and renaming file', [
+                'file_id' => $fileId,
+                'new_parent' => $newParentId,
+                'new_name' => $newName,
+                'error' => $e->getMessage()
+            ]);
+            throw new RuntimeException('Error al mover y renombrar archivo: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Copia un archivo a una nueva ubicación con un nuevo nombre
+     */
+    public function copyFile(string $fileId, string $newParentId, string $newName): string
+    {
+        try {
+            $copiedFile = new DriveFile([
+                'name' => $newName,
+                'parents' => [$newParentId]
+            ]);
+
+            $result = $this->drive->files->copy($fileId, $copiedFile, [
+                'fields' => 'id,name,parents'
+            ]);
+
+            return $result->getId();
+
+        } catch (\Exception $e) {
+            Log::error('Error copying file', [
+                'file_id' => $fileId,
+                'new_parent' => $newParentId,
+                'new_name' => $newName,
+                'error' => $e->getMessage()
+            ]);
+            throw new RuntimeException('Error al copiar archivo: ' . $e->getMessage());
+        }
+    }
 }

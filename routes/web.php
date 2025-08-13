@@ -42,6 +42,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/meetings/{id}/download-ju', [MeetingController::class, 'downloadJuFile'])->name('api.meetings.download-ju');
     Route::get('/api/meetings/{id}/download-audio', [MeetingController::class, 'downloadAudioFile'])->name('api.meetings.download-audio');
 
+    // API para reuniones pendientes
+    Route::get('/api/pending-meetings', [MeetingController::class, 'getPendingMeetings']);
+    Route::post('/api/pending-meetings/{id}/analyze', [MeetingController::class, 'analyzePendingMeeting']);
+    Route::post('/api/pending-meetings/complete', [MeetingController::class, 'completePendingMeeting']);
+    Route::get('/api/pending-meetings/{id}/info', [MeetingController::class, 'getPendingProcessingInfo']);
+    Route::get('/api/pending-meetings/audio/{tempFileName}', [MeetingController::class, 'getPendingAudioFile']);
+
     Route::post('/drive/disconnect', [GoogleAuthController::class, 'disconnect'])->name('drive.disconnect');
 
     // Rutas POST para manejo de carpetas
@@ -96,4 +103,22 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post('/admin/pending-recordings/process', [\App\Http\Controllers\PendingRecordingController::class, 'process'])
         ->name('admin.pending-recordings.process');
+
+    // Ruta temporal para depurar datos pending
+    Route::get('/debug-pending', function() {
+        $user = \Illuminate\Support\Facades\Auth::user();
+        $folders = \App\Models\PendingFolder::all();
+        $recordings = \App\Models\PendingRecording::all();
+
+        return response()->json([
+            'current_user' => $user ? $user->username : 'No autenticado',
+            'folders' => $folders,
+            'recordings' => $recordings
+        ]);
+    });
+
+    // Vista de prueba para reuniones pendientes
+    Route::get('/test-pending', function() {
+        return view('test-pending');
+    });
 });

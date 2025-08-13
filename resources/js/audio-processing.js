@@ -887,7 +887,7 @@ async function loadDriveFolders() {
             rootSelect.innerHTML = '';
             if (data.root_folder) {
                 const opt = document.createElement('option');
-                opt.value = data.root_folder.id;
+                opt.value = data.root_folder.google_id; // Usar google_id en lugar de id
                 opt.textContent = `\uD83D\uDCC1 ${data.root_folder.name}`;
                 rootSelect.appendChild(opt);
             }
@@ -1072,59 +1072,153 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         }
     }
 
+    const csrfToken = document.querySelector('meta[name="csrf-token"]');
+    if (!csrfToken) {
+        console.error('❌ CSRF token no encontrado');
+        showNotification('Error de configuración: Token de seguridad no encontrado', 'error');
+        resetUI();
+        showStep(4);
+        return { success: false, message: 'Token de seguridad no encontrado' };
+    }
+
     const headers = {
         'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        'X-CSRF-TOKEN': csrfToken.getAttribute('content')
     };
 
     try {
         setProgress(10, 'Guardando resultados...');
         addMessage('Enviando datos al servidor...');
 
-        const response = await fetch('/drive/save-results', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                meetingName,
-                rootFolder,
-                transcriptionSubfolder,
-                audioSubfolder,
-                transcriptionData: transcription,
-                analysisResults: analysis,
-                audioData: audio,
-                audioMimeType
-            })
-        });
+        // Verificar si es un audio pendiente
+        if (window.pendingAudioInfo) {
+            addMessage('Completando procesamiento de audio pendiente...');
 
-        if (!response.ok) {
-            if (response.status === 401) {
-                window.location.href = '/login';
-                return { success: false, message: 'No autorizado' };
-            }
+            console.log('📦 Datos a enviar:', {
+                pending_id: window.pendingAudioInfo.pendingId,
+                meeting_name: meetingName,
+                root_folder: rootFolder,
+                transcription_subfolder: transcriptionSubfolder,
+                audio_subfolder: audioSubfolder,
+                transcription_data: transcription,
+                analysis_results: analysis
+            });
 
-            let errorMsg = 'Error al guardar los datos';
-            const contentType = response.headers.get('content-type') || '';
-            if (contentType.includes('application/json')) {
+            const response = await fetch('/api/pending-meetings/complete', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    pending_id: window.pendingAudioInfo.pendingId,
+                    meeting_name: meetingName,
+                    root_folder: rootFolder,
+                    transcription_subfolder: transcriptionSubfolder,
+                    audio_subfolder: audioSubfolder,
+                    transcription_data: transcription,
+                    analysis_results: analysis
+                })
+            });
+
+            console.log('📡 Respuesta del servidor:', {
+                status: response.status,
+                statusText: response.statusText,
+                headers: response.headers,
+                ok: response.ok
+            });
+
+            if (!response.ok) {
+                let errorMsg = 'Error al completar audio pendiente';
                 try {
-                    const err = await response.json();
-                    if (err && err.message) errorMsg = err.message;
-                } catch (_) {}
-            } else {
-                errorMsg = 'Respuesta inesperada del servidor';
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('application/json')) {
+                        const err = await response.json();
+                        if (err && err.error) errorMsg = err.error;
+                    } else {
+                        // Si no es JSON, probablemente es una página de error HTML
+                        const errorText = await response.text();
+                        console.error('Respuesta no JSON recibida:', errorText.substring(0, 500));
+                        errorMsg = `Error del servidor (${response.status}): ${response.statusText}`;
+                    }
+                } catch (parseError) {
+                    console.error('Error al parsear respuesta de error:', parseError);
+                    errorMsg = `Error del servidor (${response.status}): ${response.statusText}`;
+                }
+
+                addMessage(`⚠️ ${errorMsg}`);
+                showNotification(errorMsg, 'error');
+                resetUI();
+                showStep(4);
+                return { success: false, message: errorMsg };
             }
 
-            addMessage(`⚠️ ${errorMsg}`);
-            showNotification(errorMsg, 'error');
-            resetUI();
-            showStep(4);
-            return { success: false, message: errorMsg };
-        }
+            let result;
+            try {
+                result = await response.json();
+            } catch (jsonError) {
+                console.error('Error al parsear JSON de respuesta exitosa:', jsonError);
+                const responseText = await response.text();
+                console.error('Contenido de respuesta:', responseText.substring(0, 500));
+                addMessage('⚠️ Error al procesar respuesta del servidor');
+                showNotification('Error al procesar respuesta del servidor', 'error');
+                resetUI();
+                showStep(4);
+                return { success: false, message: 'Error al procesar respuesta del servidor' };
+            }
 
-        const result = await response.json();
-        finalDrivePath = result.drive_path || '';
-        finalAudioDuration = result.audio_duration || 0;
-        finalSpeakerCount = result.speaker_count || 0;
-        finalTasks = result.tasks || [];
+            finalDrivePath = result.drive_path || '';
+            finalAudioDuration = result.audio_duration || 0;
+            finalSpeakerCount = result.speaker_count || 0;
+            finalTasks = result.tasks || [];
+
+            // Limpiar datos pendientes
+            window.pendingAudioInfo = null;
+
+        } else {
+            // Flujo normal
+            const response = await fetch('/drive/save-results', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    meetingName,
+                    rootFolder,
+                    transcriptionSubfolder,
+                    audioSubfolder,
+                    transcriptionData: transcription,
+                    analysisResults: analysis,
+                    audioData: audio,
+                    audioMimeType
+                })
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return { success: false, message: 'No autorizado' };
+                }
+
+                let errorMsg = 'Error al guardar los datos';
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    try {
+                        const err = await response.json();
+                        if (err && err.message) errorMsg = err.message;
+                    } catch (_) {}
+                } else {
+                    errorMsg = 'Respuesta inesperada del servidor';
+                }
+
+                addMessage(`⚠️ ${errorMsg}`);
+                showNotification(errorMsg, 'error');
+                resetUI();
+                showStep(4);
+                return { success: false, message: errorMsg };
+            }
+
+            const result = await response.json();
+            finalDrivePath = result.drive_path || '';
+            finalAudioDuration = result.audio_duration || 0;
+            finalSpeakerCount = result.speaker_count || 0;
+            finalTasks = result.tasks || [];
+        }
 
         document.getElementById('audio-upload-status').textContent = '✅';
         document.getElementById('transcription-save-status').textContent = '✅';
@@ -1256,16 +1350,29 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-function base64ToBlob(base64) {
-    const parts = base64.split(',');
-    const mime = parts[0].match(/:(.*?);/)[1] || 'audio/webm';
-    const binary = atob(parts[1]);
-    const len = binary.length;
-    const buffer = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-        buffer[i] = binary.charCodeAt(i);
+function base64ToBlob(base64, mimeType = null) {
+    // Si el base64 incluye el prefijo data:mime/type;base64,
+    if (base64.includes(',')) {
+        const parts = base64.split(',');
+        const mime = mimeType || (parts[0].match(/:(.*?);/)?.[1] || 'audio/webm');
+        const binary = atob(parts[1]);
+        const len = binary.length;
+        const buffer = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            buffer[i] = binary.charCodeAt(i);
+        }
+        return new Blob([buffer], { type: mime });
+    } else {
+        // Base64 sin prefijo
+        const mime = mimeType || 'audio/webm';
+        const binary = atob(base64);
+        const len = binary.length;
+        const buffer = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            buffer[i] = binary.charCodeAt(i);
+        }
+        return new Blob([buffer], { type: mime });
     }
-    return new Blob([buffer], { type: mime });
 }
 
 function blobToBase64(blob) {
@@ -1337,6 +1444,52 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
+    // Verificar si es un audio pendiente
+    const pendingAudioData = localStorage.getItem('pendingAudioData');
+    if (pendingAudioData) {
+        try {
+            window.pendingAudioInfo = JSON.parse(pendingAudioData);
+            console.log("✅ Audio pendiente detectado:", window.pendingAudioInfo);
+
+            // Cargar el audio desde el servidor usando el tempFile
+            if (window.pendingAudioInfo.tempFile) {
+                try {
+                    const response = await fetch(`/api/pending-meetings/audio/${window.pendingAudioInfo.tempFile}`);
+                    const result = await response.json();
+
+                    if (result.success && result.audioData) {
+                        // Convertir base64 a blob
+                        audioData = base64ToBlob(result.audioData, result.mimeType || 'audio/mpeg');
+                        console.log("✅ Audio pendiente cargado desde servidor");
+
+                        // Limpiar datos temporales
+                        localStorage.removeItem('pendingAudioData');
+
+                        // Iniciar procesamiento después de 1s
+                        setTimeout(() => {
+                            startAudioProcessing();
+                        }, 1000);
+                        return;
+                    } else {
+                        throw new Error(result.error || 'Error al cargar audio del servidor');
+                    }
+                } catch (fetchError) {
+                    console.error("❌ Error al obtener audio del servidor:", fetchError);
+                    showNotification('Error al cargar el archivo de audio: ' + fetchError.message, 'error');
+                    return;
+                }
+            } else {
+                console.error("❌ No se encontró el tempFile para el audio pendiente");
+                showNotification('Error: Información de archivo incompleta', 'error');
+                return;
+            }
+        } catch (e) {
+            console.error("❌ Error al parsear datos del audio pendiente:", e);
+            localStorage.removeItem('pendingAudioData');
+        }
+    }
+
+    // Flujo normal: cargar audio desde IndexedDB o sessionStorage
     const uploadedKey = sessionStorage.getItem('uploadedAudioKey');
     if (uploadedKey) {
         try {

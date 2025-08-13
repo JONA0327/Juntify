@@ -72,11 +72,378 @@ async function loadMeetings() {
             showErrorState(data.message || 'Error al cargar reuniones');
         }
 
+        // Cargar estado de reuniones pendientes
+        await loadPendingMeetingsStatus();
+
     } catch (error) {
         console.error('Error loading meetings:', error);
         showErrorState('Error de conexión al cargar reuniones');
     }
 }
+
+// ===============================================
+// REUNIONES PENDIENTES
+// ===============================================
+async function loadPendingMeetingsStatus() {
+    try {
+        const response = await fetch('/api/pending-meetings', {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            updatePendingMeetingsButton(data.has_pending, data.pending_meetings?.length || 0);
+        }
+    } catch (error) {
+        console.error('Error loading pending meetings status:', error);
+    }
+}
+
+function updatePendingMeetingsButton(hasPending, count = 0) {
+    // Buscar el botón por el texto que contiene
+    const buttons = Array.from(document.querySelectorAll('button'));
+    const button = buttons.find(btn => {
+        const span = btn.querySelector('span');
+        return span && (
+            span.textContent.includes('Reuniones Pendientes') ||
+            span.textContent.includes('reuniones pendientes') ||
+            span.textContent.includes('No hay reuniones pendientes')
+        );
+    });
+
+    if (!button) {
+        console.warn('Botón de reuniones pendientes no encontrado');
+        console.log('Botones disponibles:', buttons.map(b => b.textContent.trim()));
+        return;
+    }
+
+    const span = button.querySelector('span');
+    if (!span) {
+        console.warn('Span del botón no encontrado');
+        return;
+    }
+
+    if (hasPending) {
+        button.disabled = false;
+        button.classList.remove('opacity-50', 'cursor-not-allowed');
+        span.textContent = `Reuniones Pendientes (${count})`;
+
+        // Agregar event listener si no existe
+        if (!button.hasAttribute('data-pending-listener')) {
+            button.addEventListener('click', openPendingMeetingsModal);
+            button.setAttribute('data-pending-listener', 'true');
+        }
+
+        console.log(`Botón habilitado con ${count} reuniones pendientes`);
+    } else {
+        button.disabled = true;
+        button.classList.add('opacity-50', 'cursor-not-allowed');
+        span.textContent = 'No hay reuniones pendientes';
+
+        // Remover event listener
+        button.removeEventListener('click', openPendingMeetingsModal);
+        button.removeAttribute('data-pending-listener');
+
+        console.log('Botón deshabilitado - no hay reuniones pendientes');
+    }
+}
+
+async function openPendingMeetingsModal() {
+    try {
+        const response = await fetch('/api/pending-meetings', {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Error al cargar reuniones pendientes');
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            showPendingMeetingsModal(data.pending_meetings);
+        } else {
+            alert('Error al cargar reuniones pendientes');
+        }
+    } catch (error) {
+        console.error('Error opening pending meetings modal:', error);
+        alert('Error de conexión al cargar reuniones pendientes');
+    }
+}
+
+function showPendingMeetingsModal(pendingMeetings) {
+    const modalHTML = `
+        <div class="meeting-modal active" id="pendingMeetingsModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title-section">
+                        <h2 class="modal-title">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Reuniones Pendientes
+                        </h2>
+                        <p class="modal-subtitle">Selecciona una reunión para analizar</p>
+                    </div>
+
+                    <button class="close-btn" onclick="closePendingMeetingsModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    ${pendingMeetings.length > 0 ? `
+                        <div class="modal-section">
+                            <h3 class="section-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                                Audios Disponibles (${pendingMeetings.length})
+                            </h3>
+                            <div class="pending-meetings-grid">
+                                ${pendingMeetings.map(meeting => `
+                                    <div class="pending-meeting-card" data-meeting-id="${meeting.id}">
+                                        <div class="pending-card-header">
+                                            <div class="pending-meeting-icon">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 9v6l6-6" />
+                                                </svg>
+                                            </div>
+                                            <div class="pending-meeting-info">
+                                                <h4 class="pending-meeting-name">${escapeHtml(meeting.name)}</h4>
+                                                <div class="pending-meeting-meta">
+                                                    <span class="meta-item">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                        ${meeting.created_at}
+                                                    </span>
+                                                    <span class="meta-item">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707L16.414 6.414A1 1 0 0015.707 6H7a2 2 0 00-2 2v11a2 2 0 002 2z" />
+                                                        </svg>
+                                                        ${meeting.size}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="pending-card-actions">
+                                            <button class="analyze-btn primary" onclick="analyzePendingMeeting(${meeting.id})" data-meeting-id="${meeting.id}">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                                </svg>
+                                                Analizar Audio
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="modal-section">
+                            <div class="empty-state">
+                                <div class="empty-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                                    </svg>
+                                </div>
+                                <h3>No hay reuniones pendientes</h3>
+                                <p>Todas tus reuniones han sido procesadas.</p>
+                            </div>
+                        </div>
+                    `}
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    const modal = document.getElementById('pendingMeetingsModal');
+
+    // Deshabilitar scroll del body
+    document.body.style.overflow = 'hidden';
+}
+
+function closePendingMeetingsModal() {
+    const modal = document.getElementById('pendingMeetingsModal');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+
+        setTimeout(() => {
+            if (modal && !modal.classList.contains('active')) {
+                modal.remove();
+            }
+        }, 300);
+    }
+}
+
+async function analyzePendingMeeting(meetingId) {
+    try {
+        const button = document.querySelector(`.analyze-btn[data-meeting-id="${meetingId}"]`);
+        if (!button) {
+            console.error('Botón no encontrado para meeting ID:', meetingId);
+            return;
+        }
+
+        const card = button.closest('.pending-meeting-card');
+        const meetingName = card.querySelector('.pending-meeting-name').textContent;
+        const originalText = button.innerHTML;
+
+        // Agregar clase de loading y cambiar texto
+        button.classList.add('loading');
+        button.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Descargando...</span>
+        `;
+        button.disabled = true;
+
+        // Deshabilitar toda la tarjeta visualmente
+        card.style.opacity = '0.7';
+        card.style.pointerEvents = 'none';
+
+        const response = await fetch(`/api/pending-meetings/${meetingId}/analyze`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Mostrar notificación de descarga exitosa
+            showNotification(`Audio "${meetingName}" descargado. Redirigiendo al procesamiento...`, 'success');
+
+            // Cambiar el botón a estado de procesamiento
+            button.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span>Procesando...</span>
+            `;
+            button.classList.remove('loading');
+            button.classList.add('processing');
+
+            // Redirigir a audio-processing con información del audio pendiente
+            setTimeout(() => {
+                // Almacenar información del audio pendiente en localStorage
+                localStorage.setItem('pendingAudioData', JSON.stringify({
+                    pendingId: meetingId,
+                    tempFile: data.temp_file,
+                    originalName: data.filename,
+                    isPendingAudio: true,
+                    status: 'processing'
+                }));
+
+                // Redirigir a la página de audio-processing
+                window.location.href = '/audio-processing';
+            }, 1500);
+
+        } else {
+            throw new Error(data.error || 'Error al analizar audio');
+        }
+
+    } catch (error) {
+        console.error('Error analyzing pending meeting:', error);
+        showNotification('Error al procesar audio: ' + error.message, 'error');
+
+        // Restaurar botón y tarjeta
+        const button = document.querySelector(`.analyze-btn[data-meeting-id="${meetingId}"]`);
+        const card = button?.closest('.pending-meeting-card');
+
+        if (button) {
+            button.classList.remove('loading', 'processing');
+            button.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span>Analizar Audio</span>
+            `;
+            button.disabled = false;
+        }
+
+        if (card) {
+            card.style.opacity = '';
+            card.style.pointerEvents = '';
+        }
+    }
+}// Función para mostrar notificaciones elegantes
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+
+    const icon = type === 'success' ?
+        `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>` :
+        `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>`;
+
+    notification.innerHTML = `
+        <div class="notification-content">
+            ${icon}
+            <span>${message}</span>
+        </div>
+    `;
+
+    // Agregar estilos inline
+    notification.style.cssText = `
+        position: fixed;
+        top: 2rem;
+        right: 2rem;
+        background: ${type === 'success' ? 'linear-gradient(135deg, #10B981, #059669)' : 'linear-gradient(135deg, #EF4444, #DC2626)'};
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        z-index: 10000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+        max-width: 400px;
+    `;
+
+    notification.querySelector('.notification-content').style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-weight: 500;
+    `;
+
+    document.body.appendChild(notification);
+
+    // Animar entrada
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+    }, 100);
+
+    // Auto remover después de 4 segundos
+    setTimeout(() => {
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 4000);
+}
+
+// Hacer las funciones disponibles globalmente
+window.closePendingMeetingsModal = closePendingMeetingsModal;
+window.analyzePendingMeeting = analyzePendingMeeting;
 
 // ===============================================
 // RENDERIZADO DE REUNIONES
@@ -282,7 +649,7 @@ function renderMeetingModal(meeting) {
                     <div class="modal-section">
                         <h3 class="section-title">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
                             </svg>
                             Tareas y Acciones
                         </h3>
@@ -380,7 +747,7 @@ function renderTasks(tasks) {
                     <li class="task-item">
                         <div class="task-checkbox">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
                         <span class="task-text">${escapeHtml(taskText)}</span>

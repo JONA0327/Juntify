@@ -538,6 +538,492 @@ class MeetingController extends Controller
         }
     }
 
+    /**
+     * Obtiene las reuniones pendientes del usuario
+     */
+    public function getPendingMeetings()
+    {
+        try {
+            $user = Auth::user();
+
+            // Verificar si el usuario tiene carpeta pendiente
+            $pendingFolder = \App\Models\PendingFolder::where('username', $user->username)->first();
+
+            // Obtener grabaciones pendientes del usuario
+            $pendingRecordings = \App\Models\PendingRecording::where('username', $user->username)
+                ->where('status', 'pending')
+                ->get();
+
+            $pendingMeetings = [];
+
+            foreach ($pendingRecordings as $recording) {
+                try {
+                    // Configurar Google Drive si hay token
+                    if ($user->google_token) {
+                        $this->setGoogleDriveToken($user);
+                        // Intentar obtener información del archivo de Google Drive
+                        $fileInfo = $this->googleDriveService->getFileInfo($recording->audio_drive_id);
+
+                        $pendingMeetings[] = [
+                            'id' => $recording->id,
+                            'name' => $fileInfo->getName() ?: $recording->meeting_name,
+                            'drive_file_id' => $recording->audio_drive_id,
+                            'created_at' => $recording->created_at->format('d/m/Y H:i'),
+                            'size' => $fileInfo->getSize() ? $this->formatBytes($fileInfo->getSize()) : 'N/A',
+                            'status' => $recording->status
+                        ];
+                    } else {
+                        // Si no hay token de Google, usar solo datos de la DB
+                        $pendingMeetings[] = [
+                            'id' => $recording->id,
+                            'name' => $recording->meeting_name,
+                            'drive_file_id' => $recording->audio_drive_id,
+                            'created_at' => $recording->created_at->format('d/m/Y H:i'),
+                            'size' => 'N/A',
+                            'status' => $recording->status
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Error getting pending recording info', [
+                        'recording_id' => $recording->id,
+                        'error' => $e->getMessage()
+                    ]);
+                    // Incluir el registro aunque no podamos obtener info completa
+                    $pendingMeetings[] = [
+                        'id' => $recording->id,
+                        'name' => $recording->meeting_name ?: ('Audio - ' . $recording->created_at->format('d/m/Y H:i')),
+                        'drive_file_id' => $recording->audio_drive_id,
+                        'created_at' => $recording->created_at->format('d/m/Y H:i'),
+                        'size' => 'N/A',
+                        'status' => $recording->status
+                    ];
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'pending_meetings' => $pendingMeetings,
+                'has_pending' => count($pendingMeetings) > 0,
+                'folder_info' => $pendingFolder ? [
+                    'name' => $pendingFolder->name,
+                    'google_id' => $pendingFolder->google_id
+                ] : null
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting pending meetings', [
+                'error' => $e->getMessage()
+            ]);
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al obtener reuniones pendientes'
+            ], 500);
+        }
+    }
+
+    /**
+     * Analiza una reunión pendiente - Fase 1: Descarga y procesamiento
+     */
+    public function analyzePendingMeeting($id)
+    {
+        try {
+            $user = Auth::user();
+
+            $pendingRecording = \App\Models\PendingRecording::where('id', $id)
+                ->where('username', $user->username)
+                ->where('status', 'pending')
+                ->firstOrFail();
+
+            // Cambiar status a 'processing'
+            $pendingRecording->update(['status' => 'processing']);
+
+            // Guardar información en memoria para el proceso
+            $originalAudioName = $pendingRecording->meeting_name;
+
+            try {
+                // Descargar el audio de Google Drive usando la cuenta de servicio
+                $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
+                $audioContent = $serviceAccount->downloadFile($pendingRecording->audio_drive_id);
+
+                if (!$audioContent) {
+                    throw new \Exception('No se pudo descargar el audio de Google Drive');
+                }
+
+                // Guardar temporalmente el archivo de audio
+                $tempFileName = 'pending_' . $id . '_' . time() . '.tmp';
+                $tempPath = storage_path('app/temp/' . $tempFileName);
+
+                // Crear directorio si no existe
+                if (!file_exists(dirname($tempPath))) {
+                    mkdir(dirname($tempPath), 0755, true);
+                }
+
+                file_put_contents($tempPath, $audioContent);
+
+                // Guardar información del proceso en session para mantener el estado
+                session(['pending_analysis_' . $id => [
+                    'original_name' => $originalAudioName,
+                    'temp_file' => $tempPath,
+                    'drive_file_id' => $pendingRecording->audio_drive_id,
+                    'pending_id' => $id,
+                    'username' => $user->username
+                ]]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Audio descargado y listo para procesamiento',
+                    'recording_id' => $pendingRecording->id,
+                    'filename' => $originalAudioName,
+                    'status' => 'processing',
+                    'temp_file' => $tempFileName,
+                    'redirect_to_processing' => true
+                ]);
+
+            } catch (\Exception $e) {
+                // Si hay error en la descarga, revertir el status
+                $pendingRecording->update([
+                    'status' => 'pending',
+                    'error_message' => 'Error al descargar: ' . $e->getMessage()
+                ]);
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error analyzing pending meeting', [
+                'recording_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al procesar audio: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Completa el procesamiento de una reunión pendiente - Fase 2: Mover y guardar
+     */
+    public function completePendingMeeting(Request $request)
+    {
+        try {
+            $request->validate([
+                'pending_id' => 'required|integer',
+                'meeting_name' => 'required|string',
+                'root_folder' => 'required|string',
+                'transcription_subfolder' => 'nullable|string',
+                'audio_subfolder' => 'nullable|string',
+                'transcription_data' => 'required',
+                'analysis_results' => 'required'
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Datos de validación incorrectos',
+                'validation_errors' => $e->errors()
+            ], 422);
+        }
+
+        try {
+            $user = Auth::user();
+            $pendingId = $request->input('pending_id');
+
+            Log::info('Iniciando completePendingMeeting', [
+                'pending_id' => $pendingId,
+                'user' => $user->username,
+                'meeting_name' => $request->input('meeting_name')
+            ]);
+
+            // Verificar que el registro esté en estado processing
+            $pendingRecording = \App\Models\PendingRecording::where('id', $pendingId)
+                ->where('username', $user->username)
+                ->where('status', 'processing')
+                ->firstOrFail();
+
+            // Recuperar información del proceso desde la session
+            $processInfo = session('pending_analysis_' . $pendingId);
+            if (!$processInfo) {
+                throw new \Exception('Información del proceso no encontrada');
+            }
+
+            $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
+            $newMeetingName = $request->input('meeting_name');
+
+            Log::info('Datos recibidos para completePendingMeeting', [
+                'root_folder' => $request->input('root_folder'),
+                'transcription_subfolder' => $request->input('transcription_subfolder'),
+                'audio_subfolder' => $request->input('audio_subfolder'),
+                'all_inputs' => $request->all()
+            ]);
+
+            // Determinar las carpetas de destino
+            $rootFolder = \App\Models\Folder::where('google_id', $request->input('root_folder'))->first();
+
+            if (!$rootFolder) {
+                // Intentar buscar por id en lugar de google_id
+                $rootFolder = \App\Models\Folder::where('id', $request->input('root_folder'))->first();
+
+                if (!$rootFolder) {
+                    // Obtener token del usuario para mostrar carpetas disponibles
+                    $token = \App\Models\GoogleToken::where('username', $user->username)->first();
+                    $availableFolders = [];
+                    if ($token) {
+                        $availableFolders = \App\Models\Folder::where('google_token_id', $token->id)
+                            ->get(['id', 'google_id', 'name'])->toArray();
+                    }
+
+                    Log::error('No se encontró la carpeta raíz', [
+                        'root_folder_value' => $request->input('root_folder'),
+                        'available_folders' => $availableFolders
+                    ]);
+                    throw new \Exception('Carpeta raíz no encontrada: ' . $request->input('root_folder'));
+                }
+            }
+
+            $transcriptionFolderId = $rootFolder->google_id;
+            if ($request->input('transcription_subfolder')) {
+                $sub = \App\Models\Subfolder::where('google_id', $request->input('transcription_subfolder'))
+                    ->where('folder_id', $rootFolder->id)
+                    ->first();
+                if ($sub) {
+                    $transcriptionFolderId = $sub->google_id;
+                } else {
+                    Log::warning('Subcarpeta de transcripción no encontrada', [
+                        'transcription_subfolder' => $request->input('transcription_subfolder'),
+                        'root_folder_id' => $rootFolder->id
+                    ]);
+                }
+            }
+
+            $audioFolderId = $rootFolder->google_id;
+            if ($request->input('audio_subfolder')) {
+                $sub = \App\Models\Subfolder::where('google_id', $request->input('audio_subfolder'))
+                    ->where('folder_id', $rootFolder->id)
+                    ->first();
+                if ($sub) {
+                    $audioFolderId = $sub->google_id;
+                } else {
+                    Log::warning('Subcarpeta de audio no encontrada', [
+                        'audio_subfolder' => $request->input('audio_subfolder'),
+                        'root_folder_id' => $rootFolder->id
+                    ]);
+                }
+            }            // 1. Mover y renombrar el audio en Google Drive
+            $oldFileId = $processInfo['drive_file_id'];
+            $audioExtension = pathinfo($processInfo['original_name'], PATHINFO_EXTENSION);
+            $newAudioName = $newMeetingName . '.' . $audioExtension;
+
+            // Mover el archivo a la nueva ubicación con nuevo nombre
+            $newAudioFileId = $serviceAccount->moveAndRenameFile(
+                $oldFileId,
+                $audioFolderId,
+                $newAudioName
+            );
+
+            // 2. Crear y subir la transcripción
+            $analysisResults = $request->input('analysis_results');
+            $payload = [
+                'segments' => $request->input('transcription_data'),
+                'summary' => $analysisResults['summary'] ?? null,
+                'keyPoints' => $analysisResults['keyPoints'] ?? [],
+                'tasks' => $analysisResults['tasks'] ?? [],
+            ];
+            $encrypted = \Illuminate\Support\Facades\Crypt::encryptString(json_encode($payload));
+
+            $transcriptFileId = $serviceAccount->uploadFile(
+                $newMeetingName . '.ju',
+                'application/json',
+                $transcriptionFolderId,
+                $encrypted
+            );
+
+            // 3. Obtener URLs de descarga
+            $audioUrl = $serviceAccount->getFileLink($newAudioFileId);
+            $transcriptUrl = $serviceAccount->getFileLink($transcriptFileId);
+
+            // 4. Guardar en la BD principal (TranscriptionLaravel)
+            $transcription = \App\Models\TranscriptionLaravel::create([
+                'username' => $user->username,
+                'meeting_name' => $newMeetingName,
+                'audio_drive_id' => $newAudioFileId,
+                'audio_download_url' => $audioUrl,
+                'transcript_drive_id' => $transcriptFileId,
+                'transcript_download_url' => $transcriptUrl,
+            ]);
+
+            // 5. Marcar como exitoso y limpiar
+            $pendingRecording->update(['status' => 'success']);
+
+            // 6. Limpiar archivos temporales
+            if (file_exists($processInfo['temp_file'])) {
+                unlink($processInfo['temp_file']);
+            }
+            session()->forget('pending_analysis_' . $pendingId);
+
+            // 7. Eliminar el registro de pending después de confirmar que todo salió bien
+            $pendingRecording->delete();
+
+            // Extraer datos adicionales para la respuesta
+            $analysisResults = $request->input('analysis_results');
+            $audioData = $processInfo['temp_file'] ?? null;
+            $audioDuration = 0;
+            $speakerCount = 0;
+            $tasks = $analysisResults['tasks'] ?? [];
+
+            // Intentar obtener duración del audio si está disponible
+            if ($audioData && file_exists($audioData)) {
+                try {
+                    // Aquí podrías agregar lógica para obtener la duración real del audio
+                    // Por ahora usaremos un valor por defecto
+                    $audioDuration = 300; // 5 minutos como ejemplo
+                } catch (\Exception $e) {
+                    // Si no se puede obtener, usar valor por defecto
+                }
+            }
+
+            // Contar speakers únicos de la transcripción si está disponible
+            $transcriptionData = $request->input('transcription_data');
+            if ($transcriptionData && is_array($transcriptionData)) {
+                $speakers = [];
+                foreach ($transcriptionData as $segment) {
+                    if (isset($segment['speaker']) && !in_array($segment['speaker'], $speakers)) {
+                        $speakers[] = $segment['speaker'];
+                    }
+                }
+                $speakerCount = count($speakers);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Reunión procesada y guardada exitosamente',
+                'transcription_id' => $transcription->id,
+                'drive_path' => $newMeetingName,
+                'audio_duration' => $audioDuration,
+                'speaker_count' => $speakerCount,
+                'tasks' => $tasks,
+                'audio_drive_id' => $newAudioFileId,
+                'transcript_drive_id' => $transcriptFileId
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error completing pending meeting', [
+                'pending_id' => $request->input('pending_id'),
+                'error' => $e->getMessage()
+            ]);
+
+            // En caso de error, mantener el estado processing para reintento
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al completar el procesamiento: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene información de un audio pendiente en procesamiento
+     */
+    public function getPendingProcessingInfo($id)
+    {
+        try {
+            $user = Auth::user();
+
+            $pendingRecording = \App\Models\PendingRecording::where('id', $id)
+                ->where('username', $user->username)
+                ->where('status', 'processing')
+                ->firstOrFail();
+
+            // Recuperar información del proceso
+            $processInfo = session('pending_analysis_' . $id);
+            if (!$processInfo) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Información del proceso no encontrada'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'pending_id' => $id,
+                'original_name' => $processInfo['original_name'],
+                'temp_file' => basename($processInfo['temp_file']),
+                'status' => 'processing'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al obtener información: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Descarga el archivo temporal del audio pendiente para el frontend
+     */
+    public function getPendingAudioFile($tempFileName)
+    {
+        try {
+            $user = Auth::user();
+            $tempPath = storage_path('app/temp/' . $tempFileName);
+
+            if (!file_exists($tempPath)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Archivo temporal no encontrado'
+                ], 404);
+            }
+
+            // Validar que el archivo pertenece al usuario actual
+            if (!str_contains($tempFileName, 'pending_')) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Archivo no válido'
+                ], 403);
+            }
+
+            // Leer el contenido del archivo
+            $audioContent = file_get_contents($tempPath);
+
+            if ($audioContent === false) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Error al leer el archivo'
+                ], 500);
+            }
+
+            // Convertir a base64
+            $audioBase64 = base64_encode($audioContent);
+
+            return response()->json([
+                'success' => true,
+                'audioData' => $audioBase64,
+                'mimeType' => 'audio/mpeg'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting pending audio file', [
+                'temp_file' => $tempFileName,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al obtener archivo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function formatBytes($bytes, $precision = 2)
+    {
+        $units = array('B', 'KB', 'MB', 'GB', 'TB');
+
+        for ($i = 0; $bytes > 1024; $i++) {
+            $bytes /= 1024;
+        }
+
+        return round($bytes, $precision) . ' ' . $units[$i];
+    }
+
     private function updateDriveFileName($fileId, $newName)
     {
         return $this->googleDriveService->updateFileName($fileId, $newName);
