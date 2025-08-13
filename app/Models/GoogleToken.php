@@ -14,4 +14,8 @@ class GoogleToken extends Model
         'expiry_date',
         'recordings_folder_id',
     ];
+
+    protected $casts = [
+        'expiry_date' => 'datetime',
+    ];
 }

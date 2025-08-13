@@ -31,6 +31,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
     Route::get('/reuniones', [MeetingController::class, 'index'])->name('reuniones.index');
 
+    // Rutas API para reuniones
+    Route::get('/api/meetings', [MeetingController::class, 'getMeetings'])->name('api.meetings');
+    Route::get('/api/meetings/{id}', [MeetingController::class, 'show'])->name('api.meetings.show');
+    Route::put('/api/meetings/{id}/name', [MeetingController::class, 'updateName'])->name('api.meetings.updateName');
+    Route::delete('/api/meetings/{id}', [MeetingController::class, 'destroy'])->name('api.meetings.destroy');
+    Route::post('/api/meetings/cleanup', [MeetingController::class, 'cleanupModal'])->name('api.meetings.cleanup');
 
     Route::post('/drive/disconnect', [GoogleAuthController::class, 'disconnect'])->name('drive.disconnect');
 
