@@ -28,23 +28,15 @@
         </div>
     </div>
 
-    <div class="recorder-controls">
+    <div class="recorder-controls" style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
         <button class="icon-btn" id="start-recording" onclick="toggleRecording()">
-            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" />
-            </svg>
+            <span class="record-icon-round">
+                <svg class="nav-icon nav-icon-xxl" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 96 96" stroke="none">
+                    <path d="M21 21l54 27-54 27V21z" />
+                </svg>
+            </span>
         </button>
-        <div class="postpone-switch flex flex-col items-center mt-3" id="postpone-switch">
-            <span id="postpone-mode-label" class="text-sm mb-1">Modo posponer: Apagado</span>
-            <label for="postpone-toggle" class="cursor-pointer select-none">
-                <input id="postpone-toggle" type="checkbox" class="sr-only" onchange="togglePostponeMode()">
-                <span id="postpone-track" class="switch-track">
-                    <span class="switch-label off">OFF</span>
-                    <span class="switch-label on">ON</span>
-                    <span class="switch-thumb"></span>
-                </span>
-            </label>
-        </div>
+        <div class="recorder-actions" id="recorder-actions">
         <button class="icon-btn" id="pause-recording" onclick="pauseRecording()" style="display: none;">
             <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
@@ -60,6 +52,18 @@
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
         </button>
+        </div>
+        <div class="postpone-switch flex flex-col items-center mt-6" id="postpone-switch">
+            <span id="postpone-mode-label" class="text-sm mb-1">Modo posponer: Apagado</span>
+            <label for="postpone-toggle" class="cursor-pointer select-none">
+                <input id="postpone-toggle" type="checkbox" class="sr-only" onchange="togglePostponeMode()">
+                <span id="postpone-track" class="switch-track">
+                    <span class="switch-label off">OFF</span>
+                    <span class="switch-label on">ON</span>
+                    <span class="switch-thumb"></span>
+                </span>
+            </label>
+        </div>
     </div>
 </div>
 

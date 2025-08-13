@@ -1,3 +1,25 @@
+.recorder-actions {
+    display: flex;               /* keep row structure always */
+    flex-direction: row;
+    margin-top: 16px;
+    gap: 16px;
+    align-items: center;
+    justify-content: center;
+    min-height: 56px;            /* reserve space to avoid jumps */
+    visibility: hidden;          /* hidden by default */
+}
+
+/* Reveal row when recording */
+.recorder-actions.show { visibility: visible; }
+
+/* Color tune for theme */
+#pause-recording.icon-btn { background: rgba(245, 158, 11, 0.18); border-color: rgba(245, 158, 11, 0.25); }
+#resume-recording.icon-btn { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.25); }
+#discard-recording.icon-btn { background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.25); }
+
+/* Better stop state (square inside big circle) */
+.recorder-btn.recording .nav-icon-xxl { color: #ffddc7; }
+
 /* New Meeting Styles - Juntify Theme */
 
 /* Variables CSS */
@@ -907,6 +929,105 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
     transition: background 0.3s ease;
 }
 
+/* Unified circular recorder controls (only for secondary buttons) */
+.recorder-controls #pause-recording,
+.recorder-controls #resume-recording,
+.recorder-controls #discard-recording {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(148, 163, 184, 0.15); /* slate-400/15 */
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+.recorder-controls #pause-recording .nav-icon,
+.recorder-controls #resume-recording .nav-icon,
+.recorder-controls #discard-recording .nav-icon {
+    width: 24px;
+    height: 24px;
+    color: #e2e8f0;
+    margin: auto; /* center with margin auto */
+}
+
+/* Perfect centering for small control buttons */
+.recorder-controls #pause-recording,
+.recorder-controls #resume-recording,
+.recorder-controls #discard-recording {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 0;
+}
+.recorder-controls #pause-recording:hover,
+.recorder-controls #resume-recording:hover,
+.recorder-controls #discard-recording:hover {
+    background: rgba(148, 163, 184, 0.25);
+}
+
+/* Color variants */
+#pause-recording.icon-btn { background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.25); }
+#resume-recording.icon-btn { background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.25); }
+#discard-recording.icon-btn { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.25); }
+
+#pause-recording.icon-btn:hover { background: rgba(245, 158, 11, 0.3); }
+#resume-recording.icon-btn:hover { background: rgba(16, 185, 129, 0.3); }
+#discard-recording.icon-btn:hover { background: rgba(239, 68, 68, 0.3); }
+
+.record-icon-round {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100px;
+    height: 100px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+}
+
+/* Ensure all SVG icons render centered */
+.nav-icon, .nav-icon-giant, .nav-icon-xxl {
+
+    align-items: center;
+    justify-content: center;
+    left: 20px;
+}
+
+.nav-icon-giant {
+    width: 64px;
+    height: 64px;
+    stroke-width: 3;
+    color: #fff;
+}
+
+
+.btn-giant {
+    padding: 3rem 5rem;
+    min-width: 400px;
+    border-radius: 40px;
+    font-size: 2.5rem;
+}
+
+.nav-icon-giant {
+    width: 96px;
+    height: 96px;
+    stroke-width: 3;
+}
+
+
+.btn-large {
+    padding: 2rem 3.5rem;
+    min-width: 320px;
+    border-radius: 32px;
+    font-size: 2rem;
+}
+
+.nav-icon-large {
+    width: 64px;
+    height: 64px;
+    stroke-width: 2.5;
+}
+
 .icon-btn:hover {
     background: rgba(59, 130, 246, 0.1);
 }
@@ -1412,6 +1533,11 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
     box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
     transition: all 0.3s ease;
+}
+.nav-icon.nav-icon-xxl {
+    width: 30px;
+    height: 30px;
+    color: #ffffff;
 }
 
 .meeting-record-btn:hover {

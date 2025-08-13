@@ -46,7 +46,19 @@ function setIcon(svgEl, name) {
     if (!svgEl) return;
     const path = ICON_PATHS[name];
     if (path) {
-        svgEl.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="${path}" />`;
+        if (svgEl.classList.contains('nav-icon-xxl')) {
+            // Use fill icons and a 24x24 viewBox so paths scale to the large size
+            svgEl.setAttribute('viewBox', '0 0 24 24');
+            svgEl.setAttribute('fill', 'currentColor');
+            svgEl.removeAttribute('stroke');
+            svgEl.innerHTML = `<path d="${path}" />`;
+        } else {
+            // Default small icons: strokes on 24x24
+            svgEl.setAttribute('viewBox', '0 0 24 24');
+            svgEl.setAttribute('fill', 'none');
+            svgEl.setAttribute('stroke', 'currentColor');
+            svgEl.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="${path}" />`;
+        }
     }
 }
 
@@ -490,6 +502,7 @@ function updateRecordingUI(recording) {
     const timerCounter = document.getElementById('timer-counter');
     const timerLabel = document.getElementById('timer-label');
     const visualizer = document.getElementById('audio-visualizer');
+    const actions = document.getElementById('recorder-actions');
 
     if (recording) {
         setIcon(buttonIcon, 'stop');
@@ -499,6 +512,7 @@ function updateRecordingUI(recording) {
         timerLabel.textContent = 'Grabando...';
         timerLabel.classList.add('recording');
         visualizer.classList.add('active');
+    if (actions) actions.classList.add('show');
     } else {
         setIcon(buttonIcon, 'play');
         button.classList.remove('recording');
@@ -508,6 +522,7 @@ function updateRecordingUI(recording) {
         timerLabel.classList.remove('recording');
         timerCounter.textContent = '00:00';
         visualizer.classList.remove('active');
+    if (actions) actions.classList.remove('show');
     }
 }
 
