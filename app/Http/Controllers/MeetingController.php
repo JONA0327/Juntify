@@ -40,6 +40,9 @@ class MeetingController extends Controller
         try {
             $user = Auth::user();
 
+            // Configurar el cliente de Google Drive con el token del usuario
+            $this->setGoogleDriveToken($user);
+
             $meetings = TranscriptionLaravel::where('username', $user->username)
                 ->orderBy('created_at', 'desc')
         ->get()
@@ -79,6 +82,9 @@ class MeetingController extends Controller
             $meeting = TranscriptionLaravel::where('id', $id)
                 ->where('username', $user->username)
                 ->firstOrFail();
+
+            // Configurar el cliente de Google Drive con el token del usuario
+            $this->setGoogleDriveToken($user);
 
             // Descargar el archivo .ju (transcripción)
             $transcriptContent = $this->downloadFromDrive($meeting->transcript_drive_id);
