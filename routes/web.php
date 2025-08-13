@@ -38,6 +38,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('/api/meetings/{id}', [MeetingController::class, 'destroy'])->name('api.meetings.destroy');
     Route::post('/api/meetings/cleanup', [MeetingController::class, 'cleanupModal'])->name('api.meetings.cleanup');
 
+    // Rutas de descarga
+    Route::get('/api/meetings/{id}/download-ju', [MeetingController::class, 'downloadJuFile'])->name('api.meetings.download-ju');
+    Route::get('/api/meetings/{id}/download-audio', [MeetingController::class, 'downloadAudioFile'])->name('api.meetings.download-audio');
+
     Route::post('/drive/disconnect', [GoogleAuthController::class, 'disconnect'])->name('drive.disconnect');
 
     // Rutas POST para manejo de carpetas

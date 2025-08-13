@@ -458,6 +458,42 @@
     left: 0;
 }
 
+/* Estilos específicos para elementos de tarea */
+.task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding-left: 0 !important;
+}
+
+.task-item::before {
+    display: none !important;
+}
+
+.task-checkbox {
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 0.375rem;
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid var(--primary-yellow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.125rem;
+}
+
+.task-checkbox svg {
+    width: 0.875rem;
+    height: 0.875rem;
+    color: var(--primary-yellow);
+}
+
+.task-text {
+    flex: 1;
+    line-height: 1.5;
+}
+
 /* =========================================
    ESTADOS DE CARGA
    ========================================= */

@@ -277,6 +277,21 @@ function renderMeetingModal(meeting) {
                         </div>
                     </div>
 
+                    <!-- Tareas/Acciones -->
+                    ${meeting.tasks && meeting.tasks.length > 0 ? `
+                    <div class="modal-section">
+                        <h3 class="section-title">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                            </svg>
+                            Tareas y Acciones
+                        </h3>
+                        <div class="section-content">
+                            ${renderTasks(meeting.tasks)}
+                        </div>
+                    </div>
+                    ` : ''}
+
                     <!-- Participantes/Hablantes -->
                     ${meeting.speakers && meeting.speakers.length > 0 ? `
                     <div class="modal-section">
@@ -337,13 +352,41 @@ function renderMeetingModal(meeting) {
 // FUNCIONES DE RENDERIZADO
 // ===============================================
 function renderKeyPoints(keyPoints) {
-    if (!keyPoints || keyPoints.length === 0) {
+    if (!keyPoints || !Array.isArray(keyPoints) || keyPoints.length === 0) {
         return '<p class="text-slate-400">No se identificaron puntos clave específicos.</p>';
     }
 
     return `
         <ul class="key-points-list">
-            ${keyPoints.map(point => `<li>${escapeHtml(point)}</li>`).join('')}
+            ${keyPoints.map(point => {
+                const pointText = typeof point === 'string' ? point : (point?.text || point?.description || String(point) || 'Punto sin descripción');
+                return `<li>${escapeHtml(pointText)}</li>`;
+            }).join('')}
+        </ul>
+    `;
+}
+
+function renderTasks(tasks) {
+    if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+        return '<p class="text-slate-400">No se identificaron tareas o acciones específicas.</p>';
+    }
+
+    return `
+        <ul class="tasks-list">
+            ${tasks.map(task => {
+                // Asegurar que task sea un string
+                const taskText = typeof task === 'string' ? task : (task?.text || task?.description || String(task) || 'Tarea sin descripción');
+                return `
+                    <li class="task-item">
+                        <div class="task-checkbox">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                            </svg>
+                        </div>
+                        <span class="task-text">${escapeHtml(taskText)}</span>
+                    </li>
+                `;
+            }).join('')}
         </ul>
     `;
 }
@@ -431,6 +474,9 @@ function closeMeetingModal() {
         }, 300);
     }
 }
+
+// Hacer la función disponible globalmente
+window.closeMeetingModal = closeMeetingModal;
 
 // ===============================================
 // FUNCIONES DE ESTADO
@@ -549,39 +595,6 @@ function handleSearch(event) {
 }
 
 // ===============================================
-// ELIMINACIÓN DE REUNIONES
-// ===============================================
-async function deleteMeeting(meetingId) {
-    if (!confirm('¿Estás seguro de que deseas eliminar esta reunión? Esta acción no se puede deshacer.')) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/meetings/${meetingId}`, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                'Accept': 'application/json',
-            }
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            // Recargar lista de reuniones
-            await loadMeetings();
-            alert('Reunión eliminada correctamente');
-        } else {
-            alert('Error al eliminar la reunión: ' + (data.message || 'Error desconocido'));
-        }
-
-    } catch (error) {
-        console.error('Error deleting meeting:', error);
-        alert('Error de conexión al eliminar la reunión');
-    }
-}
-
-// ===============================================
 // LIMPIEZA DE ARCHIVOS TEMPORALES
 // ===============================================
 async function cleanupModalFiles() {
@@ -602,7 +615,7 @@ async function cleanupModalFiles() {
 // UTILIDADES
 // ===============================================
 function escapeHtml(text) {
-    if (!text) return '';
+    if (!text || typeof text !== 'string') return '';
     const map = {
         '&': '&amp;',
         '<': '&lt;',
@@ -612,3 +625,83 @@ function escapeHtml(text) {
     };
     return text.replace(/[&<>"']/g, function(m) { return map[m]; });
 }
+
+// ===============================================
+// FUNCIONES DE DESCARGA
+// ===============================================
+async function downloadJuFile(meetingId) {
+    try {
+        window.location.href = `/api/meetings/${meetingId}/download-ju`;
+    } catch (error) {
+        console.error('Error downloading .ju file:', error);
+        alert('Error al descargar el archivo .ju');
+    }
+}
+
+async function downloadAudioFile(meetingId) {
+    try {
+        window.location.href = `/api/meetings/${meetingId}/download-audio`;
+    } catch (error) {
+        console.error('Error downloading audio file:', error);
+        alert('Error al descargar el archivo de audio');
+    }
+}
+
+async function saveMeetingTitle(meetingId, newTitle) {
+    try {
+        const response = await fetch(`/api/meetings/${meetingId}/name`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({ name: newTitle })
+        });
+
+        if (!response.ok) {
+            throw new Error('Error al guardar el título');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error saving meeting title:', error);
+        throw error;
+    }
+}
+
+async function deleteMeeting(meetingId) {
+    if (!confirm('¿Estás seguro de que quieres eliminar esta reunión? Esta acción no se puede deshacer.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/meetings/${meetingId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Error al eliminar la reunión');
+        }
+
+        // Recargar la lista de reuniones
+        loadMeetings();
+        closeMeetingModal();
+    } catch (error) {
+        console.error('Error deleting meeting:', error);
+        alert('Error al eliminar la reunión');
+    }
+}
+
+// ===============================================
+// FUNCIONES GLOBALES PARA HTML INLINE
+// ===============================================
+// Hacer funciones disponibles globalmente para onclick en HTML
+window.closeMeetingModal = closeMeetingModal;
+window.openMeetingModal = openMeetingModal;
+window.downloadJuFile = downloadJuFile;
+window.downloadAudioFile = downloadAudioFile;
+window.saveMeetingTitle = saveMeetingTitle;
+window.deleteMeeting = deleteMeeting;

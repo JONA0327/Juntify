@@ -264,34 +264,51 @@ class MeetingController extends Controller
                 'first_50' => substr($content, 0, 50)
             ]);
 
-            // Si el contenido empieza con 'eyJ' es base64
+            // Primer intento: ver si el contenido ya es JSON válido (sin encriptar)
+            $json_data = json_decode($content, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($json_data)) {
+                Log::info('decryptJuFile: Content is already valid JSON (unencrypted)');
+                return $this->extractMeetingDataFromJson($json_data);
+            }
+
+            // Segundo intento: ver si es un string encriptado directo de Laravel Crypt
             if (substr($content, 0, 3) === 'eyJ') {
-                Log::info('decryptJuFile: Attempting base64 decode');
-                $decoded_content = base64_decode($content);
+                Log::info('decryptJuFile: Attempting to decrypt Laravel Crypt format');
+                try {
+                    // Intentar desencriptar directamente el string base64
+                    $decrypted = \Illuminate\Support\Facades\Crypt::decryptString($content);
+                    Log::info('decryptJuFile: Direct decryption successful');
 
-                if ($decoded_content !== false) {
-                    Log::info('decryptJuFile: Base64 decode successful', [
-                        'decoded_preview' => substr($decoded_content, 0, 100)
-                    ]);
-
-                    // Intentar desencriptar el contenido decodificado
-                    try {
-                        $decrypted = \Illuminate\Support\Facades\Crypt::decryptString($decoded_content);
-                        Log::info('decryptJuFile: Decryption successful');
-
-                        $json_data = json_decode($decrypted, true);
-                        if (json_last_error() === JSON_ERROR_NONE) {
-                            Log::info('decryptJuFile: JSON parsing successful', ['keys' => array_keys($json_data)]);
-                            return $this->extractMeetingDataFromJson($json_data);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('decryptJuFile: Decryption failed', ['error' => $e->getMessage()]);
+                    $json_data = json_decode($decrypted, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        Log::info('decryptJuFile: JSON parsing after decryption successful', ['keys' => array_keys($json_data)]);
+                        return $this->extractMeetingDataFromJson($json_data);
                     }
+                } catch (\Exception $e) {
+                    Log::warning('decryptJuFile: Direct decryption failed', ['error' => $e->getMessage()]);
+                }
+            }
+
+            // Tercer intento: ver si el contenido contiene el formato {"iv":"...","value":"..."} de Laravel
+            if (str_contains($content, '"iv"') && str_contains($content, '"value"')) {
+                Log::info('decryptJuFile: Detected Laravel Crypt JSON format');
+                try {
+                    // El contenido ya contiene el formato JSON de Laravel Crypt, desencriptar directamente
+                    $decrypted = \Illuminate\Support\Facades\Crypt::decrypt($content);
+                    Log::info('decryptJuFile: Laravel Crypt JSON decryption successful');
+
+                    $json_data = json_decode($decrypted, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        Log::info('decryptJuFile: JSON parsing after Laravel Crypt decryption successful', ['keys' => array_keys($json_data)]);
+                        return $this->extractMeetingDataFromJson($json_data);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('decryptJuFile: Laravel Crypt JSON decryption failed', ['error' => $e->getMessage()]);
                 }
             }
 
             // Fallback: usar datos por defecto
-            Log::warning('decryptJuFile: Using default data');
+            Log::warning('decryptJuFile: Using default data - all decryption methods failed');
             return $this->getDefaultMeetingData();
 
         } catch (\Exception $e) {
@@ -446,6 +463,78 @@ class MeetingController extends Controller
         } catch (\Exception $e) {
             Log::error('cleanupModal error', ['error' => $e->getMessage()]);
             return response()->json(['success' => false], 500);
+        }
+    }
+
+    /**
+     * Descarga el archivo .ju de una reunión
+     */
+    public function downloadJuFile($id)
+    {
+        try {
+            $user = Auth::user();
+            $this->setGoogleDriveToken($user);
+
+            $meeting = TranscriptionLaravel::where('id', $id)
+                ->where('username', $user->username)
+                ->firstOrFail();
+
+            if (empty($meeting->transcript_drive_id)) {
+                return response()->json(['error' => 'No se encontró archivo .ju para esta reunión'], 404);
+            }
+
+            // Descargar el contenido del archivo
+            $content = $this->googleDriveService->downloadFileContent($meeting->transcript_drive_id);
+
+            // Crear nombre de archivo
+            $filename = 'meeting_' . $meeting->id . '.ju';
+
+            return response($content)
+                ->header('Content-Type', 'application/octet-stream')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+
+        } catch (\Exception $e) {
+            Log::error('Error downloading .ju file', [
+                'meeting_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json(['error' => 'Error al descargar archivo .ju'], 500);
+        }
+    }
+
+    /**
+     * Descarga el archivo de audio de una reunión
+     */
+    public function downloadAudioFile($id)
+    {
+        try {
+            $user = Auth::user();
+            $this->setGoogleDriveToken($user);
+
+            $meeting = TranscriptionLaravel::where('id', $id)
+                ->where('username', $user->username)
+                ->firstOrFail();
+
+            if (empty($meeting->audio_drive_id)) {
+                return response()->json(['error' => 'No se encontró archivo de audio para esta reunión'], 404);
+            }
+
+            // Descargar el contenido del archivo
+            $content = $this->googleDriveService->downloadFileContent($meeting->audio_drive_id);
+
+            // Crear nombre de archivo (asumiendo que es mp3, pero podría ser otro formato)
+            $filename = 'meeting_' . $meeting->id . '_audio.mp3';
+
+            return response($content)
+                ->header('Content-Type', 'audio/mpeg')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+
+        } catch (\Exception $e) {
+            Log::error('Error downloading audio file', [
+                'meeting_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json(['error' => 'Error al descargar archivo de audio'], 500);
         }
     }
 
