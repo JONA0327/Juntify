@@ -743,7 +743,11 @@ async function analyzeNow() {
         sessionStorage.removeItem('recordingSegments');
         sessionStorage.removeItem('recordingMetadata');
     } catch (e) {
+        downloadBlob(pendingAudioBlob, 'grabacion_error.webm');
         console.error('Error preparando audio', e);
+        showError('Error al analizar la grabación. Usa el archivo descargado para reintentar.');
+        handlePostActionCleanup();
+        return;
     }
 
     handlePostActionCleanup();
