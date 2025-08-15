@@ -10,6 +10,7 @@ let meetingAudioPlayer = null;
 let currentSegmentIndex = null;
 let segmentEndHandler = null;
 let selectedSegmentIndex = null;
+let segmentsModified = false;
 
 // ===============================================
 // INICIALIZACIÓN
@@ -798,9 +799,11 @@ function renderSpeakers(speakers) {
 function renderSegments(segments) {
     if (!segments || segments.length === 0) {
         meetingSegments = [];
+        segmentsModified = false;
         return '<p class="text-slate-400">No hay segmentación por hablante disponible.</p>';
     }
 
+    segmentsModified = false;
     meetingSegments = segments.map((segment, index) => {
         const speaker = segment.speaker || `Hablante ${index + 1}`;
         const avatar = speaker.toString().slice(0, 2).toUpperCase();
@@ -961,6 +964,7 @@ function confirmSpeakerChange() {
     }
 
     meetingSegments[selectedSegmentIndex].speaker = newName;
+    segmentsModified = true;
     const element = document.querySelector(`[data-segment="${selectedSegmentIndex}"] .speaker-name`);
     if (element) {
         element.textContent = newName;
@@ -999,6 +1003,8 @@ function confirmGlobalSpeakerChange() {
             }
         }
     });
+
+    segmentsModified = true;
 
     closeGlobalSpeakerModal();
     showNotification('Hablantes actualizados correctamente', 'success');
@@ -1048,7 +1054,24 @@ function showMeetingModal() {
     }
 }
 
-function closeMeetingModal() {
+async function closeMeetingModal() {
+    if (segmentsModified && currentModalMeeting) {
+        try {
+            await fetch(`/api/meetings/${currentModalMeeting.id}/segments`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ segments: meetingSegments })
+            });
+        } catch (error) {
+            console.error('Error guardando segmentos:', error);
+        }
+        segmentsModified = false;
+    }
+
     const modal = document.getElementById('meetingModal');
     if (modal) {
         modal.classList.remove('active');

@@ -239,6 +239,22 @@ class GoogleDriveService
     }
 
     /**
+     * Actualiza el contenido de un archivo existente en Drive
+     */
+    public function updateFileContent(string $fileId, string $contents, string $mimeType = 'application/octet-stream'): string
+    {
+        $file = $this->drive->files->update($fileId, new DriveFile(), [
+            'data' => $contents,
+            'mimeType' => $mimeType,
+            'uploadType' => 'media',
+            'supportsAllDrives' => true,
+            'fields' => 'id'
+        ]);
+
+        return $file->getId();
+    }
+
+    /**
      * Actualiza el nombre de un archivo en Drive
      */
     public function updateFileName(string $fileId, string $newName): void
