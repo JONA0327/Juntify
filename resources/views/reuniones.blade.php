@@ -15,6 +15,7 @@
         'resources/css/app.css',
         'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css',
         'resources/css/reuniones_v2.css', /* Nuevo archivo de estilos */
+        'resources/css/audio-processing.css',
         'resources/js/reuniones_v2.js'   /* Nuevo archivo de script */
     ])
 </head>
@@ -113,6 +114,70 @@
 
             </div>
         </main>
+    </div>
+
+    <!-- Modal para cambiar hablante -->
+    <div class="modal" id="change-speaker-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <x-icon name="user" class="modal-icon" />
+                    Cambiar Hablante
+                </h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">
+                    Ingresa el nuevo nombre para este hablante específico.
+                </p>
+                <div class="form-group">
+                    <label class="form-label">Nombre del hablante</label>
+                    <input type="text" class="modal-input" id="speaker-name-input" placeholder="Ej: María González">
+                    <div class="input-hint">Este cambio solo afectará a este segmento de la transcripción.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeChangeSpeakerModal()">Cancelar</button>
+                <button class="btn btn-primary" id="confirm-speaker-change" onclick="confirmSpeakerChange()">
+                    <x-icon name="check" class="btn-icon" />
+                    <span class="sr-only">Cambiar Hablante</span>
+                    Cambiar Hablante
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para cambiar hablantes globalmente -->
+    <div class="modal" id="change-global-speaker-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <x-icon name="users" class="modal-icon" />
+                    Cambiar Hablante Globalmente
+                </h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">
+                    Cambia el nombre de este hablante en toda la transcripción.
+                </p>
+                <div class="form-group">
+                    <label class="form-label">Hablante actual</label>
+                    <input type="text" class="modal-input" id="current-speaker-name" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nuevo nombre</label>
+                    <input type="text" class="modal-input" id="global-speaker-name-input" placeholder="Ej: María González">
+                    <div class="input-hint">Este cambio afectará a todos los segmentos de este hablante.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeGlobalSpeakerModal()">Cancelar</button>
+                <button class="btn btn-primary" id="confirm-global-speaker-change" onclick="confirmGlobalSpeakerChange()">
+                    <x-icon name="check" class="btn-icon" />
+                    <span class="sr-only">Cambiar Globalmente</span>
+                    Cambiar Globalmente
+                </button>
+            </div>
+        </div>
     </div>
 
 </body>
