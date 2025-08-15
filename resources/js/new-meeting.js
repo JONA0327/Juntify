@@ -701,8 +701,15 @@ function pollPendingRecordingStatus(id, taskId) {
 async function analyzeNow() {
     if (!pendingAudioBlob) return;
     try {
-        const base64 = await blobToBase64(pendingAudioBlob);
-        sessionStorage.setItem('recordingBlob', base64);
+        // Guardar el blob en IndexedDB y almacenar la clave en sessionStorage
+        const key = await saveAudioBlob(pendingAudioBlob);
+        sessionStorage.setItem('uploadedAudioKey', key);
+
+        // Respaldo: conversión a base64 deshabilitada
+        // const base64 = await blobToBase64(pendingAudioBlob);
+        // sessionStorage.setItem('recordingBlob', base64);
+
+        sessionStorage.removeItem('recordingBlob');
         sessionStorage.removeItem('recordingSegments');
         sessionStorage.removeItem('recordingMetadata');
     } catch (e) {

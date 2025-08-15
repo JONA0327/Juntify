@@ -1494,10 +1494,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (uploadedKey) {
         try {
             audioData = await loadAudioBlob(uploadedKey);
+            if (!audioData) {
+                showNotification('No se encontró el audio guardado. Intentando respaldo...', 'warning');
+            }
         } catch (e) {
             console.error('Error loading audio from IndexedDB', e);
+            showNotification('Error al cargar el audio guardado', 'error');
         }
-    } else {
+    }
+
+    // Si no se pudo cargar desde IndexedDB, intentar respaldos en sessionStorage
+    if (!audioData) {
         const storedAudio = sessionStorage.getItem('recordingBlob');
         if (storedAudio) {
             audioData = storedAudio;
@@ -1521,6 +1528,11 @@ document.addEventListener('DOMContentLoaded', async function() {
             } catch (e) {
                 console.error('Error al leer metadata de grabación', e);
             }
+        }
+
+        if (!audioData && (!audioSegments || audioSegments.length === 0)) {
+            showNotification('No se encontró audio para procesar', 'error');
+            return;
         }
     }
 
