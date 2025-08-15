@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
 
@@ -249,6 +250,70 @@ class MeetingController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Actualiza los segmentos de una reunión
+     */
+    public function updateSegments(Request $request, $id): JsonResponse
+    {
+        try {
+            $request->validate([
+                'segments' => 'required|array'
+            ]);
+
+            $user = Auth::user();
+            $meeting = TranscriptionLaravel::where('id', $id)
+                ->where('username', $user->username)
+                ->firstOrFail();
+
+            if (!$meeting->transcript_drive_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Archivo de transcripción no encontrado'
+                ], 404);
+            }
+
+            $this->setGoogleDriveToken($user);
+
+            // Descargar y decodificar el archivo actual
+            $content = $this->googleDriveService->downloadFileContent($meeting->transcript_drive_id);
+            try {
+                $data = json_decode(Crypt::decryptString($content), true) ?: [];
+            } catch (\Exception $e) {
+                $data = json_decode($content, true) ?: [];
+            }
+
+            // Mezclar segmentos
+            $data['segments'] = $request->segments;
+
+            $encrypted = Crypt::encryptString(json_encode($data));
+
+            $updatedId = $this->googleDriveService->updateFileContent(
+                $meeting->transcript_drive_id,
+                $encrypted,
+                'application/json'
+            );
+
+            if ($updatedId !== $meeting->transcript_drive_id) {
+                $meeting->transcript_drive_id = $updatedId;
+                $meeting->transcript_download_url = $this->googleDriveService->getFileLink($updatedId);
+                $meeting->save();
+            }
+
+            return response()->json([
+                'success' => true
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar segmentos de reunión', [
+                'meeting_id' => $id,
+                'error' => $e->getMessage()
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
