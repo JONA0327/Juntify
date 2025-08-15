@@ -680,42 +680,29 @@ function renderMeetingModal(meeting) {
                     </div>
                     ` : ''}
 
-                    <!-- Participantes/Hablantes -->
-                    ${meeting.speakers && meeting.speakers.length > 0 ? `
-                    <div class="modal-section">
-                        <h3 class="section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                            Participantes
-                        </h3>
-                        <div class="section-content">
-                            ${renderSpeakers(meeting.speakers)}
-                        </div>
-                    </div>
-                    ` : ''}
+                    
 
-                    <!-- Transcripción por Segmentos -->
+                    <!-- Transcripción con Hablantes -->
                     ${meeting.segments && meeting.segments.length > 0 ? `
                     <div class="modal-section">
                         <h3 class="section-title">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                             </svg>
-                            Transcripción por Hablante
+                            Transcripción con hablantes
                         </h3>
                         <div class="section-content transcription-segmented" style="max-height: 400px; overflow-y: auto;">
                             ${renderSegments(meeting.segments)}
                         </div>
                     </div>
                     ` : `
-                    <!-- Transcripción Completa -->
+                    <!-- Transcripción -->
                     <div class="modal-section">
                         <h3 class="section-title">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                             </svg>
-                            Transcripción Completa
+                            Transcripción
                         </h3>
                         <div class="section-content transcription-full" style="max-height: 400px; overflow-y: auto;">
                             ${renderTranscription(meeting.transcription)}
