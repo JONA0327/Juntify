@@ -590,8 +590,7 @@ async function openMeetingModal(meetingId) {
             await new Promise(resolve => setTimeout(resolve, 500));
 
             currentModalMeeting = data.meeting;
-            renderMeetingModal(data.meeting);
-            showMeetingModal();
+            showMeetingModal(data.meeting);
         } else {
             closeMeetingModal();
             alert('Error al cargar la reunión: ' + (data.message || 'Error desconocido'));
@@ -604,16 +603,15 @@ async function openMeetingModal(meetingId) {
     }
 }
 
-function renderMeetingModal(meeting) {
+function showMeetingModal(meeting) {
     const modalHtml = `
-        <div class="meeting-modal active" id="meetingModal">
+        <div class="meeting-modal" id="meetingModal">
             <div class="modal-content">
                 <div class="modal-header">
                     <div class="modal-title-section">
                         <h2 class="modal-title" id="modalTitle">${escapeHtml(meeting.meeting_name)}</h2>
-                        <p class="modal-subtitle">Reunión del ${meeting.created_at}</p>
+                        <p class="modal-subtitle">${meeting.created_at} • ${meeting.duration || ''} • ${meeting.participants || 0} participantes</p>
                     </div>
-
                     <button class="close-btn" onclick="closeMeetingModal()">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -621,106 +619,108 @@ function renderMeetingModal(meeting) {
                     </button>
                 </div>
 
+                <div class="modal-nav">
+                    <button class="modal-tab active" data-tab="summary">Resumen</button>
+                    <button class="modal-tab" data-tab="key-points">Puntos clave</button>
+                    <button class="modal-tab" data-tab="tasks">Tareas</button>
+                    <button class="modal-tab" data-tab="transcription">Transcripción</button>
+                </div>
+
                 <div class="modal-body">
-                    <!-- Reproductor de Audio -->
-                    <div class="modal-section">
-                        <h3 class="section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 9v6l6-6" />
-                            </svg>
-                            Audio de la Reunión
-                        </h3>
-                        <div class="audio-player">
-                            <audio controls preload="metadata">
-                                <source src="${meeting.audio_path}" type="audio/mpeg">
-                                Tu navegador no soporta el reproductor de audio.
-                            </audio>
-                            <audio id="meeting-full-audio" src="${meeting.audio_path}" preload="metadata" style="display:none"></audio>
+                    <div class="tab-content active" id="tab-summary">
+                        <div class="modal-section">
+                            <h3 class="section-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 9v6l6-6" />
+                                </svg>
+                                Audio de la Reunión
+                            </h3>
+                            <div class="audio-player">
+                                <audio controls preload="metadata">
+                                    <source src="${meeting.audio_path}" type="audio/mpeg">
+                                    Tu navegador no soporta el reproductor de audio.
+                                </audio>
+                                <audio id="meeting-full-audio" src="${meeting.audio_path}" preload="metadata" style="display:none"></audio>
+                            </div>
+                        </div>
+                        <div class="modal-section">
+                            <h3 class="section-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Resumen del Análisis
+                            </h3>
+                            <div class="section-content">
+                                ${escapeHtml(meeting.summary)}
+                            </div>
                         </div>
                     </div>
-
-                    <!-- Resumen -->
-                    <div class="modal-section">
-                        <h3 class="section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            Resumen del Análisis
-                        </h3>
-                        <div class="section-content">
-                            ${escapeHtml(meeting.summary)}
+                    <div class="tab-content" id="tab-key-points">
+                        <div class="modal-section">
+                            <h3 class="section-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                                Puntos Clave
+                            </h3>
+                            <div class="section-content">
+                                ${renderKeyPoints(meeting.key_points)}
+                            </div>
                         </div>
                     </div>
-
-                    <!-- Puntos Clave -->
-                    <div class="modal-section">
-                        <h3 class="section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                            Puntos Clave
-                        </h3>
-                        <div class="section-content">
-                            ${renderKeyPoints(meeting.key_points)}
+                    <div class="tab-content" id="tab-tasks">
+                        <div class="modal-section">
+                            <h3 class="section-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                                Tareas y Acciones
+                            </h3>
+                            <div class="section-content">
+                                ${renderTasks(meeting.tasks)}
+                            </div>
                         </div>
                     </div>
-
-                    <!-- Tareas/Acciones -->
-                    ${meeting.tasks && meeting.tasks.length > 0 ? `
-                    <div class="modal-section">
-                        <h3 class="section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
-                            </svg>
-                            Tareas y Acciones
-                        </h3>
-                        <div class="section-content">
-                            ${renderTasks(meeting.tasks)}
+                    <div class="tab-content" id="tab-transcription">
+                        <div class="modal-section">
+                            <h3 class="section-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                                </svg>
+                                Transcripción${meeting.segments && meeting.segments.length > 0 ? ' con hablantes' : ''}
+                            </h3>
+                            <div class="section-content ${meeting.segments && meeting.segments.length > 0 ? 'transcription-segmented' : 'transcription-full'}" style="max-height: 400px; overflow-y: auto;">
+                                ${meeting.segments && meeting.segments.length > 0 ? renderSegments(meeting.segments) : renderTranscription(meeting.transcription)}
+                            </div>
                         </div>
                     </div>
-                    ` : ''}
-
-                    
-
-                    <!-- Transcripción con Hablantes -->
-                    ${meeting.segments && meeting.segments.length > 0 ? `
-                    <div class="modal-section">
-                        <h3 class="section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                            </svg>
-                            Transcripción con hablantes
-                        </h3>
-                        <div class="section-content transcription-segmented" style="max-height: 400px; overflow-y: auto;">
-                            ${renderSegments(meeting.segments)}
-                        </div>
-                    </div>
-                    ` : `
-                    <!-- Transcripción -->
-                    <div class="modal-section">
-                        <h3 class="section-title">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                            </svg>
-                            Transcripción
-                        </h3>
-                        <div class="section-content transcription-full" style="max-height: 400px; overflow-y: auto;">
-                            ${renderTranscription(meeting.transcription)}
-                        </div>
-                    </div>
-                    `}
                 </div>
             </div>
         </div>
     `;
 
-    // Añadir modal al DOM
     const existingModal = document.getElementById('meetingModal');
     if (existingModal) {
         existingModal.remove();
     }
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = document.getElementById('meetingModal');
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => {
+        modal.classList.add('active');
+    });
+
+    document.querySelectorAll('.modal-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.getAttribute('data-tab');
+            document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const content = document.getElementById(`tab-${target}`);
+            if (content) content.classList.add('active');
+        });
+    });
 }
 
 // ===============================================
@@ -1028,19 +1028,6 @@ function formatTime(ms) {
 // ===============================================
 // CONTROL DEL MODAL
 // ===============================================
-function showMeetingModal() {
-    const modal = document.getElementById('meetingModal');
-    if (modal) {
-        modal.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-
-        // Añadir animación de entrada
-        setTimeout(() => {
-            modal.classList.add('active');
-        }, 10);
-    }
-}
-
 async function closeMeetingModal() {
     if (segmentsModified && currentModalMeeting) {
         try {
