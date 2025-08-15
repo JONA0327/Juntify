@@ -636,10 +636,20 @@ function showMeetingModal(meeting) {
                                 Audio de la Reunión
                             </h3>
                             <div class="audio-player">
-                                <audio controls preload="metadata">
-                                    <source src="${meeting.audio_path}" type="audio/mpeg">
-                                    Tu navegador no soporta el reproductor de audio.
-                                </audio>
+                                <audio id="meeting-audio" src="${meeting.audio_path}" preload="metadata"></audio>
+                                <div class="audio-controls">
+                                    <button id="audio-play" class="audio-btn" aria-label="Reproducir">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M5 3.87v16.26L19.5 12 5 3.87z" />
+                                        </svg>
+                                    </button>
+                                    <button id="audio-pause" class="audio-btn hidden" aria-label="Pausar">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M6 4h4v16H6zm8 0h4v16h-4z" />
+                                        </svg>
+                                    </button>
+                                    <input type="range" id="audio-progress" value="0" min="0" step="0.1">
+                                </div>
                                 <audio id="meeting-full-audio" src="${meeting.audio_path}" preload="metadata" style="display:none"></audio>
                             </div>
                         </div>
@@ -721,6 +731,46 @@ function showMeetingModal(meeting) {
             if (content) content.classList.add('active');
         });
     });
+
+    // Configuración de reproductor de audio personalizado
+    meetingAudioPlayer = document.getElementById('meeting-audio');
+    const playBtn = document.getElementById('audio-play');
+    const pauseBtn = document.getElementById('audio-pause');
+    const progress = document.getElementById('audio-progress');
+
+    if (meetingAudioPlayer && playBtn && pauseBtn && progress) {
+        meetingAudioPlayer.addEventListener('loadedmetadata', () => {
+            progress.max = meetingAudioPlayer.duration;
+        });
+
+        meetingAudioPlayer.addEventListener('timeupdate', () => {
+            progress.value = meetingAudioPlayer.currentTime;
+        });
+
+        playBtn.addEventListener('click', () => {
+            meetingAudioPlayer.play();
+        });
+
+        pauseBtn.addEventListener('click', () => {
+            meetingAudioPlayer.pause();
+        });
+
+        meetingAudioPlayer.addEventListener('play', () => {
+            playBtn.classList.add('hidden');
+            pauseBtn.classList.remove('hidden');
+            pauseBtn.classList.add('active');
+        });
+
+        meetingAudioPlayer.addEventListener('pause', () => {
+            pauseBtn.classList.add('hidden');
+            pauseBtn.classList.remove('active');
+            playBtn.classList.remove('hidden');
+        });
+
+        progress.addEventListener('input', () => {
+            meetingAudioPlayer.currentTime = progress.value;
+        });
+    }
 }
 
 // ===============================================
