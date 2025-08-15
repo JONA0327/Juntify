@@ -1,3 +1,54 @@
+/* Mejoras visuales para el estado de error de conexión */
+.error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    padding: 2rem 1rem;
+    text-align: center;
+}
+
+.error-state svg {
+    width: 4.5rem;
+    height: 4.5rem;
+    max-width: 80px;
+    max-height: 80px;
+    margin-bottom: 1.5rem;
+    opacity: 0.35;
+    color: var(--text-slate-400);
+}
+
+.error-state h3 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-slate-200);
+    margin-bottom: 0.5rem;
+}
+
+.error-state p {
+    color: var(--text-slate-400);
+    font-size: 1.05rem;
+    margin-bottom: 1.5rem;
+    max-width: 420px;
+}
+
+.error-state .btn-primary {
+    background: linear-gradient(90deg, #fbbf24, #f59e0b);
+    color: #1e293b;
+    font-weight: 600;
+    border: none;
+    border-radius: 0.75rem;
+    padding: 0.75rem 2.5rem;
+    font-size: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+}
+.error-state .btn-primary:hover {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    transform: scale(1.04);
+}
 .tab-transition {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
