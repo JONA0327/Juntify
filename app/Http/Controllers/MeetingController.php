@@ -264,7 +264,8 @@ class MeetingController extends Controller
     {
         try {
             $request->validate([
-                'segments' => 'required|array'
+                'segments'   => 'required|array',
+                'newDriveId' => 'nullable|string',
             ]);
 
             $user = Auth::user();
@@ -272,7 +273,9 @@ class MeetingController extends Controller
                 ->where('username', $user->username)
                 ->firstOrFail();
 
-            if (!$meeting->transcript_drive_id) {
+            $driveId = $request->input('newDriveId') ?? $meeting->transcript_drive_id;
+
+            if (!$driveId) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Archivo de transcripción no encontrado'
@@ -282,7 +285,7 @@ class MeetingController extends Controller
             $this->setGoogleDriveToken($user);
 
             // Descargar y decodificar el archivo actual
-            $content = $this->googleDriveService->downloadFileContent($meeting->transcript_drive_id);
+            $content = $this->googleDriveService->downloadFileContent($driveId);
             try {
                 $data = json_decode(Crypt::decryptString($content), true) ?: [];
             } catch (\Exception $e) {
@@ -294,16 +297,21 @@ class MeetingController extends Controller
 
             $encrypted = Crypt::encryptString(json_encode($data));
 
-            $updatedId = $this->googleDriveService->updateFileContent(
-                $meeting->transcript_drive_id,
-                $encrypted,
-                'application/json'
+            $webLink = $this->googleDriveService->updateFileContent(
+                $driveId,
+                'application/json',
+                $encrypted
             );
 
-            if ($updatedId !== $meeting->transcript_drive_id) {
-                $meeting->transcript_drive_id = $updatedId;
-                $meeting->transcript_download_url = $this->googleDriveService->getFileLink($updatedId);
-                $meeting->save();
+            $updates = [];
+            if ($driveId !== $meeting->transcript_drive_id) {
+                $updates['transcript_drive_id'] = $driveId;
+            }
+            if ($webLink && $webLink !== $meeting->transcript_download_url) {
+                $updates['transcript_download_url'] = $webLink;
+            }
+            if (!empty($updates)) {
+                TranscriptionLaravel::where('id', $id)->update($updates);
             }
 
             return response()->json([

@@ -239,19 +239,23 @@ class GoogleDriveService
     }
 
     /**
-     * Actualiza el contenido de un archivo existente en Drive
+     * Actualiza el contenido de un archivo en Drive y devuelve su webViewLink.
      */
-    public function updateFileContent(string $fileId, string $contents, string $mimeType = 'application/octet-stream'): string
+    public function updateFileContent(string $fileId, string $mimeType, $data): string
     {
         $file = $this->drive->files->update($fileId, new DriveFile(), [
-            'data' => $contents,
+            'data' => $data,
             'mimeType' => $mimeType,
             'uploadType' => 'media',
             'supportsAllDrives' => true,
-            'fields' => 'id'
+            'fields' => 'id,webViewLink'
         ]);
 
-        return $file->getId();
+        if (empty($file->webViewLink)) {
+            throw new RuntimeException("No se pudo obtener webViewLink para el archivo $fileId");
+        }
+
+        return $file->webViewLink;
     }
 
     /**
