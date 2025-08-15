@@ -504,13 +504,29 @@ class MeetingController extends Controller
 
     private function processTranscriptData($data): array
     {
+        $segments = $data['segments'] ?? [];
+
+        $segments = array_map(function ($segment) {
+            if ((!isset($segment['start']) || !isset($segment['end'])) && isset($segment['timestamp'])) {
+                if (preg_match('/(\d{2}):(\d{2})(?::(\d{2}))?\s*-\s*(\d{2}):(\d{2})(?::(\d{2}))?/', $segment['timestamp'], $m)) {
+                    $segment['start'] = isset($m[3])
+                        ? ((int)$m[1] * 3600 + (int)$m[2] * 60 + (int)$m[3])
+                        : ((int)$m[1] * 60 + (int)$m[2]);
+                    $segment['end'] = isset($m[6])
+                        ? ((int)$m[4] * 3600 + (int)$m[5] * 60 + (int)$m[6])
+                        : ((int)$m[4] * 60 + (int)$m[5]);
+                }
+            }
+            return $segment;
+        }, $segments);
+
         return [
             'summary' => $data['summary'] ?? 'No hay resumen disponible',
             'key_points' => $data['key_points'] ?? [],
             'tasks' => $data['tasks'] ?? [],
             'transcription' => $data['transcription'] ?? 'No hay transcripción disponible',
             'speakers' => $data['speakers'] ?? [],
-            'segments' => $data['segments'] ?? []
+            'segments' => $segments,
         ];
     }
 

@@ -4,6 +4,12 @@
 let currentMeetings = [];
 let isEditingTitle = false;
 let currentModalMeeting = null;
+// Variables para manejo de audio segmentado en el modal
+let meetingSegments = [];
+let meetingAudioPlayer = null;
+let currentSegmentIndex = null;
+let segmentEndHandler = null;
+let selectedSegmentIndex = null;
 
 // ===============================================
 // INICIALIZACIÓN
@@ -628,6 +634,7 @@ function renderMeetingModal(meeting) {
                                 <source src="${meeting.audio_path}" type="audio/mpeg">
                                 Tu navegador no soporta el reproductor de audio.
                             </audio>
+                            <audio id="meeting-full-audio" src="${meeting.audio_path}" preload="metadata" style="display:none"></audio>
                         </div>
                     </div>
 
@@ -790,18 +797,63 @@ function renderSpeakers(speakers) {
 
 function renderSegments(segments) {
     if (!segments || segments.length === 0) {
+        meetingSegments = [];
         return '<p class="text-slate-400">No hay segmentación por hablante disponible.</p>';
     }
 
+    meetingSegments = segments.map((segment, index) => {
+        const speaker = segment.speaker || `Hablante ${index + 1}`;
+        const avatar = speaker.toString().slice(0, 2).toUpperCase();
+        const start = typeof segment.start === 'number' ? segment.start : 0;
+        const end = typeof segment.end === 'number' ? segment.end : 0;
+        const time = segment.timestamp || `${formatTime(start * 1000)} - ${formatTime(end * 1000)}`;
+        return { ...segment, speaker, avatar, start, end, time, text: segment.text || '' };
+    });
+
     return `
         <div class="transcription-segments">
-            ${segments.map((segment, index) => `
-                <div class="segment">
+            ${meetingSegments.map((segment, index) => `
+                <div class="transcript-segment" data-segment="${index}">
                     <div class="segment-header">
-                        <span class="speaker-label">${escapeHtml(segment.speaker || 'Hablante ' + (index + 1))}</span>
-                        ${segment.timestamp ? `<span class="timestamp">${segment.timestamp}</span>` : ''}
+                        <div class="speaker-info">
+                            <div class="speaker-avatar">${segment.avatar}</div>
+                            <div class="speaker-details">
+                                <div class="speaker-name">${segment.speaker}</div>
+                                <div class="speaker-time">${segment.time}</div>
+                            </div>
+                        </div>
+                        <div class="segment-controls">
+                            <button class="control-btn" onclick="playSegmentAudio(${index})" title="Reproducir fragmento">
+                                ${getPlayIcon('btn-icon')}
+                            </button>
+                            <button class="control-btn" onclick="openChangeSpeakerModal(${index})" title="Editar hablante">
+                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487l3.651 3.651-9.375 9.375-3.651.975.975-3.651 9.4-9.35zM5.25 18.75h13.5" />
+                                </svg>
+                            </button>
+                            <button class="control-btn" onclick="openGlobalSpeakerModal(${index})" title="Cambiar hablante globalmente">
+                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 15a3 3 0 100-6 3 3 0 000 6zm9 0a3 3 0 10-6 0 3 3 0 006 0zm-9 1.5a4.5 4.5 0 00-4.5 4.5v1.5h9v-1.5a4.5 4.5 0 00-4.5-4.5zm9 0a4.5 4.5 0 014.5 4.5v1.5h-9v-1.5a4.5 4.5 0 014.5-4.5z" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
-                    <div class="segment-text">${escapeHtml(segment.text)}</div>
+
+                    <div class="segment-audio">
+                        <div class="audio-player-mini">
+                            <button class="play-btn-mini" onclick="playSegmentAudio(${index})">
+                                ${getPlayIcon('play-icon')}
+                            </button>
+                            <div class="audio-timeline-mini" onclick="seekAudio(${index}, event)">
+                                <div class="timeline-progress-mini" style="width: 0%"></div>
+                            </div>
+                            <span class="audio-duration-mini">${segment.time.split(' - ')[1]}</span>
+                        </div>
+                    </div>
+
+                    <div class="segment-content">
+                        <textarea class="transcript-text" placeholder="Texto de la transcripción..." readonly>${segment.text}</textarea>
+                    </div>
                 </div>
             `).join('')}
         </div>
@@ -820,6 +872,164 @@ function renderTranscription(transcription) {
         .join('');
 
     return formatted || '<p class="text-slate-400">Contenido no disponible.</p>';
+}
+
+function getPlayIcon(cls) {
+    return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" /></svg>`;
+}
+
+function getPauseIcon(cls) {
+    return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" /></svg>`;
+}
+
+function updateSegmentButtons(activeIndex) {
+    meetingSegments.forEach((_, idx) => {
+        const segmentEl = document.querySelector(`[data-segment="${idx}"]`);
+        if (!segmentEl) return;
+        const headerBtn = segmentEl.querySelector('.segment-controls .control-btn');
+        const miniBtn = segmentEl.querySelector('.play-btn-mini');
+        const isActive = idx === activeIndex;
+        if (headerBtn) headerBtn.innerHTML = isActive ? getPauseIcon('btn-icon') : getPlayIcon('btn-icon');
+        if (miniBtn) miniBtn.innerHTML = isActive ? getPauseIcon('play-icon') : getPlayIcon('play-icon');
+    });
+}
+
+function playSegmentAudio(segmentIndex) {
+    const segment = meetingSegments[segmentIndex];
+    if (!segment) return;
+
+    if (!meetingAudioPlayer) {
+        meetingAudioPlayer = document.getElementById('meeting-full-audio');
+    }
+    if (!meetingAudioPlayer) return;
+
+    if (currentSegmentIndex === segmentIndex && !meetingAudioPlayer.paused) {
+        meetingAudioPlayer.pause();
+        if (segmentEndHandler) {
+            meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+            segmentEndHandler = null;
+        }
+        updateSegmentButtons(null);
+        currentSegmentIndex = null;
+        return;
+    }
+
+    if (segmentEndHandler) {
+        meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+        segmentEndHandler = null;
+    }
+
+    if (!meetingAudioPlayer.paused) {
+        meetingAudioPlayer.pause();
+    }
+    meetingAudioPlayer.currentTime = segment.start;
+    const stopTime = segment.end;
+
+    segmentEndHandler = () => {
+        if (meetingAudioPlayer.currentTime >= stopTime) {
+            meetingAudioPlayer.pause();
+            meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+            segmentEndHandler = null;
+            updateSegmentButtons(null);
+            currentSegmentIndex = null;
+        }
+    };
+
+    meetingAudioPlayer.addEventListener('timeupdate', segmentEndHandler);
+    meetingAudioPlayer.play();
+    currentSegmentIndex = segmentIndex;
+    updateSegmentButtons(segmentIndex);
+}
+
+function openChangeSpeakerModal(segmentIndex) {
+    selectedSegmentIndex = segmentIndex;
+    const currentName = meetingSegments[segmentIndex].speaker;
+    document.getElementById('speaker-name-input').value = currentName;
+    document.getElementById('change-speaker-modal').classList.add('show');
+}
+
+function closeChangeSpeakerModal() {
+    document.getElementById('change-speaker-modal').classList.remove('show');
+}
+
+function confirmSpeakerChange() {
+    const input = document.getElementById('speaker-name-input');
+    const newName = input.value.trim();
+    if (!newName) {
+        showNotification('Debes ingresar un nombre válido', 'warning');
+        return;
+    }
+
+    meetingSegments[selectedSegmentIndex].speaker = newName;
+    const element = document.querySelector(`[data-segment="${selectedSegmentIndex}"] .speaker-name`);
+    if (element) {
+        element.textContent = newName;
+    }
+
+    closeChangeSpeakerModal();
+    showNotification('Hablante actualizado correctamente', 'success');
+}
+
+function openGlobalSpeakerModal(segmentIndex) {
+    selectedSegmentIndex = segmentIndex;
+    const currentName = meetingSegments[segmentIndex].speaker;
+    document.getElementById('current-speaker-name').value = currentName;
+    document.getElementById('global-speaker-name-input').value = '';
+    document.getElementById('change-global-speaker-modal').classList.add('show');
+}
+
+function closeGlobalSpeakerModal() {
+    document.getElementById('change-global-speaker-modal').classList.remove('show');
+}
+
+function confirmGlobalSpeakerChange() {
+    const newName = document.getElementById('global-speaker-name-input').value.trim();
+    const currentName = document.getElementById('current-speaker-name').value;
+    if (!newName) {
+        showNotification('Debes ingresar un nombre válido', 'warning');
+        return;
+    }
+
+    meetingSegments.forEach((segment, idx) => {
+        if (segment.speaker === currentName) {
+            segment.speaker = newName;
+            const el = document.querySelector(`[data-segment="${idx}"] .speaker-name`);
+            if (el) {
+                el.textContent = newName;
+            }
+        }
+    });
+
+    closeGlobalSpeakerModal();
+    showNotification('Hablantes actualizados correctamente', 'success');
+}
+
+function seekAudio(segmentIndex, event) {
+    const timeline = event.currentTarget;
+    const rect = timeline.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const percentage = (clickX / rect.width) * 100;
+
+    const progress = timeline.querySelector('.timeline-progress-mini');
+    progress.style.width = percentage + '%';
+
+    const segment = meetingSegments[segmentIndex];
+    if (!segment) return;
+    const duration = segment.end - segment.start;
+    const targetTime = segment.start + (duration * (percentage / 100));
+
+    if (!meetingAudioPlayer) {
+        meetingAudioPlayer = document.getElementById('meeting-full-audio');
+    }
+    if (!meetingAudioPlayer) return;
+    meetingAudioPlayer.currentTime = targetTime;
+}
+
+function formatTime(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
 }
 
 // ===============================================
@@ -1357,3 +1567,11 @@ window.closeDeleteConfirmationModal = closeDeleteConfirmationModal;
 window.confirmDeleteMeeting = confirmDeleteMeeting;
 window.closeEditNameModal = closeEditNameModal;
 window.confirmEditMeetingName = confirmEditMeetingName;
+window.playSegmentAudio = playSegmentAudio;
+window.seekAudio = seekAudio;
+window.openChangeSpeakerModal = openChangeSpeakerModal;
+window.closeChangeSpeakerModal = closeChangeSpeakerModal;
+window.confirmSpeakerChange = confirmSpeakerChange;
+window.openGlobalSpeakerModal = openGlobalSpeakerModal;
+window.closeGlobalSpeakerModal = closeGlobalSpeakerModal;
+window.confirmGlobalSpeakerChange = confirmGlobalSpeakerChange;
