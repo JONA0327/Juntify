@@ -637,6 +637,56 @@
     border-radius: 0.5rem;
 }
 
+/* Personalización de controles nativos del reproductor de audio
+   Nota: solo funciona en navegadores con soporte para estos pseudo-elementos */
+.audio-player audio::-webkit-media-controls-progress-bar {
+    background-color: var(--bg-slate-900);
+}
+
+.audio-player audio::-webkit-media-controls-progress-value {
+    background-color: var(--primary-yellow);
+}
+
+.audio-player audio::-webkit-media-controls-play-button {
+    background-color: var(--bg-slate-900);
+    border-radius: 50%;
+}
+
+.audio-player audio::-webkit-media-controls-play-button:hover,
+.audio-player audio::-webkit-media-controls-play-button:active,
+.audio-player audio::-webkit-media-controls-progress-bar:hover,
+.audio-player audio::-webkit-media-controls-progress-bar:active {
+    background-color: var(--bg-slate-800);
+}
+
+/* Firefox */
+.audio-player audio::-moz-range-track {
+    background-color: var(--bg-slate-900);
+}
+
+.audio-player audio::-moz-range-progress {
+    background-color: var(--primary-yellow);
+}
+
+.audio-player audio::-moz-range-track:hover,
+.audio-player audio::-moz-range-track:active {
+    background-color: var(--bg-slate-800);
+}
+
+/* IE/Edge */
+.audio-player audio::-ms-track {
+    background-color: var(--bg-slate-900);
+}
+
+.audio-player audio::-ms-fill-lower {
+    background-color: var(--primary-yellow);
+}
+
+.audio-player audio::-ms-track:hover,
+.audio-player audio::-ms-track:active {
+    background-color: var(--bg-slate-800);
+}
+
 /* =========================================
    LISTAS DE PUNTOS CLAVE Y TAREAS
    ========================================= */
