@@ -541,6 +541,45 @@
 }
 
 /* =========================================
+   NAVEGACIÓN DEL MODAL
+   ========================================= */
+.modal-nav {
+    display: flex;
+    border-bottom: 1px solid var(--border-slate-700);
+    margin: 0 2rem;
+}
+
+.modal-tab {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-slate-400);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.modal-tab:hover {
+    color: var(--text-slate-200);
+    background: rgba(51, 65, 85, 0.3);
+}
+
+.modal-tab.active {
+    color: var(--bg-slate-950);
+    background: var(--primary-yellow);
+    border-bottom-color: var(--primary-yellow);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* =========================================
    CONTENIDO DEL MODAL
    ========================================= */
 .modal-body {
