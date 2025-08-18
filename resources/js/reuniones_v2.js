@@ -16,9 +16,12 @@ let segmentsModified = false;
 // INICIALIZACIÓN
 // ===============================================
 document.addEventListener('DOMContentLoaded', function() {
-    loadMeetings();
     setupEventListeners();
     initializeFadeAnimations();
+    const defaultTab = document.querySelector('button[data-target="my-meetings"]');
+    if (defaultTab) {
+        setActiveTab(defaultTab);
+    }
 });
 
 // ===============================================
@@ -37,6 +40,39 @@ function setupEventListeners() {
     if (searchInput) {
         searchInput.addEventListener('input', handleSearch);
     }
+
+    // Listeners para pestañas
+    const tabButtons = document.querySelectorAll('.tab-transition');
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => setActiveTab(btn));
+    });
+}
+
+function setActiveTab(button) {
+    const targetId = button.dataset.target;
+
+    // Actualizar clases activas en botones
+    document.querySelectorAll('.tab-transition').forEach(btn => {
+        btn.classList.remove('bg-slate-700/50');
+    });
+    button.classList.add('bg-slate-700/50');
+
+    // Mostrar pestaña objetivo
+    const containers = document.querySelectorAll('#meetings-container > div');
+    containers.forEach(c => c.classList.add('hidden'));
+    const target = document.getElementById(targetId);
+    if (target) {
+        target.classList.remove('hidden');
+    }
+
+    // Cargar datos correspondientes
+    if (targetId === 'my-meetings') {
+        loadMyMeetings();
+    } else if (targetId === 'shared-meetings') {
+        loadSharedMeetings();
+    } else if (targetId === 'containers') {
+        loadContainers();
+    }
 }
 
 // ===============================================
@@ -53,11 +89,12 @@ function initializeFadeAnimations() {
 }
 
 // ===============================================
-// CARGA DE REUNIONES
+// CARGA DE REUNIONES Y CONTENEDORES
 // ===============================================
-async function loadMeetings() {
+async function loadMyMeetings() {
+    const container = document.getElementById('my-meetings');
     try {
-        showLoadingState();
+        showLoadingState(container);
 
         const response = await fetch('/api/meetings', {
             headers: {
@@ -74,17 +111,76 @@ async function loadMeetings() {
 
         if (data.success) {
             currentMeetings = data.meetings;
-            renderMeetings(currentMeetings);
+            renderMeetings(currentMeetings, '#my-meetings', 'No tienes reuniones');
         } else {
-            showErrorState(data.message || 'Error al cargar reuniones');
+            showErrorState(container, data.message || 'Error al cargar reuniones', loadMyMeetings);
         }
 
-        // Cargar estado de reuniones pendientes
         await loadPendingMeetingsStatus();
 
     } catch (error) {
         console.error('Error loading meetings:', error);
-        showErrorState('Error de conexión al cargar reuniones');
+        showErrorState(container, 'Error de conexión al cargar reuniones', loadMyMeetings);
+    }
+}
+
+async function loadSharedMeetings() {
+    const container = document.getElementById('shared-meetings');
+    try {
+        showLoadingState(container);
+
+        const response = await fetch('/api/shared-meetings', {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Error al cargar reuniones compartidas');
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            renderMeetings(data.meetings, '#shared-meetings', 'No hay reuniones compartidas');
+        } else {
+            showErrorState(container, data.message || 'Error al cargar reuniones compartidas', loadSharedMeetings);
+        }
+
+    } catch (error) {
+        console.error('Error loading shared meetings:', error);
+        showErrorState(container, 'Error de conexión al cargar reuniones compartidas', loadSharedMeetings);
+    }
+}
+
+async function loadContainers() {
+    const container = document.getElementById('containers');
+    try {
+        showLoadingState(container);
+
+        const response = await fetch('/api/containers', {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Error al cargar contenedores');
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            renderMeetings(data.containers, '#containers', 'No tienes contenedores', createContainerCard);
+        } else {
+            showErrorState(container, data.message || 'Error al cargar contenedores', loadContainers);
+        }
+
+    } catch (error) {
+        console.error('Error loading containers:', error);
+        showErrorState(container, 'Error de conexión al cargar contenedores', loadContainers);
     }
 }
 
@@ -455,25 +551,17 @@ window.analyzePendingMeeting = analyzePendingMeeting;
 // ===============================================
 // RENDERIZADO DE REUNIONES
 // ===============================================
-function renderMeetings(meetings) {
-    const container = document.querySelector('#meetings-container') || document.querySelector('.fade-in.stagger-2');
+function renderMeetings(items, targetSelector, emptyMessage, cardCreator = createMeetingCard) {
+    const container = typeof targetSelector === 'string' ? document.querySelector(targetSelector) : targetSelector;
     if (!container) return;
 
-    // Si ya hay tarjetas renderizadas por Blade (SSR), no sobreescribir el HTML.
-    const hasSSRContent = container.querySelector('.meeting-card');
-    if (hasSSRContent) {
-        attachMeetingEventListeners();
-        return;
-    }
-
-    if (!meetings || meetings.length === 0) {
+    if (!items || items.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                <h3 class="text-lg font-semibold mb-2">No hay reuniones disponibles</h3>
-                <p>Aún no tienes reuniones grabadas. Inicia tu primera reunión para comenzar.</p>
+                <h3 class="text-lg font-semibold mb-2">${emptyMessage}</h3>
             </div>
         `;
         return;
@@ -481,7 +569,7 @@ function renderMeetings(meetings) {
 
     const meetingsHtml = `
         <div class="meetings-grid">
-            ${meetings.map(meeting => createMeetingCard(meeting)).join('')}
+            ${items.map(item => cardCreator(item)).join('')}
         </div>
     `;
 
@@ -540,11 +628,29 @@ function createMeetingCard(meeting) {
     `;
 }
 
+function createContainerCard(container) {
+    return `
+        <div class="meeting-card" data-container-id="${container.id}">
+            <div class="meeting-card-header">
+                <div class="meeting-content">
+                    <h3 class="meeting-title">${escapeHtml(container.name || container.title || '')}</h3>
+                    <p class="meeting-date">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+                        </svg>
+                        ${container.meetings_count || 0} reuniones
+                    </p>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 // ===============================================
 // EVENT LISTENERS PARA REUNIONES
 // ===============================================
 function attachMeetingEventListeners() {
-    const meetingCards = document.querySelectorAll('.meeting-card');
+    const meetingCards = document.querySelectorAll('.meeting-card[data-meeting-id]');
     meetingCards.forEach(card => {
         card.addEventListener('click', function(e) {
             // No abrir modal si se hizo click en el botón de eliminar o editar
@@ -1148,8 +1254,8 @@ window.closeMeetingModal = closeMeetingModal;
 // ===============================================
 // FUNCIONES DE ESTADO
 // ===============================================
-function showLoadingState() {
-    const container = document.querySelector('.fade-in.stagger-2');
+function showLoadingState(container) {
+    if (!container) return;
     container.innerHTML = `
         <div class="loading-state">
             <div class="loading-spinner"></div>
@@ -1227,8 +1333,8 @@ function updateLoadingStep(stepNumber) {
     }
 }
 
-function showErrorState(message) {
-    const container = document.querySelector('.fade-in.stagger-2');
+function showErrorState(container, message, retryCallback) {
+    if (!container) return;
     container.innerHTML = `
         <div class="error-state">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1237,9 +1343,14 @@ function showErrorState(message) {
             <h3>Error de conexión</h3>
             <div class="subtitle" style="color: #fbbf24; font-weight: 500; margin-bottom: 0.75rem;">No se pudo conectar con el servidor</div>
             <p>${message || 'Intenta recargar la página o verifica tu conexión a internet.'}</p>
-            <button onclick="loadMeetings()" class="btn-primary">Reintentar</button>
+            <button class="btn-primary" id="retry-load">Reintentar</button>
         </div>
     `;
+
+    const retryBtn = container.querySelector('#retry-load');
+    if (retryBtn && typeof retryCallback === 'function') {
+        retryBtn.addEventListener('click', retryCallback);
+    }
 }
 
 // ===============================================
@@ -1249,7 +1360,7 @@ function handleSearch(event) {
     const query = event.target.value.toLowerCase().trim();
 
     if (!query) {
-        renderMeetings(currentMeetings);
+        renderMeetings(currentMeetings, '#my-meetings', 'No tienes reuniones');
         return;
     }
 
@@ -1259,7 +1370,7 @@ function handleSearch(event) {
         (meeting.preview_text && meeting.preview_text.toLowerCase().includes(query))
     );
 
-    renderMeetings(filtered);
+    renderMeetings(filtered, '#my-meetings', 'No se encontraron reuniones');
 }
 
 // ===============================================
@@ -1482,7 +1593,7 @@ async function confirmEditMeetingName(meetingId) {
         if (data.success) {
             showNotification('Nombre actualizado correctamente en Drive y base de datos', 'success');
             // Recargar la lista de reuniones para reflejar los cambios
-            loadMeetings();
+            loadMyMeetings();
         } else {
             throw new Error(data.message || 'Error al actualizar el nombre');
         }
@@ -1620,7 +1731,7 @@ async function confirmDeleteMeeting(meetingId) {
         if (data.success) {
             showNotification('Reunión eliminada correctamente de Drive y base de datos', 'success');
             // Recargar la lista de reuniones
-            loadMeetings();
+            loadMyMeetings();
             closeMeetingModal();
         } else {
             throw new Error(data.message || 'Error al eliminar la reunión');
