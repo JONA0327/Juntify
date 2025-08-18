@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\TranscriptionLaravel;
 use App\Models\GoogleToken;
 use App\Models\Folder;
+use App\Models\MeetingShare;
+use App\Models\MeetingContainer;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -96,6 +98,72 @@ class MeetingController extends Controller
         }
     }
 
+    /**
+     * Obtiene las reuniones compartidas con el usuario autenticado
+     */
+    public function getSharedMeetings(): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $meetingIds = MeetingShare::where('to_username', $user->username)->pluck('meeting_id');
+            $meetings = TranscriptionLaravel::whereIn('id', $meetingIds)
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($meeting) {
+                    return [
+                        'id' => $meeting->id,
+                        'meeting_name' => $meeting->meeting_name,
+                        'created_at' => $meeting->created_at->format('d/m/Y H:i'),
+                        'audio_drive_id' => $meeting->audio_drive_id,
+                        'transcript_drive_id' => $meeting->transcript_drive_id,
+                        'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
+                        'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'meetings' => $meetings
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar reuniones compartidas: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene los contenedores del usuario autenticado
+     */
+    public function getContainers(): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $containers = MeetingContainer::where('username', $user->username)
+                ->withCount('meetings')
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($container) {
+                    return [
+                        'id' => $container->id,
+                        'name' => $container->name,
+                        'created_at' => $container->created_at->format('d/m/Y H:i'),
+                        'meetings_count' => $container->meetings_count,
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'containers' => $containers
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar contenedores: ' . $e->getMessage()
+            ], 500);
+        }
+    }
     /**
      * Obtiene los detalles completos de una reunión específica
      */
