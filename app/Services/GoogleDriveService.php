@@ -203,7 +203,15 @@ class GoogleDriveService
             throw new RuntimeException("No se pudo obtener webViewLink para el archivo $fileId");
         }
 
-        return $file->webViewLink;
+        return $this->normalizeDriveUrl($file->webViewLink);
+    }
+
+    private function normalizeDriveUrl(string $url): string
+    {
+        if (preg_match('/https:\/\/drive\.google\.com\/file\/d\/([^\/]+)\/view/', $url, $matches)) {
+            return 'https://drive.google.com/uc?export=download&id=' . $matches[1];
+        }
+        return $url;
     }
 
     /**

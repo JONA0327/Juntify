@@ -743,11 +743,12 @@ class MeetingController extends Controller
         try {
             // Si ya tenemos una URL de descarga directa, usarla
             if (!empty($meeting->audio_download_url)) {
+                $normalized = $this->normalizeDriveUrl($meeting->audio_download_url);
                 Log::info('Usando URL directa de descarga para audio', [
                     'meeting_id' => $meeting->id,
-                    'url' => $meeting->audio_download_url
+                    'url' => $normalized
                 ]);
-                return $meeting->audio_download_url;
+                return $normalized;
             }
 
             // Si no hay URL directa, descargar desde Drive
@@ -1490,5 +1491,13 @@ class MeetingController extends Controller
     private function updateDriveFileName($fileId, $newName)
     {
         return $this->googleDriveService->updateFileName($fileId, $newName);
+    }
+
+    private function normalizeDriveUrl(string $url): string
+    {
+        if (preg_match('/https:\/\/drive\.google\.com\/file\/d\/([^\/]+)\/view/', $url, $matches)) {
+            return 'https://drive.google.com/uc?export=download&id=' . $matches[1];
+        }
+        return $url;
     }
 }
