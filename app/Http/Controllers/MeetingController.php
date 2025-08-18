@@ -51,7 +51,7 @@ class MeetingController extends Controller
             return view('reuniones', [ 'meetings' => $meetings ]);
         } catch (\Throwable $e) {
             // If anything fails, return view without meetings (JS will fetch)
-            \Log::warning('Meetings SSR failed: ' . $e->getMessage());
+            Log::warning('Meetings SSR failed: ' . $e->getMessage());
             return view('reuniones');
         }
     }
