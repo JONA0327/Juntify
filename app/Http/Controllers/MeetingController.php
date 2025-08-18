@@ -333,6 +333,36 @@ class MeetingController extends Controller
     }
 
     /**
+     * Encripta y guarda el contenido de la reunión en Google Drive
+     */
+    public function encryptJu(Request $request, $id): JsonResponse
+    {
+        $user = $request->user();
+        $meeting = TranscriptionLaravel::where('id', $id)
+            ->where('username', $user->username)
+            ->firstOrFail();
+
+        $this->setGoogleDriveToken($request);
+
+        $payload = json_encode([
+            'segments'   => $request->input('segments'),
+            'summary'    => $request->input('summary'),
+            'key_points' => $request->input('key_points'),
+            'tasks'      => $request->input('tasks'),
+        ]);
+
+        $encrypted = Crypt::encryptString($payload);
+
+        $this->googleDriveService->updateFileContent(
+            $meeting->transcript_drive_id,
+            'application/json',
+            $encrypted
+        );
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
      * Elimina una reunión
      */
     public function delete($id): JsonResponse
@@ -438,8 +468,9 @@ class MeetingController extends Controller
     /**
      * Configura el token de Google Drive para el usuario
      */
-    private function setGoogleDriveToken($user)
+    private function setGoogleDriveToken($userOrRequest)
     {
+        $user = $userOrRequest instanceof Request ? $userOrRequest->user() : $userOrRequest;
         $googleToken = $user->googleToken;
         if (!$googleToken) {
             throw new \Exception('No se encontró token de Google para el usuario');
