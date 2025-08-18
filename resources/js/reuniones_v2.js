@@ -1171,6 +1171,14 @@ function playSegmentAudio(segmentIndex) {
     };
 
     meetingAudioPlayer.addEventListener('timeupdate', segmentEndHandler);
+    if (meetingAudioPlayer.readyState < 2) {
+        alert('El audio no está listo para reproducirse.');
+        meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+        segmentEndHandler = null;
+        updateSegmentButtons(null);
+        currentSegmentIndex = null;
+        return;
+    }
     meetingAudioPlayer.play().catch(error => {
         console.warn('Error reproduciendo segmento de audio:', error);
         alert('No se pudo reproducir este segmento de audio.');
