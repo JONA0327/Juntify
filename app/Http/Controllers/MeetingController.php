@@ -112,7 +112,9 @@ class MeetingController extends Controller
 
             // Descargar el archivo .ju (transcripción)
             $transcriptContent = $this->downloadFromDrive($meeting->transcript_drive_id);
-            $transcriptData = $this->decryptJuFile($transcriptContent);
+            $transcriptResult = $this->decryptJuFile($transcriptContent);
+            $transcriptData = $transcriptResult['data'];
+            $needsEncryption = $transcriptResult['needs_encryption'];
 
             // Descargar el archivo de audio
             $audioContent = $this->downloadFromDrive($meeting->audio_drive_id);
@@ -141,6 +143,7 @@ class MeetingController extends Controller
                     // Carpeta real desde Drive
                     'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
                     'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
+                    'needs_encryption' => $needsEncryption,
                 ]
             ]);
 
@@ -488,7 +491,10 @@ class MeetingController extends Controller
             $json_data = json_decode($content, true);
             if (json_last_error() === JSON_ERROR_NONE && is_array($json_data)) {
                 Log::info('decryptJuFile: Content is already valid JSON (unencrypted)');
-                return $this->extractMeetingDataFromJson($json_data);
+                return [
+                    'data' => $this->extractMeetingDataFromJson($json_data),
+                    'needs_encryption' => true,
+                ];
             }
 
             // Segundo intento: ver si es un string encriptado directo de Laravel Crypt
@@ -502,7 +508,10 @@ class MeetingController extends Controller
                     $json_data = json_decode($decrypted, true);
                     if (json_last_error() === JSON_ERROR_NONE) {
                         Log::info('decryptJuFile: JSON parsing after decryption successful', ['keys' => array_keys($json_data)]);
-                        return $this->extractMeetingDataFromJson($json_data);
+                        return [
+                            'data' => $this->extractMeetingDataFromJson($json_data),
+                            'needs_encryption' => false,
+                        ];
                     }
                 } catch (\Exception $e) {
                     Log::warning('decryptJuFile: Direct decryption failed', ['error' => $e->getMessage()]);
@@ -520,7 +529,10 @@ class MeetingController extends Controller
                     $json_data = json_decode($decrypted, true);
                     if (json_last_error() === JSON_ERROR_NONE) {
                         Log::info('decryptJuFile: JSON parsing after Laravel Crypt decryption successful', ['keys' => array_keys($json_data)]);
-                        return $this->extractMeetingDataFromJson($json_data);
+                        return [
+                            'data' => $this->extractMeetingDataFromJson($json_data),
+                            'needs_encryption' => false,
+                        ];
                     }
                 } catch (\Exception $e) {
                     Log::error('decryptJuFile: Laravel Crypt JSON decryption failed', ['error' => $e->getMessage()]);
@@ -529,11 +541,17 @@ class MeetingController extends Controller
 
             // Fallback: usar datos por defecto
             Log::warning('decryptJuFile: Using default data - all decryption methods failed');
-            return $this->getDefaultMeetingData();
+            return [
+                'data' => $this->getDefaultMeetingData(),
+                'needs_encryption' => false,
+            ];
 
         } catch (\Exception $e) {
             Log::error('decryptJuFile: General exception', ['error' => $e->getMessage()]);
-            return $this->getDefaultMeetingData();
+            return [
+                'data' => $this->getDefaultMeetingData(),
+                'needs_encryption' => false,
+            ];
         }
     }
 
