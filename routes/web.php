@@ -38,6 +38,8 @@ Route::middleware('auth')->group(function () {
     Route::put('/api/meetings/{id}/segments', [MeetingController::class, 'updateSegments'])->name('api.meetings.updateSegments');
     Route::delete('/api/meetings/{id}', [MeetingController::class, 'destroy'])->name('api.meetings.destroy');
     Route::post('/api/meetings/cleanup', [MeetingController::class, 'cleanupModal'])->name('api.meetings.cleanup');
+    Route::post('/api/meetings/{id}/encrypt', [MeetingController::class, 'encryptJu'])
+        ->name('api.meetings.encrypt');
 
     // Rutas de descarga
     Route::get('/api/meetings/{id}/download-ju', [MeetingController::class, 'downloadJuFile'])->name('api.meetings.download-ju');
