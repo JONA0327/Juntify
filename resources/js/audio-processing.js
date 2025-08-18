@@ -519,7 +519,22 @@ function playSegmentAudio(segmentIndex) {
     };
 
     audioPlayer.addEventListener('timeupdate', segmentEndHandler);
-    audioPlayer.play();
+    if (audioPlayer.readyState < 2) {
+        alert('El audio no está listo para reproducirse.');
+        audioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+        segmentEndHandler = null;
+        updateSegmentButtons(null);
+        currentSegmentIndex = null;
+        return;
+    }
+    audioPlayer.play().catch(error => {
+        console.warn('Error reproduciendo segmento de audio:', error);
+        alert('No se pudo reproducir este segmento de audio.');
+        audioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+        segmentEndHandler = null;
+        updateSegmentButtons(null);
+        currentSegmentIndex = null;
+    });
     currentSegmentIndex = segmentIndex;
     updateSegmentButtons(segmentIndex);
 }
