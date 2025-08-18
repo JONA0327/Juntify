@@ -715,6 +715,8 @@ function showMeetingModal(meeting) {
     console.log('Datos de la reunión:', meeting);
     console.log('Ruta de audio:', meeting.audio_path);
 
+    const audioSrc = normalizeDriveUrl(meeting.audio_path);
+
     const modalHtml = `
         <div class="meeting-modal" id="meetingModal">
             <div class="modal-content">
@@ -747,10 +749,7 @@ function showMeetingModal(meeting) {
                                 Audio de la Reunión
                             </h3>
                             <div class="audio-player">
-                                ${meeting.audio_path ?
-                                    `<audio id="meeting-audio" src="${meeting.audio_path}" preload="metadata"></audio>` :
-                                    `<audio id="meeting-audio" preload="metadata"></audio>`
-                                }
+                                <audio id="meeting-audio" preload="metadata"></audio>
                                 <div class="audio-controls">
                                     <button id="audio-play" class="audio-btn" aria-label="Reproducir">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -763,12 +762,9 @@ function showMeetingModal(meeting) {
                                         </svg>
                                     </button>
                                     <input type="range" id="audio-progress" value="0" min="0" step="0.1">
-                                    ${!meeting.audio_path ? '<p class="text-slate-400 text-sm mt-2">Audio no disponible para esta reunión</p>' : ''}
+                                    ${!audioSrc ? '<p class="text-slate-400 text-sm mt-2">Audio no disponible para esta reunión</p>' : ''}
                                 </div>
-                                ${meeting.audio_path ?
-                                    `<audio id="meeting-full-audio" src="${meeting.audio_path}" preload="metadata" style="display:none"></audio>` :
-                                    `<audio id="meeting-full-audio" preload="metadata" style="display:none"></audio>`
-                                }
+                                <audio id="meeting-full-audio" preload="metadata" style="display:none"></audio>
                             </div>
                         </div>
                         <div class="modal-section">
@@ -852,13 +848,23 @@ function showMeetingModal(meeting) {
 
     // Configuración de reproductor de audio personalizado
     meetingAudioPlayer = document.getElementById('meeting-audio');
+    const fullAudioPlayer = document.getElementById('meeting-full-audio');
     const playBtn = document.getElementById('audio-play');
     const pauseBtn = document.getElementById('audio-pause');
     const progress = document.getElementById('audio-progress');
 
     if (meetingAudioPlayer && playBtn && pauseBtn && progress) {
-        // Verificar si el audio tiene una fuente válida
-        if (!meetingAudioPlayer.src || meetingAudioPlayer.src === window.location.href) {
+        if (audioSrc) {
+            meetingAudioPlayer.src = audioSrc;
+            if (fullAudioPlayer) {
+                fullAudioPlayer.src = audioSrc;
+                fullAudioPlayer.load();
+            }
+            meetingAudioPlayer.load();
+            playBtn.disabled = false;
+            playBtn.style.opacity = '';
+            playBtn.title = 'Reproducir';
+        } else {
             console.warn('No hay fuente de audio válida para esta reunión');
             playBtn.disabled = true;
             playBtn.style.opacity = '0.5';
@@ -1456,6 +1462,15 @@ async function cleanupModalFiles() {
 // ===============================================
 // UTILIDADES
 // ===============================================
+function normalizeDriveUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    const match = url.match(/^https:\/\/drive\.google\.com\/file\/d\/([^\/]+)\/view/);
+    if (match) {
+        return `https://drive.google.com/uc?export=download&id=${match[1]}`;
+    }
+    return url;
+}
+
 function escapeHtml(text) {
     if (!text || typeof text !== 'string') return '';
     const map = {
