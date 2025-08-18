@@ -8,6 +8,7 @@ use App\Http\Controllers\DriveController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\TranscriptionController;
 use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\TaskController;
 
 
 Route::get('/', function () {
@@ -30,6 +31,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
     Route::get('/reuniones', [MeetingController::class, 'index'])->name('reuniones.index');
+
+    // Rutas de Tareas
+    Route::get('/tareas', [TaskController::class, 'index'])->name('tareas.index');
+    Route::get('/api/tasks', [TaskController::class, 'getTasks'])->name('api.tasks');
+    Route::get('/api/tasks/{task}', [TaskController::class, 'show'])->name('api.tasks.show');
+    Route::post('/api/tasks', [TaskController::class, 'store'])->name('api.tasks.store');
+    Route::put('/api/tasks/{task}', [TaskController::class, 'update'])->name('api.tasks.update');
+    Route::delete('/api/tasks/{task}', [TaskController::class, 'destroy'])->name('api.tasks.destroy');
+    Route::post('/api/tasks/{task}/complete', [TaskController::class, 'complete'])->name('api.tasks.complete');
 
     // Rutas API para reuniones
     Route::get('/api/meetings', [MeetingController::class, 'getMeetings'])->name('api.meetings');

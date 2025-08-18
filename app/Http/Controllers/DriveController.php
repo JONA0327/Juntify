@@ -463,52 +463,6 @@ class DriveController extends Controller
             $ext = $mimeToExt[$baseMime] ?? preg_replace('/[^\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
             $fileName = $v['meetingName'] . '.' . $ext;
 
-            // Intentar convertir a MP3 para mejor compatibilidad de reproducción en Drive
-            $convertedTemp = null;
-            if ($ext !== 'mp3') {
-                try {
-                    $ffmpeg = env('FFMPEG_PATH', 'ffmpeg');
-                    $convertedTemp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . uniqid('pending_', true) . '.mp3';
-                    $cmd = $ffmpeg . ' -y -i ' . escapeshellarg($filePath) . ' -vn -acodec libmp3lame -b:a 192k ' . escapeshellarg($convertedTemp) . ' 2>&1';
-                    Log::info('uploadPendingAudio ffmpeg convert start', [
-                        'cmd' => $cmd,
-                        'source_mime' => $mime,
-                        'source_ext' => $ext,
-                    ]);
-                    $output = [];
-                    $ret = 0;
-                    @exec($cmd, $output, $ret);
-                    if ($ret === 0 && file_exists($convertedTemp) && filesize($convertedTemp) > 0) {
-                        $filePath = $convertedTemp;
-                        $mime = 'audio/mpeg';
-                        $ext = 'mp3';
-                        $fileName = $v['meetingName'] . '.mp3';
-                        Log::info('uploadPendingAudio ffmpeg convert success', [
-                            'converted_path' => $convertedTemp,
-                            'size' => filesize($convertedTemp),
-                        ]);
-                    } else {
-                        Log::warning('uploadPendingAudio ffmpeg convert failed, using original file', [
-                            'ret' => $ret,
-                            'output_tail' => implode("\n", array_slice($output ?? [], -10)),
-                        ]);
-                        // Cleanup if empty file created
-                        if (file_exists($convertedTemp) && filesize($convertedTemp) === 0) {
-                            @unlink($convertedTemp);
-                        }
-                        $convertedTemp = null;
-                    }
-                } catch (\Throwable $convEx) {
-                    Log::warning('uploadPendingAudio ffmpeg threw, using original file', [
-                        'error' => $convEx->getMessage(),
-                    ]);
-                    if ($convertedTemp && file_exists($convertedTemp)) {
-                        @unlink($convertedTemp);
-                    }
-                    $convertedTemp = null;
-                }
-            }
-
             Log::debug('uploadPendingAudio uploading to Drive', [
                 'fileName' => $fileName,
                 'mime' => $mime,
@@ -523,11 +477,6 @@ class DriveController extends Controller
                 $fileContents
             );
             $audioUrl = $serviceAccount->getFileLink($fileId);
-
-            // Eliminar archivo temporal convertido si existe
-            if ($convertedTemp && file_exists($convertedTemp)) {
-                @unlink($convertedTemp);
-            }
 
             // 4. Guardar en la BD
             Log::debug('uploadPendingAudio saving PendingRecording', [

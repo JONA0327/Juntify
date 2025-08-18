@@ -1,0 +1,99 @@
+/* Estilos para el Calendario Principal (inspirado en la imagen 1) */
+.calendar-container {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 20px;
+    padding: 2rem;
+    transition: all 0.3s ease;
+}
+.calendar-container:hover {
+    border-color: rgba(59, 130, 246, 0.4);
+}
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    color: #e2e8f0;
+}
+.calendar-header .month-year {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px; /* Reducido para un look más compacto */
+}
+.calendar-day-name {
+    text-align: center;
+    font-weight: 500;
+    color: #94a3b8;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+.day-cell {
+    background-color: rgba(10, 14, 39, 0.5);
+    border: 1px solid rgba(59, 130, 246, 0.1);
+    border-radius: 12px;
+    min-height: 120px;
+    padding: 8px;
+    font-weight: 600;
+    color: #cbd5e1;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.day-cell:hover {
+    transform: translateY(-2px);
+    background-color: rgba(59, 130, 246, 0.1);
+}
+.day-cell.is-today {
+    background-color: rgba(59, 130, 246, 0.2);
+    border-color: #3b82f6;
+}
+.day-cell.is-other-month {
+    opacity: 0.3;
+    background-color: transparent;
+}
+.day-number {
+    margin-bottom: 4px;
+}
+.event {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    border-left: 3px solid;
+}
+.event-blue { background-color: rgba(59, 130, 246, 0.2); border-color: #60a5fa; color: #e2e8f0; }
+.event-green { background-color: rgba(16, 185, 129, 0.2); border-color: #34d399; color: #e2e8f0; }
+.event-purple { background-color: rgba(168, 85, 247, 0.2); border-color: #c084fc; color: #e2e8f0; }
+.event-yellow { background-color: rgba(245, 158, 11, 0.2); border-color: #facc15; color: #e2e8f0; }
+
+/* Estilos para Pestañas de Reuniones */
+.tabs-nav {
+    display: flex;
+    gap: 1rem;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+    margin-bottom: 1.5rem;
+}
+.tab-link {
+    padding: 0.75rem 0.5rem;
+    border-bottom: 2px solid transparent;
+    color: #94a3b8;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.tab-link:hover { color: #ffffff; }
+.tab-link.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+}

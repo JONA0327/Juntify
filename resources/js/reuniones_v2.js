@@ -712,6 +712,9 @@ async function openMeetingModal(meetingId) {
 }
 
 function showMeetingModal(meeting) {
+    console.log('Datos de la reunión:', meeting);
+    console.log('Ruta de audio:', meeting.audio_path);
+
     const modalHtml = `
         <div class="meeting-modal" id="meetingModal">
             <div class="modal-content">
@@ -744,7 +747,10 @@ function showMeetingModal(meeting) {
                                 Audio de la Reunión
                             </h3>
                             <div class="audio-player">
-                                <audio id="meeting-audio" src="${meeting.audio_path}" preload="metadata"></audio>
+                                ${meeting.audio_path ?
+                                    `<audio id="meeting-audio" src="${meeting.audio_path}" preload="metadata"></audio>` :
+                                    `<audio id="meeting-audio" preload="metadata"></audio>`
+                                }
                                 <div class="audio-controls">
                                     <button id="audio-play" class="audio-btn" aria-label="Reproducir">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -757,8 +763,12 @@ function showMeetingModal(meeting) {
                                         </svg>
                                     </button>
                                     <input type="range" id="audio-progress" value="0" min="0" step="0.1">
+                                    ${!meeting.audio_path ? '<p class="text-slate-400 text-sm mt-2">Audio no disponible para esta reunión</p>' : ''}
                                 </div>
-                                <audio id="meeting-full-audio" src="${meeting.audio_path}" preload="metadata" style="display:none"></audio>
+                                ${meeting.audio_path ?
+                                    `<audio id="meeting-full-audio" src="${meeting.audio_path}" preload="metadata" style="display:none"></audio>` :
+                                    `<audio id="meeting-full-audio" preload="metadata" style="display:none"></audio>`
+                                }
                             </div>
                         </div>
                         <div class="modal-section">
@@ -847,6 +857,23 @@ function showMeetingModal(meeting) {
     const progress = document.getElementById('audio-progress');
 
     if (meetingAudioPlayer && playBtn && pauseBtn && progress) {
+        // Verificar si el audio tiene una fuente válida
+        if (!meetingAudioPlayer.src || meetingAudioPlayer.src === window.location.href) {
+            console.warn('No hay fuente de audio válida para esta reunión');
+            playBtn.disabled = true;
+            playBtn.style.opacity = '0.5';
+            playBtn.title = 'Audio no disponible';
+            return;
+        }
+
+        // Agregar manejo de errores para carga de audio
+        meetingAudioPlayer.addEventListener('error', (e) => {
+            console.error('Error cargando audio:', e);
+            playBtn.disabled = true;
+            playBtn.style.opacity = '0.5';
+            playBtn.title = 'Error cargando audio';
+        });
+
         meetingAudioPlayer.addEventListener('loadedmetadata', () => {
             progress.max = meetingAudioPlayer.duration;
         });
@@ -856,7 +883,14 @@ function showMeetingModal(meeting) {
         });
 
         playBtn.addEventListener('click', () => {
-            meetingAudioPlayer.play();
+            if (meetingAudioPlayer.src && meetingAudioPlayer.src !== window.location.href) {
+                meetingAudioPlayer.play().catch(error => {
+                    console.warn('Error reproduciendo audio:', error);
+                    alert('No se pudo reproducir el audio. Puede que el archivo no exista o no sea válido.');
+                });
+            } else {
+                alert('No hay audio disponible para esta reunión.');
+            }
         });
 
         pauseBtn.addEventListener('click', () => {
@@ -1051,6 +1085,13 @@ function playSegmentAudio(segmentIndex) {
     }
     if (!meetingAudioPlayer) return;
 
+    // Verificar si el audio tiene una fuente válida
+    if (!meetingAudioPlayer.src || meetingAudioPlayer.src === window.location.href) {
+        console.warn('No hay fuente de audio válida para reproducir segmentos');
+        alert('Audio no disponible para esta reunión.');
+        return;
+    }
+
     if (currentSegmentIndex === segmentIndex && !meetingAudioPlayer.paused) {
         meetingAudioPlayer.pause();
         if (segmentEndHandler) {
@@ -1084,7 +1125,16 @@ function playSegmentAudio(segmentIndex) {
     };
 
     meetingAudioPlayer.addEventListener('timeupdate', segmentEndHandler);
-    meetingAudioPlayer.play();
+    meetingAudioPlayer.play().catch(error => {
+        console.warn('Error reproduciendo segmento de audio:', error);
+        alert('No se pudo reproducir este segmento de audio.');
+        updateSegmentButtons(null);
+        currentSegmentIndex = null;
+        if (segmentEndHandler) {
+            meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+            segmentEndHandler = null;
+        }
+    });
     currentSegmentIndex = segmentIndex;
     updateSegmentButtons(segmentIndex);
 }
@@ -1162,7 +1212,9 @@ function seekAudio(segmentIndex, event) {
     const percentage = (clickX / rect.width) * 100;
 
     const progress = timeline.querySelector('.timeline-progress-mini');
-    progress.style.width = percentage + '%';
+    if (progress) {
+        progress.style.width = percentage + '%';
+    }
 
     const segment = meetingSegments[segmentIndex];
     if (!segment) return;
@@ -1173,7 +1225,18 @@ function seekAudio(segmentIndex, event) {
         meetingAudioPlayer = document.getElementById('meeting-full-audio');
     }
     if (!meetingAudioPlayer) return;
-    meetingAudioPlayer.currentTime = targetTime;
+
+    // Verificar si el audio tiene una fuente válida antes de intentar cambiar currentTime
+    if (!meetingAudioPlayer.src || meetingAudioPlayer.src === window.location.href) {
+        console.warn('No hay fuente de audio válida para hacer seek');
+        return;
+    }
+
+    try {
+        meetingAudioPlayer.currentTime = targetTime;
+    } catch (error) {
+        console.warn('Error al hacer seek en el audio:', error);
+    }
 }
 
 function formatTime(ms) {

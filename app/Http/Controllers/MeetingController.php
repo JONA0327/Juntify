@@ -184,13 +184,8 @@ class MeetingController extends Controller
             $transcriptData = $transcriptResult['data'];
             $needsEncryption = $transcriptResult['needs_encryption'];
 
-            // Descargar el archivo de audio
-            $audioContent = $this->downloadFromDrive($meeting->audio_drive_id);
-
-            // Generar nombre de archivo temporal basado en el nombre de la reunión
-            $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meeting->meeting_name);
-            $audioFileName = $sanitizedName . '_' . $id . '.mp3';
-            $audioPath = $this->storeTemporaryFile($audioContent, $audioFileName);
+            // Obtener la ruta del audio
+            $audioPath = $this->getAudioPath($meeting);
 
             // Procesar los datos de la transcripción
             $processedData = $this->processTranscriptData($transcriptData);
@@ -724,7 +719,122 @@ class MeetingController extends Controller
     {
         $path = 'temp/' . $filename;
         Storage::disk('public')->put($path, $content);
-        return asset('storage/' . $path);
+        $fullPath = asset('storage/' . $path);
+
+        // Log para debuggear
+        Log::info('Archivo temporal guardado', [
+            'filename' => $filename,
+            'path' => $path,
+            'full_path' => $fullPath,
+            'exists' => Storage::disk('public')->exists($path),
+            'size' => Storage::disk('public')->size($path)
+        ]);
+
+        return $fullPath;
+    }
+
+    /**
+     * Obtiene la ruta del audio para una reunión
+     * Prioriza la URL directa de descarga si está disponible,
+     * sino descarga desde Drive y detecta el formato automáticamente
+     */
+    private function getAudioPath($meeting): ?string
+    {
+        try {
+            // Si ya tenemos una URL de descarga directa, usarla
+            if (!empty($meeting->audio_download_url)) {
+                Log::info('Usando URL directa de descarga para audio', [
+                    'meeting_id' => $meeting->id,
+                    'url' => $meeting->audio_download_url
+                ]);
+                return $meeting->audio_download_url;
+            }
+
+            // Si no hay URL directa, descargar desde Drive
+            if (empty($meeting->audio_drive_id)) {
+                Log::warning('No hay audio_drive_id para la reunión', [
+                    'meeting_id' => $meeting->id
+                ]);
+                return null;
+            }
+
+            // Obtener información del archivo para detectar formato
+            $fileInfo = $this->googleDriveService->getFileInfo($meeting->audio_drive_id);
+            $fileName = $fileInfo->getName();
+            $mimeType = $fileInfo->getMimeType();
+
+            // Detectar extensión del archivo
+            $extension = $this->detectAudioExtension($fileName, $mimeType);
+
+            Log::info('Información del archivo de audio', [
+                'meeting_id' => $meeting->id,
+                'file_name' => $fileName,
+                'mime_type' => $mimeType,
+                'detected_extension' => $extension
+            ]);
+
+            // Descargar el contenido del archivo
+            $audioContent = $this->downloadFromDrive($meeting->audio_drive_id);
+
+            // Generar nombre de archivo temporal con la extensión correcta
+            $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meeting->meeting_name);
+            $audioFileName = $sanitizedName . '_' . $meeting->id . '.' . $extension;
+
+            return $this->storeTemporaryFile($audioContent, $audioFileName);
+
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo audio path', [
+                'meeting_id' => $meeting->id,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Detecta la extensión del archivo de audio basado en el nombre y MIME type
+     */
+    private function detectAudioExtension($fileName, $mimeType): string
+    {
+        // Primero intentar extraer la extensión del nombre del archivo
+        $extension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+
+        // Lista de extensiones de audio válidas
+        $validAudioExtensions = ['mp3', 'aac', 'wav', 'ogg', 'webm', 'mp4', 'm4a', 'flac'];
+
+        if (in_array($extension, $validAudioExtensions)) {
+            return $extension;
+        }
+
+        // Si no se detectó por el nombre, usar el MIME type
+        $mimeToExtension = [
+            'audio/mpeg' => 'mp3',
+            'audio/mp3' => 'mp3',
+            'audio/aac' => 'aac',
+            'audio/mp4' => 'mp4',
+            'audio/x-m4a' => 'm4a',
+            'audio/wav' => 'wav',
+            'audio/x-wav' => 'wav',
+            'audio/wave' => 'wav',
+            'audio/ogg' => 'ogg',
+            'audio/webm' => 'webm',
+            'audio/flac' => 'flac',
+            'video/webm' => 'webm', // Algunos archivos webm con audio
+        ];
+
+        $baseMimeType = explode(';', strtolower($mimeType))[0];
+
+        if (isset($mimeToExtension[$baseMimeType])) {
+            return $mimeToExtension[$baseMimeType];
+        }
+
+        // Si no se pudo detectar, asumir mp3 como fallback
+        Log::warning('No se pudo detectar la extensión del audio, usando mp3 como fallback', [
+            'file_name' => $fileName,
+            'mime_type' => $mimeType
+        ]);
+
+        return 'mp3';
     }
 
     private function getFolderName($fileId): string

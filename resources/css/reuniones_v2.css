@@ -9,6 +9,11 @@
     text-align: center;
 }
 
+/* Utility classes */
+.hidden {
+    display: none !important;
+}
+
 .error-state svg {
     width: 4.5rem;
     height: 4.5rem;
@@ -625,16 +630,18 @@
    REPRODUCTOR DE AUDIO
    ========================================= */
 .audio-player {
-    background: rgba(15, 23, 42, 0.8);
-    border: 1px solid rgba(51, 65, 85, 0.5);
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(100, 116, 139, 0.3);
     border-radius: 0.75rem;
     padding: 1.5rem;
+    margin: 1rem 0;
 }
 
 .audio-controls {
     display: flex;
     align-items: center;
     gap: 1rem;
+    min-height: 60px;
 }
 
 .audio-btn {
@@ -642,49 +649,72 @@
     border: 1px solid var(--border-slate-700);
     color: var(--text-slate-200);
     border-radius: 0.5rem;
-    padding: 0.5rem;
+    padding: 0.75rem;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s ease;
+    min-width: 44px;
+    min-height: 44px;
+    position: relative;
+}
+
+.audio-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
 }
 
 .audio-btn:hover {
     background: var(--bg-slate-800);
+    border-color: var(--primary-yellow);
+    transform: translateY(-1px);
+}
+
+.audio-btn:active {
+    transform: translateY(0);
 }
 
 .audio-btn.active {
     background: var(--primary-yellow);
     color: var(--bg-slate-900);
+    border-color: var(--primary-yellow);
 }
 
 #audio-progress {
     -webkit-appearance: none;
     appearance: none;
     flex: 1;
-    height: 4px;
-    background: var(--bg-slate-900);
-    border-radius: 0.25rem;
+    height: 6px;
+    background: rgba(51, 65, 85, 0.5);
+    border-radius: 3px;
     cursor: pointer;
+    margin: 0 1rem;
+    transition: all 0.2s ease;
+}
+
+#audio-progress:hover {
+    height: 8px;
 }
 
 #audio-progress::-webkit-slider-runnable-track {
-    background: var(--bg-slate-900);
-    border-radius: 0.25rem;
-    height: 4px;
+    background: rgba(51, 65, 85, 0.5);
+    border-radius: 3px;
+    height: 6px;
 }
 
 #audio-progress::-moz-range-track {
-    background: var(--bg-slate-900);
-    border-radius: 0.25rem;
-    height: 4px;
+    background: rgba(51, 65, 85, 0.5);
+    border-radius: 3px;
+    height: 6px;
+    border: none;
 }
 
 #audio-progress::-ms-track {
-    background: var(--bg-slate-900);
-    border-radius: 0.25rem;
-    height: 4px;
+    background: rgba(51, 65, 85, 0.5);
+    border-radius: 3px;
+    height: 6px;
     border-color: transparent;
     color: transparent;
 }
@@ -692,12 +722,39 @@
 #audio-progress::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 12px;
-    height: 12px;
+    width: 16px;
+    height: 16px;
     background: var(--primary-yellow);
     border-radius: 50%;
     cursor: pointer;
-    margin-top: -4px;
+    margin-top: -5px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+}
+
+#audio-progress::-webkit-slider-thumb:hover {
+    width: 18px;
+    height: 18px;
+    margin-top: -6px;
+}
+
+#audio-progress::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--primary-yellow);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+#audio-progress::-ms-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--primary-yellow);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
 }
 
 #audio-progress::-moz-range-thumb {
