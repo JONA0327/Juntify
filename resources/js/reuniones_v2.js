@@ -590,6 +590,8 @@ async function openMeetingModal(meetingId) {
             await new Promise(resolve => setTimeout(resolve, 500));
 
             currentModalMeeting = data.meeting;
+            // Guardar bandera de encriptación
+            currentModalMeeting.needs_encryption = data.meeting.needs_encryption;
             showMeetingModal(data.meeting);
         } else {
             closeMeetingModal();
@@ -1102,10 +1104,38 @@ async function closeMeetingModal() {
         document.body.style.overflow = '';
 
         // Esperar a que termine la animación antes de ocultar
-        setTimeout(() => {
+        setTimeout(async () => {
             if (modal && !modal.classList.contains('active')) {
                 modal.style.display = 'none';
                 modal.remove();
+
+                if (currentModalMeeting?.needs_encryption) {
+                    try {
+                        const encryptResponse = await fetch(`/api/meetings/${currentModalMeeting.id}/encrypt`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                segments: currentModalMeeting.segments,
+                                summary: currentModalMeeting.summary,
+                                key_points: currentModalMeeting.key_points,
+                                tasks: currentModalMeeting.tasks
+                            })
+                        });
+
+                        if (!encryptResponse.ok) {
+                            throw new Error('Error encrypting meeting');
+                        }
+
+                        currentModalMeeting.needs_encryption = false;
+                    } catch (error) {
+                        console.error('Error encrypting meeting:', error);
+                    }
+                }
+
                 cleanupModalFiles();
             }
         }, 300);
