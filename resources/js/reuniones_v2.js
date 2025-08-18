@@ -875,13 +875,53 @@ function showMeetingModal(meeting) {
         // Agregar manejo de errores para carga de audio
         meetingAudioPlayer.addEventListener('error', (e) => {
             console.error('Error cargando audio:', e);
+
+            // Deshabilitar controles
             playBtn.disabled = true;
+            pauseBtn.disabled = true;
+            progress.disabled = true;
             playBtn.style.opacity = '0.5';
+            pauseBtn.style.opacity = '0.5';
+            progress.style.opacity = '0.5';
             playBtn.title = 'Error cargando audio';
+            pauseBtn.title = 'Error cargando audio';
+
+            // Mostrar mensaje de error y enlace de descarga
+            const audioPlayerContainer = document.querySelector('.audio-player');
+            if (audioPlayerContainer && !audioPlayerContainer.querySelector('.audio-error')) {
+                const errorMsg = document.createElement('p');
+                errorMsg.className = 'audio-error text-red-500 text-sm mt-2';
+                errorMsg.textContent = 'No se pudo cargar el audio. ';
+
+                const downloadLink = document.createElement('a');
+                downloadLink.href = encodeURI(audioSrc);
+                downloadLink.textContent = 'Descargar audio';
+                downloadLink.className = 'underline';
+                errorMsg.appendChild(downloadLink);
+
+                audioPlayerContainer.appendChild(errorMsg);
+            }
         });
 
         meetingAudioPlayer.addEventListener('loadedmetadata', () => {
             progress.max = meetingAudioPlayer.duration;
+
+            // Rehabilitar controles
+            playBtn.disabled = false;
+            pauseBtn.disabled = false;
+            progress.disabled = false;
+            playBtn.style.opacity = '';
+            pauseBtn.style.opacity = '';
+            progress.style.opacity = '';
+            playBtn.title = 'Reproducir';
+            pauseBtn.title = 'Pausar';
+
+            // Eliminar mensaje de error si existe
+            const audioPlayerContainer = document.querySelector('.audio-player');
+            const errorMsg = audioPlayerContainer?.querySelector('.audio-error');
+            if (errorMsg) {
+                errorMsg.remove();
+            }
         });
 
         meetingAudioPlayer.addEventListener('timeupdate', () => {
