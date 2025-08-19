@@ -715,7 +715,7 @@ function showMeetingModal(meeting) {
     console.log('Datos de la reunión:', meeting);
     console.log('Ruta de audio:', meeting.audio_path);
 
-    const audioSrc = normalizeDriveUrl(meeting.audio_path);
+    const audioSrc = meeting.audio_path ? `/api/meetings/${meeting.id}/audio` : '';
 
     const modalHtml = `
         <div class="meeting-modal" id="meetingModal">
