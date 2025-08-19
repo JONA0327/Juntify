@@ -298,6 +298,14 @@
     box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
 }
 
+.icon-btn.container-btn:hover {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.25);
+}
+
 .meeting-actions .icon-btn svg {
     width: 1.125rem;
     height: 1.125rem;
@@ -330,6 +338,9 @@
 }
 .meeting-actions .delete-btn {
     color: #f87171; /* rojo coral */
+}
+.meeting-actions .container-btn {
+    color: #fbbf24; /* amarillo */
 }
 
 /* =========================================

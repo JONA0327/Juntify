@@ -41,6 +41,11 @@
         </div>
 
         <div class="meeting-actions">
+            <button class="icon-btn container-btn" onclick="openContainerSelectModal({{ $id }})" aria-label="Añadir a contenedor" title="Añadir a contenedor">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12z" />
+                </svg>
+            </button>
             <button class="icon-btn edit-btn" onclick="editMeetingName({{ $id }})" aria-label="Editar reunión" title="Editar nombre de reunión">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                     <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
