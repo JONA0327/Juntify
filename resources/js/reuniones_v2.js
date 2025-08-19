@@ -588,6 +588,11 @@ function createMeetingCard(meeting) {
                 </div>
 
                 <div class="meeting-actions">
+                    <button class="icon-btn container-btn" onclick="openContainerSelectModal(${meeting.id})" title="Añadir a contenedor">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12z" />
+                        </svg>
+                    </button>
                     <button class="icon-btn edit-btn" onclick="editMeetingName(${meeting.id})" title="Editar nombre de reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -650,8 +655,8 @@ function attachMeetingEventListeners() {
             e.dataTransfer.setData('meeting-id', card.dataset.meetingId);
         });
         card.addEventListener('click', function(e) {
-            // No abrir modal si se hizo click en el botón de eliminar o editar
-            if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn')) {
+            // No abrir modal si se hizo click en los botones de acción
+            if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn')) {
                 return;
             }
 
@@ -673,7 +678,12 @@ function attachContainerEventListeners() {
             }
         });
 
-        card.addEventListener('click', () => toggleContainer(card.dataset.containerId, card));
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.edit-btn') || e.target.closest('.delete-btn')) {
+                return;
+            }
+            openContainerMeetingsModal(card.dataset.containerId);
+        });
     });
 }
 
@@ -718,6 +728,99 @@ async function toggleContainer(containerId, card) {
         }
     } catch (error) {
         console.error('Error loading container meetings:', error);
+    }
+}
+
+function openContainerSelectModal(meetingId) {
+    if (!containers || containers.length === 0) {
+        return;
+    }
+
+    const modalHtml = `
+        <div class="meeting-modal active" id="containerSelectModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title">Seleccionar contenedor</h2>
+                    <button class="close-btn" onclick="closeContainerSelectModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="space-y-2">
+                        ${containers.map(c => `<button class="w-full text-left px-4 py-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition" data-id="${c.id}">${escapeHtml(c.name || c.title || '')}</button>`).join('')}
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    document.body.style.overflow = 'hidden';
+
+    document.querySelectorAll('#containerSelectModal [data-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const containerId = btn.dataset.id;
+            addMeetingToContainer(meetingId, containerId);
+            closeContainerSelectModal();
+            openContainerMeetingsModal(containerId);
+        });
+    });
+}
+
+function closeContainerSelectModal() {
+    const modal = document.getElementById('containerSelectModal');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+        setTimeout(() => modal.remove(), 300);
+    }
+}
+
+async function openContainerMeetingsModal(containerId) {
+    try {
+        const response = await fetch(`/api/containers/${containerId}/meetings`, {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+        if (!response.ok) throw new Error('Error al cargar reuniones');
+        const data = await response.json();
+        const meetingsHtml = data.success ? data.meetings.map(m => createMeetingCard(m)).join('') : '';
+        const modalHtml = `
+            <div class="meeting-modal active" id="containerMeetingsModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Reuniones del contenedor</h2>
+                        <button class="close-btn" onclick="closeContainerMeetingsModal()">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="meetings-grid">
+                            ${meetingsHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        document.body.style.overflow = 'hidden';
+        attachMeetingEventListeners();
+    } catch (error) {
+        console.error('Error loading container meetings:', error);
+    }
+}
+
+function closeContainerMeetingsModal() {
+    const modal = document.getElementById('containerMeetingsModal');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+        setTimeout(() => modal.remove(), 300);
     }
 }
 
@@ -2323,3 +2426,7 @@ window.openEditContainerModal = openEditContainerModal;
 window.closeContainerModal = closeContainerModal;
 window.saveContainer = saveContainer;
 window.deleteContainer = deleteContainer;
+window.openContainerSelectModal = openContainerSelectModal;
+window.closeContainerSelectModal = closeContainerSelectModal;
+window.openContainerMeetingsModal = openContainerMeetingsModal;
+window.closeContainerMeetingsModal = closeContainerMeetingsModal;
