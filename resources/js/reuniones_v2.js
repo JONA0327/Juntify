@@ -749,7 +749,7 @@ function showMeetingModal(meeting) {
                                 Audio de la Reunión
                             </h3>
                             <div class="audio-player">
-                                <audio id="meeting-audio" preload="metadata"></audio>
+                                <audio id="meeting-audio" preload="auto"></audio>
                                 <div class="audio-controls">
                                     <button id="audio-play" class="audio-btn" aria-label="Reproducir">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -764,7 +764,7 @@ function showMeetingModal(meeting) {
                                     <input type="range" id="audio-progress" value="0" min="0" step="0.1">
                                     ${!audioSrc ? '<p class="text-slate-400 text-sm mt-2">Audio no disponible para esta reunión</p>' : ''}
                                 </div>
-                                <audio id="meeting-full-audio" preload="metadata" style="display:none"></audio>
+                                <audio id="meeting-full-audio" preload="auto" style="display:none"></audio>
                             </div>
                         </div>
                         <div class="modal-section">
@@ -856,11 +856,11 @@ function showMeetingModal(meeting) {
     if (meetingAudioPlayer && playBtn && pauseBtn && progress) {
         if (audioSrc) {
             meetingAudioPlayer.src = audioSrc;
+            meetingAudioPlayer.load();
             if (fullAudioPlayer) {
                 fullAudioPlayer.src = audioSrc;
                 fullAudioPlayer.load();
             }
-            meetingAudioPlayer.load();
             playBtn.disabled = false;
             playBtn.style.opacity = '';
             playBtn.title = 'Reproducir';
