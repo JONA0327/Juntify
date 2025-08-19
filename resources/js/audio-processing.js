@@ -757,9 +757,29 @@ async function processAnalysis() {
         progressText.textContent = 'Análisis completado';
     } catch (e) {
         console.error('Error en análisis', e);
-        progressText.textContent = 'Error en análisis';
-        showNotification('Error al analizar la reunión', 'error');
         clearInterval(interval);
+        progressText.textContent = 'Error en análisis';
+
+        // Mostrar mensaje de error más específico
+        let errorMessage = 'Error al analizar la reunión';
+        if (e.response && e.response.data && e.response.data.error) {
+            errorMessage = e.response.data.error;
+
+            // Si hay detalles adicionales, mostrarlos también
+            if (e.response.data.details) {
+                errorMessage += '\n' + e.response.data.details;
+            }
+        } else if (e.message) {
+            errorMessage = e.message;
+        }
+
+        showNotification(errorMessage, 'error');
+
+        // Marcar el paso como fallido
+        progressBar.style.width = '0%';
+        progressBar.style.backgroundColor = '#ef4444';
+        progressPercent.textContent = 'Error';
+
         return;
     }
 
@@ -1310,7 +1330,7 @@ function viewMeetingDetails() {
 
 function goToMeetings() {
     showNotification('Redirigiendo a lista de reuniones...', 'info');
-    // Aquí iría la redirección a la lista de reuniones
+    window.location.href = '/reuniones';
 }
 
 function createNewMeeting() {

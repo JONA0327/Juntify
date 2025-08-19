@@ -12,6 +12,11 @@ class AnalysisController extends Controller
 {
     public function analyze(Request $request)
     {
+        Log::info('Análisis iniciado', [
+            'request_data' => $request->all(),
+            'user' => Auth::user()->username ?? 'unknown'
+        ]);
+
         $data = $request->validate([
             'analyzer_id' => 'required|string',
             'transcript'  => 'required|string',
@@ -19,10 +24,18 @@ class AnalysisController extends Controller
 
         $analyzer = Analyzer::find($data['analyzer_id']);
         if (! $analyzer) {
+            Log::error('Analyzer no encontrado', [
+                'analyzer_id' => $data['analyzer_id'],
+                'available_analyzers' => Analyzer::all(['id', 'name'])->toArray()
+            ]);
             return response()->json(['error' => 'Analyzer not found'], 404);
         }
 
         if (! str_contains($analyzer->user_prompt_template ?? '', '{transcription}')) {
+            Log::error('Template sin marcador de transcripción', [
+                'analyzer_id' => $data['analyzer_id'],
+                'template' => $analyzer->user_prompt_template
+            ]);
             return response()->json([
                 'error' => 'La plantilla de prompt no contiene el marcador {transcription}',
             ], 400);
@@ -55,7 +68,25 @@ class AnalysisController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Error en OpenAI', ['exception' => $e->getMessage()]);
-            return response()->json(['error' => 'Error en OpenAI: ' . $e->getMessage()], 500);
+
+            // Mensajes de error más específicos
+            $errorMessage = $e->getMessage();
+            if (str_contains($errorMessage, 'Incorrect API key')) {
+                return response()->json([
+                    'error' => 'API key de OpenAI inválida. Por favor verifica tu configuración.',
+                    'details' => 'La clave de API de OpenAI no es válida o ha expirado.'
+                ], 500);
+            } elseif (str_contains($errorMessage, 'insufficient_quota')) {
+                return response()->json([
+                    'error' => 'Cuota de OpenAI agotada. Por favor verifica tu plan de OpenAI.',
+                    'details' => 'Has excedido tu cuota mensual de OpenAI.'
+                ], 500);
+            } else {
+                return response()->json([
+                    'error' => 'Error al conectar con OpenAI: ' . $errorMessage,
+                    'details' => 'Revisa tu conexión a internet y configuración de API.'
+                ], 500);
+            }
         }
 
         $content = $response->choices[0]->message->content ?? '{}';

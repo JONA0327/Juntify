@@ -748,35 +748,13 @@ class MeetingController extends Controller
     private function getAudioPath($meeting): ?string
     {
         try {
-            // Si ya tenemos una URL de descarga directa, verificar que sea válida
+            // Si ya tenemos una URL de descarga directa, usarla
             if (!empty($meeting->audio_download_url)) {
-                $normalized = $this->normalizeDriveUrl($meeting->audio_download_url);
-
-                try {
-                    $response = Http::head($normalized);
-                    $contentType = $response->header('Content-Type');
-                    if ($response->ok() && $contentType && str_starts_with($contentType, 'audio')) {
-                        Log::info('Usando URL directa de descarga para audio', [
-                            'meeting_id' => $meeting->id,
-                            'url' => $normalized,
-                            'content_type' => $contentType,
-                        ]);
-                        return $normalized;
-                    }
-
-                    Log::warning('URL directa de audio no válida', [
-                        'meeting_id' => $meeting->id,
-                        'url' => $normalized,
-                        'status' => $response->status(),
-                        'content_type' => $contentType,
-                    ]);
-                } catch (\Exception $e) {
-                    Log::warning('Error verificando URL de audio', [
-                        'meeting_id' => $meeting->id,
-                        'url' => $normalized,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
+                Log::info('Usando URL directa de descarga para audio', [
+                    'meeting_id' => $meeting->id,
+                    'url' => $meeting->audio_download_url
+                ]);
+                return $meeting->audio_download_url;
             }
 
             // Si no hay URL directa, descargar desde Drive
@@ -792,10 +770,8 @@ class MeetingController extends Controller
             $fileName = $fileInfo->getName();
             $mimeType = $fileInfo->getMimeType();
 
-            // Detectar extensión del archivo (puede normalizar a m4a si es AAC)
+            // Detectar extensión del archivo
             $extension = $this->detectAudioExtension($fileName, $mimeType);
-            $isAacOriginal = strtolower(pathinfo($fileName, PATHINFO_EXTENSION)) === 'aac'
-                || str_contains(strtolower($mimeType), 'aac');
 
             Log::info('Información del archivo de audio', [
                 'meeting_id' => $meeting->id,
@@ -807,20 +783,6 @@ class MeetingController extends Controller
             // Descargar el contenido del archivo
             $audioContent = $this->downloadFromDrive($meeting->audio_drive_id);
 
-            // Si es AAC, convertir a M4A antes de guardar
-            if ($isAacOriginal) {
-                try {
-                    $audioContent = $this->convertAacToM4a($audioContent);
-                    $extension = 'm4a';
-                } catch (\Throwable $e) {
-                    Log::warning('No se pudo convertir audio AAC, se usará original', [
-                        'meeting_id' => $meeting->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                    $extension = 'aac';
-                }
-            }
-
             // Generar nombre de archivo temporal con la extensión correcta
             $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meeting->meeting_name);
             $audioFileName = $sanitizedName . '_' . $meeting->id . '.' . $extension;
@@ -830,7 +792,8 @@ class MeetingController extends Controller
         } catch (\Exception $e) {
             Log::error('Error obteniendo audio path', [
                 'meeting_id' => $meeting->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             return null;
         }
