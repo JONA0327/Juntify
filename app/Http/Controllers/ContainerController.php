@@ -10,9 +10,19 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use App\Services\GoogleDriveService;
+use App\Traits\GoogleDriveHelpers;
 
 class ContainerController extends Controller
 {
+    use GoogleDriveHelpers;
+
+    protected $googleDriveService;
+
+    public function __construct(GoogleDriveService $googleDriveService)
+    {
+        $this->googleDriveService = $googleDriveService;
+    }
     /**
      * Muestra la vista principal de contenedores
      */
@@ -190,6 +200,7 @@ class ContainerController extends Controller
     public function getMeetings($id): JsonResponse
     {
         $user = Auth::user();
+        $this->setGoogleDriveToken($user);
 
         $container = MeetingContentContainer::where('id', $id)
             ->where('username', $user->username)
@@ -205,8 +216,8 @@ class ContainerController extends Controller
                     'created_at' => $meeting->created_at->format('d/m/Y H:i'),
                     'audio_drive_id' => $meeting->audio_drive_id,
                     'transcript_drive_id' => $meeting->transcript_drive_id,
-                    'audio_folder' => '',
-                    'transcript_folder' => '',
+                    'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
+                    'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
                 ];
             });
 
@@ -223,6 +234,7 @@ class ContainerController extends Controller
     {
         try {
             $user = Auth::user();
+            $this->setGoogleDriveToken($user);
             Log::info("Getting container meetings for container ID: {$id}, user: {$user->username}");
 
             // Verificar que el contenedor pertenece al usuario
@@ -244,9 +256,8 @@ class ContainerController extends Controller
                         'created_at' => $meeting->created_at->format('d/m/Y H:i'),
                         'audio_drive_id' => $meeting->audio_drive_id,
                         'transcript_drive_id' => $meeting->transcript_drive_id,
-                        // Estos se pueden llenar desde el frontend si es necesario
-                        'audio_folder' => '',
-                        'transcript_folder' => '',
+                        'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
+                        'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
                     ];
                 });
 
