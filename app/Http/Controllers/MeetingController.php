@@ -1037,14 +1037,23 @@ class MeetingController extends Controller
                 ->where('username', $user->username)
                 ->firstOrFail();
 
-            $audioPath = $this->getAudioPath($meetingModel);
+            // Generar el nombre base del archivo temporal
+            $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meetingModel->meeting_name);
+            $pattern = Storage::disk('public')->path('temp/' . $sanitizedName . '_' . $meetingModel->id . '.*');
+            $existingFiles = glob($pattern);
 
-            if (!$audioPath) {
-                return response()->json(['error' => 'Audio no disponible'], 404);
-            }
+            if (!empty($existingFiles)) {
+                $audioPath = $existingFiles[0];
+            } else {
+                $audioPath = $this->getAudioPath($meetingModel);
 
-            if (str_starts_with($audioPath, 'http')) {
-                return redirect()->away($audioPath);
+                if (!$audioPath) {
+                    return response()->json(['error' => 'Audio no disponible'], 404);
+                }
+
+                if (str_starts_with($audioPath, 'http')) {
+                    return redirect()->away($audioPath);
+                }
             }
 
             $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
