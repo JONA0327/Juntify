@@ -165,7 +165,17 @@
                 </div>
 
                 <div class="transcription-editor">
-                    <audio id="recorded-audio" style="display: none;"></audio>
+                    <audio id="recorded-audio" style="display: none;">
+                        <source id="recorded-audio-src" type="audio/webm" />
+                    </audio>
+                    <script>
+                        document.addEventListener('DOMContentLoaded', () => {
+                            const source = document.getElementById('recorded-audio-src');
+                            if (source && !document.createElement('audio').canPlayType('audio/webm')) {
+                                source.setAttribute('type', 'audio/mpeg');
+                            }
+                        });
+                    </script>
                     <div class="editor-controls">
                         <div class="audio-player">
                             <button class="play-btn" onclick="toggleAudioPlayback()">

@@ -68,6 +68,15 @@ const SEGMENT_MS = 10 * 60 * 1000; // 10 minutos
 let recordedSegments = [];
 let segmentTimeout = null;
 let recordingStream = null;
+let currentMimeType = 'audio/webm;codecs=opus';
+
+function getExtensionFromMime(type) {
+    if (!type) return 'webm';
+    if (type.includes('mpeg')) return 'mp3';
+    if (type.includes('mp4')) return 'mp4';
+    if (type.includes('webm')) return 'webm';
+    return 'webm';
+}
 
 // ===== FUNCIONES DE LIMPIEZA =====
 
@@ -268,9 +277,18 @@ function startNewSegment() {
 
     let chunks = [];
     let bitsPerSecond = 128000; // calidad media por defecto
+    let mimeType = 'audio/webm;codecs=opus';
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+        if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/mpeg')) {
+            mimeType = 'audio/mpeg';
+        }
+    }
+    currentMimeType = mimeType;
 
     mediaRecorder = new MediaRecorder(recordingStream, {
-        mimeType: 'audio/webm;codecs=opus',
+        mimeType: mimeType,
         audioBitsPerSecond: bitsPerSecond
     });
 
@@ -282,7 +300,7 @@ function startNewSegment() {
 
     mediaRecorder.onstop = () => {
         clearTimeout(segmentTimeout);
-        const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+        const blob = new Blob(chunks, { type: currentMimeType });
         if (blob.size > 0 && !discardRequested) {
             recordedSegments.push(blob);
         }
@@ -430,13 +448,15 @@ async function finalizeRecording() {
     resetAudioVisualizer();
     resetRecordingControls();
 
-    const finalBlob = new Blob(recordedSegments, { type: 'audio/webm;codecs=opus' });
+    const finalBlob = new Blob(recordedSegments, { type: currentMimeType });
     const sizeMB = finalBlob.size / (1024 * 1024);
     const durationMs = Date.now() - (meetingStartTime || startTime || Date.now());
     const durationMin = durationMs / 60000;
 
     const now = new Date();
     const name = `grabacion-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
+
+    const extension = getExtensionFromMime(currentMimeType);
 
     if (sizeMB > 100 || durationMin > 10) {
         showError('La grabación supera los límites de 100 MB o 10 minutos.');
@@ -453,13 +473,13 @@ async function finalizeRecording() {
                 .catch(e => {
                     console.error('Error al subir la grabación', e);
                     showError('Error al subir la grabación. Se descargará el audio');
-                    downloadBlob(finalBlob, name + '.webm');
+                    downloadBlob(finalBlob, name + '.' + extension);
                 });
 
             showSuccess('La subida continuará en segundo plano. El estado final se mostrará mediante uploadNotifications.');
             handlePostActionCleanup(true);
         } else {
-            downloadBlob(finalBlob, name + '.webm');
+            downloadBlob(finalBlob, name + '.' + extension);
             handlePostActionCleanup();
         }
         return;
@@ -476,7 +496,7 @@ async function finalizeRecording() {
             .catch(e => {
                 console.error('Error al subir la grabación', e);
                 showError('Error al subir la grabación. Se descargará el audio');
-                downloadBlob(finalBlob, name + '.webm');
+                downloadBlob(finalBlob, name + '.' + extension);
             });
 
         showSuccess('La subida continuará en segundo plano. El estado final se mostrará mediante uploadNotifications.');
@@ -653,7 +673,8 @@ function showSuccess(message) {
 // Sube un blob de audio en segundo plano
 function uploadInBackground(blob, name, onProgress) {
     const formData = new FormData();
-    formData.append('audioFile', blob, `${name}.webm`);
+    const ext = getExtensionFromMime(blob.type || currentMimeType);
+    formData.append('audioFile', blob, `${name}.${ext}`);
     formData.append('meetingName', name);
 
     const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -743,7 +764,8 @@ async function analyzeNow() {
         sessionStorage.removeItem('recordingSegments');
         sessionStorage.removeItem('recordingMetadata');
     } catch (e) {
-        downloadBlob(pendingAudioBlob, 'grabacion_error.webm');
+        const ext = getExtensionFromMime(pendingAudioBlob.type || currentMimeType);
+        downloadBlob(pendingAudioBlob, `grabacion_error.${ext}`);
         console.error('Error preparando audio', e);
         showError('Error al analizar la grabación. Usa el archivo descargado para reintentar.');
         handlePostActionCleanup();

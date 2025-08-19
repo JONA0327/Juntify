@@ -783,6 +783,18 @@ class MeetingController extends Controller
             // Descargar el contenido del archivo
             $audioContent = $this->downloadFromDrive($meeting->audio_drive_id);
 
+            if ($extension === 'webm') {
+                try {
+                    $audioContent = $this->convertWebmToMp3($audioContent);
+                    $extension = 'mp3';
+                } catch (\Throwable $e) {
+                    Log::error('Error convirtiendo WebM a MP3', [
+                        'meeting_id' => $meeting->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             // Generar nombre de archivo temporal con la extensión correcta
             $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meeting->meeting_name);
             $audioFileName = $sanitizedName . '_' . $meeting->id . '.' . $extension;
@@ -806,6 +818,34 @@ class MeetingController extends Controller
     {
         $input = tempnam(sys_get_temp_dir(), 'aac_') . '.aac';
         $output = tempnam(sys_get_temp_dir(), 'm4a_') . '.m4a';
+        file_put_contents($input, $content);
+
+        $command = sprintf(
+            'ffmpeg -y -i %s %s 2>&1',
+            escapeshellarg($input),
+            escapeshellarg($output)
+        );
+
+        $result = shell_exec($command);
+
+        if (!file_exists($output)) {
+            throw new \RuntimeException('FFmpeg conversion failed: ' . ($result ?? 'unknown error'));
+        }
+
+        $converted = file_get_contents($output);
+        @unlink($input);
+        @unlink($output);
+
+        return $converted;
+    }
+
+    /**
+     * Convierte contenido WebM a MP3 utilizando FFmpeg
+     */
+    private function convertWebmToMp3(string $content): string
+    {
+        $input = tempnam(sys_get_temp_dir(), 'webm_') . '.webm';
+        $output = tempnam(sys_get_temp_dir(), 'mp3_') . '.mp3';
         file_put_contents($input, $content);
 
         $command = sprintf(
