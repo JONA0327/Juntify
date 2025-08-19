@@ -1512,10 +1512,33 @@ async function cleanupModalFiles() {
 // ===============================================
 function normalizeDriveUrl(url) {
     if (!url || typeof url !== 'string') return url;
-    const match = url.match(/^https:\/\/drive\.google\.com\/file\/d\/([^\/]+)\/view/);
-    if (match) {
-        return `https://drive.google.com/uc?export=download&id=${match[1]}`;
+
+    try {
+        const parsedUrl = new URL(url);
+
+        // Verificar si el ID viene como parámetro (?id=)
+        const idParam = parsedUrl.searchParams.get('id');
+        if (idParam) {
+            return `https://drive.google.com/uc?export=download&id=${idParam}`;
+        }
+
+        // Buscar el ID en la ruta (/d/ID/)
+        const pathMatch = parsedUrl.pathname.match(/\/d\/([^/]+)/);
+        if (pathMatch) {
+            return `https://drive.google.com/uc?export=download&id=${pathMatch[1]}`;
+        }
+    } catch (e) {
+        // En caso de URL inválida, intentar coincidir con expresiones regulares básicas
+        const regexMatch = url.match(/drive\.google\.com\/.*[?&]id=([^&]+)/);
+        if (regexMatch) {
+            return `https://drive.google.com/uc?export=download&id=${regexMatch[1]}`;
+        }
+        const pathRegexMatch = url.match(/drive\.google\.com\/file\/d\/([^\/]+)/);
+        if (pathRegexMatch) {
+            return `https://drive.google.com/uc?export=download&id=${pathRegexMatch[1]}`;
+        }
     }
+
     return url;
 }
 
