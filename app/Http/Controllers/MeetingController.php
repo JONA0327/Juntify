@@ -703,6 +703,12 @@ class MeetingController extends Controller
                         : ((int)$m[4] * 60 + (int)$m[5]);
                 }
             }
+            if (isset($segment['start'])) {
+                $segment['start'] = (float)$segment['start'];
+            }
+            if (isset($segment['end'])) {
+                $segment['end'] = (float)$segment['end'];
+            }
             return $segment;
         }, $segments);
 
