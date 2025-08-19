@@ -1,0 +1,80 @@
+<?php
+
+namespace App\Traits;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+
+trait GoogleDriveHelpers
+{
+    protected function setGoogleDriveToken($userOrRequest)
+    {
+        $user = $userOrRequest instanceof Request ? $userOrRequest->user() : $userOrRequest;
+        $googleToken = $user->googleToken;
+        if (!$googleToken) {
+            throw new \Exception('No se encontró token de Google para el usuario');
+        }
+
+        Log::info('setGoogleDriveToken: Setting token', [
+            'username' => $user->username,
+            'has_access_token' => !empty($googleToken->access_token),
+            'has_refresh_token' => !empty($googleToken->refresh_token),
+            'expiry_date' => $googleToken->expiry_date
+        ]);
+
+        $this->googleDriveService->setAccessToken($googleToken->access_token);
+
+        if ($this->googleDriveService->getClient()->isAccessTokenExpired()) {
+            Log::info('setGoogleDriveToken: Google Client says token is expired, refreshing');
+            try {
+                $newTokens = $this->googleDriveService->refreshToken($googleToken->refresh_token);
+                $googleToken->update([
+                    'access_token' => $newTokens['access_token'],
+                    'expiry_date' => now()->addSeconds($newTokens['expires_in'] ?? 3600)
+                ]);
+                Log::info('setGoogleDriveToken: Token refreshed successfully', [
+                    'new_expiry' => now()->addSeconds($newTokens['expires_in'] ?? 3600)
+                ]);
+            } catch (\Exception $e) {
+                Log::error('setGoogleDriveToken: Error refreshing token', [
+                    'error' => $e->getMessage()
+                ]);
+                throw $e;
+            }
+        }
+    }
+
+    protected function getFolderName($fileId): string
+    {
+        try {
+            if (empty($fileId)) {
+                return 'Sin especificar';
+            }
+
+            $file = $this->googleDriveService->getFileInfo($fileId);
+
+            if ($file->getParents()) {
+                $parentId = $file->getParents()[0];
+                $parent = $this->googleDriveService->getFileInfo($parentId);
+                return $parent->getName() ?: 'Carpeta sin nombre';
+            }
+
+            return 'Carpeta raíz';
+        } catch (\Exception $e) {
+            Log::warning('getFolderName: Error getting folder name (first attempt)', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage()
+            ]);
+
+            if (str_contains($e->getMessage(), 'API key') ||
+                str_contains($e->getMessage(), 'PERMISSION_DENIED') ||
+                str_contains($e->getMessage(), 'unauthorized') ||
+                str_contains($e->getMessage(), 'forbidden')) {
+                return 'Juntify Recordings';
+            }
+
+            return 'Error al obtener carpeta';
+        }
+    }
+}
+

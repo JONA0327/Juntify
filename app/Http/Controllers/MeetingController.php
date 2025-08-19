@@ -16,9 +16,12 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use App\Traits\GoogleDriveHelpers;
 
 class MeetingController extends Controller
 {
+    use GoogleDriveHelpers;
+
     protected $googleDriveService;
 
     public function __construct(GoogleDriveService $googleDriveService)
@@ -600,47 +603,7 @@ class MeetingController extends Controller
         }
     }
 
-    /**
-     * Configura el token de Google Drive para el usuario
-     */
-    private function setGoogleDriveToken($userOrRequest)
-    {
-        $user = $userOrRequest instanceof Request ? $userOrRequest->user() : $userOrRequest;
-        $googleToken = $user->googleToken;
-        if (!$googleToken) {
-            throw new \Exception('No se encontró token de Google para el usuario');
-        }
-
-        Log::info('setGoogleDriveToken: Setting token', [
-            'username' => $user->username,
-            'has_access_token' => !empty($googleToken->access_token),
-            'has_refresh_token' => !empty($googleToken->refresh_token),
-            'expiry_date' => $googleToken->expiry_date
-        ]);
-
-        $this->googleDriveService->setAccessToken($googleToken->access_token);
-
-        // Verificar si Google Client marca el token como expirado
-        if ($this->googleDriveService->getClient()->isAccessTokenExpired()) {
-            Log::info('setGoogleDriveToken: Google Client says token is expired, refreshing');
-            try {
-                $newTokens = $this->googleDriveService->refreshToken($googleToken->refresh_token);
-                $googleToken->update([
-                    'access_token' => $newTokens['access_token'],
-                    // Guardar como datetime en BD
-                    'expiry_date' => now()->addSeconds($newTokens['expires_in'] ?? 3600)
-                ]);
-                Log::info('setGoogleDriveToken: Token refreshed successfully', [
-                    'new_expiry' => now()->addSeconds($newTokens['expires_in'] ?? 3600)
-                ]);
-            } catch (\Exception $e) {
-                Log::error('setGoogleDriveToken: Error refreshing token', [
-                    'error' => $e->getMessage()
-                ]);
-                throw $e;
-            }
-        }
-    }    private function downloadFromDrive($fileId)
+    private function downloadFromDrive($fileId)
     {
         return $this->googleDriveService->downloadFileContent($fileId);
     }
@@ -929,44 +892,6 @@ class MeetingController extends Controller
         ]);
 
         return 'mp3';
-    }
-
-    private function getFolderName($fileId): string
-    {
-        try {
-            if (empty($fileId)) {
-                return 'Sin especificar';
-            }
-
-            // Obtener información del archivo para saber en qué carpeta está
-            $file = $this->googleDriveService->getFileInfo($fileId);
-
-            if ($file->getParents()) {
-                $parentId = $file->getParents()[0];
-                $parent = $this->googleDriveService->getFileInfo($parentId);
-                return $parent->getName() ?: 'Carpeta sin nombre';
-            }
-
-            return 'Carpeta raíz';
-        } catch (\Exception $e) {
-            Log::warning('getFolderName: Error getting folder name (first attempt)', [
-                'file_id' => $fileId,
-                'error' => $e->getMessage()
-            ]);
-
-            // Si es problema de API Key o autenticación, devolver el nombre por defecto basado en la estructura conocida
-            if (str_contains($e->getMessage(), 'API key') ||
-                str_contains($e->getMessage(), 'PERMISSION_DENIED') ||
-                str_contains($e->getMessage(), 'unauthorized') ||
-                str_contains($e->getMessage(), 'forbidden')) {
-
-                // Basado en la estructura que descubrimos: Juntify Recordings → Transcripciones/Audios
-                // Como el error indica problemas de autenticación, devolvemos nombres genéricos útiles
-                return 'Juntify Recordings'; // Nombre genérico ya que sabemos la estructura
-            }
-
-            return 'Error al obtener carpeta';
-        }
     }
 
     /**
