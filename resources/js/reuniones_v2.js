@@ -1041,8 +1041,10 @@ function renderSegments(segments) {
     meetingSegments = segments.map((segment, index) => {
         const speaker = segment.speaker || `Hablante ${index + 1}`;
         const avatar = speaker.toString().slice(0, 2).toUpperCase();
-        const start = typeof segment.start === 'number' ? segment.start : 0;
-        const end = typeof segment.end === 'number' ? segment.end : 0;
+        const parsedStart = parseFloat(segment.start);
+        const parsedEnd = parseFloat(segment.end);
+        const start = isNaN(parsedStart) ? 0 : parsedStart;
+        const end = isNaN(parsedEnd) ? 0 : parsedEnd;
         const time = segment.timestamp || `${formatTime(start * 1000)} - ${formatTime(end * 1000)}`;
         return { ...segment, speaker, avatar, start, end, time, text: segment.text || '' };
     });
@@ -1188,8 +1190,10 @@ function playSegmentAudio(segmentIndex) {
     if (currentSegmentIndex !== null && currentSegmentIndex !== segmentIndex) {
         resetSegmentProgress(currentSegmentIndex);
     }
-    const stopTime = segment.end;
-    const startTime = segment.start;
+    const parsedStop = parseFloat(segment.end);
+    const parsedStart = parseFloat(segment.start);
+    const stopTime = isNaN(parsedStop) ? 0 : parsedStop;
+    const startTime = isNaN(parsedStart) ? 0 : parsedStart;
 
     segmentEndHandler = () => {
         const duration = stopTime - startTime;
@@ -1325,8 +1329,12 @@ function seekAudio(segmentIndex, event) {
 
     const segment = meetingSegments[segmentIndex];
     if (!segment) return;
-    const duration = segment.end - segment.start;
-    const targetTime = segment.start + (duration * (percentage / 100));
+    const rawStart = parseFloat(segment.start);
+    const rawEnd = parseFloat(segment.end);
+    const start = isNaN(rawStart) ? 0 : rawStart;
+    const end = isNaN(rawEnd) ? 0 : rawEnd;
+    const duration = end - start;
+    const targetTime = start + (duration * (percentage / 100));
 
     if (!meetingAudioPlayer) {
         meetingAudioPlayer = document.getElementById('meeting-full-audio');
