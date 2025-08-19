@@ -276,5 +276,62 @@
         </div>
     </div>
 
+    <!-- Modal de Reuniones del Contenedor -->
+    <div id="container-meetings-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 backdrop-blur-sm">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-slate-900 rounded-2xl shadow-2xl border border-slate-700/50 w-full max-w-4xl max-h-[80vh] overflow-hidden">
+                <!-- Header del Modal -->
+                <div class="bg-gradient-to-r from-slate-800/50 to-slate-700/50 px-6 py-4 border-b border-slate-700/50">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 id="container-meetings-title" class="text-xl font-semibold text-white">Reuniones del Contenedor</h3>
+                            <p id="container-meetings-subtitle" class="text-slate-400 text-sm"></p>
+                        </div>
+                        <button onclick="closeContainerMeetingsModal()" class="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-all duration-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Contenido del Modal -->
+                <div class="p-6 overflow-y-auto max-h-[60vh]">
+                    <!-- Loading State -->
+                    <div id="container-meetings-loading" class="text-center py-8">
+                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-400"></div>
+                        <p class="text-slate-400 mt-2">Cargando reuniones...</p>
+                    </div>
+
+                    <!-- Lista de Reuniones -->
+                    <div id="container-meetings-list" class="hidden space-y-4">
+                        <!-- Las reuniones se cargarán aquí dinámicamente -->
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="container-meetings-empty" class="hidden text-center py-8">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-slate-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 7a2 2 0 012-2h10a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                        <h3 class="text-lg font-medium text-slate-400 mb-2">Sin reuniones</h3>
+                        <p class="text-slate-500">Este contenedor aún no tiene reuniones asignadas.</p>
+                    </div>
+
+                    <!-- Error State -->
+                    <div id="container-meetings-error" class="hidden text-center py-8">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-red-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <h3 class="text-lg font-medium text-red-400 mb-2">Error al cargar reuniones</h3>
+                        <p id="container-meetings-error-message" class="text-slate-400 mb-4"></p>
+                        <button onclick="retryLoadContainerMeetings()" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-medium rounded-lg transition-colors">
+                            Reintentar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

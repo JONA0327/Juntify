@@ -8,6 +8,7 @@ use App\Models\TranscriptionLaravel;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 class ContainerController extends Controller
@@ -213,6 +214,65 @@ class ContainerController extends Controller
             'success' => true,
             'meetings' => $meetings,
         ]);
+    }
+
+    /**
+     * Obtiene las reuniones de un contenedor específico
+     */
+    public function getContainerMeetings($id): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            Log::info("Getting container meetings for container ID: {$id}, user: {$user->username}");
+
+            // Verificar que el contenedor pertenece al usuario
+            $container = MeetingContentContainer::where('id', $id)
+                ->where('username', $user->username)
+                ->where('is_active', true)
+                ->firstOrFail();
+
+            Log::info("Container found: " . json_encode($container->toArray()));
+
+            // Obtener las reuniones del contenedor usando la relación del modelo
+            $meetings = $container->meetings()
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($meeting) {
+                    return [
+                        'id' => $meeting->id,
+                        'meeting_name' => $meeting->meeting_name,
+                        'created_at' => $meeting->created_at->format('d/m/Y H:i'),
+                        'audio_drive_id' => $meeting->audio_drive_id,
+                        'transcript_drive_id' => $meeting->transcript_drive_id,
+                        // Estos se pueden llenar desde el frontend si es necesario
+                        'audio_folder' => '',
+                        'transcript_folder' => '',
+                    ];
+                });
+
+            Log::info("Meetings found: " . $meetings->count());
+
+            $response = [
+                'success' => true,
+                'container' => [
+                    'id' => $container->id,
+                    'name' => $container->name,
+                    'description' => $container->description,
+                ],
+                'meetings' => $meetings,
+            ];
+
+            Log::info("Response data: " . json_encode($response));
+
+            return response()->json($response);
+
+        } catch (\Exception $e) {
+            Log::error("Error in getContainerMeetings: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar las reuniones del contenedor: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

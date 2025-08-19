@@ -6,7 +6,7 @@ use App\Models\TranscriptionLaravel;
 use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\MeetingShare;
-use App\Models\Container;
+use App\Models\MeetingContentContainer;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;

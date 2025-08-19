@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use App\Models\Container;
+use App\Models\MeetingContentContainer;
 
 class TranscriptionLaravel extends Model
 {
@@ -38,6 +38,6 @@ class TranscriptionLaravel extends Model
 
     public function containers(): BelongsToMany
     {
-        return $this->belongsToMany(Container::class, 'container_meetings', 'meeting_id', 'container_id');
+        return $this->belongsToMany(MeetingContentContainer::class, 'meeting_content_relations', 'meeting_id', 'container_id');
     }
 }

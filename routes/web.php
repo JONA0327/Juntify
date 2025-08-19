@@ -44,6 +44,7 @@ Route::middleware('auth')->group(function () {
 
     // Rutas de Contenedores
     Route::get('/api/content-containers', [ContainerController::class, 'getContainers'])->name('api.content-containers');
+    Route::get('/api/content-containers/{id}/meetings', [ContainerController::class, 'getContainerMeetings'])->name('api.content-containers.meetings');
     Route::post('/api/content-containers', [ContainerController::class, 'store'])->name('api.content-containers.store');
     Route::put('/api/content-containers/{id}', [ContainerController::class, 'update'])->name('api.content-containers.update');
     Route::delete('/api/content-containers/{id}', [ContainerController::class, 'destroy'])->name('api.content-containers.destroy');

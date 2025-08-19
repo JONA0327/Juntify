@@ -611,7 +611,7 @@ function createMeetingCard(meeting) {
 
 function createContainerCard(container) {
     return `
-        <div class="meeting-card container-card" data-container-id="${container.id}">
+        <div class="meeting-card container-card" data-container-id="${container.id}" onclick="openContainerMeetingsModal(${container.id})" style="cursor: pointer;">
             <div class="meeting-card-header">
                 <div class="meeting-content">
                     <div class="meeting-icon">
@@ -629,12 +629,12 @@ function createContainerCard(container) {
                     ${container.description ? `<p class="meeting-description">${escapeHtml(container.description)}</p>` : ''}
                 </div>
                 <div class="meeting-actions">
-                    <button onclick="openEditContainerModal(${JSON.stringify(container).replace(/"/g, '&quot;')})" class="edit-btn" title="Editar contenedor">
+                    <button onclick="event.stopPropagation(); openEditContainerModal(${JSON.stringify(container).replace(/"/g, '&quot;')})" class="edit-btn" title="Editar contenedor">
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                     </button>
-                    <button onclick="deleteContainer(${container.id})" class="delete-btn" title="Eliminar contenedor">
+                    <button onclick="event.stopPropagation(); deleteContainer(${container.id})" class="delete-btn" title="Eliminar contenedor">
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
@@ -788,53 +788,6 @@ function openContainerSelectModal(meetingId) {
 
 function closeContainerSelectModal() {
     const modal = document.getElementById('containerSelectModal');
-    if (modal) {
-        modal.classList.remove('active');
-        document.body.style.overflow = '';
-        setTimeout(() => modal.remove(), 300);
-    }
-}
-
-async function openContainerMeetingsModal(containerId) {
-    try {
-        const response = await fetch(`/api/content-containers/${containerId}/meetings`, {
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                'Accept': 'application/json',
-            }
-        });
-        if (!response.ok) throw new Error('Error al cargar reuniones');
-        const data = await response.json();
-        const meetingsHtml = data.success ? data.meetings.map(m => createMeetingCard(m)).join('') : '';
-        const modalHtml = `
-            <div class="meeting-modal active" id="containerMeetingsModal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2 class="modal-title">Reuniones del contenedor</h2>
-                        <button class="close-btn" onclick="closeContainerMeetingsModal()">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="meetings-grid">
-                            ${meetingsHtml}
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        document.body.style.overflow = 'hidden';
-        attachMeetingEventListeners();
-    } catch (error) {
-        console.error('Error loading container meetings:', error);
-    }
-}
-
-function closeContainerMeetingsModal() {
-    const modal = document.getElementById('containerMeetingsModal');
     if (modal) {
         modal.classList.remove('active');
         document.body.style.overflow = '';
@@ -2414,6 +2367,149 @@ function clearContainerErrors() {
     });
 }
 
+// Variables globales para el modal de reuniones del contenedor
+let currentContainerForMeetings = null;
+
+// ===============================================
+// MODAL DE REUNIONES DEL CONTENEDOR
+// ===============================================
+
+async function openContainerMeetingsModal(containerId) {
+    currentContainerForMeetings = containerId;
+
+    // Mostrar modal
+    document.getElementById('container-meetings-modal').classList.remove('hidden');
+
+    // Mostrar estado de carga
+    showContainerMeetingsLoading();
+
+    // Cargar reuniones del contenedor
+    await loadContainerMeetings(containerId);
+}
+
+function closeContainerMeetingsModal() {
+    document.getElementById('container-meetings-modal').classList.add('hidden');
+    currentContainerForMeetings = null;
+}
+
+function showContainerMeetingsLoading() {
+    document.getElementById('container-meetings-loading').classList.remove('hidden');
+    document.getElementById('container-meetings-list').classList.add('hidden');
+    document.getElementById('container-meetings-empty').classList.add('hidden');
+    document.getElementById('container-meetings-error').classList.add('hidden');
+}
+
+function showContainerMeetingsList() {
+    document.getElementById('container-meetings-loading').classList.add('hidden');
+    document.getElementById('container-meetings-list').classList.remove('hidden');
+    document.getElementById('container-meetings-empty').classList.add('hidden');
+    document.getElementById('container-meetings-error').classList.add('hidden');
+}
+
+function showContainerMeetingsEmpty() {
+    document.getElementById('container-meetings-loading').classList.add('hidden');
+    document.getElementById('container-meetings-list').classList.add('hidden');
+    document.getElementById('container-meetings-empty').classList.remove('hidden');
+    document.getElementById('container-meetings-error').classList.add('hidden');
+}
+
+function showContainerMeetingsError(message) {
+    document.getElementById('container-meetings-loading').classList.add('hidden');
+    document.getElementById('container-meetings-list').classList.add('hidden');
+    document.getElementById('container-meetings-empty').classList.add('hidden');
+    document.getElementById('container-meetings-error').classList.remove('hidden');
+    document.getElementById('container-meetings-error-message').textContent = message;
+}
+
+async function loadContainerMeetings(containerId) {
+    try {
+        const response = await fetch(`/api/content-containers/${containerId}/meetings`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        });
+
+        const data = await response.json();
+        console.log('Container meetings response:', data); // Debug
+
+        if (data.success) {
+            // Verificar que container existe en la respuesta
+            if (data.container && data.container.name) {
+                // Actualizar título del modal
+                document.getElementById('container-meetings-title').textContent = `Reuniones en "${data.container.name}"`;
+                document.getElementById('container-meetings-subtitle').textContent = data.container.description || '';
+            } else {
+                // Fallback si no hay información del contenedor
+                document.getElementById('container-meetings-title').textContent = 'Reuniones del Contenedor';
+                document.getElementById('container-meetings-subtitle').textContent = '';
+                console.warn('Container information missing in response:', data);
+            }
+
+            if (data.meetings && data.meetings.length > 0) {
+                renderContainerMeetings(data.meetings);
+                showContainerMeetingsList();
+            } else {
+                showContainerMeetingsEmpty();
+            }
+        } else {
+            throw new Error(data.message || 'Error al cargar reuniones del contenedor');
+        }
+
+    } catch (error) {
+        console.error('Error loading container meetings:', error);
+        showContainerMeetingsError(error.message);
+    }
+}
+
+function renderContainerMeetings(meetings) {
+    const container = document.getElementById('container-meetings-list');
+
+    const meetingsHTML = meetings.map(meeting => `
+        <div class="bg-slate-800/50 backdrop-blur-custom border border-slate-700/50 rounded-xl p-4 hover:bg-slate-800/70 hover:border-slate-600/50 transition-all duration-200 shadow-lg shadow-black/10 cursor-pointer"
+             onclick="openMeetingModalFromContainer(${meeting.id})">
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h4 class="text-lg font-semibold text-white mb-2">${escapeHtml(meeting.meeting_name)}</h4>
+                    <div class="flex items-center gap-4 text-sm text-slate-400">
+                        <div class="flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span>${meeting.created_at}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 text-slate-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    container.innerHTML = meetingsHTML;
+}
+
+function openMeetingModalFromContainer(meetingId) {
+    // Cerrar el modal del contenedor
+    closeContainerMeetingsModal();
+
+    // Abrir el modal de la reunión
+    setTimeout(() => {
+        openMeetingModal(meetingId);
+    }, 100);
+}
+
+function retryLoadContainerMeetings() {
+    if (currentContainerForMeetings) {
+        showContainerMeetingsLoading();
+        loadContainerMeetings(currentContainerForMeetings);
+    }
+}
+
 // ===============================================
 // FUNCIONES GLOBALES PARA HTML INLINE
 // ===============================================
@@ -2444,7 +2540,9 @@ window.openEditContainerModal = openEditContainerModal;
 window.closeContainerModal = closeContainerModal;
 window.saveContainer = saveContainer;
 window.deleteContainer = deleteContainer;
-window.openContainerSelectModal = openContainerSelectModal;
-window.closeContainerSelectModal = closeContainerSelectModal;
+
+// Funciones del modal de reuniones del contenedor
 window.openContainerMeetingsModal = openContainerMeetingsModal;
 window.closeContainerMeetingsModal = closeContainerMeetingsModal;
+window.retryLoadContainerMeetings = retryLoadContainerMeetings;
+window.openMeetingModalFromContainer = openMeetingModalFromContainer;
