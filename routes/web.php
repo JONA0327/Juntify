@@ -45,6 +45,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/meetings', [MeetingController::class, 'getMeetings'])->name('api.meetings');
     Route::get('/api/shared-meetings', [MeetingController::class, 'getSharedMeetings'])->name('api.shared-meetings');
     Route::get('/api/containers', [MeetingController::class, 'getContainers'])->name('api.containers');
+    Route::post('/api/containers', [MeetingController::class, 'storeContainer'])->name('api.containers.store');
+    Route::post('/api/containers/{id}/meetings', [MeetingController::class, 'addMeetingToContainer'])->name('api.containers.addMeeting');
+    Route::get('/api/containers/{id}/meetings', [MeetingController::class, 'getContainerMeetings'])->name('api.containers.meetings');
     Route::get('/api/meetings/{id}', [MeetingController::class, 'show'])->name('api.meetings.show');
     Route::put('/api/meetings/{id}/name', [MeetingController::class, 'updateName'])->name('api.meetings.updateName');
     Route::put('/api/meetings/{id}/segments', [MeetingController::class, 'updateSegments'])->name('api.meetings.updateSegments');

@@ -174,6 +174,7 @@ async function loadContainers() {
 
         if (data.success) {
             renderMeetings(data.containers, '#containers', 'No tienes contenedores', createContainerCard);
+            attachContainerEventListeners();
         } else {
             showErrorState(container, data.message || 'Error al cargar contenedores', loadContainers);
         }
@@ -582,9 +583,14 @@ function renderMeetings(items, targetSelector, emptyMessage, cardCreator = creat
 // ===============================================
 function createMeetingCard(meeting) {
     return `
-        <div class="meeting-card" data-meeting-id="${meeting.id}">
+        <div class="meeting-card" data-meeting-id="${meeting.id}" draggable="true">
             <div class="meeting-card-header">
                 <div class="meeting-content">
+                    <div class="meeting-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
                     <h3 class="meeting-title">${escapeHtml(meeting.meeting_name)}</h3>
                     <p class="meeting-date">
                         <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -630,9 +636,14 @@ function createMeetingCard(meeting) {
 
 function createContainerCard(container) {
     return `
-        <div class="meeting-card" data-container-id="${container.id}">
+        <div class="meeting-card container-card" data-container-id="${container.id}">
             <div class="meeting-card-header">
                 <div class="meeting-content">
+                    <div class="meeting-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h4l2-2h8a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+                        </svg>
+                    </div>
                     <h3 class="meeting-title">${escapeHtml(container.name || container.title || '')}</h3>
                     <p class="meeting-date">
                         <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -652,6 +663,9 @@ function createContainerCard(container) {
 function attachMeetingEventListeners() {
     const meetingCards = document.querySelectorAll('.meeting-card[data-meeting-id]');
     meetingCards.forEach(card => {
+        card.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('meeting-id', card.dataset.meetingId);
+        });
         card.addEventListener('click', function(e) {
             // No abrir modal si se hizo click en el botón de eliminar o editar
             if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn')) {
@@ -662,6 +676,66 @@ function attachMeetingEventListeners() {
             openMeetingModal(meetingId);
         });
     });
+}
+
+function attachContainerEventListeners() {
+    const containerCards = document.querySelectorAll('.container-card');
+    containerCards.forEach(card => {
+        card.addEventListener('dragover', e => e.preventDefault());
+        card.addEventListener('drop', e => {
+            e.preventDefault();
+            const meetingId = e.dataTransfer.getData('meeting-id');
+            if (meetingId) {
+                addMeetingToContainer(meetingId, card.dataset.containerId);
+            }
+        });
+
+        card.addEventListener('click', () => toggleContainer(card.dataset.containerId, card));
+    });
+}
+
+async function addMeetingToContainer(meetingId, containerId) {
+    try {
+        await fetch(`/api/containers/${containerId}/meetings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ meeting_id: meetingId })
+        });
+    } catch (error) {
+        console.error('Error adding meeting to container:', error);
+    }
+}
+
+async function toggleContainer(containerId, card) {
+    if (card.classList.contains('expanded')) {
+        card.classList.remove('expanded');
+        const nested = card.querySelector('.nested-meetings');
+        if (nested) nested.remove();
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/containers/${containerId}/meetings`, {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+        if (!response.ok) throw new Error('Error al cargar reuniones');
+        const data = await response.json();
+        if (data.success) {
+            const html = `<div class="nested-meetings">${data.meetings.map(m => createMeetingCard(m)).join('')}</div>`;
+            card.insertAdjacentHTML('beforeend', html);
+            card.classList.add('expanded');
+            attachMeetingEventListeners();
+        }
+    } catch (error) {
+        console.error('Error loading container meetings:', error);
+    }
 }
 
 // ===============================================

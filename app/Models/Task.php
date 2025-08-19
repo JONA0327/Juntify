@@ -41,7 +41,7 @@ class Task extends Model
 
     public function meeting()
     {
-        return $this->belongsTo(MeetingContainer::class, 'meeting_id');
+        return $this->belongsTo(Container::class, 'meeting_id');
     }
 
     // Scopes

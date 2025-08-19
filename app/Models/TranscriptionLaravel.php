@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Models\Container;
 
 class TranscriptionLaravel extends Model
 {
@@ -32,5 +34,10 @@ class TranscriptionLaravel extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'username', 'username');
+    }
+
+    public function containers(): BelongsToMany
+    {
+        return $this->belongsToMany(Container::class, 'container_meetings', 'meeting_id', 'container_id');
     }
 }
