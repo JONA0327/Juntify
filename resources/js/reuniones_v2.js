@@ -699,12 +699,23 @@ async function addMeetingToContainer(meetingId, containerId) {
             body: JSON.stringify({ meeting_id: meetingId })
         });
 
-        if (!response.ok) throw new Error('Error adding meeting to container');
-
         const data = await response.json();
-        return data.success;
+
+        if (!response.ok || !data.success) {
+            showNotification(data.message || 'Error al agregar la reunión al contenedor', 'error');
+            return false;
+        }
+
+        showNotification(data.message || 'Reunión agregada al contenedor', 'success');
+
+        currentMeetings = currentMeetings.filter(m => m.id != meetingId);
+        renderMeetings(currentMeetings, '#my-meetings', 'No tienes reuniones');
+        loadContainers();
+
+        return true;
     } catch (error) {
         console.error('Error adding meeting to container:', error);
+        showNotification('Error al agregar la reunión al contenedor', 'error');
         return false;
     }
 }
