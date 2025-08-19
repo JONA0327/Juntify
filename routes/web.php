@@ -43,7 +43,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/tasks/{task}/complete', [TaskController::class, 'complete'])->name('api.tasks.complete');
 
     // Rutas de Contenedores
-    Route::get('/contenedores', [ContainerController::class, 'index'])->name('contenedores.index');
     Route::get('/api/content-containers', [ContainerController::class, 'getContainers'])->name('api.content-containers');
     Route::post('/api/content-containers', [ContainerController::class, 'store'])->name('api.content-containers.store');
     Route::put('/api/content-containers/{id}', [ContainerController::class, 'update'])->name('api.content-containers.update');

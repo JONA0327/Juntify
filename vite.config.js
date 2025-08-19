@@ -23,7 +23,6 @@ export default defineConfig({
                 'resources/js/audio-processing.js',
                 'resources/js/upload-notifications.js',
                 'resources/css/tasks.css', // <-- AÑADE ESTA LÍNEA
-                'resources/js/containers.js', // <-- ARCHIVO DE CONTENEDORES
             ],
             refresh: true,
         }),
