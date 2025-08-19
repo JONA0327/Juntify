@@ -1030,6 +1030,19 @@ function renderSpeakers(speakers) {
     `;
 }
 
+function parseTimeString(timeStr) {
+    if (!timeStr) return NaN;
+    const parts = timeStr.split(':').map(p => parseFloat(p));
+    if (parts.some(isNaN)) return NaN;
+    if (parts.length === 3) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    if (parts.length === 2) {
+        return parts[0] * 60 + parts[1];
+    }
+    return parts[0];
+}
+
 function renderSegments(segments) {
     if (!segments || segments.length === 0) {
         meetingSegments = [];
@@ -1041,11 +1054,51 @@ function renderSegments(segments) {
     meetingSegments = segments.map((segment, index) => {
         const speaker = segment.speaker || `Hablante ${index + 1}`;
         const avatar = speaker.toString().slice(0, 2).toUpperCase();
-        const parsedStart = parseFloat(segment.start);
-        const parsedEnd = parseFloat(segment.end);
-        const start = isNaN(parsedStart) ? 0 : parsedStart;
-        const end = isNaN(parsedEnd) ? 0 : parsedEnd;
-        const time = segment.timestamp || `${formatTime(start * 1000)} - ${formatTime(end * 1000)}`;
+
+        let start = parseFloat(segment.start);
+        let end = parseFloat(segment.end);
+
+        if (segment.start == null || isNaN(start) || segment.end == null || isNaN(end)) {
+            const rawTime = (segment.time || segment.timestamp || '').trim();
+            const [startStr, endStr] = rawTime.split('-').map(t => t.trim());
+
+            if ((segment.start == null || isNaN(start)) && startStr) {
+                const parsed = parseTimeString(startStr);
+                if (!isNaN(parsed)) start = parsed;
+            }
+
+            if ((segment.end == null || isNaN(end)) && endStr) {
+                const parsed = parseTimeString(endStr);
+                if (!isNaN(parsed)) end = parsed;
+            }
+
+            if (segment.end == null || isNaN(end)) {
+                let nextStart = NaN;
+                const nextSegment = segments[index + 1];
+                if (nextSegment) {
+                    nextStart = parseFloat(nextSegment.start);
+                    if (isNaN(nextStart)) {
+                        const nextRaw = (nextSegment.time || nextSegment.timestamp || '').split('-')[0]?.trim();
+                        nextStart = parseTimeString(nextRaw);
+                    }
+                }
+
+                if (!isNaN(nextStart)) {
+                    end = nextStart;
+                } else {
+                    const duration = parseFloat(currentModalMeeting?.audio_duration) ||
+                        (meetingAudioPlayer && !isNaN(meetingAudioPlayer.duration) ? meetingAudioPlayer.duration : NaN);
+                    if (!isNaN(duration) && duration > 0) {
+                        end = duration;
+                    }
+                }
+            }
+        }
+
+        start = isNaN(start) ? 0 : start;
+        end = isNaN(end) ? start : end;
+        const time = `${formatTime(start * 1000)} - ${formatTime(end * 1000)}`;
+
         return { ...segment, speaker, avatar, start, end, time, text: segment.text || '' };
     });
 
