@@ -609,6 +609,64 @@ function createMeetingCard(meeting) {
     `;
 }
 
+function createContainerMeetingCard(meeting) {
+    return `
+        <div class="meeting-card" data-meeting-id="${meeting.id}" draggable="true">
+            <div class="meeting-card-header">
+                <div class="meeting-content">
+                    <div class="meeting-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <h3 class="meeting-title">${escapeHtml(meeting.meeting_name)}</h3>
+                    <p class="meeting-date">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        ${meeting.created_at}
+                    </p>
+
+                    <div class="meeting-folders">
+                        <div class="folder-info">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span>Transcripción:</span>
+                            <span class="folder-name">${escapeHtml(meeting.transcript_folder)}</span>
+                        </div>
+                        <div class="folder-info">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728" />
+                            </svg>
+                            <span>Audio:</span>
+                            <span class="folder-name">${escapeHtml(meeting.audio_folder)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="meeting-actions">
+                    <button class="icon-btn remove-btn" onclick="removeMeetingFromContainer(${meeting.id})" title="Quitar del contenedor">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2h3" />
+                        </svg>
+                    </button>
+                    <button class="icon-btn edit-btn" onclick="editMeetingName(${meeting.id})" title="Editar nombre de reunión">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                    </button>
+                    <button class="icon-btn delete-btn" onclick="deleteMeeting(${meeting.id})" title="Eliminar reunión">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function createContainerCard(container) {
     return `
         <div class="meeting-card container-card" data-container-id="${container.id}" onclick="openContainerMeetingsModal(${container.id})" style="cursor: pointer;">
@@ -656,12 +714,17 @@ function attachMeetingEventListeners() {
         });
         card.addEventListener('click', function(e) {
             // No abrir modal si se hizo click en los botones de acción
-            if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn')) {
+            if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn') || e.target.closest('.remove-btn')) {
                 return;
             }
 
             const meetingId = this.dataset.meetingId;
-            openMeetingModal(meetingId);
+            const containerModal = document.getElementById('container-meetings-modal');
+            if (containerModal && !containerModal.classList.contains('hidden')) {
+                openMeetingModalFromContainer(meetingId);
+            } else {
+                openMeetingModal(meetingId);
+            }
         });
     });
 }
@@ -717,6 +780,35 @@ async function addMeetingToContainer(meetingId, containerId) {
         console.error('Error adding meeting to container:', error);
         showNotification('Error al agregar la reunión al contenedor', 'error');
         return false;
+    }
+}
+
+async function removeMeetingFromContainer(meetingId) {
+    if (!currentContainerForMeetings) return;
+
+    try {
+        const response = await fetch(`/api/content-containers/${currentContainerForMeetings}/meetings/${meetingId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            showNotification(data.message || 'Error al quitar la reunión del contenedor', 'error');
+            return;
+        }
+
+        showNotification(data.message || 'Reunión quitada del contenedor', 'success');
+        loadContainerMeetings(currentContainerForMeetings);
+        loadContainers();
+    } catch (error) {
+        console.error('Error removing meeting from container:', error);
+        showNotification('Error al quitar la reunión del contenedor', 'error');
     }
 }
 
@@ -2466,31 +2558,8 @@ async function loadContainerMeetings(containerId) {
 function renderContainerMeetings(meetings) {
     const container = document.getElementById('container-meetings-list');
 
-    const meetingsHTML = meetings.map(meeting => `
-        <div class="bg-slate-800/50 backdrop-blur-custom border border-slate-700/50 rounded-xl p-4 hover:bg-slate-800/70 hover:border-slate-600/50 transition-all duration-200 shadow-lg shadow-black/10 cursor-pointer"
-             onclick="openMeetingModalFromContainer(${meeting.id})">
-            <div class="flex items-center justify-between">
-                <div class="flex-1">
-                    <h4 class="text-lg font-semibold text-white mb-2">${escapeHtml(meeting.meeting_name)}</h4>
-                    <div class="flex items-center gap-4 text-sm text-slate-400">
-                        <div class="flex items-center gap-1">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <span>${meeting.created_at}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2 text-slate-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                </div>
-            </div>
-        </div>
-    `).join('');
-
-    container.innerHTML = meetingsHTML;
+    container.innerHTML = meetings.map(m => createContainerMeetingCard(m)).join('');
+    attachMeetingEventListeners();
 }
 
 function openMeetingModalFromContainer(meetingId) {
@@ -2546,3 +2615,4 @@ window.openContainerMeetingsModal = openContainerMeetingsModal;
 window.closeContainerMeetingsModal = closeContainerMeetingsModal;
 window.retryLoadContainerMeetings = retryLoadContainerMeetings;
 window.openMeetingModalFromContainer = openMeetingModalFromContainer;
+window.removeMeetingFromContainer = removeMeetingFromContainer;
