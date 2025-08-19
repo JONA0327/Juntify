@@ -715,7 +715,10 @@ function showMeetingModal(meeting) {
     console.log('Datos de la reunión:', meeting);
     console.log('Ruta de audio:', meeting.audio_path);
 
-    const audioSrc = meeting.audio_path ? `/api/meetings/${meeting.id}/audio` : '';
+    const isExternalAudio = meeting.audio_path && meeting.audio_path.startsWith('http');
+    const audioSrc = meeting.audio_path
+        ? (isExternalAudio ? meeting.audio_path : `/api/meetings/${meeting.id}/audio`)
+        : '';
 
     const modalHtml = `
         <div class="meeting-modal" id="meetingModal">
@@ -904,7 +907,7 @@ function showMeetingModal(meeting) {
                 errorMsg.textContent = `No se pudo cargar el audio (${errorName}). `;
 
                 const downloadLink = document.createElement('a');
-                downloadLink.href = encodeURI(audioSrc);
+                downloadLink.href = encodeURI(isExternalAudio ? meeting.audio_path : audioSrc);
                 downloadLink.textContent = 'Descargar audio';
                 downloadLink.className = 'underline';
                 errorMsg.appendChild(downloadLink);
