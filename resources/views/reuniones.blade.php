@@ -74,7 +74,7 @@
 
                         <!-- Botones de Acción -->
                         <div class="flex items-center gap-3">
-                            <button class="inline-flex items-center gap-3 px-5 py-3 bg-slate-800/50 backdrop-blur-custom border border-slate-700/50 rounded-xl text-slate-200 font-medium hover:bg-slate-700/50 hover:border-slate-600/50 transition-all duration-200 group shadow-lg shadow-black/10">
+                            <button id="create-container-btn" class="inline-flex items-center gap-3 px-5 py-3 bg-slate-800/50 backdrop-blur-custom border border-slate-700/50 rounded-xl text-slate-200 font-medium hover:bg-slate-700/50 hover:border-slate-600/50 transition-all duration-200 group shadow-lg shadow-black/10">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400 group-hover:text-slate-300 transition-colors duration-200" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
                                 <span>Nuevo Contenedor</span>
                             </button>
@@ -199,6 +199,78 @@
                     <x-icon name="check" class="btn-icon" />
                     <span class="sr-only">Cambiar Globalmente</span>
                     Cambiar Globalmente
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Crear/Editar Contenedor -->
+    <div id="container-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            <!-- Header del Modal -->
+            <div class="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4 border-b border-slate-600">
+                <h3 id="modal-title" class="text-xl font-bold text-white">Crear Contenedor</h3>
+            </div>
+
+            <!-- Contenido del Modal -->
+            <div class="p-6 space-y-6">
+                <form id="container-form">
+                    <!-- Campo Nombre -->
+                    <div class="space-y-2">
+                        <label for="container-name" class="block text-sm font-medium text-slate-300">
+                            Nombre del contenedor
+                        </label>
+                        <input
+                            type="text"
+                            id="container-name"
+                            name="name"
+                            placeholder="Ej: Reuniones Q1 2025"
+                            class="bg-slate-700/50 border border-slate-600 rounded-xl py-3 px-4 block w-full text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all duration-200"
+                            required
+                            maxlength="255"
+                        >
+                        <div id="name-error" class="text-red-400 text-sm hidden"></div>
+                    </div>
+
+                    <!-- Campo Descripción -->
+                    <div class="space-y-2">
+                        <label for="container-description" class="block text-sm font-medium text-slate-300">
+                            Descripción (opcional)
+                        </label>
+                        <textarea
+                            id="container-description"
+                            name="description"
+                            placeholder="Describe el propósito de este contenedor..."
+                            rows="3"
+                            class="bg-slate-700/50 border border-slate-600 rounded-xl py-3 px-4 block w-full text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all duration-200 resize-none"
+                            maxlength="1000"
+                        ></textarea>
+                        <div class="text-xs text-slate-400 text-right">
+                            <span id="description-count">0</span>/1000 caracteres
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Footer del Modal -->
+            <div class="bg-slate-900/50 px-6 py-4 flex justify-end gap-3 border-t border-slate-600">
+                <button
+                    id="cancel-modal-btn"
+                    type="button"
+                    class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-6 py-2.5 rounded-xl font-medium transition-all duration-200 border border-slate-600"
+                >
+                    Cancelar
+                </button>
+                <button
+                    id="save-container-btn"
+                    type="submit"
+                    class="bg-gradient-to-r from-yellow-400 to-amber-400 hover:from-yellow-300 hover:to-amber-300 text-slate-900 px-6 py-2.5 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-yellow-400/20 hover:shadow-yellow-400/30"
+                >
+                    <span id="save-btn-text">Guardar</span>
+                    <svg id="save-btn-loading" class="animate-spin h-4 w-4 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
                 </button>
             </div>
         </div>

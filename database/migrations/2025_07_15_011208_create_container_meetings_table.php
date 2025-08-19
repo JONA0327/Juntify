@@ -8,14 +8,15 @@ return new class extends Migration
 {
      public function up()
     {
-        Schema::create('container_meetings', function (Blueprint $table) {
+        Schema::create('meeting_content_relations', function (Blueprint $table) {
             $table->unsignedInteger('container_id');
             $table->unsignedBigInteger('meeting_id');
             $table->primary(['container_id', 'meeting_id']);
+            $table->timestamps();
         });
     }
     public function down()
     {
-        Schema::dropIfExists('container_meetings');
+        Schema::dropIfExists('meeting_content_relations');
     }
 };

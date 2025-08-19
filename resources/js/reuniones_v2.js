@@ -18,6 +18,7 @@ let segmentsModified = false;
 document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     initializeFadeAnimations();
+    initializeContainers(); // Inicializar funcionalidad de contenedores
     const defaultTab = document.querySelector('button[data-target="my-meetings"]');
     if (defaultTab) {
         setActiveTab(defaultTab);
@@ -151,37 +152,6 @@ async function loadSharedMeetings() {
     } catch (error) {
         console.error('Error loading shared meetings:', error);
         showErrorState(container, 'Error de conexión al cargar reuniones compartidas', loadSharedMeetings);
-    }
-}
-
-async function loadContainers() {
-    const container = document.getElementById('containers');
-    try {
-        showLoadingState(container);
-
-        const response = await fetch('/api/containers', {
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                'Accept': 'application/json',
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Error al cargar contenedores');
-        }
-
-        const data = await response.json();
-
-        if (data.success) {
-            renderMeetings(data.containers, '#containers', 'No tienes contenedores', createContainerCard);
-            attachContainerEventListeners();
-        } else {
-            showErrorState(container, data.message || 'Error al cargar contenedores', loadContainers);
-        }
-
-    } catch (error) {
-        console.error('Error loading containers:', error);
-        showErrorState(container, 'Error de conexión al cargar contenedores', loadContainers);
     }
 }
 
@@ -641,7 +611,7 @@ function createContainerCard(container) {
                 <div class="meeting-content">
                     <div class="meeting-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h4l2-2h8a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10" />
                         </svg>
                     </div>
                     <h3 class="meeting-title">${escapeHtml(container.name || container.title || '')}</h3>
@@ -651,6 +621,19 @@ function createContainerCard(container) {
                         </svg>
                         ${container.meetings_count || 0} reuniones
                     </p>
+                    ${container.description ? `<p class="meeting-description">${escapeHtml(container.description)}</p>` : ''}
+                </div>
+                <div class="meeting-actions">
+                    <button onclick="openEditContainerModal(${JSON.stringify(container).replace(/"/g, '&quot;')})" class="edit-btn" title="Editar contenedor">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                    </button>
+                    <button onclick="deleteContainer(${container.id})" class="delete-btn" title="Eliminar contenedor">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>
@@ -2017,7 +2000,300 @@ async function confirmDeleteMeeting(meetingId) {
         console.error('Error deleting meeting:', error);
         showNotification('Error al eliminar la reunión: ' + error.message, 'error');
     }
-}// ===============================================
+}
+
+// ===============================================
+// FUNCIONALIDAD DE CONTENEDORES
+// ===============================================
+let containers = [];
+let currentContainer = null;
+let isEditMode = false;
+
+// Inicializar funcionalidad de contenedores
+function initializeContainers() {
+    // Event listeners para contenedores
+    const createContainerBtn = document.getElementById('create-container-btn');
+    if (createContainerBtn) {
+        createContainerBtn.addEventListener('click', openCreateContainerModal);
+    }
+
+    const cancelModalBtn = document.getElementById('cancel-modal-btn');
+    if (cancelModalBtn) {
+        cancelModalBtn.addEventListener('click', closeContainerModal);
+    }
+
+    const saveContainerBtn = document.getElementById('save-container-btn');
+    if (saveContainerBtn) {
+        saveContainerBtn.addEventListener('click', saveContainer);
+    }
+
+    const containerForm = document.getElementById('container-form');
+    if (containerForm) {
+        containerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveContainer();
+        });
+    }
+
+    // Contador de caracteres en descripción
+    const descriptionField = document.getElementById('container-description');
+    if (descriptionField) {
+        descriptionField.addEventListener('input', updateCharacterCount);
+    }
+
+    // Cerrar modal al hacer clic fuera
+    const containerModal = document.getElementById('container-modal');
+    if (containerModal) {
+        containerModal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeContainerModal();
+            }
+        });
+    }
+
+    // Cerrar modal con ESC (ya está en setupEventListeners, pero agregamos específico para contenedores)
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !document.getElementById('container-modal').classList.contains('hidden')) {
+            closeContainerModal();
+        }
+    });
+}
+
+async function loadContainers() {
+    try {
+        const response = await fetch('/api/content-containers', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            containers = data.containers;
+            renderContainers();
+        } else {
+            throw new Error(data.message || 'Error al cargar contenedores');
+        }
+
+    } catch (error) {
+        console.error('Error loading containers:', error);
+        showNotification('Error al cargar contenedores: ' + error.message, 'error');
+    }
+}
+
+function renderContainers() {
+    const containersTab = document.getElementById('containers');
+
+    if (!containersTab) return;
+
+    if (containers.length === 0) {
+        containersTab.innerHTML = `
+            <div class="text-center py-20">
+                <div class="mx-auto max-w-md">
+                    <div class="bg-slate-800/30 backdrop-blur-sm rounded-full h-24 w-24 mx-auto mb-6 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-slate-300 mb-3">No hay contenedores</h3>
+                    <p class="text-slate-400 mb-6">Crea tu primer contenedor para organizar tus reuniones</p>
+                    <button onclick="openCreateContainerModal()" class="bg-gradient-to-r from-yellow-400 to-amber-400 text-slate-900 px-6 py-3 rounded-xl font-semibold hover:from-yellow-300 hover:to-amber-300 transition-all duration-200 shadow-lg shadow-yellow-400/20 hover:shadow-yellow-400/30">
+                        Crear Primer Contenedor
+                    </button>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    containersTab.innerHTML = `
+        <div class="space-y-4">
+            ${containers.map(container => createContainerCard(container)).join('')}
+        </div>
+    `;
+
+    // Agregar event listeners a los botones de cada contenedor
+    containers.forEach(container => {
+        const editBtn = document.getElementById(`edit-container-${container.id}`);
+        const deleteBtn = document.getElementById(`delete-container-${container.id}`);
+
+        if (editBtn) {
+            editBtn.addEventListener('click', () => openEditContainerModal(container));
+        }
+
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => deleteContainer(container.id));
+        }
+    });
+}
+
+function openCreateContainerModal() {
+    isEditMode = false;
+    currentContainer = null;
+
+    document.getElementById('modal-title').textContent = 'Crear Contenedor';
+    document.getElementById('save-btn-text').textContent = 'Guardar';
+
+    // Limpiar formulario
+    document.getElementById('container-form').reset();
+    clearContainerErrors();
+    updateCharacterCount();
+
+    document.getElementById('container-modal').classList.remove('hidden');
+    document.getElementById('container-name').focus();
+}
+
+function openEditContainerModal(container) {
+    isEditMode = true;
+    currentContainer = container;
+
+    document.getElementById('modal-title').textContent = 'Editar Contenedor';
+    document.getElementById('save-btn-text').textContent = 'Actualizar';
+
+    // Llenar formulario
+    document.getElementById('container-name').value = container.name;
+    document.getElementById('container-description').value = container.description || '';
+    clearContainerErrors();
+    updateCharacterCount();
+
+    document.getElementById('container-modal').classList.remove('hidden');
+    document.getElementById('container-name').focus();
+}
+
+function closeContainerModal() {
+    document.getElementById('container-modal').classList.add('hidden');
+    currentContainer = null;
+    isEditMode = false;
+    clearContainerErrors();
+}
+
+async function saveContainer() {
+    const saveBtn = document.getElementById('save-container-btn');
+    const saveBtnText = document.getElementById('save-btn-text');
+    const saveBtnLoading = document.getElementById('save-btn-loading');
+
+    // Obtener datos del formulario
+    const formData = {
+        name: document.getElementById('container-name').value.trim(),
+        description: document.getElementById('container-description').value.trim() || null
+    };
+
+    // Validar
+    if (!formData.name) {
+        showFieldError('name-error', 'El nombre es requerido');
+        return;
+    }
+
+    try {
+        // UI Loading
+        saveBtn.disabled = true;
+        saveBtnText.classList.add('hidden');
+        saveBtnLoading.classList.remove('hidden');
+        clearContainerErrors();
+
+        const url = isEditMode ? `/api/content-containers/${currentContainer.id}` : '/api/content-containers';
+        const method = isEditMode ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification(data.message, 'success');
+            closeContainerModal();
+            loadContainers(); // Recargar lista
+        } else {
+            if (data.errors) {
+                // Mostrar errores de validación
+                Object.keys(data.errors).forEach(field => {
+                    showFieldError(`${field}-error`, data.errors[field][0]);
+                });
+            } else {
+                throw new Error(data.message);
+            }
+        }
+
+    } catch (error) {
+        console.error('Error saving container:', error);
+        showNotification('Error al guardar: ' + error.message, 'error');
+
+    } finally {
+        // Reset UI
+        saveBtn.disabled = false;
+        saveBtnText.classList.remove('hidden');
+        saveBtnLoading.classList.add('hidden');
+    }
+}
+
+async function deleteContainer(containerId) {
+    if (!confirm('¿Estás seguro de que quieres eliminar este contenedor? Esta acción no se puede deshacer.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/content-containers/${containerId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification(data.message, 'success');
+            loadContainers(); // Recargar lista
+        } else {
+            throw new Error(data.message);
+        }
+
+    } catch (error) {
+        console.error('Error deleting container:', error);
+        showNotification('Error al eliminar: ' + error.message, 'error');
+    }
+}
+
+function updateCharacterCount() {
+    const textarea = document.getElementById('container-description');
+    const counter = document.getElementById('description-count');
+
+    if (textarea && counter) {
+        counter.textContent = textarea.value.length;
+    }
+}
+
+function showFieldError(elementId, message) {
+    const errorElement = document.getElementById(elementId);
+    if (errorElement) {
+        errorElement.textContent = message;
+        errorElement.classList.remove('hidden');
+    }
+}
+
+function clearContainerErrors() {
+    const errorElements = document.querySelectorAll('[id$="-error"]');
+    errorElements.forEach(element => {
+        element.classList.add('hidden');
+        element.textContent = '';
+    });
+}
+
+// ===============================================
 // FUNCIONES GLOBALES PARA HTML INLINE
 // ===============================================
 // Hacer funciones disponibles globalmente para onclick en HTML
@@ -2040,3 +2316,10 @@ window.confirmSpeakerChange = confirmSpeakerChange;
 window.openGlobalSpeakerModal = openGlobalSpeakerModal;
 window.closeGlobalSpeakerModal = closeGlobalSpeakerModal;
 window.confirmGlobalSpeakerChange = confirmGlobalSpeakerChange;
+
+// Funciones de contenedores
+window.openCreateContainerModal = openCreateContainerModal;
+window.openEditContainerModal = openEditContainerModal;
+window.closeContainerModal = closeContainerModal;
+window.saveContainer = saveContainer;
+window.deleteContainer = deleteContainer;

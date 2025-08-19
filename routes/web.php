@@ -9,6 +9,7 @@ use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\TranscriptionController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\ContainerController;
 
 
 Route::get('/', function () {
@@ -40,6 +41,13 @@ Route::middleware('auth')->group(function () {
     Route::put('/api/tasks/{task}', [TaskController::class, 'update'])->name('api.tasks.update');
     Route::delete('/api/tasks/{task}', [TaskController::class, 'destroy'])->name('api.tasks.destroy');
     Route::post('/api/tasks/{task}/complete', [TaskController::class, 'complete'])->name('api.tasks.complete');
+
+    // Rutas de Contenedores
+    Route::get('/contenedores', [ContainerController::class, 'index'])->name('contenedores.index');
+    Route::get('/api/content-containers', [ContainerController::class, 'getContainers'])->name('api.content-containers');
+    Route::post('/api/content-containers', [ContainerController::class, 'store'])->name('api.content-containers.store');
+    Route::put('/api/content-containers/{id}', [ContainerController::class, 'update'])->name('api.content-containers.update');
+    Route::delete('/api/content-containers/{id}', [ContainerController::class, 'destroy'])->name('api.content-containers.destroy');
 
     // Rutas API para reuniones
     Route::get('/api/meetings', [MeetingController::class, 'getMeetings'])->name('api.meetings');
