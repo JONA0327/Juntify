@@ -39,6 +39,7 @@ class MeetingController extends Controller
             $this->setGoogleDriveToken($user);
 
             $meetings = \App\Models\TranscriptionLaravel::where('username', $user->username)
+                ->whereDoesntHave('containers')
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($meeting) {
@@ -71,18 +72,19 @@ class MeetingController extends Controller
             $this->setGoogleDriveToken($user);
 
             $meetings = TranscriptionLaravel::where('username', $user->username)
+                ->whereDoesntHave('containers')
                 ->orderBy('created_at', 'desc')
-        ->get()
-        ->map(function ($meeting) {
+                ->get()
+                ->map(function ($meeting) {
                     return [
                         'id' => $meeting->id,
                         'meeting_name' => $meeting->meeting_name,
                         'created_at' => $meeting->created_at->format('d/m/Y H:i'),
                         'audio_drive_id' => $meeting->audio_drive_id,
                         'transcript_drive_id' => $meeting->transcript_drive_id,
-            // Carpeta real desde Drive (subcarpeta o raíz)
-            'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
-            'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
+                        // Carpeta real desde Drive (subcarpeta o raíz)
+                        'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
+                        'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
                     ];
                 });
 
