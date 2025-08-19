@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\MeetingContentContainer;
+use App\Models\MeetingContentRelation;
+use App\Models\TranscriptionLaravel;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -152,6 +154,65 @@ class ContainerController extends Controller
                 'message' => 'Error al actualizar el contenedor: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Agrega una reunión existente a un contenedor
+     */
+    public function addMeeting(Request $request, $id): JsonResponse
+    {
+        $user = Auth::user();
+
+        $data = $request->validate([
+            'meeting_id' => ['required', 'exists:transcriptions_laravel,id'],
+        ]);
+
+        $container = MeetingContentContainer::where('id', $id)
+            ->where('username', $user->username)
+            ->firstOrFail();
+
+        $meeting = TranscriptionLaravel::where('id', $data['meeting_id'])
+            ->where('username', $user->username)
+            ->firstOrFail();
+
+        MeetingContentRelation::firstOrCreate([
+            'container_id' => $container->id,
+            'meeting_id' => $meeting->id,
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Obtiene las reuniones asociadas a un contenedor
+     */
+    public function getMeetings($id): JsonResponse
+    {
+        $user = Auth::user();
+
+        $container = MeetingContentContainer::where('id', $id)
+            ->where('username', $user->username)
+            ->firstOrFail();
+
+        $meetings = $container->meetings()
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($meeting) {
+                return [
+                    'id' => $meeting->id,
+                    'meeting_name' => $meeting->meeting_name,
+                    'created_at' => $meeting->created_at->format('d/m/Y H:i'),
+                    'audio_drive_id' => $meeting->audio_drive_id,
+                    'transcript_drive_id' => $meeting->transcript_drive_id,
+                    'audio_folder' => '',
+                    'transcript_folder' => '',
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'meetings' => $meetings,
+        ]);
     }
 
     /**

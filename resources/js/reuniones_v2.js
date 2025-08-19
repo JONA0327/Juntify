@@ -689,7 +689,7 @@ function attachContainerEventListeners() {
 
 async function addMeetingToContainer(meetingId, containerId) {
     try {
-        await fetch(`/api/containers/${containerId}/meetings`, {
+        await fetch(`/api/content-containers/${containerId}/meetings`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -712,7 +712,7 @@ async function toggleContainer(containerId, card) {
     }
 
     try {
-        const response = await fetch(`/api/containers/${containerId}/meetings`, {
+        const response = await fetch(`/api/content-containers/${containerId}/meetings`, {
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'Accept': 'application/json',
@@ -779,7 +779,7 @@ function closeContainerSelectModal() {
 
 async function openContainerMeetingsModal(containerId) {
     try {
-        const response = await fetch(`/api/containers/${containerId}/meetings`, {
+        const response = await fetch(`/api/content-containers/${containerId}/meetings`, {
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'Accept': 'application/json',

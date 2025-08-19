@@ -1,11 +1,11 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\TranscriptionLaravel;
 use App\Models\MeetingShare;
-use App\Models\Container;
+use App\Models\MeetingContentContainer;
+use App\Models\MeetingContentRelation;
 
 uses(RefreshDatabase::class);
 
@@ -43,9 +43,10 @@ test('shared meetings endpoint returns meetings for authenticated user', functio
 test('containers endpoint returns containers with meeting count', function () {
     $user = User::factory()->create(['username' => 'user']);
 
-    $container = Container::create([
+    $container = MeetingContentContainer::create([
         'username' => $user->username,
         'name' => 'My Container',
+        'is_active' => true,
     ]);
 
     $meeting = TranscriptionLaravel::factory()->create([
@@ -55,12 +56,12 @@ test('containers endpoint returns containers with meeting count', function () {
         'transcript_drive_id' => null,
     ]);
 
-    DB::table('container_meetings')->insert([
+    MeetingContentRelation::create([
         'container_id' => $container->id,
         'meeting_id' => $meeting->id,
     ]);
 
-    $response = $this->actingAs($user)->getJson('/api/containers');
+    $response = $this->actingAs($user)->getJson('/api/content-containers');
 
     $response->assertOk()
         ->assertJson([

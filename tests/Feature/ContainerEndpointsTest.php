@@ -3,18 +3,19 @@
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Models\User;
 use App\Models\TranscriptionLaravel;
-use App\Models\Container;
+use App\Models\MeetingContentContainer;
+use App\Models\MeetingContentRelation;
 
 uses(RefreshDatabase::class);
 
 test('user can create container', function () {
     $user = User::factory()->create(['username' => 'alice']);
 
-    $response = $this->actingAs($user)->postJson('/api/containers', [
+    $response = $this->actingAs($user)->postJson('/api/content-containers', [
         'name' => 'New Container',
     ]);
 
-    $response->assertCreated()
+    $response->assertOk()
         ->assertJson([
             'success' => true,
             'container' => [
@@ -22,7 +23,7 @@ test('user can create container', function () {
             ],
         ]);
 
-    $this->assertDatabaseHas('containers', [
+    $this->assertDatabaseHas('meeting_content_containers', [
         'username' => $user->username,
         'name' => 'New Container',
     ]);
@@ -31,9 +32,10 @@ test('user can create container', function () {
 test('user can add meeting to container and list meetings', function () {
     $user = User::factory()->create(['username' => 'bob']);
 
-    $container = Container::create([
+    $container = MeetingContentContainer::create([
         'username' => $user->username,
         'name' => 'Work',
+        'is_active' => true,
     ]);
 
     $meeting = TranscriptionLaravel::factory()->create([
@@ -43,18 +45,18 @@ test('user can add meeting to container and list meetings', function () {
         'transcript_drive_id' => null,
     ]);
 
-    $addResponse = $this->actingAs($user)->postJson("/api/containers/{$container->id}/meetings", [
+    $addResponse = $this->actingAs($user)->postJson("/api/content-containers/{$container->id}/meetings", [
         'meeting_id' => $meeting->id,
     ]);
 
     $addResponse->assertOk()->assertJson(['success' => true]);
 
-    $this->assertDatabaseHas('container_meetings', [
+    $this->assertDatabaseHas('meeting_content_relations', [
         'container_id' => $container->id,
         'meeting_id' => $meeting->id,
     ]);
 
-    $listResponse = $this->actingAs($user)->getJson("/api/containers/{$container->id}/meetings");
+    $listResponse = $this->actingAs($user)->getJson("/api/content-containers/{$container->id}/meetings");
 
     $listResponse->assertOk()
         ->assertJson([
