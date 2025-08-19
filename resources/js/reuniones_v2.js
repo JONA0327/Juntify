@@ -689,7 +689,7 @@ function attachContainerEventListeners() {
 
 async function addMeetingToContainer(meetingId, containerId) {
     try {
-        await fetch(`/api/content-containers/${containerId}/meetings`, {
+        const response = await fetch(`/api/content-containers/${containerId}/meetings`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -698,8 +698,14 @@ async function addMeetingToContainer(meetingId, containerId) {
             },
             body: JSON.stringify({ meeting_id: meetingId })
         });
+
+        if (!response.ok) throw new Error('Error adding meeting to container');
+
+        const data = await response.json();
+        return data.success;
     } catch (error) {
         console.error('Error adding meeting to container:', error);
+        return false;
     }
 }
 
@@ -759,11 +765,13 @@ function openContainerSelectModal(meetingId) {
     document.body.style.overflow = 'hidden';
 
     document.querySelectorAll('#containerSelectModal [data-id]').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             const containerId = btn.dataset.id;
-            addMeetingToContainer(meetingId, containerId);
-            closeContainerSelectModal();
-            openContainerMeetingsModal(containerId);
+            const success = await addMeetingToContainer(meetingId, containerId);
+            if (success) {
+                closeContainerSelectModal();
+                openContainerMeetingsModal(containerId);
+            }
         });
     });
 }
