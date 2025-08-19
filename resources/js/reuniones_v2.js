@@ -953,6 +953,15 @@ function showMeetingModal(meeting) {
             pauseBtn.classList.add('hidden');
             pauseBtn.classList.remove('active');
             playBtn.classList.remove('hidden');
+
+            // Limpiar manejador de segmentos y restablecer botones cuando se pausa
+            if (segmentEndHandler) {
+                meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+                segmentEndHandler = null;
+            }
+            if (currentSegmentIndex !== null) {
+                updateSegmentButtons(null);
+            }
         });
 
         progress.addEventListener('input', () => {
@@ -1133,6 +1142,13 @@ function setSegmentButtonsDisabled(disabled) {
     });
 }
 
+function resetSegmentProgress(index) {
+    const progress = document.querySelector(`[data-segment="${index}"] .timeline-progress-mini`);
+    if (progress) {
+        progress.style.width = '0%';
+    }
+}
+
 function playSegmentAudio(segmentIndex) {
     const segment = meetingSegments[segmentIndex];
     if (!segment) return;
@@ -1155,6 +1171,7 @@ function playSegmentAudio(segmentIndex) {
             meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
             segmentEndHandler = null;
         }
+        resetSegmentProgress(segmentIndex);
         updateSegmentButtons(null);
         currentSegmentIndex = null;
         return;
@@ -1168,13 +1185,26 @@ function playSegmentAudio(segmentIndex) {
     if (!meetingAudioPlayer.paused) {
         meetingAudioPlayer.pause();
     }
+    if (currentSegmentIndex !== null && currentSegmentIndex !== segmentIndex) {
+        resetSegmentProgress(currentSegmentIndex);
+    }
     const stopTime = segment.end;
+    const startTime = segment.start;
 
     segmentEndHandler = () => {
+        const duration = stopTime - startTime;
+        const elapsed = meetingAudioPlayer.currentTime - startTime;
+        const progressEl = document.querySelector(`[data-segment="${segmentIndex}"] .timeline-progress-mini`);
+        if (progressEl && duration > 0) {
+            const percent = Math.min(100, Math.max(0, (elapsed / duration) * 100));
+            progressEl.style.width = percent + '%';
+        }
+
         if (meetingAudioPlayer.currentTime >= stopTime) {
             meetingAudioPlayer.pause();
             meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
             segmentEndHandler = null;
+            resetSegmentProgress(segmentIndex);
             updateSegmentButtons(null);
             currentSegmentIndex = null;
         }
@@ -1183,10 +1213,12 @@ function playSegmentAudio(segmentIndex) {
     meetingAudioPlayer.addEventListener('timeupdate', segmentEndHandler);
 
     const startPlayback = () => {
-        meetingAudioPlayer.currentTime = segment.start;
+        resetSegmentProgress(segmentIndex);
+        meetingAudioPlayer.currentTime = startTime;
         meetingAudioPlayer.play().catch(error => {
             console.warn('Error reproduciendo segmento de audio:', error);
             alert('No se pudo reproducir este segmento de audio.');
+            resetSegmentProgress(segmentIndex);
             updateSegmentButtons(null);
             currentSegmentIndex = null;
             if (segmentEndHandler) {
