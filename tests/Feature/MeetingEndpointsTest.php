@@ -6,6 +6,7 @@ use App\Models\TranscriptionLaravel;
 use App\Models\MeetingShare;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
+use App\Models\Container;
 
 uses(RefreshDatabase::class);
 
@@ -73,6 +74,73 @@ test('containers endpoint returns containers with meeting count', function () {
                     'meetings_count' => 1,
                 ],
             ],
+        ]);
+});
+
+test('index view only lists meetings without containers', function () {
+    $user = User::factory()->create(['username' => 'user']);
+
+    $meetingWithout = TranscriptionLaravel::factory()->create([
+        'username' => $user->username,
+        'meeting_name' => 'Free Meeting',
+        'audio_drive_id' => null,
+        'transcript_drive_id' => null,
+    ]);
+
+    $meetingWith = TranscriptionLaravel::factory()->create([
+        'username' => $user->username,
+        'meeting_name' => 'Contained Meeting',
+        'audio_drive_id' => null,
+        'transcript_drive_id' => null,
+    ]);
+
+    $container = Container::create([
+        'username' => $user->username,
+        'name' => 'Container',
+    ]);
+    $container->meetings()->attach($meetingWith->id);
+
+    $response = $this->actingAs($user)->get('/reuniones');
+
+    $response->assertOk();
+    $response->assertSee('Free Meeting');
+    $response->assertDontSee('Contained Meeting');
+});
+
+test('/api/meetings excludes meetings inside containers', function () {
+    $user = User::factory()->create(['username' => 'user']);
+
+    $meetingWithout = TranscriptionLaravel::factory()->create([
+        'username' => $user->username,
+        'meeting_name' => 'Free Meeting',
+        'audio_drive_id' => null,
+        'transcript_drive_id' => null,
+    ]);
+
+    $meetingWith = TranscriptionLaravel::factory()->create([
+        'username' => $user->username,
+        'meeting_name' => 'Contained Meeting',
+        'audio_drive_id' => null,
+        'transcript_drive_id' => null,
+    ]);
+
+    $container = Container::create([
+        'username' => $user->username,
+        'name' => 'Container',
+    ]);
+    $container->meetings()->attach($meetingWith->id);
+
+    $response = $this->actingAs($user)->getJson('/api/meetings');
+
+    $response->assertOk()
+        ->assertJsonCount(1, 'meetings')
+        ->assertJsonFragment([
+            'id' => $meetingWithout->id,
+            'meeting_name' => 'Free Meeting',
+        ])
+        ->assertJsonMissing([
+            'id' => $meetingWith->id,
+            'meeting_name' => 'Contained Meeting',
         ]);
 });
 
