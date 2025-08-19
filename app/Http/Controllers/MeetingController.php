@@ -786,8 +786,10 @@ class MeetingController extends Controller
             $fileName = $fileInfo->getName();
             $mimeType = $fileInfo->getMimeType();
 
-            // Detectar extensión del archivo
+            // Detectar extensión del archivo (puede normalizar a m4a si es AAC)
             $extension = $this->detectAudioExtension($fileName, $mimeType);
+            $isAacOriginal = strtolower(pathinfo($fileName, PATHINFO_EXTENSION)) === 'aac'
+                || str_contains(strtolower($mimeType), 'aac');
 
             Log::info('Información del archivo de audio', [
                 'meeting_id' => $meeting->id,
@@ -798,6 +800,20 @@ class MeetingController extends Controller
 
             // Descargar el contenido del archivo
             $audioContent = $this->downloadFromDrive($meeting->audio_drive_id);
+
+            // Si es AAC, convertir a M4A antes de guardar
+            if ($isAacOriginal) {
+                try {
+                    $audioContent = $this->convertAacToM4a($audioContent);
+                    $extension = 'm4a';
+                } catch (\Throwable $e) {
+                    Log::warning('No se pudo convertir audio AAC, se usará original', [
+                        'meeting_id' => $meeting->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                    $extension = 'aac';
+                }
+            }
 
             // Generar nombre de archivo temporal con la extensión correcta
             $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meeting->meeting_name);
@@ -815,6 +831,34 @@ class MeetingController extends Controller
     }
 
     /**
+     * Convierte contenido AAC a M4A utilizando FFmpeg
+     */
+    private function convertAacToM4a(string $content): string
+    {
+        $input = tempnam(sys_get_temp_dir(), 'aac_') . '.aac';
+        $output = tempnam(sys_get_temp_dir(), 'm4a_') . '.m4a';
+        file_put_contents($input, $content);
+
+        $command = sprintf(
+            'ffmpeg -y -i %s %s 2>&1',
+            escapeshellarg($input),
+            escapeshellarg($output)
+        );
+
+        $result = shell_exec($command);
+
+        if (!file_exists($output)) {
+            throw new \RuntimeException('FFmpeg conversion failed: ' . ($result ?? 'unknown error'));
+        }
+
+        $converted = file_get_contents($output);
+        @unlink($input);
+        @unlink($output);
+
+        return $converted;
+    }
+
+    /**
      * Detecta la extensión del archivo de audio basado en el nombre y MIME type
      */
     private function detectAudioExtension($fileName, $mimeType): string
@@ -826,6 +870,9 @@ class MeetingController extends Controller
         $validAudioExtensions = ['mp3', 'aac', 'wav', 'ogg', 'webm', 'mp4', 'm4a', 'flac'];
 
         if (in_array($extension, $validAudioExtensions)) {
+            if ($extension === 'aac') {
+                return 'm4a';
+            }
             return $extension;
         }
 
@@ -833,7 +880,8 @@ class MeetingController extends Controller
         $mimeToExtension = [
             'audio/mpeg' => 'mp3',
             'audio/mp3' => 'mp3',
-            'audio/aac' => 'aac',
+            'audio/aac' => 'm4a',
+            'audio/x-aac' => 'm4a',
             'audio/mp4' => 'mp4',
             'audio/x-m4a' => 'm4a',
             'audio/wav' => 'wav',
