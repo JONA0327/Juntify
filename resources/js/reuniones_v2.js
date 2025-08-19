@@ -1122,6 +1122,17 @@ function updateSegmentButtons(activeIndex) {
     });
 }
 
+function setSegmentButtonsDisabled(disabled) {
+    meetingSegments.forEach((_, idx) => {
+        const segmentEl = document.querySelector(`[data-segment="${idx}"]`);
+        if (!segmentEl) return;
+        const headerBtn = segmentEl.querySelector('.segment-controls .control-btn');
+        const miniBtn = segmentEl.querySelector('.play-btn-mini');
+        if (headerBtn) headerBtn.disabled = disabled;
+        if (miniBtn) miniBtn.disabled = disabled;
+    });
+}
+
 function playSegmentAudio(segmentIndex) {
     const segment = meetingSegments[segmentIndex];
     if (!segment) return;
@@ -1157,7 +1168,6 @@ function playSegmentAudio(segmentIndex) {
     if (!meetingAudioPlayer.paused) {
         meetingAudioPlayer.pause();
     }
-    meetingAudioPlayer.currentTime = segment.start;
     const stopTime = segment.end;
 
     segmentEndHandler = () => {
@@ -1171,26 +1181,37 @@ function playSegmentAudio(segmentIndex) {
     };
 
     meetingAudioPlayer.addEventListener('timeupdate', segmentEndHandler);
+
+    const startPlayback = () => {
+        meetingAudioPlayer.currentTime = segment.start;
+        meetingAudioPlayer.play().catch(error => {
+            console.warn('Error reproduciendo segmento de audio:', error);
+            alert('No se pudo reproducir este segmento de audio.');
+            updateSegmentButtons(null);
+            currentSegmentIndex = null;
+            if (segmentEndHandler) {
+                meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+                segmentEndHandler = null;
+            }
+        });
+        currentSegmentIndex = segmentIndex;
+        updateSegmentButtons(segmentIndex);
+    };
+
     if (meetingAudioPlayer.readyState < 2) {
-        alert('El audio no está listo para reproducirse.');
-        meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
-        segmentEndHandler = null;
-        updateSegmentButtons(null);
-        currentSegmentIndex = null;
+        setSegmentButtonsDisabled(true);
+        const onLoaded = () => {
+            meetingAudioPlayer.removeEventListener('canplaythrough', onLoaded);
+            meetingAudioPlayer.removeEventListener('loadeddata', onLoaded);
+            setSegmentButtonsDisabled(false);
+            startPlayback();
+        };
+        meetingAudioPlayer.addEventListener('canplaythrough', onLoaded);
+        meetingAudioPlayer.addEventListener('loadeddata', onLoaded);
         return;
     }
-    meetingAudioPlayer.play().catch(error => {
-        console.warn('Error reproduciendo segmento de audio:', error);
-        alert('No se pudo reproducir este segmento de audio.');
-        updateSegmentButtons(null);
-        currentSegmentIndex = null;
-        if (segmentEndHandler) {
-            meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
-            segmentEndHandler = null;
-        }
-    });
-    currentSegmentIndex = segmentIndex;
-    updateSegmentButtons(segmentIndex);
+
+    startPlayback();
 }
 
 function openChangeSpeakerModal(segmentIndex) {
