@@ -875,6 +875,16 @@ function showMeetingModal(meeting) {
         // Agregar manejo de errores para carga de audio
         meetingAudioPlayer.addEventListener('error', (e) => {
             console.error('Error cargando audio:', e);
+            console.error(e.target.error?.code, e.target.error?.message);
+
+            // Determinar causa del error
+            const errorCodeMap = {
+                1: 'MEDIA_ERR_ABORTED',
+                2: 'MEDIA_ERR_NETWORK',
+                3: 'MEDIA_ERR_DECODE',
+                4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+            };
+            const errorName = errorCodeMap[e.target.error?.code] || 'ERROR_DESCONOCIDO';
 
             // Deshabilitar controles
             playBtn.disabled = true;
@@ -891,7 +901,7 @@ function showMeetingModal(meeting) {
             if (audioPlayerContainer && !audioPlayerContainer.querySelector('.audio-error')) {
                 const errorMsg = document.createElement('p');
                 errorMsg.className = 'audio-error text-red-500 text-sm mt-2';
-                errorMsg.textContent = 'No se pudo cargar el audio. ';
+                errorMsg.textContent = `No se pudo cargar el audio (${errorName}). `;
 
                 const downloadLink = document.createElement('a');
                 downloadLink.href = encodeURI(audioSrc);
