@@ -781,7 +781,6 @@ function openContainerSelectModal(meetingId) {
             const success = await addMeetingToContainer(meetingId, containerId);
             if (success) {
                 closeContainerSelectModal();
-                openContainerMeetingsModal(containerId);
             }
         });
     });
