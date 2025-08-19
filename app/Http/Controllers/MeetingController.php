@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
 
@@ -719,7 +720,7 @@ class MeetingController extends Controller
     {
         $path = 'temp/' . $filename;
         Storage::disk('public')->put($path, $content);
-        $fullPath = asset('storage/' . $path);
+        $fullPath = Storage::disk('public')->path($path);
 
         // Log para debuggear
         Log::info('Archivo temporal guardado', [
@@ -741,14 +742,35 @@ class MeetingController extends Controller
     private function getAudioPath($meeting): ?string
     {
         try {
-            // Si ya tenemos una URL de descarga directa, usarla
+            // Si ya tenemos una URL de descarga directa, verificar que sea válida
             if (!empty($meeting->audio_download_url)) {
                 $normalized = $this->normalizeDriveUrl($meeting->audio_download_url);
-                Log::info('Usando URL directa de descarga para audio', [
-                    'meeting_id' => $meeting->id,
-                    'url' => $normalized
-                ]);
-                return $normalized;
+
+                try {
+                    $response = Http::head($normalized);
+                    $contentType = $response->header('Content-Type');
+                    if ($response->ok() && $contentType && str_starts_with($contentType, 'audio')) {
+                        Log::info('Usando URL directa de descarga para audio', [
+                            'meeting_id' => $meeting->id,
+                            'url' => $normalized,
+                            'content_type' => $contentType,
+                        ]);
+                        return $normalized;
+                    }
+
+                    Log::warning('URL directa de audio no válida', [
+                        'meeting_id' => $meeting->id,
+                        'url' => $normalized,
+                        'status' => $response->status(),
+                        'content_type' => $contentType,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning('Error verificando URL de audio', [
+                        'meeting_id' => $meeting->id,
+                        'url' => $normalized,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             // Si no hay URL directa, descargar desde Drive
@@ -999,6 +1021,43 @@ class MeetingController extends Controller
                 'error' => $e->getMessage()
             ]);
             return response()->json(['error' => 'Error al descargar archivo de audio'], 500);
+        }
+    }
+
+    /**
+     * Transmite el audio de una reunión
+     */
+    public function streamAudio($meeting)
+    {
+        try {
+            $user = Auth::user();
+            $this->setGoogleDriveToken($user);
+
+            $meetingModel = TranscriptionLaravel::where('id', $meeting)
+                ->where('username', $user->username)
+                ->firstOrFail();
+
+            $audioPath = $this->getAudioPath($meetingModel);
+
+            if (!$audioPath) {
+                return response()->json(['error' => 'Audio no disponible'], 404);
+            }
+
+            if (str_starts_with($audioPath, 'http')) {
+                return redirect()->away($audioPath);
+            }
+
+            $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
+
+            return response()->file($audioPath, [
+                'Content-Type' => $mimeType,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error streaming audio file', [
+                'meeting_id' => $meeting,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['error' => 'Error al obtener audio'], 500);
         }
     }
 
