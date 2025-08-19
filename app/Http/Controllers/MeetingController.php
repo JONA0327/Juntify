@@ -6,7 +6,7 @@ use App\Models\TranscriptionLaravel;
 use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\MeetingShare;
-use App\Models\MeetingContainer;
+use App\Models\Container;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -141,7 +141,7 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
-            $containers = MeetingContainer::where('username', $user->username)
+            $containers = Container::where('username', $user->username)
                 ->withCount('meetings')
                 ->orderBy('created_at', 'desc')
                 ->get()
@@ -164,6 +164,75 @@ class MeetingController extends Controller
                 'message' => 'Error al cargar contenedores: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    public function storeContainer(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        $container = Container::create([
+            'username' => $user->username,
+            'name' => $data['name'],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'container' => $container,
+        ], 201);
+    }
+
+    public function addMeetingToContainer(Request $request, $id): JsonResponse
+    {
+        $user = Auth::user();
+
+        $data = $request->validate([
+            'meeting_id' => ['required', 'exists:transcriptions_laravel,id'],
+        ]);
+
+        $container = Container::where('id', $id)
+            ->where('username', $user->username)
+            ->firstOrFail();
+
+        $meeting = TranscriptionLaravel::where('id', $data['meeting_id'])
+            ->where('username', $user->username)
+            ->firstOrFail();
+
+        $container->meetings()->syncWithoutDetaching([$meeting->id]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function getContainerMeetings($id): JsonResponse
+    {
+        $user = Auth::user();
+
+        $container = Container::where('id', $id)
+            ->where('username', $user->username)
+            ->firstOrFail();
+
+        $meetings = $container->meetings()
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($meeting) {
+                return [
+                    'id' => $meeting->id,
+                    'meeting_name' => $meeting->meeting_name,
+                    'created_at' => $meeting->created_at->format('d/m/Y H:i'),
+                    'audio_drive_id' => $meeting->audio_drive_id,
+                    'transcript_drive_id' => $meeting->transcript_drive_id,
+                    'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
+                    'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'meetings' => $meetings,
+        ]);
     }
     /**
      * Obtiene los detalles completos de una reunión específica

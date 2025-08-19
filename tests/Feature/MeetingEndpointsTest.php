@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\TranscriptionLaravel;
 use App\Models\MeetingShare;
-use App\Models\MeetingContainer;
+use App\Models\Container;
 
 uses(RefreshDatabase::class);
 
@@ -43,7 +43,7 @@ test('shared meetings endpoint returns meetings for authenticated user', functio
 test('containers endpoint returns containers with meeting count', function () {
     $user = User::factory()->create(['username' => 'user']);
 
-    $container = MeetingContainer::create([
+    $container = Container::create([
         'username' => $user->username,
         'name' => 'My Container',
     ]);

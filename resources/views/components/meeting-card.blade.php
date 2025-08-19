@@ -6,9 +6,14 @@
     'transcriptFolder' => null,
 ])
 
-<div class="meeting-card" data-meeting-id="{{ $id }}">
+<div class="meeting-card" data-meeting-id="{{ $id }}" draggable="true">
     <div class="meeting-card-header">
         <div class="meeting-content">
+            <div class="meeting-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            </div>
             <h3 class="meeting-title">{{ $meetingName }}</h3>
             <p class="meeting-date">
                 <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">

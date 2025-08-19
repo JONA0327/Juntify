@@ -9,8 +9,8 @@ return new class extends Migration
      public function up()
     {
         Schema::create('container_meetings', function (Blueprint $table) {
-            $table->integer('container_id');
-            $table->integer('meeting_id');
+            $table->unsignedInteger('container_id');
+            $table->unsignedBigInteger('meeting_id');
             $table->primary(['container_id', 'meeting_id']);
         });
     }
