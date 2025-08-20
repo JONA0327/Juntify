@@ -1001,8 +1001,27 @@ function updateAudioProgress() {
 }
 
 function downloadAudio() {
-    showNotification('Descargando archivo de audio...', 'info');
-    // Aquí iría la lógica para descargar el audio
+    if (!audioData) {
+        showNotification('No hay audio para descargar', 'error');
+        return;
+    }
+
+    // Convertir a Blob si es una cadena base64
+    const blob = (typeof audioData === 'string') ? base64ToBlob(audioData) : audioData;
+    const url = URL.createObjectURL(blob);
+
+    // Crear un enlace temporal para iniciar la descarga
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'audio_reunion.webm';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    // Revocar el ObjectURL después de la descarga
+    URL.revokeObjectURL(url);
+
+    showNotification('Descarga iniciada', 'success');
 }
 
 async function saveToDatabase() {
