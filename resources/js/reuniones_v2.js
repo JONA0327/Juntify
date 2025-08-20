@@ -1647,12 +1647,12 @@ window.closeMeetingModal = closeMeetingModal;
 // ===============================================
 // FUNCIONES DE ESTADO
 // ===============================================
-function showLoadingState(container) {
+function showLoadingState(container, message = 'Cargando reuniones...') {
     if (!container) return;
     container.innerHTML = `
         <div class="loading-state">
             <div class="loading-spinner"></div>
-            <p>Cargando reuniones...</p>
+            <p>${message}</p>
         </div>
     `;
 }
@@ -2226,6 +2226,8 @@ function initializeContainers() {
 }
 
 async function loadContainers() {
+    const containersTab = document.getElementById('containers');
+    showLoadingState(containersTab, 'Cargando contenedores...');
     try {
         const response = await fetch('/api/content-containers', {
             method: 'GET',
