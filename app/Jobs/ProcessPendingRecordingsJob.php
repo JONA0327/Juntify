@@ -8,6 +8,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class ProcessPendingRecordingsJob implements ShouldQueue
@@ -29,9 +31,27 @@ class ProcessPendingRecordingsJob implements ShouldQueue
                         'status' => PendingRecording::STATUS_COMPLETED,
                     ]);
                 } catch (Throwable $e) {
+                    $backupPath = null;
+                    try {
+                        $relativePath = "failed-audio/{$recording->id}.webm";
+                        $audio = file_get_contents($recording->audio_download_url);
+                        Storage::put($relativePath, $audio);
+                        $backupPath = Storage::path($relativePath);
+                        Log::info('Backup saved for pending recording', [
+                            'recording_id' => $recording->id,
+                            'path' => $backupPath,
+                        ]);
+                    } catch (Throwable $downloadException) {
+                        Log::warning('Failed to backup pending recording', [
+                            'recording_id' => $recording->id,
+                            'exception' => $downloadException->getMessage(),
+                        ]);
+                    }
+
                     $recording->update([
                         'status' => PendingRecording::STATUS_FAILED,
                         'error_message' => $e->getMessage(),
+                        'backup_path' => $backupPath,
                     ]);
                 }
             });
