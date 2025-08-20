@@ -49,6 +49,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/api/content-containers/{id}', [ContainerController::class, 'update'])->name('api.content-containers.update');
     Route::delete('/api/content-containers/{id}', [ContainerController::class, 'destroy'])->name('api.content-containers.destroy');
     Route::post('/api/content-containers/{id}/meetings', [ContainerController::class, 'addMeeting'])->name('api.content-containers.addMeeting');
+    Route::delete('/api/content-containers/{container}/meetings/{meeting}', [ContainerController::class, 'removeMeeting'])->name('api.content-containers.meetings.destroy');
     Route::get('/api/content-containers/{id}/meetings', [ContainerController::class, 'getMeetings'])->name('api.content-containers.meetings');
 
     // Rutas API para reuniones
