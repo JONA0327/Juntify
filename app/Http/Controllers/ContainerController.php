@@ -195,6 +195,38 @@ class ContainerController extends Controller
     }
 
     /**
+     * Elimina una reunión de un contenedor
+     */
+    public function removeMeeting($containerId, $meetingId): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+
+            $container = MeetingContentContainer::where('id', $containerId)
+                ->where('username', $user->username)
+                ->firstOrFail();
+
+            $meeting = TranscriptionLaravel::where('id', $meetingId)
+                ->where('username', $user->username)
+                ->firstOrFail();
+
+            MeetingContentRelation::where('container_id', $container->id)
+                ->where('meeting_id', $meeting->id)
+                ->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Reunión eliminada del contenedor'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar la reunión del contenedor: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Obtiene las reuniones asociadas a un contenedor
      */
     public function getMeetings($id): JsonResponse
