@@ -2560,6 +2560,7 @@ async function loadContainerMeetings(containerId) {
 function renderContainerMeetings(meetings) {
     const container = document.getElementById('container-meetings-list');
 
+    currentMeetings = meetings;
     container.innerHTML = meetings.map(m => createContainerMeetingCard(m)).join('');
     attachMeetingEventListeners();
 }
