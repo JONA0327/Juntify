@@ -19,6 +19,7 @@ class PendingRecording extends Model
         'audio_download_url',
         'status',
         'error_message',
+        'backup_path',
     ];
 
     protected $attributes = [
