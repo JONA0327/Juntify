@@ -2609,6 +2609,8 @@ window.openEditContainerModal = openEditContainerModal;
 window.closeContainerModal = closeContainerModal;
 window.saveContainer = saveContainer;
 window.deleteContainer = deleteContainer;
+window.openContainerSelectModal = openContainerSelectModal;
+window.closeContainerSelectModal = closeContainerSelectModal;
 
 // Funciones del modal de reuniones del contenedor
 window.openContainerMeetingsModal = openContainerMeetingsModal;
