@@ -283,6 +283,9 @@ async function startTranscription() {
 
         alert(userMessage);
 
+        downloadAudio();
+        showNotification('Se descargó una copia de seguridad del audio', 'info');
+
         progressText.textContent = 'Error al subir audio. Reintenta o verifica tu conexión.';
         showRetryTranscription();
     }
@@ -345,6 +348,8 @@ function pollTranscription(id) {
                 if (message) {
                     showNotification(message, 'error');
                 }
+                downloadAudio();
+                showNotification('Se descargó una copia de seguridad del audio', 'info');
                 clearInterval(interval);
                 clearInterval(typingInterval);
             }
@@ -759,6 +764,8 @@ async function processAnalysis() {
         console.error('Error en análisis', e);
         progressText.textContent = 'Error en análisis';
         showNotification('Error al analizar la reunión', 'error');
+        downloadAudio();
+        showNotification('Se descargó una copia de seguridad del audio', 'info');
         clearInterval(interval);
         return;
     }
@@ -1276,6 +1283,8 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         const msg = e.message || 'No se pudo conectar con el servidor';
         addMessage(`⚠️ ${msg}`);
         showNotification(msg, 'error');
+        downloadAudio();
+        showNotification('Se descargó una copia de seguridad del audio', 'info');
         resetUI();
         showStep(4);
         return { success: false, message: msg };
