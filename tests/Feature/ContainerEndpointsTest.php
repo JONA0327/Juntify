@@ -69,3 +69,34 @@ test('user can add meeting to container and list meetings', function () {
             ],
         ]);
 });
+
+test('user can remove meeting from container', function () {
+    $user = User::factory()->create(['username' => 'carol']);
+
+    $container = MeetingContentContainer::create([
+        'username' => $user->username,
+        'name' => 'Work',
+        'is_active' => true,
+    ]);
+
+    $meeting = TranscriptionLaravel::factory()->create([
+        'username' => $user->username,
+        'meeting_name' => 'Weekly',
+        'audio_drive_id' => null,
+        'transcript_drive_id' => null,
+    ]);
+
+    MeetingContentRelation::create([
+        'container_id' => $container->id,
+        'meeting_id' => $meeting->id,
+    ]);
+
+    $response = $this->actingAs($user)->deleteJson("/api/content-containers/{$container->id}/meetings/{$meeting->id}");
+
+    $response->assertOk()->assertJson(['success' => true]);
+
+    $this->assertDatabaseMissing('meeting_content_relations', [
+        'container_id' => $container->id,
+        'meeting_id' => $meeting->id,
+    ]);
+});
