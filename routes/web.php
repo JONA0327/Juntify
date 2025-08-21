@@ -47,6 +47,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/groups/{group}', [GroupController::class, 'show'])->name('api.groups.show');
     Route::post('/api/groups/{group}/invite', [GroupController::class, 'invite'])->name('api.groups.invite');
     Route::post('/api/groups/{group}/accept', [GroupController::class, 'accept'])->name('api.groups.accept');
+    Route::get('/groups/{group}/members', [GroupController::class, 'members'])->name('groups.members');
+    Route::patch('/api/groups/{group}/members/{user}', [GroupController::class, 'updateMemberRole'])->name('api.groups.members.update');
 
     // Notificaciones
     Route::get('/api/notifications', [NotificationController::class, 'index'])->name('api.notifications.index');
@@ -123,9 +125,13 @@ Route::get('/new-meeting', function () {
     return view('new-meeting');
 })->name('new-meeting');
 
-Route::post('/transcription', [TranscriptionController::class, 'store'])->name('transcription.store');
+Route::post('/transcription', [TranscriptionController::class, 'store'])
+    ->name('transcription.store')
+    ->middleware(['auth', 'group.role']);
 Route::get('/transcription/{id}', [TranscriptionController::class, 'show'])->name('transcription.show');
-Route::post('/analysis', [\App\Http\Controllers\AnalysisController::class, 'analyze'])->name('analysis');
+Route::post('/analysis', [\App\Http\Controllers\AnalysisController::class, 'analyze'])
+    ->name('analysis')
+    ->middleware(['auth', 'group.role']);
 
 // Admin routes (solo para roles específicos)
 Route::middleware(['auth'])->group(function () {
