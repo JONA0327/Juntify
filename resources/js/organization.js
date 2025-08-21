@@ -19,6 +19,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     currentOrg: null,
     currentGroup: null,
     inviteEmail: '',
+    inviteCode: '',
     userId: Number(document.querySelector('meta[name="user-id"]').getAttribute('content')),
 
     openOrgModal() {
@@ -127,6 +128,45 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             }
         } catch (error) {
             console.error('Error inviting member:', error);
+        }
+    },
+    async joinOrganization() {
+        if (!this.inviteCode) {
+            alert('Por favor ingresa un código de invitación');
+            return;
+        }
+
+        try {
+            const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const joinRes = await fetch(`/api/organizations/${this.inviteCode}/join`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrf
+                }
+            });
+
+            if (!joinRes.ok) {
+                const data = await joinRes.json().catch(() => ({}));
+                alert(data.message || 'No se pudo unirse a la organización');
+                return;
+            }
+
+            const orgRes = await fetch(`/api/organizations/${this.inviteCode}`);
+            if (orgRes.ok) {
+                const org = await orgRes.json();
+                if (!this.organizations.some(o => o.id === org.id)) {
+                    if (!org.groups) {
+                        org.groups = [];
+                    }
+                    this.organizations.push(org);
+                }
+            }
+
+            this.inviteCode = '';
+        } catch (error) {
+            console.error('Error joining organization:', error);
+            alert('Hubo un problema al unirse a la organización');
         }
     },
     async acceptInvitation() {
