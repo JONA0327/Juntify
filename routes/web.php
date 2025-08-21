@@ -11,6 +11,7 @@ use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\OrganizationController;
+use App\Http\Controllers\GroupController;
 
 
 Route::get('/', function () {
@@ -35,6 +36,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/reuniones', [MeetingController::class, 'index'])->name('reuniones.index');
 
     Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
+
+    // Rutas de Grupos
+    Route::post('/api/groups', [GroupController::class, 'store'])->name('api.groups.store');
+    Route::get('/api/groups/{group}', [GroupController::class, 'show'])->name('api.groups.show');
+    Route::post('/api/groups/{group}/invite', [GroupController::class, 'invite'])->name('api.groups.invite');
 
     // Rutas de Tareas
     Route::get('/tareas', [TaskController::class, 'index'])->name('tareas.index');
