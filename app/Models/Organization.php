@@ -31,5 +31,13 @@ class Organization extends Model
             $query->where('id_organizacion', $this->id);
         });
     }
+
+    public function refreshMemberCount(): int
+    {
+        $count = $this->users()->distinct()->count('users.id');
+        $this->update(['num_miembros' => $count]);
+
+        return $count;
+    }
 }
 

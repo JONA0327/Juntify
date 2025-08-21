@@ -27,6 +27,7 @@ class GroupController extends Controller
 
         $group = Group::create($validated + ['miembros' => 1]);
         $group->users()->attach($user->id, ['rol' => 'full_meeting_access']);
+        $group->organization->refreshMemberCount();
 
         return response()->json($group, 201);
     }
@@ -107,6 +108,7 @@ class GroupController extends Controller
 
         $group->users()->syncWithoutDetaching([$user->id => ['rol' => 'meeting_viewer']]);
         $group->increment('miembros');
+        $group->organization->refreshMemberCount();
 
         Notification::where('emisor', $user->id)
             ->where('type', 'group_invitation')
@@ -150,8 +152,10 @@ class GroupController extends Controller
             abort(403);
         }
 
+        $organization = $group->organization;
         $group->users()->detach();
         $group->delete();
+        $organization->refreshMemberCount();
 
         return response()->json(['deleted' => true]);
     }
