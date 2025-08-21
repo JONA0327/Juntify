@@ -1,0 +1,47 @@
+@import './reuniones_v2.css';
+
+/* Card styles for organizations */
+.organization-card {
+    background: linear-gradient(135deg,
+                rgba(30, 41, 59, 0.7) 0%,
+                rgba(30, 41, 59, 0.5) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border-slate-700);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.organization-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(251, 191, 36, 0.3);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3),
+                0 10px 10px -5px rgba(0, 0, 0, 0.2),
+                0 0 30px rgba(251, 191, 36, 0.1);
+}
+
+/* Group cards */
+.group-card {
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    border-radius: 0.75rem;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.group-card:hover {
+    background: rgba(51, 65, 85, 0.5);
+    border-color: rgba(100, 116, 139, 0.5);
+}
+
+/* Modal styling */
+.organization-modal {
+    background: rgba(30, 41, 59, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    border-radius: 1rem;
+    box-shadow: 0 20px 25px -5px var(--shadow-black);
+}
