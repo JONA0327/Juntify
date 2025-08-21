@@ -119,67 +119,103 @@
                         <h2 class="text-lg font-semibold mb-2" x-text="currentGroup?.nombre_grupo"></h2>
                         <p class="text-sm text-slate-400 mb-4" x-text="currentGroup?.descripcion"></p>
 
-                        <table class="w-full mb-4 border border-slate-700/50">
-                            <thead>
-                                <tr class="bg-slate-800/50">
-                                    <th class="text-left p-2">Miembro</th>
-                                    <th class="p-2">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="user in currentGroup?.users" :key="user.id">
-                                    <tr class="border-t border-slate-700/50">
-                                        <td class="p-2" x-text="user.full_name + ' (@' + user.username + ')'"></td>
-                                        <td class="p-2 text-center">
-                                            <button @click.stop="removeMember(user)" class="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Quitar</button>
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-
-                        <div class="mb-4">
-                            <button @click="showInviteOptions = !showInviteOptions" class="px-3 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Invitar miembro</button>
-                            <div x-show="showInviteOptions" class="mt-2" x-cloak>
-                                <input type="email"
-                                       x-model="inviteEmail"
-                                       @input="checkUserExists()"
-                                       placeholder="Correo electrónico"
-                                       class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 mb-2 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
-
-                                <!-- Mensaje de estado del usuario -->
-                                <div x-show="userExistsMessage" class="mb-3 p-2 rounded-lg text-sm font-medium"
-                                     :class="userExists ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'">
-                                    <div class="flex items-center">
-                                        <!-- Icono para usuario existente -->
-                                        <template x-if="userExists">
-                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5-5-5h5v-12"></path>
-                                            </svg>
-                                        </template>
-                                        <!-- Icono para usuario no existente -->
-                                        <template x-if="!userExists">
-                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                                            </svg>
-                                        </template>
-                                        <span x-text="userExistsMessage"></span>
-                                    </div>
-                                </div>
-
-                                <!-- Botón único para enviar invitación -->
-                                <button @click="sendInvitation()"
-                                        :disabled="!inviteEmail"
-                                        :class="{'opacity-50 cursor-not-allowed': !inviteEmail}"
-                                        class="w-full px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
-                                    <span x-text="userExists ? 'Enviar Notificación Interna' : 'Enviar Invitación por Email'"></span>
-                                </button>
-                            </div>
+                        <!-- Tabs de administración -->
+                        <div x-show="isOwner" class="mb-4 border-b border-slate-700/50">
+                            <nav class="flex space-x-4">
+                                <button @click="activeTab = 'grupos'" :class="activeTab === 'grupos' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400'" class="px-3 py-2">Grupos</button>
+                                <button @click="activeTab = 'permisos'" :class="activeTab === 'permisos' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400'" class="px-3 py-2">Permisos</button>
+                            </nav>
                         </div>
 
-                        <template x-if="currentGroup && !currentGroup.users.some(u => u.id === userId)">
-                            <button @click="acceptInvitation" class="px-3 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 mb-4">Aceptar invitación</button>
-                        </template>
+                        <!-- Contenido pestaña Grupos -->
+                        <div x-show="activeTab === 'grupos'">
+                            <table class="w-full mb-4 border border-slate-700/50">
+                                <thead>
+                                    <tr class="bg-slate-800/50">
+                                        <th class="text-left p-2">Miembro</th>
+                                        <th class="p-2">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="user in currentGroup?.users" :key="user.id">
+                                        <tr class="border-t border-slate-700/50">
+                                            <td class="p-2" x-text="user.full_name + ' (@' + user.username + ')'"></td>
+                                            <td class="p-2 text-center">
+                                                <button @click.stop="removeMember(user)" class="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Quitar</button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+
+                            <div class="mb-4">
+                                <button @click="showInviteOptions = !showInviteOptions" class="px-3 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Invitar miembro</button>
+                                <div x-show="showInviteOptions" class="mt-2" x-cloak>
+                                    <input type="email"
+                                           x-model="inviteEmail"
+                                           @input="checkUserExists()"
+                                           placeholder="Correo electrónico"
+                                           class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 mb-2 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+
+                                    <!-- Mensaje de estado del usuario -->
+                                    <div x-show="userExistsMessage" class="mb-3 p-2 rounded-lg text-sm font-medium"
+                                         :class="userExists ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'">
+                                        <div class="flex items-center">
+                                            <!-- Icono para usuario existente -->
+                                            <template x-if="userExists">
+                                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5-5-5h5v-12"></path>
+                                                </svg>
+                                            </template>
+                                            <!-- Icono para usuario no existente -->
+                                            <template x-if="!userExists">
+                                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                                </svg>
+                                            </template>
+                                            <span x-text="userExistsMessage"></span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Botón único para enviar invitación -->
+                                    <button @click="sendInvitation()"
+                                            :disabled="!inviteEmail"
+                                            :class="{'opacity-50 cursor-not-allowed': !inviteEmail}"
+                                            class="w-full px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                        <span x-text="userExists ? 'Enviar Notificación Interna' : 'Enviar Invitación por Email'"></span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <template x-if="currentGroup && !currentGroup.users.some(u => u.id === userId)">
+                                <button @click="acceptInvitation" class="px-3 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 mb-4">Aceptar invitación</button>
+                            </template>
+                        </div>
+
+                        <!-- Contenido pestaña Permisos -->
+                        <div x-show="activeTab === 'permisos'" x-cloak>
+                            <table class="w-full mb-4 border border-slate-700/50">
+                                <thead>
+                                    <tr class="bg-slate-800/50">
+                                        <th class="text-left p-2">Miembro</th>
+                                        <th class="p-2">Rol</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="user in currentGroup?.users" :key="user.id">
+                                        <tr class="border-t border-slate-700/50">
+                                            <td class="p-2" x-text="user.full_name + ' (@' + user.username + ')'"></td>
+                                            <td class="p-2">
+                                                <select x-model="user.pivot.rol" @change="updateMemberRole(user)" class="bg-slate-900/50 border border-slate-700/50 rounded p-1">
+                                                    <option value="meeting_viewer">Ver reuniones</option>
+                                                    <option value="full_meeting_access">Acceso completo</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
 
                         <div class="flex justify-end">
                             <button @click="showGroupInfoModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cerrar</button>
