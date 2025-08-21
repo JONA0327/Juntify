@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="user-id" content="{{ auth()->id() }}">
     <title>Organizaciones - Juntify</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -30,7 +31,7 @@
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4" x-show="org.groups && org.groups.length">
                     <template x-for="group in org.groups" :key="group.id">
-                        <div class="border rounded p-4 bg-gray-50 dark:bg-gray-700">
+                        <div @click="viewGroup(group)" class="cursor-pointer border rounded p-4 bg-gray-50 dark:bg-gray-700">
                             <h4 class="font-medium" x-text="group.nombre_grupo"></h4>
                             <p class="text-sm text-gray-600" x-text="group.descripcion"></p>
                             <p class="text-xs mt-1">Miembros: <span x-text="group.miembros"></span></p>
@@ -66,6 +67,46 @@
                 <div class="flex justify-end space-x-2">
                     <button @click="showGroupModal=false" class="px-4 py-2 bg-gray-300 rounded">Cancelar</button>
                     <button @click="createGroup" class="px-4 py-2 bg-blue-600 text-white rounded">Aceptar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal información del grupo -->
+        <div x-show="showGroupInfoModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow w-full max-w-lg">
+                <h2 class="text-lg font-semibold mb-2" x-text="currentGroup?.nombre_grupo"></h2>
+                <p class="text-sm text-gray-600 mb-4" x-text="currentGroup?.descripcion"></p>
+
+                <table class="w-full mb-4 border">
+                    <thead>
+                        <tr class="bg-gray-200"><th class="text-left p-2">Miembro</th></tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="user in currentGroup?.users" :key="user.id">
+                            <tr class="border-t">
+                                <td class="p-2" x-text="user.username || user.email"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+
+                <div class="mb-4">
+                    <button @click="showInviteOptions = !showInviteOptions" class="px-3 py-2 bg-blue-600 text-white rounded">Invitar miembro</button>
+                    <div x-show="showInviteOptions" class="mt-2" x-cloak>
+                        <input type="email" x-model="inviteEmail" placeholder="Correo electrónico" class="w-full p-2 border rounded mb-2">
+                        <div class="flex space-x-2">
+                            <button @click="inviteMember('notification')" class="px-3 py-2 bg-green-600 text-white rounded">Notificación</button>
+                            <button @click="inviteMember('email')" class="px-3 py-2 bg-indigo-600 text-white rounded">Correo</button>
+                        </div>
+                    </div>
+                </div>
+
+                <template x-if="currentGroup && !currentGroup.users.some(u => u.id === userId)">
+                    <button @click="acceptInvitation" class="px-3 py-2 bg-green-600 text-white rounded mb-4">Aceptar invitación</button>
+                </template>
+
+                <div class="flex justify-end">
+                    <button @click="showGroupInfoModal=false" class="px-4 py-2 bg-gray-300 rounded">Cerrar</button>
                 </div>
             </div>
         </div>

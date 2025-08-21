@@ -4,6 +4,8 @@ Alpine.data('organizationPage', () => ({
     organizations: [],
     showOrgModal: false,
     showGroupModal: false,
+    showGroupInfoModal: false,
+    showInviteOptions: false,
     newOrg: {
         nombre_organizacion: '',
         descripcion: ''
@@ -15,6 +17,9 @@ Alpine.data('organizationPage', () => ({
         id_organizacion: null
     },
     currentOrg: null,
+    currentGroup: null,
+    inviteEmail: '',
+    userId: Number(document.querySelector('meta[name="user-id"]').getAttribute('content')),
 
     openOrgModal() {
         this.newOrg = { nombre_organizacion: '', descripcion: '' };
@@ -59,6 +64,19 @@ Alpine.data('organizationPage', () => ({
         this.currentOrg = org;
         this.showGroupModal = true;
     },
+    async viewGroup(group) {
+        try {
+            const response = await fetch(`/api/groups/${group.id}`);
+            if (response.ok) {
+                this.currentGroup = await response.json();
+                this.showGroupInfoModal = true;
+                this.showInviteOptions = false;
+                this.inviteEmail = '';
+            }
+        } catch (error) {
+            console.error('Error loading group:', error);
+        }
+    },
     async createGroup() {
         try {
             const response = await fetch('/api/groups', {
@@ -83,6 +101,44 @@ Alpine.data('organizationPage', () => ({
             }
         } catch (error) {
             console.error('Error creating group:', error);
+        }
+    },
+    async inviteMember(method) {
+        try {
+            const response = await fetch(`/api/groups/${this.currentGroup.id}/invite`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    email: this.inviteEmail,
+                    method: method
+                })
+            });
+            if (response.ok) {
+                this.inviteEmail = '';
+                this.showInviteOptions = false;
+            }
+        } catch (error) {
+            console.error('Error inviting member:', error);
+        }
+    },
+    async acceptInvitation() {
+        try {
+            const response = await fetch(`/api/groups/${this.currentGroup.id}/accept`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                this.currentGroup = data.group;
+            }
+        } catch (error) {
+            console.error('Error joining group:', error);
         }
     }
 }));
