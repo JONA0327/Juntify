@@ -456,7 +456,7 @@ async function finalizeRecording() {
                     downloadBlob(finalBlob, name + '.webm');
                 });
 
-            showSuccess('La subida continuará en segundo plano. El estado final se mostrará mediante uploadNotifications.');
+            showSuccess('La subida continuará en segundo plano. Revisa el panel de notificaciones para el estado final.');
             handlePostActionCleanup(true);
         } else {
             downloadBlob(finalBlob, name + '.webm');
@@ -479,7 +479,7 @@ async function finalizeRecording() {
                 downloadBlob(finalBlob, name + '.webm');
             });
 
-        showSuccess('La subida continuará en segundo plano. El estado final se mostrará mediante uploadNotifications.');
+        showSuccess('La subida continuará en segundo plano. Revisa el panel de notificaciones para el estado final.');
         handlePostActionCleanup(true);
     } else {
         pendingAudioBlob = finalBlob;
@@ -657,7 +657,6 @@ function uploadInBackground(blob, name, onProgress) {
     formData.append('meetingName', name);
 
     const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    const taskId = window.uploadNotifications.add(name);
 
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -665,17 +664,13 @@ function uploadInBackground(blob, name, onProgress) {
         xhr.setRequestHeader('X-CSRF-TOKEN', token);
 
         xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-                window.uploadNotifications.progress(taskId, e.loaded, e.total);
-                if (onProgress) {
-                    onProgress(e.loaded, e.total);
-                }
+            if (e.lengthComputable && onProgress) {
+                onProgress(e.loaded, e.total);
             }
         };
 
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-                window.uploadNotifications.processing(taskId);
                 let response;
                 try {
                     response = JSON.parse(xhr.responseText);
@@ -683,14 +678,13 @@ function uploadInBackground(blob, name, onProgress) {
                     response = xhr.responseText;
                 }
                 if (response?.pending_recording) {
-                    pollPendingRecordingStatus(response.pending_recording, taskId);
-                } else {
-                    window.uploadNotifications.success(taskId);
-                    showSuccess('Subida completada');
+                    pollPendingRecordingStatus(response.pending_recording);
+                }
+                if (window.notifications) {
+                    window.notifications.refresh();
                 }
                 resolve(response);
             } else {
-                window.uploadNotifications.error(taskId);
                 showError('Fallo al subir el audio');
                 reject(new Error('Upload failed'));
             }
@@ -698,7 +692,6 @@ function uploadInBackground(blob, name, onProgress) {
 
         xhr.onerror = () => {
             console.error('Error uploading audio');
-            window.uploadNotifications.error(taskId);
             showError('Fallo al subir el audio');
             reject(new Error('Upload failed'));
         };
@@ -707,18 +700,21 @@ function uploadInBackground(blob, name, onProgress) {
     });
 }
 
-function pollPendingRecordingStatus(id, taskId) {
+function pollPendingRecordingStatus(id) {
     const check = () => {
         fetch(`/api/pending-recordings/${id}`)
             .then(r => r.json())
             .then(data => {
                 if (data.status === 'COMPLETED') {
-                    window.uploadNotifications.success(taskId, 'Procesado');
                     showSuccess('Grabación procesada correctamente');
+                    if (window.notifications) {
+                        window.notifications.refresh();
+                    }
                 } else if (data.status === 'FAILED') {
-                    const msg = data.error_message ? `Error: ${data.error_message}` : 'Error';
-                    window.uploadNotifications.error(taskId, msg);
                     showError('Error al procesar la grabación en Drive');
+                    if (window.notifications) {
+                        window.notifications.refresh();
+                    }
                 } else {
                     setTimeout(check, 5000);
                 }

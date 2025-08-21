@@ -26,8 +26,6 @@ class UserController extends Controller
     public function getNotifications()
     {
         $notifications = Notification::where('emisor', auth()->id())
-            ->where('status', 'pending')
-            ->where('type', 'group_invitation')
             ->with(['remitente:id,username'])
             ->orderBy('created_at', 'desc')
             ->get();

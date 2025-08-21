@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\PendingRecording;
+use App\Models\Notification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -30,6 +31,8 @@ class ProcessPendingRecordingsJob implements ShouldQueue
                     $recording->update([
                         'status' => PendingRecording::STATUS_COMPLETED,
                     ]);
+
+                    $this->updateNotification($recording, 'Subida completada', 'completed');
                 } catch (Throwable $e) {
                     $backupPath = null;
                     try {
@@ -53,7 +56,44 @@ class ProcessPendingRecordingsJob implements ShouldQueue
                         'error_message' => $e->getMessage(),
                         'backup_path' => $backupPath,
                     ]);
+
+                    $this->updateNotification(
+                        $recording,
+                        'Error en la subida',
+                        'failed'
+                    );
                 }
             });
+    }
+
+    protected function updateNotification(PendingRecording $recording, string $message, string $status): void
+    {
+        $user = $recording->user;
+        if (! $user) {
+            return;
+        }
+
+        $notification = Notification::where('emisor', $user->id)
+            ->where('type', 'audio_upload')
+            ->whereJsonContains('data->pending_recording_id', $recording->id)
+            ->first();
+
+        $payload = [
+            'remitente' => $user->id,
+            'emisor'    => $user->id,
+            'status'    => $status,
+            'message'   => $message,
+            'type'      => 'audio_upload',
+            'data'      => [
+                'pending_recording_id' => $recording->id,
+                'meeting_name'         => $recording->meeting_name,
+            ],
+        ];
+
+        if ($notification) {
+            $notification->update($payload);
+        } else {
+            Notification::create($payload);
+        }
     }
 }

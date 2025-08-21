@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use App\Models\TranscriptionLaravel;
 use App\Models\PendingRecording;
+use App\Models\Notification;
 use Illuminate\Support\Facades\Log;
 use Google\Service\Drive as DriveService;
 use Google\Service\Exception as GoogleServiceException;
@@ -492,6 +493,18 @@ class DriveController extends Controller
                 'audio_download_url' => $audioUrl,
                 'status'             => PendingRecording::STATUS_PENDING,
                 'error_message'      => null,
+            ]);
+
+            Notification::create([
+                'remitente' => $user->id,
+                'emisor'    => $user->id,
+                'status'    => 'pending',
+                'message'   => 'Subida iniciada',
+                'type'      => 'audio_upload',
+                'data'      => [
+                    'pending_recording_id' => $pending->id,
+                    'meeting_name'         => $fileName,
+                ],
             ]);
 
             $response = [

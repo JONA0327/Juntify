@@ -74,10 +74,7 @@
     </a>
   </li>
   <li>
-    <x-upload-notifications />
-  </li>
-  <li>
-    <x-invitation-notifications />
+    <x-notifications />
   </li>
 </ul>
 

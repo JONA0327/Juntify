@@ -21,8 +21,7 @@ export default defineConfig({
                 'resources/js/new-meeting.js',
                 'resources/css/audio-processing.css',
                 'resources/js/audio-processing.js',
-                'resources/js/upload-notifications.js',
-                'resources/js/invitation-notifications.js',
+                'resources/js/notifications.js',
                 'resources/css/tasks.css', // <-- AÑADE ESTA LÍNEA
             ],
             refresh: true,

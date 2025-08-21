@@ -166,17 +166,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 const data = await response.json();
 
                 if (this.userExists) {
-                    // Enviar notificación interna usando el sistema de upload-notifications
-                    const notificationId = window.uploadNotifications.add(`Invitación enviada a ${this.inviteEmail}`);
-                    setTimeout(() => {
-                        window.uploadNotifications.success(notificationId, 'Enviada');
-                        // Refrescar notificaciones de invitación para el destinatario
-                        if (window.invitationNotifications) {
-                            window.invitationNotifications.refresh();
-                        }
-                    }, 1000);
+                    alert(`Invitación enviada a ${this.inviteEmail}`);
+                    if (window.notifications) {
+                        window.notifications.refresh();
+                    }
                 } else {
-                    // Mostrar mensaje de email enviado
                     alert('Invitación enviada por email correctamente');
                 }
 
