@@ -58,10 +58,7 @@
                 <span class="dropdown-text">Exportar</span>
             </a>
             <div class="dropdown-item">
-                <x-upload-notifications />
-            </div>
-            <div class="dropdown-item">
-                <x-invitation-notifications />
+                <x-notifications />
             </div>
         </div>
     </div>

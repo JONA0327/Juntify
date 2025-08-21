@@ -1,0 +1,148 @@
+const Notifications = (() => {
+    let notifications = [];
+
+    function render() {
+        document.querySelectorAll('.notifications-list').forEach(list => {
+            list.innerHTML = '';
+            if (notifications.length === 0) {
+                const li = document.createElement('li');
+                li.className = 'text-slate-400 text-sm text-center py-4';
+                li.textContent = 'No hay notificaciones';
+                list.appendChild(li);
+                return;
+            }
+
+            notifications.forEach(n => {
+                const li = document.createElement('li');
+                if (n.type === 'group_invitation') {
+                    li.className = 'invitation-item p-3 bg-slate-700/50 rounded-lg mb-2';
+                    li.innerHTML = `
+                        <div class="text-sm text-slate-200 mb-2">${n.message}</div>
+                        <div class="text-xs text-slate-400 mb-2">De: ${n.remitente?.username || 'Usuario'}</div>
+                        <div class="flex space-x-2">
+                            <button class="accept-btn px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700" data-id="${n.id}">Aceptar</button>
+                            <button class="reject-btn px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700" data-id="${n.id}">Rechazar</button>
+                        </div>
+                    `;
+                } else if (n.type === 'audio_upload') {
+                    const name = n.data?.meeting_name || 'Audio';
+                    li.className = 'upload-item p-3 bg-slate-700/50 rounded-lg mb-2 flex justify-between items-center';
+                    li.innerHTML = `
+                        <span class="text-sm text-slate-200">${name} - ${n.message}</span>
+                        <button class="dismiss-btn text-slate-400 hover:text-white" data-id="${n.id}">&times;</button>
+                    `;
+                } else {
+                    li.className = 'p-3 bg-slate-700/50 rounded-lg mb-2 flex justify-between items-center';
+                    li.innerHTML = `
+                        <span class="text-sm text-slate-200">${n.message}</span>
+                        <button class="dismiss-btn text-slate-400 hover:text-white" data-id="${n.id}">&times;</button>
+                    `;
+                }
+                list.appendChild(li);
+            });
+        });
+        updateIndicator();
+        attachListeners();
+    }
+
+    function updateIndicator() {
+        const has = notifications.length > 0;
+        document.querySelectorAll('.notifications-dot').forEach(dot => {
+            dot.classList.toggle('hidden', !has);
+        });
+    }
+
+    function attachListeners() {
+        document.querySelectorAll('.accept-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = e.target.dataset.id;
+                respondToInvitation(id, 'accept');
+            });
+        });
+        document.querySelectorAll('.reject-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = e.target.dataset.id;
+                respondToInvitation(id, 'reject');
+            });
+        });
+        document.querySelectorAll('.dismiss-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = e.target.dataset.id;
+                dismissNotification(id);
+            });
+        });
+    }
+
+    async function respondToInvitation(id, action) {
+        try {
+            const response = await fetch(`/api/users/notifications/${id}/respond`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ action })
+            });
+            if (response.ok) {
+                notifications = notifications.filter(n => n.id != id);
+                render();
+            }
+        } catch (error) {
+            console.error('Error responding to invitation:', error);
+        }
+    }
+
+    async function dismissNotification(id) {
+        try {
+            const response = await fetch(`/api/notifications/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+            if (response.ok) {
+                notifications = notifications.filter(n => n.id != id);
+                render();
+            }
+        } catch (error) {
+            console.error('Error dismissing notification:', error);
+        }
+    }
+
+    async function fetchNotifications() {
+        try {
+            const response = await fetch('/api/notifications');
+            if (response.ok) {
+                notifications = await response.json();
+                render();
+            }
+        } catch (error) {
+            console.error('Error loading notifications:', error);
+        }
+    }
+
+    function init() {
+        document.querySelectorAll('.notifications-toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                document.querySelectorAll('.notifications-panel').forEach(panel => {
+                    panel.classList.toggle('hidden');
+                });
+            });
+        });
+
+        fetchNotifications();
+        setInterval(fetchNotifications, 30000);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+    return {
+        refresh: fetchNotifications
+    };
+})();
+
+window.notifications = Notifications;

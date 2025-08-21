@@ -16,6 +16,10 @@ class Notification extends Model
         'data',
     ];
 
+    protected $casts = [
+        'data' => 'array',
+    ];
+
     public $timestamps = true;
 
     public function remitente(): BelongsTo
