@@ -32,9 +32,16 @@
 
         <main class="w-full pl-24 pt-24" style="margin-top:130px;">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" x-data='organizationPage(@json($organizations))'>
-                <div class="mb-6 flex space-x-4">
-                    <button @click="openOrgModal" :disabled="organizations.length > 0" :class="{'opacity-50 cursor-not-allowed': organizations.length > 0}" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear organización</button>
-                    <button class="bg-slate-800/50 backdrop-blur-custom text-slate-200 px-4 py-2 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 hover:border-slate-600/50 transition-colors duration-200">Introducir código de invitación</button>
+                <div class="mb-6 flex flex-col items-center w-full max-w-sm mx-auto space-y-4">
+                    <h1 class="text-2xl font-semibold text-center">Organización</h1>
+                    <button @click="openOrgModal" :disabled="organizations.length > 0" :class="{'opacity-50 cursor-not-allowed': organizations.length > 0}" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear organización</button>
+                    <div class="flex items-center w-full">
+                        <hr class="flex-grow border-slate-700/50">
+                        <span class="px-2 text-slate-400">o</span>
+                        <hr class="flex-grow border-slate-700/50">
+                    </div>
+                    <input type="text" x-model="inviteCode" placeholder="Código de invitación" class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+                    <button @click="joinOrganization()" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Unirse</button>
                 </div>
 
                 <template x-for="org in organizations" :key="org.id">
