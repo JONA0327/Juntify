@@ -32,9 +32,10 @@
 
         <main class="w-full pl-24 pt-24" style="margin-top:130px;">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" x-data='organizationPage(@json($organizations))'>
-                <div class="mb-6 flex flex-col items-center w-full max-w-sm mx-auto space-y-4">
+                <!-- Sección de crear/unirse - solo visible cuando no hay organizaciones -->
+                <div x-show="organizations.length === 0" class="mb-6 flex flex-col items-center w-full max-w-sm mx-auto space-y-4">
                     <h1 class="text-2xl font-semibold text-center">Organización</h1>
-                    <button @click="openOrgModal" :disabled="organizations.length > 0" :class="{'opacity-50 cursor-not-allowed': organizations.length > 0}" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear organización</button>
+                    <button @click="openOrgModal" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear organización</button>
                     <div class="flex items-center w-full">
                         <hr class="flex-grow border-slate-700/50">
                         <span class="px-2 text-slate-400">o</span>
@@ -42,26 +43,32 @@
                     </div>
                     <input type="text" x-model="inviteCode" placeholder="Código de invitación" class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
                     <button @click="joinOrganization()" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Unirse</button>
+                </div>
 
+                <!-- Título cuando hay organizaciones -->
+                <div x-show="organizations.length > 0" class="mb-8 text-center">
+                    <h1 class="text-3xl font-semibold">Mi Organización</h1>
                 </div>
 
                 <template x-for="org in organizations" :key="org.id">
-                    <div class="organization-card mb-6 text-slate-200">
-                        <div class="flex items-center">
-                            <img :src="org.imagen || 'https://via.placeholder.com/64'" alt="" class="w-16 h-16 object-cover rounded-lg mr-4">
-                            <div class="flex-1">
-                                <h3 class="text-xl font-semibold" x-text="org.nombre_organizacion"></h3>
-                                <p class="text-slate-400 text-sm" x-text="org.descripcion"></p>
-                                <p class="text-sm mt-2">Miembros: <span x-text="org.num_miembros"></span></p>
+                    <div class="organization-card mb-8 text-slate-200 bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 shadow-lg">
+                        <div class="flex items-center mb-6">
+                            <div class="organization-avatar">
+                                <img :src="org.imagen || 'https://via.placeholder.com/100'" alt="" class="org-avatar">
                             </div>
-                            <button @click="openGroupModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-3 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear grupo</button>
+                            <div class="flex-1 ml-6">
+                                <h3 class="text-3xl font-bold mb-2" x-text="org.nombre_organizacion"></h3>
+                                <p class="text-slate-300 text-lg mb-3" x-text="org.descripcion"></p>
+                                <p class="text-lg">Miembros: <span class="font-semibold text-yellow-400" x-text="org.num_miembros"></span></p>
+                            </div>
+                            <button @click="openGroupModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-6 py-3 rounded-xl font-semibold text-lg shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear grupo</button>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4" x-show="org.groups && org.groups.length">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6" x-show="org.groups && org.groups.length">
                             <template x-for="group in org.groups" :key="group.id">
-                                <div @click="viewGroup(group)" class="cursor-pointer group-card p-4 text-slate-200">
-                                    <h4 class="font-medium" x-text="group.nombre_grupo"></h4>
-                                    <p class="text-sm text-slate-400" x-text="group.descripcion"></p>
-                                    <p class="text-xs mt-1 text-slate-400">Miembros: <span x-text="group.miembros"></span></p>
+                                <div @click="viewGroup(group)" class="cursor-pointer group-card p-6 text-slate-200 bg-slate-700/50 border border-slate-600/50 rounded-lg hover:bg-slate-700/70 transition-colors duration-200">
+                                    <h4 class="font-semibold text-lg mb-2" x-text="group.nombre_grupo"></h4>
+                                    <p class="text-sm text-slate-400 mb-3" x-text="group.descripcion"></p>
+                                    <p class="text-sm text-slate-400">Miembros: <span class="text-yellow-400 font-medium" x-text="group.miembros"></span></p>
                                 </div>
                             </template>
                         </div>
@@ -120,11 +127,39 @@
                         <div class="mb-4">
                             <button @click="showInviteOptions = !showInviteOptions" class="px-3 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Invitar miembro</button>
                             <div x-show="showInviteOptions" class="mt-2" x-cloak>
-                                <input type="email" x-model="inviteEmail" placeholder="Correo electrónico" class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 mb-2 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
-                                <div class="flex space-x-2">
-                                    <button @click="inviteMember('notification')" class="px-3 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Notificación</button>
-                                    <button @click="inviteMember('email')" class="px-3 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Correo</button>
+                                <input type="email"
+                                       x-model="inviteEmail"
+                                       @input="checkUserExists()"
+                                       placeholder="Correo electrónico"
+                                       class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 mb-2 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+
+                                <!-- Mensaje de estado del usuario -->
+                                <div x-show="userExistsMessage" class="mb-3 p-2 rounded-lg text-sm font-medium"
+                                     :class="userExists ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'">
+                                    <div class="flex items-center">
+                                        <!-- Icono para usuario existente -->
+                                        <template x-if="userExists">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5-5-5h5v-12"></path>
+                                            </svg>
+                                        </template>
+                                        <!-- Icono para usuario no existente -->
+                                        <template x-if="!userExists">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                            </svg>
+                                        </template>
+                                        <span x-text="userExistsMessage"></span>
+                                    </div>
                                 </div>
+
+                                <!-- Botón único para enviar invitación -->
+                                <button @click="sendInvitation()"
+                                        :disabled="!inviteEmail"
+                                        :class="{'opacity-50 cursor-not-allowed': !inviteEmail}"
+                                        class="w-full px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                    <span x-text="userExists ? 'Enviar Notificación Interna' : 'Enviar Invitación por Email'"></span>
+                                </button>
                             </div>
                         </div>
 

@@ -45,3 +45,23 @@
     border-radius: 1rem;
     box-shadow: 0 20px 25px -5px var(--shadow-black);
 }
+
+/* Organization Avatar - Same style as badges */
+.organization-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(251, 191, 36, 0.3);
+}
+
+.organization-avatar .org-avatar {
+    max-width: 170%;
+    max-height: 170%;
+    object-fit: contain;
+}

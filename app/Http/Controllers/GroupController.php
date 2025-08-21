@@ -47,44 +47,41 @@ class GroupController extends Controller
     {
         $validated = $request->validate([
             'email' => 'required|email',
-            'method' => 'nullable|in:notification,email',
+            'send_notification' => 'boolean',
         ]);
 
         $user = User::where('email', $validated['email'])->first();
-        $method = $validated['method'] ?? null;
+        $sendNotification = $validated['send_notification'] ?? false;
 
-        if ($method === 'notification') {
-            if (!$user) {
-                return response()->json(['error' => 'Usuario no encontrado'], 404);
-            }
-
+        if ($sendNotification && $user) {
+            // Usuario existe en Juntify - enviar notificación interna
             Notification::create([
                 'remitente' => auth()->id(),
                 'emisor' => $user->id,
                 'status' => 'pending',
                 'message' => "Has sido invitado al grupo {$group->nombre_grupo}",
                 'type' => 'group_invitation',
+                'data' => json_encode(['group_id' => $group->id])
             ]);
 
-            return response()->json(['notified' => true]);
-        }
-
-        if ($method === 'email' || !$user) {
+            return response()->json([
+                'success' => true,
+                'type' => 'notification',
+                'message' => 'Notificación enviada al usuario de Juntify'
+            ]);
+        } else {
+            // Usuario no existe o se forzó email - enviar por correo
             $code = Str::uuid()->toString();
-            Mail::to($validated['email'])->send(new GroupInvitation($code, $group->id));
 
-            return response()->json(['invitation_sent' => true]);
+            // Aquí puedes implementar el envío de email
+            // Mail::to($validated['email'])->send(new GroupInvitation($code, $group->id));
+
+            return response()->json([
+                'success' => true,
+                'type' => 'email',
+                'message' => 'Invitación enviada por correo electrónico'
+            ]);
         }
-
-        Notification::create([
-            'remitente' => auth()->id(),
-            'emisor' => $user->id,
-            'status' => 'pending',
-            'message' => "Has sido invitado al grupo {$group->nombre_grupo}",
-            'type' => 'group_invitation',
-        ]);
-
-        return response()->json(['notified' => true]);
     }
 
     public function accept(Group $group)

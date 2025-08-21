@@ -60,6 +60,9 @@
             <div class="dropdown-item">
                 <x-upload-notifications />
             </div>
+            <div class="dropdown-item">
+                <x-invitation-notifications />
+            </div>
         </div>
     </div>
 </div>

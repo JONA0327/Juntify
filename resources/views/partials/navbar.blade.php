@@ -76,6 +76,9 @@
   <li>
     <x-upload-notifications />
   </li>
+  <li>
+    <x-invitation-notifications />
+  </li>
 </ul>
 
   </nav>

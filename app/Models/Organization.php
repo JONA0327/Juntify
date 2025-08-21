@@ -24,9 +24,12 @@ class Organization extends Model
         return $this->hasMany(Group::class, 'id_organizacion');
     }
 
-    public function users(): BelongsToMany
+    public function users()
     {
-        return $this->belongsToMany(User::class, 'organization_user', 'id_organizacion', 'user_id');
+        // Obtener usuarios a través de los grupos de la organización
+        return User::whereHas('groups', function($query) {
+            $query->where('id_organizacion', $this->id);
+        });
     }
 }
 

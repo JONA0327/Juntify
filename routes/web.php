@@ -12,6 +12,7 @@ use App\Http\Controllers\TaskController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\GroupController;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
 
 
@@ -42,6 +43,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/organizations', [OrganizationController::class, 'store'])->name('api.organizations.store');
     Route::post('/api/organizations/{token}/join', [OrganizationController::class, 'join'])->name('api.organizations.join');
     Route::get('/api/organizations/{organization}', [OrganizationController::class, 'show'])->name('api.organizations.show');
+
+    // Rutas de Usuarios
+    Route::post('/api/users/check-email', [UserController::class, 'checkEmail'])->name('api.users.check-email');
+    Route::get('/api/users/notifications', [UserController::class, 'getNotifications'])->name('api.users.notifications');
+    Route::post('/api/users/notifications/{notification}/respond', [UserController::class, 'respondToNotification'])->name('api.users.notifications.respond');
 
     // Rutas de Grupos
     Route::post('/api/groups', [GroupController::class, 'store'])->name('api.groups.store');

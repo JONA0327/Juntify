@@ -14,7 +14,14 @@ class OrganizationController extends Controller
             abort(403);
         }
 
-        $organizations = $user->organizations()->with('groups')->get();
+        // Obtener organizaciones del usuario a través de los grupos
+        $organizations = Organization::whereHas('groups.users', function($query) use ($user) {
+            $query->where('users.id', $user->id);
+        })->with(['groups' => function($query) use ($user) {
+            $query->whereHas('users', function($subQuery) use ($user) {
+                $subQuery->where('users.id', $user->id);
+            });
+        }])->get();
 
         return view('organization.index', [
             'organizations' => $organizations,
@@ -28,7 +35,12 @@ class OrganizationController extends Controller
             abort(403);
         }
 
-        if ($user->organizations()->exists()) {
+        // Verificar si el usuario ya pertenece a una organización
+        $hasOrganization = Organization::whereHas('groups.users', function($query) use ($user) {
+            $query->where('users.id', $user->id);
+        })->exists();
+
+        if ($hasOrganization) {
             return response()->json([
                 'message' => 'Ya perteneces a una organización'],
                 403
@@ -42,7 +54,14 @@ class OrganizationController extends Controller
         ]);
 
         $organization = Organization::create($validated + ['num_miembros' => 1]);
-        $organization->users()->attach($user->id);
+
+        // Crear un grupo principal para la organización y agregar al usuario
+        $mainGroup = $organization->groups()->create([
+            'nombre_grupo' => 'Grupo Principal',
+            'descripcion' => 'Grupo principal de la organización',
+        ]);
+
+        $mainGroup->users()->attach($user->id);
 
         return response()->json($organization, 201);
     }
@@ -50,8 +69,19 @@ class OrganizationController extends Controller
     public function join(Request $request, $token)
     {
         $organization = Organization::where('id', $token)->firstOrFail();
+        $user = $request->user();
 
-        $organization->users()->syncWithoutDetaching([$request->user()->id]);
+        // Buscar el grupo principal de la organización o crear uno si no existe
+        $mainGroup = $organization->groups()->first();
+        if (!$mainGroup) {
+            $mainGroup = $organization->groups()->create([
+                'nombre_grupo' => 'Grupo Principal',
+                'descripcion' => 'Grupo principal de la organización',
+            ]);
+        }
+
+        // Agregar usuario al grupo principal
+        $mainGroup->users()->syncWithoutDetaching([$user->id]);
         $organization->increment('num_miembros');
 
         return response()->json(['joined' => true]);

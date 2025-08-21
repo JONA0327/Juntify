@@ -156,6 +156,55 @@
             color: #ef4444;
         }
 
+        /* Invitation notifications */
+        .invitation-notifications {
+            position: relative;
+        }
+
+        .invitation-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            position: relative;
+            color: inherit;
+        }
+
+        .invitation-dot {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 8px;
+            height: 8px;
+            background: #f59e0b;
+            border-radius: 50%;
+        }
+
+        .invitation-panel {
+            position: absolute;
+            right: 0;
+            top: 120%;
+            background: rgba(10, 14, 39, 0.95);
+            border: 1px solid rgba(251, 191, 36, 0.2);
+            border-radius: 8px;
+            padding: 1rem;
+            width: 280px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .invitation-panel ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .invitation-item {
+            font-size: 0.8rem;
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+
         /* Mobile navbar button */
         .mobile-navbar-btn {
             display: none;
@@ -176,11 +225,11 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         .mobile-navbar-btn:hover {
             background: rgba(59, 130, 246, 0.3);
         }
-        
+
         .hamburger-navbar {
             display: flex;
             flex-direction: column;
@@ -188,7 +237,7 @@
             height: 16px;
             justify-content: space-between;
         }
-        
+
         .hamburger-navbar span {
             display: block;
             height: 2px;
@@ -197,15 +246,15 @@
             border-radius: 1px;
             transition: all 0.3s ease;
         }
-        
+
         .hamburger-navbar.active span:nth-child(1) {
             transform: rotate(45deg) translate(5px, 5px);
         }
-        
+
         .hamburger-navbar.active span:nth-child(2) {
             opacity: 0;
         }
-        
+
         .hamburger-navbar.active span:nth-child(3) {
             transform: rotate(-45deg) translate(7px, -6px);
         }
@@ -685,7 +734,7 @@
             .mobile-navbar-btn {
                 display: flex;
             }
-            
+
             .nav-links {
                 position: fixed;
                 top: 4rem;
@@ -700,22 +749,22 @@
                 transition: transform 0.3s ease;
                 z-index: 998;
             }
-            
+
             .nav-links.show {
                 transform: translateY(0);
             }
-            
+
             .nav-links li {
                 margin: 0;
                 padding: 0.5rem 2rem;
             }
-            
+
             .nav-links a {
                 display: block;
                 padding: 0.75rem 0;
                 border-bottom: 1px solid rgba(59, 130, 246, 0.1);
             }
-            
+
             .nav-links a:hover {
                 background: rgba(59, 130, 246, 0.1);
                 border-radius: 8px;

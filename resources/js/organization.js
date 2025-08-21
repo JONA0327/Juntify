@@ -20,6 +20,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     currentGroup: null,
     inviteEmail: '',
     inviteCode: '',
+    userExists: null,
+    userExistsMessage: '',
     userId: Number(document.querySelector('meta[name="user-id"]').getAttribute('content')),
 
     openOrgModal() {
@@ -107,6 +109,84 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             }
         } catch (error) {
             console.error('Error creating group:', error);
+        }
+    },
+    async checkUserExists() {
+        if (!this.inviteEmail || !this.inviteEmail.includes('@')) {
+            this.userExists = null;
+            this.userExistsMessage = '';
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/users/check-email', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    email: this.inviteEmail
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.userExists = data.exists;
+                this.userExistsMessage = data.exists
+                    ? '✓ Este usuario existe en Juntify'
+                    : '○ Usuario no registrado, se enviará por email';
+            }
+        } catch (error) {
+            console.error('Error checking user:', error);
+            this.userExists = null;
+            this.userExistsMessage = '';
+        }
+    },
+    async sendInvitation() {
+        if (!this.inviteEmail) {
+            alert('Por favor ingresa un email');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/groups/${this.currentGroup.id}/invite`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    email: this.inviteEmail,
+                    send_notification: this.userExists
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+
+                if (this.userExists) {
+                    // Enviar notificación interna usando el sistema de upload-notifications
+                    const notificationId = window.uploadNotifications.add(`Invitación enviada a ${this.inviteEmail}`);
+                    setTimeout(() => {
+                        window.uploadNotifications.success(notificationId, 'Enviada');
+                        // Refrescar notificaciones de invitación para el destinatario
+                        if (window.invitationNotifications) {
+                            window.invitationNotifications.refresh();
+                        }
+                    }, 1000);
+                } else {
+                    // Mostrar mensaje de email enviado
+                    alert('Invitación enviada por email correctamente');
+                }
+
+                this.inviteEmail = '';
+                this.userExists = null;
+                this.userExistsMessage = '';
+                this.showInviteOptions = false;
+            }
+        } catch (error) {
+            console.error('Error sending invitation:', error);
         }
     },
     async inviteMember(method) {

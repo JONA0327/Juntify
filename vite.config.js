@@ -22,6 +22,7 @@ export default defineConfig({
                 'resources/css/audio-processing.css',
                 'resources/js/audio-processing.js',
                 'resources/js/upload-notifications.js',
+                'resources/js/invitation-notifications.js',
                 'resources/css/tasks.css', // <-- AÑADE ESTA LÍNEA
             ],
             refresh: true,

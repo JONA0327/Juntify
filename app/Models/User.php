@@ -51,17 +51,13 @@ class User extends Authenticatable
 
     public function organizations()
     {
-        return $this->hasManyThrough(
-            Organization::class,
-            Group::class,
-            'id_organizacion', // Foreign key on groups table
-            'id',              // Foreign key on organizations table
-            'id',              // Local key on users table
-            'id'               // Local key on groups table
-        )->join('group_user', function ($join) {
-            $join->on('groups.id', '=', 'group_user.id_grupo')
-                 ->where('group_user.user_id', '=', $this->id);
-        })->distinct();
+        // Obtener organizaciones a través de los grupos del usuario
+        return Organization::whereIn('id', function($query) {
+            $query->select('groups.id_organizacion')
+                  ->from('groups')
+                  ->join('group_user', 'groups.id', '=', 'group_user.id_grupo')
+                  ->where('group_user.user_id', $this->id);
+        });
     }
 
     public function groups(): BelongsToMany
