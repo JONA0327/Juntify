@@ -35,6 +35,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
     Route::get('/reuniones', [MeetingController::class, 'index'])->name('reuniones.index');
+    Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
 
     // Rutas de Organizaciones
     Route::get('/api/organizations', [OrganizationController::class, 'index'])->name('api.organizations.index');

@@ -49,6 +49,21 @@ class User extends Authenticatable
         return $this->belongsTo(Organization::class, 'current_organization_id');
     }
 
+    public function organizations()
+    {
+        return $this->hasManyThrough(
+            Organization::class,
+            Group::class,
+            'id_organizacion', // Foreign key on groups table
+            'id',              // Foreign key on organizations table
+            'id',              // Local key on users table
+            'id'               // Local key on groups table
+        )->join('group_user', function ($join) {
+            $join->on('groups.id', '=', 'group_user.id_grupo')
+                 ->where('group_user.user_id', '=', $this->id);
+        })->distinct();
+    }
+
     public function groups(): BelongsToMany
     {
         return $this->belongsToMany(Group::class, 'group_user', 'user_id', 'id_grupo');
