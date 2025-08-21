@@ -53,15 +53,7 @@ class OrganizationController extends Controller
             'imagen' => 'nullable|string',
         ]);
 
-        $organization = Organization::create($validated + ['num_miembros' => 1]);
-
-        // Crear un grupo principal para la organización y agregar al usuario
-        $mainGroup = $organization->groups()->create([
-            'nombre_grupo' => 'Grupo Principal',
-            'descripcion' => 'Grupo principal de la organización',
-        ]);
-
-        $mainGroup->users()->attach($user->id);
+        $organization = Organization::create($validated + ['num_miembros' => 0]);
 
         return response()->json($organization, 201);
     }
@@ -71,13 +63,12 @@ class OrganizationController extends Controller
         $organization = Organization::where('id', $token)->firstOrFail();
         $user = $request->user();
 
-        // Buscar el grupo principal de la organización o crear uno si no existe
+        // Buscar el grupo principal de la organización
         $mainGroup = $organization->groups()->first();
         if (!$mainGroup) {
-            $mainGroup = $organization->groups()->create([
-                'nombre_grupo' => 'Grupo Principal',
-                'descripcion' => 'Grupo principal de la organización',
-            ]);
+            return response()->json([
+                'message' => 'No existe un grupo al que unirse'
+            ], 404);
         }
 
         // Agregar usuario al grupo principal
