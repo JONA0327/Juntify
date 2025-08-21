@@ -29,7 +29,7 @@ class UserFactory extends Factory
             'email'      => fake()->unique()->safeEmail(),
             'password'   => static::$password ??= Hash::make('password'),
             'roles'      => 'superadmin',
-            'organization' => 'Juntify',
+            'current_organization_id' => null,
         ];
     }
 
