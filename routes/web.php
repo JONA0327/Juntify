@@ -12,6 +12,7 @@ use App\Http\Controllers\TaskController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\GroupController;
+use App\Http\Controllers\NotificationController;
 
 
 Route::get('/', function () {
@@ -45,6 +46,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/groups', [GroupController::class, 'store'])->name('api.groups.store');
     Route::get('/api/groups/{group}', [GroupController::class, 'show'])->name('api.groups.show');
     Route::post('/api/groups/{group}/invite', [GroupController::class, 'invite'])->name('api.groups.invite');
+    Route::post('/api/groups/{group}/accept', [GroupController::class, 'accept'])->name('api.groups.accept');
+
+    // Notificaciones
+    Route::get('/api/notifications', [NotificationController::class, 'index'])->name('api.notifications.index');
+    Route::delete('/api/notifications/{notification}', [NotificationController::class, 'destroy'])->name('api.notifications.destroy');
 
     // Rutas de Tareas
     Route::get('/tareas', [TaskController::class, 'index'])->name('tareas.index');
