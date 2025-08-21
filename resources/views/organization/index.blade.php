@@ -64,6 +64,7 @@
                             <div class="flex space-x-2">
                                 <button @click="openGroupModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-6 py-3 rounded-xl font-semibold text-lg shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear grupo</button>
                                 <button @click="openEditOrgModal(org)" class="bg-slate-700/50 px-6 py-3 rounded-xl font-semibold text-lg hover:bg-slate-700 transition-colors duration-200">Editar</button>
+                                <button @click="deleteOrganization(org)" class="bg-red-600 px-6 py-3 rounded-xl font-semibold text-lg hover:bg-red-700 transition-colors duration-200">Eliminar</button>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6" x-show="org.groups && org.groups.length">
@@ -72,7 +73,10 @@
                                     <h4 class="font-semibold text-lg mb-2" x-text="group.nombre_grupo"></h4>
                                     <p class="text-sm text-slate-400 mb-3" x-text="group.descripcion"></p>
                                     <p class="text-sm text-slate-400 mb-2">Miembros: <span class="text-yellow-400 font-medium" x-text="group.miembros"></span></p>
-                                    <button @click.stop="openEditGroupModal(org, group)" class="px-3 py-1 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg text-sm shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Editar</button>
+                                    <div class="flex space-x-2">
+                                        <button @click.stop="openEditGroupModal(org, group)" class="px-3 py-1 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg text-sm shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Editar</button>
+                                        <button @click.stop="deleteGroup(org, group)" class="px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors duration-200">Eliminar</button>
+                                    </div>
                                 </div>
                             </template>
                         </div>

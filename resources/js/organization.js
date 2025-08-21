@@ -127,6 +127,24 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             console.error('Error updating organization:', error);
         }
     },
+    async deleteOrganization(org) {
+        try {
+            const response = await fetch(`/api/organizations/${org.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+            if (response.ok) {
+                const idx = this.organizations.findIndex(o => o.id === org.id);
+                if (idx !== -1) {
+                    this.organizations.splice(idx, 1);
+                }
+            }
+        } catch (error) {
+            console.error('Error deleting organization:', error);
+        }
+    },
     openEditGroupModal(org, group) {
         this.editGroup = { id: group.id, nombre_grupo: group.nombre_grupo, descripcion: group.descripcion, id_organizacion: org.id };
         this.currentOrg = org;
@@ -155,6 +173,24 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             }
         } catch (error) {
             console.error('Error updating group:', error);
+        }
+    },
+    async deleteGroup(org, group) {
+        try {
+            const response = await fetch(`/api/groups/${group.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+            if (response.ok) {
+                const idx = org.groups.findIndex(g => g.id === group.id);
+                if (idx !== -1) {
+                    org.groups.splice(idx, 1);
+                }
+            }
+        } catch (error) {
+            console.error('Error deleting group:', error);
         }
     },
     async viewGroup(group) {

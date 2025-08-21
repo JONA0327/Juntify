@@ -107,5 +107,21 @@ class OrganizationController extends Controller
 
         return response()->json($organization);
     }
+
+    public function destroy(Organization $organization)
+    {
+        $user = auth()->user();
+        if (!$user || in_array($user->roles, ['free', 'basic'])) {
+            abort(403);
+        }
+
+        foreach ($organization->groups as $group) {
+            $group->users()->detach();
+        }
+
+        $organization->delete();
+
+        return response()->json(['deleted' => true]);
+    }
 }
 
