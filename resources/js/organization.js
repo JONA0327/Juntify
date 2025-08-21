@@ -37,6 +37,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     userExists: null,
     userExistsMessage: '',
     userId: Number(document.querySelector('meta[name="user-id"]').getAttribute('content')),
+    activeTab: 'grupos',
+    isOwner: false,
 
     openOrgModal() {
         this.newOrg = { nombre_organizacion: '', descripcion: '' };
@@ -201,6 +203,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 this.showGroupInfoModal = true;
                 this.showInviteOptions = false;
                 this.inviteEmail = '';
+                const org = this.organizations.find(o => o.groups && o.groups.some(g => g.id === group.id));
+                this.isOwner = org ? org.is_owner : false;
+                this.activeTab = 'grupos';
             }
         } catch (error) {
             console.error('Error loading group:', error);
@@ -385,6 +390,20 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             }
         } catch (error) {
             console.error('Error removing member:', error);
+        }
+    },
+    async updateMemberRole(user) {
+        try {
+            await fetch(`/api/groups/${this.currentGroup.id}/members/${user.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ rol: user.pivot.rol })
+            });
+        } catch (error) {
+            console.error('Error updating member role:', error);
         }
     },
     async acceptInvitation() {
