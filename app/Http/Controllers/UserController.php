@@ -58,11 +58,15 @@ class UserController extends Controller
                 }
             }
 
-            $notification->update(['status' => 'accepted']);
-            return response()->json(['message' => 'Invitación aceptada', 'status' => 'accepted']);
+            // Eliminar la notificación después de aceptar
+            $notification->delete();
+
+            return response()->json(['message' => 'Invitación aceptada']);
         } else {
-            $notification->update(['status' => 'rejected']);
-            return response()->json(['message' => 'Invitación rechazada', 'status' => 'rejected']);
+            // Eliminar la notificación después de rechazar
+            $notification->delete();
+
+            return response()->json(['message' => 'Invitación rechazada']);
         }
     }
 }
