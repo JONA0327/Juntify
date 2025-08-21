@@ -47,11 +47,17 @@ class GroupController extends Controller
     {
         $validated = $request->validate([
             'email' => 'required|email',
+            'method' => 'nullable|in:notification,email',
         ]);
 
         $user = User::where('email', $validated['email'])->first();
+        $method = $validated['method'] ?? null;
 
-        if ($user) {
+        if ($method === 'notification') {
+            if (!$user) {
+                return response()->json(['error' => 'Usuario no encontrado'], 404);
+            }
+
             Notification::create([
                 'remitente' => auth()->id(),
                 'emisor' => $user->id,
@@ -63,10 +69,22 @@ class GroupController extends Controller
             return response()->json(['notified' => true]);
         }
 
-        $code = Str::uuid()->toString();
-        Mail::to($validated['email'])->send(new GroupInvitation($code, $group->id));
+        if ($method === 'email' || !$user) {
+            $code = Str::uuid()->toString();
+            Mail::to($validated['email'])->send(new GroupInvitation($code, $group->id));
 
-        return response()->json(['invitation_sent' => true]);
+            return response()->json(['invitation_sent' => true]);
+        }
+
+        Notification::create([
+            'remitente' => auth()->id(),
+            'emisor' => $user->id,
+            'status' => 'pending',
+            'message' => "Has sido invitado al grupo {$group->nombre_grupo}",
+            'type' => 'group_invitation',
+        ]);
+
+        return response()->json(['notified' => true]);
     }
 
     public function accept(Group $group)
@@ -80,7 +98,9 @@ class GroupController extends Controller
             ->where('type', 'group_invitation')
             ->delete();
 
-        return response()->json(['joined' => true]);
+        $group->load('users');
+
+        return response()->json(['joined' => true, 'group' => $group]);
     }
 
     public function members(Group $group)
