@@ -135,6 +135,14 @@ class GroupController extends Controller
         return response()->json(['role_updated' => true]);
     }
 
+    public function removeMember(Group $group, User $user)
+    {
+        $group->users()->detach($user->id);
+        $group->update(['miembros' => $group->users()->count()]);
+
+        return response()->json(['removed' => true]);
+    }
+
     public function destroy(Group $group)
     {
         $user = auth()->user();

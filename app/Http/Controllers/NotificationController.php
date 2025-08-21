@@ -11,7 +11,7 @@ class NotificationController extends Controller
     {
         $user = auth()->user();
         $notifications = Notification::where('emisor', $user->id)
-            ->with(['remitente:id,username'])
+            ->with(['remitente:id,username,full_name'])
             ->orderBy('created_at', 'desc')
             ->get();
 

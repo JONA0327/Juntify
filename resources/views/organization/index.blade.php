@@ -121,12 +121,18 @@
 
                         <table class="w-full mb-4 border border-slate-700/50">
                             <thead>
-                                <tr class="bg-slate-800/50"><th class="text-left p-2">Miembro</th></tr>
+                                <tr class="bg-slate-800/50">
+                                    <th class="text-left p-2">Miembro</th>
+                                    <th class="p-2">Acciones</th>
+                                </tr>
                             </thead>
                             <tbody>
                                 <template x-for="user in currentGroup?.users" :key="user.id">
                                     <tr class="border-t border-slate-700/50">
-                                        <td class="p-2" x-text="user.username || user.email"></td>
+                                        <td class="p-2" x-text="user.full_name + ' (@' + user.username + ')'"></td>
+                                        <td class="p-2 text-center">
+                                            <button @click.stop="removeMember(user)" class="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Quitar</button>
+                                        </td>
                                     </tr>
                                 </template>
                             </tbody>

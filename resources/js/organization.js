@@ -364,6 +364,29 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             alert('Hubo un problema al unirse a la organización');
         }
     },
+    async removeMember(user) {
+        try {
+            const response = await fetch(`/api/groups/${this.currentGroup.id}/members/${user.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+            if (response.ok) {
+                this.currentGroup.users = this.currentGroup.users.filter(u => u.id !== user.id);
+                this.currentGroup.miembros--;
+                const org = this.organizations.find(o => o.groups && o.groups.some(g => g.id === this.currentGroup.id));
+                if (org) {
+                    const g = org.groups.find(g => g.id === this.currentGroup.id);
+                    if (g) {
+                        g.miembros = this.currentGroup.miembros;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error removing member:', error);
+        }
+    },
     async acceptInvitation() {
         try {
             const response = await fetch(`/api/groups/${this.currentGroup.id}/accept`, {
