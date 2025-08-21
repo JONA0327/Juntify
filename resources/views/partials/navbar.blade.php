@@ -7,7 +7,7 @@
   $isHome   = $currentUri === '/';
   // ¿estamos en nueva reunión?
   $isNewMeeting = request()->routeIs('new-meeting');
-  $userRole = auth()->user()?->roles ?? 'free';
+  $hasGroups = auth()->check() && auth()->user()->groups()->exists();
 @endphp
 
   <header class="header">
@@ -40,7 +40,7 @@
       Tareas
     </a>
   </li>
-  @if(!in_array($userRole, ['free', 'basic']))
+  @if($hasGroups)
   <li>
     <a href="{{ route('organization.index') }}">
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">

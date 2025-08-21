@@ -10,7 +10,7 @@ class OrganizationController extends Controller
     public function index()
     {
         $user = auth()->user();
-        if (!$user || in_array($user->roles, ['free', 'basic'])) {
+        if (!$user || !$user->groups()->exists()) {
             abort(403);
         }
 
@@ -20,8 +20,16 @@ class OrganizationController extends Controller
         })->with(['groups' => function($query) use ($user) {
             $query->whereHas('users', function($subQuery) use ($user) {
                 $subQuery->where('users.id', $user->id);
-            });
+            })->with(['users' => function($q) use ($user) {
+                $q->where('users.id', $user->id);
+            }]);
         }])->get();
+
+        // Marcar si el usuario es propietario de la organización
+        $organizations->each(function ($organization) use ($user) {
+            $organization->is_owner = $organization->groups->flatMap->users
+                ->contains(fn($u) => $u->id === $user->id && $u->pivot->rol === 'owner');
+        });
 
         return view('organization.index', [
             'organizations' => $organizations,
@@ -85,6 +93,14 @@ class OrganizationController extends Controller
             abort(403);
         }
 
+        $isOwner = $organization->groups()->whereHas('users', function($q) use ($user) {
+            $q->where('users.id', $user->id)->where('group_user.rol', 'owner');
+        })->exists();
+
+        if (!$isOwner) {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'nombre_organizacion' => 'required|string|max:255',
             'descripcion' => 'nullable|string',
@@ -112,6 +128,14 @@ class OrganizationController extends Controller
     {
         $user = auth()->user();
         if (!$user || in_array($user->roles, ['free', 'basic'])) {
+            abort(403);
+        }
+
+        $isOwner = $organization->groups()->whereHas('users', function($q) use ($user) {
+            $q->where('users.id', $user->id)->where('group_user.rol', 'owner');
+        })->exists();
+
+        if (!$isOwner) {
             abort(403);
         }
 
