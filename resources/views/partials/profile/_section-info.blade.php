@@ -20,7 +20,7 @@
             </div>
             <div class="info-item">
                 <span class="info-label">Organización</span>
-                <span class="info-value">{{ $user->organization ?? 'No especificada' }}</span>
+                <span class="info-value">{{ $user->organization?->nombre_organizacion ?? 'No especificada' }}</span>
             </div>
         </div>
 

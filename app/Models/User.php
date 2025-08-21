@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\GoogleToken;
 
@@ -20,6 +21,7 @@ class User extends Authenticatable
         'email',
         'password',
         'roles',           // ahora un string
+        'current_organization_id',
         'plan_expires_at',
     ];
 
@@ -42,9 +44,9 @@ class User extends Authenticatable
         return $this->hasOne(GoogleToken::class, 'username', 'username');
     }
 
-    public function organizations(): BelongsToMany
+    public function organization(): BelongsTo
     {
-        return $this->belongsToMany(Organization::class, 'organization_user', 'user_id', 'id_organizacion');
+        return $this->belongsTo(Organization::class, 'current_organization_id');
     }
 
     public function groups(): BelongsToMany
