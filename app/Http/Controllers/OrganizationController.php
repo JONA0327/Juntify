@@ -14,7 +14,11 @@ class OrganizationController extends Controller
             abort(403);
         }
 
-        return view('organization.index');
+        $organizations = $user->organizations()->with('groups')->get();
+
+        return view('organization.index', [
+            'organizations' => $organizations,
+        ]);
     }
 
     public function store(Request $request)
@@ -22,6 +26,13 @@ class OrganizationController extends Controller
         $user = auth()->user();
         if (!$user || in_array($user->roles, ['free', 'basic'])) {
             abort(403);
+        }
+
+        if ($user->organizations()->exists()) {
+            return response()->json([
+                'message' => 'Ya perteneces a una organización'],
+                403
+            );
         }
 
         $validated = $request->validate([

@@ -1,7 +1,7 @@
 import Alpine from 'alpinejs';
 
-Alpine.data('organizationPage', () => ({
-    organizations: [],
+Alpine.data('organizationPage', (initialOrganizations = []) => ({
+    organizations: initialOrganizations,
     showOrgModal: false,
     showGroupModal: false,
     showGroupInfoModal: false,
@@ -48,6 +48,11 @@ Alpine.data('organizationPage', () => ({
                     imagen: this.preview
                 })
             });
+            if (response.status === 403) {
+                const data = await response.json();
+                alert(data.message || 'No puedes crear otra organización');
+                return;
+            }
             if (response.ok) {
                 const org = await response.json();
                 org.imagen = this.preview;
