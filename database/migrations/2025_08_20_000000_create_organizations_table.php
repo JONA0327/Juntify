@@ -12,7 +12,7 @@ return new class extends Migration
             $table->increments('id');
             $table->string('nombre_organizacion');
             $table->text('descripcion')->nullable();
-            $table->string('imagen')->nullable();
+            $table->longText('imagen')->nullable();
             $table->integer('num_miembros')->default(0);
             $table->timestamp('created_at')->useCurrent();
             $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
