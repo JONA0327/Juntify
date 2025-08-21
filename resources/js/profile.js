@@ -480,6 +480,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (connectBtn)    connectBtn.addEventListener('click', connectDrive);
   if (setMainBtn)    setMainBtn.addEventListener('click', setMainFolder);
+
+  const notificationsList = document.getElementById('notifications-list');
+  if (notificationsList) {
+    axios.get('/api/notifications').then(res => {
+      const items = res.data;
+      notificationsList.innerHTML = '';
+      if (items.length === 0) {
+        notificationsList.innerHTML = '<p style="color: #cbd5e1; text-align: center; padding: 2rem;">No tienes notificaciones nuevas.</p>';
+      } else {
+        items.forEach(n => {
+          const div = document.createElement('div');
+          div.className = 'notification-item';
+          div.innerHTML = `<span class="icon">📨</span><span class="text">${n.message}</span><button class="delete" data-id="${n.id}">✖</button>`;
+          notificationsList.appendChild(div);
+        });
+      }
+    });
+
+    notificationsList.addEventListener('click', e => {
+      if (e.target.classList.contains('delete')) {
+        const id = e.target.dataset.id;
+        axios.delete(`/api/notifications/${id}`).then(() => {
+          e.target.parentElement.remove();
+          if (!notificationsList.children.length) {
+            notificationsList.innerHTML = '<p style="color: #cbd5e1; text-align: center; padding: 2rem;">No tienes notificaciones nuevas.</p>';
+          }
+        });
+      }
+    });
+  }
 });
 
 // Exponer funciones para handlers inline (si aún usas onclick en HTML)

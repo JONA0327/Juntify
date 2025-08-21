@@ -15,12 +15,14 @@
 <div class="content-section" id="section-notifications" style="display: none;">
     <div class="info-card">
         <h2 class="card-title">
-            <span class="card-icon">🔔</span>
+            <span class="card-icon">📨</span>
             Notificaciones
         </h2>
-        <p style="color: #cbd5e1; text-align: center; padding: 2rem;">
-            No tienes notificaciones nuevas.
-        </p>
+        <div id="notifications-list">
+            <p style="color: #cbd5e1; text-align: center; padding: 2rem;">
+                No tienes notificaciones nuevas.
+            </p>
+        </div>
     </div>
 </div>
 

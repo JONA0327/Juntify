@@ -10,10 +10,12 @@ return new class extends Migration
     {
         Schema::create('notifications', function (Blueprint $table) {
             $table->increments('id');
-            $table->string('username', 255);
+            $table->unsignedBigInteger('remitente');
+            $table->unsignedBigInteger('emisor');
+            $table->string('status')->default('pending');
             $table->text('message');
-            $table->boolean('read')->default(false);
-            $table->timestamp('created_at')->useCurrent();
+            $table->string('type');
+            $table->timestamps();
         });
     }
     public function down()
