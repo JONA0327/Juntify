@@ -61,14 +61,18 @@
                                 <p class="text-slate-300 text-lg mb-3" x-text="org.descripcion"></p>
                                 <p class="text-lg">Miembros: <span class="font-semibold text-yellow-400" x-text="org.num_miembros"></span></p>
                             </div>
-                            <button @click="openGroupModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-6 py-3 rounded-xl font-semibold text-lg shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear grupo</button>
+                            <div class="flex space-x-2">
+                                <button @click="openGroupModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-6 py-3 rounded-xl font-semibold text-lg shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear grupo</button>
+                                <button @click="openEditOrgModal(org)" class="bg-slate-700/50 px-6 py-3 rounded-xl font-semibold text-lg hover:bg-slate-700 transition-colors duration-200">Editar</button>
+                            </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6" x-show="org.groups && org.groups.length">
                             <template x-for="group in org.groups" :key="group.id">
                                 <div @click="viewGroup(group)" class="cursor-pointer group-card p-6 text-slate-200 bg-slate-700/50 border border-slate-600/50 rounded-lg hover:bg-slate-700/70 transition-colors duration-200">
                                     <h4 class="font-semibold text-lg mb-2" x-text="group.nombre_grupo"></h4>
                                     <p class="text-sm text-slate-400 mb-3" x-text="group.descripcion"></p>
-                                    <p class="text-sm text-slate-400">Miembros: <span class="text-yellow-400 font-medium" x-text="group.miembros"></span></p>
+                                    <p class="text-sm text-slate-400 mb-2">Miembros: <span class="text-yellow-400 font-medium" x-text="group.miembros"></span></p>
+                                    <button @click.stop="openEditGroupModal(org, group)" class="px-3 py-1 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg text-sm shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Editar</button>
                                 </div>
                             </template>
                         </div>
@@ -169,6 +173,36 @@
 
                         <div class="flex justify-end">
                             <button @click="showGroupInfoModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal editar organización -->
+                <div x-show="showEditOrgModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                    <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+                        <h2 class="text-lg font-semibold mb-4">Editar organización</h2>
+                        <input type="text" x-model="editOrg.nombre_organizacion" placeholder="Nombre" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+                        <textarea x-model="editOrg.descripcion" placeholder="Descripción (opcional)" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
+                        <input type="file" @change="previewEditImage" class="mb-3 text-slate-200">
+                        <template x-if="editPreview">
+                            <img :src="editPreview" class="w-24 h-24 object-cover rounded-lg mb-3">
+                        </template>
+                        <div class="flex justify-end space-x-2">
+                            <button @click="showEditOrgModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
+                            <button @click="editOrganization" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Guardar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal editar grupo -->
+                <div x-show="showEditGroupModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                    <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+                        <h2 class="text-lg font-semibold mb-4">Editar grupo</h2>
+                        <input type="text" x-model="editGroup.nombre_grupo" placeholder="Nombre del grupo" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+                        <textarea x-model="editGroup.descripcion" placeholder="Descripción" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
+                        <div class="flex justify-end space-x-2">
+                            <button @click="showEditGroupModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
+                            <button @click="editGroup" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Guardar</button>
                         </div>
                     </div>
                 </div>

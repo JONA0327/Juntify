@@ -43,6 +43,23 @@ class GroupController extends Controller
         return response()->json($group);
     }
 
+    public function update(Request $request, Group $group)
+    {
+        $user = auth()->user();
+        if (!$user || in_array($user->roles, ['free', 'basic'])) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'nombre_grupo' => 'required|string|max:255',
+            'descripcion' => 'nullable|string',
+        ]);
+
+        $group->update($validated);
+
+        return response()->json($group->fresh());
+    }
+
     public function invite(Request $request, Group $group)
     {
         $validated = $request->validate([

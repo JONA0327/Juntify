@@ -87,6 +87,24 @@ class OrganizationController extends Controller
         return response()->json(['joined' => true]);
     }
 
+    public function update(Request $request, Organization $organization)
+    {
+        $user = auth()->user();
+        if (!$user || in_array($user->roles, ['free', 'basic'])) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'nombre_organizacion' => 'required|string|max:255',
+            'descripcion' => 'nullable|string',
+            'imagen' => 'nullable|string',
+        ]);
+
+        $organization->update($validated);
+
+        return response()->json($organization->fresh());
+    }
+
     public function show(Organization $organization)
     {
         $user = auth()->user();
