@@ -35,7 +35,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
     Route::get('/reuniones', [MeetingController::class, 'index'])->name('reuniones.index');
 
-    Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
+    // Rutas de Organizaciones
+    Route::get('/api/organizations', [OrganizationController::class, 'index'])->name('api.organizations.index');
+    Route::post('/api/organizations', [OrganizationController::class, 'store'])->name('api.organizations.store');
+    Route::post('/api/organizations/{token}/join', [OrganizationController::class, 'join'])->name('api.organizations.join');
+    Route::get('/api/organizations/{organization}', [OrganizationController::class, 'show'])->name('api.organizations.show');
 
     // Rutas de Grupos
     Route::post('/api/groups', [GroupController::class, 'store'])->name('api.groups.store');
