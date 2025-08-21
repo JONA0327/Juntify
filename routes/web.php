@@ -60,6 +60,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/groups/{group}/accept', [GroupController::class, 'accept'])->name('api.groups.accept');
     Route::get('/groups/{group}/members', [GroupController::class, 'members'])->name('groups.members');
     Route::patch('/api/groups/{group}/members/{user}', [GroupController::class, 'updateMemberRole'])->name('api.groups.members.update');
+    Route::delete('/api/groups/{group}/members/{user}', [GroupController::class, 'removeMember'])->name('api.groups.members.destroy');
 
     // Notificaciones
     Route::get('/api/notifications', [NotificationController::class, 'index'])->name('api.notifications.index');
