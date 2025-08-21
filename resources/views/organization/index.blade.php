@@ -12,9 +12,9 @@
     @include('partials.navbar')
     @include('partials.mobile-nav')
 
-    <div class="max-w-4xl mx-auto px-4 py-8" x-data="organizationPage">
+    <div class="max-w-4xl mx-auto px-4 py-8" x-data='organizationPage(@json($organizations))'>
         <div class="mb-6 flex space-x-4">
-            <button @click="openOrgModal" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Crear organización</button>
+            <button @click="openOrgModal" :disabled="organizations.length > 0" :class="{'opacity-50 cursor-not-allowed': organizations.length > 0}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Crear organización</button>
             <button class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">Introducir código de invitación</button>
         </div>
 
