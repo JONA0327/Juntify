@@ -134,5 +134,18 @@ class GroupController extends Controller
 
         return response()->json(['role_updated' => true]);
     }
+
+    public function destroy(Group $group)
+    {
+        $user = auth()->user();
+        if (!$user || in_array($user->roles, ['free', 'basic'])) {
+            abort(403);
+        }
+
+        $group->users()->detach();
+        $group->delete();
+
+        return response()->json(['deleted' => true]);
+    }
 }
 

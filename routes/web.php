@@ -44,6 +44,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/organizations/{token}/join', [OrganizationController::class, 'join'])->name('api.organizations.join');
     Route::patch('/api/organizations/{organization}', [OrganizationController::class, 'update'])->name('api.organizations.update');
     Route::get('/api/organizations/{organization}', [OrganizationController::class, 'show'])->name('api.organizations.show');
+    Route::delete('/api/organizations/{organization}', [OrganizationController::class, 'destroy'])->name('api.organizations.destroy');
 
     // Rutas de Usuarios
     Route::post('/api/users/check-email', [UserController::class, 'checkEmail'])->name('api.users.check-email');
@@ -54,6 +55,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/groups', [GroupController::class, 'store'])->name('api.groups.store');
     Route::get('/api/groups/{group}', [GroupController::class, 'show'])->name('api.groups.show');
     Route::patch('/api/groups/{group}', [GroupController::class, 'update'])->name('api.groups.update');
+    Route::delete('/api/groups/{group}', [GroupController::class, 'destroy'])->name('api.groups.destroy');
     Route::post('/api/groups/{group}/invite', [GroupController::class, 'invite'])->name('api.groups.invite');
     Route::post('/api/groups/{group}/accept', [GroupController::class, 'accept'])->name('api.groups.accept');
     Route::get('/groups/{group}/members', [GroupController::class, 'members'])->name('groups.members');
