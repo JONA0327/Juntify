@@ -6,12 +6,26 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     showGroupModal: false,
     showGroupInfoModal: false,
     showInviteOptions: false,
+    showEditOrgModal: false,
+    showEditGroupModal: false,
     newOrg: {
         nombre_organizacion: '',
         descripcion: ''
     },
     preview: null,
+    editOrg: {
+        id: null,
+        nombre_organizacion: '',
+        descripcion: ''
+    },
+    editPreview: null,
     newGroup: {
+        nombre_grupo: '',
+        descripcion: '',
+        id_organizacion: null
+    },
+    editGroup: {
+        id: null,
         nombre_grupo: '',
         descripcion: '',
         id_organizacion: null
@@ -71,6 +85,77 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.newGroup = { nombre_grupo: '', descripcion: '', id_organizacion: org.id };
         this.currentOrg = org;
         this.showGroupModal = true;
+    },
+    openEditOrgModal(org) {
+        this.editOrg = { id: org.id, nombre_organizacion: org.nombre_organizacion, descripcion: org.descripcion };
+        this.editPreview = org.imagen || null;
+        this.showEditOrgModal = true;
+    },
+    previewEditImage(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = e => { this.editPreview = e.target.result; };
+            reader.readAsDataURL(file);
+        }
+    },
+    async editOrganization() {
+        try {
+            const response = await fetch(`/api/organizations/${this.editOrg.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    nombre_organizacion: this.editOrg.nombre_organizacion,
+                    descripcion: this.editOrg.descripcion,
+                    imagen: this.editPreview
+                })
+            });
+            if (response.ok) {
+                const updated = await response.json();
+                const idx = this.organizations.findIndex(o => o.id === updated.id);
+                if (idx !== -1) {
+                    updated.groups = this.organizations[idx].groups;
+                    updated.imagen = this.editPreview;
+                    this.organizations[idx] = updated;
+                }
+                this.showEditOrgModal = false;
+            }
+        } catch (error) {
+            console.error('Error updating organization:', error);
+        }
+    },
+    openEditGroupModal(org, group) {
+        this.editGroup = { id: group.id, nombre_grupo: group.nombre_grupo, descripcion: group.descripcion, id_organizacion: org.id };
+        this.currentOrg = org;
+        this.showEditGroupModal = true;
+    },
+    async editGroup() {
+        try {
+            const response = await fetch(`/api/groups/${this.editGroup.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    nombre_grupo: this.editGroup.nombre_grupo,
+                    descripcion: this.editGroup.descripcion
+                })
+            });
+            if (response.ok) {
+                const updated = await response.json();
+                const idx = this.currentOrg.groups.findIndex(g => g.id === updated.id);
+                if (idx !== -1) {
+                    this.currentOrg.groups[idx] = updated;
+                }
+                this.showEditGroupModal = false;
+            }
+        } catch (error) {
+            console.error('Error updating group:', error);
+        }
     },
     async viewGroup(group) {
         try {
