@@ -26,7 +26,7 @@ class GroupController extends Controller
         ]);
 
         $group = Group::create($validated + ['miembros' => 1]);
-        $group->users()->attach($user->id);
+        $group->users()->attach($user->id, ['rol' => 'full_meeting_access']);
 
         return response()->json($group, 201);
     }
@@ -73,7 +73,7 @@ class GroupController extends Controller
     {
         $user = auth()->user();
 
-        $group->users()->syncWithoutDetaching([$user->id]);
+        $group->users()->syncWithoutDetaching([$user->id => ['rol' => 'meeting_viewer']]);
         $group->increment('miembros');
 
         Notification::where('emisor', $user->id)
@@ -81,6 +81,24 @@ class GroupController extends Controller
             ->delete();
 
         return response()->json(['joined' => true]);
+    }
+
+    public function members(Group $group)
+    {
+        $group->load('users');
+
+        return view('group.members', compact('group'));
+    }
+
+    public function updateMemberRole(Request $request, Group $group, User $user)
+    {
+        $validated = $request->validate([
+            'rol' => 'required|in:meeting_viewer,full_meeting_access',
+        ]);
+
+        $group->users()->updateExistingPivot($user->id, ['rol' => $validated['rol']]);
+
+        return response()->json(['role_updated' => true]);
     }
 }
 
