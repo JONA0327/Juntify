@@ -609,6 +609,9 @@ function createMeetingCard(meeting) {
     `;
 }
 
+// Exponer la función para su uso global
+window.createMeetingCard = createMeetingCard;
+
 function createContainerMeetingCard(meeting) {
     return `
         <div class="meeting-card" data-meeting-id="${meeting.id}" draggable="true">
