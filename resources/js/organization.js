@@ -8,6 +8,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     showInviteOptions: false,
     showEditOrgModal: false,
     showEditGroupModal: false,
+    showInviteModal: false,
+    showCreateContainerModal: false, // Nueva variable para modal crear contenedor
+    mainTab: 'organization', // Nueva variable para las pestañas principales
     newOrg: {
         nombre_organizacion: '',
         descripcion: ''
@@ -24,6 +27,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         descripcion: '',
         id_organizacion: null
     },
+    newContainer: { // Nueva variable para contenedor
+        name: '',
+        description: ''
+    },
     editGroup: {
         id: null,
         nombre_grupo: '',
@@ -32,12 +39,29 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     },
     currentOrg: null,
     currentGroup: null,
+    selectedGroup: null, // Nueva variable para el grupo seleccionado para invitación
     inviteEmail: '',
     inviteCode: '',
+    inviteRole: 'invitado', // Nueva variable para el rol de invitación
     userExists: null,
     userExistsMessage: '',
+    selectedOrganization: null, // Nueva variable para la organización seleccionada
+    editForm: {
+        nombre_organizacion: '',
+        descripcion: '',
+        imagen: ''
+    },
+    editGroupForm: {
+        nombre_grupo: '',
+        descripcion: ''
+    },
+    showEditModal: false,
+    isCreatingOrg: false, // Nueva variable para loading de crear organización
+    isCreatingGroup: false, // Nueva variable para loading de crear grupo
+    isCreatingContainer: false, // Nueva variable para loading de crear contenedor
+    isJoining: false, // Nueva variable para loading de unirse
     userId: Number(document.querySelector('meta[name="user-id"]').getAttribute('content')),
-    activeTab: 'grupos',
+    activeTab: 'contenedores', // Cambiar tab por defecto a contenedores
     isOwner: false,
 
     openOrgModal() {
@@ -54,6 +78,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
     async createOrganization() {
+        if (this.isCreatingOrg) return; // Evitar múltiples clicks
+
+        this.isCreatingOrg = true;
         try {
             const response = await fetch('/api/organizations', {
                 method: 'POST',
@@ -67,20 +94,39 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     imagen: this.preview
                 })
             });
+
             if (response.status === 403) {
                 const data = await response.json();
                 alert(data.message || 'No puedes crear otra organización');
                 return;
             }
+
             if (response.ok) {
                 const org = await response.json();
                 org.imagen = this.preview;
                 org.groups = [];
                 this.organizations.push(org);
                 this.showOrgModal = false;
+                this.newOrg = { nombre_organizacion: '', descripcion: '' };
+                this.preview = null;
+
+                // Mostrar mensaje de éxito
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                notification.textContent = 'Organización creada exitosamente';
+                document.body.appendChild(notification);
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 3000);
+            } else {
+                const errorData = await response.json();
+                alert(errorData.message || 'Error al crear la organización');
             }
         } catch (error) {
             console.error('Error creating organization:', error);
+            alert('Error al crear la organización');
+        } finally {
+            this.isCreatingOrg = false;
         }
     },
     openGroupModal(org) {
@@ -89,9 +135,13 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.showGroupModal = true;
     },
     openEditOrgModal(org) {
-        this.editOrg = { id: org.id, nombre_organizacion: org.nombre_organizacion, descripcion: org.descripcion };
-        this.editPreview = org.imagen || null;
-        this.showEditOrgModal = true;
+        this.selectedOrganization = org;
+        this.editForm = {
+            nombre_organizacion: org.nombre_organizacion,
+            descripcion: org.descripcion || '',
+            imagen: org.imagen || ''
+        };
+        this.showEditModal = true;
     },
     previewEditImage(event) {
         const file = event.target.files[0];
@@ -148,8 +198,12 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
     openEditGroupModal(org, group) {
-        this.editGroup = { id: group.id, nombre_grupo: group.nombre_grupo, descripcion: group.descripcion, id_organizacion: org.id };
-        this.currentOrg = org;
+        this.selectedGroup = group;
+        this.selectedOrganization = org;
+        this.editGroupForm = {
+            nombre_grupo: group.nombre_grupo,
+            descripcion: group.descripcion || ''
+        };
         this.showEditGroupModal = true;
     },
     async editGroup() {
@@ -200,18 +254,38 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             const response = await fetch(`/api/groups/${group.id}`);
             if (response.ok) {
                 this.currentGroup = await response.json();
+
+                // Cargar contenedores del grupo
+                await this.loadGroupContainers(group.id);
+
                 this.showGroupInfoModal = true;
                 this.showInviteOptions = false;
                 this.inviteEmail = '';
                 const org = this.organizations.find(o => o.groups && o.groups.some(g => g.id === group.id));
                 this.isOwner = org ? org.is_owner : false;
-                this.activeTab = 'grupos';
+                this.activeTab = 'contenedores'; // Cambiar a contenedores por defecto
             }
         } catch (error) {
             console.error('Error loading group:', error);
         }
     },
+
+    async loadGroupContainers(groupId) {
+        try {
+            const response = await fetch(`/api/groups/${groupId}/containers`);
+            if (response.ok) {
+                const data = await response.json();
+                this.currentGroup.containers = data.containers || [];
+            }
+        } catch (error) {
+            console.error('Error loading group containers:', error);
+            this.currentGroup.containers = [];
+        }
+    },
     async createGroup() {
+        if (this.isCreatingGroup) return; // Evitar múltiples clicks
+
+        this.isCreatingGroup = true;
         try {
             const response = await fetch('/api/groups', {
                 method: 'POST',
@@ -225,6 +299,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     descripcion: this.newGroup.descripcion
                 })
             });
+
             if (response.ok) {
                 const group = await response.json();
                 if (!this.currentOrg.groups) {
@@ -232,9 +307,25 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 }
                 this.currentOrg.groups.push(group);
                 this.showGroupModal = false;
+                this.newGroup = { nombre_grupo: '', descripcion: '', id_organizacion: null };
+
+                // Mostrar mensaje de éxito
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                notification.textContent = 'Grupo creado exitosamente';
+                document.body.appendChild(notification);
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 3000);
+            } else {
+                const errorData = await response.json();
+                alert(errorData.message || 'Error al crear el grupo');
             }
         } catch (error) {
             console.error('Error creating group:', error);
+            alert('Error al crear el grupo');
+        } finally {
+            this.isCreatingGroup = false;
         }
     },
     async checkUserExists() {
@@ -336,6 +427,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             return;
         }
 
+        if (this.isJoining) return; // Evitar múltiples clicks
+
+        this.isJoining = true;
         try {
             const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const joinRes = await fetch(`/api/organizations/${this.inviteCode}/join`, {
@@ -360,6 +454,16 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                         org.groups = [];
                     }
                     this.organizations.push(org);
+                    this.inviteCode = '';
+
+                    // Mostrar mensaje de éxito
+                    const notification = document.createElement('div');
+                    notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                    notification.textContent = 'Te has unido a la organización exitosamente';
+                    document.body.appendChild(notification);
+                    setTimeout(() => {
+                        document.body.removeChild(notification);
+                    }, 3000);
                 }
             }
 
@@ -367,6 +471,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         } catch (error) {
             console.error('Error joining organization:', error);
             alert('Hubo un problema al unirse a la organización');
+        } finally {
+            this.isJoining = false;
         }
     },
     async removeMember(user) {
@@ -392,20 +498,6 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             console.error('Error removing member:', error);
         }
     },
-    async updateMemberRole(user) {
-        try {
-            await fetch(`/api/groups/${this.currentGroup.id}/members/${user.id}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                },
-                body: JSON.stringify({ rol: user.pivot.rol })
-            });
-        } catch (error) {
-            console.error('Error updating member role:', error);
-        }
-    },
     async acceptInvitation() {
         try {
             const response = await fetch(`/api/groups/${this.currentGroup.id}/accept`, {
@@ -421,6 +513,359 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             }
         } catch (error) {
             console.error('Error joining group:', error);
+        }
+    },
+
+    // Nuevos métodos para la gestión avanzada
+
+    openInviteModal(group) {
+        this.selectedGroup = group;
+        this.inviteEmail = '';
+        this.inviteRole = 'meeting_viewer';
+        this.userExists = null;
+        this.userExistsMessage = '';
+        this.showInviteModal = true;
+    },
+
+    async sendGroupInvitation() {
+        if (!this.selectedGroup || !this.inviteEmail) return;
+
+        try {
+            const response = await fetch(`/api/groups/${this.selectedGroup.id}/invite`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    email: this.inviteEmail,
+                    send_notification: this.userExists,
+                    role: this.inviteRole
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                alert(data.message || 'Invitación enviada correctamente');
+                this.showInviteModal = false;
+
+                // Refrescar los datos del grupo
+                await this.refreshGroupData(this.selectedGroup.id);
+            } else {
+                const errorData = await response.json();
+                alert(errorData.message || 'Error al enviar la invitación');
+            }
+        } catch (error) {
+            console.error('Error sending group invitation:', error);
+            alert('Error al enviar la invitación');
+        }
+    },
+
+    async refreshGroupData(groupId) {
+        try {
+            const response = await fetch(`/api/groups/${groupId}`);
+            if (response.ok) {
+                const updatedGroup = await response.json();
+
+                // Actualizar el grupo en la lista de organizaciones
+                this.organizations.forEach(org => {
+                    if (org.groups) {
+                        const groupIndex = org.groups.findIndex(g => g.id === groupId);
+                        if (groupIndex !== -1) {
+                            org.groups[groupIndex] = updatedGroup;
+                        }
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error refreshing group data:', error);
+        }
+    },
+
+    async updateMemberRole(groupId, user) {
+        try {
+            const response = await fetch(`/api/groups/${groupId}/members/${user.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ rol: user.pivot.rol })
+            });
+
+            if (response.ok) {
+                // Mostrar mensaje de éxito
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                notification.textContent = 'Rol actualizado correctamente';
+                document.body.appendChild(notification);
+
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 3000);
+            } else {
+                throw new Error('Error al actualizar el rol');
+            }
+        } catch (error) {
+            console.error('Error updating member role:', error);
+            alert('Error al actualizar el rol del miembro');
+        }
+    },
+
+    async removeMember(groupId, user) {
+        if (!confirm(`¿Estás seguro de que quieres quitar a ${user.full_name} del grupo?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/groups/${groupId}/members/${user.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+
+            if (response.ok) {
+                // Refrescar los datos del grupo
+                await this.refreshGroupData(groupId);
+
+                // Mostrar mensaje de éxito
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                notification.textContent = 'Miembro removido correctamente';
+                document.body.appendChild(notification);
+
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 3000);
+            } else {
+                throw new Error('Error al remover el miembro');
+            }
+        } catch (error) {
+            console.error('Error removing member:', error);
+            alert('Error al remover el miembro del grupo');
+        }
+    },
+
+        // Método para editar organización
+        editOrganization() {
+            this.showEditModal = true;
+            this.editForm = {
+                nombre_organizacion: this.selectedOrganization.nombre_organizacion,
+                descripcion: this.selectedOrganization.descripcion || '',
+                imagen: this.selectedOrganization.imagen || ''
+            };
+        },
+
+        async saveOrganization() {
+            try {
+                const response = await fetch(`/api/organizations/${this.selectedOrganization.id}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify(this.editForm)
+                });
+
+                if (response.ok) {
+                    const updatedOrg = await response.json();
+                    this.selectedOrganization = updatedOrg;
+                    this.showEditModal = false;
+
+                    // Actualizar en la lista
+                    const index = this.organizations.findIndex(org => org.id === updatedOrg.id);
+                    if (index !== -1) {
+                        this.organizations[index] = updatedOrg;
+                    }
+                }
+            } catch (error) {
+                console.error('Error al actualizar organización:', error);
+            }
+        },
+
+        // Método para editar grupo
+        editGroupMethod(group) {
+            this.selectedGroup = group;
+            this.showEditGroupModal = true;
+            this.editGroupForm = {
+                nombre_grupo: group.nombre_grupo,
+                descripcion: group.descripcion || ''
+            };
+        },
+
+        async saveGroup() {
+            try {
+                const response = await fetch(`/api/groups/${this.selectedGroup.id}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify(this.editGroupForm)
+                });
+
+                if (response.ok) {
+                    const updatedGroup = await response.json();
+                    this.showEditGroupModal = false;
+
+                    // Actualizar en la lista de grupos
+                    const index = this.selectedOrganization.groups.findIndex(g => g.id === updatedGroup.id);
+                    if (index !== -1) {
+                        this.selectedOrganization.groups[index] = updatedGroup;
+                    }
+
+                    // Mostrar mensaje de éxito
+                    const notification = document.createElement('div');
+                    notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                    notification.textContent = 'Grupo actualizado correctamente';
+                    document.body.appendChild(notification);
+
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 3000);
+            } else {
+                throw new Error('Error al actualizar el grupo');
+            }
+        } catch (error) {
+            console.error('Error updating group:', error);
+            alert('Error al actualizar el grupo');
+        }
+    },
+
+    // Método para salirse de la organización
+    async leaveOrganization() {
+        if (!confirm('¿Estás seguro de que quieres salir de esta organización?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/organizations/leave', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+
+            if (response.ok) {
+                // Recargar la página para mostrar la vista de unirse/crear
+                window.location.reload();
+            } else {
+                const data = await response.json();
+                alert(data.message || 'Error al salir de la organización');
+            }
+        } catch (error) {
+            console.error('Error leaving organization:', error);
+            alert('Error al salir de la organización');
+        }
+    },
+
+    // Funciones para manejar contenedores
+    openCreateContainerModal() {
+        this.newContainer = { name: '', description: '' };
+        this.showCreateContainerModal = true;
+    },
+
+    async createContainer() {
+        if (this.isCreatingContainer) return;
+        if (!this.newContainer.name.trim()) {
+            alert('El nombre del contenedor es requerido');
+            return;
+        }
+
+        this.isCreatingContainer = true;
+        try {
+            const response = await fetch('/api/containers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    name: this.newContainer.name,
+                    description: this.newContainer.description,
+                    group_id: this.currentGroup.id
+                })
+            });
+
+            if (response.ok) {
+                const container = await response.json();
+
+                // Agregar el contenedor a la lista del grupo actual
+                if (!this.currentGroup.containers) {
+                    this.currentGroup.containers = [];
+                }
+                this.currentGroup.containers.push(container.container);
+
+                this.showCreateContainerModal = false;
+                this.newContainer = { name: '', description: '' };
+
+                // Mostrar mensaje de éxito
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                notification.textContent = 'Contenedor creado exitosamente';
+                document.body.appendChild(notification);
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 3000);
+            } else {
+                const errorData = await response.json();
+                alert(errorData.message || 'Error al crear el contenedor');
+            }
+        } catch (error) {
+            console.error('Error creating container:', error);
+            alert('Error al crear el contenedor');
+        } finally {
+            this.isCreatingContainer = false;
+        }
+    },
+
+    viewContainerMeetings(container) {
+        // Aquí puedes implementar la navegación a las reuniones del contenedor
+        window.location.href = `/containers/${container.id}`;
+    },
+
+    editContainer(container) {
+        // Implementar edición de contenedor si es necesario
+        console.log('Edit container:', container);
+    },
+
+    async deleteContainer(container) {
+        if (!confirm('¿Estás seguro de que quieres eliminar este contenedor?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/containers/${container.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+
+            if (response.ok) {
+                // Remover el contenedor de la lista
+                const index = this.currentGroup.containers.findIndex(c => c.id === container.id);
+                if (index !== -1) {
+                    this.currentGroup.containers.splice(index, 1);
+                }
+
+                // Mostrar mensaje de éxito
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                notification.textContent = 'Contenedor eliminado exitosamente';
+                document.body.appendChild(notification);
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 3000);
+            } else {
+                const errorData = await response.json();
+                alert(errorData.message || 'Error al eliminar el contenedor');
+            }
+        } catch (error) {
+            console.error('Error deleting container:', error);
+            alert('Error al eliminar el contenedor');
         }
     }
 }));

@@ -13,6 +13,7 @@ class Organization extends Model
         'descripcion',
         'imagen',
         'num_miembros',
+        'admin_id',
     ];
 
     protected $casts = [
@@ -22,6 +23,11 @@ class Organization extends Model
     public function groups(): HasMany
     {
         return $this->hasMany(Group::class, 'id_organizacion');
+    }
+
+    public function admin()
+    {
+        return $this->belongsTo(User::class, 'admin_id');
     }
 
     public function users()

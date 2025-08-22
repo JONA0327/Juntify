@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Group extends Model
 {
@@ -30,6 +31,11 @@ class Group extends Model
         return $this->belongsToMany(User::class, 'group_user', 'id_grupo', 'user_id')
             ->withPivot('rol')
             ->withTimestamps();
+    }
+
+    public function containers(): HasMany
+    {
+        return $this->hasMany(MeetingContentContainer::class, 'group_id');
     }
 }
 

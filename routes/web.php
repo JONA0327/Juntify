@@ -42,6 +42,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/organizations', [OrganizationController::class, 'index'])->name('api.organizations.index');
     Route::post('/api/organizations', [OrganizationController::class, 'store'])->name('api.organizations.store');
     Route::post('/api/organizations/{token}/join', [OrganizationController::class, 'join'])->name('api.organizations.join');
+    Route::post('/api/organizations/leave', [OrganizationController::class, 'leave'])->name('api.organizations.leave');
     Route::patch('/api/organizations/{organization}', [OrganizationController::class, 'update'])->name('api.organizations.update');
     Route::get('/api/organizations/{organization}', [OrganizationController::class, 'show'])->name('api.organizations.show');
     Route::delete('/api/organizations/{organization}', [OrganizationController::class, 'destroy'])->name('api.organizations.destroy');
@@ -61,6 +62,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/groups/{group}/members', [GroupController::class, 'members'])->name('groups.members');
     Route::patch('/api/groups/{group}/members/{user}', [GroupController::class, 'updateMemberRole'])->name('api.groups.members.update');
     Route::delete('/api/groups/{group}/members/{user}', [GroupController::class, 'removeMember'])->name('api.groups.members.destroy');
+    Route::get('/api/groups/{group}/containers', [GroupController::class, 'getContainers'])->name('api.groups.containers');
+
+    // Rutas de Contenedores
+    Route::post('/api/containers', [ContainerController::class, 'store'])->name('api.containers.store');
+    Route::delete('/api/containers/{container}', [ContainerController::class, 'destroy'])->name('api.containers.destroy');
 
     // Notificaciones
     Route::get('/api/notifications', [NotificationController::class, 'index'])->name('api.notifications.index');

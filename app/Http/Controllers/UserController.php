@@ -53,7 +53,7 @@ class UserController extends Controller
                 $group = Group::find($groupId);
                 if ($group) {
                     // Agregar usuario al grupo
-                    $group->users()->syncWithoutDetaching([auth()->id() => ['rol' => 'meeting_viewer']]);
+                    $group->users()->syncWithoutDetaching([auth()->id() => ['rol' => 'invitado']]);
                     $group->increment('miembros');
                 }
             }

@@ -23,6 +23,7 @@ class MeetingContentContainer extends Model
         'name',
         'description',
         'username',
+        'group_id',
         'is_active',
     ];
 
@@ -44,6 +45,14 @@ class MeetingContentContainer extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'username', 'username');
+    }
+
+    /**
+     * Get the group that owns the container.
+     */
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(Group::class, 'group_id');
     }
 
     /**

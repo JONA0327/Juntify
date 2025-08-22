@@ -34,11 +34,34 @@ class MeetingController extends Controller
      *
      * @return \Illuminate\View\View
      */
-    public function index(): View
+    public function index()
     {
         // Server-side render of meetings list (keeps JS fallback too)
         try {
             $user = Auth::user();
+
+            // Verificar si el usuario es invitado en todas las organizaciones
+            $organizations = \App\Models\Organization::whereHas('groups.users', function($query) use ($user) {
+                $query->where('users.id', $user->id);
+            })->with(['groups' => function($query) use ($user) {
+                $query->whereHas('users', function($subQuery) use ($user) {
+                    $subQuery->where('users.id', $user->id);
+                });
+            }])->get();
+
+            $isOnlyGuest = $organizations->every(function($org) use ($user) {
+                return $org->groups->every(function($group) use ($user) {
+                    $userInGroup = $group->users->where('id', $user->id)->first();
+                    return $userInGroup && $userInGroup->pivot->rol === 'invitado';
+                });
+            });
+
+            if ($isOnlyGuest && $organizations->count() > 0) {
+                // Redirigir a organizaciones si es solo invitado
+                return redirect()->route('organization.index')
+                    ->with('error', 'Los usuarios invitados no tienen acceso a esta sección');
+            }
+
             $this->setGoogleDriveToken($user);
 
             $meetings = \App\Models\TranscriptionLaravel::where('username', $user->username)

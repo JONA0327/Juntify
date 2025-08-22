@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Organization;
+use App\Models\Group;
 use Illuminate\Http\Request;
 
 class OrganizationController extends Controller
@@ -10,7 +11,7 @@ class OrganizationController extends Controller
     public function index()
     {
         $user = auth()->user();
-        if (!$user || !$user->groups()->exists()) {
+        if (!$user) {
             abort(403);
         }
 
@@ -25,14 +26,29 @@ class OrganizationController extends Controller
             }]);
         }])->get();
 
-        // Marcar si el usuario es propietario de la organización
+        // Marcar si el usuario es propietario de la organización y obtener su rol más alto
         $organizations->each(function ($organization) use ($user) {
-            $organization->is_owner = $organization->groups->flatMap->users
-                ->contains(fn($u) => $u->id === $user->id && $u->pivot->rol === 'owner');
+            $organization->is_owner = $organization->admin_id === $user->id;
+
+            // Obtener el rol más alto del usuario en esta organización
+            $userRoles = $organization->groups->flatMap->users
+                ->where('id', $user->id)
+                ->pluck('pivot.rol')
+                ->unique();
+
+            $organization->user_role = $userRoles->contains('administrador') ? 'administrador' :
+                                     ($userRoles->contains('colaborador') ? 'colaborador' : 'invitado');
+        });
+
+        // Verificar si el usuario es solo invitado en todas las organizaciones
+        $isOnlyGuest = $organizations->every(function($org) {
+            return $org->user_role === 'invitado';
         });
 
         return view('organization.index', [
             'organizations' => $organizations,
+            'user' => $user,
+            'isOnlyGuest' => $isOnlyGuest,
         ]);
     }
 
@@ -61,7 +77,21 @@ class OrganizationController extends Controller
             'imagen' => 'nullable|string',
         ]);
 
-        $organization = Organization::create($validated + ['num_miembros' => 0]);
+        $organization = Organization::create($validated + [
+            'num_miembros' => 1,
+            'admin_id' => $user->id
+        ]);
+
+        // Crear grupo principal de la organización
+        $mainGroup = Group::create([
+            'nombre_grupo' => 'General',
+            'descripcion' => 'Grupo principal de la organización',
+            'id_organizacion' => $organization->id,
+            'miembros' => 1
+        ]);
+
+        // Agregar al usuario como administrador del grupo principal
+        $mainGroup->users()->attach($user->id, ['rol' => 'administrador']);
 
         return response()->json($organization, 201);
     }
@@ -84,6 +114,39 @@ class OrganizationController extends Controller
         $organization->increment('num_miembros');
 
         return response()->json(['joined' => true]);
+    }
+
+    public function leave(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user) {
+            abort(403);
+        }
+
+        // Obtener todas las organizaciones del usuario
+        $organizations = Organization::whereHas('groups.users', function($query) use ($user) {
+            $query->where('users.id', $user->id);
+        })->get();
+
+        foreach ($organizations as $organization) {
+            // Si es el admin de la organización, no puede salirse
+            if ($organization->admin_id === $user->id) {
+                return response()->json([
+                    'message' => 'No puedes salir de una organización que administras'
+                ], 403);
+            }
+
+            // Remover de todos los grupos de la organización
+            foreach ($organization->groups as $group) {
+                $group->users()->detach($user->id);
+                $group->update(['miembros' => $group->users()->count()]);
+            }
+
+            // Actualizar contador de miembros de la organización
+            $organization->refreshMemberCount();
+        }
+
+        return response()->json(['left' => true]);
     }
 
     public function update(Request $request, Organization $organization)

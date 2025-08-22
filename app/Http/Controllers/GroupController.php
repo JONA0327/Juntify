@@ -26,7 +26,7 @@ class GroupController extends Controller
         ]);
 
         $group = Group::create($validated + ['miembros' => 1]);
-        $group->users()->attach($user->id, ['rol' => 'full_meeting_access']);
+        $group->users()->attach($user->id, ['rol' => 'colaborador']);
         $group->organization->refreshMemberCount();
 
         return response()->json($group, 201);
@@ -106,7 +106,7 @@ class GroupController extends Controller
     {
         $user = auth()->user();
 
-        $group->users()->syncWithoutDetaching([$user->id => ['rol' => 'meeting_viewer']]);
+        $group->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
         $group->increment('miembros');
         $group->organization->refreshMemberCount();
 
@@ -129,7 +129,7 @@ class GroupController extends Controller
     public function updateMemberRole(Request $request, Group $group, User $user)
     {
         $validated = $request->validate([
-            'rol' => 'required|in:meeting_viewer,full_meeting_access',
+            'rol' => 'required|in:invitado,colaborador,administrador',
         ]);
 
         $group->users()->updateExistingPivot($user->id, ['rol' => $validated['rol']]);
@@ -158,6 +158,38 @@ class GroupController extends Controller
         $organization->refreshMemberCount();
 
         return response()->json(['deleted' => true]);
+    }
+
+    public function getContainers(Group $group)
+    {
+        $user = auth()->user();
+        if (!$user || in_array($user->roles, ['free', 'basic'])) {
+            abort(403);
+        }
+
+        // Verificar que el usuario pertenece al grupo
+        $userInGroup = $group->users()->where('user_id', $user->id)->exists();
+        if (!$userInGroup) {
+            abort(403, 'No tienes acceso a este grupo');
+        }
+
+        $containers = $group->containers()
+            ->where('is_active', true)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($container) {
+                return [
+                    'id' => $container->id,
+                    'name' => $container->name,
+                    'description' => $container->description,
+                    'created_at' => $container->created_at->format('d/m/Y H:i'),
+                    'meetings_count' => $container->meetingRelations()->count(),
+                ];
+            });
+
+        return response()->json([
+            'containers' => $containers
+        ]);
     }
 }
 

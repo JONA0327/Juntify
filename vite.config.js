@@ -22,7 +22,9 @@ export default defineConfig({
                 'resources/css/audio-processing.css',
                 'resources/js/audio-processing.js',
                 'resources/js/notifications.js',
-                'resources/css/tasks.css', // <-- AÑADE ESTA LÍNEA
+                'resources/css/tasks.css',
+                'resources/css/organization.css',
+                'resources/js/organization.js',
             ],
             refresh: true,
         }),

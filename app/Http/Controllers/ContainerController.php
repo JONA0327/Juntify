@@ -81,6 +81,7 @@ class ContainerController extends Controller
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
                 'description' => 'nullable|string|max:1000',
+                'group_id' => 'nullable|exists:groups,id',
             ]);
 
             $user = Auth::user();
@@ -89,6 +90,7 @@ class ContainerController extends Controller
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
                 'username' => $user->username,
+                'group_id' => $validated['group_id'] ?? null,
                 'is_active' => true,
             ]);
 

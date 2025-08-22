@@ -19,6 +19,7 @@
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
         'resources/css/organization.css',
+        'resources/js/organization.js',
         'resources/css/audio-processing.css',
         'resources/js/reuniones_v2.js'
     ])
@@ -35,53 +36,277 @@
                 <!-- Sección de crear/unirse - solo visible cuando no hay organizaciones -->
                 <div x-show="organizations.length === 0" class="mb-6 flex flex-col items-center w-full max-w-sm mx-auto space-y-4">
                     <h1 class="text-2xl font-semibold text-center">Organización</h1>
-                    <button @click="openOrgModal" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear organización</button>
-                    <div class="flex items-center w-full">
-                        <hr class="flex-grow border-slate-700/50">
-                        <span class="px-2 text-slate-400">o</span>
-                        <hr class="flex-grow border-slate-700/50">
-                    </div>
-                    <input type="text" x-model="inviteCode" placeholder="Código de invitación" class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
-                    <button @click="joinOrganization()" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Unirse</button>
-                </div>
-
-                <!-- Título cuando hay organizaciones -->
-                <div x-show="organizations.length > 0" class="mb-8 text-center">
-                    <h1 class="text-3xl font-semibold">Mi Organización</h1>
-                </div>
-
-                <template x-for="org in organizations" :key="org.id">
-                    <div class="organization-card mb-8 text-slate-200 bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 shadow-lg">
-                        <div class="flex items-center mb-6">
-                            <div class="organization-avatar">
-                                <img :src="org.imagen || 'https://via.placeholder.com/100'" alt="" class="org-avatar">
-                            </div>
-                            <div class="flex-1 ml-6">
-                                <h3 class="text-3xl font-bold mb-2" x-text="org.nombre_organizacion"></h3>
-                                <p class="text-slate-300 text-lg mb-3" x-text="org.descripcion"></p>
-                                <p class="text-lg">Miembros: <span class="font-semibold text-yellow-400" x-text="org.num_miembros"></span></p>
-                            </div>
-                            <div class="flex space-x-2">
-                                <button @click="openGroupModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-6 py-3 rounded-xl font-semibold text-lg shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear grupo</button>
-                                <button x-show="org.is_owner" @click="openEditOrgModal(org)" class="bg-slate-700/50 px-6 py-3 rounded-xl font-semibold text-lg hover:bg-slate-700 transition-colors duration-200">Editar</button>
-                                <button x-show="org.is_owner" @click="deleteOrganization(org)" class="bg-red-600 px-6 py-3 rounded-xl font-semibold text-lg hover:bg-red-700 transition-colors duration-200">Eliminar</button>
-                            </div>
+                    @if(!in_array($user->roles, ['free', 'basic']))
+                        <button @click="openOrgModal" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear organización</button>
+                        <div class="flex items-center w-full">
+                            <hr class="flex-grow border-slate-700/50">
+                            <span class="px-2 text-slate-400">o</span>
+                            <hr class="flex-grow border-slate-700/50">
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6" x-show="org.groups && org.groups.length">
-                            <template x-for="group in org.groups" :key="group.id">
-                                <div @click="viewGroup(group)" class="cursor-pointer group-card p-6 text-slate-200 bg-slate-700/50 border border-slate-600/50 rounded-lg hover:bg-slate-700/70 transition-colors duration-200">
-                                    <h4 class="font-semibold text-lg mb-2" x-text="group.nombre_grupo"></h4>
-                                    <p class="text-sm text-slate-400 mb-3" x-text="group.descripcion"></p>
-                                    <p class="text-sm text-slate-400 mb-2">Miembros: <span class="text-yellow-400 font-medium" x-text="group.miembros"></span></p>
-                                    <div class="flex space-x-2" x-show="org.is_owner">
-                                        <button @click.stop="openEditGroupModal(org, group)" class="px-3 py-1 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg text-sm shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Editar</button>
-                                        <button @click.stop="deleteGroup(org, group)" class="px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors duration-200">Eliminar</button>
+                    @endif
+                    <input type="text" x-model="inviteCode" placeholder="Código de invitación" class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+                    <button @click="joinOrganization()" :disabled="isJoining" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-show="!isJoining">Unirse</span>
+                        <span x-show="isJoining" class="flex items-center justify-center">
+                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Uniéndose...
+                        </span>
+                    </button>
+                </div>
+
+                <!-- Vista especial para usuarios invitados -->
+                @if($isOnlyGuest && count($organizations) > 0)
+                    <div class="mb-8">
+                        <div class="text-center mb-6">
+                            <h1 class="text-2xl font-semibold text-slate-200">Mi Grupo</h1>
+                            <p class="text-slate-400 mt-2">Eres invitado en esta organización</p>
+                        </div>
+
+                        @foreach($organizations as $org)
+                            <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-6">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h2 class="text-xl font-semibold text-slate-200 mb-2">{{ $org->nombre_organizacion }}</h2>
+                                        <p class="text-slate-300">{{ $org->descripcion }}</p>
+                                        <span class="inline-block bg-blue-600/20 text-blue-400 px-2 py-1 rounded text-sm mt-2">Invitado</span>
+                                    </div>
+                                    <button @click="leaveOrganization()" class="bg-red-600 px-4 py-2 rounded-lg text-white hover:bg-red-700 transition-colors duration-200">
+                                        Salir de la organización
+                                    </button>
+                                </div>
+
+                                <div class="border-t border-slate-700/50 pt-4">
+                                    <h3 class="text-lg font-medium text-slate-200 mb-3">Mis Grupos</h3>
+                                    @if($org->groups && count($org->groups) > 0)
+                                        <div class="space-y-3">
+                                            @foreach($org->groups as $group)
+                                                <div class="bg-slate-700/30 rounded-lg p-4">
+                                                    <div class="flex justify-between items-center">
+                                                        <div>
+                                                            <h4 class="font-medium text-slate-200">{{ $group->nombre_grupo }}</h4>
+                                                            <p class="text-sm text-slate-400 mt-1">{{ $group->descripcion }}</p>
+                                                            <p class="text-sm text-slate-400 mt-1">Miembros: {{ $group->miembros ?? 0 }}</p>
+                                                        </div>
+                                                        <span class="bg-blue-600/20 text-blue-400 px-2 py-1 rounded text-xs">
+                                                            Invitado
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <p class="text-slate-400 text-center py-4">No perteneces a ningún grupo en esta organización</p>
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
+                <!-- Interfaz principal cuando hay organizaciones -->
+                <div x-show="organizations.length > 0" class="mb-8" @if($isOnlyGuest) style="display: none;" @endif>
+                    <!-- Título y header -->
+                    <div class="mb-8 text-center">
+                        <h1 class="text-3xl font-semibold">Gestión de Organización</h1>
+                    </div>
+
+                    <!-- Pestañas principales -->
+                    <div class="mb-6">
+                        <nav class="flex space-x-1 bg-slate-800/30 p-1 rounded-lg max-w-md mx-auto">
+                            <button @click="mainTab = 'organization'"
+                                    :class="mainTab === 'organization' ? 'bg-yellow-400 text-slate-900' : 'text-slate-400 hover:text-slate-200'"
+                                    class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
+                                Organización
+                            </button>
+                            <button @click="mainTab = 'groups'"
+                                    :class="mainTab === 'groups' ? 'bg-yellow-400 text-slate-900' : 'text-slate-400 hover:text-slate-200'"
+                                    class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
+                                Grupos
+                            </button>
+                            <button @click="mainTab = 'permissions'"
+                                    :class="mainTab === 'permissions' ? 'bg-yellow-400 text-slate-900' : 'text-slate-400 hover:text-slate-200'"
+                                    class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
+                                Permisos
+                            </button>
+                        </nav>
+                    </div>
+
+                    <!-- Contenido de pestañas -->
+                    <template x-for="org in organizations" :key="org.id">
+                        <div class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 shadow-lg">
+
+                            <!-- Pestaña Organización -->
+                            <div x-show="mainTab === 'organization'" x-transition>
+                                <div class="flex items-center justify-between mb-6">
+                                    <div class="flex items-center">
+                                        <div class="organization-avatar mr-6">
+                                            <div class="w-20 h-20 rounded-full border-2 border-slate-600 overflow-hidden bg-slate-700 flex items-center justify-center">
+                                                <img x-show="org.imagen" :src="org.imagen" alt="" class="w-full h-full object-cover">
+                                                <svg x-show="!org.imagen" class="w-10 h-10 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-2xl font-bold text-slate-200 mb-2" x-text="org.nombre_organizacion"></h3>
+                                            <p class="text-slate-300 text-lg mb-2" x-text="org.descripcion"></p>
+                                            <p class="text-slate-400">Miembros: <span class="font-semibold text-yellow-400" x-text="org.num_miembros"></span></p>
+                                        </div>
+                                    </div>
+                                    <div class="flex space-x-3" x-show="org.is_owner">
+                                        <button @click="openEditOrgModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                            Editar Organización
+                                        </button>
+                                        <button @click="deleteOrganization(org)" class="bg-red-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200">
+                                            Eliminar
+                                        </button>
                                     </div>
                                 </div>
-                            </template>
+
+                                <!-- Estadísticas de la organización -->
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                                    <div class="bg-slate-700/30 p-4 rounded-lg text-center">
+                                        <div class="text-2xl font-bold text-yellow-400" x-text="org.groups ? org.groups.length : 0"></div>
+                                        <div class="text-slate-400">Grupos</div>
+                                    </div>
+                                    <div class="bg-slate-700/30 p-4 rounded-lg text-center">
+                                        <div class="text-2xl font-bold text-yellow-400" x-text="org.num_miembros"></div>
+                                        <div class="text-slate-400">Miembros Totales</div>
+                                    </div>
+                                    <div class="bg-slate-700/30 p-4 rounded-lg text-center">
+                                        <div class="text-2xl font-bold text-yellow-400" x-text="org.created_at ? new Date(org.created_at).getFullYear() : 'N/A'"></div>
+                                        <div class="text-slate-400">Año de Creación</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Pestaña Grupos -->
+                            <div x-show="mainTab === 'groups'" x-transition>
+                                <div class="flex items-center justify-between mb-6">
+                                    <h3 class="text-2xl font-bold text-slate-200">Grupos de la Organización</h3>
+                                    <button @click="openGroupModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                        Crear Grupo
+                                    </button>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" x-show="org.groups && org.groups.length">
+                                    <template x-for="group in org.groups" :key="group.id">
+                                        <div class="bg-slate-700/50 border border-slate-600/50 rounded-lg p-4 hover:bg-slate-700/70 transition-colors duration-200">
+                                            <div class="flex items-center justify-between mb-3">
+                                                <h4 class="font-semibold text-lg text-slate-200" x-text="group.nombre_grupo"></h4>
+                                                <button @click="viewGroup(group)" class="text-yellow-400 hover:text-yellow-300">
+                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            <p class="text-sm text-slate-400 mb-3" x-text="group.descripcion"></p>
+                                            <div class="flex items-center justify-between">
+                                                <p class="text-sm text-slate-400">
+                                                    Miembros: <span class="text-yellow-400 font-medium" x-text="group.miembros || 0"></span>
+                                                </p>
+                                                <div class="flex space-x-2" x-show="org.is_owner">
+                                                    <button @click="openEditGroupModal(org, group)" class="px-2 py-1 bg-yellow-500 text-slate-900 rounded text-xs hover:bg-yellow-400 transition-colors duration-200">
+                                                        Editar
+                                                    </button>
+                                                    <button @click="deleteGroup(org, group)" class="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors duration-200">
+                                                        Eliminar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <div x-show="!org.groups || org.groups.length === 0" class="text-center py-8">
+                                    <p class="text-slate-400 mb-4">No hay grupos creados en esta organización</p>
+                                    <button @click="openGroupModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-6 py-3 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                        Crear el primer grupo
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Pestaña Permisos -->
+                            <div x-show="mainTab === 'permissions'" x-transition>
+                                <div class="mb-6">
+                                    <h3 class="text-2xl font-bold text-slate-200 mb-2">Gestión de Permisos</h3>
+                                    <p class="text-slate-400">Administra los roles y permisos de los miembros en cada grupo</p>
+                                </div>
+
+                                <div x-show="org.groups && org.groups.length" class="space-y-6">
+                                    <template x-for="group in org.groups" :key="group.id">
+                                        <div class="bg-slate-700/30 border border-slate-600/50 rounded-lg p-4">
+                                            <h4 class="font-semibold text-lg text-slate-200 mb-4" x-text="group.nombre_grupo"></h4>
+
+                                            <div class="overflow-x-auto">
+                                                <table class="w-full border border-slate-600/50 rounded-lg overflow-hidden">
+                                                    <thead>
+                                                        <tr class="bg-slate-800/50">
+                                                            <th class="text-left p-3 text-slate-200">Miembro</th>
+                                                            <th class="text-left p-3 text-slate-200">Email</th>
+                                                            <th class="text-center p-3 text-slate-200">Rol</th>
+                                                            <th class="text-center p-3 text-slate-200" x-show="org.is_owner">Acciones</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <template x-for="user in group.users || []" :key="user.id">
+                                                            <tr class="border-t border-slate-600/50 hover:bg-slate-700/20">
+                                                                <td class="p-3 text-slate-200">
+                                                                    <div class="font-medium" x-text="user.full_name"></div>
+                                                                    <div class="text-sm text-slate-400" x-text="'@' + user.username"></div>
+                                                                </td>
+                                                                <td class="p-3 text-slate-400" x-text="user.email"></td>
+                                                                <td class="p-3 text-center">
+                                                                    <select x-model="user.pivot.rol"
+                                                                            @change="updateMemberRole(group.id, user)"
+                                                                            :disabled="!org.is_owner"
+                                                                            class="bg-slate-900/50 border border-slate-600/50 rounded p-2 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400/50">
+                                                                        <option value="invitado">Invitado</option>
+                                                                        <option value="colaborador">Colaborador</option>
+                                                                        <option value="administrador">Administrador</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td class="p-3 text-center" x-show="org.is_owner">
+                                                                    <button @click="removeMember(group.id, user)"
+                                                                            class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors duration-200">
+                                                                        Quitar
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        </template>
+                                                        <template x-if="!group.users || group.users.length === 0">
+                                                            <tr>
+                                                                <td colspan="4" class="p-4 text-center text-slate-400">No hay miembros en este grupo</td>
+                                                            </tr>
+                                                        </template>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                            <!-- Botón para invitar miembros al grupo -->
+                                            <div class="mt-4" x-show="org.is_owner">
+                                                <button @click="openInviteModal(group)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium text-sm shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                                    Invitar miembro a este grupo
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <div x-show="!org.groups || org.groups.length === 0" class="text-center py-8">
+                                    <p class="text-slate-400 mb-4">No hay grupos para gestionar permisos</p>
+                                    <button @click="mainTab = 'groups'" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-6 py-3 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                        Ir a crear grupos
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </template>
+                    </template>
+                </div>
 
                 <!-- Modal crear organización -->
                 <div x-show="showOrgModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
@@ -95,7 +320,16 @@
                         </template>
                         <div class="flex justify-end space-x-2">
                             <button @click="showOrgModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
-                            <button @click="createOrganization" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Aceptar</button>
+                            <button @click="createOrganization" :disabled="isCreatingOrg" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span x-show="!isCreatingOrg">Crear</span>
+                                <span x-show="isCreatingOrg" class="flex items-center">
+                                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Creando...
+                                </span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -108,134 +342,163 @@
                         <textarea x-model="newGroup.descripcion" placeholder="Descripción" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
                         <div class="flex justify-end space-x-2">
                             <button @click="showGroupModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
-                            <button @click="createGroup" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Aceptar</button>
+                            <button @click="createGroup" :disabled="isCreatingGroup" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span x-show="!isCreatingGroup">Crear</span>
+                                <span x-show="isCreatingGroup" class="flex items-center">
+                                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Creando...
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal invitar a grupo específico -->
+                <div x-show="showInviteModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                    <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+                        <h2 class="text-lg font-semibold mb-4">Invitar miembro</h2>
+                        <p class="text-sm text-slate-400 mb-4" x-text="'Invitar a: ' + (selectedGroup?.nombre_grupo || '')"></p>
+
+                        <input type="email"
+                               x-model="inviteEmail"
+                               @input="checkUserExists()"
+                               placeholder="Correo electrónico"
+                               class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 mb-3 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+
+                        <!-- Mensaje de estado del usuario -->
+                        <div x-show="userExistsMessage" class="mb-3 p-2 rounded-lg text-sm font-medium"
+                             :class="userExists ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'">
+                            <div class="flex items-center">
+                                <!-- Icono para usuario existente -->
+                                <template x-if="userExists">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                    </svg>
+                                </template>
+                                <!-- Icono para usuario no existente -->
+                                <template x-if="!userExists">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                    </svg>
+                                </template>
+                                <span x-text="userExistsMessage"></span>
+                            </div>
+                        </div>
+
+                        <!-- Selector de rol -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Rol en el grupo</label>
+                            <select x-model="inviteRole" class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-yellow-400/50">
+                                <option value="invitado">Invitado</option>
+                                <option value="colaborador">Colaborador</option>
+                                <option value="admin">Administrador</option>
+                            </select>
+                        </div>
+
+                        <div class="flex justify-end space-x-2">
+                            <button @click="showInviteModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
+                            <button @click="sendGroupInvitation()"
+                                    :disabled="!inviteEmail"
+                                    :class="{'opacity-50 cursor-not-allowed': !inviteEmail}"
+                                    class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                <span x-text="userExists ? 'Enviar Notificación' : 'Enviar Invitación'"></span>
+                            </button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Modal información del grupo -->
                 <div x-show="showGroupInfoModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
-                    <div class="organization-modal p-6 w-full max-w-lg text-slate-200">
+                    <div class="organization-modal p-6 w-full max-w-4xl text-slate-200">
                         <h2 class="text-lg font-semibold mb-2" x-text="currentGroup?.nombre_grupo"></h2>
                         <p class="text-sm text-slate-400 mb-4" x-text="currentGroup?.descripcion"></p>
 
-                        <!-- Tabs de administración -->
-                        <div x-show="isOwner" class="mb-4 border-b border-slate-700/50">
+                        <!-- Tabs -->
+                        <div class="mb-4 border-b border-slate-700/50">
                             <nav class="flex space-x-4">
-                                <button @click="activeTab = 'grupos'" :class="activeTab === 'grupos' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400'" class="px-3 py-2">Grupos</button>
-                                <button @click="activeTab = 'permisos'" :class="activeTab === 'permisos' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400'" class="px-3 py-2">Permisos</button>
+                                <button @click="activeTab = 'contenedores'" :class="activeTab === 'contenedores' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400'" class="px-3 py-2">Contenedores</button>
                             </nav>
                         </div>
 
-                        <!-- Contenido pestaña Grupos -->
-                        <div x-show="activeTab === 'grupos'">
-                            <table class="w-full mb-4 border border-slate-700/50">
-                                <thead>
-                                    <tr class="bg-slate-800/50">
-                                        <th class="text-left p-2">Miembro</th>
-                                        <th class="p-2">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template x-for="user in currentGroup?.users" :key="user.id">
-                                        <tr class="border-t border-slate-700/50">
-                                            <td class="p-2" x-text="user.full_name + ' (@' + user.username + ')'"></td>
-                                            <td class="p-2 text-center">
-                                                <button @click.stop="removeMember(user)" class="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Quitar</button>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-
-                            <div class="mb-4">
-                                <button @click="showInviteOptions = !showInviteOptions" class="px-3 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Invitar miembro</button>
-                                <div x-show="showInviteOptions" class="mt-2" x-cloak>
-                                    <input type="email"
-                                           x-model="inviteEmail"
-                                           @input="checkUserExists()"
-                                           placeholder="Correo electrónico"
-                                           class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 mb-2 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
-
-                                    <!-- Mensaje de estado del usuario -->
-                                    <div x-show="userExistsMessage" class="mb-3 p-2 rounded-lg text-sm font-medium"
-                                         :class="userExists ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'">
-                                        <div class="flex items-center">
-                                            <!-- Icono para usuario existente -->
-                                            <template x-if="userExists">
-                                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5-5-5h5v-12"></path>
-                                                </svg>
-                                            </template>
-                                            <!-- Icono para usuario no existente -->
-                                            <template x-if="!userExists">
-                                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                                                </svg>
-                                            </template>
-                                            <span x-text="userExistsMessage"></span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Botón único para enviar invitación -->
-                                    <button @click="sendInvitation()"
-                                            :disabled="!inviteEmail"
-                                            :class="{'opacity-50 cursor-not-allowed': !inviteEmail}"
-                                            class="w-full px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
-                                        <span x-text="userExists ? 'Enviar Notificación Interna' : 'Enviar Invitación por Email'"></span>
-                                    </button>
-                                </div>
+                        <!-- Contenido pestaña Contenedores -->
+                        <div x-show="activeTab === 'contenedores'">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold">Contenedores del Grupo</h3>
+                                <button @click="openCreateContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                    Crear Contenedor
+                                </button>
                             </div>
 
-                            <template x-if="currentGroup && !currentGroup.users.some(u => u.id === userId)">
-                                <button @click="acceptInvitation" class="px-3 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 mb-4">Aceptar invitación</button>
-                            </template>
+                            <!-- Lista de contenedores -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                                <template x-for="container in currentGroup?.containers || []" :key="container.id">
+                                    <div class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
+                                        <h4 class="font-semibold text-yellow-400 mb-2" x-text="container.name"></h4>
+                                        <p class="text-sm text-slate-300 mb-3" x-text="container.description"></p>
+                                        <div class="flex justify-between items-center text-xs text-slate-400">
+                                            <span x-text="'Reuniones: ' + (container.meetings_count || 0)"></span>
+                                            <span x-text="container.created_at"></span>
+                                        </div>
+                                        <div class="mt-3 flex space-x-2">
+                                            <button @click="viewContainerMeetings(container)" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Ver</button>
+                                            <button @click="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700">Editar</button>
+                                            <button @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Eliminar</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Mensaje si no hay contenedores -->
+                            <div x-show="!currentGroup?.containers || currentGroup.containers.length === 0" class="text-center py-8 text-slate-400">
+                                <svg class="w-12 h-12 mx-auto mb-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                                </svg>
+                                <p>No hay contenedores creados para este grupo</p>
+                                <p class="text-sm">Los contenedores te permiten organizar las reuniones por categorías</p>
+                            </div>
                         </div>
 
-                        <!-- Contenido pestaña Permisos -->
-                        <div x-show="activeTab === 'permisos'" x-cloak>
-                            <table class="w-full mb-4 border border-slate-700/50">
-                                <thead>
-                                    <tr class="bg-slate-800/50">
-                                        <th class="text-left p-2">Miembro</th>
-                                        <th class="p-2">Rol</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template x-for="user in currentGroup?.users" :key="user.id">
-                                        <tr class="border-t border-slate-700/50">
-                                            <td class="p-2" x-text="user.full_name + ' (@' + user.username + ')'"></td>
-                                            <td class="p-2">
-                                                <select x-model="user.pivot.rol" @change="updateMemberRole(user)" class="bg-slate-900/50 border border-slate-700/50 rounded p-1">
-                                                    <option value="meeting_viewer">Ver reuniones</option>
-                                                    <option value="full_meeting_access">Acceso completo</option>
-                                                </select>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="flex justify-end">
+                        <div class="flex justify-end mt-6">
                             <button @click="showGroupInfoModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cerrar</button>
                         </div>
                     </div>
                 </div>
 
+                <!-- Modal crear contenedor -->
+                <div x-show="showCreateContainerModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                    <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+                        <h2 class="text-lg font-semibold mb-4">Crear Contenedor</h2>
+                        <input type="text" x-model="newContainer.name" placeholder="Nombre del contenedor" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+                        <textarea x-model="newContainer.description" placeholder="Descripción del contenedor" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
+                        <div class="flex justify-end space-x-2">
+                            <button @click="showCreateContainerModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
+                            <button @click="createContainer" :disabled="isCreatingContainer" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span x-show="!isCreatingContainer">Crear</span>
+                                <span x-show="isCreatingContainer" class="flex items-center">
+                                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Creando...
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Modal editar organización -->
-                <div x-show="showEditOrgModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                <div x-show="showEditModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-4">Editar organización</h2>
-                        <input type="text" x-model="editOrg.nombre_organizacion" placeholder="Nombre" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
-                        <textarea x-model="editOrg.descripcion" placeholder="Descripción (opcional)" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
-                        <input type="file" @change="previewEditImage" class="mb-3 text-slate-200">
-                        <template x-if="editPreview">
-                            <img :src="editPreview" class="w-24 h-24 object-cover rounded-lg mb-3">
-                        </template>
+                        <input type="text" x-model="editForm.nombre_organizacion" placeholder="Nombre" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+                        <textarea x-model="editForm.descripcion" placeholder="Descripción (opcional)" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
+                        <input type="text" x-model="editForm.imagen" placeholder="URL de imagen (opcional)" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
                         <div class="flex justify-end space-x-2">
-                            <button @click="showEditOrgModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
-                            <button @click="editOrganization" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Guardar</button>
+                            <button @click="showEditModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
+                            <button @click="saveOrganization" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Guardar</button>
                         </div>
                     </div>
                 </div>
@@ -244,11 +507,11 @@
                 <div x-show="showEditGroupModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-4">Editar grupo</h2>
-                        <input type="text" x-model="editGroup.nombre_grupo" placeholder="Nombre del grupo" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
-                        <textarea x-model="editGroup.descripcion" placeholder="Descripción" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
+                        <input type="text" x-model="editGroupForm.nombre_grupo" placeholder="Nombre del grupo" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+                        <textarea x-model="editGroupForm.descripcion" placeholder="Descripción" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
                         <div class="flex justify-end space-x-2">
                             <button @click="showEditGroupModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
-                            <button @click="editGroup" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Guardar</button>
+                            <button @click="saveGroup" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Guardar</button>
                         </div>
                     </div>
                 </div>
