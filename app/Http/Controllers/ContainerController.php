@@ -292,6 +292,7 @@ class ContainerController extends Controller
                         'transcript_drive_id' => $meeting->transcript_drive_id,
                         'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
                         'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
+                        'has_transcript' => !empty($meeting->transcript_drive_id),
                     ];
                 });
 

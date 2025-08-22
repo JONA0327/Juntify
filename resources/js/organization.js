@@ -849,6 +849,31 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     if (typeof attachMeetingEventListeners === 'function') {
                         attachMeetingEventListeners();
                     }
+
+                    // Deshabilitar ver detalles si no hay transcripción
+                    this.selectedContainer.meetings.forEach(meeting => {
+                        if (!meeting.has_transcript) {
+                            const card = document.querySelector(`.meeting-card[data-meeting-id='${meeting.id}']`);
+                            if (card) {
+                                const message = document.createElement('span');
+                                message.className = 'block mt-2 text-xs text-slate-400';
+                                message.textContent = 'Transcripción no disponible';
+                                const content = card.querySelector('.meeting-content');
+                                if (content) {
+                                    content.appendChild(message);
+                                }
+
+                                card.addEventListener('click', (e) => {
+                                    if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn') || e.target.closest('.remove-btn')) {
+                                        return;
+                                    }
+                                    e.stopImmediatePropagation();
+                                    e.preventDefault();
+                                    alert('Transcripción no disponible');
+                                }, true);
+                            }
+                        }
+                    });
                 });
             } else {
                 alert('Error al cargar las reuniones del contenedor');

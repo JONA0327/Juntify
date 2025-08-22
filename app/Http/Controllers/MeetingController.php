@@ -276,6 +276,13 @@ class MeetingController extends Controller
             // Configurar el cliente de Google Drive con el token del usuario
             $this->setGoogleDriveToken($user);
 
+            if (empty($meeting->transcript_drive_id)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Transcripción no disponible',
+                ], 404);
+            }
+
             // Descargar el archivo .ju (transcripción)
             $transcriptContent = $this->downloadFromDrive($meeting->transcript_drive_id);
             $transcriptResult = $this->decryptJuFile($transcriptContent);
