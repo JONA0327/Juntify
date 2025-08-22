@@ -985,7 +985,18 @@ async function openMeetingModal(meetingId) {
         updateLoadingStep(2); // Paso 2: Descifrando archivo
 
         if (!response.ok) {
-            throw new Error('Error al cargar detalles de la reunión');
+            let errorMessage = 'Error al cargar la reunión';
+            try {
+                const errorData = await response.json();
+                if (errorData.message) {
+                    errorMessage = errorData.message;
+                }
+            } catch (e) {
+                // ignore json parse errors
+            }
+            closeMeetingModal();
+            alert(errorMessage);
+            return;
         }
 
         const data = await response.json();
