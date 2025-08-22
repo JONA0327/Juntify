@@ -2715,3 +2715,4 @@ window.closeContainerMeetingsModal = closeContainerMeetingsModal;
 window.retryLoadContainerMeetings = retryLoadContainerMeetings;
 window.openMeetingModalFromContainer = openMeetingModalFromContainer;
 window.removeMeetingFromContainer = removeMeetingFromContainer;
+window.attachMeetingEventListeners = attachMeetingEventListeners;
