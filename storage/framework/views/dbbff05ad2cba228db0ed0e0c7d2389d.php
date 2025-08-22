@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="<?php echo e(str_replace('_', '-', app()->getLocale())); ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="user-id" content="{{ auth()->id() }}">
+    <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
+    <meta name="user-id" content="<?php echo e(auth()->id()); ?>">
     <title>Organizaciones - Juntify</title>
 
     <!-- Fonts -->
@@ -12,7 +12,7 @@
     <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
     <!-- Vite Assets -->
-    @vite([
+    <?php echo app('Illuminate\Foundation\Vite')([
         'resources/css/app.css',
         'resources/js/app.js',
         'resources/css/new-meeting.css',
@@ -22,28 +22,28 @@
         'resources/js/organization.js',
         'resources/css/audio-processing.css',
         'resources/js/reuniones_v2.js'
-    ])
+    ]); ?>
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
 
     <div class="flex">
 
-        @include('partials.navbar')
-        @include('partials.mobile-nav')
+        <?php echo $__env->make('partials.navbar', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
+        <?php echo $__env->make('partials.mobile-nav', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
 
         <main class="w-full pl-24 pt-24" style="margin-top:130px;">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" x-data='organizationPage(@json($organizations))'>
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" x-data='organizationPage(<?php echo json_encode($organizations, 15, 512) ?>)'>
                 <!-- Sección de crear/unirse - solo visible cuando no hay organizaciones -->
                 <div x-show="organizations.length === 0" class="mb-6 flex flex-col items-center w-full max-w-sm mx-auto space-y-4">
                     <h1 class="text-2xl font-semibold text-center">Organización</h1>
-                    @if(!in_array($user->roles, ['free', 'basic']))
+                    <?php if(!in_array($user->roles, ['free', 'basic'])): ?>
                         <button @click="openOrgModal" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear organización</button>
                         <div class="flex items-center w-full">
                             <hr class="flex-grow border-slate-700/50">
                             <span class="px-2 text-slate-400">o</span>
                             <hr class="flex-grow border-slate-700/50">
                         </div>
-                    @endif
+                    <?php endif; ?>
                     <input type="text" x-model="inviteCode" placeholder="Código de invitación" class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
                     <button @click="joinOrganization()" :disabled="isJoining" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
                         <span x-show="!isJoining">Unirse</span>
@@ -58,19 +58,19 @@
                 </div>
 
                 <!-- Vista especial para usuarios invitados -->
-                @if($isOnlyGuest && count($organizations) > 0)
+                <?php if($isOnlyGuest && count($organizations) > 0): ?>
                     <div class="mb-8">
                         <div class="text-center mb-6">
                             <h1 class="text-2xl font-semibold text-slate-200">Mi Grupo</h1>
                             <p class="text-slate-400 mt-2">Eres invitado en esta organización</p>
                         </div>
 
-                        @foreach($organizations as $org)
+                        <?php $__currentLoopData = $organizations; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $org): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                             <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-6">
                                 <div class="flex justify-between items-start mb-4">
                                     <div>
-                                        <h2 class="text-xl font-semibold text-slate-200 mb-2">{{ $org->nombre_organizacion }}</h2>
-                                        <p class="text-slate-300">{{ $org->descripcion }}</p>
+                                        <h2 class="text-xl font-semibold text-slate-200 mb-2"><?php echo e($org->nombre_organizacion); ?></h2>
+                                        <p class="text-slate-300"><?php echo e($org->descripcion); ?></p>
                                         <span class="inline-block bg-blue-600/20 text-blue-400 px-2 py-1 rounded text-sm mt-2">Invitado</span>
                                     </div>
                                     <button @click="leaveOrganization()" class="bg-red-600 px-4 py-2 rounded-lg text-white hover:bg-red-700 transition-colors duration-200">
@@ -80,34 +80,34 @@
 
                                 <div class="border-t border-slate-700/50 pt-4">
                                     <h3 class="text-lg font-medium text-slate-200 mb-3">Mis Grupos</h3>
-                                    @if($org->groups && count($org->groups) > 0)
+                                    <?php if($org->groups && count($org->groups) > 0): ?>
                                         <div class="space-y-3">
-                                            @foreach($org->groups as $group)
+                                            <?php $__currentLoopData = $org->groups; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $group): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                                                 <div class="bg-slate-700/30 rounded-lg p-4">
                                                     <div class="flex justify-between items-center">
                                                         <div>
-                                                            <h4 class="font-medium text-slate-200">{{ $group->nombre_grupo }}</h4>
-                                                            <p class="text-sm text-slate-400 mt-1">{{ $group->descripcion }}</p>
-                                                            <p class="text-sm text-slate-400 mt-1">Miembros: {{ $group->miembros ?? 0 }}</p>
+                                                            <h4 class="font-medium text-slate-200"><?php echo e($group->nombre_grupo); ?></h4>
+                                                            <p class="text-sm text-slate-400 mt-1"><?php echo e($group->descripcion); ?></p>
+                                                            <p class="text-sm text-slate-400 mt-1">Miembros: <?php echo e($group->miembros ?? 0); ?></p>
                                                         </div>
                                                         <span class="bg-blue-600/20 text-blue-400 px-2 py-1 rounded text-xs">
                                                             Invitado
                                                         </span>
                                                     </div>
                                                 </div>
-                                            @endforeach
+                                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                                         </div>
-                                    @else
+                                    <?php else: ?>
                                         <p class="text-slate-400 text-center py-4">No perteneces a ningún grupo en esta organización</p>
-                                    @endif
+                                    <?php endif; ?>
                                 </div>
                             </div>
-                        @endforeach
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                     </div>
-                @endif
+                <?php endif; ?>
 
                 <!-- Interfaz principal cuando hay organizaciones -->
-                <div x-show="organizations.length > 0" class="mb-8" @if($isOnlyGuest) style="display: none;" @endif>
+                <div x-show="organizations.length > 0" class="mb-8" <?php if($isOnlyGuest): ?> style="display: none;" <?php endif; ?>>
                     <!-- Título y header -->
                     <div class="mb-8 text-center">
                         <h1 class="text-3xl font-semibold">Gestión de Organización</h1>
@@ -640,3 +640,4 @@
     </div>
 </body>
 </html>
+<?php /**PATH C:\laragon\www\Juntify\resources\views/organization/index.blade.php ENDPATH**/ ?>

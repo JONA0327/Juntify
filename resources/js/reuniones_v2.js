@@ -840,16 +840,13 @@ async function toggleContainer(containerId, card) {
     }
 }
 
-function openContainerSelectModal(meetingId) {
-    if (!containers || containers.length === 0) {
-        return;
-    }
-
-    const modalHtml = `
+async function openContainerSelectModal(meetingId) {
+    // Mostrar modal de loading inmediatamente
+    const loadingModalHtml = `
         <div class="meeting-modal active" id="containerSelectModal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2 class="modal-title">Seleccionar contenedor</h2>
+                    <h2 class="modal-title">Cargando contenedores...</h2>
                     <button class="close-btn" onclick="closeContainerSelectModal()">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -857,25 +854,108 @@ function openContainerSelectModal(meetingId) {
                     </button>
                 </div>
                 <div class="modal-body">
-                    <div class="space-y-2">
-                        ${containers.map(c => `<button class="w-full text-left px-4 py-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition" data-id="${c.id}">${escapeHtml(c.name || c.title || '')}</button>`).join('')}
+                    <div class="flex items-center justify-center p-8">
+                        <div class="loading-spinner"></div>
+                        <span class="ml-3 text-slate-300">Cargando contenedores...</span>
                     </div>
                 </div>
             </div>
         </div>`;
 
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    document.body.insertAdjacentHTML('beforeend', loadingModalHtml);
     document.body.style.overflow = 'hidden';
 
-    document.querySelectorAll('#containerSelectModal [data-id]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const containerId = btn.dataset.id;
-            const success = await addMeetingToContainer(meetingId, containerId);
-            if (success) {
-                closeContainerSelectModal();
-            }
+    try {
+        // Asegurar que los contenedores estén cargados
+        if (!containers || containers.length === 0) {
+            await loadContainers();
+        }
+
+        // Verificar si hay contenedores después de cargar
+        if (!containers || containers.length === 0) {
+            updateModalContent('No hay contenedores disponibles', `
+                <div class="text-center p-8">
+                    <div class="mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mx-auto text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12z" />
+                        </svg>
+                    </div>
+                    <p class="text-slate-400 mb-4">No tienes contenedores creados aún.</p>
+                    <button onclick="closeContainerSelectModal(); openContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-600 text-slate-900 rounded-lg font-medium hover:from-yellow-500 hover:to-yellow-700 transition-all">
+                        Crear primer contenedor
+                    </button>
+                </div>
+            `);
+            return;
+        }
+
+        // Actualizar modal con los contenedores disponibles
+        updateModalContent('Seleccionar contenedor', `
+            <div class="space-y-2">
+                ${containers.map(c => `
+                    <button class="w-full text-left px-4 py-3 rounded-lg bg-slate-800/30 border border-slate-700/50 hover:bg-slate-700/50 hover:border-slate-600/50 transition-all duration-200 text-slate-200" data-id="${c.id}">
+                        <div class="flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-3 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12z" />
+                            </svg>
+                            <div>
+                                <div class="font-medium">${escapeHtml(c.name || c.title || '')}</div>
+                                ${c.description ? `<div class="text-sm text-slate-400 mt-1">${escapeHtml(c.description)}</div>` : ''}
+                            </div>
+                        </div>
+                    </button>
+                `).join('')}
+            </div>
+        `);
+
+        // Agregar event listeners a los botones
+        document.querySelectorAll('#containerSelectModal [data-id]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const containerId = btn.dataset.id;
+
+                // Mostrar loading en el botón clickeado
+                btn.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="loading-spinner-small mr-3"></div>
+                        <span>Agregando...</span>
+                    </div>
+                `;
+                btn.disabled = true;
+
+                const success = await addMeetingToContainer(meetingId, containerId);
+                if (success) {
+                    closeContainerSelectModal();
+                }
+            });
         });
-    });
+
+    } catch (error) {
+        console.error('Error loading containers:', error);
+        updateModalContent('Error', `
+            <div class="text-center p-8">
+                <div class="mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mx-auto text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <p class="text-slate-400 mb-4">Error al cargar los contenedores.</p>
+                <button onclick="closeContainerSelectModal()" class="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 transition-all">
+                    Cerrar
+                </button>
+            </div>
+        `);
+    }
+}
+
+function updateModalContent(title, bodyContent) {
+    const modal = document.getElementById('containerSelectModal');
+    if (!modal) return;
+
+    const titleElement = modal.querySelector('.modal-title');
+    const bodyElement = modal.querySelector('.modal-body');
+
+    if (titleElement) titleElement.textContent = title;
+    if (bodyElement) bodyElement.innerHTML = bodyContent;
 }
 
 function closeContainerSelectModal() {

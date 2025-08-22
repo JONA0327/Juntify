@@ -883,6 +883,16 @@
     margin: 0 auto 1rem;
 }
 
+.loading-spinner-small {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid rgba(51, 65, 85, 0.3);
+    border-top: 2px solid var(--primary-yellow);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }

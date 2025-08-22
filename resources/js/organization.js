@@ -10,6 +10,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     showEditGroupModal: false,
     showInviteModal: false,
     showCreateContainerModal: false, // Nueva variable para modal crear contenedor
+    showEditContainerModal: false, // Nueva variable para modal editar contenedor
+    showContainerMeetingsModal: false, // Nueva variable para modal ver reuniones del contenedor
+    selectedContainer: null, // Nueva variable para el contenedor seleccionado
     mainTab: 'organization', // Nueva variable para las pestañas principales
     newOrg: {
         nombre_organizacion: '',
@@ -28,6 +31,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         id_organizacion: null
     },
     newContainer: { // Nueva variable para contenedor
+        name: '',
+        description: ''
+    },
+    editContainer: { // Nueva variable para editar contenedor
+        id: null,
         name: '',
         description: ''
     },
@@ -822,13 +830,101 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     },
 
     viewContainerMeetings(container) {
-        // Aquí puedes implementar la navegación a las reuniones del contenedor
-        window.location.href = `/containers/${container.id}`;
+        // Abrir modal para ver las reuniones del contenedor
+        this.openContainerMeetingsModal(container);
+    },
+
+    async openContainerMeetingsModal(container) {
+        try {
+            // Cargar las reuniones del contenedor
+            const response = await fetch(`/api/content-containers/${container.id}/meetings`);
+            if (response.ok) {
+                const data = await response.json();
+                this.selectedContainer = {
+                    ...container,
+                    meetings: data.meetings || []
+                };
+                this.showContainerMeetingsModal = true;
+            } else {
+                alert('Error al cargar las reuniones del contenedor');
+            }
+        } catch (error) {
+            console.error('Error loading container meetings:', error);
+            alert('Error al cargar las reuniones del contenedor');
+        }
+    },
+
+    // Método para abrir modal de reunión desde organizaciones
+    openMeetingModalFromOrganization(meetingId) {
+        // Llamar a la función global
+        if (window.openMeetingModalFromOrganization) {
+            window.openMeetingModalFromOrganization(meetingId);
+        } else {
+            // Fallback si no está disponible
+            window.location.href = `/transcription/${meetingId}`;
+        }
     },
 
     editContainer(container) {
-        // Implementar edición de contenedor si es necesario
-        console.log('Edit container:', container);
+        // Abrir modal de edición con los datos del contenedor
+        this.editContainer = {
+            id: container.id,
+            name: container.name,
+            description: container.description || ''
+        };
+        this.showEditContainerModal = true;
+    },
+
+    async saveContainer() {
+        if (!this.editContainer.name.trim()) {
+            alert('El nombre del contenedor es requerido');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/containers/${this.editContainer.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    name: this.editContainer.name,
+                    description: this.editContainer.description
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+
+                // Actualizar el contenedor en la lista
+                const index = this.currentGroup.containers.findIndex(c => c.id === this.editContainer.id);
+                if (index !== -1) {
+                    this.currentGroup.containers[index] = {
+                        ...this.currentGroup.containers[index],
+                        name: this.editContainer.name,
+                        description: this.editContainer.description
+                    };
+                }
+
+                this.showEditContainerModal = false;
+
+                // Mostrar mensaje de éxito
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                notification.textContent = 'Contenedor actualizado exitosamente';
+                document.body.appendChild(notification);
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 3000);
+            } else {
+                const errorData = await response.json();
+                alert(errorData.message || 'Error al actualizar el contenedor');
+            }
+        } catch (error) {
+            console.error('Error updating container:', error);
+            alert('Error al actualizar el contenedor');
+        }
     },
 
     async deleteContainer(container) {
@@ -869,3 +965,134 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     }
 }));
+
+// Función global para abrir modal de reunión desde organizaciones
+window.openMeetingModalFromOrganization = async function(meetingId) {
+    try {
+        // Mostrar modal de loading inmediatamente
+        showModalLoadingState();
+
+        const response = await fetch(`/api/meetings/${meetingId}`, {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+
+        updateLoadingStep(2); // Paso 2: Procesando datos
+
+        if (!response.ok) {
+            // Manejar errores específicos del servidor
+            if (response.status === 404) {
+                throw new Error('Reunión no encontrada');
+            } else if (response.status === 500) {
+                const errorData = await response.json().catch(() => ({}));
+                if (errorData.message && errorData.message.includes('transcript')) {
+                    throw new Error('La transcripción de esta reunión no está disponible o aún se está procesando');
+                } else {
+                    throw new Error('Error del servidor al cargar la reunión');
+                }
+            }
+            throw new Error('Error al cargar detalles de la reunión');
+        }
+
+        const data = await response.json();
+
+        updateLoadingStep(3); // Paso 3: Preparando contenido
+
+        if (data.success) {
+            updateLoadingStep(4); // Paso 4: Completado
+
+            // Esperar un poco para mostrar el progreso completo
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Usar las mismas funciones que en reuniones
+            if (window.showMeetingModal) {
+                window.showMeetingModal(data.meeting);
+            } else {
+                // Fallback: redirigir a la página de transcripción
+                if (window.closeMeetingModal) window.closeMeetingModal();
+                window.location.href = `/transcription/${meetingId}`;
+            }
+        } else {
+            if (window.closeMeetingModal) window.closeMeetingModal();
+
+            // Manejar mensaje de error específico
+            const errorMsg = data.message || 'Error desconocido';
+            if (errorMsg.includes('transcript') || errorMsg.includes('transcripción')) {
+                alert('La transcripción de esta reunión no está disponible o aún se está procesando. Por favor, inténtalo más tarde.');
+            } else {
+                alert('Error al cargar la reunión: ' + errorMsg);
+            }
+        }
+
+    } catch (error) {
+        console.error('Error loading meeting details:', error);
+        if (window.closeMeetingModal) window.closeMeetingModal();
+
+        // Mostrar mensaje de error específico basado en el tipo de error
+        let errorMessage = 'Error de conexión al cargar la reunión';
+
+        if (error.message.includes('transcript') || error.message.includes('transcripción')) {
+            errorMessage = 'La transcripción de esta reunión no está disponible o aún se está procesando. Por favor, inténtalo más tarde.';
+        } else if (error.message.includes('no encontrada')) {
+            errorMessage = 'Esta reunión no fue encontrada o no tienes permisos para verla.';
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+
+        alert(errorMessage);
+    }
+};
+
+// Función auxiliar para mostrar loading state (usando las de reuniones si están disponibles)
+function showModalLoadingState() {
+    if (window.showModalLoadingState) {
+        window.showModalLoadingState();
+    } else {
+        // Loading state simple si no están las funciones de reuniones
+        const loadingHtml = `
+            <div class="meeting-modal active" id="meetingModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Cargando reunión...</h2>
+                        <button class="close-btn" onclick="closeMeetingModal()">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="flex items-center justify-center p-8">
+                            <div class="loading-spinner"></div>
+                            <span class="ml-3 text-slate-300">Cargando detalles de la reunión...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+        document.body.insertAdjacentHTML('beforeend', loadingHtml);
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function updateLoadingStep(step) {
+    if (window.updateLoadingStep) {
+        window.updateLoadingStep(step);
+    }
+}
+
+// Función para cerrar modal (usando la de reuniones si está disponible)
+window.closeMeetingModal = function() {
+    if (window.closeMeetingModal && window.closeMeetingModal !== arguments.callee) {
+        window.closeMeetingModal();
+    } else {
+        const modal = document.getElementById('meetingModal');
+        if (modal) {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+            setTimeout(() => modal.remove(), 300);
+        }
+    }
+};
+
