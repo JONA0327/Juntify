@@ -845,6 +845,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     meetings: data.meetings || []
                 };
                 this.showContainerMeetingsModal = true;
+                this.$nextTick(() => {
+                    if (typeof attachMeetingEventListeners === 'function') {
+                        attachMeetingEventListeners();
+                    }
+                });
             } else {
                 alert('Error al cargar las reuniones del contenedor');
             }

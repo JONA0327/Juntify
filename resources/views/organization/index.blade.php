@@ -532,7 +532,7 @@
                 </div>
 
                 <!-- Modal ver reuniones del contenedor -->
-                <div x-show="showContainerMeetingsModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                <div x-show="showContainerMeetingsModal" id="container-meetings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
                     <div class="bg-slate-950 rounded-xl border border-slate-700/50 shadow-2xl shadow-black/20 w-full max-w-6xl max-h-[90vh] overflow-hidden">
                         <!-- Header del modal -->
                         <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
@@ -551,70 +551,9 @@
                         <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
                             <!-- Lista de reuniones -->
                             <template x-if="selectedContainer?.meetings?.length > 0">
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div class="meetings-grid">
                                     <template x-for="meeting in selectedContainer.meetings" :key="meeting.id">
-                                        <div class="group relative bg-slate-800/30 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 hover:bg-slate-800/50 hover:border-slate-600/50 transition-all duration-300 shadow-lg shadow-black/10 hover:shadow-xl hover:shadow-black/20 transform hover:-translate-y-1">
-                                            <!-- Header de la reunión -->
-                                            <div class="flex items-start justify-between mb-4">
-                                                <div class="flex-1 min-w-0">
-                                                    <h3 class="font-semibold text-white text-lg truncate group-hover:text-yellow-400 transition-colors duration-200" x-text="meeting.meeting_name"></h3>
-                                                    <p class="text-slate-400 text-sm mt-1" x-text="meeting.created_at"></p>
-                                                </div>
-                                                <div class="flex items-center space-x-2 ml-3">
-                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
-                                                        Completada
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            <!-- Información adicional -->
-                                            <template x-if="meeting.summary">
-                                                <div class="mb-4">
-                                                    <p class="text-slate-300 text-sm line-clamp-3" x-text="meeting.summary.substring(0, 120) + (meeting.summary.length > 120 ? '...' : '')"></p>
-                                                </div>
-                                            </template>
-
-                                            <!-- Estadísticas -->
-                                            <div class="flex items-center justify-between text-xs text-slate-400 mb-4 pt-3 border-t border-slate-700/30">
-                                                <div class="flex items-center space-x-4">
-                                                    <template x-if="meeting.duration">
-                                                        <span class="flex items-center">
-                                                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                            </svg>
-                                                            <span x-text="meeting.duration"></span>
-                                                        </span>
-                                                    </template>
-                                                    <template x-if="meeting.participants">
-                                                        <span class="flex items-center">
-                                                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                                                            </svg>
-                                                            <span x-text="meeting.participants || 'N/A'"></span>
-                                                        </span>
-                                                    </template>
-                                                </div>
-                                            </div>
-
-                                            <!-- Botones de acción -->
-                                            <div class="flex space-x-2">
-                                                <button @click="openMeetingModalFromOrganization(meeting.id)" class="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 text-sm font-medium rounded-lg hover:from-yellow-500 hover:to-yellow-400 transition-all duration-200 shadow-lg shadow-yellow-400/20 hover:shadow-yellow-400/30 transform hover:scale-105">
-                                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                                                    </svg>
-                                                    Ver Detalles
-                                                </button>
-                                                <template x-if="meeting.audio_url">
-                                                    <a :href="meeting.audio_url" target="_blank" class="inline-flex items-center justify-center px-4 py-2.5 bg-slate-700/50 text-slate-200 text-sm font-medium rounded-lg hover:bg-slate-600/50 transition-all duration-200 border border-slate-600/50 hover:border-slate-500/50">
-                                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 9v6a1 1 0 01-1.447.894L5.236 15H3a1 1 0 01-1-1v-2a1 1 0 011-1h2.236l2.317-1.106A1 1 0 019 9z"></path>
-                                                        </svg>
-                                                        Audio
-                                                    </a>
-                                                </template>
-                                            </div>
-                                        </div>
+                                        <div x-html="createMeetingCard(meeting)"></div>
                                     </template>
                                 </div>
                             </template>
