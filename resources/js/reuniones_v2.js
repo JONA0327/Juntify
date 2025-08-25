@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     initializeFadeAnimations();
     initializeContainers(); // Inicializar funcionalidad de contenedores
+    initializeDownloadModal();
     const defaultTab = document.querySelector('button[data-target="my-meetings"]');
     if (defaultTab) {
         setActiveTab(defaultTab);
@@ -725,6 +726,13 @@ function attachMeetingEventListeners() {
         card.addEventListener('dragstart', e => {
             e.dataTransfer.setData('meeting-id', card.dataset.meetingId);
         });
+        const downloadBtn = card.querySelector('.download-btn');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openDownloadModal(card.dataset.meetingId);
+            });
+        }
         card.addEventListener('click', function(e) {
             // No abrir modal si se hizo click en los botones de acción
             if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn') || e.target.closest('.remove-btn') || e.target.closest('.download-btn')) {
@@ -2565,6 +2573,48 @@ function clearContainerErrors() {
     });
 }
 
+function openDownloadModal(meetingId) {
+    const modal = document.querySelector('[name="download-meeting"]');
+    if (!modal) return;
+    modal.dataset.meetingId = meetingId;
+    window.dispatchEvent(new CustomEvent('open-modal', { detail: 'download-meeting' }));
+}
+
+function initializeDownloadModal() {
+    const confirm = document.getElementById('confirm-download');
+    if (!confirm) return;
+    confirm.addEventListener('click', async () => {
+        const modal = document.querySelector('[name="download-meeting"]');
+        const meetingId = modal?.dataset.meetingId;
+        const items = Array.from(modal.querySelectorAll('.download-option:checked')).map(cb => cb.value);
+
+        try {
+            const res = await fetch(`/api/meetings/${meetingId}/download`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ items })
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `meeting-${meetingId}.zip`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+            }
+        } catch (e) {
+            console.error('Error downloading meeting', e);
+        }
+
+        window.dispatchEvent(new CustomEvent('close-modal', { detail: 'download-meeting' }));
+    });
+}
+
 // Variables globales para el modal de reuniones del contenedor
 let currentContainerForMeetings = null;
 
@@ -2709,6 +2759,7 @@ window.confirmSpeakerChange = confirmSpeakerChange;
 window.openGlobalSpeakerModal = openGlobalSpeakerModal;
 window.closeGlobalSpeakerModal = closeGlobalSpeakerModal;
 window.confirmGlobalSpeakerChange = confirmGlobalSpeakerChange;
+window.openDownloadModal = openDownloadModal;
 
 // Funciones de contenedores
 window.openCreateContainerModal = openCreateContainerModal;

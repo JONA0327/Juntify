@@ -1878,3 +1878,23 @@
     width: 1rem;
     height: 1rem;
 }
+
+/* Modal de descarga */
+.download-modal .modal-option {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    color: var(--text-slate-200);
+}
+
+.download-modal .download-option {
+    accent-color: var(--primary-yellow);
+}
+
+.download-modal .btn-cancel {
+    @apply bg-slate-700/50 px-4 py-2 rounded-lg hover:bg-slate-600/50;
+}
+
+.download-modal .btn-primary {
+    @apply bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 font-semibold px-5 py-2 rounded-lg;
+}

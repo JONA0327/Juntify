@@ -946,6 +946,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
 
+    openMeetingDownload(meetingId) {
+        window.openDownloadModal(meetingId);
+    },
+
     async deleteContainer(container) {
         if (!confirm('¿Estás seguro de que quieres eliminar este contenedor?')) {
             return;
