@@ -146,17 +146,15 @@
 }
 
 .tasks-table th:nth-child(1),
-.tasks-table td:nth-child(1) { width: 25%; }
+.tasks-table td:nth-child(1) { width: 10%; }
 .tasks-table th:nth-child(2),
-.tasks-table td:nth-child(2) { width: 15%; }
+.tasks-table td:nth-child(2) { width: 40%; }
 .tasks-table th:nth-child(3),
-.tasks-table td:nth-child(3) { width: 15%; }
+.tasks-table td:nth-child(3) { width: 20%; }
 .tasks-table th:nth-child(4),
-.tasks-table td:nth-child(4) { width: 10%; }
+.tasks-table td:nth-child(4) { width: 15%; }
 .tasks-table th:nth-child(5),
-.tasks-table td:nth-child(5) { width: 10%; }
-.tasks-table th:nth-child(6),
-.tasks-table td:nth-child(6) { width: 25%; }
+.tasks-table td:nth-child(5) { width: 15%; }
 
 .report-footer {
     position: fixed;

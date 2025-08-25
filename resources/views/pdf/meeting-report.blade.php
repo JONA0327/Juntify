@@ -95,19 +95,19 @@
             <table class="tasks-table">
                 <thead>
                     <tr>
-                        <th>Tarea</th>
-                        <th>Responsable</th>
-                        <th>Fecha límite</th>
-                        <th>Estado</th>
-                        <th>Prioridad</th>
-                        <th>Comentarios</th>
+                        <th>N°</th>
+                        <th>Descripción</th>
+                        <th>Observaciones</th>
+                        <th>Fecha</th>
+                        <th>Progreso</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($tasks as $task)
                         <tr>
+                            <td class="text-center">{{ $loop->iteration }}</td>
                             <td class="{{ empty($task['text']) ? 'text-center' : '' }}">{{ $task['text'] ?? '-' }}</td>
-                            <td class="text-center">{{ $task['assignee'] ?? '-' }}</td>
+                            <td>{{ $task['description'] ?? '-' }}</td>
                             <td class="text-center">
                                 @if(!empty($task['due_date']))
                                     {{ \Carbon\Carbon::parse($task['due_date'])->format('d/m/Y') }}
@@ -116,18 +116,16 @@
                                 @endif
                             </td>
                             <td class="text-center">
-                                @if(isset($task['completed']))
-                                    {{ $task['completed'] ? 'Completada' : 'Pendiente' }}
+                                @if(isset($task['completed']) && $task['completed'])
+                                    100%
                                 @else
-                                    -
+                                    {{ isset($task['progress']) ? $task['progress'] : 0 }}%
                                 @endif
                             </td>
-                            <td class="text-center">{{ $task['priority'] ?? '-' }}</td>
-                            <td>{{ $task['description'] ?? '-' }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="text-center">No hay tareas</td>
+                            <td colspan="5" class="text-center">No hay tareas</td>
                         </tr>
                     @endforelse
                 </tbody>
