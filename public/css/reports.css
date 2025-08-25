@@ -1,0 +1,145 @@
+.report-body {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: #1f2937;
+    padding: 2rem;
+}
+
+.report-header {
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 2rem;
+}
+
+.report-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #1e3a8a;
+    color: #ffffff;
+    padding: 1rem 2rem;
+}
+
+.report-brand {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.report-summary {
+    text-align: right;
+}
+
+.report-title {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.report-date {
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.meeting-details {
+    padding: 1rem 2rem;
+}
+
+.meeting-name {
+    margin: 0;
+    font-weight: 600;
+}
+
+.participants {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #4b5563;
+}
+
+.org-logo {
+    height: 40px;
+}
+
+.report-section {
+    margin-bottom: 2rem;
+}
+
+.summary-section {
+    border: 1px solid #d1d5db;
+    padding: 1rem;
+    margin-bottom: 2rem;
+    background-color: #f9fafb;
+}
+
+.transcription-section {
+    border: 1px solid #d1d5db;
+    padding: 1rem;
+    margin-bottom: 2rem;
+    background-color: #e0f2fe;
+}
+
+.key-points-section {
+    border: 1px solid #d1d5db;
+    padding: 1rem;
+    margin-bottom: 2rem;
+    background-color: #f0fdf4;
+}
+
+.observations-section {
+    border: 1px solid #d1d5db;
+    padding: 1rem;
+    margin-bottom: 2rem;
+    background-color: #fef3c7;
+}
+
+.tasks-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.tasks-table th,
+.tasks-table td {
+    border: 1px solid #d1d5db;
+    padding: 0.5rem;
+}
+
+.tasks-table th {
+    background-color: #1e3a8a;
+    color: #ffffff;
+    text-align: left;
+}
+
+.tasks-table td.text-center {
+    text-align: center;
+}
+
+.tasks-table tbody tr:nth-child(odd) {
+    background-color: #ffffff;
+}
+
+.tasks-table tbody tr:nth-child(even) {
+    background-color: #f9fafb;
+}
+
+.tasks-table th:nth-child(1),
+.tasks-table td:nth-child(1) { width: 25%; }
+.tasks-table th:nth-child(2),
+.tasks-table td:nth-child(2) { width: 15%; }
+.tasks-table th:nth-child(3),
+.tasks-table td:nth-child(3) { width: 15%; }
+.tasks-table th:nth-child(4),
+.tasks-table td:nth-child(4) { width: 10%; }
+.tasks-table th:nth-child(5),
+.tasks-table td:nth-child(5) { width: 10%; }
+.tasks-table th:nth-child(6),
+.tasks-table td:nth-child(6) { width: 25%; }
+
+.report-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: right;
+    font-size: 0.75rem;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 0.5rem;
+}
