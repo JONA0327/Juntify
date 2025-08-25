@@ -1655,4 +1655,219 @@ class MeetingController extends Controller
         }
         return $url;
     }
+
+    /**
+     * Genera y descarga un PDF con los datos seleccionados de la reunión
+     */
+    public function downloadPdf(Request $request, $id)
+    {
+        try {
+            $user = Auth::user();
+
+            // Validar que la reunión pertenece al usuario
+            $meeting = TranscriptionLaravel::where('id', $id)
+                ->where('username', $user->username)
+                ->firstOrFail();
+
+            // Validar request
+            $request->validate([
+                'meeting_name' => 'required|string',
+                'created_at' => 'required|string',
+                'sections' => 'required|array',
+                'data' => 'required|array'
+            ]);
+
+            $data = $request->input('data');
+            $sections = $request->input('sections');
+            $meetingName = $request->input('meeting_name');
+            $createdAt = $request->input('created_at');
+
+            // Crear el HTML para el PDF
+            $html = $this->generatePdfHtml($meetingName, $createdAt, $sections, $data);
+
+            // Generar PDF usando DomPDF
+            $pdf = app('dompdf.wrapper');
+            $pdf->loadHTML($html);
+            $pdf->setPaper('A4', 'portrait');
+
+            // Nombre del archivo
+            $fileName = preg_replace('/[^\w\s]/', '', $meetingName) . '_' . date('Y-m-d') . '.pdf';
+
+            return $pdf->download($fileName);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar PDF: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Genera el HTML para el PDF
+     */
+    private function generatePdfHtml($meetingName, $createdAt, $sections, $data)
+    {
+        $html = '
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>' . htmlspecialchars($meetingName) . '</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    margin: 20px;
+                    color: #333;
+                    line-height: 1.6;
+                }
+                .header {
+                    text-align: center;
+                    margin-bottom: 30px;
+                    border-bottom: 2px solid #f59e0b;
+                    padding-bottom: 20px;
+                }
+                .meeting-title {
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #1e293b;
+                    margin-bottom: 10px;
+                }
+                .meeting-date {
+                    font-size: 14px;
+                    color: #64748b;
+                }
+                .section {
+                    margin-bottom: 30px;
+                    page-break-inside: avoid;
+                }
+                .section-title {
+                    font-size: 18px;
+                    font-weight: bold;
+                    color: #f59e0b;
+                    margin-bottom: 15px;
+                    border-left: 4px solid #f59e0b;
+                    padding-left: 10px;
+                }
+                .content {
+                    margin-left: 15px;
+                    text-align: justify;
+                }
+                .task-item {
+                    margin-bottom: 10px;
+                    padding: 10px;
+                    background-color: #f8fafc;
+                    border-left: 3px solid #f59e0b;
+                }
+                .speaker {
+                    font-weight: bold;
+                    color: #f59e0b;
+                }
+                .transcript-segment {
+                    margin-bottom: 15px;
+                    padding: 10px;
+                    background-color: #f8fafc;
+                    border-radius: 5px;
+                }
+                .key-point {
+                    margin-bottom: 10px;
+                    padding: 8px;
+                    background-color: #fef3c7;
+                    border-left: 3px solid #f59e0b;
+                }
+                ul {
+                    padding-left: 20px;
+                }
+                li {
+                    margin-bottom: 5px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div class="meeting-title">' . htmlspecialchars($meetingName) . '</div>
+                <div class="meeting-date">Fecha: ' . htmlspecialchars($createdAt) . '</div>
+            </div>';
+
+        // Resumen
+        if (in_array('summary', $sections) && !empty($data['summary'])) {
+            $summaryText = is_string($data['summary']) ? $data['summary'] : (is_array($data['summary']) ? implode(', ', $data['summary']) : strval($data['summary']));
+            $html .= '
+            <div class="section">
+                <div class="section-title">Resumen</div>
+                <div class="content">' . nl2br(htmlspecialchars($summaryText)) . '</div>
+            </div>';
+        }
+
+        // Puntos Clave
+        if (in_array('key_points', $sections) && !empty($data['key_points'])) {
+            $html .= '
+            <div class="section">
+                <div class="section-title">Puntos Clave</div>
+                <div class="content">';
+
+            if (is_array($data['key_points'])) {
+                $html .= '<ul>';
+                foreach ($data['key_points'] as $point) {
+                    // Asegurar que $point sea string
+                    $pointText = is_string($point) ? $point : (is_array($point) ? implode(', ', $point) : strval($point));
+                    $html .= '<li class="key-point">' . htmlspecialchars($pointText) . '</li>';
+                }
+                $html .= '</ul>';
+            } else {
+                $keyPointsText = is_string($data['key_points']) ? $data['key_points'] : strval($data['key_points']);
+                $html .= '<div class="key-point">' . nl2br(htmlspecialchars($keyPointsText)) . '</div>';
+            }
+
+            $html .= '</div></div>';
+        }
+
+        // Tareas
+        if (in_array('tasks', $sections) && !empty($data['tasks'])) {
+            $html .= '
+            <div class="section">
+                <div class="section-title">Tareas</div>
+                <div class="content">';
+
+            if (is_array($data['tasks'])) {
+                foreach ($data['tasks'] as $task) {
+                    // Asegurar que $task sea string
+                    $taskText = is_string($task) ? $task : (is_array($task) ? implode(', ', $task) : strval($task));
+                    $html .= '<div class="task-item">' . htmlspecialchars($taskText) . '</div>';
+                }
+            } else {
+                $taskText = is_string($data['tasks']) ? $data['tasks'] : strval($data['tasks']);
+                $html .= '<div class="task-item">' . nl2br(htmlspecialchars($taskText)) . '</div>';
+            }
+
+            $html .= '</div></div>';
+        }
+
+        // Transcripción
+        if (in_array('transcription', $sections) && !empty($data['transcription'])) {
+            $html .= '
+            <div class="section">
+                <div class="section-title">Transcripción</div>
+                <div class="content">';
+
+            if (is_array($data['segments']) && !empty($data['segments'])) {
+                foreach ($data['segments'] as $segment) {
+                    $speaker = isset($segment['speaker']) ? (is_string($segment['speaker']) ? htmlspecialchars($segment['speaker']) : 'Desconocido') : 'Desconocido';
+                    $text = isset($segment['text']) ? (is_string($segment['text']) ? htmlspecialchars($segment['text']) : '') : '';
+                    $html .= '<div class="transcript-segment"><span class="speaker">' . $speaker . ':</span> ' . $text . '</div>';
+                }
+            } else {
+                $transcriptionText = is_string($data['transcription']) ? $data['transcription'] : (is_array($data['transcription']) ? implode(' ', $data['transcription']) : strval($data['transcription']));
+                $html .= '<div class="transcript-segment">' . nl2br(htmlspecialchars($transcriptionText)) . '</div>';
+            }
+
+            $html .= '</div></div>';
+        }
+
+        $html .= '
+        </body>
+        </html>';
+
+        return $html;
+    }
 }

@@ -424,6 +424,54 @@
         </div>
     </div>
 
+    <?php if (isset($component)) { $__componentOriginal9f64f32e90b9102968f2bc548315018c = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal9f64f32e90b9102968f2bc548315018c = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.modal','data' => ['name' => 'download-meeting','maxWidth' => 'md']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? (array) $attributes->getIterator() : [])); ?>
+<?php $component->withName('modal'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag && $constructor = (new ReflectionClass(Illuminate\View\AnonymousComponent::class))->getConstructor()): ?>
+<?php $attributes = $attributes->except(collect($constructor->getParameters())->map->getName()->all()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['name' => 'download-meeting','maxWidth' => 'md']); ?>
+        <div class="p-6 space-y-4 download-modal">
+            <h2 class="text-xl font-semibold">Descargar reunión</h2>
+
+            <div class="space-y-2">
+                <label class="modal-option">
+                    <input type="checkbox" value="summary" class="download-option">
+                    <span>Resumen</span>
+                </label>
+                <label class="modal-option">
+                    <input type="checkbox" value="key_points" class="download-option">
+                    <span>Puntos Claves</span>
+                </label>
+                <label class="modal-option">
+                    <input type="checkbox" value="transcription" class="download-option">
+                    <span>Transcripción</span>
+                </label>
+                <label class="modal-option">
+                    <input type="checkbox" value="tasks" class="download-option">
+                    <span>Tareas</span>
+                </label>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button class="btn-cancel" x-on:click="$dispatch('close-modal','download-meeting')">Cancelar</button>
+                <button id="confirm-download" class="btn-primary">Descargar</button>
+            </div>
+        </div>
+     <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal9f64f32e90b9102968f2bc548315018c)): ?>
+<?php $attributes = $__attributesOriginal9f64f32e90b9102968f2bc548315018c; ?>
+<?php unset($__attributesOriginal9f64f32e90b9102968f2bc548315018c); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal9f64f32e90b9102968f2bc548315018c)): ?>
+<?php $component = $__componentOriginal9f64f32e90b9102968f2bc548315018c; ?>
+<?php unset($__componentOriginal9f64f32e90b9102968f2bc548315018c); ?>
+<?php endif; ?>
+
 </body>
 </html>
 <?php /**PATH C:\laragon\www\Juntify\resources\views/reuniones.blade.php ENDPATH**/ ?>

@@ -83,5 +83,10 @@
             </button>
         </div>
     </div>
+    <button class="download-btn icon-btn absolute bottom-4 right-4" aria-label="Descargar reunión" title="Descargar reunión">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
+        </svg>
+    </button>
 </div>
 <?php /**PATH C:\laragon\www\Juntify\resources\views/components/meeting-card.blade.php ENDPATH**/ ?>

@@ -606,7 +606,7 @@ function createMeetingCard(meeting) {
                     </button>
                 </div>
             </div>
-            <button class="download-btn icon-btn absolute bottom-4 right-4" title="Descargar reunión">
+            <button class="download-btn icon-btn absolute bottom-4 right-4" onclick="openDownloadModal(${meeting.id})" title="Descargar reunión">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
                 </svg>
@@ -672,7 +672,7 @@ function createContainerMeetingCard(meeting) {
                     </button>
                 </div>
             </div>
-            <button class="download-btn icon-btn absolute bottom-4 right-4" title="Descargar reunión">
+            <button class="download-btn icon-btn absolute bottom-4 right-4" onclick="openDownloadModal(${meeting.id})" title="Descargar reunión">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
                 </svg>
@@ -2573,24 +2573,386 @@ function clearContainerErrors() {
     });
 }
 
-function openDownloadModal(meetingId) {
-    const modal = document.querySelector('[name="download-meeting"]');
-    if (!modal) return;
-    modal.dataset.meetingId = meetingId;
-    window.dispatchEvent(new CustomEvent('open-modal', { detail: 'download-meeting' }));
+async function openDownloadModal(meetingId) {
+    // Prevenir ejecución múltiple
+    if (window.downloadModalProcessing) {
+        console.log('Modal de descarga ya en proceso...');
+        return;
+    }
+
+    window.downloadModalProcessing = true;
+
+    console.log('Iniciando descarga para reunión:', meetingId);
+
+    try {
+        // Mostrar loading inicial
+        showDownloadModalLoading(meetingId);
+
+        // Paso 1: Descargar y desencriptar el archivo .ju desde Drive
+        console.log('Descargando y desencriptando archivo .ju...');
+        const response = await fetch(`/api/meetings/${meetingId}`, {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Error al descargar el archivo de la reunión');
+        }
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.message || 'Error al procesar el archivo de la reunión');
+        }
+
+        console.log('Archivo descargado y desencriptado exitosamente');
+
+        // Paso 2: Crear y mostrar el modal de selección
+        createDownloadModal();
+
+        // Paso 3: Guardar los datos y mostrar opciones
+        const modal = document.querySelector('[name="download-meeting"]');
+        if (modal) {
+            modal.dataset.meetingId = meetingId;
+            modal.dataset.meetingData = JSON.stringify(data.meeting);
+
+            // Inicializar los event listeners del modal
+            initializeDownloadModal();
+
+            // Mostrar el modal con las opciones
+            showDownloadModalOptions(data.meeting);
+
+            console.log('Modal de selección mostrado para reunión:', meetingId);
+        } else {
+            throw new Error('No se pudo crear el modal de descarga');
+        }
+
+    } catch (error) {
+        console.error('Error en el proceso de descarga:', error);
+
+        // Cerrar loading modal si está abierto
+        closeDownloadModal();
+
+        // Mostrar error específico
+        let errorMessage = 'Error al procesar la reunión para descarga';
+        if (error.message && error.message.includes('transcript')) {
+            errorMessage = 'La transcripción de esta reunión no está disponible. No se puede generar el PDF.';
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+
+        alert(errorMessage);
+    } finally {
+        // Liberar el lock después de un delay
+        setTimeout(() => {
+            window.downloadModalProcessing = false;
+        }, 1000);
+    }
+}function showDownloadModalLoading(meetingId) {
+    // Crear y mostrar modal de loading centrado perfectamente
+    const loadingModal = `
+        <div class="fixed inset-0 z-[9999] overflow-hidden" id="downloadLoadingModal">
+            <!-- Overlay -->
+            <div class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm"></div>
+
+            <!-- Container centrado con flexbox -->
+            <div class="fixed inset-0 flex items-center justify-center">
+                <div class="relative bg-slate-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-slate-700">
+
+                    <!-- Header -->
+                    <div class="flex items-center justify-between p-6 border-b border-slate-700">
+                        <h2 class="text-xl font-semibold text-white">Preparando descarga</h2>
+                        <button class="text-slate-400 hover:text-white transition-colors" onclick="closeDownloadModal()">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="p-6">
+                        <div class="flex items-center justify-center space-x-3 mb-6">
+                            <!-- Spinner -->
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div>
+                            <div class="text-slate-300">
+                                <p class="font-medium">Descargando archivo .ju...</p>
+                                <p class="text-sm text-slate-400">Desencriptando contenido de la reunión</p>
+                            </div>
+                        </div>
+
+                        <!-- Progress steps -->
+                        <div class="space-y-3">
+                            <div class="flex items-center space-x-3 text-sm">
+                                <div class="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                                <span class="text-slate-300">Conectando con Google Drive...</span>
+                            </div>
+                            <div class="flex items-center space-x-3 text-sm">
+                                <div class="w-3 h-3 bg-slate-600 rounded-full"></div>
+                                <span class="text-slate-400">Descargando archivo encriptado...</span>
+                            </div>
+                            <div class="flex items-center space-x-3 text-sm">
+                                <div class="w-3 h-3 bg-slate-600 rounded-full"></div>
+                                <span class="text-slate-400">Procesando contenido...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', loadingModal);
+    document.body.style.overflow = 'hidden';
+}function showDownloadModalOptions(meetingData) {
+    // Cerrar modal de loading
+    const loadingModal = document.getElementById('downloadLoadingModal');
+    if (loadingModal) {
+        loadingModal.remove();
+        document.body.style.overflow = '';
+    }
+
+    // Abrir el modal de opciones de descarga con los datos disponibles
+    window.dispatchEvent(new CustomEvent('open-modal', {
+        detail: 'download-meeting'
+    }));
+
+    // Marcar todas las opciones por defecto
+    setTimeout(() => {
+        const checkboxes = document.querySelectorAll('.download-option');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = true;
+        });
+    }, 100);
+}
+
+function createDownloadModal() {
+    // Eliminar modal existente si existe
+    const existingModal = document.querySelector('[name="download-meeting"]');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Crear el modal centrado perfectamente
+    const modalHtml = `
+        <div x-data="{ show: false }"
+             x-show="show"
+             x-on:open-modal.window="$event.detail == 'download-meeting' ? show = true : null"
+             x-on:close-modal.window="$event.detail == 'download-meeting' ? show = false : null"
+             x-on:close.stop="show = false"
+             x-on:keydown.escape.window="show = false"
+             name="download-meeting"
+             class="fixed inset-0 z-[9999] overflow-hidden"
+             style="display: none;">
+
+            <!-- Overlay con fondo semi-transparente -->
+            <div class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm"></div>
+
+            <!-- Container centrado con flexbox -->
+            <div class="fixed inset-0 flex items-center justify-center">
+                <div class="relative bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 border border-slate-700">
+
+                    <!-- Contenido del modal -->
+                    <div class="p-6 space-y-6">
+                        <div class="text-center border-b border-slate-700 pb-4">
+                            <h2 class="text-2xl font-semibold text-white mb-2">📄 Descargar Reunión</h2>
+                            <p class="text-slate-300 text-sm">Selecciona el contenido que deseas incluir en el PDF</p>
+                        </div>
+
+                        <!-- Opciones de descarga -->
+                        <div class="space-y-3">
+                            <label class="flex items-center space-x-3 p-4 rounded-lg hover:bg-slate-700 cursor-pointer transition-colors border border-slate-600 hover:border-slate-500">
+                                <input type="checkbox" value="summary" class="download-option w-5 h-5 text-yellow-500 bg-slate-700 border-slate-600 rounded focus:ring-yellow-500 focus:ring-2">
+                                <div class="flex-1">
+                                    <span class="text-slate-200 font-medium text-lg">� Resumen</span>
+                                    <p class="text-slate-400 text-sm">Resumen ejecutivo de la reunión</p>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center space-x-3 p-4 rounded-lg hover:bg-slate-700 cursor-pointer transition-colors border border-slate-600 hover:border-slate-500">
+                                <input type="checkbox" value="key_points" class="download-option w-5 h-5 text-yellow-500 bg-slate-700 border-slate-600 rounded focus:ring-yellow-500 focus:ring-2">
+                                <div class="flex-1">
+                                    <span class="text-slate-200 font-medium text-lg">🎯 Puntos Clave</span>
+                                    <p class="text-slate-400 text-sm">Aspectos más importantes discutidos</p>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center space-x-3 p-4 rounded-lg hover:bg-slate-700 cursor-pointer transition-colors border border-slate-600 hover:border-slate-500">
+                                <input type="checkbox" value="transcription" class="download-option w-5 h-5 text-yellow-500 bg-slate-700 border-slate-600 rounded focus:ring-yellow-500 focus:ring-2">
+                                <div class="flex-1">
+                                    <span class="text-slate-200 font-medium text-lg">📝 Transcripción</span>
+                                    <p class="text-slate-400 text-sm">Transcripción completa de la conversación</p>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center space-x-3 p-4 rounded-lg hover:bg-slate-700 cursor-pointer transition-colors border border-slate-600 hover:border-slate-500">
+                                <input type="checkbox" value="tasks" class="download-option w-5 h-5 text-yellow-500 bg-slate-700 border-slate-600 rounded focus:ring-yellow-500 focus:ring-2">
+                                <div class="flex-1">
+                                    <span class="text-slate-200 font-medium text-lg">✅ Tareas</span>
+                                    <p class="text-slate-400 text-sm">Acciones y tareas asignadas</p>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Botones -->
+                        <div class="flex justify-end gap-3 pt-4 border-t border-slate-700">
+                            <button class="px-6 py-3 text-slate-300 hover:text-white bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors font-medium"
+                                    x-on:click="$dispatch('close-modal','download-meeting')">
+                                Cancelar
+                            </button>
+                            <button id="confirm-download"
+                                    class="px-8 py-3 bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-semibold rounded-lg transition-colors">
+                                <span class="flex items-center space-x-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    <span>Descargar PDF</span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}function closeDownloadModal() {
+    // Liberar el lock de procesamiento
+    window.downloadModalProcessing = false;
+
+    // Cerrar modal de loading si está abierto
+    const loadingModal = document.getElementById('downloadLoadingModal');
+    if (loadingModal) {
+        loadingModal.remove();
+        document.body.style.overflow = '';
+    }
+
+    // Cerrar modal de opciones si está abierto
+    window.dispatchEvent(new CustomEvent('close-modal', {
+        detail: 'download-meeting'
+    }));
+
+    // Limpiar cualquier modal de descarga existente
+    const downloadModal = document.querySelector('[name="download-meeting"]');
+    if (downloadModal) {
+        downloadModal.remove();
+    }
 }
 
 function initializeDownloadModal() {
+    // Asegurar que solo se agregue un listener
+    const existingButton = document.getElementById('confirm-download');
+    if (existingButton && existingButton.dataset.listenerAdded) {
+        return;
+    }
+
     const confirm = document.getElementById('confirm-download');
     if (!confirm) return;
-    confirm.addEventListener('click', () => {
+
+    // Marcar que ya se agregó el listener
+    confirm.dataset.listenerAdded = 'true';
+
+    confirm.addEventListener('click', async () => {
         const modal = document.querySelector('[name="download-meeting"]');
         const meetingId = modal?.dataset.meetingId;
-        const items = Array.from(modal.querySelectorAll('.download-option:checked')).map(cb => cb.value);
-        const baseUrl = '/api/meetings/' + meetingId + '/download-report';
-        const url = items.length ? baseUrl + '?sections=' + items.join(',') : baseUrl;
-        window.location.href = url;
-        window.dispatchEvent(new CustomEvent('close-modal', { detail: 'download-meeting' }));
+        const meetingDataStr = modal?.dataset.meetingData;
+
+        if (!meetingId) {
+            alert('Error: No se encontró el ID de la reunión');
+            return;
+        }
+
+        if (!meetingDataStr) {
+            alert('Error: No se han cargado los datos de la reunión');
+            return;
+        }
+
+        try {
+            const meetingData = JSON.parse(meetingDataStr);
+            const selectedItems = Array.from(modal.querySelectorAll('.download-option:checked')).map(cb => cb.value);
+
+            if (selectedItems.length === 0) {
+                alert('Por favor selecciona al menos una sección para descargar');
+                return;
+            }
+
+            // Mostrar loading en el botón con mejor UI
+            confirm.disabled = true;
+            const originalContent = confirm.innerHTML;
+            confirm.innerHTML = `
+                <span class="flex items-center space-x-2">
+                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-900"></div>
+                    <span>Generando PDF...</span>
+                </span>
+            `;
+
+            console.log('Generando PDF con secciones:', selectedItems);
+
+            // Preparar los datos para enviar al servidor
+            const downloadData = {
+                meeting_id: meetingId,
+                meeting_name: meetingData.meeting_name,
+                created_at: meetingData.created_at,
+                sections: selectedItems,
+                data: {
+                    summary: selectedItems.includes('summary') ? meetingData.summary : null,
+                    key_points: selectedItems.includes('key_points') ? meetingData.key_points : null,
+                    transcription: selectedItems.includes('transcription') ? meetingData.transcription : null,
+                    tasks: selectedItems.includes('tasks') ? meetingData.tasks : null,
+                    speakers: meetingData.speakers || [],
+                    segments: meetingData.segments || []
+                }
+            };
+
+            // Enviar al endpoint de descarga
+            const response = await fetch('/api/meetings/' + meetingId + '/download-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(downloadData)
+            });
+
+            if (response.ok) {
+                console.log('PDF generado exitosamente');
+
+                // Si la respuesta es un blob (PDF), descargarlo
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+
+                // Nombre del archivo con timestamp
+                const timestamp = new Date().toISOString().split('T')[0];
+                const cleanName = meetingData.meeting_name.replace(/[^\w\s]/gi, '').trim();
+                a.download = `${cleanName}_${timestamp}.pdf`;
+
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                // Cerrar modal después de un pequeño delay
+                setTimeout(() => {
+                    closeDownloadModal();
+                }, 500);
+
+            } else {
+                const errorData = await response.json();
+                console.error('Error del servidor:', errorData);
+                alert('Error al generar PDF: ' + (errorData.message || 'Error desconocido'));
+            }
+
+        } catch (error) {
+            console.error('Error downloading PDF:', error);
+            alert('Error al descargar: ' + error.message);
+        } finally {
+            // Restaurar botón
+            confirm.disabled = false;
+            confirm.innerHTML = originalContent;
+        }
     });
 }
 
@@ -2739,6 +3101,9 @@ window.openGlobalSpeakerModal = openGlobalSpeakerModal;
 window.closeGlobalSpeakerModal = closeGlobalSpeakerModal;
 window.confirmGlobalSpeakerChange = confirmGlobalSpeakerChange;
 window.openDownloadModal = openDownloadModal;
+window.closeDownloadModal = closeDownloadModal;
+window.showDownloadModalLoading = showDownloadModalLoading;
+window.createDownloadModal = createDownloadModal;
 
 // Funciones de contenedores
 window.openCreateContainerModal = openCreateContainerModal;
