@@ -1064,48 +1064,75 @@ class MeetingController extends Controller
             abort(403, 'No tienes acceso a esta reunión');
         }
 
-        $sections = $request->input('sections', ['summary', 'key_points', 'transcription', 'tasks']);
-        if (!is_array($sections)) {
-            $sections = explode(',', $sections);
+        $sectionTypes = $request->input('sections', ['summary', 'key_points', 'transcription', 'tasks']);
+        if (!is_array($sectionTypes)) {
+            $sectionTypes = explode(',', $sectionTypes);
         }
 
-        $summary = null;
-        $keyPoints = [];
-        $transcription = '';
-        $tasks = collect();
+        $sections = [];
 
-        if (in_array('summary', $sections)) {
+        if (in_array('summary', $sectionTypes)) {
             $summary = DB::table('meeting_files')
                 ->where('meeting_id', $meeting->id)
                 ->value('summary');
+
+            if ($summary) {
+                $sections[] = [
+                    'title' => 'Resumen',
+                    'content' => $summary,
+                ];
+            }
         }
 
-        if (in_array('key_points', $sections)) {
+        if (in_array('key_points', $sectionTypes)) {
             $keyPoints = DB::table('key_points')
                 ->where('meeting_id', $meeting->id)
                 ->orderBy('order_num')
                 ->pluck('point_text')
                 ->toArray();
+
+            if (!empty($keyPoints)) {
+                $sections[] = [
+                    'title' => 'Puntos Clave',
+                    'content' => $keyPoints,
+                ];
+            }
         }
 
-        if (in_array('transcription', $sections)) {
+        if (in_array('transcription', $sectionTypes)) {
             $transcription = DB::table('transcriptions')
                 ->where('meeting_id', $meeting->id)
                 ->orderBy('id')
                 ->pluck('text')
                 ->implode("\n");
+
+            if (!empty($transcription)) {
+                $sections[] = [
+                    'title' => 'Transcripción',
+                    'content' => $transcription,
+                ];
+            }
         }
 
-        if (in_array('tasks', $sections)) {
+        if (in_array('tasks', $sectionTypes)) {
             $tasks = Task::where('meeting_id', $meeting->id)->get();
+
+            if ($tasks->isNotEmpty()) {
+                $sections[] = [
+                    'title' => 'Tareas',
+                    'content' => $tasks->map(function ($task) {
+                        return $task->text . ($task->assignee ? ' - ' . $task->assignee : '');
+                    })->toArray(),
+                ];
+            }
         }
+
+        $organization = $user->organization;
 
         $pdf = Pdf::loadView('pdf.meeting-report', [
             'meeting' => $meeting,
-            'summary' => $summary,
-            'keyPoints' => $keyPoints,
-            'transcription' => $transcription,
-            'tasks' => $tasks,
+            'organization' => $organization,
+            'sections' => $sections,
         ]);
 
         return $pdf->download('meeting_' . $meeting->id . '_report.pdf');

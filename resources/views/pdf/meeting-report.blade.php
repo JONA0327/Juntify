@@ -8,38 +8,37 @@
         h1 { font-size: 20px; }
         h2 { font-size: 16px; margin-top: 20px; }
         pre { white-space: pre-wrap; }
+        .org-logo { max-height: 80px; }
+        .text-center { text-align: center; }
     </style>
 </head>
 <body>
-    <h1>{{ $meeting->meeting_name }}</h1>
+    <div class="text-center">
+        @if($organization && $organization->imagen)
+            <img class="org-logo" src="{{ $organization->imagen }}" alt="{{ $organization->nombre_organizacion }}">
+        @endif
+        <h1>{{ $meeting->meeting_name }}</h1>
+        @if($organization)
+            <p>{{ $organization->nombre_organizacion }}</p>
+        @endif
+    </div>
 
-    @if(!empty($summary))
-        <h2>Resumen</h2>
-        <p>{{ $summary }}</p>
-    @endif
-
-    @if(!empty($keyPoints))
-        <h2>Puntos Clave</h2>
-        <ul>
-            @foreach($keyPoints as $point)
-                <li>{{ $point }}</li>
-            @endforeach
-        </ul>
-    @endif
-
-    @if(!empty($transcription))
-        <h2>Transcripción</h2>
-        <pre>{{ $transcription }}</pre>
-    @endif
-
-    @if($tasks->isNotEmpty())
-        <h2>Tareas</h2>
-        <ul>
-            @foreach($tasks as $task)
-                <li>{{ $task->text }} @if($task->assignee) - {{ $task->assignee }} @endif</li>
-            @endforeach
-        </ul>
-    @endif
+    @foreach($sections as $section)
+        <h2>{{ $section['title'] }}</h2>
+        @if(is_array($section['content']))
+            <ul>
+                @foreach($section['content'] as $item)
+                    <li>{{ $item }}</li>
+                @endforeach
+            </ul>
+        @else
+            @if($section['title'] === 'Transcripción')
+                <pre>{{ $section['content'] }}</pre>
+            @else
+                <p>{{ $section['content'] }}</p>
+            @endif
+        @endif
+    @endforeach
 </body>
 </html>
 
