@@ -76,6 +76,31 @@
     background-color: #e0f2fe;
 }
 
+.transcription-table {
+    width: 100%;
+}
+
+.transcription-segment {
+    display: flex;
+    margin-bottom: 0.5rem;
+}
+
+.transcription-speaker {
+    width: 25%;
+    font-weight: 600;
+    background-color: #bfdbfe;
+    border: 1px solid #60a5fa;
+    padding: 0.25rem 0.5rem;
+}
+
+.transcription-text {
+    flex: 1;
+    background-color: #ffffff;
+    border: 1px solid #60a5fa;
+    border-left: none;
+    padding: 0.25rem 0.5rem;
+}
+
 .key-points-section {
     border: 1px solid #d1d5db;
     padding: 1rem;

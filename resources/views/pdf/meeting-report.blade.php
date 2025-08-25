@@ -41,9 +41,33 @@
     @endisset
 
     @isset($transcription)
+        @php
+            $segments = [];
+            foreach(preg_split("/\r\n|\n|\r/", $transcription) as $line) {
+                $line = trim($line);
+                if ($line === '') {
+                    continue;
+                }
+                if (strpos($line, ':') !== false) {
+                    [$speaker, $text] = explode(':', $line, 2);
+                    $segments[] = ['speaker' => trim($speaker), 'text' => trim($text)];
+                } else {
+                    $segments[] = ['speaker' => '', 'text' => $line];
+                }
+            }
+        @endphp
         <section class="report-section transcription-section">
             <h2>Transcripción</h2>
-            <p>{!! nl2br(e($transcription)) !!}</p>
+            <div class="transcription-table">
+                @foreach($segments as $segment)
+                    <div class="transcription-segment">
+                        @if($segment['speaker'] !== '')
+                            <div class="transcription-speaker">{{ e($segment['speaker']) }}</div>
+                        @endif
+                        <div class="transcription-text">{{ e($segment['text']) }}</div>
+                    </div>
+                @endforeach
+            </div>
         </section>
     @endisset
 
