@@ -12,10 +12,25 @@
 </head>
 <body class="report-body">
     <header class="report-header">
-        <h1>Juntify</h1>
-        @if(isset($organization) && $organization?->imagen)
-            <img src="{{ $organization->imagen }}" alt="Logo" class="org-logo">
-        @endif
+        <div class="report-topbar">
+            @if(isset($organization) && $organization?->imagen)
+                <img src="{{ $organization->imagen }}" alt="Logo" class="org-logo">
+            @else
+                <h1 class="report-brand">Juntify</h1>
+            @endif
+            <div class="report-summary">
+                <h1 class="report-title">{{ $reportTitle ?? 'Reporte de Reunión' }}</h1>
+                <p class="report-date">{{ $reportDate ?? now()->format('d/m/Y') }}</p>
+            </div>
+        </div>
+        <div class="meeting-details">
+            @isset($meetingName)
+                <p class="meeting-name">{{ $meetingName }}</p>
+            @endisset
+            @isset($participants)
+                <p class="participants">Participantes: {{ is_array($participants) ? implode(', ', $participants) : $participants }}</p>
+            @endisset
+        </div>
     </header>
 
     @isset($sections)
