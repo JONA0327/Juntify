@@ -864,7 +864,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                                 }
 
                                 card.addEventListener('click', (e) => {
-                                    if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn') || e.target.closest('.remove-btn')) {
+                                    if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn') || e.target.closest('.remove-btn') || e.target.closest('.download-btn')) {
                                         return;
                                     }
                                     e.stopImmediatePropagation();
