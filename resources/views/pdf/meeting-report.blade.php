@@ -33,17 +33,36 @@
         </div>
     </header>
 
-    @isset($sections)
-        @foreach($sections as $section)
-            @if(!empty($section['content']))
-                <section class="report-section">
-                    @isset($section['title'])
-                        <h2>{{ $section['title'] }}</h2>
-                    @endisset
-                    {!! $section['content'] !!}
-                </section>
-            @endif
-        @endforeach
+    @isset($summary)
+        <section class="report-section summary-section">
+            <h2>Resumen</h2>
+            <p>{!! nl2br(e($summary)) !!}</p>
+        </section>
+    @endisset
+
+    @isset($transcription)
+        <section class="report-section transcription-section">
+            <h2>Transcripción</h2>
+            <p>{!! nl2br(e($transcription)) !!}</p>
+        </section>
+    @endisset
+
+    @if(!empty($keyPoints))
+        <section class="report-section key-points-section">
+            <h2>Puntos clave / Acuerdos</h2>
+            <ul>
+                @foreach($keyPoints as $point)
+                    <li>{{ $point }}</li>
+                @endforeach
+            </ul>
+        </section>
+    @endif
+
+    @isset($additionalNotes)
+        <section class="report-section observations-section">
+            <h2>Observaciones adicionales</h2>
+            <p>{!! nl2br(e($additionalNotes)) !!}</p>
+        </section>
     @endisset
 
     @isset($tasks)
