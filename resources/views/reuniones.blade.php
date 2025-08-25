@@ -277,7 +277,7 @@
     </div>
 
     <!-- Modal de Reuniones del Contenedor -->
-    <div id="container-meetings-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 backdrop-blur-sm">
+    <div id="container-meetings-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-40 backdrop-blur-sm">
         <div class="flex items-center justify-center min-h-screen p-4">
             <div class="bg-slate-900 rounded-2xl shadow-2xl border border-slate-700/50 w-full max-w-4xl max-h-[80vh] overflow-hidden">
                 <!-- Header del Modal -->

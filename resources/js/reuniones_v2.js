@@ -2585,6 +2585,12 @@ async function openDownloadModal(meetingId) {
     console.log('Iniciando descarga para reunión:', meetingId);
 
     try {
+        // Cerrar el modal de contenedor si está abierto
+        previousContainerForDownload = currentContainerForMeetings;
+        if (previousContainerForDownload) {
+            closeContainerMeetingsModal();
+        }
+
         // Mostrar loading inicial
         showDownloadModalLoading(meetingId);
 
@@ -2837,6 +2843,12 @@ function createDownloadModal() {
     if (downloadModal) {
         downloadModal.remove();
     }
+
+    // Reabrir modal de contenedor si estaba activo
+    if (previousContainerForDownload) {
+        openContainerMeetingsModal(previousContainerForDownload);
+        previousContainerForDownload = null;
+    }
 }
 
 function initializeDownloadModal() {
@@ -2958,6 +2970,7 @@ function initializeDownloadModal() {
 
 // Variables globales para el modal de reuniones del contenedor
 let currentContainerForMeetings = null;
+let previousContainerForDownload = null;
 
 // ===============================================
 // MODAL DE REUNIONES DEL CONTENEDOR

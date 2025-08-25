@@ -532,7 +532,7 @@
                 </div>
 
                 <!-- Modal ver reuniones del contenedor -->
-                <div x-show="showContainerMeetingsModal" id="container-meetings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                <div x-show="showContainerMeetingsModal" id="container-meetings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-40" x-cloak>
                     <div class="bg-slate-950 rounded-xl border border-slate-700/50 shadow-2xl shadow-black/20 w-full max-w-6xl max-h-[90vh] overflow-hidden">
                         <!-- Header del modal -->
                         <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
