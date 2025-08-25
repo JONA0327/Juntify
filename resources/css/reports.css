@@ -6,17 +6,52 @@
 }
 
 .report-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
     border-bottom: 1px solid #e5e7eb;
-    padding-bottom: 1rem;
     margin-bottom: 2rem;
 }
 
-.report-header h1 {
+.report-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #1e3a8a;
+    color: #ffffff;
+    padding: 1rem 2rem;
+}
+
+.report-brand {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.report-summary {
+    text-align: right;
+}
+
+.report-title {
     margin: 0;
     font-size: 1.5rem;
+}
+
+.report-date {
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.meeting-details {
+    padding: 1rem 2rem;
+}
+
+.meeting-name {
+    margin: 0;
+    font-weight: 600;
+}
+
+.participants {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #4b5563;
 }
 
 .org-logo {
