@@ -237,12 +237,12 @@ function testModal() {
             <p class="text-slate-300 mb-4">El modal se abrió correctamente!</p>
             <div class="text-sm text-slate-400 mb-6">
                 <p>En el sistema real aquí aparecerían:</p>
-                <ul class="list-disc list-inside mt-2 space-y-1">
-                    <li>Lista de reuniones pendientes</li>
-                    <li>Botones de análisis</li>
-                    <li>Estados de procesamiento</li>
-                    <li>Información de archivos</li>
-                </ul>
+                <div class="card-list mt-2">
+                    <div class="info-card">Lista de reuniones pendientes</div>
+                    <div class="info-card">Botones de análisis</div>
+                    <div class="info-card">Estados de procesamiento</div>
+                    <div class="info-card">Información de archivos</div>
+                </div>
             </div>
             <button onclick="this.closest('.fixed').remove()"
                     class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors">
