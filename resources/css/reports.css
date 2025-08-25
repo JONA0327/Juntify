@@ -1,0 +1,59 @@
+.report-body {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: #1f2937;
+    padding: 2rem;
+}
+
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 1rem;
+    margin-bottom: 2rem;
+}
+
+.report-header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.org-logo {
+    height: 40px;
+}
+
+.report-section {
+    margin-bottom: 2rem;
+}
+
+.tasks-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tasks-table th,
+.tasks-table td {
+    border: 1px solid #d1d5db;
+    padding: 0.5rem;
+}
+
+.tasks-table th {
+    background-color: #f3f4f6;
+    text-align: left;
+}
+
+.tasks-table td.text-center {
+    text-align: center;
+}
+
+.report-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: right;
+    font-size: 0.75rem;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 0.5rem;
+}
