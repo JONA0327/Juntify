@@ -134,7 +134,7 @@
     @endisset
 
     <footer class="report-footer">
-        Generado el {{ now()->format('d/m/Y H:i') }}
+        Generado el {{ now()->format('d/m/Y H:i') }} - Página <script type="text/php"> echo $PAGE_NUM; </script> de <script type="text/php"> echo $PAGE_COUNT; </script>
     </footer>
 </body>
 </html>
