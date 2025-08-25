@@ -2583,34 +2583,13 @@ function openDownloadModal(meetingId) {
 function initializeDownloadModal() {
     const confirm = document.getElementById('confirm-download');
     if (!confirm) return;
-    confirm.addEventListener('click', async () => {
+    confirm.addEventListener('click', () => {
         const modal = document.querySelector('[name="download-meeting"]');
         const meetingId = modal?.dataset.meetingId;
         const items = Array.from(modal.querySelectorAll('.download-option:checked')).map(cb => cb.value);
-
-        try {
-            const res = await fetch(`/api/meetings/${meetingId}/download`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                },
-                body: JSON.stringify({ items })
-            });
-
-            if (res.ok) {
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `meeting-${meetingId}.zip`;
-                a.click();
-                window.URL.revokeObjectURL(url);
-            }
-        } catch (e) {
-            console.error('Error downloading meeting', e);
-        }
-
+        const baseUrl = '/api/meetings/' + meetingId + '/download-report';
+        const url = items.length ? baseUrl + '?sections=' + items.join(',') : baseUrl;
+        window.location.href = url;
         window.dispatchEvent(new CustomEvent('close-modal', { detail: 'download-meeting' }));
     });
 }
