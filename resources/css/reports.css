@@ -93,6 +93,7 @@
 .tasks-table {
     width: 100%;
     border-collapse: collapse;
+    font-size: 0.875rem;
 }
 
 .tasks-table th,
@@ -102,13 +103,35 @@
 }
 
 .tasks-table th {
-    background-color: #f3f4f6;
+    background-color: #1e3a8a;
+    color: #ffffff;
     text-align: left;
 }
 
 .tasks-table td.text-center {
     text-align: center;
 }
+
+.tasks-table tbody tr:nth-child(odd) {
+    background-color: #ffffff;
+}
+
+.tasks-table tbody tr:nth-child(even) {
+    background-color: #f9fafb;
+}
+
+.tasks-table th:nth-child(1),
+.tasks-table td:nth-child(1) { width: 25%; }
+.tasks-table th:nth-child(2),
+.tasks-table td:nth-child(2) { width: 15%; }
+.tasks-table th:nth-child(3),
+.tasks-table td:nth-child(3) { width: 15%; }
+.tasks-table th:nth-child(4),
+.tasks-table td:nth-child(4) { width: 10%; }
+.tasks-table th:nth-child(5),
+.tasks-table td:nth-child(5) { width: 10%; }
+.tasks-table th:nth-child(6),
+.tasks-table td:nth-child(6) { width: 25%; }
 
 .report-footer {
     position: fixed;

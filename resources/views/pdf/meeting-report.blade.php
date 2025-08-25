@@ -75,6 +75,8 @@
                         <th>Responsable</th>
                         <th>Fecha límite</th>
                         <th>Estado</th>
+                        <th>Prioridad</th>
+                        <th>Comentarios</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -96,10 +98,12 @@
                                     -
                                 @endif
                             </td>
+                            <td class="text-center">{{ $task['priority'] ?? '-' }}</td>
+                            <td>{{ $task['description'] ?? '-' }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="text-center">No hay tareas</td>
+                            <td colspan="6" class="text-center">No hay tareas</td>
                         </tr>
                     @endforelse
                 </tbody>

@@ -1097,7 +1097,8 @@ class MeetingController extends Controller
         }
 
         if (in_array('tasks', $sections)) {
-            $tasks = Task::where('meeting_id', $meeting->id)->get();
+            $tasks = Task::where('meeting_id', $meeting->id)
+                ->get(['text', 'assignee', 'due_date', 'completed', 'priority', 'description']);
         }
 
         $pdf = Pdf::loadView('pdf.meeting-report', [
