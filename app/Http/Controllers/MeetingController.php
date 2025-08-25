@@ -7,6 +7,7 @@ use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\MeetingShare;
 use App\Models\MeetingContentContainer;
+use App\Models\Task;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,8 +15,10 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use Barryvdh\DomPDF\Facade\Pdf;
 use App\Traits\GoogleDriveHelpers;
 
 class MeetingController extends Controller
@@ -1048,6 +1051,64 @@ class MeetingController extends Controller
             ]);
             return response()->json(['error' => 'Error al descargar archivo de audio'], 500);
         }
+    }
+
+    /**
+     * Genera y descarga un reporte PDF de una reunión
+     */
+    public function downloadReport(Request $request, TranscriptionLaravel $meeting)
+    {
+        $user = Auth::user();
+
+        if ($meeting->username !== $user->username) {
+            abort(403, 'No tienes acceso a esta reunión');
+        }
+
+        $sections = $request->input('sections', ['summary', 'key_points', 'transcription', 'tasks']);
+        if (!is_array($sections)) {
+            $sections = explode(',', $sections);
+        }
+
+        $summary = null;
+        $keyPoints = [];
+        $transcription = '';
+        $tasks = collect();
+
+        if (in_array('summary', $sections)) {
+            $summary = DB::table('meeting_files')
+                ->where('meeting_id', $meeting->id)
+                ->value('summary');
+        }
+
+        if (in_array('key_points', $sections)) {
+            $keyPoints = DB::table('key_points')
+                ->where('meeting_id', $meeting->id)
+                ->orderBy('order_num')
+                ->pluck('point_text')
+                ->toArray();
+        }
+
+        if (in_array('transcription', $sections)) {
+            $transcription = DB::table('transcriptions')
+                ->where('meeting_id', $meeting->id)
+                ->orderBy('id')
+                ->pluck('text')
+                ->implode("\n");
+        }
+
+        if (in_array('tasks', $sections)) {
+            $tasks = Task::where('meeting_id', $meeting->id)->get();
+        }
+
+        $pdf = Pdf::loadView('pdf.meeting-report', [
+            'meeting' => $meeting,
+            'summary' => $summary,
+            'keyPoints' => $keyPoints,
+            'transcription' => $transcription,
+            'tasks' => $tasks,
+        ]);
+
+        return $pdf->download('meeting_' . $meeting->id . '_report.pdf');
     }
 
     /**

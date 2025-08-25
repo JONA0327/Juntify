@@ -104,6 +104,7 @@ Route::middleware('auth')->group(function () {
     // Rutas de descarga
     Route::get('/api/meetings/{id}/download-ju', [MeetingController::class, 'downloadJuFile'])->name('api.meetings.download-ju');
     Route::get('/api/meetings/{id}/download-audio', [MeetingController::class, 'downloadAudioFile'])->name('api.meetings.download-audio');
+    Route::get('/api/meetings/{meeting}/download-report', [MeetingController::class, 'downloadReport'])->name('api.meetings.download-report');
     Route::get('/api/meetings/{meeting}/audio', [MeetingController::class, 'streamAudio'])->name('api.meetings.audio');
 
     // API para reuniones pendientes
