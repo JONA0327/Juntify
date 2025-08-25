@@ -3,8 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Task;
-use App\Models\User;
-use App\Models\Container;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
@@ -21,12 +19,12 @@ class TaskController extends Controller
      */
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $username = $this->getValidatedUsername();
 
         // Obtener tareas del usuario autenticado o asignadas a él
-        $query = Task::where(function($q) use ($user) {
-            $q->where('username', $user->username)
-              ->orWhere('assignee', $user->username);
+        $query = Task::where(function($q) use ($username) {
+            $q->where('username', $username)
+              ->orWhere('assignee', $username);
         })->with(['user', 'assignedUser', 'meeting']);
 
         // Filtros
@@ -50,20 +48,20 @@ class TaskController extends Controller
 
         // Estadísticas para el dashboard
         $stats = [
-            'total' => Task::where(function($q) use ($user) {
-                $q->where('username', $user->username)->orWhere('assignee', $user->username);
+            'total' => Task::where(function($q) use ($username) {
+                $q->where('username', $username)->orWhere('assignee', $username);
             })->count(),
-            'pending' => Task::where(function($q) use ($user) {
-                $q->where('username', $user->username)->orWhere('assignee', $user->username);
+            'pending' => Task::where(function($q) use ($username) {
+                $q->where('username', $username)->orWhere('assignee', $username);
             })->where('completed', false)->count(),
-            'in_progress' => Task::where(function($q) use ($user) {
-                $q->where('username', $user->username)->orWhere('assignee', $user->username);
+            'in_progress' => Task::where(function($q) use ($username) {
+                $q->where('username', $username)->orWhere('assignee', $username);
             })->where('completed', false)->where('progress', '>', 0)->count(),
-            'completed' => Task::where(function($q) use ($user) {
-                $q->where('username', $user->username)->orWhere('assignee', $user->username);
+            'completed' => Task::where(function($q) use ($username) {
+                $q->where('username', $username)->orWhere('assignee', $username);
             })->where('completed', true)->count(),
-            'overdue' => Task::where(function($q) use ($user) {
-                $q->where('username', $user->username)->orWhere('assignee', $user->username);
+            'overdue' => Task::where(function($q) use ($username) {
+                $q->where('username', $username)->orWhere('assignee', $username);
             })->overdue()->count(),
         ];
 
@@ -75,11 +73,11 @@ class TaskController extends Controller
      */
     public function getTasks(Request $request)
     {
-        $user = Auth::user();
+        $username = $this->getValidatedUsername();
 
-        $query = Task::where(function($q) use ($user) {
-            $q->where('username', $user->username)
-              ->orWhere('assignee', $user->username);
+        $query = Task::where(function($q) use ($username) {
+            $q->where('username', $username)
+              ->orWhere('assignee', $username);
         })->with(['user', 'assignedUser', 'meeting']);
 
         if ($request->has('start') && $request->has('end')) {
@@ -116,10 +114,10 @@ class TaskController extends Controller
      */
     public function show(Task $task)
     {
-        $user = Auth::user();
+        $username = $this->getValidatedUsername();
 
         // Verificar que el usuario pueda ver esta tarea
-        if ($task->username !== $user->username && $task->assignee !== $user->username) {
+        if ($task->username !== $username && $task->assignee !== $username) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
@@ -133,7 +131,7 @@ class TaskController extends Controller
      */
     public function store(Request $request)
     {
-        $user = Auth::user();
+        $username = $this->getValidatedUsername();
 
         $request->validate([
             'text' => 'required|string|max:255',
@@ -150,7 +148,7 @@ class TaskController extends Controller
             'description' => $request->description,
             'due_date' => $request->due_date,
             'priority' => $request->priority ?? 'media',
-            'username' => $user->username,
+            'username' => $username,
             'assignee' => $request->assignee,
             'meeting_id' => $request->meeting_id,
             'progress' => $request->progress ?? 0,
@@ -169,10 +167,10 @@ class TaskController extends Controller
      */
     public function update(Request $request, Task $task)
     {
-        $user = Auth::user();
+        $username = $this->getValidatedUsername();
 
         // Verificar que el usuario pueda editar esta tarea
-        if ($task->username !== $user->username && $task->assignee !== $user->username) {
+        if ($task->username !== $username && $task->assignee !== $username) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
@@ -203,10 +201,10 @@ class TaskController extends Controller
      */
     public function destroy(Task $task)
     {
-        $user = Auth::user();
+        $username = $this->getValidatedUsername();
 
         // Verificar que el usuario pueda eliminar esta tarea
-        if ($task->username !== $user->username) {
+        if ($task->username !== $username) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
@@ -223,10 +221,10 @@ class TaskController extends Controller
      */
     public function complete(Task $task)
     {
-        $user = Auth::user();
+        $username = $this->getValidatedUsername();
 
         // Verificar que el usuario pueda completar esta tarea
-        if ($task->username !== $user->username && $task->assignee !== $user->username) {
+        if ($task->username !== $username && $task->assignee !== $username) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
@@ -261,5 +259,19 @@ class TaskController extends Controller
             'baja' => '#6b7280', // Gris
             default => '#6b7280'
         };
+    }
+
+    /**
+     * Obtener el nombre de usuario autenticado como cadena.
+     */
+    private function getValidatedUsername(): string
+    {
+        $username = Auth::user()?->username;
+
+        if (!is_string($username) || $username === '') {
+            abort(403, 'Nombre de usuario inválido');
+        }
+
+        return $username;
     }
 }
