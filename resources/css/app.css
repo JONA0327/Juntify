@@ -1,3 +1,18 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Tarjetas informativas para listas personalizadas */
+.card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.info-card {
+    border: 1px solid #e2e8f0;
+    background-color: #f8fafc;
+    padding: 0.75rem 1rem;
+    border-left: 4px solid #3b82f6;
+    border-radius: 0.375rem;
+}
