@@ -21,7 +21,7 @@
 
 .report-brand {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: 1.5rem;
     font-weight: 600;
 }
 
@@ -31,26 +31,28 @@
 
 .report-title {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 2rem;
 }
 
 .report-date {
     margin: 0;
-    font-size: 0.875rem;
+    font-size: 1rem;
 }
 
 .meeting-details {
     padding: 1rem 2rem;
+    text-align: center;
 }
 
 .meeting-name {
     margin: 0;
     font-weight: 600;
+    font-size: 1.25rem;
 }
 
 .participants {
     margin: 0;
-    font-size: 0.875rem;
+    font-size: 1rem;
     color: #4b5563;
 }
 
