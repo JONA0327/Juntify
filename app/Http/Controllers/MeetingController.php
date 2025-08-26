@@ -1687,15 +1687,25 @@ class MeetingController extends Controller
             // Verificar si la reunión pertenece a una organización
             $hasOrganization = $meeting->containers()->exists();
             $organizationName = null;
+            $organizationLogo = null;
             if ($hasOrganization) {
                 $container = $meeting->containers()->first();
                 if ($container && isset($container->organization)) {
                     $organizationName = $container->organization->name ?? 'Organización';
+                    $organizationLogo = $container->organization->imagen ?? null;
                 }
             }
 
             // Crear el HTML para el PDF
-            $html = $this->generatePdfHtml($meetingName, $realCreatedAt, $sections, $data, $hasOrganization, $organizationName);
+            $html = $this->generatePdfHtml(
+                $meetingName,
+                $realCreatedAt,
+                $sections,
+                $data,
+                $hasOrganization,
+                $organizationName,
+                $organizationLogo
+            );
 
             // Generar PDF usando DomPDF
             $pdf = app('dompdf.wrapper');
@@ -1718,7 +1728,7 @@ class MeetingController extends Controller
     /**
      * Genera el HTML para el PDF con el nuevo diseño solicitado
      */
-    private function generatePdfHtml($meetingName, $realCreatedAt, $sections, $data, $hasOrganization = false, $organizationName = null)
+    private function generatePdfHtml($meetingName, $realCreatedAt, $sections, $data, $hasOrganization = false, $organizationName = null, $organizationLogo = null)
     {
         $html = '
         <!DOCTYPE html>
@@ -1748,9 +1758,7 @@ class MeetingController extends Controller
 
                 /* Header */
                 .header {
-                    background: #3b82f6;
-                    background: -webkit-linear-gradient(left, #3b82f6, #1d4ed8);
-                    background: linear-gradient(to right, #3b82f6, #1d4ed8);
+                    background: #1e3a8a;
                     color: white !important;
                     padding: 20px;
                     margin: -15mm -15mm 20px -15mm;
@@ -1783,10 +1791,7 @@ class MeetingController extends Controller
                     color: white !important;
                 }
                 .org-logo {
-                    font-size: 12px;
-                    font-style: italic;
-                    opacity: 0.9;
-                    color: white !important;
+                    max-height: 40px;
                 }
 
                 /* Contenido principal */
@@ -1952,9 +1957,15 @@ class MeetingController extends Controller
                     <div class="header-left">
                         <div class="logo">JUNTIFY</div>
                     </div>
-                    <div class="header-right">
-                        <div class="org-logo">' . ($hasOrganization ? htmlspecialchars($organizationName ?? 'Organización') : '[Logo de la Organización]') . '</div>
-                    </div>
+                    <div class="header-right">' . (
+                        $hasOrganization
+                            ? (
+                                $organizationLogo
+                                    ? '<img src="' . htmlspecialchars($organizationLogo) . '" class="org-logo">'
+                                    : htmlspecialchars($organizationName ?? 'Organización')
+                            )
+                            : '[Logo de la Organización]'
+                    ) . '</div>
                 </div>
             </div>
 
