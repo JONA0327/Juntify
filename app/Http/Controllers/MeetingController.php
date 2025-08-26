@@ -1908,32 +1908,82 @@ class MeetingController extends Controller
             $lastDateIdx = $startIdx;
         }
 
-        // Heurística para asignado: token adyacente a la última fecha
+        // Heurística mejorada para asignado: token adyacente a la última fecha
         $looksLikeName = function($s) {
             $s = trim($s);
             if ($s === '') return false;
             if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) return false; // fecha
             if (preg_match('/^(task[_-]?\d+|tarea[_-]?\d+)$/i', $s)) return false; // id típico
-            // Al menos una letra, usualmente con espacio
-            return (bool)preg_match('/[A-Za-zÁÉÍÓÚÑáéíóúñ]/u', $s);
+            if (preg_match('/^(100|[0-9]{1,2})%$/', $s)) return false; // porcentaje
+            
+            // Patrones que sugieren que es un nombre de persona (mejorado)
+            $personPatterns = [
+                '/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$/', // Nombre Apellido
+                '/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ]\.$/', // Nombre A.
+                '/^[A-Z]\.\s*[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$/', // A. Apellido
+            ];
+            
+            foreach ($personPatterns as $pattern) {
+                if (preg_match($pattern, $s)) {
+                    return true;
+                }
+            }
+            
+            // Patrones que sugieren que NO es un nombre (es descripción de tarea)
+            $taskPatterns = [
+                '/\b(revisar|analizar|preparar|coordinar|planificar|desarrollar|implementar|ejecutar|completar)\b/i',
+                '/\b(documento|archivo|reporte|presentación|presupuesto|proyecto|evento|reunión)\b/i',
+                '/\b(todos|todas|con|para|de|del|la|el|los|las)\b/i',
+            ];
+            
+            foreach ($taskPatterns as $pattern) {
+                if (preg_match($pattern, $s)) {
+                    return false;
+                }
+            }
+            
+            // Si tiene al menos una letra y posiblemente sea un nombre simple
+            if (preg_match('/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}$/u', $s)) {
+                return true;
+            }
+            
+            return false;
         };
 
         $assignedIdx = -1;
         if ($lastDateIdx >= 0) {
-            if ($lastDateIdx - 1 >= 0 && $looksLikeName($parts[$lastDateIdx - 1])) {
-                $assignedIdx = $lastDateIdx - 1;
-            } elseif ($lastDateIdx + 1 < $n && $looksLikeName($parts[$lastDateIdx + 1])) {
+            // Priorizar tokens DESPUÉS de la fecha (más probable que sean nombres de personas)
+            if ($lastDateIdx + 1 < $n && $looksLikeName($parts[$lastDateIdx + 1])) {
                 $assignedIdx = $lastDateIdx + 1;
+            } elseif ($lastDateIdx - 1 >= 0 && $looksLikeName($parts[$lastDateIdx - 1])) {
+                $assignedIdx = $lastDateIdx - 1;
             }
         }
         if ($assignedIdx >= 0) { $result['assigned'] = $parts[$assignedIdx]; }
 
-        // Si no hay fechas ni asignado detectado, asumir que el primer token es el nombre y el resto es la descripción
+        // Si no hay fechas ni asignado detectado, usar mejor heurística para separar nombre y descripción
         if ($lastDateIdx < 0 && $assignedIdx < 0 && $n > 1) {
             $idToken = $parts[0] ?? null;
             $baseId = $idToken !== null ? rtrim(trim($idToken), ",;:") : '';
             $result['name'] = $baseId !== '' ? $baseId : 'Sin nombre';
-            $descTokens = array_slice($parts, 1);
+            
+            // Buscar si alguno de los tokens restantes parece ser un nombre de persona
+            $foundPersonIdx = -1;
+            for ($i = 1; $i < $n; $i++) {
+                if ($looksLikeName($parts[$i])) {
+                    $foundPersonIdx = $i;
+                    $result['assigned'] = $parts[$i];
+                    break;
+                }
+            }
+            
+            // Construir descripción excluyendo el nombre de la persona si se encontró
+            $descTokens = [];
+            for ($i = 1; $i < $n; $i++) {
+                if ($i !== $foundPersonIdx) {
+                    $descTokens[] = $parts[$i];
+                }
+            }
             $result['description'] = trim(implode(', ', $descTokens));
             return $result;
         }
