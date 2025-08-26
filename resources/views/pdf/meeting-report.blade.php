@@ -13,11 +13,7 @@
 <body class="report-body">
     <header class="report-header">
         <div class="report-topbar">
-            @if(isset($organization) && $organization?->imagen)
-                <img src="{{ $organization->imagen }}" alt="Logo" class="org-logo">
-            @else
-                <h1 class="report-brand">Juntify</h1>
-            @endif
+            <h1 class="report-brand">Juntify</h1>
             <div class="report-summary">
                 <h1 class="report-title">{{ $reportTitle ?? 'Reporte de Reunión' }}</h1>
                 <p class="report-date">{{ $reportDate ?? now()->format('d/m/Y') }}</p>
@@ -33,6 +29,7 @@
         </div>
     </header>
 
+    <main class="report-content">
     @isset($summary)
         <section class="report-section summary-section">
             <h2>Resumen</h2>
@@ -56,7 +53,7 @@
                 }
             }
         @endphp
-        <section class="report-section transcription-section">
+    <section class="report-section transcription-section">
             <h2>Transcripción</h2>
             <div class="transcription-table">
                 @foreach($segments as $segment)
@@ -72,7 +69,7 @@
     @endisset
 
     @if(!empty($keyPoints))
-        <section class="report-section key-points-section">
+    <section class="report-section key-points-section">
             <h2>Puntos clave / Acuerdos</h2>
             <ul>
                 @foreach($keyPoints as $point)
@@ -83,7 +80,7 @@
     @endif
 
     @isset($additionalNotes)
-        <section class="report-section observations-section">
+    <section class="report-section observations-section">
             <h2>Observaciones adicionales</h2>
             <p>{!! nl2br(e($additionalNotes)) !!}</p>
         </section>
@@ -132,9 +129,23 @@
             </table>
         </section>
     @endisset
+    </main>
 
     <footer class="report-footer">
-        Generado el {{ now()->format('d/m/Y H:i') }} - Página <script type="text/php"> echo $PAGE_NUM; </script> de <script type="text/php"> echo $PAGE_COUNT; </script>
+        <span>Generado el {{ ($reportGeneratedAt ?? now())->format('d/m/Y H:i') }}</span>
+        <span> | Página <script type="text/php"> echo $PAGE_NUM; </script> de <script type="text/php"> echo $PAGE_COUNT; </script></span>
+        <script type="text/php">
+            if (isset($pdf)) {
+                $generatedAt = "{{ ($reportGeneratedAt ?? now())->format('d/m/Y H:i') }}";
+                $text = "Generado el " . $generatedAt . " | Página {PAGE_NUM} de {PAGE_COUNT}";
+                $font = $fontMetrics->get_font("helvetica", "normal");
+                $size = 9;
+                $w = $pdf->get_width();
+                $h = $pdf->get_height();
+                $y = $h - 28; // slightly above edge
+                $pdf->page_text(($w - $fontMetrics->get_text_width($text, $font, $size)) / 2, $y, $text, $font, $size, [1,1,1]);
+            }
+        </script>
     </footer>
 </body>
 </html>

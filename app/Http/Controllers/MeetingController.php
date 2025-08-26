@@ -1107,7 +1107,12 @@ class MeetingController extends Controller
             'keyPoints' => $keyPoints,
             'transcription' => $transcription,
             'tasks' => $tasks,
-        ]);
+            'reportTitle' => 'Reporte de Reunión',
+            'reportDate' => now()->format('d/m/Y'),
+            'meetingName' => $meeting->name ?? ($meeting->title ?? null),
+            'participants' => $meeting->participants_list ?? [],
+            'reportGeneratedAt' => now(),
+        ])->setPaper('letter', 'portrait');
 
         return $pdf->download('meeting_' . $meeting->id . '_report.pdf');
     }
@@ -1723,7 +1728,7 @@ class MeetingController extends Controller
                 [1,1,1]
             );
 
-            $pdf->setPaper('A4', 'portrait');
+            $pdf->setPaper('letter', 'portrait');
 
             // Nombre del archivo
             $fileName = preg_replace('/[^\w\s]/', '', $meetingName) . '_' . date('Y-m-d') . '.pdf';
@@ -1734,6 +1739,74 @@ class MeetingController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al generar PDF: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Genera un PDF con los datos seleccionados y lo muestra en el navegador (vista previa)
+     */
+    public function previewPdf(Request $request, $id)
+    {
+        try {
+            $user = Auth::user();
+
+            // Validar que la reunión pertenece al usuario
+            $meeting = TranscriptionLaravel::where('id', $id)
+                ->where('username', $user->username)
+                ->firstOrFail();
+
+            // Validar request
+            $request->validate([
+                'meeting_name' => 'required|string',
+                'sections' => 'required|array',
+                'data' => 'required|array'
+            ]);
+
+            $data = $request->input('data');
+            $sections = $request->input('sections');
+            $meetingName = $request->input('meeting_name');
+
+            // Usar la fecha real de created_at de la base de datos
+            $realCreatedAt = $meeting->created_at;
+
+            // Verificar si la reunión pertenece a una organización
+            $hasOrganization = $meeting->containers()->exists();
+            $organizationName = null;
+            $organizationLogo = null;
+            if ($hasOrganization) {
+                $container = $meeting->containers()->first();
+                if ($container && isset($container->organization)) {
+                    $organizationName = $container->organization->name ?? 'Organización';
+                    $organizationLogo = $container->organization->imagen ?? null;
+                }
+            }
+
+            // Crear el HTML para el PDF
+            $html = $this->generatePdfHtml(
+                $meetingName,
+                $realCreatedAt,
+                $sections,
+                $data,
+                $hasOrganization,
+                $organizationName,
+                $organizationLogo
+            );
+
+            // Generar PDF usando DomPDF
+            $pdf = app('dompdf.wrapper');
+            $pdf->loadHTML($html);
+            $pdf->setPaper('letter', 'portrait');
+
+            // Forzar vista inline
+            return $pdf->stream('preview.pdf', [
+                'Attachment' => false
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar vista previa: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -1751,8 +1824,8 @@ class MeetingController extends Controller
             <title>' . htmlspecialchars($meetingName) . '</title>
             <style>
                 @page {
-                    margin: 15mm;
-                    size: A4;
+                    margin: 20mm; /* 2cm */
+                    size: letter;
                 }
                 * {
                     margin: 0;
@@ -1771,12 +1844,12 @@ class MeetingController extends Controller
 
                 /* Header */
                 .header {
-                    background: #1e3a8a;
+                    background: linear-gradient(90deg, #3b82f6, #1d4ed8);
                     color: white !important;
                     padding: 20px;
-                    margin: -15mm -15mm 20px -15mm;
+                    margin: 0 0 20px 0;
                     display: block;
-                    width: calc(100% + 30mm);
+                    width: 100%;
                     position: relative;
                 }
                 .header-content {
@@ -1804,7 +1877,10 @@ class MeetingController extends Controller
                     color: white !important;
                 }
                 .org-logo {
-                    max-height: 40px;
+                    font-size: 12px;
+                    font-style: italic;
+                    opacity: 0.9;
+                    color: white !important;
                 }
 
                 /* Contenido principal */
@@ -1931,15 +2007,27 @@ class MeetingController extends Controller
 
                 /* Footer */
                 .footer {
-                    background: #1e3a8a;
+                    background: linear-gradient(90deg, #3b82f6, #1d4ed8);
                     color: white !important;
                     padding: 15px 20px;
                     font-size: 10px;
-                    text-align: right;
-                    position: fixed;
-                    bottom: 0;
-                    right: 0;
+                    display: table;
                     width: 100%;
+                    margin-top: 20px;
+                }
+                .footer-left {
+                    display: table-cell;
+                    vertical-align: middle;
+                    width: 50%;
+                    color: white !important;
+                }
+                .footer-right {
+                    display: table-cell;
+                    vertical-align: middle;
+                    width: 50%;
+                    text-align: right;
+                    font-weight: bold;
+                    color: white !important;
                 }
             </style>
         </head>
@@ -1970,8 +2058,8 @@ class MeetingController extends Controller
                     <div class="meeting-date">Fecha de Grabación: ' . $realCreatedAt->format('d/m/Y H:i') . '</div>
                 </div>';
 
-        // Resumen
-        if (in_array('summary', $sections) && !empty($data['summary'])) {
+    // Resumen (solo si el usuario la seleccionó y hay contenido)
+    if (in_array('summary', $sections) && !empty($data['summary'])) {
             $summaryText = is_string($data['summary']) ? $data['summary'] : (is_array($data['summary']) ? implode(' ', $data['summary']) : strval($data['summary']));
             $html .= '
             <div class="section">
@@ -1982,8 +2070,9 @@ class MeetingController extends Controller
             </div>';
         }
 
-        // Transcripción
-        if (in_array('transcription', $sections) && !empty($data['transcription'])) {
+    // Transcripción (solo si el usuario la seleccionó y existe texto o segmentos)
+    $hasTranscriptionData = !empty($data['transcription']) || (is_array($data['segments'] ?? null) && !empty($data['segments']));
+    if (in_array('transcription', $sections) && $hasTranscriptionData) {
             $html .= '
             <div class="section">
                 <div class="section-title">Transcripción</div>
@@ -2011,8 +2100,8 @@ class MeetingController extends Controller
             $html .= '</div></div>';
         }
 
-        // Puntos Clave
-        if (in_array('key_points', $sections) && !empty($data['key_points'])) {
+    // Puntos Clave (solo si el usuario los seleccionó y hay contenido)
+    if (in_array('key_points', $sections) && !empty($data['key_points'])) {
             $html .= '
             <div class="section">
                 <div class="section-title">Puntos Clave</div>
@@ -2032,8 +2121,8 @@ class MeetingController extends Controller
             $html .= '</ul></div></div>';
         }
 
-        // Tareas
-        if (in_array('tasks', $sections) && !empty($data['tasks'])) {
+    // Tareas (solo si el usuario las seleccionó y hay contenido)
+    if (in_array('tasks', $sections) && !empty($data['tasks'])) {
             $html .= '
             <div class="section">
                 <div class="section-title">Tareas</div>

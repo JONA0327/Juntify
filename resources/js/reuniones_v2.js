@@ -2619,10 +2619,12 @@ async function openDownloadModal(meetingId) {
         createDownloadModal();
 
         // Paso 3: Guardar los datos y mostrar opciones
-        const modal = document.querySelector('[name="download-meeting"]');
-        if (modal) {
-            modal.dataset.meetingId = meetingId;
-            modal.dataset.meetingData = JSON.stringify(data.meeting);
+        const modals = document.querySelectorAll('[name="download-meeting"]');
+        if (modals && modals.length) {
+            modals.forEach(m => {
+                m.dataset.meetingId = meetingId;
+                m.dataset.meetingData = JSON.stringify(data.meeting);
+            });
 
             // Inicializar los event listeners del modal
             initializeDownloadModal();
@@ -2723,13 +2725,7 @@ async function openDownloadModal(meetingId) {
         detail: 'download-meeting'
     }));
 
-    // Marcar todas las opciones por defecto
-    setTimeout(() => {
-        const checkboxes = document.querySelectorAll('.download-option');
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = true;
-        });
-    }, 100);
+    // Mantener selección del usuario (no forzar checks por defecto)
 }
 
 function createDownloadModal() {
@@ -2800,6 +2796,14 @@ function createDownloadModal() {
                             </label>
                         </div>
 
+                        <!-- Vista previa -->
+                        <div class="pt-2">
+                            <button id="preview-pdf" class="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors">Vista previa</button>
+                            <div id="preview-container" class="mt-3 hidden border border-slate-700 rounded overflow-hidden" style="height: 420px;">
+                                <iframe id="preview-frame" title="Vista previa PDF" class="w-full h-full bg-white"></iframe>
+                            </div>
+                        </div>
+
                         <!-- Botones -->
                         <div class="flex justify-end gap-3 pt-4 border-t border-slate-700">
                             <button class="px-6 py-3 text-slate-300 hover:text-white bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors font-medium"
@@ -2851,133 +2855,225 @@ function createDownloadModal() {
     }
 }
 
+// Devuelve el modal activo/visible que contiene las opciones de descarga
+function getActiveDownloadModal() {
+    const modals = Array.from(document.querySelectorAll('[name="download-meeting"]'));
+    if (!modals.length) return null;
+    // Elegir el modal que tenga más opciones y esté visible
+    const visible = modals.filter(m => {
+        const style = window.getComputedStyle(m);
+        const hiddenByClass = m.classList.contains('hidden');
+        return style.display !== 'none' && !hiddenByClass;
+    });
+    const pool = visible.length ? visible : modals;
+    return pool.sort((a,b) => b.querySelectorAll('.download-option').length - a.querySelectorAll('.download-option').length)[0];
+}
+
 function initializeDownloadModal() {
-    // Asegurar que solo se agregue un listener
-    const existingButton = document.getElementById('confirm-download');
-    if (existingButton && existingButton.dataset.listenerAdded) {
-        return;
-    }
+    // Adjuntar listeners a todos los botones presentes (Blade + dinámico)
+    const confirmButtons = Array.from(document.querySelectorAll('#confirm-download'));
+    const previewButtons = Array.from(document.querySelectorAll('#preview-pdf'));
 
-    const confirm = document.getElementById('confirm-download');
-    if (!confirm) return;
+    // Vista previa
+    previewButtons.forEach(previewBtn => {
+        if (!previewBtn || previewBtn.dataset.listenerAdded) return;
+        previewBtn.dataset.listenerAdded = 'true';
+        previewBtn.addEventListener('click', async () => {
+            // Evitar múltiples solicitudes si ya está cargando
+            if (previewBtn.disabled) return;
 
-    // Marcar que ya se agregó el listener
-    confirm.dataset.listenerAdded = 'true';
-
-    confirm.addEventListener('click', async () => {
-        const modal = document.querySelector('[name="download-meeting"]');
-        const meetingId = modal?.dataset.meetingId;
-        const meetingDataStr = modal?.dataset.meetingData;
-        let originalContent = null;
-
-        if (!meetingId) {
-            alert('Error: No se encontró el ID de la reunión');
-            return;
-        }
-
-        if (!meetingDataStr) {
-            alert('Error: No se han cargado los datos de la reunión');
-            return;
-        }
-
-        try {
-            const meetingData = JSON.parse(meetingDataStr);
-            const selectedItems = Array.from(modal.querySelectorAll('.download-option:checked')).map(cb => cb.value);
-
-            if (selectedItems.length === 0) {
-                alert('Por favor selecciona al menos una sección para descargar');
+            const modal = previewBtn.closest('[name="download-meeting"]') || getActiveDownloadModal();
+            const meetingId = modal?.dataset.meetingId;
+            const meetingDataStr = modal?.dataset.meetingData;
+            const previewContainer = (modal && modal.querySelector('#preview-container')) || document.getElementById('preview-container');
+            const previewFrame = (modal && modal.querySelector('#preview-frame')) || document.getElementById('preview-frame');
+            if (!meetingId || !meetingDataStr) {
+                alert('Faltan datos para la vista previa');
                 return;
             }
-
-            // Mostrar loading en el botón con mejor UI
-            confirm.disabled = true;
-            originalContent = confirm.innerHTML;
-            confirm.innerHTML = `
-                <span class="flex items-center space-x-2">
-                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-900"></div>
-                    <span>Generando PDF...</span>
+            const meetingData = JSON.parse(meetingDataStr);
+            let selectedItems = Array.from(modal.querySelectorAll('.download-option:checked')).map(cb => cb.value);
+            if (selectedItems.length === 0) {
+                // Fallback global por si el modal visible está en otra capa
+                selectedItems = Array.from(document.querySelectorAll('[name="download-meeting"] .download-option:checked')).map(cb => cb.value);
+            }
+            if (selectedItems.length === 0) {
+                alert('Selecciona al menos una sección para previsualizar');
+                return;
+            }
+            const payload = {
+                meeting_name: meetingData.meeting_name,
+                sections: selectedItems,
+                data: {
+                    summary: selectedItems.includes('summary') ? meetingData.summary : null,
+                    key_points: selectedItems.includes('key_points') ? meetingData.key_points : null,
+                    transcription: selectedItems.includes('transcription') ? meetingData.transcription : null,
+                    tasks: selectedItems.includes('tasks') ? meetingData.tasks : null,
+                    speakers: meetingData.speakers || [],
+                    segments: meetingData.segments || []
+                }
+            };
+            // Mostrar estado de carga en el botón
+            const originalPreviewContent = previewBtn.innerHTML;
+            previewBtn.disabled = true;
+            previewBtn.innerHTML = `
+                <span class="flex items-center justify-center space-x-2">
+                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-200"></div>
+                    <span>Generando vista previa...</span>
                 </span>
             `;
 
             try {
-                console.log('Generando PDF con secciones:', selectedItems);
-
-                // Preparar los datos para enviar al servidor
-                const downloadData = {
-                    meeting_id: meetingId,
-                    meeting_name: meetingData.meeting_name,
-                    created_at: meetingData.created_at,
-                    sections: selectedItems,
-                    data: {
-                        summary: selectedItems.includes('summary') ? meetingData.summary : null,
-                        key_points: selectedItems.includes('key_points') ? meetingData.key_points : null,
-                        transcription: selectedItems.includes('transcription') ? meetingData.transcription : null,
-                        tasks: selectedItems.includes('tasks') ? meetingData.tasks : null,
-                        speakers: meetingData.speakers || [],
-                        segments: meetingData.segments || []
-                    }
-                };
-
-                // Enviar al endpoint de descarga
-                const response = await fetch('/api/meetings/' + meetingId + '/download-pdf', {
+                // Enviar POST y obtener blob URL para iframe
+                const res = await fetch('/api/meetings/' + meetingId + '/preview-pdf', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                        'Accept': 'application/json',
+                        'Accept': 'application/pdf'
                     },
-                    body: JSON.stringify(downloadData)
+                    body: JSON.stringify(payload)
                 });
+                if (!res.ok) {
+                    const err = await res.text();
+                    throw new Error(err || 'No se pudo generar la vista previa');
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                previewFrame.src = url;
+                previewContainer.classList.remove('hidden');
+            } catch (e) {
+                alert('Error en vista previa: ' + e.message);
+            } finally {
+                // Restaurar el botón
+                previewBtn.disabled = false;
+                previewBtn.innerHTML = originalPreviewContent;
+            }
+        });
+    });
 
-                if (response.ok) {
-                    console.log('PDF generado exitosamente');
+    // Descargar
+    confirmButtons.forEach(confirm => {
+        if (!confirm || confirm.dataset.listenerAdded) return;
+        confirm.dataset.listenerAdded = 'true';
+        confirm.addEventListener('click', async () => {
+            const modal = confirm.closest('[name="download-meeting"]') || getActiveDownloadModal();
+            const meetingId = modal?.dataset.meetingId;
+            const meetingDataStr = modal?.dataset.meetingData;
+            let originalContent = null;
 
-                    // Si la respuesta es un blob (PDF), descargarlo
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
+            if (!meetingId) {
+                alert('Error: No se encontró el ID de la reunión');
+                return;
+            }
 
-                    // Nombre del archivo con timestamp
-                    const timestamp = new Date().toISOString().split('T')[0];
-                    const cleanName = meetingData.meeting_name.replace(/[^\w\s]/gi, '').trim();
-                    a.download = `${cleanName}_${timestamp}.pdf`;
+            if (!meetingDataStr) {
+                alert('Error: No se han cargado los datos de la reunión');
+                return;
+            }
 
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-
-                    // Cerrar modal después de un pequeño delay
-                    setTimeout(() => {
-                        closeDownloadModal();
-                    }, 500);
-
-                } else {
-                    const errorData = await response.json();
-                    console.error('Error del servidor:', errorData);
-                    alert('Error al generar PDF: ' + (errorData.message || 'Error desconocido'));
+            try {
+                const meetingData = JSON.parse(meetingDataStr);
+                let selectedItems = Array.from(modal.querySelectorAll('.download-option:checked')).map(cb => cb.value);
+                if (selectedItems.length === 0) {
+                    selectedItems = Array.from(document.querySelectorAll('[name="download-meeting"] .download-option:checked')).map(cb => cb.value);
                 }
 
+                if (selectedItems.length === 0) {
+                    alert('Por favor selecciona al menos una sección para descargar');
+                    return;
+                }
+
+                // Mostrar loading en el botón con mejor UI
+                confirm.disabled = true;
+                originalContent = confirm.innerHTML;
+                confirm.innerHTML = `
+                    <span class="flex items-center space-x-2">
+                        <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-900"></div>
+                        <span>Generando PDF...</span>
+                    </span>
+                `;
+
+                try {
+                    console.log('Generando PDF con secciones:', selectedItems);
+
+                    // Preparar los datos para enviar al servidor
+                    const downloadData = {
+                        meeting_id: meetingId,
+                        meeting_name: meetingData.meeting_name,
+                        created_at: meetingData.created_at,
+                        sections: selectedItems,
+                        data: {
+                            summary: selectedItems.includes('summary') ? meetingData.summary : null,
+                            key_points: selectedItems.includes('key_points') ? meetingData.key_points : null,
+                            transcription: selectedItems.includes('transcription') ? meetingData.transcription : null,
+                            tasks: selectedItems.includes('tasks') ? meetingData.tasks : null,
+                            speakers: meetingData.speakers || [],
+                            segments: meetingData.segments || []
+                        }
+                    };
+
+                    // Enviar al endpoint de descarga
+                    const response = await fetch('/api/meetings/' + meetingId + '/download-pdf', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                            'Accept': 'application/json',
+                        },
+                        body: JSON.stringify(downloadData)
+                    });
+
+                    if (response.ok) {
+                        console.log('PDF generado exitosamente');
+
+                        // Si la respuesta es un blob (PDF), descargarlo
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+
+                        // Nombre del archivo con timestamp
+                        const timestamp = new Date().toISOString().split('T')[0];
+                        const cleanName = meetingData.meeting_name.replace(/[^\w\s]/gi, '').trim();
+                        a.download = `${cleanName}_${timestamp}.pdf`;
+
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+
+                        // Cerrar modal después de un pequeño delay
+                        setTimeout(() => {
+                            closeDownloadModal();
+                        }, 500);
+
+                    } else {
+                        const errorData = await response.json();
+                        console.error('Error del servidor:', errorData);
+                        alert('Error al generar PDF: ' + (errorData.message || 'Error desconocido'));
+                    }
+
+                } catch (error) {
+                    console.error('Error downloading PDF:', error);
+                    alert('Error al descargar: ' + error.message);
+                } finally {
+                    // Restaurar botón siempre
+                    if (confirm) {
+                        confirm.disabled = false;
+                        confirm.innerHTML = originalContent;
+                    }
+                }
             } catch (error) {
-                console.error('Error downloading PDF:', error);
-                alert('Error al descargar: ' + error.message);
-            } finally {
-                // Restaurar botón siempre
-                if (confirm) {
+                console.error('Error general en initializeDownloadModal:', error);
+                alert('Error inesperado: ' + error.message);
+                // Restaurar botón en caso de error general
+                if (confirm && originalContent) {
                     confirm.disabled = false;
                     confirm.innerHTML = originalContent;
                 }
             }
-        } catch (error) {
-            console.error('Error general en initializeDownloadModal:', error);
-            alert('Error inesperado: ' + error.message);
-            // Restaurar botón en caso de error general
-            if (confirm && originalContent) {
-                confirm.disabled = false;
-                confirm.innerHTML = originalContent;
-            }
-        }
+        });
     });
 }
 

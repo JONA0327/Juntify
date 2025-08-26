@@ -456,6 +456,14 @@
                 </label>
             </div>
 
+            <!-- Vista previa PDF -->
+            <div class="mt-4">
+                <button id="preview-pdf" class="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors">Vista previa</button>
+                <div id="preview-container" class="mt-3 hidden border border-slate-700 rounded overflow-hidden" style="height: 420px;">
+                    <iframe id="preview-frame" title="Vista previa PDF" class="w-full h-full bg-white"></iframe>
+                </div>
+            </div>
+
             <div class="flex justify-end gap-3 mt-6">
                 <button class="btn-cancel" x-on:click="$dispatch('close-modal','download-meeting')">Cancelar</button>
                 <button id="confirm-download" class="btn-primary">Descargar</button>
