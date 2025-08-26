@@ -12,6 +12,9 @@ let segmentEndHandler = null;
 let selectedSegmentIndex = null;
 let segmentsModified = false;
 
+// Almacenamiento temporal para datos de reuniones descargadas
+window.downloadMeetingData = window.downloadMeetingData || {};
+
 // ===============================================
 // INICIALIZACIÓN
 // ===============================================
@@ -2619,11 +2622,11 @@ async function openDownloadModal(meetingId) {
         createDownloadModal();
 
         // Paso 3: Guardar los datos y mostrar opciones
+        window.downloadMeetingData[meetingId] = data.meeting;
         const modals = document.querySelectorAll('[name="download-meeting"]');
         if (modals && modals.length) {
             modals.forEach(m => {
                 m.dataset.meetingId = meetingId;
-                m.dataset.meetingData = JSON.stringify(data.meeting);
             });
 
             // Inicializar los event listeners del modal
@@ -2869,14 +2872,17 @@ function initializeDownloadModal() {
 
             const modal = previewBtn.closest('[name="download-meeting"]');
             const meetingId = modal?.dataset.meetingId;
-            const meetingDataStr = modal?.dataset.meetingData;
             const previewContainer = (modal && modal.querySelector('#preview-container')) || document.getElementById('preview-container');
             const previewFrame = (modal && modal.querySelector('#preview-frame')) || document.getElementById('preview-frame');
-            if (!meetingId || !meetingDataStr) {
+            if (!meetingId) {
                 alert('Faltan datos para la vista previa');
                 return;
             }
-            const meetingData = JSON.parse(meetingDataStr);
+            const meetingData = window.downloadMeetingData[meetingId];
+            if (!meetingData) {
+                alert('Faltan datos para la vista previa');
+                return;
+            }
             const selectedItems = Array.from(
                 document.querySelectorAll('.download-modal .download-option:checked')
             ).map(cb => cb.value);
@@ -2942,7 +2948,7 @@ function initializeDownloadModal() {
         confirm.addEventListener('click', async () => {
             const modal = confirm.closest('[name="download-meeting"]');
             const meetingId = modal?.dataset.meetingId;
-            const meetingDataStr = modal?.dataset.meetingData;
+            const meetingData = window.downloadMeetingData[meetingId];
             let originalContent = null;
 
             if (!meetingId) {
@@ -2950,13 +2956,12 @@ function initializeDownloadModal() {
                 return;
             }
 
-            if (!meetingDataStr) {
+            if (!meetingData) {
                 alert('Error: No se han cargado los datos de la reunión');
                 return;
             }
 
             try {
-                const meetingData = JSON.parse(meetingDataStr);
                 const selectedItems = Array.from(
                     document.querySelectorAll('.download-modal .download-option:checked')
                 ).map(cb => cb.value);
