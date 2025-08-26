@@ -2884,7 +2884,7 @@ function initializeDownloadModal() {
                 return;
             }
             const selectedItems = Array.from(
-                document.querySelectorAll('.download-modal .download-option:checked')
+                modal.querySelectorAll('.download-option:checked')
             ).map(cb => cb.value);
             if (selectedItems.length === 0) {
                 alert('Selecciona al menos una sección para previsualizar');
@@ -2963,7 +2963,7 @@ function initializeDownloadModal() {
 
             try {
                 const selectedItems = Array.from(
-                    document.querySelectorAll('.download-modal .download-option:checked')
+                    modal.querySelectorAll('.download-option:checked')
                 ).map(cb => cb.value);
 
                 if (selectedItems.length === 0) {
