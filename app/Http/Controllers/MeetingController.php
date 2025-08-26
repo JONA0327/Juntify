@@ -1728,7 +1728,7 @@ class MeetingController extends Controller
             <title>' . htmlspecialchars($meetingName) . '</title>
             <style>
                 @page {
-                    margin: 20mm;
+                    margin: 15mm;
                     size: A4;
                 }
                 * {
@@ -1753,9 +1753,9 @@ class MeetingController extends Controller
                     background: linear-gradient(to right, #3b82f6, #1d4ed8);
                     color: white !important;
                     padding: 20px;
-                    margin: -20mm -20mm 20px -20mm;
+                    margin: -15mm -15mm 20px -15mm;
                     display: block;
-                    width: calc(100% + 40mm);
+                    width: calc(100% + 30mm);
                     position: relative;
                 }
                 .header-content {
@@ -1920,8 +1920,8 @@ class MeetingController extends Controller
                     padding: 15px 20px;
                     font-size: 10px;
                     display: block;
-                    width: calc(100% + 40mm);
-                    margin: 20px -20mm -20mm -20mm;
+                    width: calc(100% + 30mm);
+                    margin: 20px -15mm -15mm -15mm;
                     position: relative;
                 }
                 .footer-content {
