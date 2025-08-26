@@ -1673,7 +1673,6 @@ class MeetingController extends Controller
             // Validar request
             $request->validate([
                 'meeting_name' => 'required|string',
-                'created_at' => 'required|string',
                 'sections' => 'required|array',
                 'data' => 'required|array'
             ]);
@@ -1681,10 +1680,22 @@ class MeetingController extends Controller
             $data = $request->input('data');
             $sections = $request->input('sections');
             $meetingName = $request->input('meeting_name');
-            $createdAt = $request->input('created_at');
+
+            // Usar la fecha real de created_at de la base de datos
+            $realCreatedAt = $meeting->created_at;
+
+            // Verificar si la reunión pertenece a una organización
+            $hasOrganization = $meeting->containers()->exists();
+            $organizationName = null;
+            if ($hasOrganization) {
+                $container = $meeting->containers()->first();
+                if ($container && isset($container->organization)) {
+                    $organizationName = $container->organization->name ?? 'Organización';
+                }
+            }
 
             // Crear el HTML para el PDF
-            $html = $this->generatePdfHtml($meetingName, $createdAt, $sections, $data);
+            $html = $this->generatePdfHtml($meetingName, $realCreatedAt, $sections, $data, $hasOrganization, $organizationName);
 
             // Generar PDF usando DomPDF
             $pdf = app('dompdf.wrapper');
@@ -1705,9 +1716,9 @@ class MeetingController extends Controller
     }
 
     /**
-     * Genera el HTML para el PDF con diseño profesional de Juntify
+     * Genera el HTML para el PDF con el nuevo diseño solicitado
      */
-    private function generatePdfHtml($meetingName, $createdAt, $sections, $data)
+    private function generatePdfHtml($meetingName, $realCreatedAt, $sections, $data, $hasOrganization = false, $organizationName = null)
     {
         $html = '
         <!DOCTYPE html>
@@ -1717,7 +1728,7 @@ class MeetingController extends Controller
             <title>' . htmlspecialchars($meetingName) . '</title>
             <style>
                 @page {
-                    margin: 0;
+                    margin: 20mm;
                     size: A4;
                 }
                 * {
@@ -1726,241 +1737,281 @@ class MeetingController extends Controller
                     box-sizing: border-box;
                 }
                 body {
-                    font-family: "Arial", sans-serif;
-                    color: #2c3e50;
-                    line-height: 1.6;
-                    background: #ffffff;
+                    font-family: Arial, sans-serif;
+                    font-size: 12px;
+                    line-height: 1.5;
+                    color: #333;
+                    margin: 0;
+                    padding: 0;
+                    background: white;
                 }
 
-                /* Header con diseño Juntify */
+                /* Header */
                 .header {
-                    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-                    color: white;
-                    padding: 40px 30px;
+                    background: #3b82f6;
+                    background: -webkit-linear-gradient(left, #3b82f6, #1d4ed8);
+                    background: linear-gradient(to right, #3b82f6, #1d4ed8);
+                    color: white !important;
+                    padding: 20px;
+                    margin: -20mm -20mm 20px -20mm;
+                    display: block;
+                    width: calc(100% + 40mm);
                     position: relative;
-                    overflow: hidden;
-                }
-                .header::before {
-                    content: "";
-                    position: absolute;
-                    top: -50%;
-                    right: -50%;
-                    width: 100%;
-                    height: 200%;
-                    background: rgba(255,255,255,0.1);
-                    transform: rotate(45deg);
                 }
                 .header-content {
-                    position: relative;
-                    z-index: 2;
+                    display: table;
+                    width: 100%;
+                    color: white !important;
+                }
+                .header-left {
+                    display: table-cell;
+                    vertical-align: middle;
+                    width: 70%;
+                    color: white !important;
+                }
+                .header-right {
+                    display: table-cell;
+                    vertical-align: middle;
+                    width: 30%;
+                    text-align: right;
+                    color: white !important;
                 }
                 .logo {
-                    font-size: 32px;
+                    font-size: 24px;
                     font-weight: bold;
-                    margin-bottom: 20px;
-                    letter-spacing: 2px;
-                }
-                .meeting-title {
-                    font-size: 28px;
-                    font-weight: bold;
-                    margin-bottom: 10px;
-                    text-transform: uppercase;
                     letter-spacing: 1px;
+                    color: white !important;
                 }
-                .meeting-subtitle {
-                    font-size: 16px;
+                .org-logo {
+                    font-size: 12px;
+                    font-style: italic;
                     opacity: 0.9;
-                    margin-bottom: 5px;
+                    color: white !important;
                 }
 
                 /* Contenido principal */
                 .main-content {
-                    padding: 40px 30px;
+                    padding: 0;
+                    margin: 0;
                 }
 
-                .section {
-                    margin-bottom: 40px;
-                    page-break-inside: avoid;
-                    border-radius: 8px;
-                    overflow: hidden;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                /* Título centrado */
+                .title-section {
+                    text-align: center;
+                    margin-bottom: 30px;
+                    padding: 20px 0;
                 }
-
-                .section-header {
-                    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-                    color: white;
-                    padding: 15px 20px;
-                    font-size: 18px;
+                .meeting-title {
+                    font-size: 20px;
                     font-weight: bold;
+                    color: #333;
+                    margin-bottom: 10px;
                     text-transform: uppercase;
-                    letter-spacing: 1px;
+                }
+                .meeting-date {
+                    font-size: 14px;
+                    color: #666;
+                    font-style: italic;
                 }
 
+                /* Secciones */
+                .section {
+                    margin-bottom: 25px;
+                    page-break-inside: avoid;
+                }
+                .section-title {
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: #1d4ed8;
+                    margin-bottom: 15px;
+                    border-bottom: 2px solid #3b82f6;
+                    padding-bottom: 5px;
+                }
                 .section-content {
-                    background: #f8fafc;
-                    padding: 25px;
-                    border: 1px solid #e2e8f0;
+                    padding: 10px 0;
                 }
 
                 /* Resumen */
-                .summary-content {
-                    font-size: 14px;
-                    line-height: 1.8;
+                .summary-text {
                     text-align: justify;
-                    color: #374151;
+                    line-height: 1.6;
+                    color: #555;
+                }
+
+                /* Transcripción */
+                .transcription-item {
+                    margin-bottom: 15px;
+                    padding: 10px;
+                    background: #f9f9f9;
+                    border-left: 4px solid #3b82f6;
+                    border-radius: 4px;
+                }
+                .speaker-name {
+                    font-weight: bold;
+                    color: #1d4ed8;
+                    margin-bottom: 5px;
+                }
+                .speaker-text {
+                    color: #555;
+                    line-height: 1.5;
                 }
 
                 /* Puntos Clave */
                 .key-points-list {
                     list-style: none;
-                    counter-reset: point-counter;
                 }
                 .key-point {
-                    counter-increment: point-counter;
-                    position: relative;
-                    padding: 15px 20px 15px 60px;
-                    margin-bottom: 15px;
-                    background: white;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    margin-bottom: 10px;
+                    padding: 10px 15px;
+                    background: #eff6ff;
                     border-left: 4px solid #3b82f6;
+                    border-radius: 4px;
+                    position: relative;
+                    padding-left: 40px;
                 }
                 .key-point::before {
-                    content: counter(point-counter);
+                    content: "●";
                     position: absolute;
-                    left: 20px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    width: 25px;
-                    height: 25px;
-                    background: #3b82f6;
-                    color: white;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
+                    left: 15px;
+                    color: #1d4ed8;
                     font-weight: bold;
-                    font-size: 12px;
                 }
 
-                /* Transcripción */
-                .transcript-content {
-                    background: white;
-                    padding: 0;
-                }
-                .speaker-segment {
-                    padding: 15px 20px;
-                    border-bottom: 1px solid #e2e8f0;
-                    display: table;
-                    width: 100%;
-                }
-                .speaker-segment:nth-child(even) {
-                    background: #f1f5f9;
-                }
-                .speaker-name {
-                    display: table-cell;
-                    width: 120px;
-                    font-weight: bold;
-                    color: #1e3a8a;
-                    padding-right: 15px;
-                    vertical-align: top;
-                    border-right: 3px solid #3b82f6;
-                    padding-top: 2px;
-                }
-                .speaker-text {
-                    display: table-cell;
-                    padding-left: 15px;
-                    color: #374151;
-                    line-height: 1.6;
-                }
-
-                /* Tareas */
-                .tasks-grid {
-                    display: table;
+                /* Tabla de Tareas */
+                .tasks-table {
                     width: 100%;
                     border-collapse: collapse;
+                    margin-top: 10px;
                 }
-                .task-header {
-                    display: table-row;
-                    background: #1e3a8a;
+                .tasks-table th {
+                    background: linear-gradient(90deg, #3b82f6, #1d4ed8);
                     color: white;
+                    padding: 12px 8px;
+                    font-size: 11px;
                     font-weight: bold;
-                }
-                .task-header-cell {
-                    display: table-cell;
-                    padding: 12px 15px;
-                    border: 1px solid #3b82f6;
                     text-align: center;
-                    font-size: 12px;
-                    text-transform: uppercase;
+                    border: 1px solid #1d4ed8;
                 }
-                .task-row {
-                    display: table-row;
-                }
-                .task-row:nth-child(even) {
-                    background: #f1f5f9;
-                }
-                .task-cell {
-                    display: table-cell;
-                    padding: 12px 15px;
-                    border: 1px solid #e2e8f0;
+                .tasks-table td {
+                    padding: 10px 8px;
+                    border: 1px solid #ddd;
+                    font-size: 10px;
+                    text-align: center;
                     vertical-align: top;
-                    font-size: 12px;
-                    color: #374151;
+                }
+                .tasks-table tr:nth-child(even) {
+                    background: #dbeafe;
+                }
+                .task-name {
+                    font-weight: bold;
+                    color: #1d4ed8;
+                }
+                .task-description {
+                    text-align: left !important;
+                    max-width: 200px;
                 }
 
                 /* Footer */
                 .footer {
-                    position: fixed;
-                    bottom: 0;
-                    left: 0;
-                    right: 0;
-                    background: #1e3a8a;
-                    color: white;
-                    padding: 15px 30px;
-                    font-size: 12px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
+                    background: #3b82f6;
+                    background: -webkit-linear-gradient(left, #3b82f6, #1d4ed8);
+                    background: linear-gradient(to right, #3b82f6, #1d4ed8);
+                    color: white !important;
+                    padding: 15px 20px;
+                    font-size: 10px;
+                    display: block;
+                    width: calc(100% + 40mm);
+                    margin: 20px -20mm -20mm -20mm;
+                    position: relative;
                 }
-                .page-number {
+                .footer-content {
+                    display: table;
+                    width: 100%;
+                    color: white !important;
+                }
+                .footer-left {
+                    display: table-cell;
+                    vertical-align: middle;
+                    width: 50%;
+                    color: white !important;
+                }
+                .footer-right {
+                    display: table-cell;
+                    vertical-align: middle;
+                    width: 50%;
+                    text-align: right;
                     font-weight: bold;
-                }
-                .generated-date {
-                    opacity: 0.8;
+                    color: white !important;
                 }
             </style>
         </head>
         <body>
-            <!-- Header con estilo Juntify -->
+            <!-- Header -->
             <div class="header">
                 <div class="header-content">
-                    <div class="logo">JUNTIFY</div>
-                    <div class="meeting-subtitle">[Aquí va el Logo de la organización si tiene]</div>
-                    <div class="meeting-title">' . strtoupper(htmlspecialchars($meetingName)) . '</div>
-                    <div class="meeting-subtitle">[Fecha de Reunión]</div>
+                    <div class="header-left">
+                        <div class="logo">JUNTIFY</div>
+                    </div>
+                    <div class="header-right">
+                        <div class="org-logo">' . ($hasOrganization ? htmlspecialchars($organizationName ?? 'Organización') : '[Logo de la Organización]') . '</div>
+                    </div>
                 </div>
             </div>
 
-            <div class="main-content">';
+            <!-- Contenido Principal -->
+            <div class="main-content">
+                <!-- Título Centrado -->
+                <div class="title-section">
+                    <div class="meeting-title">' . htmlspecialchars($meetingName) . '</div>
+                    <div class="meeting-date">Fecha de Grabación: ' . $realCreatedAt->format('d/m/Y H:i') . '</div>
+                </div>';
 
         // Resumen
         if (in_array('summary', $sections) && !empty($data['summary'])) {
-            $summaryText = is_string($data['summary']) ? $data['summary'] : (is_array($data['summary']) ? implode(', ', $data['summary']) : strval($data['summary']));
+            $summaryText = is_string($data['summary']) ? $data['summary'] : (is_array($data['summary']) ? implode(' ', $data['summary']) : strval($data['summary']));
             $html .= '
             <div class="section">
-                <div class="section-header">Resumen de la Reunión</div>
+                <div class="section-title">Resumen</div>
                 <div class="section-content">
-                    <div class="summary-content">' . nl2br(htmlspecialchars($summaryText)) . '</div>
+                    <div class="summary-text">' . nl2br(htmlspecialchars($summaryText)) . '</div>
                 </div>
             </div>';
+        }
+
+        // Transcripción
+        if (in_array('transcription', $sections) && !empty($data['transcription'])) {
+            $html .= '
+            <div class="section">
+                <div class="section-title">Transcripción</div>
+                <div class="section-content">';
+
+            if (is_array($data['segments']) && !empty($data['segments'])) {
+                foreach ($data['segments'] as $segment) {
+                    $speaker = isset($segment['speaker']) ? (is_string($segment['speaker']) ? htmlspecialchars($segment['speaker']) : 'Participante') : 'Participante';
+                    $text = isset($segment['text']) ? (is_string($segment['text']) ? htmlspecialchars($segment['text']) : '') : '';
+                    $html .= '
+                    <div class="transcription-item">
+                        <div class="speaker-name">' . $speaker . ':</div>
+                        <div class="speaker-text">' . $text . '</div>
+                    </div>';
+                }
+            } else {
+                $transcriptionText = is_string($data['transcription']) ? $data['transcription'] : (is_array($data['transcription']) ? implode(' ', $data['transcription']) : strval($data['transcription']));
+                $html .= '
+                <div class="transcription-item">
+                    <div class="speaker-name">Participante:</div>
+                    <div class="speaker-text">' . nl2br(htmlspecialchars($transcriptionText)) . '</div>
+                </div>';
+            }
+
+            $html .= '</div></div>';
         }
 
         // Puntos Clave
         if (in_array('key_points', $sections) && !empty($data['key_points'])) {
             $html .= '
             <div class="section">
-                <div class="section-header">Puntos Clave</div>
+                <div class="section-title">Puntos Clave</div>
                 <div class="section-content">
                     <ul class="key-points-list">';
 
@@ -1977,89 +2028,69 @@ class MeetingController extends Controller
             $html .= '</ul></div></div>';
         }
 
-        // Transcripción
-        if (in_array('transcription', $sections) && !empty($data['transcription'])) {
-            $html .= '
-            <div class="section">
-                <div class="section-header">Transcripción</div>
-                <div class="section-content">
-                    <div class="transcript-content">';
-
-            if (is_array($data['segments']) && !empty($data['segments'])) {
-                foreach ($data['segments'] as $segment) {
-                    $speaker = isset($segment['speaker']) ? (is_string($segment['speaker']) ? htmlspecialchars($segment['speaker']) : 'HablanteA') : 'HablanteA';
-                    $text = isset($segment['text']) ? (is_string($segment['text']) ? htmlspecialchars($segment['text']) : '') : '';
-                    $html .= '
-                    <div class="speaker-segment">
-                        <div class="speaker-name">' . $speaker . '</div>
-                        <div class="speaker-text">' . $text . '</div>
-                    </div>';
-                }
-            } else {
-                $transcriptionText = is_string($data['transcription']) ? $data['transcription'] : (is_array($data['transcription']) ? implode(' ', $data['transcription']) : strval($data['transcription']));
-                $html .= '<div class="speaker-segment">
-                    <div class="speaker-name">Contenido</div>
-                    <div class="speaker-text">' . nl2br(htmlspecialchars($transcriptionText)) . '</div>
-                </div>';
-            }
-
-            $html .= '</div></div></div>';
-        }
-
         // Tareas
         if (in_array('tasks', $sections) && !empty($data['tasks'])) {
             $html .= '
             <div class="section">
-                <div class="section-header">Tareas de la Reunión</div>
+                <div class="section-title">Tareas</div>
                 <div class="section-content">
-                    <div class="tasks-grid">
-                        <div class="task-header">
-                            <div class="task-header-cell" style="width: 20%;">Nombre TareaX</div>
-                            <div class="task-header-cell" style="width: 25%;">Descripción</div>
-                            <div class="task-header-cell" style="width: 15%;">Observaciones</div>
-                            <div class="task-header-cell" style="width: 12%;">Fecha Inicio</div>
-                            <div class="task-header-cell" style="width: 12%;">Fecha Límite</div>
-                            <div class="task-header-cell" style="width: 16%;">Progreso</div>
-                        </div>';
+                    <table class="tasks-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 15%;">Nombre de la Tarea</th>
+                                <th style="width: 35%;">Descripción</th>
+                                <th style="width: 12%;">Fecha Inicio</th>
+                                <th style="width: 12%;">Fecha Fin</th>
+                                <th style="width: 15%;">Asignado a</th>
+                                <th style="width: 11%;">Progreso</th>
+                            </tr>
+                        </thead>
+                        <tbody>';
 
             if (is_array($data['tasks'])) {
                 $taskCounter = 1;
                 foreach ($data['tasks'] as $task) {
                     $taskText = is_string($task) ? $task : (is_array($task) ? implode(', ', $task) : strval($task));
                     $html .= '
-                    <div class="task-row">
-                        <div class="task-cell">Tarea ' . $taskCounter . '</div>
-                        <div class="task-cell">' . htmlspecialchars($taskText) . '</div>
-                        <div class="task-cell">-</div>
-                        <div class="task-cell">-</div>
-                        <div class="task-cell">-</div>
-                        <div class="task-cell">Pendiente</div>
-                    </div>';
+                            <tr>
+                                <td class="task-name">Tarea ' . $taskCounter . '</td>
+                                <td class="task-description">' . htmlspecialchars($taskText) . '</td>
+                                <td>Sin asignar</td>
+                                <td>Sin asignar</td>
+                                <td>Sin asignar</td>
+                                <td>0%</td>
+                            </tr>';
                     $taskCounter++;
                 }
             } else {
                 $taskText = is_string($data['tasks']) ? $data['tasks'] : strval($data['tasks']);
                 $html .= '
-                <div class="task-row">
-                    <div class="task-cell">Tarea General</div>
-                    <div class="task-cell">' . htmlspecialchars($taskText) . '</div>
-                    <div class="task-cell">-</div>
-                    <div class="task-cell">-</div>
-                    <div class="task-cell">-</div>
-                    <div class="task-cell">Pendiente</div>
-                </div>';
+                            <tr>
+                                <td class="task-name">Tarea 1</td>
+                                <td class="task-description">' . htmlspecialchars($taskText) . '</td>
+                                <td>Sin asignar</td>
+                                <td>Sin asignar</td>
+                                <td>Sin asignar</td>
+                                <td>0%</td>
+                            </tr>';
             }
 
-            $html .= '</div></div></div>';
+            $html .= '
+                        </tbody>
+                    </table>
+                </div>
+            </div>';
         }
 
         $html .= '
-            </div>
+            </div> <!-- Fin main-content -->
 
             <!-- Footer -->
             <div class="footer">
-                <div class="generated-date">' . date('d/m/Y H:i') . ' a.m.</div>
-                <div class="page-number">1</div>
+                <div class="footer-content">
+                    <div class="footer-left">Generado el: ' . date('d/m/Y H:i') . '</div>
+                    <div class="footer-right">Página 1</div>
+                </div>
             </div>
         </body>
         </html>';

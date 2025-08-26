@@ -2868,6 +2868,7 @@ function initializeDownloadModal() {
         const modal = document.querySelector('[name="download-meeting"]');
         const meetingId = modal?.dataset.meetingId;
         const meetingDataStr = modal?.dataset.meetingData;
+        let originalContent = null;
 
         if (!meetingId) {
             alert('Error: No se encontró el ID de la reunión');
@@ -2890,7 +2891,7 @@ function initializeDownloadModal() {
 
             // Mostrar loading en el botón con mejor UI
             confirm.disabled = true;
-            const originalContent = confirm.innerHTML;
+            originalContent = confirm.innerHTML;
             confirm.innerHTML = `
                 <span class="flex items-center space-x-2">
                     <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-900"></div>
@@ -2898,72 +2899,84 @@ function initializeDownloadModal() {
                 </span>
             `;
 
-            console.log('Generando PDF con secciones:', selectedItems);
+            try {
+                console.log('Generando PDF con secciones:', selectedItems);
 
-            // Preparar los datos para enviar al servidor
-            const downloadData = {
-                meeting_id: meetingId,
-                meeting_name: meetingData.meeting_name,
-                created_at: meetingData.created_at,
-                sections: selectedItems,
-                data: {
-                    summary: selectedItems.includes('summary') ? meetingData.summary : null,
-                    key_points: selectedItems.includes('key_points') ? meetingData.key_points : null,
-                    transcription: selectedItems.includes('transcription') ? meetingData.transcription : null,
-                    tasks: selectedItems.includes('tasks') ? meetingData.tasks : null,
-                    speakers: meetingData.speakers || [],
-                    segments: meetingData.segments || []
+                // Preparar los datos para enviar al servidor
+                const downloadData = {
+                    meeting_id: meetingId,
+                    meeting_name: meetingData.meeting_name,
+                    created_at: meetingData.created_at,
+                    sections: selectedItems,
+                    data: {
+                        summary: selectedItems.includes('summary') ? meetingData.summary : null,
+                        key_points: selectedItems.includes('key_points') ? meetingData.key_points : null,
+                        transcription: selectedItems.includes('transcription') ? meetingData.transcription : null,
+                        tasks: selectedItems.includes('tasks') ? meetingData.tasks : null,
+                        speakers: meetingData.speakers || [],
+                        segments: meetingData.segments || []
+                    }
+                };
+
+                // Enviar al endpoint de descarga
+                const response = await fetch('/api/meetings/' + meetingId + '/download-pdf', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify(downloadData)
+                });
+
+                if (response.ok) {
+                    console.log('PDF generado exitosamente');
+
+                    // Si la respuesta es un blob (PDF), descargarlo
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+
+                    // Nombre del archivo con timestamp
+                    const timestamp = new Date().toISOString().split('T')[0];
+                    const cleanName = meetingData.meeting_name.replace(/[^\w\s]/gi, '').trim();
+                    a.download = `${cleanName}_${timestamp}.pdf`;
+
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+
+                    // Cerrar modal después de un pequeño delay
+                    setTimeout(() => {
+                        closeDownloadModal();
+                    }, 500);
+
+                } else {
+                    const errorData = await response.json();
+                    console.error('Error del servidor:', errorData);
+                    alert('Error al generar PDF: ' + (errorData.message || 'Error desconocido'));
                 }
-            };
 
-            // Enviar al endpoint de descarga
-            const response = await fetch('/api/meetings/' + meetingId + '/download-pdf', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify(downloadData)
-            });
-
-            if (response.ok) {
-                console.log('PDF generado exitosamente');
-
-                // Si la respuesta es un blob (PDF), descargarlo
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-
-                // Nombre del archivo con timestamp
-                const timestamp = new Date().toISOString().split('T')[0];
-                const cleanName = meetingData.meeting_name.replace(/[^\w\s]/gi, '').trim();
-                a.download = `${cleanName}_${timestamp}.pdf`;
-
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-
-                // Cerrar modal después de un pequeño delay
-                setTimeout(() => {
-                    closeDownloadModal();
-                }, 500);
-
-            } else {
-                const errorData = await response.json();
-                console.error('Error del servidor:', errorData);
-                alert('Error al generar PDF: ' + (errorData.message || 'Error desconocido'));
+            } catch (error) {
+                console.error('Error downloading PDF:', error);
+                alert('Error al descargar: ' + error.message);
+            } finally {
+                // Restaurar botón siempre
+                if (confirm) {
+                    confirm.disabled = false;
+                    confirm.innerHTML = originalContent;
+                }
             }
-
         } catch (error) {
-            console.error('Error downloading PDF:', error);
-            alert('Error al descargar: ' + error.message);
-        } finally {
-            // Restaurar botón
-            confirm.disabled = false;
-            confirm.innerHTML = originalContent;
+            console.error('Error general en initializeDownloadModal:', error);
+            alert('Error inesperado: ' + error.message);
+            // Restaurar botón en caso de error general
+            if (confirm && originalContent) {
+                confirm.disabled = false;
+                confirm.innerHTML = originalContent;
+            }
         }
     });
 }
