@@ -2747,7 +2747,7 @@ function createDownloadModal() {
              x-on:close.stop="show = false"
              x-on:keydown.escape.window="show = false"
              name="download-meeting"
-             class="fixed inset-0 z-[9999] overflow-hidden"
+             class="fixed inset-0 z-[9999] overflow-hidden download-modal"
              style="display: none;">
 
             <!-- Overlay con fondo semi-transparente -->
