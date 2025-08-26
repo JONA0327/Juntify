@@ -1710,6 +1710,19 @@ class MeetingController extends Controller
             // Generar PDF usando DomPDF
             $pdf = app('dompdf.wrapper');
             $pdf->loadHTML($html);
+
+            $domPdf = $pdf->getDomPDF();
+            $canvas = $domPdf->get_canvas();
+            $date = date('d/m/Y H:i');
+            $canvas->page_text(
+                $canvas->get_width()-170,
+                $canvas->get_height()-28,
+                "$date  Página {PAGE_NUM} de {PAGE_COUNT}",
+                null,
+                10,
+                [1,1,1]
+            );
+
             $pdf->setPaper('A4', 'portrait');
 
             // Nombre del archivo
@@ -1918,35 +1931,15 @@ class MeetingController extends Controller
 
                 /* Footer */
                 .footer {
-                    background: #3b82f6;
-                    background: -webkit-linear-gradient(left, #3b82f6, #1d4ed8);
-                    background: linear-gradient(to right, #3b82f6, #1d4ed8);
+                    background: #1e3a8a;
                     color: white !important;
                     padding: 15px 20px;
                     font-size: 10px;
-                    display: block;
-                    width: calc(100% + 30mm);
-                    margin: 20px -15mm -15mm -15mm;
-                    position: relative;
-                }
-                .footer-content {
-                    display: table;
-                    width: 100%;
-                    color: white !important;
-                }
-                .footer-left {
-                    display: table-cell;
-                    vertical-align: middle;
-                    width: 50%;
-                    color: white !important;
-                }
-                .footer-right {
-                    display: table-cell;
-                    vertical-align: middle;
-                    width: 50%;
                     text-align: right;
-                    font-weight: bold;
-                    color: white !important;
+                    position: fixed;
+                    bottom: 0;
+                    right: 0;
+                    width: 100%;
                 }
             </style>
         </head>
@@ -2097,12 +2090,7 @@ class MeetingController extends Controller
             </div> <!-- Fin main-content -->
 
             <!-- Footer -->
-            <div class="footer">
-                <div class="footer-content">
-                    <div class="footer-left">Generado el: ' . date('d/m/Y H:i') . '</div>
-                    <div class="footer-right">Página 1</div>
-                </div>
-            </div>
+            <div class="footer">Generado el: ' . date('d/m/Y H:i') . '</div>
         </body>
         </html>';
 
