@@ -8,6 +8,7 @@ use App\Models\Folder;
 use App\Models\MeetingShare;
 use App\Models\MeetingContentContainer;
 use App\Models\Task;
+use App\Models\Container;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -1704,6 +1705,30 @@ class MeetingController extends Controller
             }
 
             // Crear el HTML para el PDF
+            // Si se solicitó la sección de tareas, intentar usar las tareas de la BD (si existen)
+            if (in_array('tasks', $sections)) {
+                $dbTasks = Task::where('meeting_id', $meeting->id)
+                    ->get(['text', 'description', 'assignee', 'due_date', 'completed', 'progress']);
+                if ($dbTasks->count() > 0) {
+                    $mapped = $dbTasks->map(function($t) {
+                        $end = $t->due_date ? ($t->due_date instanceof \Carbon\Carbon ? $t->due_date->format('Y-m-d') : (string)$t->due_date) : 'Sin asignar';
+                        $progress = isset($t->progress) && is_numeric($t->progress)
+                            ? (intval($t->progress) . '%')
+                            : ($t->completed ? '100%' : '0%');
+                        return [
+                            'title' => $t->text ?? 'Sin nombre',
+                            'description' => $t->description ?? '',
+                            'assigned' => $t->assignee ?? 'Sin asignar',
+                            'start' => 'Sin asignar',
+                            'end' => $end,
+                            'progress' => $progress,
+                        ];
+                    })->toArray();
+                    $data['tasks'] = $mapped;
+                }
+            }
+
+            // Crear el HTML para el PDF
             $html = $this->generatePdfHtml(
                 $meetingName,
                 $realCreatedAt,
@@ -1814,6 +1839,148 @@ class MeetingController extends Controller
     }
 
     /**
+     * Parsea una tarea a partir de partes posicionales ya separadas y limpias.
+     * Heurística:
+     * - Detecta fechas (YYYY-MM-DD). Si hay 2, asume [inicio, fin]. Si hay 1, es inicio.
+     * - El asignado se toma preferentemente del token previo a la última fecha si luce como nombre; si no, del token siguiente.
+     * - name = id (primer token) + título (tokens hasta antes de asignado/fecha)
+     * - description = tokens tras la última fecha; si no hay fecha, lo que queda tras el título.
+     * - progress = último token que parezca porcentaje (e.g., 50%) si existe.
+     */
+    private function parseTaskFromParts(array $parts, array $result): array
+    {
+        // Limpieza básica
+        $parts = array_values(array_map(function($p){ return trim((string)$p); }, array_filter($parts, function($p){ return $p !== null && trim((string)$p) !== ''; })));
+        // Expandir elementos que contienen comas o saltos de línea (caso de arrays numéricos con tokens embebidos)
+        $expanded = [];
+        foreach ($parts as $p) {
+            $p = str_replace(["\r\n", "\n", "\r", "\t", "|"], ',', $p);
+            $sub = array_map('trim', array_filter(explode(',', $p), function($x){ return $x !== ''; }));
+            if (empty($sub)) {
+                $expanded[] = $p;
+            } else {
+                foreach ($sub as $s) { $expanded[] = $s; }
+            }
+        }
+        $parts = $expanded;
+        $n = count($parts);
+        if ($n === 0) { return $result; }
+
+        // Caso especial: un solo token con separador ':' o '-' que contenga nombre y descripción
+        if ($n === 1) {
+            $single = $parts[0];
+            if (preg_match('/^\s*([^:\-–]+?)\s*[:\-–]\s*(.+)$/u', $single, $m)) {
+                $idToken = trim($m[1]);
+                $desc = trim($m[2]);
+                $result['name'] = $idToken !== '' ? rtrim($idToken, ",;:") : 'Sin nombre';
+                $result['description'] = $desc;
+                return $result;
+            }
+        }
+
+        // Detectar porcentaje (progreso) al final si existe
+        $progressIdx = -1;
+        for ($i = $n - 1; $i >= 0; $i--) {
+            if (preg_match('/^(100|[0-9]{1,2})%$/', $parts[$i])) { $progressIdx = $i; break; }
+        }
+        if ($progressIdx >= 0) {
+            $result['progress'] = $parts[$progressIdx];
+            array_splice($parts, $progressIdx, 1);
+            $n = count($parts);
+        }
+
+        // Detectar fechas YYYY-MM-DD
+        $dateIdxs = [];
+        for ($i = 0; $i < $n; $i++) {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $parts[$i])) { $dateIdxs[] = $i; }
+        }
+
+        $startIdx = -1; $endIdx = -1; $lastDateIdx = -1;
+        if (count($dateIdxs) >= 2) {
+            $startIdx = $dateIdxs[0];
+            $endIdx = $dateIdxs[1];
+            $result['start'] = $parts[$startIdx];
+            $result['end'] = $parts[$endIdx];
+            $lastDateIdx = max($dateIdxs);
+        } elseif (count($dateIdxs) === 1) {
+            $startIdx = $dateIdxs[0];
+            $result['start'] = $parts[$startIdx];
+            $lastDateIdx = $startIdx;
+        }
+
+        // Heurística para asignado: token adyacente a la última fecha
+        $looksLikeName = function($s) {
+            $s = trim($s);
+            if ($s === '') return false;
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) return false; // fecha
+            if (preg_match('/^(task[_-]?\d+|tarea[_-]?\d+)$/i', $s)) return false; // id típico
+            // Al menos una letra, usualmente con espacio
+            return (bool)preg_match('/[A-Za-zÁÉÍÓÚÑáéíóúñ]/u', $s);
+        };
+
+        $assignedIdx = -1;
+        if ($lastDateIdx >= 0) {
+            if ($lastDateIdx - 1 >= 0 && $looksLikeName($parts[$lastDateIdx - 1])) {
+                $assignedIdx = $lastDateIdx - 1;
+            } elseif ($lastDateIdx + 1 < $n && $looksLikeName($parts[$lastDateIdx + 1])) {
+                $assignedIdx = $lastDateIdx + 1;
+            }
+        }
+        if ($assignedIdx >= 0) { $result['assigned'] = $parts[$assignedIdx]; }
+
+        // Si no hay fechas ni asignado detectado, asumir que el primer token es el nombre y el resto es la descripción
+        if ($lastDateIdx < 0 && $assignedIdx < 0 && $n > 1) {
+            $idToken = $parts[0] ?? null;
+            $baseId = $idToken !== null ? rtrim(trim($idToken), ",;:") : '';
+            $result['name'] = $baseId !== '' ? $baseId : 'Sin nombre';
+            $descTokens = array_slice($parts, 1);
+            $result['description'] = trim(implode(', ', $descTokens));
+            return $result;
+        }
+
+        // Construir name (id + título)
+        $idToken = $parts[0] ?? null;
+        $titleStart = $idToken !== null ? 1 : 0;
+        // Fin del título antes de assigned o de fecha
+        $limitIdx = $n - 1;
+        if ($assignedIdx >= 0) { $limitIdx = min($limitIdx, $assignedIdx - 1); }
+        if ($lastDateIdx >= 0) { $limitIdx = min($limitIdx, $lastDateIdx - 1); }
+        $titleTokens = [];
+        if ($limitIdx >= $titleStart) {
+            for ($i = $titleStart; $i <= $limitIdx; $i++) { $titleTokens[] = $parts[$i]; }
+        }
+        $title = trim(implode(', ', $titleTokens));
+        $baseId = $idToken !== null ? rtrim(trim($idToken), ",;:") : '';
+        if ($title !== '') {
+            $name = trim(($baseId !== '' ? $baseId . ', ' : '') . $title);
+        } else {
+            $name = $baseId !== '' ? $baseId : 'Sin nombre';
+        }
+        $result['name'] = $name;
+
+        // Descripción: posterior a la última fecha si existe; si no, lo que queda tras el título
+        $descTokens = [];
+        if ($lastDateIdx >= 0) {
+            for ($i = $lastDateIdx + 1; $i < $n; $i++) {
+                if ($i === $assignedIdx) continue;
+                $descTokens[] = $parts[$i];
+            }
+        } else {
+            $tailStart = max($limitIdx + 1, $titleStart);
+            for ($i = $tailStart; $i < $n; $i++) {
+                if ($i === $assignedIdx) continue;
+                // Evitar duplicar fecha si no fue detectada por formato
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $parts[$i])) continue;
+                $descTokens[] = $parts[$i];
+            }
+        }
+        $desc = trim(implode(', ', $descTokens));
+        $result['description'] = $desc;
+
+        return $result;
+    }
+
+    /**
      * Genera el HTML para el PDF con el nuevo diseño solicitado
      */
     private function generatePdfHtml($meetingName, $realCreatedAt, $sections, $data, $hasOrganization = false, $organizationName = null, $organizationLogo = null)
@@ -1825,9 +1992,10 @@ class MeetingController extends Controller
             <meta charset="utf-8">
             <title>' . htmlspecialchars($meetingName) . '</title>
             <style>
+                /* Forzar márgenes internos visibles: usar padding en body y margin 0 en la página */
                 @page {
-                    margin: 20mm; /* 2cm */
                     size: letter;
+                    margin: 0;
                 }
                 * {
                     margin: 0;
@@ -1840,7 +2008,7 @@ class MeetingController extends Controller
                     line-height: 1.5;
                     color: #333;
                     margin: 0;
-                    padding: 0;
+                    padding: 20mm; /* 2 cm en todos los lados */
                     background: white;
                 }
 
@@ -1979,9 +2147,10 @@ class MeetingController extends Controller
                     border-collapse: collapse;
                     margin-top: 10px;
                 }
+                /* Dompdf no soporta bien gradients: usar color sólido para que el texto blanco sea visible */
                 .tasks-table th {
-                    background: linear-gradient(90deg, #3b82f6, #1d4ed8);
-                    color: white;
+                    background-color: #1d4ed8; /* azul sólido */
+                    color: #ffffff;
                     padding: 12px 8px;
                     font-size: 11px;
                     font-weight: bold;
@@ -1994,6 +2163,7 @@ class MeetingController extends Controller
                     font-size: 10px;
                     text-align: center;
                     vertical-align: top;
+                    color: #111111; /* asegurar contraste */
                 }
                 .tasks-table tr:nth-child(even) {
                     background: #dbeafe;
@@ -2142,32 +2312,112 @@ class MeetingController extends Controller
                         </thead>
                         <tbody>';
 
+            // Función de parseo flexible para cadenas de tareas
+            $parseTask = function($raw) {
+                $result = [
+                    'name' => 'Sin nombre',
+                    'description' => '',
+                    'assigned' => 'Sin asignar',
+                    'start' => 'Sin asignar',
+                    'end' => 'Sin asignar',
+                    'progress' => '0%'
+                ];
+
+                if (is_array($raw)) {
+                    // ¿Es asociativo o numérico?
+                    $isAssoc = array_keys($raw) !== range(0, count($raw) - 1);
+                    if ($isAssoc) {
+                        // Intentar mapear campos por nombre si existen
+                        $id = $raw['id'] ?? $raw['name'] ?? $raw['title'] ?? null;
+                        $title = $raw['title'] ?? $raw['name'] ?? null;
+                        $desc = $raw['description'] ?? $raw['desc'] ?? '';
+                        $assigned = $raw['assigned'] ?? $raw['assigned_to'] ?? $raw['owner'] ?? 'Sin asignar';
+                        $start = $raw['start'] ?? $raw['start_date'] ?? $raw['fecha_inicio'] ?? 'Sin asignar';
+                        $end = $raw['end'] ?? $raw['due'] ?? $raw['due_date'] ?? $raw['fecha_fin'] ?? 'Sin asignar';
+                        $progress = isset($raw['progress']) ? (is_numeric($raw['progress']) ? ($raw['progress'] . '%') : $raw['progress']) : '0%';
+
+                        // Si no hay título pero el id contiene más tokens (coma/saltos/':'), intentar parsear desde id
+                        $parsedFromId = null;
+                        if ($title === null || trim((string)$title) === '') {
+                            $idText = is_string($id) ? $id : '';
+                            if ($idText !== '') {
+                                $norm = str_replace(["\r\n", "\n", "\r", "\t", "|"], ',', $idText);
+                                $idParts = array_map('trim', array_filter(explode(',', $norm), function($p){ return $p !== ''; }));
+                                if (!empty($idParts)) {
+                                    $parsedFromId = $this->parseTaskFromParts($idParts, $result);
+                                }
+                            }
+                        }
+
+                        if ($parsedFromId) {
+                            $name = $parsedFromId['name'] ?? ($id ?? 'Sin nombre');
+                            $descFromId = $parsedFromId['description'] ?? '';
+                            $finalDesc = is_string($desc) && trim($desc) !== ''
+                                ? $desc
+                                : $descFromId;
+                        } else {
+                            // Construir nombre evitando coma extra si no hay título
+                            $baseId = $id !== null ? rtrim(trim((string)$id), ",;:") : '';
+                            if ($title !== null && trim((string)$title) !== '') {
+                                $name = trim(($baseId !== '' ? $baseId . ', ' : '') . $title);
+                            } else {
+                                $name = $baseId !== '' ? $baseId : 'Sin nombre';
+                            }
+                            $finalDesc = is_string($desc) ? $desc : (is_array($desc) ? implode(', ', $desc) : strval($desc));
+                        }
+
+                        $result['name'] = $name;
+                        $result['description'] = $finalDesc;
+                        $result['assigned'] = $assigned ?: 'Sin asignar';
+                        $result['start'] = $start ?: 'Sin asignar';
+                        $result['end'] = $end ?: 'Sin asignar';
+                        $result['progress'] = $progress ?: '0%';
+                        return $result;
+                    } else {
+                        // Lista posicional: [id, titulo..., asignado, fecha, descripcion...]
+                        $parts = array_values(array_map('trim', array_filter($raw, function($p){ return $p !== null && $p !== ''; })));
+                        return $this->parseTaskFromParts($parts, $result);
+                    }
+                }
+
+                $text = is_string($raw) ? $raw : strval($raw);
+                // Normalizar saltos de línea a comas para soportar formatos en múltiples líneas
+                $text = str_replace(["\r\n", "\n", "\r", "\t", "|"], ',', $text);
+                // Separar por comas, limpiar espacios
+                $parts = array_map('trim', array_filter(explode(',', $text), function($p){ return $p !== ''; }));
+                if (empty($parts)) {
+                    $result['description'] = $text;
+                    return $result;
+                }
+                return $this->parseTaskFromParts($parts, $result);
+            };
+
             if (is_array($data['tasks'])) {
-                $taskCounter = 1;
                 foreach ($data['tasks'] as $task) {
-                    $taskText = is_string($task) ? $task : (is_array($task) ? implode(', ', $task) : strval($task));
-                    $html .= '
-                            <tr>
-                                <td class="task-name">Tarea ' . $taskCounter . '</td>
-                                <td class="task-description">' . htmlspecialchars($taskText) . '</td>
-                                <td>Sin asignar</td>
-                                <td>Sin asignar</td>
-                                <td>Sin asignar</td>
-                                <td>0%</td>
-                            </tr>';
-                    $taskCounter++;
+                    $t = $parseTask($task);
+                    // Sanitizar nombre y completar descripción si faltara
+                    $t['name'] = rtrim(trim((string)$t['name']), ",;:");
+                    if ((string)$t['description'] === '' && is_array($task)) {
+                        $assoc = array_keys($task) !== range(0, count($task) - 1);
+                        if ($assoc) {
+                            $ignoreKeys = ['id','name','title','description','desc','assigned','assigned_to','owner','start','start_date','fecha_inicio','end','due','due_date','fecha_fin','progress'];
+                            $extra = [];
+                            foreach ($task as $k => $v) {
+                                if (!in_array($k, $ignoreKeys, true) && is_string($v) && trim($v) !== '') {
+                                    $extra[] = trim($v);
+                                }
+                            }
+                            if (!empty($extra)) {
+                                $t['description'] = implode(', ', $extra);
+                            }
+                        }
+                    }
+                    $html .= '\n                            <tr>\n                                <td class="task-name">' . htmlspecialchars($t['name']) . '</td>\n                                <td class="task-description">' . htmlspecialchars($t['description']) . '</td>\n                                <td>' . htmlspecialchars($t['start']) . '</td>\n                                <td>' . htmlspecialchars($t['end']) . '</td>\n                                <td>' . htmlspecialchars($t['assigned']) . '</td>\n                                <td>' . htmlspecialchars($t['progress']) . '</td>\n                            </tr>';
                 }
             } else {
-                $taskText = is_string($data['tasks']) ? $data['tasks'] : strval($data['tasks']);
-                $html .= '
-                            <tr>
-                                <td class="task-name">Tarea 1</td>
-                                <td class="task-description">' . htmlspecialchars($taskText) . '</td>
-                                <td>Sin asignar</td>
-                                <td>Sin asignar</td>
-                                <td>Sin asignar</td>
-                                <td>0%</td>
-                            </tr>';
+                $t = $parseTask($data['tasks']);
+                $t['name'] = rtrim(trim((string)$t['name']), ",;:");
+                $html .= '\n                            <tr>\n                                <td class="task-name">' . htmlspecialchars($t['name']) . '</td>\n                                <td class="task-description">' . htmlspecialchars($t['description']) . '</td>\n                                <td>' . htmlspecialchars($t['start']) . '</td>\n                                <td>' . htmlspecialchars($t['end']) . '</td>\n                                <td>' . htmlspecialchars($t['assigned']) . '</td>\n                                <td>' . htmlspecialchars($t['progress']) . '</td>\n                            </tr>';
             }
 
             $html .= '

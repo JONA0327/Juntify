@@ -1,14 +1,14 @@
-/* Letter page with 2cm margins */
+/* Letter page with visible 2cm margins via body padding (more reliable in Dompdf) */
 @page {
     size: letter;
-    margin: 2cm;
+    margin: 0; /* margins handled by body padding */
 }
 
 .report-body {
     font-family: 'Inter', sans-serif;
     font-size: 14px;
     color: #1f2937;
-    padding: 0; /* managed by @page margins */
+    padding: 20mm; /* 2cm */
 }
 
 .report-header {
@@ -23,8 +23,9 @@
 
 /* space for fixed header/footer so body content doesn't overlap */
 body.report-body {
-    margin-top: 110px; /* header height approx */
-    margin-bottom: 60px; /* footer height approx */
+    /* Reservar espacio adicional para header/footer fijos dentro del padding */
+    padding-top: calc(20mm + 90px);
+    padding-bottom: calc(20mm + 50px);
 }
 
 .report-topbar {
@@ -152,8 +153,8 @@ body.report-body {
 }
 
 .tasks-table th {
-    background-color: #1e3a8a;
-    color: #ffffff;
+    background-color: #1e3a8a; /* sólido para compatibilidad */
+    color: #ffffff; /* texto claro */
     text-align: left;
 }
 
@@ -168,6 +169,9 @@ body.report-body {
 .tasks-table tbody tr:nth-child(even) {
     background-color: #f9fafb;
 }
+
+/* Asegurar que el texto de las celdas sea oscuro para buen contraste */
+.tasks-table td { color: #111827; }
 
 .tasks-table th:nth-child(1),
 .tasks-table td:nth-child(1) { width: 10%; }
