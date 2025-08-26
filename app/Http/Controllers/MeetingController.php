@@ -292,10 +292,9 @@ class MeetingController extends Controller
             $transcriptData = $transcriptResult['data'];
             $needsEncryption = $transcriptResult['needs_encryption'];
 
-            // Obtener la ruta del audio
+            // Normalizar y procesar la transcripción
+            $transcriptData = $this->extractMeetingDataFromJson($transcriptData);
             $audioPath = $this->getAudioPath($meeting);
-
-            // Procesar los datos de la transcripción
             $processedData = $this->processTranscriptData($transcriptData);
 
             return response()->json([
@@ -751,12 +750,15 @@ class MeetingController extends Controller
             'tasks' => $data['tasks'] ?? $data['tareas'] ?? $data['action_items'] ?? [],
             'transcription' => $data['transcription'] ?? $data['transcripcion'] ?? $data['text'] ?? 'Transcripción no disponible',
             'speakers' => $data['speakers'] ?? $data['participantes'] ?? [],
-            'segments' => $data['segments'] ?? $data['segmentos'] ?? []
+            'segments' => $data['segments'] ?? $data['segmentos'] ?? [],
         ];
     }
 
     private function processTranscriptData($data): array
     {
+        // Asegurar estructura uniforme sin importar el formato original
+        $data = $this->extractMeetingDataFromJson($data);
+
         $segments = $data['segments'] ?? [];
 
         $segments = array_map(function ($segment) {
