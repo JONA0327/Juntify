@@ -606,7 +606,7 @@
 
         <div class="flex justify-end gap-3 mt-6">
             <button class="btn-cancel" x-on:click="$dispatch('close-modal','download-meeting')">Cancelar</button>
-            <button id="confirm-download" class="btn-primary">Descargar</button>
+            <button class="confirm-download btn-primary">Descargar</button>
         </div>
     </div>
 </x-modal>
