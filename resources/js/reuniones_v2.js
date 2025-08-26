@@ -2798,7 +2798,7 @@ function createDownloadModal() {
 
                         <!-- Vista previa -->
                         <div class="pt-2">
-                            <button id="preview-pdf" class="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors">Vista previa</button>
+                            <button class="preview-pdf w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors">Vista previa</button>
                             <div id="preview-container" class="mt-3 hidden border border-slate-700 rounded overflow-hidden" style="height: 420px;">
                                 <iframe id="preview-frame" title="Vista previa PDF" class="w-full h-full bg-white"></iframe>
                             </div>
@@ -2810,8 +2810,7 @@ function createDownloadModal() {
                                     x-on:click="$dispatch('close-modal','download-meeting')">
                                 Cancelar
                             </button>
-                            <button id="confirm-download"
-                                    class="px-8 py-3 bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-semibold rounded-lg transition-colors">
+                            <button class="confirm-download px-8 py-3 bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-semibold rounded-lg transition-colors">
                                 <span class="flex items-center space-x-2">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -2857,8 +2856,8 @@ function createDownloadModal() {
 
 function initializeDownloadModal() {
     // Adjuntar listeners a todos los botones presentes (Blade + dinámico)
-    const confirmButtons = Array.from(document.querySelectorAll('#confirm-download'));
-    const previewButtons = Array.from(document.querySelectorAll('#preview-pdf'));
+    const confirmButtons = Array.from(document.querySelectorAll('.confirm-download'));
+    const previewButtons = Array.from(document.querySelectorAll('.preview-pdf'));
 
     // Vista previa
     previewButtons.forEach(previewBtn => {
