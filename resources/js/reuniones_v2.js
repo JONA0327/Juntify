@@ -2855,20 +2855,6 @@ function createDownloadModal() {
     }
 }
 
-// Devuelve el modal activo/visible que contiene las opciones de descarga
-function getActiveDownloadModal() {
-    const modals = Array.from(document.querySelectorAll('[name="download-meeting"]'));
-    if (!modals.length) return null;
-    // Elegir el modal que tenga más opciones y esté visible
-    const visible = modals.filter(m => {
-        const style = window.getComputedStyle(m);
-        const hiddenByClass = m.classList.contains('hidden');
-        return style.display !== 'none' && !hiddenByClass;
-    });
-    const pool = visible.length ? visible : modals;
-    return pool.sort((a,b) => b.querySelectorAll('.download-option').length - a.querySelectorAll('.download-option').length)[0];
-}
-
 function initializeDownloadModal() {
     // Adjuntar listeners a todos los botones presentes (Blade + dinámico)
     const confirmButtons = Array.from(document.querySelectorAll('#confirm-download'));
@@ -2882,7 +2868,7 @@ function initializeDownloadModal() {
             // Evitar múltiples solicitudes si ya está cargando
             if (previewBtn.disabled) return;
 
-            const modal = previewBtn.closest('[name="download-meeting"]') || getActiveDownloadModal();
+            const modal = previewBtn.closest('[name="download-meeting"]');
             const meetingId = modal?.dataset.meetingId;
             const meetingDataStr = modal?.dataset.meetingData;
             const previewContainer = (modal && modal.querySelector('#preview-container')) || document.getElementById('preview-container');
@@ -2892,11 +2878,9 @@ function initializeDownloadModal() {
                 return;
             }
             const meetingData = JSON.parse(meetingDataStr);
-            let selectedItems = Array.from(modal.querySelectorAll('.download-option:checked')).map(cb => cb.value);
-            if (selectedItems.length === 0) {
-                // Fallback global por si el modal visible está en otra capa
-                selectedItems = Array.from(document.querySelectorAll('[name="download-meeting"] .download-option:checked')).map(cb => cb.value);
-            }
+            const selectedItems = Array.from(
+                document.querySelectorAll('.download-modal .download-option:checked')
+            ).map(cb => cb.value);
             if (selectedItems.length === 0) {
                 alert('Selecciona al menos una sección para previsualizar');
                 return;
@@ -2957,7 +2941,7 @@ function initializeDownloadModal() {
         if (!confirm || confirm.dataset.listenerAdded) return;
         confirm.dataset.listenerAdded = 'true';
         confirm.addEventListener('click', async () => {
-            const modal = confirm.closest('[name="download-meeting"]') || getActiveDownloadModal();
+            const modal = confirm.closest('[name="download-meeting"]');
             const meetingId = modal?.dataset.meetingId;
             const meetingDataStr = modal?.dataset.meetingData;
             let originalContent = null;
@@ -2974,10 +2958,9 @@ function initializeDownloadModal() {
 
             try {
                 const meetingData = JSON.parse(meetingDataStr);
-                let selectedItems = Array.from(modal.querySelectorAll('.download-option:checked')).map(cb => cb.value);
-                if (selectedItems.length === 0) {
-                    selectedItems = Array.from(document.querySelectorAll('[name="download-meeting"] .download-option:checked')).map(cb => cb.value);
-                }
+                const selectedItems = Array.from(
+                    document.querySelectorAll('.download-modal .download-option:checked')
+                ).map(cb => cb.value);
 
                 if (selectedItems.length === 0) {
                     alert('Por favor selecciona al menos una sección para descargar');
