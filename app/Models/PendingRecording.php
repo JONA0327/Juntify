@@ -17,9 +17,14 @@ class PendingRecording extends Model
         'meeting_name',
         'audio_drive_id',
         'audio_download_url',
+        'duration',
         'status',
         'error_message',
         'backup_path',
+    ];
+
+    protected $casts = [
+        'duration' => 'integer',
     ];
 
     protected $attributes = [

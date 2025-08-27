@@ -19,12 +19,24 @@ class ProcessPendingRecordingsJob implements ShouldQueue
 
     public function handle(): void
     {
+        $maxDuration = 2 * 60 * 60; // 2 hours in seconds
+
         PendingRecording::where('status', PendingRecording::STATUS_PENDING)
-            ->each(function (PendingRecording $recording) {
+            ->each(function (PendingRecording $recording) use ($maxDuration) {
                 $recording->update([
                     'status' => PendingRecording::STATUS_PROCESSING,
                     'error_message' => null,
                 ]);
+
+                if ($recording->duration !== null && $recording->duration > $maxDuration) {
+                    $recording->update([
+                        'status' => PendingRecording::STATUS_FAILED,
+                        'error_message' => 'Duration exceeds 2 hours',
+                    ]);
+
+                    $this->updateNotification($recording, 'Duración excedida', 'failed');
+                    return;
+                }
 
                 try {
                     // Aquí iría la lógica real de procesamiento de la grabación
