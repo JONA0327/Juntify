@@ -299,6 +299,9 @@ class MeetingController extends Controller
             $transcriptData = $this->extractMeetingDataFromJson($transcriptData);
             $audioPath = $this->getAudioPath($meeting);
             $processedData = $this->processTranscriptData($transcriptData);
+            unset($processedData['tasks']);
+
+            $tasks = TaskLaravel::where('meeting_id', $meeting->id)->get();
 
             return response()->json([
                 'success' => true,
@@ -309,8 +312,8 @@ class MeetingController extends Controller
                     'audio_path' => $audioPath,
                     'summary' => $processedData['summary'],
                     'key_points' => $processedData['key_points'],
-                    'tasks' => $processedData['tasks'],
                     'transcription' => $processedData['transcription'],
+                    'tasks' => $tasks,
                     'speakers' => $processedData['speakers'] ?? [],
                     'segments' => $processedData['segments'] ?? [],
                     // Carpeta real desde Drive
