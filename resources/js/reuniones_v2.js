@@ -2307,7 +2307,12 @@ async function confirmDeleteMeeting(meetingId) {
         });
 
         if (!response.ok) {
-            throw new Error('Error al eliminar la reunión');
+            try {
+                const data = await response.json();
+                throw new Error(data.message || 'Error al eliminar la reunión');
+            } catch (e) {
+                throw new Error('Error al eliminar la reunión');
+            }
         }
 
         const data = await response.json();
@@ -2323,7 +2328,7 @@ async function confirmDeleteMeeting(meetingId) {
 
     } catch (error) {
         console.error('Error deleting meeting:', error);
-        showNotification('Error al eliminar la reunión: ' + error.message, 'error');
+        showNotification(error.message, 'error');
     }
 }
 
