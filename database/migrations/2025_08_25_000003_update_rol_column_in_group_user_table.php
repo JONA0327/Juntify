@@ -7,7 +7,7 @@ return new class extends Migration
 {
     public function up()
     {
-        DB::statement("ALTER TABLE group_user MODIFY rol ENUM('meeting_viewer','full_meeting_access') DEFAULT 'meeting_viewer'");
+        DB::statement("ALTER TABLE group_user MODIFY rol ENUM('invitado','colaborador','administrador') DEFAULT 'invitado'");
     }
 
     public function down()

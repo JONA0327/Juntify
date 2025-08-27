@@ -529,7 +529,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     openInviteModal(group) {
         this.selectedGroup = group;
         this.inviteEmail = '';
-        this.inviteRole = 'meeting_viewer';
+        this.inviteRole = 'invitado';
         this.userExists = null;
         this.userExistsMessage = '';
         this.showInviteModal = true;

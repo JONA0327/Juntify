@@ -17,8 +17,9 @@
                     @csrf
                     @method('PATCH')
                     <select name="rol" onchange="this.form.submit()" class="border rounded p-1">
-                        <option value="meeting_viewer" {{ $user->pivot->rol === 'meeting_viewer' ? 'selected' : '' }}>meeting_viewer</option>
-                        <option value="full_meeting_access" {{ $user->pivot->rol === 'full_meeting_access' ? 'selected' : '' }}>full_meeting_access</option>
+                        <option value="invitado" {{ $user->pivot->rol === 'invitado' ? 'selected' : '' }}>Invitado</option>
+                        <option value="colaborador" {{ $user->pivot->rol === 'colaborador' ? 'selected' : '' }}>Colaborador</option>
+                        <option value="administrador" {{ $user->pivot->rol === 'administrador' ? 'selected' : '' }}>Administrador</option>
                     </select>
                 </form>
             </li>

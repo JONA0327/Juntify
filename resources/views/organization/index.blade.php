@@ -394,7 +394,7 @@
                             <select x-model="inviteRole" class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-yellow-400/50">
                                 <option value="invitado">Invitado</option>
                                 <option value="colaborador">Colaborador</option>
-                                <option value="admin">Administrador</option>
+                                <option value="administrador">Administrador</option>
                             </select>
                         </div>
 

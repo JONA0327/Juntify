@@ -28,9 +28,9 @@ it('refreshMemberCount counts unique users across groups and updates num_miembro
     $user1 = User::factory()->create();
     $user2 = User::factory()->create();
 
-    $group1->users()->attach($user1->id, ['rol' => 'meeting_viewer']);
-    $group1->users()->attach($user2->id, ['rol' => 'meeting_viewer']);
-    $group2->users()->attach($user1->id, ['rol' => 'meeting_viewer']);
+    $group1->users()->attach($user1->id, ['rol' => 'invitado']);
+    $group1->users()->attach($user2->id, ['rol' => 'invitado']);
+    $group2->users()->attach($user1->id, ['rol' => 'invitado']);
 
     $organization->refreshMemberCount();
 
