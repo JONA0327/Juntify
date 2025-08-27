@@ -7,6 +7,9 @@ use App\Models\MeetingShare;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 use App\Models\Container;
+use App\Models\Meeting;
+use App\Models\GoogleToken;
+use App\Services\GoogleDriveService;
 
 uses(RefreshDatabase::class);
 
@@ -142,5 +145,77 @@ test('/api/meetings excludes meetings inside containers', function () {
             'id' => $meetingWith->id,
             'meeting_name' => 'Contained Meeting',
         ]);
+});
+
+test('/api/meetings returns is_legacy flag', function () {
+    $user = User::factory()->create(['username' => 'user']);
+
+    GoogleToken::create([
+        'username' => $user->username,
+        'access_token' => 'test-token',
+        'refresh_token' => 'refresh',
+        'expiry_date' => now()->addDay(),
+    ]);
+
+    app()->instance(GoogleDriveService::class, new class {
+        public function setAccessToken($token) {}
+        public function getClient() { return new class { public function isAccessTokenExpired(){ return false; } }; }
+        public function searchFiles($name, $folderId) { return []; }
+        public function getFileInfo($fileId) { return new class {
+            public function getParents(){ return []; }
+            public function getName(){ return 'Parent'; }
+        }; }
+        public function downloadFileContent($fileId) { return ''; }
+    });
+
+    $legacy = TranscriptionLaravel::factory()->create([
+        'username' => $user->username,
+        'meeting_name' => 'Legacy',
+        'audio_drive_id' => null,
+        'transcript_drive_id' => null,
+    ]);
+
+    $modern = Meeting::factory()->create([
+        'username' => $user->username,
+        'recordings_folder_id' => null,
+    ]);
+
+    $response = $this->actingAs($user)->getJson('/api/meetings');
+
+    $response->assertOk()
+        ->assertJsonFragment(['id' => $legacy->id, 'is_legacy' => true])
+        ->assertJsonFragment(['id' => $modern->id, 'is_legacy' => false]);
+});
+
+test('show meeting returns is_legacy flag', function () {
+    $user = User::factory()->create(['username' => 'user']);
+
+    GoogleToken::create([
+        'username' => $user->username,
+        'access_token' => 'test-token',
+        'refresh_token' => 'refresh',
+        'expiry_date' => now()->addDay(),
+    ]);
+
+    app()->instance(GoogleDriveService::class, new class {
+        public function setAccessToken($token) {}
+        public function getClient() { return new class { public function isAccessTokenExpired(){ return false; } }; }
+        public function searchFiles($name, $folderId) { return []; }
+        public function getFileInfo($fileId) { return new class {
+            public function getParents(){ return []; }
+            public function getName(){ return 'Parent'; }
+        }; }
+        public function downloadFileContent($fileId) { return ''; }
+    });
+
+    $meeting = Meeting::factory()->create([
+        'username' => $user->username,
+        'recordings_folder_id' => null,
+    ]);
+
+    $response = $this->actingAs($user)->getJson('/api/meetings/' . $meeting->id);
+
+    $response->assertOk()
+        ->assertJsonFragment(['id' => $meeting->id, 'is_legacy' => false]);
 });
 
