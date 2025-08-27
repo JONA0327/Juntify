@@ -55,7 +55,7 @@
                 </span>
             </label>
         </div>
-        <p class="text-xs text-gray-500 mt-4 text-center">Las grabaciones para análisis inmediato deben ser menores a 100 MB o 10 min.</p>
+        <p class="text-xs text-gray-500 mt-4 text-center">Puedes grabar hasta 2 horas continuas. Se notificará cuando queden 5 min para el límite.</p>
     </div>
 </div>
 
