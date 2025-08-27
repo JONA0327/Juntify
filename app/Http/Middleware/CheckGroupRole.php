@@ -24,7 +24,9 @@ class CheckGroupRole
             })
             ->value('rol');
 
+
         if ($role !== 'administrador') {
+
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
