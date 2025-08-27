@@ -228,7 +228,7 @@ document.getElementById('taskForm').addEventListener('submit', function(e) {
             closeTaskModal();
             if (window.loadTasksForMeeting && window.lastSelectedMeetingId) {
                 // refresh sidebar list if a meeting is selected
-                window.loadTasksForMeeting(window.lastSelectedMeetingId);
+                window.loadTasksForMeeting(window.lastSelectedMeetingId, window.lastSelectedMeetingSource);
             } else {
                 location.reload();
             }
