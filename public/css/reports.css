@@ -1,14 +1,14 @@
-/* Letter page with visible 2cm margins via body padding (more reliable in Dompdf) */
+/* Letter page, no default margins; we manage spacing with padding and fixed header/footer heights */
 @page {
     size: letter;
-    margin: 0; /* margins handled by body padding */
+    margin: 0;
 }
 
 .report-body {
     font-family: 'Inter', sans-serif;
     font-size: 14px;
     color: #1f2937;
-    padding: 20mm; /* 2cm */
+    padding: 20mm; /* base margins on all sides */
 }
 
 .report-header {
@@ -16,16 +16,16 @@
     top: 0;
     left: 0;
     right: 0;
+    height: 25mm; /* lowered to give more room to first page content */
     border-bottom: 0;
     background: linear-gradient(90deg, #2563eb 0%, #1e3a8a 100%);
     color: #ffffff;
 }
 
-/* space for fixed header/footer so body content doesn't overlap */
+/* Space for fixed header/footer so body content doesn't overlap; use mm to avoid calc() issues */
 body.report-body {
-    /* Reservar espacio adicional para header/footer fijos dentro del padding */
-    padding-top: calc(20mm + 90px);
-    padding-bottom: calc(20mm + 50px);
+    padding-top: 45mm;  /* 20mm base + 25mm header */
+    padding-bottom: 40mm; /* 20mm base + ~20mm footer */
 }
 
 .report-topbar {
@@ -190,9 +190,14 @@ body.report-body {
     bottom: 0;
     left: 0;
     right: 0;
+    height: 20mm; /* predictable footer height */
     text-align: center;
     font-size: 0.8rem;
     background-color: #1e3a8a;
     color: #ffffff;
     padding: 0.5rem 1rem;
 }
+
+/* Allow sections to naturally flow across pages; avoid forced breaks */
+.report-section { page-break-inside: auto; }
+.summary-section, .transcription-section, .key-points-section, .observations-section { page-break-before: auto; }

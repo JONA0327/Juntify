@@ -759,12 +759,17 @@ async function analyzeNow() {
         // Guardar el blob en IndexedDB y almacenar la clave en sessionStorage
         const key = await saveAudioBlob(pendingAudioBlob);
         sessionStorage.setItem('uploadedAudioKey', key);
-
-        // Respaldo: conversión a base64 deshabilitada
-        // const base64 = await blobToBase64(pendingAudioBlob);
-        // sessionStorage.setItem('recordingBlob', base64);
-
-        sessionStorage.removeItem('recordingBlob');
+        // Respaldo: guardar base64 si el blob no es muy grande (<= 50MB)
+        try {
+            if (pendingAudioBlob.size <= 50 * 1024 * 1024) {
+                const base64 = await blobToBase64(pendingAudioBlob);
+                sessionStorage.setItem('recordingBlob', base64);
+            } else {
+                sessionStorage.removeItem('recordingBlob');
+            }
+        } catch (_) {
+            // Si falla respaldo, continuar con la clave de IDB
+        }
         sessionStorage.removeItem('recordingSegments');
         sessionStorage.removeItem('recordingMetadata');
     } catch (e) {
@@ -998,6 +1003,18 @@ async function processAudioFile() {
 
         // Guardar la clave en sessionStorage para que audio-processing.js la pueda usar
         sessionStorage.setItem('uploadedAudioKey', audioKey);
+
+        // Respaldo: guardar una copia base64 si el archivo no es demasiado grande (<= 50MB)
+        try {
+            if (uploadedFile && typeof uploadedFile.size === 'number' && uploadedFile.size <= 50 * 1024 * 1024) {
+                const base64 = await blobToBase64(uploadedFile);
+                sessionStorage.setItem('recordingBlob', base64);
+            } else {
+                sessionStorage.removeItem('recordingBlob');
+            }
+        } catch (e) {
+            console.warn('No se pudo crear respaldo base64 del audio subido:', e);
+        }
 
         if (progressContainer) {
             progressFill.style.width = '90%';

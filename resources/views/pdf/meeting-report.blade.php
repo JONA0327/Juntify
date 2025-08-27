@@ -16,6 +16,9 @@
             <h1 class="report-brand">JUNTIFY</h1>
             <div class="report-generated">Generado el: {{ ($reportGeneratedAt ?? now())->locale('es')->translatedFormat('d MMM yyyy') }}</div>
         </div>
+    </header>
+
+    <main class="report-content" style="min-height: 100%;">
         <div class="meeting-details">
             <div class="meeting-meta">
                 @isset($meetingName)
@@ -29,9 +32,6 @@
                 @endisset
             </div>
         </div>
-    </header>
-
-    <main class="report-content">
     @isset($summary)
         <section class="report-section summary-section">
             <h2>Resumen</h2>

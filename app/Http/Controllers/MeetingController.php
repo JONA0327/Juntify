@@ -332,17 +332,16 @@ class MeetingController extends Controller
                         ->orderBy('transcriptions.id')
                         ->get(['transcriptions.time', 'transcriptions.speaker', 'transcriptions.text', 'transcriptions.display_speaker']);
 
-                    $segments = $segmentsData->map(function ($t) {
-                        return [
-                            'time' => $t->time,
-                            'speaker' => $t->speaker,
-                            'text' => $t->text,
-                            'display_speaker' => $t->display_speaker,
-                        ];
-                    })->toArray();
+                    // Construir segmentos con tiempos de inicio/fin a partir del campo 'time' (formato mm:ss o hh:mm:ss)
+                    $segments = $this->buildLegacySegmentsFromDb($segmentsData);
 
                     $transcriptionText = $segmentsData->pluck('text')->implode(' ');
-                    $speakers = collect($segments)->pluck('display_speaker')->filter()->unique()->values()->toArray();
+                    $speakers = collect($segments)
+                        ->map(function ($s) { return $s['display_speaker'] ?: $s['speaker']; })
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->toArray();
 
                     $tasks = TaskLaravel::where('meeting_id', $legacyMeeting->id)
                         ->where('username', $user->username)
@@ -370,6 +369,7 @@ class MeetingController extends Controller
                             'transcription' => $transcriptionText,
                             'tasks' => $tasks,
                             'speakers' => $speakers,
+                            // Incluir segmentos con start/end solo para el caso legacy sin .ju
                             'segments' => $segments,
                             'audio_folder' => $this->getFolderName($legacyMeeting->audio_drive_id),
                             'transcript_folder' => 'Base de datos',
@@ -450,25 +450,56 @@ class MeetingController extends Controller
               ->where('username', $user->username)
               ->firstOrFail();
 
-            $audioFile = null;
-            if ($meeting->recordings_folder_id) {
-                $files = $this->googleDriveService->searchFiles($meeting->title, $meeting->recordings_folder_id);
-                $audioFile = $files[0] ?? null;
-            }
-            if (!$audioFile) {
-                $files = $this->googleDriveService->searchFiles($meeting->title, null);
-                $audioFile = $files[0] ?? null;
+            // Buscar audio dentro de la carpeta indicada por recordings_folder_id, priorizando coincidencia por ID de reunión
+            $audioPath = null;
+            $audioDriveId = null;
+            if (!empty($meeting->recordings_folder_id)) {
+                $audioData = $this->googleDriveService->findAudioInFolder(
+                    $meeting->recordings_folder_id,
+                    $meeting->title,
+                    (string) $meeting->id
+                );
+
+                if ($audioData) {
+                    $tempMeeting = (object) [
+                        'id' => $meeting->id,
+                        'meeting_name' => $meeting->title,
+                        'audio_drive_id' => $audioData['fileId'] ?? null,
+                        // Pasar la URL directa si existe para evitar descargas innecesarias
+                        'audio_download_url' => $audioData['downloadUrl'] ?? null,
+                    ];
+                    $audioDriveId = $audioData['fileId'] ?? null;
+                    $audioPath = $this->getAudioPath($tempMeeting);
+                    // Si es una ruta local del storage público, convertirla a URL pública
+                    if ($audioPath && !str_starts_with($audioPath, 'http')) {
+                        $audioPath = $this->publicUrlFromStoragePath($audioPath);
+                    }
+                }
             }
 
-            $audioPath = null;
-            if ($audioFile) {
-                $tempMeeting = (object) [
-                    'id' => $meeting->id,
-                    'meeting_name' => $meeting->title,
-                    'audio_drive_id' => $audioFile->getId(),
-                    'audio_download_url' => null,
-                ];
-                $audioPath = $this->getAudioPath($tempMeeting);
+            // Fallback: buscar por título en la carpeta y luego globalmente si no se encontró por ID
+            if ($audioPath === null) {
+                $audioFile = null;
+                if (!empty($meeting->recordings_folder_id)) {
+                    $files = $this->googleDriveService->searchFiles($meeting->title, $meeting->recordings_folder_id);
+                    $audioFile = $files[0] ?? null;
+                }
+                if (!$audioFile) {
+                    $files = $this->googleDriveService->searchFiles($meeting->title, null);
+                    $audioFile = $files[0] ?? null;
+                }
+
+                if ($audioFile) {
+                    $tempMeeting = (object) [
+                        'id' => $meeting->id,
+                        'meeting_name' => $meeting->title,
+                        'audio_drive_id' => $audioFile->getId(),
+                        'audio_download_url' => null,
+                    ];
+                    $audioDriveId = $audioFile->getId();
+                    // En lugar de exponer una ruta local/Drive directa, usar nuestro stream endpoint
+                    $audioPath = route('api.meetings.audio', ['meeting' => $meeting->id]);
+                }
             }
 
             $segments = $meeting->transcriptions->map(function ($t) {
@@ -489,7 +520,8 @@ class MeetingController extends Controller
                     'meeting_name' => $meeting->title,
                     'is_legacy' => false,
                     'created_at' => ($meeting->date ?? $meeting->created_at)->format('d/m/Y H:i'),
-                    'audio_path' => $audioPath,
+                    'audio_path' => $audioPath ?? route('api.meetings.audio', ['meeting' => $meeting->id]),
+                    // 'audio_drive_id' opcionalmente podría incluirse si el frontend lo requiere
                     'summary' => $meeting->summary,
                     'key_points' => $meeting->keyPoints->pluck('point_text'),
                     'transcription' => $transcriptionText,
@@ -921,6 +953,77 @@ class MeetingController extends Controller
     }
 
     /**
+     * Construye segmentos para reuniones legacy (sin .ju) a partir de filas de DB con 'time'.
+     * - Calcula 'start' en segundos desde time (mm:ss u hh:mm:ss)
+     * - Estima 'end' como el inicio del siguiente segmento; el último queda sin end (usa start+10s fallback)
+     */
+    private function buildLegacySegmentsFromDb($segmentsData): array
+    {
+        // Convertir a arreglo con tiempos en segundos
+        $raw = [];
+        foreach ($segmentsData as $row) {
+            $startSec = $this->parseTimestampToSeconds($row->time);
+            $raw[] = [
+                'time' => $row->time,
+                'start' => $startSec,
+                'end' => null, // se define luego
+                'speaker' => $row->speaker,
+                'text' => $row->text,
+                'display_speaker' => $row->display_speaker,
+            ];
+        }
+
+        // Asignar end como el start del siguiente segmento
+        for ($i = 0; $i < count($raw); $i++) {
+            if ($i + 1 < count($raw)) {
+                $raw[$i]['end'] = $raw[$i + 1]['start'];
+            } else {
+                // Fallback: 10s después del último start
+                $raw[$i]['end'] = $raw[$i]['start'] + 10;
+            }
+        }
+
+        return $raw;
+    }
+
+    /**
+     * Parsea una marca de tiempo tipo 'mm:ss' o 'hh:mm:ss' a segundos.
+     */
+    private function parseTimestampToSeconds(?string $time): int
+    {
+        if (!$time) return 0;
+        $parts = explode(':', $time);
+        $parts = array_map('intval', $parts);
+        if (count($parts) === 3) {
+            [$h, $m, $s] = $parts;
+            return $h * 3600 + $m * 60 + $s;
+        }
+        if (count($parts) === 2) {
+            [$m, $s] = $parts;
+            return $m * 60 + $s;
+        }
+        // Si no coincide, intentar castear entero
+        return (int) $time;
+    }
+
+    /**
+     * Convierte una ruta absoluta en storage/app/public a una URL pública accesible
+     */
+    private function publicUrlFromStoragePath(string $absolutePath): string
+    {
+        // Esperamos un path como: storage_path('app/public/temp/...')
+        $publicRoot = storage_path('app/public/');
+        if (str_starts_with($absolutePath, $publicRoot)) {
+            $relative = substr($absolutePath, strlen($publicRoot));
+            // Usar helper asset() para mapear a /storage/<relative>
+            // Requiere que el symlink public/storage exista (php artisan storage:link)
+            return asset('storage/' . str_replace('\\', '/', $relative));
+        }
+        // Si no coincide, devolver original (puede ser ya URL)
+        return $absolutePath;
+    }
+
+    /**
      * Detecta la extensión del archivo de audio basado en el nombre y MIME type
      */
     private function detectAudioExtension($fileName, $mimeType): string
@@ -1179,39 +1282,89 @@ class MeetingController extends Controller
             $user = Auth::user();
             $this->setGoogleDriveToken($user);
 
-            $meetingModel = TranscriptionLaravel::where('id', $meeting)
-                ->where('username', $user->username)
-                ->firstOrFail();
+            // Intentar flujo legacy primero
+            try {
+                $meetingModel = TranscriptionLaravel::where('id', $meeting)
+                    ->where('username', $user->username)
+                    ->firstOrFail();
 
-            // Generar el nombre base del archivo temporal
-            $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meetingModel->meeting_name);
-            $pattern = storage_path('app/public/temp/' . $sanitizedName . '_' . $meetingModel->id . '.*');
-            $existingFiles = glob($pattern);
+                $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meetingModel->meeting_name);
+                $pattern = storage_path('app/public/temp/' . $sanitizedName . '_' . $meetingModel->id . '.*');
+                $existingFiles = glob($pattern);
 
-            if (!empty($existingFiles)) {
-                $audioPath = $existingFiles[0];
-            } else {
-                $audioPath = $this->getAudioPath($meetingModel);
+                if (!empty($existingFiles)) {
+                    $audioPath = $existingFiles[0];
+                } else {
+                    $audioPath = $this->getAudioPath($meetingModel);
+                    if (!$audioPath) {
+                        return response()->json(['error' => 'Audio no disponible'], 404);
+                    }
+                    if (str_starts_with($audioPath, 'http')) {
+                        return redirect()->away($audioPath);
+                    }
+                }
 
-                if (!$audioPath) {
+                $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
+                return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
+            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+                // Flujo moderno (Meeting en BD)
+                $modern = Meeting::where('id', $meeting)
+                    ->where('username', $user->username)
+                    ->firstOrFail();
+
+                // Reutilizar si ya existe archivo temporal
+                $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $modern->title);
+                $pattern = storage_path('app/public/temp/' . $sanitizedName . '_' . $modern->id . '.*');
+                $existingFiles = glob($pattern);
+
+                if (!empty($existingFiles)) {
+                    $audioPath = $existingFiles[0];
+                    $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
+                    return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
+                }
+
+                $audioData = null;
+                if (!empty($modern->recordings_folder_id)) {
+                    $audioData = $this->googleDriveService->findAudioInFolder(
+                        $modern->recordings_folder_id,
+                        $modern->title,
+                        (string) $modern->id
+                    );
+                }
+                if (!$audioData) {
+                    $files = $this->googleDriveService->searchFiles($modern->title, $modern->recordings_folder_id);
+                    $file = $files[0] ?? null;
+                    if (!$file) {
+                        $files = $this->googleDriveService->searchFiles($modern->title, null);
+                        $file = $files[0] ?? null;
+                    }
+                    if ($file) {
+                        $audioData = [ 'fileId' => $file->getId(), 'downloadUrl' => null ];
+                    }
+                }
+
+                if (!$audioData) {
                     return response()->json(['error' => 'Audio no disponible'], 404);
                 }
 
+                $tempMeeting = (object) [
+                    'id' => $modern->id,
+                    'meeting_name' => $modern->title,
+                    'audio_drive_id' => $audioData['fileId'] ?? null,
+                    'audio_download_url' => $audioData['downloadUrl'] ?? null,
+                ];
+                $audioPath = $this->getAudioPath($tempMeeting);
+                if (!$audioPath) {
+                    return response()->json(['error' => 'Audio no disponible'], 404);
+                }
                 if (str_starts_with($audioPath, 'http')) {
                     return redirect()->away($audioPath);
                 }
+                $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
+                return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
             }
-
-            $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
-
-            return response()->file($audioPath, [
-                'Content-Type' => $mimeType,
-            ]);
         } catch (\Exception $e) {
-            Log::error('Error streaming audio file', [
-                'meeting_id' => $meeting,
-                'error' => $e->getMessage(),
-            ]);
+            Log::error('Error streaming audio file', [ 'meeting_id' => $meeting, 'error' => $e->getMessage() ]);
             return response()->json(['error' => 'Error al obtener audio'], 500);
         }
     }
@@ -2030,38 +2183,38 @@ class MeetingController extends Controller
             if (preg_match('/^\d{4}-\d{2}-\d{2}$/', rtrim($s, " ,;:."))) return false; // fecha
             if (preg_match('/^(task[_-]?\d+|tarea[_-]?\d+)$/i', $s)) return false; // id típico
             if (preg_match('/^(100|[0-9]{1,2})%$/', $s)) return false; // porcentaje
-            
+
             // Patrones que sugieren que es un nombre de persona (mejorado)
             $personPatterns = [
                 '/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$/', // Nombre Apellido
                 '/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ]\.$/', // Nombre A.
                 '/^[A-Z]\.\s*[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$/', // A. Apellido
             ];
-            
+
             foreach ($personPatterns as $pattern) {
                 if (preg_match($pattern, $s)) {
                     return true;
                 }
             }
-            
+
             // Patrones que sugieren que NO es un nombre (es descripción de tarea)
             $taskPatterns = [
                 '/\b(revisar|analizar|preparar|coordinar|planificar|desarrollar|implementar|ejecutar|completar)\b/i',
                 '/\b(documento|archivo|reporte|presentación|presupuesto|proyecto|evento|reunión)\b/i',
                 '/\b(todos|todas|con|para|de|del|la|el|los|las)\b/i',
             ];
-            
+
             foreach ($taskPatterns as $pattern) {
                 if (preg_match($pattern, $s)) {
                     return false;
                 }
             }
-            
+
             // Si tiene al menos una letra y posiblemente sea un nombre simple
             if (preg_match('/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}$/u', $s)) {
                 return true;
             }
-            
+
             return false;
         };
 
@@ -2081,7 +2234,7 @@ class MeetingController extends Controller
             $idToken = $parts[0] ?? null;
             $baseId = $idToken !== null ? rtrim(trim($idToken), ",;:") : '';
             $result['name'] = $baseId !== '' ? $baseId : 'Sin nombre';
-            
+
             // Buscar si alguno de los tokens restantes parece ser un nombre de persona
             $foundPersonIdx = -1;
             for ($i = 1; $i < $n; $i++) {
@@ -2091,7 +2244,7 @@ class MeetingController extends Controller
                     break;
                 }
             }
-            
+
             // Construir descripción excluyendo el nombre de la persona si se encontró
             $descTokens = [];
             for ($i = 1; $i < $n; $i++) {

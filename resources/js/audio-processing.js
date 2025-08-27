@@ -1,4 +1,17 @@
-import { loadAudioBlob } from './idb.js';
+import { loadAudioBlob, clearAllAudio } from './idb.js';
+let __lastNotification = { msg: null, type: null, ts: 0 };
+
+// Retry helper for IndexedDB loads to avoid transient race conditions on navigation
+async function loadAudioFromIdbWithRetries(key, tries = 5, delayMs = 200) {
+    for (let i = 0; i < tries; i++) {
+        try {
+            const blob = await loadAudioBlob(key);
+            if (blob) return blob;
+        } catch (_) {}
+        await new Promise(r => setTimeout(r, delayMs));
+    }
+    return null;
+}
 
 // ===== VARIABLES GLOBALES =====
 let currentStep = 1;
@@ -1268,7 +1281,14 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
 
         setProgress(100, 'Guardado completado');
         addMessage('Resultados almacenados con éxito');
-        setTimeout(() => {
+        setTimeout(async () => {
+            // Cleanup local temporary audio after successful save
+            try {
+                await clearAllAudio();
+            } catch (_) {}
+            try { sessionStorage.removeItem('uploadedAudioKey'); } catch (_) {}
+            try { sessionStorage.removeItem('recordingBlob'); } catch (_) {}
+            try { localStorage.removeItem('pendingAudioData'); } catch (_) {}
             showCompletion({
                 drivePath: finalDrivePath,
                 audioDuration: finalAudioDuration,
@@ -1348,6 +1368,16 @@ function createNewMeeting() {
 // ===== FUNCIONES AUXILIARES =====
 
 function showNotification(message, type = 'info') {
+    // Deduplicate frequent identical notifications and avoid overlaps
+    const now = Date.now();
+    if (__lastNotification.msg === message && __lastNotification.type === type && (now - __lastNotification.ts) < 1000) {
+        return;
+    }
+    __lastNotification = { msg: message, type, ts: now };
+
+    // Remove existing notifications to prevent stacking overlays
+    document.querySelectorAll('.notification').forEach(n => n.remove());
+
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
 
@@ -1536,7 +1566,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const uploadedKey = sessionStorage.getItem('uploadedAudioKey');
     if (uploadedKey) {
         try {
-            audioData = await loadAudioBlob(uploadedKey);
+            audioData = await loadAudioFromIdbWithRetries(uploadedKey, 5, 250);
             if (!audioData) {
                 showNotification('No se encontró el audio guardado. Intentando respaldo...', 'warning');
             }
