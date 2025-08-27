@@ -333,7 +333,9 @@ class MeetingController extends Controller
                 $processedData = $this->processTranscriptData($transcriptData);
                 unset($processedData['tasks']);
 
-                $tasks = TaskLaravel::where('meeting_id', $legacyMeeting->id)->get();
+                $tasks = TaskLaravel::where('meeting_id', $legacyMeeting->id)
+                    ->where('username', $user->username)
+                    ->get();
 
                 return response()->json([
                     'success' => true,
@@ -359,9 +361,19 @@ class MeetingController extends Controller
 
             // Reunión moderna en base de datos
             $meeting = Meeting::with([
-                'tasks',
-                'keyPoints' => function ($q) { $q->ordered(); },
-                'transcriptions' => function ($q) { $q->byTime(); },
+                'tasks' => function ($q) use ($user) {
+                    $q->where('username', $user->username);
+                },
+                'keyPoints' => function ($q) use ($user) {
+                    $q->whereHas('meeting', function ($mq) use ($user) {
+                        $mq->where('username', $user->username);
+                    })->ordered();
+                },
+                'transcriptions' => function ($q) use ($user) {
+                    $q->whereHas('meeting', function ($mq) use ($user) {
+                        $mq->where('username', $user->username);
+                    })->byTime();
+                },
             ])->where('id', $id)
               ->where('username', $user->username)
               ->firstOrFail();
@@ -1037,22 +1049,27 @@ class MeetingController extends Controller
 
         if (in_array('key_points', $sections)) {
             $keyPoints = DB::table('key_points')
-                ->where('meeting_id', $meeting->id)
-                ->orderBy('order_num')
-                ->pluck('point_text')
+                ->join('transcriptions_laravel', 'key_points.meeting_id', '=', 'transcriptions_laravel.id')
+                ->where('key_points.meeting_id', $meeting->id)
+                ->where('transcriptions_laravel.username', $user->username)
+                ->orderBy('key_points.order_num')
+                ->pluck('key_points.point_text')
                 ->toArray();
         }
 
         if (in_array('transcription', $sections)) {
             $transcription = DB::table('transcriptions')
-                ->where('meeting_id', $meeting->id)
-                ->orderBy('id')
-                ->pluck('text')
+                ->join('transcriptions_laravel', 'transcriptions.meeting_id', '=', 'transcriptions_laravel.id')
+                ->where('transcriptions.meeting_id', $meeting->id)
+                ->where('transcriptions_laravel.username', $user->username)
+                ->orderBy('transcriptions.id')
+                ->pluck('transcriptions.text')
                 ->implode("\n");
         }
 
         if (in_array('tasks', $sections)) {
             $tasks = TaskLaravel::where('meeting_id', $meeting->id)
+                ->where('username', $user->username)
                 ->get(['tarea', 'descripcion', 'fecha_limite', 'progreso'])
                 ->map(function ($task) {
                     return [
@@ -1471,7 +1488,9 @@ class MeetingController extends Controller
             $audioData = $processInfo['temp_file'] ?? null;
             $audioDuration = 0;
             $speakerCount = 0;
-            $tasks = TaskLaravel::where('meeting_id', $transcription->id)->get();
+            $tasks = TaskLaravel::where('meeting_id', $transcription->id)
+                ->where('username', $user->username)
+                ->get();
 
             // Intentar obtener duración del audio si está disponible
             if ($audioData && file_exists($audioData)) {
@@ -1683,6 +1702,7 @@ class MeetingController extends Controller
             // Si se solicitó la sección de tareas, usar siempre las tareas de la BD
             if (in_array('tasks', $sections)) {
                 $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
+                    ->where('username', $user->username)
                     ->get(['tarea', 'descripcion', 'fecha_inicio', 'fecha_limite', 'progreso', 'username']);
                 $mapped = $dbTasks->map(function($t) {
                     $start = $t->fecha_inicio ? ($t->fecha_inicio instanceof \Carbon\Carbon ? $t->fecha_inicio->format('Y-m-d') : (string)$t->fecha_inicio) : 'Sin asignar';
