@@ -458,7 +458,7 @@
 
             <!-- Vista previa PDF -->
             <div class="mt-4">
-                <button id="preview-pdf" class="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors">Vista previa</button>
+                <button class="preview-pdf w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors">Vista previa</button>
                 <div id="preview-container" class="mt-3 hidden border border-slate-700 rounded overflow-hidden" style="height: 420px;">
                     <iframe id="preview-frame" title="Vista previa PDF" class="w-full h-full bg-white"></iframe>
                 </div>
@@ -466,7 +466,7 @@
 
             <div class="flex justify-end gap-3 mt-6">
                 <button class="btn-cancel" x-on:click="$dispatch('close-modal','download-meeting')">Cancelar</button>
-                <button id="confirm-download" class="btn-primary">Descargar</button>
+                <button class="confirm-download btn-primary">Descargar</button>
             </div>
         </div>
      <?php echo $__env->renderComponent(); ?>
@@ -479,6 +479,34 @@
 <?php $component = $__componentOriginal9f64f32e90b9102968f2bc548315018c; ?>
 <?php unset($__componentOriginal9f64f32e90b9102968f2bc548315018c); ?>
 <?php endif; ?>
+
+    <!-- Modal de Vista Previa (full-screen) -->
+    <div id="fullPreviewModal" class="fixed inset-0 z-[10000] hidden">
+        <div class="absolute inset-0 bg-black/70"></div>
+        <div class="absolute inset-0 flex flex-col p-6">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-white text-lg font-semibold">Vista previa del documento</h3>
+                <button id="closeFullPreview" class="text-white/90 hover:text-white px-3 py-1 rounded bg-slate-700/60">Cerrar</button>
+            </div>
+            <div class="flex-1 bg-white rounded-md overflow-hidden">
+                <iframe id="fullPreviewFrame" class="w-full h-full" title="Vista previa PDF"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const closeBtn = document.getElementById('closeFullPreview');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function() {
+                    const modal = document.getElementById('fullPreviewModal');
+                    const frame = document.getElementById('fullPreviewFrame');
+                    if (frame) frame.src = 'about:blank';
+                    if (modal) modal.classList.add('hidden');
+                });
+            }
+        });
+    </script>
 
 </body>
 </html>

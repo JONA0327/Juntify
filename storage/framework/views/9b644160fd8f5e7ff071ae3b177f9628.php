@@ -190,3 +190,4 @@ document.addEventListener('DOMContentLoaded', () => {
     loadAndRender();
 });
 </script>
+<?php /**PATH C:\laragon\www\Juntify\resources\views/tasks/partials/_calendar-main.blade.php ENDPATH**/ ?>

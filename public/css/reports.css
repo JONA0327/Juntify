@@ -1,14 +1,14 @@
-/* Letter page with 2cm margins */
+/* Letter page with visible 2cm margins via body padding (more reliable in Dompdf) */
 @page {
     size: letter;
-    margin: 2cm;
+    margin: 0; /* margins handled by body padding */
 }
 
 .report-body {
     font-family: 'Inter', sans-serif;
     font-size: 14px;
     color: #1f2937;
-    padding: 0; /* managed by @page margins */
+    padding: 20mm; /* 2cm */
 }
 
 .report-header {
@@ -17,23 +17,24 @@
     left: 0;
     right: 0;
     border-bottom: 0;
-    background-color: #1e3a8a; /* blue brand */
+    background: linear-gradient(90deg, #2563eb 0%, #1e3a8a 100%);
     color: #ffffff;
 }
 
 /* space for fixed header/footer so body content doesn't overlap */
 body.report-body {
-    margin-top: 110px; /* header height approx */
-    margin-bottom: 60px; /* footer height approx */
+    /* Reservar espacio adicional para header/footer fijos dentro del padding */
+    padding-top: calc(20mm + 90px);
+    padding-bottom: calc(20mm + 50px);
 }
 
 .report-topbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background-color: #1e3a8a;
+    background: transparent;
     color: #ffffff;
-    padding: 1rem 2rem;
+    padding: 1rem 2rem 0.5rem 2rem;
 }
 
 .report-brand {
@@ -42,7 +43,7 @@ body.report-body {
     font-weight: 600;
 }
 
-.report-summary { text-align: right; }
+.report-generated { text-align: right; font-size: 0.95rem; opacity: 0.95; }
 
 .report-title {
     margin: 0;
@@ -55,17 +56,18 @@ body.report-body {
 }
 
 .meeting-details {
-    padding: 0.5rem 2rem 1rem 2rem;
+    padding: 0.25rem 2rem 1rem 2rem;
     text-align: center;
-    background-color: #1e3a8a; /* keep blue header */
+    background: transparent;
     color: #ffffff;
 }
 
 .meeting-name {
     margin: 0;
-    font-weight: 600;
-    font-size: 1.25rem;
+    font-weight: 700;
+    font-size: 1.4rem;
 }
+.meeting-subtitle { margin: 0.15rem 0 0 0; font-size: 1rem; opacity: 0.95; }
 
 .participants {
     margin: 0;
@@ -152,8 +154,8 @@ body.report-body {
 }
 
 .tasks-table th {
-    background-color: #1e3a8a;
-    color: #ffffff;
+    background-color: #1e3a8a; /* sólido para compatibilidad */
+    color: #ffffff; /* texto claro */
     text-align: left;
 }
 
@@ -168,6 +170,9 @@ body.report-body {
 .tasks-table tbody tr:nth-child(even) {
     background-color: #f9fafb;
 }
+
+/* Asegurar que el texto de las celdas sea oscuro para buen contraste */
+.tasks-table td { color: #111827; }
 
 .tasks-table th:nth-child(1),
 .tasks-table td:nth-child(1) { width: 10%; }

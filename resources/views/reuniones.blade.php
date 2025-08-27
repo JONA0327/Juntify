@@ -371,5 +371,33 @@
         </div>
     </x-modal>
 
+    <!-- Modal de Vista Previa (full-screen) -->
+    <div id="fullPreviewModal" class="fixed inset-0 z-[10000] hidden">
+        <div class="absolute inset-0 bg-black/70"></div>
+        <div class="absolute inset-0 flex flex-col p-6">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-white text-lg font-semibold">Vista previa del documento</h3>
+                <button id="closeFullPreview" class="text-white/90 hover:text-white px-3 py-1 rounded bg-slate-700/60">Cerrar</button>
+            </div>
+            <div class="flex-1 bg-white rounded-md overflow-hidden">
+                <iframe id="fullPreviewFrame" class="w-full h-full" title="Vista previa PDF"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const closeBtn = document.getElementById('closeFullPreview');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function() {
+                    const modal = document.getElementById('fullPreviewModal');
+                    const frame = document.getElementById('fullPreviewFrame');
+                    if (frame) frame.src = 'about:blank';
+                    if (modal) modal.classList.add('hidden');
+                });
+            }
+        });
+    </script>
+
 </body>
 </html>

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="<?php echo e(str_replace('_', '-', app()->getLocale())); ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
     <title>Mis Tareas - Juntify</title>
 
     <!-- Fonts -->
@@ -11,14 +11,14 @@
     <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
     <!-- Vite Assets -->
-    @vite([
+    <?php echo app('Illuminate\Foundation\Vite')([
         'resources/css/app.css',
         'resources/js/app.js',
         'resources/css/new-meeting.css',
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
         'resources/css/audio-processing.css'
-    ])
+    ]); ?>
 
     <!-- Styles específicos para tareas -->
     <style>
@@ -61,26 +61,26 @@
 
     <div class="flex">
 
-        @include('partials.navbar')
-        @include('partials.mobile-nav')
+        <?php echo $__env->make('partials.navbar', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
+        <?php echo $__env->make('partials.mobile-nav', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
 
         <main class="w-full pl-24 pt-24" style="margin-top:130px;">
             <!-- Contenedor Centrado -->
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
                 <!-- 1. Encabezado de la página -->
-                @include('tasks.partials._header')
+                <?php echo $__env->make('tasks.partials._header', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
 
                 <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     <!-- Columna Izquierda: Calendario + Reuniones con pestañas -->
                     <div class="lg:col-span-2 flex flex-col gap-8">
-                        @include('tasks.partials._calendar-main')
-                        @include('tasks.partials._tabs-reuniones')
+                        <?php echo $__env->make('tasks.partials._calendar-main', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
+                        <?php echo $__env->make('tasks.partials._tabs-reuniones', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
                     </div>
 
                     <!-- Columna Derecha: Lista de tareas (tasks_laravel) -->
                     <aside class="col-span-1">
-                        @include('tasks.partials._sidebar-details')
+                        <?php echo $__env->make('tasks.partials._sidebar-details', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
 
                         <!-- Placeholder (visible hasta seleccionar reunión) -->
                         <div id="tasks-empty" class="info-card p-6 mt-8 text-center text-slate-300">
@@ -109,21 +109,21 @@
     </div>
 
     <!-- Modal para crear/editar tareas -->
-    @include('tasks.partials._modal-task')
+    <?php echo $__env->make('tasks.partials._modal-task', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
 
     <!-- Scripts -->
     <script>
         // Endpoints para tasks_laravel
         window.taskLaravel = {
-            apiMeetings: '{{ route("api.tasks-laravel.meetings") }}',
+            apiMeetings: '<?php echo e(route("api.tasks-laravel.meetings")); ?>',
             apiImport: (id) => `/api/tasks-laravel/import/${id}`,
-            apiExists: '{{ route("api.tasks-laravel.exists") }}',
-            apiTasks: '{{ route("api.tasks-laravel.tasks") }}',
-            csrf: '{{ csrf_token() }}'
+            apiExists: '<?php echo e(route("api.tasks-laravel.exists")); ?>',
+            apiTasks: '<?php echo e(route("api.tasks-laravel.tasks")); ?>',
+            csrf: '<?php echo e(csrf_token()); ?>'
         };
         // Calendario: usar events de tasks_laravel
         window.taskData = {
-            apiTasks: '{{ route("api.tasks-laravel.calendar") }}'
+            apiTasks: '<?php echo e(route("api.tasks-laravel.calendar")); ?>'
         };
 
         // Utilidad para mostrar/ocultar panel de tareas
@@ -141,3 +141,4 @@
     </script>
 </body>
 </html>
+<?php /**PATH C:\laragon\www\Juntify\resources\views/tasks/index.blade.php ENDPATH**/ ?>

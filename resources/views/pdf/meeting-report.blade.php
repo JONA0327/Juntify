@@ -13,19 +13,21 @@
 <body class="report-body">
     <header class="report-header">
         <div class="report-topbar">
-            <h1 class="report-brand">Juntify</h1>
-            <div class="report-summary">
-                <h1 class="report-title">{{ $reportTitle ?? 'Reporte de Reunión' }}</h1>
-                <p class="report-date">{{ $reportDate ?? now()->format('d/m/Y') }}</p>
-            </div>
+            <h1 class="report-brand">JUNTIFY</h1>
+            <div class="report-generated">Generado el: {{ ($reportGeneratedAt ?? now())->locale('es')->translatedFormat('d MMM yyyy') }}</div>
         </div>
         <div class="meeting-details">
-            @isset($meetingName)
-                <p class="meeting-name">{{ $meetingName }}</p>
-            @endisset
-            @isset($participants)
-                <p class="participants">Participantes: {{ is_array($participants) ? implode(', ', $participants) : $participants }}</p>
-            @endisset
+            <div class="meeting-meta">
+                @isset($meetingName)
+                    <p class="meeting-name">{{ $meetingName }}</p>
+                @endisset
+                @isset($reportTitle)
+                    <p class="meeting-subtitle">{{ $reportTitle }}</p>
+                @endisset
+                @isset($participants)
+                    <p class="participants">Participantes: {{ is_array($participants) ? implode(', ', $participants) : $participants }}</p>
+                @endisset
+            </div>
         </div>
     </header>
 

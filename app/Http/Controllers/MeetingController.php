@@ -8,6 +8,7 @@ use App\Models\Folder;
 use App\Models\MeetingShare;
 use App\Models\MeetingContentContainer;
 use App\Models\Task;
+use App\Models\Container;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,10 +21,11 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Traits\GoogleDriveHelpers;
+use App\Traits\MeetingContentParsing;
 
 class MeetingController extends Controller
 {
-    use GoogleDriveHelpers;
+    use GoogleDriveHelpers, MeetingContentParsing;
 
     protected $googleDriveService;
 
@@ -635,161 +637,13 @@ class MeetingController extends Controller
         }
     }
 
-    private function downloadFromDrive($fileId)
-    {
-        return $this->googleDriveService->downloadFileContent($fileId);
-    }
 
-    private function decryptJuFile($content): array
-    {
-        try {
-            Log::info('decryptJuFile: Starting decryption', [
-                'length' => strlen($content),
-                'first_50' => substr($content, 0, 50)
-            ]);
-
-            // Primer intento: ver si el contenido ya es JSON válido (sin encriptar)
-            $json_data = json_decode($content, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($json_data)) {
-                Log::info('decryptJuFile: Content is already valid JSON (unencrypted)');
-                return [
-                    'data' => $this->extractMeetingDataFromJson($json_data),
-                    'needs_encryption' => true,
-                ];
-            }
-
-            // Segundo intento: ver si es un string encriptado directo de Laravel Crypt
-            if (substr($content, 0, 3) === 'eyJ') {
-                Log::info('decryptJuFile: Attempting to decrypt Laravel Crypt format');
-                try {
-                    // Intentar desencriptar directamente el string base64
-                    $decrypted = \Illuminate\Support\Facades\Crypt::decryptString($content);
-                    Log::info('decryptJuFile: Direct decryption successful');
-
-                    $json_data = json_decode($decrypted, true);
-                    if (json_last_error() === JSON_ERROR_NONE) {
-                        Log::info('decryptJuFile: JSON parsing after decryption successful', ['keys' => array_keys($json_data)]);
-                        return [
-                            'data' => $this->extractMeetingDataFromJson($json_data),
-                            'needs_encryption' => false,
-                        ];
-                    }
-                } catch (\Exception $e) {
-                    Log::warning('decryptJuFile: Direct decryption failed', ['error' => $e->getMessage()]);
-                }
-            }
-
-            // Tercer intento: ver si el contenido contiene el formato {"iv":"...","value":"..."} de Laravel
-            if (str_contains($content, '"iv"') && str_contains($content, '"value"')) {
-                Log::info('decryptJuFile: Detected Laravel Crypt JSON format');
-                try {
-                    // El contenido ya contiene el formato JSON de Laravel Crypt, desencriptar directamente
-                    $decrypted = \Illuminate\Support\Facades\Crypt::decrypt($content);
-                    Log::info('decryptJuFile: Laravel Crypt JSON decryption successful');
-
-                    $json_data = json_decode($decrypted, true);
-                    if (json_last_error() === JSON_ERROR_NONE) {
-                        Log::info('decryptJuFile: JSON parsing after Laravel Crypt decryption successful', ['keys' => array_keys($json_data)]);
-                        return [
-                            'data' => $this->extractMeetingDataFromJson($json_data),
-                            'needs_encryption' => false,
-                        ];
-                    }
-                } catch (\Exception $e) {
-                    Log::error('decryptJuFile: Laravel Crypt JSON decryption failed', ['error' => $e->getMessage()]);
-                }
-            }
-
-            // Fallback: usar datos por defecto
-            Log::warning('decryptJuFile: Using default data - all decryption methods failed');
-            return [
-                'data' => $this->getDefaultMeetingData(),
-                'needs_encryption' => false,
-            ];
-
-        } catch (\Exception $e) {
-            Log::error('decryptJuFile: General exception', ['error' => $e->getMessage()]);
-            return [
-                'data' => $this->getDefaultMeetingData(),
-                'needs_encryption' => false,
-            ];
-        }
-    }
-
-    private function getDefaultMeetingData(): array
-    {
-        return [
-            'summary' => 'Resumen no disponible - Los archivos están encriptados y necesitan ser procesados.',
-            'key_points' => [
-                'Archivo encontrado en Google Drive',
-                'Formato de encriptación detectado',
-                'Procesamiento en desarrollo'
-            ],
-            'tasks' => [
-                'Verificar método de encriptación utilizado',
-                'Implementar desencriptación correcta'
-            ],
-            'transcription' => 'La transcripción está encriptada y será procesada en breve. Mientras tanto, puedes descargar el archivo original desde Google Drive.',
-            'speakers' => ['Sistema'],
-            'segments' => [
-                [
-                    'speaker' => 'Sistema',
-                    'text' => 'El contenido de esta reunión está siendo procesado. El archivo se descargó correctamente desde Google Drive pero requiere desencriptación.',
-                    'timestamp' => '00:00'
-                ]
-            ]
-        ];
-    }
-
-    private function extractMeetingDataFromJson($data): array
-    {
-        // Intentar extraer datos de diferentes estructuras JSON posibles
-        return [
-            'summary' => $data['summary'] ?? $data['resumen'] ?? $data['meeting_summary'] ?? 'Resumen no disponible',
-            'key_points' => $data['key_points'] ?? $data['keyPoints'] ?? $data['puntos_clave'] ?? $data['main_points'] ?? [],
-            'tasks' => $data['tasks'] ?? $data['tareas'] ?? $data['action_items'] ?? [],
-            'transcription' => $data['transcription'] ?? $data['transcripcion'] ?? $data['text'] ?? 'Transcripción no disponible',
-            'speakers' => $data['speakers'] ?? $data['participantes'] ?? [],
-            'segments' => $data['segments'] ?? $data['segmentos'] ?? [],
-        ];
-    }
-
-    private function processTranscriptData($data): array
-    {
-        // Asegurar estructura uniforme sin importar el formato original
-        $data = $this->extractMeetingDataFromJson($data);
-
-        $segments = $data['segments'] ?? [];
-
-        $segments = array_map(function ($segment) {
-            if ((!isset($segment['start']) || !isset($segment['end'])) && isset($segment['timestamp'])) {
-                if (preg_match('/(\d{2}):(\d{2})(?::(\d{2}))?\s*-\s*(\d{2}):(\d{2})(?::(\d{2}))?/', $segment['timestamp'], $m)) {
-                    $segment['start'] = isset($m[3])
-                        ? ((int)$m[1] * 3600 + (int)$m[2] * 60 + (int)$m[3])
-                        : ((int)$m[1] * 60 + (int)$m[2]);
-                    $segment['end'] = isset($m[6])
-                        ? ((int)$m[4] * 3600 + (int)$m[5] * 60 + (int)$m[6])
-                        : ((int)$m[4] * 60 + (int)$m[5]);
-                }
-            }
-            return $segment;
-        }, $segments);
-
-        return [
-            'summary' => $data['summary'] ?? 'No hay resumen disponible',
-            'key_points' => $data['key_points'] ?? [],
-            'tasks' => $data['tasks'] ?? [],
-            'transcription' => $data['transcription'] ?? 'No hay transcripción disponible',
-            'speakers' => $data['speakers'] ?? [],
-            'segments' => $segments,
-        ];
-    }
 
     private function storeTemporaryFile($content, $filename): string
     {
         $path = 'temp/' . $filename;
         Storage::disk('public')->put($path, $content);
-        $fullPath = Storage::disk('public')->path($path);
+    $fullPath = storage_path('app/public/' . $path);
 
         // Log para debuggear
         Log::info('Archivo temporal guardado', [
@@ -1111,7 +965,7 @@ class MeetingController extends Controller
             'tasks' => $tasks,
             'reportTitle' => 'Reporte de Reunión',
             'reportDate' => now()->format('d/m/Y'),
-            'meetingName' => $meeting->name ?? ($meeting->title ?? null),
+            'meetingName' => $meeting->meeting_name,
             'participants' => $meeting->participants_list ?? [],
             'reportGeneratedAt' => now(),
         ])->setPaper('letter', 'portrait');
@@ -1134,7 +988,7 @@ class MeetingController extends Controller
 
             // Generar el nombre base del archivo temporal
             $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meetingModel->meeting_name);
-            $pattern = Storage::disk('public')->path('temp/' . $sanitizedName . '_' . $meetingModel->id . '.*');
+            $pattern = storage_path('app/public/temp/' . $sanitizedName . '_' . $meetingModel->id . '.*');
             $existingFiles = glob($pattern);
 
             if (!empty($existingFiles)) {
@@ -1704,6 +1558,30 @@ class MeetingController extends Controller
             }
 
             // Crear el HTML para el PDF
+            // Si se solicitó la sección de tareas, intentar usar las tareas de la BD (si existen)
+            if (in_array('tasks', $sections)) {
+                $dbTasks = Task::where('meeting_id', $meeting->id)
+                    ->get(['text', 'description', 'assignee', 'due_date', 'completed', 'progress']);
+                if ($dbTasks->count() > 0) {
+                    $mapped = $dbTasks->map(function($t) {
+                        $end = $t->due_date ? ($t->due_date instanceof \Carbon\Carbon ? $t->due_date->format('Y-m-d') : (string)$t->due_date) : 'Sin asignar';
+                        $progress = isset($t->progress) && is_numeric($t->progress)
+                            ? (intval($t->progress) . '%')
+                            : ($t->completed ? '100%' : '0%');
+                        return [
+                            'title' => $t->text ?? 'Sin nombre',
+                            'description' => $t->description ?? '',
+                            'assigned' => $t->assignee ?? 'Sin asignar',
+                            'start' => 'Sin asignar',
+                            'end' => $end,
+                            'progress' => $progress,
+                        ];
+                    })->toArray();
+                    $data['tasks'] = $mapped;
+                }
+            }
+
+            // Crear el HTML para el PDF
             $html = $this->generatePdfHtml(
                 $meetingName,
                 $realCreatedAt,
@@ -1718,17 +1596,18 @@ class MeetingController extends Controller
             $pdf = app('dompdf.wrapper');
             $pdf->loadHTML($html);
 
+            // Dibujar paginación centrada en el pie
             $domPdf = $pdf->getDomPDF();
             $canvas = $domPdf->get_canvas();
-            $date = date('d/m/Y H:i');
-            $canvas->page_text(
-                $canvas->get_width()-170,
-                $canvas->get_height()-28,
-                "$date  Página {PAGE_NUM} de {PAGE_COUNT}",
-                null,
-                10,
-                [1,1,1]
-            );
+            $fontMetrics = $domPdf->getFontMetrics();
+            $font = $fontMetrics ? $fontMetrics->getFont('Helvetica', 'normal') : null;
+            $size = 10;
+            $text = 'Página {PAGE_NUM} de {PAGE_COUNT}';
+            $width = $canvas->get_width();
+            $textWidth = $fontMetrics && $font ? $fontMetrics->getTextWidth($text, $font, $size) : 140;
+            $x = ($width - $textWidth) / 2;
+            $y = $canvas->get_height() - 28; // dentro del footer (40px alto)
+            $canvas->page_text($x, $y, $text, $font, $size, [0.26, 0.26, 0.26]);
 
             $pdf->setPaper('letter', 'portrait');
 
@@ -1800,6 +1679,19 @@ class MeetingController extends Controller
             $pdf->loadHTML($html);
             $pdf->setPaper('letter', 'portrait');
 
+            // Dibujar paginación centrada también en la vista previa
+            $domPdf = $pdf->getDomPDF();
+            $canvas = $domPdf->get_canvas();
+            $fontMetrics = $domPdf->getFontMetrics();
+            $font = $fontMetrics ? $fontMetrics->getFont('Helvetica', 'normal') : null;
+            $size = 10;
+            $text = 'Página {PAGE_NUM} de {PAGE_COUNT}';
+            $width = $canvas->get_width();
+            $textWidth = $fontMetrics && $font ? $fontMetrics->getTextWidth($text, $font, $size) : 140;
+            $x = ($width - $textWidth) / 2;
+            $y = $canvas->get_height() - 28;
+            $canvas->page_text($x, $y, $text, $font, $size, [0.26, 0.26, 0.26]);
+
             // Forzar vista inline
             return $pdf->stream('preview.pdf', [
                 'Attachment' => false
@@ -1814,6 +1706,199 @@ class MeetingController extends Controller
     }
 
     /**
+     * Parsea una tarea a partir de partes posicionales ya separadas y limpias.
+     * Heurística:
+     * - Detecta fechas (YYYY-MM-DD). Si hay 2, asume [inicio, fin]. Si hay 1, es inicio.
+     * - El asignado se toma preferentemente del token previo a la última fecha si luce como nombre; si no, del token siguiente.
+     * - name = id (primer token) + título (tokens hasta antes de asignado/fecha)
+     * - description = tokens tras la última fecha; si no hay fecha, lo que queda tras el título.
+     * - progress = último token que parezca porcentaje (e.g., 50%) si existe.
+     */
+    private function parseTaskFromParts(array $parts, array $result): array
+    {
+        // Limpieza básica
+        $parts = array_values(array_map(function($p){ return trim((string)$p); }, array_filter($parts, function($p){ return $p !== null && trim((string)$p) !== ''; })));
+        // Expandir elementos que contienen comas o saltos de línea (caso de arrays numéricos con tokens embebidos)
+        $expanded = [];
+        foreach ($parts as $p) {
+            $p = str_replace(["\r\n", "\n", "\r", "\t", "|"], ',', $p);
+            $sub = array_map('trim', array_filter(explode(',', $p), function($x){ return $x !== ''; }));
+            if (empty($sub)) {
+                $expanded[] = $p;
+            } else {
+                foreach ($sub as $s) { $expanded[] = $s; }
+            }
+        }
+        $parts = $expanded;
+    $n = count($parts);
+        if ($n === 0) { return $result; }
+
+        // Caso especial: un solo token con separador ':' o '-' que contenga nombre y descripción
+        if ($n === 1) {
+            $single = $parts[0];
+            if (preg_match('/^\s*([^:\-–]+?)\s*[:\-–]\s*(.+)$/u', $single, $m)) {
+                $idToken = trim($m[1]);
+                $desc = trim($m[2]);
+                $result['name'] = $idToken !== '' ? rtrim($idToken, ",;:") : 'Sin nombre';
+                $result['description'] = $desc;
+                return $result;
+            }
+        }
+
+        // Normalizar tokens para detección (remover puntuación final común)
+        $norm = array_map(function($p){ return rtrim($p, " ,;:."); }, $parts);
+
+        // Detectar porcentaje (progreso) al final si existe
+        $progressIdx = -1;
+        for ($i = $n - 1; $i >= 0; $i--) {
+            if (preg_match('/^(100|[0-9]{1,2})%[.,]?$/', $norm[$i])) { $progressIdx = $i; break; }
+        }
+        if ($progressIdx >= 0) {
+            $result['progress'] = rtrim($parts[$progressIdx], " ,;:.");
+            array_splice($parts, $progressIdx, 1);
+            array_splice($norm, $progressIdx, 1);
+            $n = count($parts);
+        }
+
+        // Detectar fechas YYYY-MM-DD
+        $dateIdxs = [];
+        for ($i = 0; $i < $n; $i++) {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $norm[$i])) { $dateIdxs[] = $i; }
+        }
+
+        $startIdx = -1; $endIdx = -1; $lastDateIdx = -1;
+        if (count($dateIdxs) >= 2) {
+            $startIdx = $dateIdxs[0];
+            $endIdx = $dateIdxs[1];
+            $result['start'] = $parts[$startIdx];
+            $result['end'] = $parts[$endIdx];
+            $lastDateIdx = max($dateIdxs);
+        } elseif (count($dateIdxs) === 1) {
+            $startIdx = $dateIdxs[0];
+            $result['start'] = $parts[$startIdx];
+            $lastDateIdx = $startIdx;
+        }
+
+        // Heurística mejorada para asignado: token adyacente a la última fecha
+        $looksLikeName = function($s) {
+            $s = trim($s);
+            if ($s === '') return false;
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', rtrim($s, " ,;:."))) return false; // fecha
+            if (preg_match('/^(task[_-]?\d+|tarea[_-]?\d+)$/i', $s)) return false; // id típico
+            if (preg_match('/^(100|[0-9]{1,2})%$/', $s)) return false; // porcentaje
+            
+            // Patrones que sugieren que es un nombre de persona (mejorado)
+            $personPatterns = [
+                '/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$/', // Nombre Apellido
+                '/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ]\.$/', // Nombre A.
+                '/^[A-Z]\.\s*[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$/', // A. Apellido
+            ];
+            
+            foreach ($personPatterns as $pattern) {
+                if (preg_match($pattern, $s)) {
+                    return true;
+                }
+            }
+            
+            // Patrones que sugieren que NO es un nombre (es descripción de tarea)
+            $taskPatterns = [
+                '/\b(revisar|analizar|preparar|coordinar|planificar|desarrollar|implementar|ejecutar|completar)\b/i',
+                '/\b(documento|archivo|reporte|presentación|presupuesto|proyecto|evento|reunión)\b/i',
+                '/\b(todos|todas|con|para|de|del|la|el|los|las)\b/i',
+            ];
+            
+            foreach ($taskPatterns as $pattern) {
+                if (preg_match($pattern, $s)) {
+                    return false;
+                }
+            }
+            
+            // Si tiene al menos una letra y posiblemente sea un nombre simple
+            if (preg_match('/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}$/u', $s)) {
+                return true;
+            }
+            
+            return false;
+        };
+
+        $assignedIdx = -1;
+        if ($lastDateIdx >= 0) {
+            // Priorizar tokens DESPUÉS de la fecha (más probable que sean nombres de personas)
+            if ($lastDateIdx + 1 < $n && $looksLikeName($parts[$lastDateIdx + 1])) {
+                $assignedIdx = $lastDateIdx + 1;
+            } elseif ($lastDateIdx - 1 >= 0 && $looksLikeName($parts[$lastDateIdx - 1])) {
+                $assignedIdx = $lastDateIdx - 1;
+            }
+        }
+        if ($assignedIdx >= 0) { $result['assigned'] = $parts[$assignedIdx]; }
+
+        // Si no hay fechas ni asignado detectado, usar mejor heurística para separar nombre y descripción
+        if ($lastDateIdx < 0 && $assignedIdx < 0 && $n > 1) {
+            $idToken = $parts[0] ?? null;
+            $baseId = $idToken !== null ? rtrim(trim($idToken), ",;:") : '';
+            $result['name'] = $baseId !== '' ? $baseId : 'Sin nombre';
+            
+            // Buscar si alguno de los tokens restantes parece ser un nombre de persona
+            $foundPersonIdx = -1;
+            for ($i = 1; $i < $n; $i++) {
+                if ($looksLikeName($parts[$i])) {
+                    $foundPersonIdx = $i;
+                    $result['assigned'] = $parts[$i];
+                    break;
+                }
+            }
+            
+            // Construir descripción excluyendo el nombre de la persona si se encontró
+            $descTokens = [];
+            for ($i = 1; $i < $n; $i++) {
+                if ($i !== $foundPersonIdx) {
+                    $descTokens[] = $parts[$i];
+                }
+            }
+            $result['description'] = trim(implode(', ', $descTokens));
+            return $result;
+        }
+
+        // Construir name (id + título)
+        $idToken = $parts[0] ?? null;
+        $titleStart = $idToken !== null ? 1 : 0;
+        // Fin del título antes de assigned o de fecha
+        $limitIdx = $n - 1;
+        if ($assignedIdx >= 0) { $limitIdx = min($limitIdx, $assignedIdx - 1); }
+        if ($lastDateIdx >= 0) { $limitIdx = min($limitIdx, $lastDateIdx - 1); }
+        $titleTokens = [];
+        if ($limitIdx >= $titleStart) {
+            for ($i = $titleStart; $i <= $limitIdx; $i++) { $titleTokens[] = $parts[$i]; }
+        }
+        $title = trim(implode(', ', $titleTokens));
+        $baseId = $idToken !== null ? rtrim(trim($idToken), ",;:") : '';
+        if ($baseId !== '' && preg_match('/^(task|tarea)[_-]?\d+$/i', $baseId)) {
+            // Si luce como id de tarea (task_1), usar solo el id como nombre
+            $name = $baseId;
+        } else if ($title !== '') {
+            $name = trim(($baseId !== '' ? $baseId . ', ' : '') . $title);
+        } else {
+            $name = $baseId !== '' ? $baseId : 'Sin nombre';
+        }
+        $result['name'] = $name;
+        // Descripción: tomar todo lo que no sea id, ni asignado, ni fechas, para conservar texto antes y después de la fecha
+        $descTokens = [];
+        $dateIdxSet = array_flip($dateIdxs);
+        for ($i = 1; $i < $n; $i++) {
+            if ($i === $assignedIdx) continue;
+            if (isset($dateIdxSet[$i])) continue;
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', rtrim($parts[$i], " ,;:."))) continue;
+            $low = mb_strtolower(rtrim($parts[$i], " ,;:.") , 'UTF-8');
+            if (in_array($low, ['no asignado','sin asignar'], true)) continue;
+            $descTokens[] = $parts[$i];
+        }
+        $desc = trim(implode(', ', $descTokens));
+        $result['description'] = $desc;
+
+        return $result;
+    }
+
+    /**
      * Genera el HTML para el PDF con el nuevo diseño solicitado
      */
     private function generatePdfHtml($meetingName, $realCreatedAt, $sections, $data, $hasOrganization = false, $organizationName = null, $organizationLogo = null)
@@ -1825,9 +1910,10 @@ class MeetingController extends Controller
             <meta charset="utf-8">
             <title>' . htmlspecialchars($meetingName) . '</title>
             <style>
+                /* Forzar márgenes internos visibles: usar padding en body y margin 0 en la página */
                 @page {
-                    margin: 20mm; /* 2cm */
                     size: letter;
+                    margin: 0;
                 }
                 * {
                     margin: 0;
@@ -1840,50 +1926,45 @@ class MeetingController extends Controller
                     line-height: 1.5;
                     color: #333;
                     margin: 0;
-                    padding: 0;
+                    /* Reservar espacio para header fijo + márgenes de 2cm */
+                    padding: 20mm; /* 2 cm laterales */
+                    padding-top: calc(20mm + 90px);
+                    padding-bottom: calc(20mm + 40px); /* reservar para el footer fijo */
                     background: white;
                 }
 
-                /* Header */
+                /* Header (fijo) */
                 .header {
-                    background: linear-gradient(90deg, #3b82f6, #1d4ed8);
-                    color: white !important;
-                    padding: 20px;
-                    margin: 0 0 20px 0;
-                    display: block;
-                    width: 100%;
-                    position: relative;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    /* Dompdf ignora a veces los gradients; proveer color sólido de respaldo */
+                    background-color: #1d4ed8; /* fallback sólido */
+                    background-image: linear-gradient(90deg, #2563eb 0%, #1e3a8a 100%);
+                    color: #ffffff !important;
+                    height: 90px; /* asegurar altura visible del header fijo */
                 }
-                .header-content {
+                .header-topbar {
                     display: table;
                     width: 100%;
-                    color: white !important;
+                    padding: 14px 22px 8px 22px;
                 }
-                .header-left {
+                .header-topbar .brand,
+                .header-topbar .generated {
                     display: table-cell;
                     vertical-align: middle;
-                    width: 70%;
-                    color: white !important;
+                    color: #ffffff !important;
                 }
-                .header-right {
-                    display: table-cell;
-                    vertical-align: middle;
-                    width: 30%;
-                    text-align: right;
-                    color: white !important;
+                .header-topbar .brand { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
+                .header-topbar .generated { text-align: right; font-size: 12px; opacity: 0.95; }
+                .meeting-details {
+                    text-align: center;
+                    padding: 6px 22px 14px 22px;
+                    color: #ffffff !important;
                 }
-                .logo {
-                    font-size: 24px;
-                    font-weight: bold;
-                    letter-spacing: 1px;
-                    color: white !important;
-                }
-                .org-logo {
-                    font-size: 12px;
-                    font-style: italic;
-                    opacity: 0.9;
-                    color: white !important;
-                }
+                .meeting-details .meeting-name { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+                .meeting-details .meeting-subtitle { font-size: 12px; opacity: 0.95; }
 
                 /* Contenido principal */
                 .main-content {
@@ -1891,24 +1972,13 @@ class MeetingController extends Controller
                     margin: 0;
                 }
 
-                /* Título centrado */
-                .title-section {
-                    text-align: center;
-                    margin-bottom: 30px;
-                    padding: 20px 0;
-                }
-                .meeting-title {
-                    font-size: 20px;
-                    font-weight: bold;
-                    color: #333;
-                    margin-bottom: 10px;
-                    text-transform: uppercase;
-                }
-                .meeting-date {
-                    font-size: 14px;
-                    color: #666;
-                    font-style: italic;
-                }
+                /* Encabezado del reporte (en el cuerpo) */
+                .report-heading { margin: 0 0 18px 0; }
+                .report-heading .top-line { height: 6px; width: 100%; background: #3b82f6; border-radius: 2px; margin-bottom: 10px; }
+                .report-heading .display-title { font-size: 28px; line-height: 1.15; font-weight: 800; color: #2563eb; margin: 0 0 8px 0; }
+                .report-heading .underline { height: 3px; width: 35%; max-width: 380px; background: #60a5fa; border-radius: 2px; margin: 0 0 12px 0; }
+                .report-heading .meta { color: #555; font-size: 14px; }
+                .report-heading .meta div { margin-bottom: 4px; }
 
                 /* Secciones */
                 .section {
@@ -1979,9 +2049,10 @@ class MeetingController extends Controller
                     border-collapse: collapse;
                     margin-top: 10px;
                 }
+                /* Dompdf no soporta bien gradients: usar color sólido para que el texto blanco sea visible */
                 .tasks-table th {
-                    background: linear-gradient(90deg, #3b82f6, #1d4ed8);
-                    color: white;
+                    background-color: #1d4ed8; /* azul sólido */
+                    color: #ffffff;
                     padding: 12px 8px;
                     font-size: 11px;
                     font-weight: bold;
@@ -1994,6 +2065,7 @@ class MeetingController extends Controller
                     font-size: 10px;
                     text-align: center;
                     vertical-align: top;
+                    color: #111111; /* asegurar contraste */
                 }
                 .tasks-table tr:nth-child(even) {
                     background: #dbeafe;
@@ -2008,56 +2080,34 @@ class MeetingController extends Controller
                 }
 
                 /* Footer */
-                .footer {
-                    background: linear-gradient(90deg, #3b82f6, #1d4ed8);
-                    color: white !important;
-                    padding: 15px 20px;
-                    font-size: 10px;
-                    display: table;
-                    width: 100%;
-                    margin-top: 20px;
-                }
-                .footer-left {
-                    display: table-cell;
-                    vertical-align: middle;
-                    width: 50%;
-                    color: white !important;
-                }
-                .footer-right {
-                    display: table-cell;
-                    vertical-align: middle;
-                    width: 50%;
-                    text-align: right;
-                    font-weight: bold;
-                    color: white !important;
-                }
+                /* Footer fijo en todas las páginas */
+                .footer { position: fixed; left: 0; right: 0; bottom: 0; height: 40px; background: #fff; border-top: 1px solid #ddd; display: table; width: 100%; font-size: 11px; color: #444; }
+                .footer .cell { display: table-cell; vertical-align: middle; padding: 10px 20mm; }
+                .footer .left { text-align: left; }
+                .footer .center { text-align: center; }
+                .footer .right { text-align: right; }
             </style>
         </head>
         <body>
             <!-- Header -->
             <div class="header">
-                <div class="header-content">
-                    <div class="header-left">
-                        <div class="logo">JUNTIFY</div>
-                    </div>
-                    <div class="header-right">' . (
-                        $hasOrganization
-                            ? (
-                                $organizationLogo
-                                    ? '<img src="' . htmlspecialchars($organizationLogo) . '" class="org-logo">'
-                                    : htmlspecialchars($organizationName ?? 'Organización')
-                            )
-                            : '[Logo de la Organización]'
-                    ) . '</div>
+                <div class="header-topbar">
+                    <div class="brand">JUNTIFY</div>
+                    <div class="generated">Generado el: ' . date('d/m/Y') . '</div>
                 </div>
             </div>
 
             <!-- Contenido Principal -->
             <div class="main-content">
-                <!-- Título Centrado -->
-                <div class="title-section">
-                    <div class="meeting-title">' . htmlspecialchars($meetingName) . '</div>
-                    <div class="meeting-date">Fecha de Grabación: ' . $realCreatedAt->format('d/m/Y H:i') . '</div>
+                <!-- Encabezado visual del reporte (en el cuerpo) -->
+                <div class="report-heading">
+                    <div class="top-line"></div>
+                    <div class="display-title">' . htmlspecialchars($meetingName) . '</div>
+                    <div class="underline"></div>
+                    <div class="meta">
+                        <div>Fecha: ' . $realCreatedAt->copy()->locale('es')->isoFormat('D [de] MMMM YYYY') . '</div>
+                        <div>Hora: ' . $realCreatedAt->copy()->locale('es')->isoFormat('HH:mm') . '</div>
+                    </div>
                 </div>';
 
     // Resumen (solo si el usuario la seleccionó y hay contenido)
@@ -2142,32 +2192,203 @@ class MeetingController extends Controller
                         </thead>
                         <tbody>';
 
+            // Función de parseo flexible para cadenas de tareas
+            $parseTask = function($raw) {
+                $result = [
+                    'name' => 'Sin nombre',
+                    'description' => '',
+                    'assigned' => 'Sin asignar',
+                    'start' => 'Sin asignar',
+                    'end' => 'Sin asignar',
+                    'progress' => '0%'
+                ];
+
+                if (is_array($raw)) {
+                    // ¿Es asociativo o numérico?
+                    $isAssoc = array_keys($raw) !== range(0, count($raw) - 1);
+                    if ($isAssoc) {
+                        // Intentar mapear campos por nombre si existen
+                        $id = $raw['id'] ?? $raw['name'] ?? $raw['title'] ?? null;
+                        $title = $raw['title'] ?? $raw['name'] ?? null;
+                        $desc = $raw['description'] ?? $raw['desc'] ?? '';
+                        $assigned = $raw['assigned'] ?? $raw['assigned_to'] ?? $raw['owner'] ?? 'Sin asignar';
+                        $start = $raw['start'] ?? $raw['start_date'] ?? $raw['fecha_inicio'] ?? 'Sin asignar';
+                        $end = $raw['end'] ?? $raw['due'] ?? $raw['due_date'] ?? $raw['fecha_fin'] ?? 'Sin asignar';
+                        $progress = isset($raw['progress']) ? (is_numeric($raw['progress']) ? ($raw['progress'] . '%') : $raw['progress']) : '0%';
+
+                        // Si no hay título pero el id contiene más tokens (coma/saltos/':'), intentar parsear desde id
+                        $parsedFromId = null;
+                        if ($title === null || trim((string)$title) === '') {
+                            $idText = is_string($id) ? $id : '';
+                            if ($idText !== '') {
+                                $norm = str_replace(["\r\n", "\n", "\r", "\t", "|"], ',', $idText);
+                                $idParts = array_map('trim', array_filter(explode(',', $norm), function($p){ return $p !== ''; }));
+                                if (!empty($idParts)) {
+                                    $parsedFromId = $this->parseTaskFromParts($idParts, $result);
+                                }
+                            }
+                        }
+
+                        if ($parsedFromId) {
+                            $name = $parsedFromId['name'] ?? ($id ?? 'Sin nombre');
+                            $descFromId = $parsedFromId['description'] ?? '';
+                            $finalDesc = is_string($desc) && trim($desc) !== ''
+                                ? $desc
+                                : $descFromId;
+                        } else {
+                            // Construir nombre evitando coma extra si no hay título
+                            $baseId = $id !== null ? rtrim(trim((string)$id), ",;:") : '';
+                            if ($title !== null && trim((string)$title) !== '') {
+                                $name = trim(($baseId !== '' ? $baseId . ', ' : '') . $title);
+                            } else {
+                                $name = $baseId !== '' ? $baseId : 'Sin nombre';
+                            }
+                            $finalDesc = is_string($desc) ? $desc : (is_array($desc) ? implode(', ', $desc) : strval($desc));
+                        }
+
+                        $result['name'] = $name;
+                        $result['description'] = $finalDesc;
+                        $result['assigned'] = $assigned ?: 'Sin asignar';
+                        $result['start'] = $start ?: 'Sin asignar';
+                        $result['end'] = $end ?: 'Sin asignar';
+                        $result['progress'] = $progress ?: '0%';
+
+                        // Limpieza adicional de la descripción para quitar fechas/asignados que vengan embebidos
+                        if (is_string($result['description']) && trim($result['description']) !== '') {
+                            $descText = str_replace(["\r\n", "\n", "\r", "\t", "|"], ',', (string)$result['description']);
+                            $descParts = array_map('trim', array_filter(explode(',', $descText), function($p){ return $p !== ''; }));
+                            if (!empty($descParts)) {
+                                // Prepend el nombre para que el parser pueda delimitar correctamente
+                                $aux = $this->parseTaskFromParts(array_merge([$name], $descParts), [
+                                    'name' => $name,
+                                    'description' => '',
+                                    'assigned' => 'Sin asignar',
+                                    'start' => 'Sin asignar',
+                                    'end' => $result['end'] ?? 'Sin asignar',
+                                    'progress' => $result['progress'] ?? '0%'
+                                ]);
+                                if (!empty($aux['description'])) {
+                                    $result['description'] = $aux['description'];
+                                }
+                                if (($result['assigned'] === 'Sin asignar' || empty($result['assigned'])) && !empty($aux['assigned']) && $aux['assigned'] !== 'Sin asignar') {
+                                    $result['assigned'] = $aux['assigned'];
+                                }
+                                if (($result['start'] === 'Sin asignar' || empty($result['start'])) && !empty($aux['start']) && $aux['start'] !== 'Sin asignar') {
+                                    $result['start'] = $aux['start'];
+                                }
+                            }
+                        }
+                        return $result;
+                    } else {
+                        // Lista posicional: [id, titulo..., asignado, fecha, descripcion...]
+                        $parts = array_values(array_map('trim', array_filter($raw, function($p){ return $p !== null && $p !== ''; })));
+                        return $this->parseTaskFromParts($parts, $result);
+                    }
+                }
+
+                $text = is_string($raw) ? $raw : strval($raw);
+                // Normalizar saltos de línea a comas para soportar formatos en múltiples líneas
+                $text = str_replace(["\r\n", "\n", "\r", "\t", "|"], ',', $text);
+                // Separar por comas, limpiar espacios
+                $parts = array_map('trim', array_filter(explode(',', $text), function($p){ return $p !== ''; }));
+                if (empty($parts)) {
+                    $result['description'] = $text;
+                    return $result;
+                }
+                return $this->parseTaskFromParts($parts, $result);
+            };
+
+            // Limpieza final de descripción para eliminar asignado/fechas residuales y normalizar comas
+            $cleanDesc = function($desc) {
+                if (!is_string($desc) || trim($desc) === '') return $desc;
+                $s = ' ' . $desc . ' ';
+                // Quitar "No asignado" / "Sin asignar" con coma/punto opcional alrededor
+                $s = preg_replace('/[,\s]+(no asignado|sin asignar)[\s,\.]+/iu', ', ', $s);
+                // Quitar fechas sueltas con coma/punto opcional
+                $s = preg_replace('/[,\s]+\d{4}-\d{2}-\d{2}[\s,\.]+/', ', ', $s);
+                // Quitar patrón "Nombre, YYYY-MM-DD," (nombre = cualquier cosa sin coma hasta 80 chars)
+                $s = preg_replace('/[,\s]+[^,]{1,80}?,\s*\d{4}-\d{2}-\d{2}[\s,\.]+/u', ', ', $s);
+                // Normalizar comas consecutivas y espacios
+                $s = preg_replace('/\s*,\s*,+/', ', ', $s);
+                $s = preg_replace('/\s{2,}/', ' ', $s);
+                $s = preg_replace('/\s*,\s*$/', '', trim($s));
+                $s = preg_replace('/^,\s*/', '', $s);
+                return trim($s);
+            };
+
             if (is_array($data['tasks'])) {
-                $taskCounter = 1;
                 foreach ($data['tasks'] as $task) {
-                    $taskText = is_string($task) ? $task : (is_array($task) ? implode(', ', $task) : strval($task));
-                    $html .= '
-                            <tr>
-                                <td class="task-name">Tarea ' . $taskCounter . '</td>
-                                <td class="task-description">' . htmlspecialchars($taskText) . '</td>
-                                <td>Sin asignar</td>
-                                <td>Sin asignar</td>
-                                <td>Sin asignar</td>
-                                <td>0%</td>
-                            </tr>';
-                    $taskCounter++;
+                    $t = $parseTask($task);
+                    // Sanitizar nombre y completar descripción si faltara
+                    $t['name'] = rtrim(trim((string)$t['name']), ",;:");
+                    if ((string)$t['description'] === '' && is_array($task)) {
+                        $assoc = array_keys($task) !== range(0, count($task) - 1);
+                        if ($assoc) {
+                            $ignoreKeys = ['id','name','title','description','desc','assigned','assigned_to','owner','start','start_date','fecha_inicio','end','due','due_date','fecha_fin','progress'];
+                            $extra = [];
+                            foreach ($task as $k => $v) {
+                                if (!in_array($k, $ignoreKeys, true) && is_string($v) && trim($v) !== '') {
+                                    $extra[] = trim($v);
+                                }
+                            }
+                            if (!empty($extra)) {
+                                $t['description'] = implode(', ', $extra);
+                            }
+                        }
+                    }
+                    // Extraer "Nombre, YYYY-MM-DD," de la descripción si aún no se asignó
+                    if (is_string($t['description']) && trim($t['description']) !== '') {
+                        $descTmp = ' ' . $t['description'] . ' ';
+                        // 1) Nombre, fecha
+                        if (($t['assigned'] === 'Sin asignar' || $t['assigned'] === '' || $t['assigned'] === null) &&
+                            preg_match('/,\s*([^,\n]{2,80}?)\s*,\s*(\d{4}-\d{2}-\d{2})\s*,/u', $descTmp, $m)) {
+                            $candidate = trim($m[1]);
+                            if (mb_strtolower($candidate, 'UTF-8') !== 'no asignado' && mb_strtolower($candidate, 'UTF-8') !== 'sin asignar') {
+                                $t['assigned'] = $candidate;
+                            }
+                            if ($t['start'] === 'Sin asignar' || empty($t['start'])) {
+                                $t['start'] = $m[2];
+                            }
+                            $descTmp = preg_replace('/,\s*' . preg_quote($m[1], '/') . '\s*,\s*' . preg_quote($m[2], '/') . '\s*,/u', ', ', $descTmp, 1);
+                        } else {
+                            // 2) (No asignado|Sin asignar), fecha -> solo fecha
+                            if (($t['start'] === 'Sin asignar' || empty($t['start'])) &&
+                                preg_match('/,\s*(no asignado|sin asignar)\s*,\s*(\d{4}-\d{2}-\d{2})\s*,/iu', $descTmp, $m2)) {
+                                $t['start'] = $m2[2];
+                                $descTmp = preg_replace('/,\s*' . $m2[1] . '\s*,\s*' . preg_quote($m2[2], '/') . '\s*,/iu', ', ', $descTmp, 1);
+                            }
+                        }
+                        $t['description'] = trim($descTmp);
+                    }
+
+                    // Limpieza final de descripción
+                    $t['description'] = $cleanDesc($t['description']);
+                    $html .= '\n                            <tr>\n                                <td class="task-name">' . htmlspecialchars($t['name']) . '</td>\n                                <td class="task-description">' . htmlspecialchars($t['description']) . '</td>\n                                <td>' . htmlspecialchars($t['start']) . '</td>\n                                <td>' . htmlspecialchars($t['end']) . '</td>\n                                <td>' . htmlspecialchars($t['assigned']) . '</td>\n                                <td>' . htmlspecialchars($t['progress']) . '</td>\n                            </tr>';
                 }
             } else {
-                $taskText = is_string($data['tasks']) ? $data['tasks'] : strval($data['tasks']);
-                $html .= '
-                            <tr>
-                                <td class="task-name">Tarea 1</td>
-                                <td class="task-description">' . htmlspecialchars($taskText) . '</td>
-                                <td>Sin asignar</td>
-                                <td>Sin asignar</td>
-                                <td>Sin asignar</td>
-                                <td>0%</td>
-                            </tr>';
+                $t = $parseTask($data['tasks']);
+                $t['name'] = rtrim(trim((string)$t['name']), ",;:");
+                if (is_string($t['description']) && trim($t['description']) !== '') {
+                    $descTmp = ' ' . $t['description'] . ' ';
+                    if (($t['assigned'] === 'Sin asignar' || $t['assigned'] === '' || $t['assigned'] === null) &&
+                        preg_match('/,\s*([^,\n]{2,80}?)\s*,\s*(\d{4}-\d{2}-\d{2})\s*,/u', $descTmp, $m)) {
+                        $candidate = trim($m[1]);
+                        if (mb_strtolower($candidate, 'UTF-8') !== 'no asignado' && mb_strtolower($candidate, 'UTF-8') !== 'sin asignar') {
+                            $t['assigned'] = $candidate;
+                        }
+                        if ($t['start'] === 'Sin asignar' || empty($t['start'])) {
+                            $t['start'] = $m[2];
+                        }
+                        $descTmp = preg_replace('/,\s*' . preg_quote($m[1], '/') . '\s*,\s*' . preg_quote($m[2], '/') . '\s*,/u', ', ', $descTmp, 1);
+                    } else if (($t['start'] === 'Sin asignar' || empty($t['start'])) &&
+                        preg_match('/,\s*(no asignado|sin asignar)\s*,\s*(\d{4}-\d{2}-\d{2})\s*,/iu', $descTmp, $m2)) {
+                        $t['start'] = $m2[2];
+                        $descTmp = preg_replace('/,\s*' . $m2[1] . '\s*,\s*' . preg_quote($m2[2], '/') . '\s*,/iu', ', ', $descTmp, 1);
+                    }
+                    $t['description'] = trim($descTmp);
+                }
+                $t['description'] = $cleanDesc($t['description']);
+                $html .= '\n                            <tr>\n                                <td class="task-name">' . htmlspecialchars($t['name']) . '</td>\n                                <td class="task-description">' . htmlspecialchars($t['description']) . '</td>\n                                <td>' . htmlspecialchars($t['start']) . '</td>\n                                <td>' . htmlspecialchars($t['end']) . '</td>\n                                <td>' . htmlspecialchars($t['assigned']) . '</td>\n                                <td>' . htmlspecialchars($t['progress']) . '</td>\n                            </tr>';
             }
 
             $html .= '
@@ -2181,7 +2402,11 @@ class MeetingController extends Controller
             </div> <!-- Fin main-content -->
 
             <!-- Footer -->
-            <div class="footer">Generado el: ' . date('d/m/Y H:i') . '</div>
+            <div class="footer">
+                <div class="cell left">Juntify - Gestión de Reuniones</div>
+                <div class="cell center">&nbsp;</div>
+                <div class="cell right">Documento confidencial</div>
+            </div>
         </body>
         </html>';
 

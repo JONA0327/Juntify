@@ -25,7 +25,7 @@ class TaskController extends Controller
         $query = Task::where(function($q) use ($username) {
             $q->where('username', $username)
               ->orWhere('assignee', $username);
-        })->with(['user', 'assignedUser', 'meeting']);
+    })->with(['user', 'assignedUser', 'meeting']);
 
         // Filtros
         if ($request->has('completed') && $request->completed !== 'all') {
@@ -139,7 +139,7 @@ class TaskController extends Controller
             'due_date' => 'nullable|date',
             'priority' => 'in:baja,media,alta',
             'assignee' => 'nullable|string|exists:users,username',
-            'meeting_id' => 'nullable|exists:meeting_containers,id',
+            'meeting_id' => 'nullable|exists:transcriptions_laravel,id',
             'progress' => 'nullable|integer|min:0|max:100',
         ]);
 

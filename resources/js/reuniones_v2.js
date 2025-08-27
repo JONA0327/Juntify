@@ -14,6 +14,7 @@ let segmentsModified = false;
 
 // Almacenamiento temporal para datos de reuniones descargadas
 window.downloadMeetingData = window.downloadMeetingData || {};
+window.lastOpenedDownloadMeetingId = window.lastOpenedDownloadMeetingId || null;
 
 // ===============================================
 // INICIALIZACIÓN
@@ -2621,12 +2622,15 @@ async function openDownloadModal(meetingId) {
         // Paso 2: Crear y mostrar el modal de selección
         createDownloadModal();
 
-        // Paso 3: Guardar los datos y mostrar opciones
-        window.downloadMeetingData[meetingId] = data.meeting;
-        const modals = document.querySelectorAll('[name="download-meeting"]');
+    // Paso 3: Guardar los datos y mostrar opciones
+    window.downloadMeetingData[meetingId] = data.meeting;
+    window.lastOpenedDownloadMeetingId = meetingId;
+    const modals = document.querySelectorAll('[name="download-meeting"]');
         if (modals && modals.length) {
             modals.forEach(m => {
                 m.dataset.meetingId = meetingId;
+        const inner = m.querySelector('.download-modal');
+        if (inner) inner.dataset.meetingId = meetingId;
             });
 
             // Inicializar los event listeners del modal
@@ -2732,11 +2736,8 @@ async function openDownloadModal(meetingId) {
 }
 
 function createDownloadModal() {
-    // Eliminar modal existente si existe
-    const existingModal = document.querySelector('[name="download-meeting"]');
-    if (existingModal) {
-        existingModal.remove();
-    }
+    // Eliminar cualquier modal existente para evitar instancias duplicadas
+    document.querySelectorAll('[name="download-meeting"]').forEach(m => m.remove());
 
     // Crear el modal centrado perfectamente
     const modalHtml = `
@@ -2799,12 +2800,9 @@ function createDownloadModal() {
                             </label>
                         </div>
 
-                        <!-- Vista previa -->
+                        <!-- Vista previa (se abrirá en un modal independiente) -->
                         <div class="pt-2">
                             <button class="preview-pdf w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors">Vista previa</button>
-                            <div id="preview-container" class="mt-3 hidden border border-slate-700 rounded overflow-hidden" style="height: 420px;">
-                                <iframe id="preview-frame" title="Vista previa PDF" class="w-full h-full bg-white"></iframe>
-                            </div>
                         </div>
 
                         <!-- Botones -->
@@ -2857,6 +2855,34 @@ function createDownloadModal() {
     }
 }
 
+// ==============================
+// Modal de Vista Previa (full)
+// ==============================
+function ensurePreviewModal() {
+    // Modal ya existe en Blade; solo asegura que hay handlers de cierre
+    const closeBtn = document.getElementById('closeFullPreview');
+    if (closeBtn && !closeBtn.dataset.listenerAdded) {
+        closeBtn.dataset.listenerAdded = 'true';
+        closeBtn.addEventListener('click', closeFullPreviewModal);
+    }
+}
+
+function openFullPreviewModal(url) {
+    ensurePreviewModal();
+    const modal = document.getElementById('fullPreviewModal');
+    const frame = document.getElementById('fullPreviewFrame');
+    frame.src = url;
+    modal.classList.remove('hidden');
+}
+
+function closeFullPreviewModal() {
+    const modal = document.getElementById('fullPreviewModal');
+    if (!modal) return;
+    const frame = document.getElementById('fullPreviewFrame');
+    frame.src = 'about:blank';
+    modal.classList.add('hidden');
+}
+
 function initializeDownloadModal() {
     // Adjuntar listeners a todos los botones presentes (Blade + dinámico)
     const confirmButtons = Array.from(document.querySelectorAll('.confirm-download'));
@@ -2870,10 +2896,9 @@ function initializeDownloadModal() {
             // Evitar múltiples solicitudes si ya está cargando
             if (previewBtn.disabled) return;
 
-            const modal = previewBtn.closest('[name="download-meeting"]');
-            const meetingId = modal?.dataset.meetingId;
-            const previewContainer = (modal && modal.querySelector('#preview-container')) || document.getElementById('preview-container');
-            const previewFrame = (modal && modal.querySelector('#preview-frame')) || document.getElementById('preview-frame');
+            const wrapper = previewBtn.closest('[name="download-meeting"]') || document.querySelector('[name="download-meeting"]');
+            const container = previewBtn.closest('.download-modal') || (wrapper && (wrapper.querySelector('.download-modal') || wrapper)) || null;
+            let meetingId = (wrapper?.dataset.meetingId) || (container?.dataset.meetingId) || window.lastOpenedDownloadMeetingId;
             if (!meetingId) {
                 alert('Faltan datos para la vista previa');
                 return;
@@ -2883,9 +2908,14 @@ function initializeDownloadModal() {
                 alert('Faltan datos para la vista previa');
                 return;
             }
-            const selectedItems = Array.from(
-                modal.querySelectorAll('.download-option:checked')
-            ).map(cb => cb.value);
+            let selectedItems = [];
+            if (container) {
+                selectedItems = Array.from(container.querySelectorAll('.download-option:checked')).map(cb => cb.value);
+            } else if (wrapper) {
+                selectedItems = Array.from(wrapper.querySelectorAll('.download-option:checked')).map(cb => cb.value);
+            } else {
+                selectedItems = Array.from(document.querySelectorAll('[name="download-meeting"] .download-option:checked')).map(cb => cb.value);
+            }
             if (selectedItems.length === 0) {
                 alert('Selecciona al menos una sección para previsualizar');
                 return;
@@ -2913,7 +2943,7 @@ function initializeDownloadModal() {
             `;
 
             try {
-                // Enviar POST y obtener blob URL para iframe
+                // Enviar POST y obtener blob URL
                 const res = await fetch('/api/meetings/' + meetingId + '/preview-pdf', {
                     method: 'POST',
                     headers: {
@@ -2929,8 +2959,7 @@ function initializeDownloadModal() {
                 }
                 const blob = await res.blob();
                 const url = URL.createObjectURL(blob);
-                previewFrame.src = url;
-                previewContainer.classList.remove('hidden');
+                openFullPreviewModal(url);
             } catch (e) {
                 alert('Error en vista previa: ' + e.message);
             } finally {
@@ -2946,9 +2975,10 @@ function initializeDownloadModal() {
         if (!confirm || confirm.dataset.listenerAdded) return;
         confirm.dataset.listenerAdded = 'true';
         confirm.addEventListener('click', async () => {
-            const modal = confirm.closest('[name="download-meeting"]');
-            const meetingId = modal?.dataset.meetingId;
-            const meetingData = window.downloadMeetingData[meetingId];
+            const wrapper = confirm.closest('[name="download-meeting"]') || document.querySelector('[name="download-meeting"]');
+            const container = confirm.closest('.download-modal') || (wrapper && (wrapper.querySelector('.download-modal') || wrapper)) || null;
+            let meetingId = (wrapper?.dataset.meetingId) || (container?.dataset.meetingId) || window.lastOpenedDownloadMeetingId;
+            const meetingData = meetingId ? window.downloadMeetingData[meetingId] : null;
             let originalContent = null;
 
             if (!meetingId) {
@@ -2962,9 +2992,14 @@ function initializeDownloadModal() {
             }
 
             try {
-                const selectedItems = Array.from(
-                    modal.querySelectorAll('.download-option:checked')
-                ).map(cb => cb.value);
+                let selectedItems = [];
+                if (container) {
+                    selectedItems = Array.from(container.querySelectorAll('.download-option:checked')).map(cb => cb.value);
+                } else if (wrapper) {
+                    selectedItems = Array.from(wrapper.querySelectorAll('.download-option:checked')).map(cb => cb.value);
+                } else {
+                    selectedItems = Array.from(document.querySelectorAll('[name="download-meeting"] .download-option:checked')).map(cb => cb.value);
+                }
 
                 if (selectedItems.length === 0) {
                     alert('Por favor selecciona al menos una sección para descargar');
