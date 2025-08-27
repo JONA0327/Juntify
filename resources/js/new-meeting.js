@@ -466,17 +466,35 @@ async function finalizeRecording() {
     }
 
     if (postponeMode) {
+        pendingSaveContext = 'recording';
+        let key;
+        try {
+            key = await saveAudioBlob(finalBlob);
+            sessionStorage.setItem('uploadedAudioKey', key);
+        } catch (e) {
+            console.error('Error al guardar el audio para subida en segundo plano', e);
+            showError('No se pudo guardar el audio localmente. Se descargará el archivo.');
+            downloadBlob(finalBlob, name + '.webm');
+            handlePostActionCleanup();
+            return;
+        }
+
         uploadInBackground(finalBlob, name)
-            .then(response => {
+            .then(async response => {
                 if (!response || (!response.saved && !response.pending_recording)) {
                     throw new Error('Invalid upload response');
                 }
                 showSuccess('Grabación subida a Drive');
+                try {
+                    await clearAllAudio();
+                } catch (err) {
+                    console.error('Error al limpiar audio local:', err);
+                }
+                sessionStorage.removeItem('uploadedAudioKey');
             })
             .catch(e => {
                 console.error('Error al subir la grabación', e);
-                showError('Error al subir la grabación. Se descargará el audio');
-                downloadBlob(finalBlob, name + '.webm');
+                showError('Error al subir la grabación. Se mantendrá guardada localmente para reintentos o descarga manual.');
             });
 
         showSuccess('La subida continuará en segundo plano. Revisa el panel de notificaciones para el estado final.');
