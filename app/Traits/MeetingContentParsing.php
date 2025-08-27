@@ -301,13 +301,38 @@ trait MeetingContentParsing
             if (is_array($rawTask)) {
                 $isAssoc = array_keys($rawTask) !== range(0, count($rawTask) - 1);
                 if ($isAssoc) {
-                    $id = $rawTask['id'] ?? $rawTask['name'] ?? $rawTask['title'] ?? null;
-                    $title = $rawTask['title'] ?? $rawTask['name'] ?? null;
-                    $desc = $rawTask['description'] ?? $rawTask['desc'] ?? '';
-                    $assigned = $rawTask['assigned'] ?? $rawTask['assigned_to'] ?? $rawTask['owner'] ?? 'Sin asignar';
-                    $start = $rawTask['start'] ?? $rawTask['start_date'] ?? $rawTask['fecha_inicio'] ?? 'Sin asignar';
-                    $end = $rawTask['end'] ?? $rawTask['due'] ?? $rawTask['due_date'] ?? $rawTask['fecha_fin'] ?? 'Sin asignar';
-                    $progress = isset($rawTask['progress']) ? (is_numeric($rawTask['progress']) ? ($rawTask['progress'] . '%') : $rawTask['progress']) : '0%';
+                    $id = $rawTask['id']
+                        ?? $rawTask['name']
+                        ?? $rawTask['title']
+                        ?? $rawTask['tarea']
+                        ?? null;
+                    $title = $rawTask['title']
+                        ?? $rawTask['name']
+                        ?? $rawTask['tarea']
+                        ?? null;
+                    $desc = $rawTask['description']
+                        ?? $rawTask['desc']
+                        ?? $rawTask['descripcion']
+                        ?? '';
+                    $assigned = $rawTask['assigned']
+                        ?? $rawTask['assigned_to']
+                        ?? $rawTask['owner']
+                        ?? $rawTask['responsable']
+                        ?? 'Sin asignar';
+                    $start = $rawTask['start']
+                        ?? $rawTask['start_date']
+                        ?? $rawTask['fecha_inicio']
+                        ?? 'Sin asignar';
+                    $end = $rawTask['end']
+                        ?? $rawTask['due']
+                        ?? $rawTask['due_date']
+                        ?? $rawTask['fecha_fin']
+                        ?? $rawTask['fecha_limite']
+                        ?? 'Sin asignar';
+                    $rawProgress = $rawTask['progress'] ?? $rawTask['progreso'] ?? null;
+                    $progress = isset($rawProgress)
+                        ? (is_numeric($rawProgress) ? ($rawProgress . '%') : $rawProgress)
+                        : '0%';
 
                     $parsedFromId = null;
                     if ($title === null || trim((string)$title) === '') {
@@ -334,12 +359,12 @@ trait MeetingContentParsing
                     }
 
                     $res = $base;
-                    $res['name'] = $name;
-                    $res['description'] = $finalDesc;
-                    $res['assigned'] = $assigned ?: 'Sin asignar';
-                    $res['start'] = $start ?: 'Sin asignar';
-                    $res['end'] = $end ?: 'Sin asignar';
-                    $res['progress'] = $progress ?: '0%';
+                    $res['name'] = (string) $name;
+                    $res['description'] = (string) $finalDesc;
+                    $res['assigned'] = (string) ($assigned ?: 'Sin asignar');
+                    $res['start'] = (string) ($start ?: 'Sin asignar');
+                    $res['end'] = (string) ($end ?: 'Sin asignar');
+                    $res['progress'] = (string) ($progress ?: '0%');
                     return $res;
                 } else {
                     $parts = array_values(array_map('trim', array_filter($rawTask, function($p){ return $p !== null && $p !== ''; })));
@@ -412,7 +437,7 @@ trait MeetingContentParsing
 
         return [
             'tarea' => rtrim(trim((string)$t['name']), ',;:'),
-            'descripcion' => $t['description'] ?: null,
+            'descripcion' => is_string($t['description']) ? trim($t['description']) : '',
             'fecha_inicio' => (is_string($start) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $start)) ? $start : null,
             'fecha_limite' => (is_string($end) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) ? $end : null,
             'progreso' => $progressInt,
