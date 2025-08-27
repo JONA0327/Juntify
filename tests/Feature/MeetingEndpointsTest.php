@@ -219,3 +219,38 @@ test('show meeting returns is_legacy flag', function () {
         ->assertJsonFragment(['id' => $meeting->id, 'is_legacy' => false]);
 });
 
+test('show legacy meeting returns audio data', function () {
+    $user = User::factory()->create(['username' => 'user']);
+
+    GoogleToken::create([
+        'username' => $user->username,
+        'access_token' => 'token',
+        'refresh_token' => 'refresh',
+        'expiry_date' => now()->addDay(),
+    ]);
+
+    $meeting = TranscriptionLaravel::factory()->create([
+        'username' => $user->username,
+        'meeting_name' => 'My Meeting',
+        'audio_drive_id' => 'folder123',
+        'transcript_drive_id' => 'trans123',
+    ]);
+
+    app()->instance(GoogleDriveService::class, new class {
+        public function setAccessToken($token) {}
+        public function getClient() { return new class { public function isAccessTokenExpired(){ return false; } }; }
+        public function downloadFileContent($fileId) { return json_encode(['summary' => 's', 'key_points' => [], 'transcription' => 't']); }
+        public function findAudioInFolder($folderId, $meetingTitle) { return ['fileId' => 'file456', 'downloadUrl' => 'https://example.com/audio.mp3']; }
+        public function getFileInfo($fileId) { return new class { public function getParents(){ return []; } public function getName(){ return 'Parent'; } }; }
+    });
+
+    $response = $this->actingAs($user)->getJson('/api/meetings/' . $meeting->id);
+
+    $response->assertOk()
+        ->assertJsonFragment([
+            'audio_path' => 'https://example.com/audio.mp3',
+            'audio_drive_id' => 'file456',
+            'is_legacy' => true,
+        ]);
+});
+
