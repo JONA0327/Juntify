@@ -1,4 +1,4 @@
-import { saveAudioBlob, clearAllAudio } from './idb.js';
+import { saveAudioBlob, loadAudioBlob, clearAllAudio } from './idb.js';
 
 // ===== VARIABLES GLOBALES =====
 let isRecording = false;
@@ -759,6 +759,18 @@ async function analyzeNow() {
         // Guardar el blob en IndexedDB y almacenar la clave en sessionStorage
         const key = await saveAudioBlob(pendingAudioBlob);
         sessionStorage.setItem('uploadedAudioKey', key);
+        // Verificar que la clave funcione recargando el blob
+        try {
+            const testBlob = await loadAudioBlob(key);
+            if (!testBlob) {
+                throw new Error('Blob no encontrado tras guardar');
+            }
+        } catch (err) {
+            console.error('Error al validar audio guardado:', err);
+            showError('Error al guardar el audio. Intenta nuevamente.');
+            handlePostActionCleanup();
+            return;
+        }
         // Respaldo: guardar base64 si el blob no es muy grande (<= 50MB)
         try {
             if (pendingAudioBlob.size <= 50 * 1024 * 1024) {
@@ -995,6 +1007,21 @@ async function processAudioFile() {
         // Guardar el archivo en IndexedDB
         const audioKey = await saveAudioBlob(uploadedFile);
         console.log('Audio guardado en IndexedDB con clave:', audioKey);
+
+        // Validar que se pueda recargar el blob
+        try {
+            const testBlob = await loadAudioBlob(audioKey);
+            if (!testBlob) {
+                throw new Error('Blob no encontrado tras guardar');
+            }
+        } catch (err) {
+            console.error('Error al validar audio subido:', err);
+            showError('Error al guardar el audio. Intenta nuevamente.');
+            if (progressContainer) {
+                progressContainer.style.display = 'none';
+            }
+            return;
+        }
 
         if (progressContainer) {
             progressFill.style.width = '70%';
