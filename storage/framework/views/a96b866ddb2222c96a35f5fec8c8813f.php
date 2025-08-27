@@ -257,3 +257,4 @@ document.getElementById('taskModal').addEventListener('click', function(e) {
     }
 });
 </script>
+<?php /**PATH C:\laragon\www\Juntify\resources\views/tasks/partials/_modal-task.blade.php ENDPATH**/ ?>

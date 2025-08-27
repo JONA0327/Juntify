@@ -5,3 +5,4 @@
         <p class="page-subtitle">Gestiona y organiza tus tareas y reuniones de forma eficiente.</p>
     </div>
 </div>
+<?php /**PATH C:\laragon\www\Juntify\resources\views/tasks/partials/_header.blade.php ENDPATH**/ ?>

@@ -76,5 +76,13 @@ trait GoogleDriveHelpers
             return 'Error al obtener carpeta';
         }
     }
+
+    /**
+     * Pequeño wrapper para descargar contenido desde Drive en clases que usan este trait.
+     */
+    protected function downloadFromDrive(string $fileId)
+    {
+        return $this->googleDriveService->downloadFileContent($fileId);
+    }
 }
 

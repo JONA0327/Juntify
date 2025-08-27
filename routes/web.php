@@ -9,6 +9,7 @@ use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\TranscriptionController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\TaskLaravelController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\GroupController;
@@ -80,6 +81,18 @@ Route::middleware('auth')->group(function () {
     Route::put('/api/tasks/{task}', [TaskController::class, 'update'])->name('api.tasks.update');
     Route::delete('/api/tasks/{task}', [TaskController::class, 'destroy'])->name('api.tasks.destroy');
     Route::post('/api/tasks/{task}/complete', [TaskController::class, 'complete'])->name('api.tasks.complete');
+
+    // Nueva BD de tareas: tasks_laravel
+    Route::get('/api/tasks-laravel/meetings', [TaskLaravelController::class, 'meetings'])->name('api.tasks-laravel.meetings');
+    Route::post('/api/tasks-laravel/import/{meetingId}', [TaskLaravelController::class, 'importFromJu'])->name('api.tasks-laravel.import');
+    Route::post('/api/tasks-laravel/exists', [TaskLaravelController::class, 'exists'])->name('api.tasks-laravel.exists');
+    Route::get('/api/tasks-laravel/tasks', [TaskLaravelController::class, 'tasks'])->name('api.tasks-laravel.tasks');
+    Route::get('/api/tasks-laravel/tasks/{id}', [TaskLaravelController::class, 'show'])->name('api.tasks-laravel.tasks.show');
+    Route::post('/api/tasks-laravel/tasks', [TaskLaravelController::class, 'store'])->name('api.tasks-laravel.tasks.store');
+    Route::put('/api/tasks-laravel/tasks/{id}', [TaskLaravelController::class, 'update'])->name('api.tasks-laravel.tasks.update');
+    Route::delete('/api/tasks-laravel/tasks/{id}', [TaskLaravelController::class, 'destroy'])->name('api.tasks-laravel.tasks.destroy');
+    Route::post('/api/tasks-laravel/tasks/{id}/complete', [TaskLaravelController::class, 'complete'])->name('api.tasks-laravel.tasks.complete');
+    Route::get('/api/tasks-laravel/calendar', [TaskLaravelController::class, 'calendar'])->name('api.tasks-laravel.calendar');
 
     // Rutas de Contenedores
     Route::get('/api/content-containers', [ContainerController::class, 'getContainers'])->name('api.content-containers');

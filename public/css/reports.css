@@ -17,7 +17,7 @@
     left: 0;
     right: 0;
     border-bottom: 0;
-    background-color: #1e3a8a; /* blue brand */
+    background: linear-gradient(90deg, #2563eb 0%, #1e3a8a 100%);
     color: #ffffff;
 }
 
@@ -32,9 +32,9 @@ body.report-body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background-color: #1e3a8a;
+    background: transparent;
     color: #ffffff;
-    padding: 1rem 2rem;
+    padding: 1rem 2rem 0.5rem 2rem;
 }
 
 .report-brand {
@@ -43,7 +43,7 @@ body.report-body {
     font-weight: 600;
 }
 
-.report-summary { text-align: right; }
+.report-generated { text-align: right; font-size: 0.95rem; opacity: 0.95; }
 
 .report-title {
     margin: 0;
@@ -56,17 +56,18 @@ body.report-body {
 }
 
 .meeting-details {
-    padding: 0.5rem 2rem 1rem 2rem;
+    padding: 0.25rem 2rem 1rem 2rem;
     text-align: center;
-    background-color: #1e3a8a; /* keep blue header */
+    background: transparent;
     color: #ffffff;
 }
 
 .meeting-name {
     margin: 0;
-    font-weight: 600;
-    font-size: 1.25rem;
+    font-weight: 700;
+    font-size: 1.4rem;
 }
+.meeting-subtitle { margin: 0.15rem 0 0 0; font-size: 1rem; opacity: 0.95; }
 
 .participants {
     margin: 0;

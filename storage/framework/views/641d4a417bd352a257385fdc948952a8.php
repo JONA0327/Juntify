@@ -29,126 +29,132 @@
     <!-- Estadísticas -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <div class="bg-slate-800 rounded-lg p-4 text-center">
-            <div class="text-2xl font-bold text-blue-400">{{ $stats['total'] }}</div>
+            <div class="text-2xl font-bold text-blue-400"><?php echo e($stats['total']); ?></div>
             <div class="text-sm text-slate-400">Total</div>
         </div>
         <div class="bg-slate-800 rounded-lg p-4 text-center">
-            <div class="text-2xl font-bold text-yellow-400">{{ $stats['pending'] }}</div>
+            <div class="text-2xl font-bold text-yellow-400"><?php echo e($stats['pending']); ?></div>
             <div class="text-sm text-slate-400">Pendientes</div>
         </div>
         <div class="bg-slate-800 rounded-lg p-4 text-center">
-            <div class="text-2xl font-bold text-orange-400">{{ $stats['in_progress'] }}</div>
+            <div class="text-2xl font-bold text-orange-400"><?php echo e($stats['in_progress']); ?></div>
             <div class="text-sm text-slate-400">En progreso</div>
         </div>
         <div class="bg-slate-800 rounded-lg p-4 text-center">
-            <div class="text-2xl font-bold text-green-400">{{ $stats['completed'] }}</div>
+            <div class="text-2xl font-bold text-green-400"><?php echo e($stats['completed']); ?></div>
             <div class="text-sm text-slate-400">Completadas</div>
         </div>
         <div class="bg-slate-800 rounded-lg p-4 text-center">
-            <div class="text-2xl font-bold text-red-400">{{ $stats['overdue'] }}</div>
+            <div class="text-2xl font-bold text-red-400"><?php echo e($stats['overdue']); ?></div>
             <div class="text-sm text-slate-400">Vencidas</div>
         </div>
     </div>
 
     <!-- Contenido de tareas -->
     <div id="tasks-container" class="flex flex-col gap-4">
-        @forelse($tasks as $task)
-            <div class="task-card priority-{{ $task->priority }} {{ $task->completed ? 'task-completed' : '' }} {{ $task->is_overdue ? 'task-overdue' : '' }}"
-                 data-task-id="{{ $task->id }}"
-                 data-priority="{{ $task->priority }}"
-                 data-status="{{ $task->status }}"
-                 data-due-date="{{ $task->due_date ? $task->due_date->format('Y-m-d') : '' }}">
+        <?php $__empty_1 = true; $__currentLoopData = $tasks; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $task): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+            <div class="task-card priority-<?php echo e($task->priority); ?> <?php echo e($task->completed ? 'task-completed' : ''); ?> <?php echo e($task->is_overdue ? 'task-overdue' : ''); ?>"
+                 data-task-id="<?php echo e($task->id); ?>"
+                 data-priority="<?php echo e($task->priority); ?>"
+                 data-status="<?php echo e($task->status); ?>"
+                 data-due-date="<?php echo e($task->due_date ? $task->due_date->format('Y-m-d') : ''); ?>">
 
                 <div class="flex justify-between items-start">
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-2">
-                            <h4 class="font-semibold text-slate-100">{{ $task->text }}</h4>
+                            <h4 class="font-semibold text-slate-100"><?php echo e($task->text); ?></h4>
 
                             <!-- Badge de prioridad -->
                             <span class="px-2 py-1 text-xs rounded-full
-                                {{ $task->priority === 'alta' ? 'bg-red-500/20 text-red-400' : '' }}
-                                {{ $task->priority === 'media' ? 'bg-yellow-500/20 text-yellow-400' : '' }}
-                                {{ $task->priority === 'baja' ? 'bg-green-500/20 text-green-400' : '' }}">
-                                {{ ucfirst($task->priority) }}
+                                <?php echo e($task->priority === 'alta' ? 'bg-red-500/20 text-red-400' : ''); ?>
+
+                                <?php echo e($task->priority === 'media' ? 'bg-yellow-500/20 text-yellow-400' : ''); ?>
+
+                                <?php echo e($task->priority === 'baja' ? 'bg-green-500/20 text-green-400' : ''); ?>">
+                                <?php echo e(ucfirst($task->priority)); ?>
+
                             </span>
 
                             <!-- Badge de estado -->
                             <span class="px-2 py-1 text-xs rounded-full
-                                {{ $task->completed ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400' }}">
-                                {{ $task->completed ? 'Completada' : ($task->progress > 0 ? 'En progreso' : 'Pendiente') }}
+                                <?php echo e($task->completed ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'); ?>">
+                                <?php echo e($task->completed ? 'Completada' : ($task->progress > 0 ? 'En progreso' : 'Pendiente')); ?>
+
                             </span>
                         </div>
 
-                        @if($task->description)
-                            <p class="text-slate-400 text-sm mb-3">{{ Str::limit($task->description, 100) }}</p>
-                        @endif
+                        <?php if($task->description): ?>
+                            <p class="text-slate-400 text-sm mb-3"><?php echo e(Str::limit($task->description, 100)); ?></p>
+                        <?php endif; ?>
 
                         <div class="flex items-center gap-4 text-sm text-slate-500">
-                            @if($task->due_date)
+                            <?php if($task->due_date): ?>
                                 <span class="flex items-center gap-1">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                                     </svg>
-                                    {{ $task->due_date->format('d/m/Y') }}
-                                </span>
-                            @endif
+                                    <?php echo e($task->due_date->format('d/m/Y')); ?>
 
-                            @if($task->assignee && $task->assignee !== auth()->user()->username)
+                                </span>
+                            <?php endif; ?>
+
+                            <?php if($task->assignee && $task->assignee !== auth()->user()->username): ?>
                                 <span class="flex items-center gap-1">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                     </svg>
-                                    {{ $task->assignedUser->name ?? $task->assignee }}
-                                </span>
-                            @endif
+                                    <?php echo e($task->assignedUser->name ?? $task->assignee); ?>
 
-                            @if($task->progress > 0)
+                                </span>
+                            <?php endif; ?>
+
+                            <?php if($task->progress > 0): ?>
                                 <span class="flex items-center gap-1">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                                     </svg>
-                                    {{ $task->progress }}%
+                                    <?php echo e($task->progress); ?>%
                                 </span>
-                            @endif
+                            <?php endif; ?>
                         </div>
                     </div>
 
                     <!-- Acciones -->
                     <div class="flex gap-2">
-                        @if(!$task->completed)
-                            <button class="btn btn-success btn-sm complete-task" data-task-id="{{ $task->id }}" title="Marcar como completada">
+                        <?php if(!$task->completed): ?>
+                            <button class="btn btn-success btn-sm complete-task" data-task-id="<?php echo e($task->id); ?>" title="Marcar como completada">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                 </svg>
                             </button>
-                        @endif
+                        <?php endif; ?>
 
-                        <button class="btn btn-secondary btn-sm edit-task" data-task-id="{{ $task->id }}" title="Editar tarea">
+                        <button class="btn btn-secondary btn-sm edit-task" data-task-id="<?php echo e($task->id); ?>" title="Editar tarea">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                             </svg>
                         </button>
 
-                        @if($task->username === auth()->user()->username)
-                            <button class="btn btn-danger btn-sm delete-task" data-task-id="{{ $task->id }}" title="Eliminar tarea">
+                        <?php if($task->username === auth()->user()->username): ?>
+                            <button class="btn btn-danger btn-sm delete-task" data-task-id="<?php echo e($task->id); ?>" title="Eliminar tarea">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                 </svg>
                             </button>
-                        @endif
+                        <?php endif; ?>
                     </div>
                 </div>
 
                 <!-- Barra de progreso -->
-                @if($task->progress > 0 && !$task->completed)
+                <?php if($task->progress > 0 && !$task->completed): ?>
                     <div class="mt-3">
                         <div class="w-full bg-slate-700 rounded-full h-2">
-                            <div class="bg-blue-500 h-2 rounded-full transition-all duration-300" style="width: {{ $task->progress }}%"></div>
+                            <div class="bg-blue-500 h-2 rounded-full transition-all duration-300" style="width: <?php echo e($task->progress); ?>%"></div>
                         </div>
                     </div>
-                @endif
+                <?php endif; ?>
             </div>
-        @empty
+        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
             <div class="text-center py-8 text-slate-400">
                 <svg class="w-16 h-16 mx-auto mb-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12l2.25 2.25L15 10.5m6 1.5a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -156,15 +162,16 @@
                 <p>No tienes tareas aún</p>
                 <button class="btn btn-primary mt-4" onclick="openTaskModal()">Crear tu primera tarea</button>
             </div>
-        @endforelse
+        <?php endif; ?>
     </div>
 
     <!-- Paginación -->
-    @if($tasks->hasPages())
+    <?php if($tasks->hasPages()): ?>
         <div class="mt-6">
-            {{ $tasks->links() }}
+            <?php echo e($tasks->links()); ?>
+
         </div>
-    @endif
+    <?php endif; ?>
 </div>
 
 <script>
@@ -296,3 +303,4 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+<?php /**PATH C:\laragon\www\Juntify\resources\views/tasks/partials/_tabs-tareas.blade.php ENDPATH**/ ?>
