@@ -333,6 +333,17 @@ class MeetingController extends Controller
                 $processedData = $this->processTranscriptData($transcriptData);
                 unset($processedData['tasks']);
 
+                $segments = $processedData['segments'] ?? [];
+                $transcription = $processedData['transcription'] ?? '';
+                if (empty($segments)) {
+                    $segments = [];
+                    if (is_array($transcription)) {
+                        $transcription = implode(' ', $transcription);
+                    }
+                } elseif (is_array($transcription)) {
+                    $transcription = implode(' ', $transcription);
+                }
+
                 $tasks = TaskLaravel::where('meeting_id', $legacyMeeting->id)
                     ->where('username', $user->username)
                     ->get();
@@ -348,10 +359,10 @@ class MeetingController extends Controller
                         'audio_drive_id' => $audioDriveId,
                         'summary' => $processedData['summary'],
                         'key_points' => $processedData['key_points'],
-                        'transcription' => $processedData['transcription'],
+                        'transcription' => $transcription,
                         'tasks' => $tasks,
                         'speakers' => $processedData['speakers'] ?? [],
-                        'segments' => $processedData['segments'] ?? [],
+                        'segments' => $segments,
                         'audio_folder' => $this->getFolderName($legacyMeeting->audio_drive_id),
                         'transcript_folder' => $this->getFolderName($legacyMeeting->transcript_drive_id),
                         'needs_encryption' => $needsEncryption,
