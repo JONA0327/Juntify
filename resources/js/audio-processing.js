@@ -1386,7 +1386,7 @@ function viewMeetingDetails() {
 
 function goToMeetings() {
     showNotification('Redirigiendo a lista de reuniones...', 'info');
-    // Aquí iría la redirección a la lista de reuniones
+    window.location.href = '/reuniones';
 }
 
 function createNewMeeting() {
