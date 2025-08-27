@@ -94,6 +94,16 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/tasks-laravel/tasks/{id}/complete', [TaskLaravelController::class, 'complete'])->name('api.tasks-laravel.tasks.complete');
     Route::get('/api/tasks-laravel/calendar', [TaskLaravelController::class, 'calendar'])->name('api.tasks-laravel.calendar');
 
+    // Comentarios de tareas
+    Route::get('/api/tasks-laravel/tasks/{task}/comments', [\App\Http\Controllers\TaskCommentController::class, 'index'])->name('api.tasks-laravel.comments.index');
+    Route::post('/api/tasks-laravel/tasks/{task}/comments', [\App\Http\Controllers\TaskCommentController::class, 'store'])->name('api.tasks-laravel.comments.store');
+
+    // Archivos asociados a tareas
+    Route::get('/api/tasks-laravel/tasks/{task}/files', [\App\Http\Controllers\TaskAttachmentController::class, 'index'])->name('api.tasks-laravel.files.index');
+    Route::post('/api/tasks-laravel/tasks/{task}/files', [\App\Http\Controllers\TaskAttachmentController::class, 'store'])->name('api.tasks-laravel.files.store');
+    Route::get('/api/drive/folders', [\App\Http\Controllers\TaskAttachmentController::class, 'folders'])->name('api.drive.folders');
+    Route::get('/api/tasks-laravel/files/{file}/download', [\App\Http\Controllers\TaskAttachmentController::class, 'download'])->name('api.tasks-laravel.files.download');
+
     // Rutas de Contenedores
     Route::get('/api/content-containers', [ContainerController::class, 'getContainers'])->name('api.content-containers');
     Route::get('/api/content-containers/{id}/meetings', [ContainerController::class, 'getContainerMeetings'])->name('api.content-containers.meetings');

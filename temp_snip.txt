@@ -1,0 +1,40 @@
+                            <h3 class="section-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 9v6l6-6" />
+                                </svg>
+                                Audio de la Reunión
+                            </h3>
+                            <div class="audio-player">
+                                <audio id="meeting-audio" preload="auto"></audio>
+                                <div class="audio-controls">
+                                    <button id="audio-play" class="audio-btn" aria-label="Reproducir">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M5 3.87v16.26L19.5 12 5 3.87z" />
+                                        </svg>
+                                    </button>
+                                    <button id="audio-pause" class="audio-btn hidden" aria-label="Pausar">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M6 4h4v16H6zm8 0h4v16h-4z" />
+                                        </svg>
+                                    </button>
+                                    <input type="range" id="audio-progress" value="0" min="0" step="0.1">
+                                    ${!audioSrc ? '<p class="text-slate-400 text-sm mt-2">Audio no disponible para esta reunión</p>' : ''}
+                                </div>
+                                <audio id="meeting-full-audio" preload="auto" style="display:none"></audio>
+                            </div>
+                        </div>
+                        <div class="modal-section">
+                            <h3 class="section-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Resumen del Análisis
+                            </h3>
+                            <div class="section-content">
+                                ${escapeHtml(meeting.summary)}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tab-content" id="tab-key-points">
+                        <div class="modal-section">
+                            <h3 class="section-title">

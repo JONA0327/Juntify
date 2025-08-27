@@ -45,4 +45,24 @@ class GoogleCalendarService
 
         return $created->getId();
     }
+
+    /**
+     * Insert or update an event. Start/End can be either ['dateTime'=>RFC3339] or ['date'=>YYYY-MM-DD].
+     */
+    public function upsertEvent(string $summary, array $start, array $end, string $calendarId = 'primary', ?string $eventId = null): string
+    {
+        $event = new Event([
+            'summary' => $summary,
+            'start'   => $start,
+            'end'     => $end,
+        ]);
+
+        if ($eventId) {
+            $updated = $this->calendar->events->patch($calendarId, $eventId, $event);
+            return $updated->getId();
+        }
+
+        $created = $this->calendar->events->insert($calendarId, $event);
+        return $created->getId();
+    }
 }

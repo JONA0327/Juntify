@@ -22,6 +22,9 @@ class TaskLaravel extends Model
         'descripcion',
     'asignado',
         'progreso',
+        'google_event_id',
+        'google_calendar_id',
+        'calendar_synced_at',
     ];
 
     protected $casts = [
@@ -30,6 +33,7 @@ class TaskLaravel extends Model
     'hora_limite' => 'string',
     'asignado' => 'string',
         'progreso' => 'integer',
+        'calendar_synced_at' => 'datetime',
     ];
 
     public function meeting()

@@ -12,6 +12,8 @@ use App\Services\GoogleDriveService;
 use App\Traits\GoogleDriveHelpers;
 use App\Traits\MeetingContentParsing;
 use Carbon\Carbon;
+use App\Services\GoogleCalendarService;
+use App\Models\GoogleToken;
 
 class TaskLaravelController extends Controller
 {
@@ -244,21 +246,37 @@ class TaskLaravelController extends Controller
         }
 
         $tasks = $q->get();
-        $events = $tasks->map(function ($t) {
+        $today = Carbon::today();
+        $events = $tasks->map(function ($t) use ($today) {
             $base = $t->fecha_limite ?: $t->fecha_inicio ?: null;
             $start = $base ? Carbon::parse($base)->toDateString() : null;
             if ($start && $t->hora_limite) {
                 $start = Carbon::parse($start . ' ' . $t->hora_limite)->toIso8601String();
             }
+
+            // Status mapping: pending, in_progress, completed, overdue
+            $status = 'pending';
+            if ($t->progreso >= 100) {
+                $status = 'completed';
+            } elseif ($t->progreso > 0) {
+                $status = 'in_progress';
+            }
+            try {
+                if ($status !== 'completed' && $t->fecha_limite) {
+                    $due = Carbon::parse($t->fecha_limite)->endOfDay();
+                    if ($due->lt($today)) $status = 'overdue';
+                }
+            } catch (\Exception $e) {}
+
             return [
                 'id' => $t->id,
                 'title' => $t->tarea,
                 'start' => $start,
                 'extendedProps' => [
                     'description' => $t->descripcion,
-                    'status' => ($t->progreso >= 100 ? 'completed' : ($t->progreso > 0 ? 'in_progress' : 'pending')),
+                    'status' => $status,
                     'priority' => $t->prioridad,
-                        'asignado' => $t->asignado,
+                    'asignado' => $t->asignado,
                     'assignee' => null,
                     'progress' => $t->progreso,
                     'meeting_id' => $t->meeting_id,
@@ -280,8 +298,39 @@ class TaskLaravelController extends Controller
         return response()->json(['success' => true, 'task' => $task]);
     }
 
+    /**
+     * Aplica el token de Google del usuario autenticado al servicio Calendar.
+     */
+    protected function applyCalendarToken(GoogleCalendarService $calendar): ?GoogleToken
+    {
+        $user = Auth::user();
+        $token = GoogleToken::where('username', $user->username)
+            ->whereNotNull('access_token')
+            ->first();
+        if (!$token) return null;
+
+        $client = $calendar->getClient();
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expires_in'    => max(1, Carbon::parse($token->expiry_date)->timestamp - time()),
+            'created'       => time(),
+        ]);
+        if ($client->isAccessTokenExpired() && $token->refresh_token) {
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (!isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
+        }
+        return $token;
+    }
+
     /** Crear una nueva tarea en tasks_laravel */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, GoogleCalendarService $calendar): JsonResponse
     {
         $user = Auth::user();
         $data = $request->validate([
@@ -313,11 +362,14 @@ class TaskLaravelController extends Controller
             $created = true;
         }
 
+        // Intentar sincronizar con Google Calendar si hay fecha
+        $this->maybeSyncToCalendar($task, $calendar);
+
         return response()->json(['success' => true, 'created' => $created, 'task' => $task]);
     }
 
     /** Actualizar una tarea en tasks_laravel */
-    public function update(Request $request, int $id): JsonResponse
+    public function update(Request $request, int $id, GoogleCalendarService $calendar): JsonResponse
     {
         $user = Auth::user();
         $task = TaskLaravel::where('id', $id)->where('username', $user->username)->firstOrFail();
@@ -334,6 +386,9 @@ class TaskLaravelController extends Controller
 
         $task->update($data);
 
+        // Sincronizar con Google Calendar en actualizaciones
+        $this->maybeSyncToCalendar($task, $calendar);
+
         return response()->json(['success' => true, 'task' => $task]);
     }
 
@@ -344,6 +399,46 @@ class TaskLaravelController extends Controller
         $task = TaskLaravel::where('id', $id)->where('username', $user->username)->firstOrFail();
         $task->delete();
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Si la tarea tiene fecha (con o sin hora), crear/actualizar evento en Google Calendar.
+     * Si no tiene fecha, no crea evento (queda pendiente hasta que se agregue una fecha).
+     */
+    protected function maybeSyncToCalendar(TaskLaravel $task, GoogleCalendarService $calendar): void
+    {
+        try {
+            // Requiere token válido; si no hay, no hace nada
+            if (!$this->applyCalendarToken($calendar)) return;
+
+            $date = $task->fecha_limite ?: $task->fecha_inicio;
+            if (!$date) return; // sin fecha, no se agenda todavía
+
+            $calendarId = $task->google_calendar_id ?: 'primary';
+            $summary = 'Tarea: ' . $task->tarea;
+
+            // Si hay hora, usar dateTime; si no, evento de todo el día
+            if (!empty($task->hora_limite)) {
+                $start = Carbon::parse($date->toDateString() . ' ' . $task->hora_limite, config('app.timezone'));
+                $end = (clone $start)->addHour();
+                $startArr = ['dateTime' => $start->toRfc3339String()];
+                $endArr   = ['dateTime' => $end->toRfc3339String()];
+            } else {
+                $startArr = ['date' => $date->toDateString()];
+                // End para all-day debe ser el día siguiente
+                $endArr   = ['date' => Carbon::parse($date)->addDay()->toDateString()];
+            }
+
+            $eventId = $calendar->upsertEvent($summary, $startArr, $endArr, $calendarId, $task->google_event_id);
+
+            if ($eventId && $eventId !== $task->google_event_id) {
+                $task->google_event_id = $eventId;
+            }
+            $task->calendar_synced_at = now();
+            $task->save();
+        } catch (\Throwable $e) {
+            Log::warning('Calendar sync failed for task '.$task->id.': '.$e->getMessage());
+        }
     }
 
     /** Marcar como completada (progreso=100) */

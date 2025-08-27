@@ -132,6 +132,15 @@
             overflow-y: auto;
         }
 
+        /* Utilidad: ocultar barras de desplazamiento manteniendo el scroll */
+        .no-scrollbar {
+            -ms-overflow-style: none; /* IE y Edge */
+            scrollbar-width: none;    /* Firefox */
+        }
+        .no-scrollbar::-webkit-scrollbar { /* Chrome, Safari, Opera */
+            display: none;
+        }
+
         .notifications-list {
             list-style: none;
             margin: 0;

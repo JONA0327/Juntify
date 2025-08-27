@@ -1097,6 +1097,18 @@ function showMeetingModal(meeting) {
 
     const audioSrc = meeting.audio_path || '';
 
+    // Calcular participantes en base a los hablantes detectados
+    let participantsCount = 0;
+    try {
+        const speakers = Array.isArray(meeting.segments)
+            ? meeting.segments
+                .map(s => (s.speaker || s.display_speaker || '').toString().trim())
+                .filter(Boolean)
+                .map(n => n.toLowerCase())
+            : [];
+        participantsCount = new Set(speakers).size;
+    } catch (_) { participantsCount = 0; }
+
     const modalHtml = `
         <div class="meeting-modal" id="meetingModal">
             <div class="modal-content">
@@ -1215,6 +1227,18 @@ function showMeetingModal(meeting) {
         modal.classList.add('active');
     });
 
+    // Reemplazar subtítulo para incluir elementos con IDs (fecha • duración • participantes)
+    try {
+        const subtitleEl = modal.querySelector('.modal-subtitle');
+        if (subtitleEl) {
+            subtitleEl.innerHTML = `
+                <span id="modal-created-at">${meeting.created_at || ''}</span>
+                • <span id="modal-duration">${meeting.duration || '--:--'}</span>
+                • <span id="modal-participants">${participantsCount}</span> participantes
+            `;
+        }
+    } catch (_) {}
+
     document.querySelectorAll('.modal-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             const target = tab.getAttribute('data-tab');
@@ -1232,6 +1256,33 @@ function showMeetingModal(meeting) {
     const playBtn = document.getElementById('audio-play');
     const pauseBtn = document.getElementById('audio-pause');
     const progress = document.getElementById('audio-progress');
+    const headerDurationEl = document.getElementById('modal-duration');
+
+    // Insertar marcadores de tiempo (actual/duración) junto a la barra de progreso
+    let currentTimeEl = document.getElementById('audio-current-time');
+    let durationEl = document.getElementById('audio-duration');
+    try {
+        const controls = modal.querySelector('.audio-controls');
+        if (controls && progress && !currentTimeEl && !durationEl) {
+            currentTimeEl = document.createElement('span');
+            currentTimeEl.id = 'audio-current-time';
+            currentTimeEl.className = 'text-slate-400 text-sm';
+            currentTimeEl.textContent = '00:00';
+
+            const slash = document.createElement('span');
+            slash.textContent = '/';
+            slash.className = 'text-slate-600';
+
+            durationEl = document.createElement('span');
+            durationEl.id = 'audio-duration';
+            durationEl.className = 'text-slate-300 text-sm';
+            durationEl.textContent = '--:--';
+
+            controls.appendChild(currentTimeEl);
+            controls.appendChild(slash);
+            controls.appendChild(durationEl);
+        }
+    } catch (_) {}
 
     if (meetingAudioPlayer && playBtn && pauseBtn && progress) {
         if (audioSrc) {
@@ -1317,10 +1368,24 @@ function showMeetingModal(meeting) {
             if (errorMsg) {
                 errorMsg.remove();
             }
+
+            // Actualizar duración en UI (controles y subtítulo)
+            try {
+                const totalMs = Math.round(meetingAudioPlayer.duration * 1000);
+                const durationElLocal = document.getElementById('audio-duration');
+                if (durationElLocal) durationElLocal.textContent = formatTime(totalMs);
+                if (headerDurationEl) headerDurationEl.textContent = formatTime(totalMs);
+            } catch (_) {}
         });
 
         meetingAudioPlayer.addEventListener('timeupdate', () => {
             progress.value = meetingAudioPlayer.currentTime;
+            const currentTimeElLocal = document.getElementById('audio-current-time');
+            if (currentTimeElLocal) {
+                try {
+                    currentTimeElLocal.textContent = formatTime(Math.round(meetingAudioPlayer.currentTime * 1000));
+                } catch (_) {}
+            }
         });
 
         playBtn.addEventListener('click', () => {
