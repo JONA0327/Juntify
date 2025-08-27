@@ -9,6 +9,11 @@ use App\Models\MeetingShare;
 use App\Models\MeetingContentContainer;
 use App\Models\Container;
 use App\Models\TaskLaravel;
+use App\Models\Meeting;
+use App\Models\KeyPoint;
+use App\Models\Transcription;
+use App\Models\Task;
+use Carbon\Carbon;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -102,7 +107,7 @@ class MeetingController extends Controller
             // Configurar el cliente de Google Drive con el token del usuario
             $this->setGoogleDriveToken($user);
 
-            $meetings = TranscriptionLaravel::where('username', $user->username)
+            $legacyMeetings = TranscriptionLaravel::where('username', $user->username)
                 ->whereDoesntHave('containers')
                 ->orderBy('created_at', 'desc')
                 ->get()
@@ -110,18 +115,41 @@ class MeetingController extends Controller
                     return [
                         'id' => $meeting->id,
                         'meeting_name' => $meeting->meeting_name,
-                        'created_at' => $meeting->created_at->format('d/m/Y H:i'),
-                        'audio_drive_id' => $meeting->audio_drive_id,
-                        'transcript_drive_id' => $meeting->transcript_drive_id,
-                        // Carpeta real desde Drive (subcarpeta o raíz)
+                        'created_at' => $meeting->created_at,
                         'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
                         'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
+                        'is_legacy' => true,
                     ];
                 });
 
+            $modernMeetings = Meeting::where('username', $user->username)
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($meeting) {
+                    return [
+                        'id' => $meeting->id,
+                        'meeting_name' => $meeting->title,
+                        'created_at' => $meeting->created_at ?? $meeting->date,
+                        'audio_folder' => $this->getFolderName($meeting->recordings_folder_id),
+                        'transcript_folder' => 'Base de datos',
+                        'is_legacy' => false,
+                    ];
+                });
+
+            $meetings = $legacyMeetings
+                ->concat($modernMeetings)
+                ->sortByDesc('created_at')
+                ->map(function ($meeting) {
+                    $meeting['created_at'] = $meeting['created_at'] instanceof Carbon
+                        ? $meeting['created_at']->format('d/m/Y H:i')
+                        : Carbon::parse($meeting['created_at'])->format('d/m/Y H:i');
+                    return $meeting;
+                })
+                ->values();
+
             return response()->json([
                 'success' => true,
-                'meetings' => $meetings
+                'meetings' => $meetings,
             ]);
 
         } catch (\Exception $e) {
@@ -274,58 +302,118 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
-            $meeting = TranscriptionLaravel::where('id', $id)
-                ->where('username', $user->username)
-                ->firstOrFail();
 
-            // Configurar el cliente de Google Drive con el token del usuario
+            // Intentar buscar una reunión legacy primero
+            $legacyMeeting = TranscriptionLaravel::where('id', $id)
+                ->where('username', $user->username)
+                ->first();
+
             $this->setGoogleDriveToken($user);
 
-            if (empty($meeting->transcript_drive_id)) {
+            if ($legacyMeeting) {
+                if (empty($legacyMeeting->transcript_drive_id)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Transcripción no disponible',
+                    ], 404);
+                }
+
+                $transcriptContent = $this->downloadFromDrive($legacyMeeting->transcript_drive_id);
+                $transcriptResult = $this->decryptJuFile($transcriptContent);
+                $transcriptData = $transcriptResult['data'];
+                $needsEncryption = $transcriptResult['needs_encryption'];
+
+                $transcriptData = $this->extractMeetingDataFromJson($transcriptData);
+                $audioPath = $this->getAudioPath($legacyMeeting);
+                $processedData = $this->processTranscriptData($transcriptData);
+                unset($processedData['tasks']);
+
+                $tasks = TaskLaravel::where('meeting_id', $legacyMeeting->id)->get();
+
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Transcripción no disponible',
-                ], 404);
+                    'success' => true,
+                    'meeting' => [
+                        'id' => $legacyMeeting->id,
+                        'meeting_name' => $legacyMeeting->meeting_name,
+                        'created_at' => $legacyMeeting->created_at->format('d/m/Y H:i'),
+                        'audio_path' => $audioPath,
+                        'summary' => $processedData['summary'],
+                        'key_points' => $processedData['key_points'],
+                        'transcription' => $processedData['transcription'],
+                        'tasks' => $tasks,
+                        'speakers' => $processedData['speakers'] ?? [],
+                        'segments' => $processedData['segments'] ?? [],
+                        'audio_folder' => $this->getFolderName($legacyMeeting->audio_drive_id),
+                        'transcript_folder' => $this->getFolderName($legacyMeeting->transcript_drive_id),
+                        'needs_encryption' => $needsEncryption,
+                    ]
+                ]);
             }
 
-            // Descargar el archivo .ju (transcripción)
-            $transcriptContent = $this->downloadFromDrive($meeting->transcript_drive_id);
-            $transcriptResult = $this->decryptJuFile($transcriptContent);
-            $transcriptData = $transcriptResult['data'];
-            $needsEncryption = $transcriptResult['needs_encryption'];
+            // Reunión moderna en base de datos
+            $meeting = Meeting::with([
+                'tasks',
+                'keyPoints' => function ($q) { $q->ordered(); },
+                'transcriptions' => function ($q) { $q->byTime(); },
+            ])->where('id', $id)
+              ->where('username', $user->username)
+              ->firstOrFail();
 
-            // Normalizar y procesar la transcripción
-            $transcriptData = $this->extractMeetingDataFromJson($transcriptData);
-            $audioPath = $this->getAudioPath($meeting);
-            $processedData = $this->processTranscriptData($transcriptData);
-            unset($processedData['tasks']);
+            $audioFile = null;
+            if ($meeting->recordings_folder_id) {
+                $files = $this->googleDriveService->searchFiles($meeting->title, $meeting->recordings_folder_id);
+                $audioFile = $files[0] ?? null;
+            }
+            if (!$audioFile) {
+                $files = $this->googleDriveService->searchFiles($meeting->title, null);
+                $audioFile = $files[0] ?? null;
+            }
 
-            $tasks = TaskLaravel::where('meeting_id', $meeting->id)->get();
+            $audioPath = null;
+            if ($audioFile) {
+                $tempMeeting = (object) [
+                    'id' => $meeting->id,
+                    'meeting_name' => $meeting->title,
+                    'audio_drive_id' => $audioFile->getId(),
+                    'audio_download_url' => null,
+                ];
+                $audioPath = $this->getAudioPath($tempMeeting);
+            }
+
+            $segments = $meeting->transcriptions->map(function ($t) {
+                return [
+                    'time' => $t->time,
+                    'speaker' => $t->speaker,
+                    'text' => $t->text,
+                    'display_speaker' => $t->display_speaker,
+                ];
+            });
+
+            $transcriptionText = $segments->pluck('text')->implode(' ');
 
             return response()->json([
                 'success' => true,
                 'meeting' => [
                     'id' => $meeting->id,
-                    'meeting_name' => $meeting->meeting_name,
-                    'created_at' => $meeting->created_at->format('d/m/Y H:i'),
+                    'meeting_name' => $meeting->title,
+                    'created_at' => ($meeting->date ?? $meeting->created_at)->format('d/m/Y H:i'),
                     'audio_path' => $audioPath,
-                    'summary' => $processedData['summary'],
-                    'key_points' => $processedData['key_points'],
-                    'transcription' => $processedData['transcription'],
-                    'tasks' => $tasks,
-                    'speakers' => $processedData['speakers'] ?? [],
-                    'segments' => $processedData['segments'] ?? [],
-                    // Carpeta real desde Drive
-                    'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
-                    'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
-                    'needs_encryption' => $needsEncryption,
+                    'summary' => $meeting->summary,
+                    'key_points' => $meeting->keyPoints->pluck('point_text'),
+                    'transcription' => $transcriptionText,
+                    'tasks' => $meeting->tasks,
+                    'speakers' => $meeting->speaker_map ?? [],
+                    'segments' => $segments,
+                    'audio_folder' => $this->getFolderName($meeting->recordings_folder_id),
+                    'transcript_folder' => 'Base de datos',
+                    'needs_encryption' => false,
                 ]
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al cargar la reunión: ' . $e->getMessage()
+                'message' => 'Error al cargar la reunión: ' . $e->getMessage(),
             ], 500);
         }
     }
