@@ -311,6 +311,29 @@ class GoogleDriveService
     }
 
     /**
+     * Busca un archivo de audio dentro de una carpeta por título de reunión
+     */
+    public function findAudioInFolder(string $folderId, string $meetingTitle): ?array
+    {
+        $response = $this->drive->files->listFiles([
+            'q' => sprintf("'%s' in parents and trashed=false", $folderId),
+            'fields' => 'files(id,name,webContentLink)',
+            'supportsAllDrives' => true,
+        ]);
+
+        foreach ($response->getFiles() as $file) {
+            if (preg_match('/^' . preg_quote($meetingTitle, '/') . '/i', $file->getName())) {
+                return [
+                    'fileId' => $file->getId(),
+                    'downloadUrl' => $this->normalizeDriveUrl($file->getWebContentLink()),
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Renombra un archivo en Google Drive
      */
     public function renameFile(string $fileId, string $newName): DriveFile

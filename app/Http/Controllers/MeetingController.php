@@ -324,7 +324,12 @@ class MeetingController extends Controller
                 $needsEncryption = $transcriptResult['needs_encryption'];
 
                 $transcriptData = $this->extractMeetingDataFromJson($transcriptData);
-                $audioPath = $this->getAudioPath($legacyMeeting);
+                $audioData = $this->googleDriveService->findAudioInFolder(
+                    $legacyMeeting->audio_drive_id,
+                    $legacyMeeting->meeting_name
+                );
+                $audioPath = $audioData['downloadUrl'] ?? null;
+                $audioDriveId = $audioData['fileId'] ?? null;
                 $processedData = $this->processTranscriptData($transcriptData);
                 unset($processedData['tasks']);
 
@@ -338,6 +343,7 @@ class MeetingController extends Controller
                         'is_legacy' => true,
                         'created_at' => $legacyMeeting->created_at->format('d/m/Y H:i'),
                         'audio_path' => $audioPath,
+                        'audio_drive_id' => $audioDriveId,
                         'summary' => $processedData['summary'],
                         'key_points' => $processedData['key_points'],
                         'transcription' => $processedData['transcription'],
