@@ -282,7 +282,7 @@
                 statPending.textContent = s.pending ?? 0;
                 statInprog.textContent = s.in_progress ?? 0;
                 statCompleted.textContent = s.completed ?? 0;
-                renderTasksSidebar(tasks);
+                renderTasksSidebar(tasks, source);
             } catch (e) {
                 console.error(e);
                 listEl.innerHTML = '<p class="text-red-400">No se pudieron cargar las tareas.</p>';
@@ -291,7 +291,7 @@
 
     window.loadTasksForMeeting = (id, src) => renderTasksAfterFetch(id, src);
 
-        function renderTasksSidebar(tasks) {
+        function renderTasksSidebar(tasks, source) {
             const listEl = document.getElementById('tasks-sidebar-list');
             listEl.innerHTML = '';
             if (!tasks.length) {
@@ -320,6 +320,7 @@
                             </div>
                         </div>
                     </div>`;
+                item.addEventListener('click', () => openTaskModal(t.id, source));
                 listEl.appendChild(item);
             }
         }

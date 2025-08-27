@@ -122,7 +122,7 @@
 <script>
 let editingTaskId = null;
 
-function openTaskModal(taskId = null) {
+function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource || 'transcriptions_laravel')) {
     const modal = document.getElementById('taskModal');
     const modalTitle = document.getElementById('modalTitle');
     const submitBtn = document.getElementById('submitBtn');
@@ -131,6 +131,7 @@ function openTaskModal(taskId = null) {
     const form = document.getElementById('taskForm');
 
     editingTaskId = taskId;
+    window.lastSelectedMeetingSource = source;
 
     if (taskId) {
         // Modo edición
@@ -139,27 +140,49 @@ function openTaskModal(taskId = null) {
         progressContainer.classList.remove('hidden');
         completedContainer.classList.remove('hidden');
 
-        // Cargar datos de la tarea (tasks_laravel)
-        fetch(`/api/tasks-laravel/tasks/${taskId}`)
-            .then(response => response.json())
-            .then(resp => {
-                if (!resp.success) throw new Error('No se pudo cargar la tarea');
-                const t = resp.task;
-                document.getElementById('taskId').value = t.id;
-                document.getElementById('taskText').value = t.tarea || '';
-                document.getElementById('taskDescription').value = t.descripcion || '';
-                document.getElementById('taskDueDate').value = t.fecha_limite || '';
-                        document.getElementById('taskDueTime').value = (t.hora_limite || '').toString().slice(0,5);
-                document.getElementById('taskPriority').value = (t.prioridad || 'media');
-                document.getElementById('taskAssignee').value = '';
-                document.getElementById('taskProgress').value = (typeof t.progreso === 'number' ? t.progreso : 0);
-                document.getElementById('taskCompleted').checked = (t.progreso >= 100);
-                updateProgressValue();
-            })
-            .catch(error => {
-                console.error('Error cargando tarea:', error);
-                alert('Error al cargar la tarea');
-            });
+        if (source === 'meetings') {
+            fetch(`/api/tasks/${taskId}`)
+                .then(res => res.json())
+                .then(t => {
+                    document.getElementById('taskId').value = t.id;
+                    document.getElementById('taskText').value = t.text || '';
+                    document.getElementById('taskDescription').value = t.description || '';
+                    const due = t.due_date ? t.due_date.toString() : '';
+                    document.getElementById('taskDueDate').value = due.slice(0,10);
+                    document.getElementById('taskDueTime').value = due.length > 10 ? due.slice(11,16) : '';
+                    document.getElementById('taskPriority').value = t.priority || 'media';
+                    document.getElementById('taskAssignee').value = t.assignee || '';
+                    document.getElementById('taskProgress').value = (typeof t.progress === 'number' ? t.progress : 0);
+                    document.getElementById('taskCompleted').checked = !!t.completed;
+                    updateProgressValue();
+                })
+                .catch(error => {
+                    console.error('Error cargando tarea:', error);
+                    alert('Error al cargar la tarea');
+                });
+        } else {
+            // Cargar datos de la tarea (tasks_laravel)
+            fetch(`/api/tasks-laravel/tasks/${taskId}`)
+                .then(response => response.json())
+                .then(resp => {
+                    if (!resp.success) throw new Error('No se pudo cargar la tarea');
+                    const t = resp.task;
+                    document.getElementById('taskId').value = t.id;
+                    document.getElementById('taskText').value = t.tarea || '';
+                    document.getElementById('taskDescription').value = t.descripcion || '';
+                    document.getElementById('taskDueDate').value = t.fecha_limite || '';
+                    document.getElementById('taskDueTime').value = (t.hora_limite || '').toString().slice(0,5);
+                    document.getElementById('taskPriority').value = (t.prioridad || 'media');
+                    document.getElementById('taskAssignee').value = '';
+                    document.getElementById('taskProgress').value = (typeof t.progreso === 'number' ? t.progreso : 0);
+                    document.getElementById('taskCompleted').checked = (t.progreso >= 100);
+                    updateProgressValue();
+                })
+                .catch(error => {
+                    console.error('Error cargando tarea:', error);
+                    alert('Error al cargar la tarea');
+                });
+        }
     } else {
         // Modo creación
         modalTitle.textContent = 'Crear Nueva Tarea';
@@ -191,55 +214,102 @@ document.getElementById('taskForm').addEventListener('submit', function(e) {
 
     const formData = new FormData(this);
     const entries = Object.fromEntries(formData.entries());
-    // Mapear a campos de tasks_laravel
     const isEdit = !!editingTaskId;
-    const payload = {
-        tarea: entries.text,
-        descripcion: entries.description || null,
-        prioridad: entries.priority || null,
-        fecha_inicio: null,
-        fecha_limite: entries.due_date || null,
-    hora_limite: entries.due_time || null,
-        progreso: parseInt(document.getElementById('taskProgress').value || '0', 10)
-    };
-    if (!isEdit) {
-        if (!window.lastSelectedMeetingId) {
-            alert('Selecciona una reunión primero para asociar la tarea.');
-            return;
-        }
-        payload.meeting_id = window.lastSelectedMeetingId;
-    }
+    const source = window.lastSelectedMeetingSource || 'transcriptions_laravel';
 
-    // Use tasks_laravel endpoints
-    const url = editingTaskId ? `/api/tasks-laravel/tasks/${editingTaskId}` : '/api/tasks-laravel/tasks';
-    const method = editingTaskId ? 'PUT' : 'POST';
-
-    fetch(url, {
-        method: method,
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': (window.taskLaravel?.csrf || window.taskData?.csrfToken)
-        },
-        body: JSON.stringify(payload)
-    })
-    .then(response => response.json())
-    .then(result => {
-        if (result.success) {
-            closeTaskModal();
-            if (window.loadTasksForMeeting && window.lastSelectedMeetingId) {
-                // refresh sidebar list if a meeting is selected
-                window.loadTasksForMeeting(window.lastSelectedMeetingId, window.lastSelectedMeetingSource);
-            } else {
-                location.reload();
+    if (source === 'meetings') {
+        const payload = {
+            text: entries.text,
+            description: entries.description || null,
+            due_date: entries.due_date ? (entries.due_time ? `${entries.due_date} ${entries.due_time}` : entries.due_date) : null,
+            priority: entries.priority || null,
+            assignee: entries.assignee || null,
+            progress: parseInt(document.getElementById('taskProgress').value || '0', 10),
+            completed: document.getElementById('taskCompleted').checked
+        };
+        if (!isEdit) {
+            if (!window.lastSelectedMeetingId) {
+                alert('Selecciona una reunión primero para asociar la tarea.');
+                return;
             }
-        } else {
-            alert('Error al guardar la tarea: ' + (result.message || 'Error desconocido'));
+            payload.meeting_id = window.lastSelectedMeetingId;
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error al guardar la tarea');
-    });
+
+        const url = isEdit ? `/api/tasks/${editingTaskId}` : '/api/tasks';
+        const method = isEdit ? 'PUT' : 'POST';
+
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': (window.taskLaravel?.csrf || window.taskData?.csrfToken)
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                closeTaskModal();
+                if (window.loadTasksForMeeting && window.lastSelectedMeetingId) {
+                    window.loadTasksForMeeting(window.lastSelectedMeetingId, source);
+                } else {
+                    location.reload();
+                }
+            } else {
+                alert('Error al guardar la tarea: ' + (result.message || 'Error desconocido'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al guardar la tarea');
+        });
+    } else {
+        const payload = {
+            tarea: entries.text,
+            descripcion: entries.description || null,
+            prioridad: entries.priority || null,
+            fecha_inicio: null,
+            fecha_limite: entries.due_date || null,
+            hora_limite: entries.due_time || null,
+            progreso: parseInt(document.getElementById('taskProgress').value || '0', 10)
+        };
+        if (!isEdit) {
+            if (!window.lastSelectedMeetingId) {
+                alert('Selecciona una reunión primero para asociar la tarea.');
+                return;
+            }
+            payload.meeting_id = window.lastSelectedMeetingId;
+        }
+
+        const url = editingTaskId ? `/api/tasks-laravel/tasks/${editingTaskId}` : '/api/tasks-laravel/tasks';
+        const method = editingTaskId ? 'PUT' : 'POST';
+
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': (window.taskLaravel?.csrf || window.taskData?.csrfToken)
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                closeTaskModal();
+                if (window.loadTasksForMeeting && window.lastSelectedMeetingId) {
+                    window.loadTasksForMeeting(window.lastSelectedMeetingId, source);
+                } else {
+                    location.reload();
+                }
+            } else {
+                alert('Error al guardar la tarea: ' + (result.message || 'Error desconocido'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al guardar la tarea');
+        });
+    }
 });
 
 // Event listeners para abrir modal desde botones
