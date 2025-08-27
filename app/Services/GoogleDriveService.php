@@ -311,9 +311,9 @@ class GoogleDriveService
     }
 
     /**
-     * Busca un archivo de audio dentro de una carpeta por título de reunión
+     * Busca un archivo de audio dentro de una carpeta por título o ID de reunión
      */
-    public function findAudioInFolder(string $folderId, string $meetingTitle): ?array
+    public function findAudioInFolder(string $folderId, string $meetingTitle, string $meetingId): ?array
     {
         $response = $this->drive->files->listFiles([
             'q' => sprintf("'%s' in parents and trashed=false", $folderId),
@@ -322,7 +322,11 @@ class GoogleDriveService
         ]);
 
         foreach ($response->getFiles() as $file) {
-            if (preg_match('/^' . preg_quote($meetingTitle, '/') . '/i', $file->getName())) {
+            $name = $file->getName();
+            if (
+                preg_match('/^' . preg_quote($meetingTitle, '/') . '/i', $name) ||
+                preg_match('/^' . preg_quote($meetingId, '/') . '/i', $name)
+            ) {
                 return [
                     'fileId' => $file->getId(),
                     'downloadUrl' => $this->normalizeDriveUrl($file->getWebContentLink()),

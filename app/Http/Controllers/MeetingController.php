@@ -350,7 +350,8 @@ class MeetingController extends Controller
 
                     $audioData = $this->googleDriveService->findAudioInFolder(
                         $legacyMeeting->audio_drive_id,
-                        $legacyMeeting->meeting_name
+                        $legacyMeeting->meeting_name,
+                        (string) $legacyMeeting->id
                     );
                     $audioPath = $audioData['downloadUrl'] ?? null;
                     $audioDriveId = $audioData['fileId'] ?? null;
@@ -385,7 +386,8 @@ class MeetingController extends Controller
                 $transcriptData = $this->extractMeetingDataFromJson($transcriptData);
                 $audioData = $this->googleDriveService->findAudioInFolder(
                     $legacyMeeting->audio_drive_id,
-                    $legacyMeeting->meeting_name
+                    $legacyMeeting->meeting_name,
+                    (string) $legacyMeeting->id
                 );
                 $audioPath = $audioData['downloadUrl'] ?? null;
                 $audioDriveId = $audioData['fileId'] ?? null;
