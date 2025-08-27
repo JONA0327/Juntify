@@ -24,7 +24,7 @@ class CheckGroupRole
             })
             ->value('rol');
 
-        if ($role !== 'full_meeting_access') {
+        if ($role === 'invitado') {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
