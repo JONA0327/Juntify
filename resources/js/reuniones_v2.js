@@ -116,7 +116,11 @@ async function loadMyMeetings() {
         const data = await response.json();
 
         if (data.success) {
-            currentMeetings = data.meetings;
+            const meetings = [
+                ...(Array.isArray(data.meetings) ? data.meetings : []),
+                ...(Array.isArray(data.legacy_meetings) ? data.legacy_meetings : []),
+            ];
+            currentMeetings = meetings;
             renderMeetings(currentMeetings, '#my-meetings', 'No tienes reuniones');
         } else {
             showErrorState(container, data.message || 'Error al cargar reuniones', loadMyMeetings);
@@ -1007,8 +1011,6 @@ async function openMeetingModal(meetingId) {
             }
         });
 
-        updateLoadingStep(2); // Paso 2: Descifrando archivo
-
         if (!response.ok) {
             let errorMessage = 'Error al cargar la reunión';
             try {
@@ -1026,18 +1028,38 @@ async function openMeetingModal(meetingId) {
 
         const data = await response.json();
 
-        updateLoadingStep(3); // Paso 3: Descargando audio
-
         if (data.success) {
-            updateLoadingStep(4); // Paso 4: Procesando contenido
+            const meeting = data.meeting || {};
+
+            // Construir segmentos y transcripción desde transcriptions si es necesario
+            if ((!meeting.segments || meeting.segments.length === 0) && Array.isArray(meeting.transcriptions)) {
+                meeting.segments = meeting.transcriptions.map((t, index) => ({
+                    speaker: t.speaker || t.display_speaker || `Hablante ${index + 1}`,
+                    time: t.time || t.timestamp,
+                    text: t.text || '',
+                    start: t.start ?? 0,
+                    end: t.end ?? 0,
+                }));
+            }
+            if (!meeting.transcription && Array.isArray(meeting.segments)) {
+                meeting.transcription = meeting.segments.map(s => s.text).join(' ');
+            }
+
+            if (meeting.is_legacy) {
+                updateLoadingStep(4); // Omitir pasos de descarga/desencriptado
+            } else {
+                updateLoadingStep(2); // Paso 2: Descifrando archivo
+                updateLoadingStep(3); // Paso 3: Descargando audio
+                updateLoadingStep(4); // Paso 4: Procesando contenido
+            }
 
             // Esperar un poco para mostrar el progreso completo
             await new Promise(resolve => setTimeout(resolve, 500));
 
-            currentModalMeeting = data.meeting;
+            currentModalMeeting = meeting;
             // Guardar bandera de encriptación
-            currentModalMeeting.needs_encryption = data.meeting.needs_encryption;
-            showMeetingModal(data.meeting);
+            currentModalMeeting.needs_encryption = meeting.needs_encryption;
+            showMeetingModal(meeting);
         } else {
             closeMeetingModal();
             alert('Error al cargar la reunión: ' + (data.message || 'Error desconocido'));
@@ -1054,7 +1076,26 @@ function showMeetingModal(meeting) {
     console.log('Datos de la reunión:', meeting);
     console.log('Ruta de audio:', meeting.audio_path);
 
-    const audioSrc = meeting.audio_path ? `/api/meetings/${meeting.id}/audio` : '';
+    // Asegurar que summary, key_points, tasks y segmentos estén en el formato correcto
+    meeting.summary = meeting.summary || '';
+    meeting.key_points = Array.isArray(meeting.key_points) ? meeting.key_points : [];
+    meeting.tasks = Array.isArray(meeting.tasks) ? meeting.tasks : [];
+
+    if ((!meeting.segments || meeting.segments.length === 0) && Array.isArray(meeting.transcriptions)) {
+        meeting.segments = meeting.transcriptions.map((t, index) => ({
+            speaker: t.speaker || t.display_speaker || `Hablante ${index + 1}`,
+            time: t.time || t.timestamp,
+            text: t.text || '',
+            start: t.start ?? 0,
+            end: t.end ?? 0,
+        }));
+    }
+
+    if (!meeting.transcription && Array.isArray(meeting.segments)) {
+        meeting.transcription = meeting.segments.map(s => s.text).join(' ');
+    }
+
+    const audioSrc = meeting.audio_path || '';
 
     const modalHtml = `
         <div class="meeting-modal" id="meetingModal">
@@ -1335,8 +1376,10 @@ function renderTasks(tasks) {
     return `
         <ul class="tasks-list">
             ${tasks.map(task => {
-                // Asegurar que task sea un string
                 const taskText = typeof task === 'string' ? task : (task?.text || task?.description || String(task) || 'Tarea sin descripción');
+                const meta = [];
+                if (task.assignee) meta.push(`Responsable: ${escapeHtml(task.assignee)}`);
+                if (typeof task.progress === 'number') meta.push(`Progreso: ${task.progress}%`);
                 return `
                     <li class="task-item">
                         <div class="task-checkbox">
@@ -1344,7 +1387,7 @@ function renderTasks(tasks) {
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
-                        <span class="task-text">${escapeHtml(taskText)}</span>
+                        <span class="task-text">${escapeHtml(taskText)}${meta.length ? ` <small>(${meta.join(' - ')})</small>` : ''}</span>
                     </li>
                 `;
             }).join('')}
