@@ -122,6 +122,7 @@ class TaskLaravelController extends Controller
                 'fecha_limite' => $parsed['fecha_limite'] ?: null,
                 'hora_limite' => $hora,
                 'descripcion' => $parsed['descripcion'] ?: null,
+                'asignado' => $item['assignee'] ?? $item['assigned'] ?? $item['responsable'] ?? null,
                 'progreso' => $parsed['progreso'] ?? 0,
             ];
 
@@ -190,9 +191,9 @@ class TaskLaravelController extends Controller
         }
 
         // Obtener tareas
-        $tasks = $query->orderBy('fecha_limite', 'asc')
-            ->orderBy('prioridad', 'asc')
-            ->get(['id','username','meeting_id','tarea','prioridad','fecha_inicio','fecha_limite','hora_limite','descripcion','progreso','created_at','updated_at']);
+            $tasks = $query->orderBy('fecha_limite', 'asc')
+                ->orderBy('prioridad', 'asc')
+                ->get(['id','username','meeting_id','tarea','prioridad','fecha_inicio','fecha_limite','hora_limite','descripcion','asignado','progreso','created_at','updated_at']);
 
         $today = Carbon::today();
         $total = (clone $query)->count();
@@ -257,6 +258,7 @@ class TaskLaravelController extends Controller
                     'description' => $t->descripcion,
                     'status' => ($t->progreso >= 100 ? 'completed' : ($t->progreso > 0 ? 'in_progress' : 'pending')),
                     'priority' => $t->prioridad,
+                        'asignado' => $t->asignado,
                     'assignee' => null,
                     'progress' => $t->progreso,
                     'meeting_id' => $t->meeting_id,

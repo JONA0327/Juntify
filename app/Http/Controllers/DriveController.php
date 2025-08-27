@@ -852,18 +852,44 @@ class DriveController extends Controller
 
                 $savedTasks = [];
                 foreach ($analysis['tasks'] ?? [] as $rawTask) {
-                    $parsed = $this->parseRawTaskForDb($rawTask);
+                    // Prefer direct mapping (text/context/assignee/dueDate) but fallback to parser too
+                    $mappedTarea = $rawTask['text'] ?? null;
+                    $mappedDesc  = $rawTask['context'] ?? null;
+                    $mappedAsig  = $rawTask['assignee'] ?? null;
+                    $mappedStart = $rawTask['dueDate'] ?? null;
+
+                    $fechaInicio = null;
+                    if (is_string($mappedStart)) {
+                        $s = trim($mappedStart);
+                        if ($s !== '' && strtolower($s) !== 'no definida' && strtolower($s) !== 'no asignado') {
+                            if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $s, $m)) {
+                                $fechaInicio = $m[3] . '-' . $m[2] . '-' . $m[1];
+                            } elseif (preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) {
+                                $fechaInicio = $s;
+                            }
+                        }
+                    }
+
+                    if (!$mappedTarea) {
+                        $parsed = $this->parseRawTaskForDb($rawTask);
+                        $mappedTarea = $parsed['tarea'];
+                        $mappedDesc  = $mappedDesc ?? $parsed['descripcion'];
+                        $fechaInicio = $fechaInicio ?? $parsed['fecha_inicio'];
+                        $mappedAsig  = $mappedAsig ?? $parsed['asignado'] ?? null;
+                    }
+
                     $taskModel = TaskLaravel::updateOrCreate(
                         [
                             'username'   => Auth::user()->username,
                             'meeting_id' => $meeting->id,
-                            'tarea'      => $parsed['tarea'],
+                            'tarea'      => substr((string)$mappedTarea, 0, 255),
                         ],
                         [
-                            'descripcion'  => $parsed['descripcion'],
-                            'fecha_inicio' => $parsed['fecha_inicio'],
-                            'fecha_limite' => $parsed['fecha_limite'],
-                            'progreso'     => $parsed['progreso'],
+                            'descripcion'  => $mappedDesc ?: '',
+                            'asignado'     => $mappedAsig,
+                            'fecha_inicio' => $fechaInicio,
+                            'fecha_limite' => null,
+                            'progreso'     => 0,
                         ]
                     );
                     $savedTasks[] = $taskModel;

@@ -24,6 +24,10 @@
       Reuniones
     </a>
   </li>
+  <?php
+    $canCreate = auth()->user()->groups()->wherePivot('rol','!=','invitado')->exists();
+  ?>
+  <?php if($canCreate): ?>
   <li>
     <a href="<?php echo e(route('new-meeting')); ?>" class="<?php echo e($isNewMeeting ? 'active' : ''); ?>">
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -32,6 +36,7 @@
       Nueva Reunión
     </a>
   </li>
+  <?php endif; ?>
   <li>
     <a href="<?php echo e(route('tareas.index')); ?>">
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">

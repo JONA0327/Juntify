@@ -106,7 +106,12 @@
                     // Click en toda la tarjeta → cargar panel, verificar si hace falta enriquecer y (re)importar si corresponde
                     const hasJu = !!(m.transcript_drive_id);
                     card.addEventListener('click', async () => {
-                        if (!hasJu) return alert('Esta reunión no tiene archivo .ju');
+                        if (!hasJu) {
+                            alert('Reunión sin archivo .ju; los datos provienen de la base del sistema anterior.');
+                            if (typeof openDownloadModal === 'function') {
+                                openDownloadModal(m.id);
+                            }
+                        }
                         window.lastSelectedMeetingId = m.id;
                         if (window.showTasksPanel) window.showTasksPanel(true);
                         // Cargar tareas para decidir si necesitan enriquecimiento
@@ -117,11 +122,14 @@
                             const poor = current.tasks.every(t => (!t.descripcion || String(t.descripcion).trim()==='') && !t.fecha_inicio && !t.fecha_limite && (!t.progreso || t.progreso===0));
                             needImport = poor;
                         }
-                        if (needImport) {
+                        if (needImport && hasJu) {
                             const ok = await importTasks(m.id);
                             if (!ok) return;
+                            const refreshed = await fetchTasksForMeeting(m.id);
+                            await renderTasksAfterFetch(m.id, refreshed);
+                        } else {
+                            await renderTasksAfterFetch(m.id, current);
                         }
-                        await renderTasksAfterFetch(m.id);
                     });
 
                     container.appendChild(card);
@@ -230,7 +238,7 @@
         return await res.json();
     }
 
-    async function renderTasksAfterFetch(meetingId){
+    async function renderTasksAfterFetch(meetingId, prefetched){
             const listEl = document.getElementById('tasks-sidebar-list');
             const statTotal = document.getElementById('stat-total');
             const statPending = document.getElementById('stat-pending');
@@ -239,7 +247,7 @@
 
             listEl.innerHTML = '<p class="text-slate-400">Cargando tareas…</p>';
             try {
-        const json = await fetchTasksForMeeting(meetingId);
+        const json = prefetched || await fetchTasksForMeeting(meetingId);
                 if (!json.success) throw new Error('Error al cargar tareas');
                 const tasks = json.tasks || [];
                 const s = json.stats || {};

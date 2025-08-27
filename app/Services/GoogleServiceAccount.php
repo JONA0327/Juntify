@@ -121,7 +121,9 @@ class GoogleServiceAccount
 
     public function deleteFile(string $id): void
     {
-        $this->drive->files->delete($id);
+        $this->drive->files->delete($id, [
+            'supportsAllDrives' => true,
+        ]);
     }
 
     public function uploadFile(

@@ -840,6 +840,15 @@ function updateAnalysisPreview() {
 
     const tasksList = document.getElementById('analysis-tasks');
     if (tasksList) {
+        // Debug: log the structure we got from analysis, before rendering
+        try {
+            console.group('%cEstructura de tareas para renderizar','color:#16a34a;font-weight:bold');
+            console.log('analysisResults.tasks (longitud):', (analysisResults.tasks || []).length);
+            if ((analysisResults.tasks || []).length) {
+                console.dir((analysisResults.tasks || [])[0]);
+            }
+            console.groupEnd();
+        } catch (e) { /* ignore */ }
         tasksList.innerHTML = '';
         (analysisResults.tasks || []).forEach(t => {
             const div = document.createElement('div');
@@ -1249,6 +1258,32 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
             finalAudioDuration = result.audio_duration || 0;
             finalSpeakerCount = result.speaker_count || 0;
             finalTasks = result.tasks || [];
+            // Debug: show how tasks are structured right after analysis
+            try {
+                const t = finalTasks;
+                console.group('%cTareas detectadas (post-análisis)','color:#2563eb;font-weight:bold');
+                console.log('Tipo:', Array.isArray(t) ? 'Array' : typeof t);
+                console.log('Cantidad:', Array.isArray(t) ? t.length : 0);
+                if (Array.isArray(t) && t.length) {
+                    console.log('Ejemplo (primer elemento crudo):');
+                    console.dir(t[0]);
+                    // Tabla con campos comunes si existen
+                    const rows = t.slice(0, 20).map((x, i) => ({
+                        idx: i,
+                        id: x.id ?? x.name ?? x.title ?? x.tarea ?? null,
+                        title: x.title ?? x.name ?? x.tarea ?? null,
+                        description: x.description ?? x.desc ?? x.descripcion ?? null,
+                        assignee: x.assigned ?? x.assigned_to ?? x.owner ?? x.responsable ?? null,
+                        start: x.start ?? x.start_date ?? x.fecha_inicio ?? null,
+                        end: x.end ?? x.due ?? x.due_date ?? x.fecha_fin ?? x.fecha_limite ?? null,
+                        progress: x.progress ?? x.progreso ?? null,
+                        prioridad: x.prioridad ?? x.priority ?? null,
+                        hora: x.hora ?? x.hora_limite ?? x.time ?? x.due_time ?? null
+                    }));
+                    console.table(rows);
+                }
+                console.groupEnd();
+            } catch (e) { /* ignore log errors */ }
 
             // Limpiar datos pendientes
             window.pendingAudioInfo = null;
@@ -1299,6 +1334,30 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
             finalAudioDuration = result.audio_duration || 0;
             finalSpeakerCount = result.speaker_count || 0;
             finalTasks = result.tasks || [];
+            // Debug (alt path): show task structure too
+            try {
+                const t = finalTasks;
+                console.group('%cTareas detectadas (post-análisis - ruta alterna)','color:#2563eb;font-weight:bold');
+                console.log('Tipo:', Array.isArray(t) ? 'Array' : typeof t);
+                console.log('Cantidad:', Array.isArray(t) ? t.length : 0);
+                if (Array.isArray(t) && t.length) {
+                    console.dir(t[0]);
+                    const rows = t.slice(0, 20).map((x, i) => ({
+                        idx: i,
+                        id: x.id ?? x.name ?? x.title ?? x.tarea ?? null,
+                        title: x.title ?? x.name ?? x.tarea ?? null,
+                        description: x.description ?? x.desc ?? x.descripcion ?? null,
+                        assignee: x.assigned ?? x.assigned_to ?? x.owner ?? x.responsable ?? null,
+                        start: x.start ?? x.start_date ?? x.fecha_inicio ?? null,
+                        end: x.end ?? x.due ?? x.due_date ?? x.fecha_fin ?? x.fecha_limite ?? null,
+                        progress: x.progress ?? x.progreso ?? null,
+                        prioridad: x.prioridad ?? x.priority ?? null,
+                        hora: x.hora ?? x.hora_limite ?? x.time ?? x.due_time ?? null
+                    }));
+                    console.table(rows);
+                }
+                console.groupEnd();
+            } catch (e) { /* ignore */ }
         }
 
         document.getElementById('audio-upload-status').textContent = '✅';

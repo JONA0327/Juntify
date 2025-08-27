@@ -20,6 +20,7 @@ class TaskLaravel extends Model
         'fecha_limite',
     'hora_limite',
         'descripcion',
+    'asignado',
         'progreso',
     ];
 
@@ -27,6 +28,7 @@ class TaskLaravel extends Model
         'fecha_inicio' => 'date',
         'fecha_limite' => 'date',
     'hora_limite' => 'string',
+    'asignado' => 'string',
         'progreso' => 'integer',
     ];
 

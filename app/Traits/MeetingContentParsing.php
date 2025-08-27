@@ -309,19 +309,23 @@ trait MeetingContentParsing
                     $title = $rawTask['title']
                         ?? $rawTask['name']
                         ?? $rawTask['tarea']
+                        ?? $rawTask['text']
                         ?? null;
                     $desc = $rawTask['description']
                         ?? $rawTask['desc']
                         ?? $rawTask['descripcion']
+                        ?? $rawTask['context']
                         ?? '';
                     $assigned = $rawTask['assigned']
                         ?? $rawTask['assigned_to']
                         ?? $rawTask['owner']
                         ?? $rawTask['responsable']
+                        ?? $rawTask['assignee']
                         ?? 'Sin asignar';
                     $start = $rawTask['start']
                         ?? $rawTask['start_date']
                         ?? $rawTask['fecha_inicio']
+                        ?? $rawTask['dueDate']
                         ?? 'Sin asignar';
                     $end = $rawTask['end']
                         ?? $rawTask['due']
@@ -382,6 +386,17 @@ trait MeetingContentParsing
         };
 
         $t = $parse($raw);
+
+        // Improve name parsing when it's like: "task 004: ..." or "tarea 12 - ..."
+        if (is_string($t['name']) && is_string($t['description'])) {
+            $nameLower = mb_strtolower(trim($t['name']), 'UTF-8');
+            if ($nameLower === 'task' || $nameLower === 'tarea') {
+                if (preg_match('/^\s*(\d{1,6})(?:\s*[:\-–]\s*)?(.*)$/u', trim($t['description']), $mFix)) {
+                    $t['name'] = trim($t['name']) . '_' . $mFix[1];
+                    $t['description'] = trim($mFix[2]);
+                }
+            }
+        }
         // Clean description similar to PDF
         $cleanDesc = function($desc) {
             if (!is_string($desc) || trim($desc) === '') return $desc;
@@ -418,6 +433,43 @@ trait MeetingContentParsing
         }
         $t['description'] = $cleanDesc($t['description']);
 
+        // Extract optional priority and time from raw or description
+        $priority = null; $timeStr = null;
+        if (is_array($raw)) {
+            $priorityRaw = $raw['prioridad'] ?? $raw['priority'] ?? $raw['nivel'] ?? $raw['importance'] ?? null;
+            if (is_string($priorityRaw)) {
+                $pl = mb_strtolower(trim($priorityRaw), 'UTF-8');
+                if (in_array($pl, ['alta','high','alta prioridad','muy alta'], true)) $priority = 'alta';
+                elseif (in_array($pl, ['media','medium','intermedia'], true)) $priority = 'media';
+                elseif (in_array($pl, ['baja','low','muy baja'], true)) $priority = 'baja';
+            } elseif (is_numeric($priorityRaw)) {
+                $n = intval($priorityRaw);
+                $priority = $n >= 3 ? 'alta' : ($n == 2 ? 'media' : 'baja');
+            }
+
+            $timeRaw = $raw['hora'] ?? $raw['hora_limite'] ?? $raw['time'] ?? $raw['due_time'] ?? $raw['hour'] ?? null;
+            if (is_string($timeRaw)) { $timeStr = trim($timeRaw); }
+        }
+        // Try to find time within start/end or description when not provided
+        $scanText = '';
+        if (!$timeStr) {
+            if (is_string($t['end'])) { $scanText .= ' ' . $t['end']; }
+            if (is_string($t['description'])) { $scanText .= ' ' . $t['description']; }
+            if (preg_match('/\b(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap]m)?\b/i', $scanText, $tm)) {
+                $hh = intval($tm[1]); $mm = intval($tm[2]); $ampm = isset($tm[3]) ? strtolower($tm[3]) : '';
+                if ($ampm === 'pm' && $hh < 12) $hh += 12; if ($ampm === 'am' && $hh == 12) $hh = 0;
+                $timeStr = sprintf('%02d:%02d', max(0, min(23, $hh)), max(0, min(59, $mm)));
+            }
+        }
+
+        // Also try to infer priority from description text
+        if ($priority === null && is_string($t['description']) && $t['description'] !== '') {
+            $dl = mb_strtolower($t['description'], 'UTF-8');
+            if (preg_match('/\b(prioridad|priority)\s*(alta|high)\b/u', $dl)) $priority = 'alta';
+            elseif (preg_match('/\b(prioridad|priority)\s*(media|medium)\b/u', $dl)) $priority = 'media';
+            elseif (preg_match('/\b(prioridad|priority)\s*(baja|low)\b/u', $dl)) $priority = 'baja';
+        }
+
         // Map to DB fields
         $progressInt = 0;
         if (is_string($t['progress']) && preg_match('/^(\d{1,3})%$/', trim($t['progress']), $pm)) {
@@ -440,6 +492,9 @@ trait MeetingContentParsing
             'descripcion' => is_string($t['description']) ? trim($t['description']) : '',
             'fecha_inicio' => (is_string($start) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $start)) ? $start : null,
             'fecha_limite' => (is_string($end) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) ? $end : null,
+            'hora_limite' => (is_string($timeStr) && preg_match('/^\d{2}:\d{2}$/', $timeStr)) ? $timeStr : null,
+            'prioridad' => $priority,
+            'asignado' => (string)($t['assigned'] ?? ''),
             'progreso' => $progressInt,
         ];
     }

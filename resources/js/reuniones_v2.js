@@ -1253,8 +1253,22 @@ function showMeetingModal(meeting) {
         }
 
         // Agregar manejo de errores para carga de audio
+        let triedAudioFallback = false;
         meetingAudioPlayer.addEventListener('error', (e) => {
             console.error('Error cargando audio:', e);
+
+            // Intentar fallback a endpoint de streaming del backend si no lo hemos hecho aún
+            if (!triedAudioFallback && meeting?.id) {
+                triedAudioFallback = true;
+                const fallbackUrl = `/api/meetings/${meeting.id}/audio`;
+                console.warn('Reintentando audio con fallback del servidor:', fallbackUrl);
+                meetingAudioPlayer.src = fallbackUrl;
+                if (fullAudioPlayer) fullAudioPlayer.src = fallbackUrl;
+                try {
+                    meetingAudioPlayer.load();
+                } catch (_) {}
+                return; // esperar siguiente evento (canplay o error)
+            }
 
             // Deshabilitar controles
             playBtn.disabled = true;
@@ -1274,7 +1288,8 @@ function showMeetingModal(meeting) {
                 errorMsg.textContent = 'No se pudo cargar el audio. ';
 
                 const downloadLink = document.createElement('a');
-                downloadLink.href = encodeURI(audioSrc);
+                const fallbackDownload = meeting?.id ? `/api/meetings/${meeting.id}/audio` : audioSrc;
+                downloadLink.href = encodeURI(fallbackDownload || '');
                 downloadLink.textContent = 'Descargar audio';
                 downloadLink.className = 'underline';
                 errorMsg.appendChild(downloadLink);
@@ -1376,10 +1391,35 @@ function renderTasks(tasks) {
     return `
         <ul class="tasks-list">
             ${tasks.map(task => {
-                const taskText = typeof task === 'string' ? task : (task?.text || task?.description || String(task) || 'Tarea sin descripción');
-                const meta = [];
-                if (task.assignee) meta.push(`Responsable: ${escapeHtml(task.assignee)}`);
-                if (typeof task.progress === 'number') meta.push(`Progreso: ${task.progress}%`);
+                // Normalizar campos para soportar tanto payload del analizador como tareas de BD
+                if (typeof task === 'string') {
+                    const simpleText = task.trim();
+                    return `
+                        <li class="task-item">
+                            <div class="task-checkbox">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <span class="task-text">${escapeHtml(simpleText || 'Tarea sin descripción')}</span>
+                        </li>
+                    `;
+                }
+
+                const text = task?.text || task?.tarea || task?.title || task?.name || task?.descripcion || task?.description || task?.context || '';
+                const desc = task?.descripcion || task?.description || '';
+                const assignee = task?.assignee || task?.asignado || '';
+                const due = task?.dueDate || task?.fecha_limite || task?.fecha_inicio || '';
+                const progress = (typeof task?.progress === 'number') ? task.progress : ((typeof task?.progreso === 'number') ? task.progreso : null);
+
+                const lines = [];
+                if (assignee) lines.push(`Responsable: ${escapeHtml(assignee)}`);
+                if (due) lines.push(`Fecha: ${escapeHtml(String(due))}`);
+                if (progress !== null) lines.push(`Progreso: ${progress}%`);
+
+                const meta = lines.length ? ` <small>(${lines.join(' - ')})</small>` : '';
+
+                const main = text ? escapeHtml(String(text)) : (desc ? escapeHtml(String(desc)) : 'Tarea sin descripción');
                 return `
                     <li class="task-item">
                         <div class="task-checkbox">
@@ -1387,7 +1427,7 @@ function renderTasks(tasks) {
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
-                        <span class="task-text">${escapeHtml(taskText)}${meta.length ? ` <small>(${meta.join(' - ')})</small>` : ''}</span>
+                        <span class="task-text">${main}${meta}</span>
                     </li>
                 `;
             }).join('')}

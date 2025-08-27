@@ -7,6 +7,7 @@ use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\MeetingShare;
 use App\Models\MeetingContentContainer;
+use App\Models\MeetingContentRelation;
 use App\Models\Container;
 use App\Models\TaskLaravel;
 use App\Models\Meeting;
@@ -831,70 +832,142 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
-            $meeting = TranscriptionLaravel::where('id', $id)
-                ->where('username', $user->username)
-                ->firstOrFail();
-
             // Configurar el cliente de Google Drive con el token del usuario
             $this->setGoogleDriveToken($user);
 
-            Log::info("Iniciando eliminación de reunión", [
-                'meeting_id' => $id,
-                'meeting_name' => $meeting->meeting_name,
-                'user' => $user->username
-            ]);
+            // 1) Intentar flujo legacy (.ju): TranscriptionLaravel
+            $legacy = TranscriptionLaravel::where('id', $id)
+                ->where('username', $user->username)
+                ->first();
 
-            // Eliminar archivos de Google Drive PRIMERO
+            if ($legacy) {
+                Log::info('Eliminación de reunión legacy iniciada', [
+                    'meeting_id' => $id,
+                    'meeting_name' => $legacy->meeting_name,
+                    'user' => $user->username
+                ]);
 
-            // Eliminar archivo .ju de Drive
-            if ($meeting->transcript_drive_id) {
-                try {
-                    $this->googleDriveService->deleteFile($meeting->transcript_drive_id);
-                    Log::info("Archivo .ju eliminado de Drive", [
-                        'file_id' => $meeting->transcript_drive_id
-                    ]);
-                } catch (\Exception $e) {
-                    Log::error('Error al eliminar archivo de transcripción de Drive', [
-                        'file_id' => $meeting->transcript_drive_id,
-                        'error' => $e->getMessage()
-                    ]);
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Error al eliminar archivo .ju: ' . $e->getMessage(),
-                    ], 500);
+                $warnings = [];
+                // Eliminar archivo .ju de Drive (si existe)
+                if (!empty($legacy->transcript_drive_id)) {
+                    $juId = $this->normalizeDriveId($legacy->transcript_drive_id);
+                    $ok = $this->deleteDriveFileResilient($juId, $user->email);
+                    if ($ok) {
+                        Log::info('Archivo .ju eliminado de Drive', ['file_id' => $juId]);
+                    } else {
+                        $warnings[] = 'No se pudo eliminar el archivo .ju';
+                    }
                 }
+
+                // Eliminar archivo de audio de Drive (si existe)
+                if (!empty($legacy->audio_drive_id)) {
+                    $audioId = $this->normalizeDriveId($legacy->audio_drive_id);
+                    $ok = $this->deleteDriveFileResilient($audioId, $user->email);
+                    if ($ok) {
+                        Log::info('Archivo de audio eliminado de Drive', ['file_id' => $audioId]);
+                    } else {
+                        $warnings[] = 'No se pudo eliminar el audio';
+                    }
+                }
+
+                // Eliminar tareas asociadas en tasks_laravel
+                try {
+                    $deletedTasks = TaskLaravel::where('meeting_id', $legacy->id)->delete();
+                    Log::info('Tareas asociadas eliminadas', ['meeting_id' => $legacy->id, 'count' => $deletedTasks]);
+                } catch (\Exception $e) {
+                    Log::warning('No se pudieron eliminar todas las tareas asociadas', ['meeting_id' => $legacy->id, 'error' => $e->getMessage()]);
+                }
+
+                // Remover asociaciones de contenedores (meeting_content_relations)
+                try {
+                    $deletedRelations = MeetingContentRelation::where('meeting_id', $legacy->id)->delete();
+                    Log::info('Relaciones en contenedores eliminadas', ['meeting_id' => $legacy->id, 'count' => $deletedRelations]);
+                } catch (\Exception $e) {
+                    Log::warning('No se pudieron eliminar las relaciones en contenedores', ['meeting_id' => $legacy->id, 'error' => $e->getMessage()]);
+                }
+
+                // Eliminar registro de la base de datos (legacy)
+                $legacy->delete();
+
+                Log::info('Reunión legacy eliminada completamente', ['meeting_id' => $id]);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Reunión eliminada correctamente' . (count($warnings) ? (' (' . implode('; ', $warnings) . ')') : ''),
+                ]);
             }
 
-            // Eliminar archivo de audio de Drive
-            if ($meeting->audio_drive_id) {
+            // 2) Flujo moderno (BD): Meeting (solo borrar audio en Drive)
+            $modern = Meeting::where('id', $id)
+                ->where('username', $user->username)
+                ->first();
+
+            if ($modern) {
+                Log::info('Eliminación de reunión moderna (audio en Drive + limpieza en BD)', [
+                    'meeting_id' => $id,
+                    'title' => $modern->title,
+                    'user' => $user->username
+                ]);
+
+                $deletedAudio = false;
                 try {
-                    $this->googleDriveService->deleteFile($meeting->audio_drive_id);
-                    Log::info("Archivo de audio eliminado de Drive", [
-                        'file_id' => $meeting->audio_drive_id
-                    ]);
+                    if (!empty($modern->recordings_folder_id)) {
+                        $found = $this->googleDriveService->findAudioInFolder(
+                            $modern->recordings_folder_id,
+                            $modern->title,
+                            (string)$modern->id
+                        );
+                        if ($found && !empty($found['fileId'])) {
+                            if ($this->deleteDriveFileResilient($found['fileId'], $user->email)) {
+                                $deletedAudio = true;
+                                Log::info('Audio de reunión moderna eliminado en Drive', ['file_id' => $found['fileId']]);
+                            } else {
+                                Log::warning('No se pudo eliminar audio de reunión moderna en Drive', ['file_id' => $found['fileId']]);
+                            }
+                        }
+                    }
                 } catch (\Exception $e) {
-                    Log::error('Error al eliminar archivo de audio de Drive', [
-                        'file_id' => $meeting->audio_drive_id,
+                    Log::error('Error al eliminar audio de reunión moderna en Drive', [
+                        'meeting_id' => $modern->id,
                         'error' => $e->getMessage()
                     ]);
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Error al eliminar archivo de audio: ' . $e->getMessage(),
-                    ], 500);
+                    // Continuar y reportar como advertencia
                 }
+
+                // Eliminar tareas asociadas en tasks_laravel (si hay alguna enlazada por meeting_id)
+                try {
+                    $deletedTasks = TaskLaravel::where('meeting_id', $modern->id)->delete();
+                    Log::info('Tareas asociadas (moderna) eliminadas', ['meeting_id' => $modern->id, 'count' => $deletedTasks]);
+                } catch (\Exception $e) {
+                    Log::warning('No se pudieron eliminar tareas asociadas (moderna)', ['meeting_id' => $modern->id, 'error' => $e->getMessage()]);
+                }
+
+                // Remover asociaciones de contenedores
+                try {
+                    $deletedRelations = MeetingContentRelation::where('meeting_id', $modern->id)->delete();
+                    Log::info('Relaciones en contenedores (moderna) eliminadas', ['meeting_id' => $modern->id, 'count' => $deletedRelations]);
+                } catch (\Exception $e) {
+                    Log::warning('No se pudieron eliminar relaciones en contenedores (moderna)', ['meeting_id' => $modern->id, 'error' => $e->getMessage()]);
+                }
+
+                // Eliminar registro de Meeting
+                try {
+                    $modern->delete();
+                    Log::info('Registro de Meeting eliminado', ['meeting_id' => $id]);
+                } catch (\Exception $e) {
+                    Log::warning('No se pudo eliminar el registro de Meeting', ['meeting_id' => $id, 'error' => $e->getMessage()]);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => $deletedAudio ? 'Reunión y audio eliminados' : 'Reunión eliminada (no se encontró audio en Drive)'
+                ]);
             }
 
-            // Eliminar registro de la base de datos
-            $meeting->delete();
-
-            Log::info("Reunión eliminada completamente", [
-                'meeting_id' => $id,
-            ]);
-
+            // 3) Si no es legacy ni moderno
             return response()->json([
-                'success' => true,
-                'message' => 'Reunión eliminada correctamente'
-            ]);
+                'success' => false,
+                'message' => 'Reunión no encontrada'
+            ], 404);
 
         } catch (\Exception $e) {
             Log::error('Error crítico al eliminar reunión', [
@@ -908,6 +981,95 @@ class MeetingController extends Controller
                 'message' => 'Error al eliminar la reunión: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Intenta eliminar un archivo de Drive con el token del usuario y, si falla
+     * por permisos u otros motivos, intenta con la cuenta de servicio impersonando
+     * al usuario. Devuelve true si finalmente se elimina o si el archivo no existe,
+     * false si no fue posible eliminarlo.
+     */
+    private function deleteDriveFileResilient(string $fileId, string $userEmail): bool
+    {
+    // Extra safety: normalize ID
+    $fileId = $this->normalizeDriveId($fileId);
+        // Primero, intentar con el token del usuario
+        try {
+            $this->googleDriveService->deleteFile($fileId);
+            return true;
+        } catch (\Exception $e) {
+            Log::warning('deleteDriveFileResilient: fallo con token de usuario, se intentará con service account', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
+            if ($this->isNotFoundDriveError($e)) {
+                return true; // ya no existe, considerar éxito
+            }
+        }
+
+        // Segundo, intentar con Service Account impersonando al usuario
+        try {
+            /** @var \App\Services\GoogleServiceAccount $sa */
+            $sa = app(\App\Services\GoogleServiceAccount::class);
+            $sa->impersonate($userEmail);
+            $sa->deleteFile($fileId);
+            return true;
+        } catch (\Exception $e) {
+            Log::error('deleteDriveFileResilient: fallo con service account', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
+            if ($this->isNotFoundDriveError($e)) {
+                return true; // ya no existe, considerar éxito
+            }
+        }
+
+        // Tercero, intentar con Service Account sin impersonate (por si el archivo fue creado por la SA)
+        try {
+            /** @var \App\Services\GoogleServiceAccount $sa */
+            $sa = app(\App\Services\GoogleServiceAccount::class);
+            // no impersonate
+            $sa->deleteFile($fileId);
+            return true;
+        } catch (\Exception $e) {
+            Log::error('deleteDriveFileResilient: fallo con service account sin impersonate', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
+            if ($this->isNotFoundDriveError($e)) {
+                return true; // ya no existe, considerar éxito
+            }
+        }
+
+        return false;
+    }
+
+    private function isNotFoundDriveError(\Exception $e): bool
+    {
+        $msg = $e->getMessage();
+        if (stripos($msg, 'File not found') !== false || stripos($msg, 'notFound') !== false) {
+            return true;
+        }
+        // Algunos SDK devuelven código en getCode()
+        $code = (int) $e->getCode();
+        return $code === 404;
+    }
+
+    /**
+     * Acepta un ID directo o una URL de Google Drive y devuelve el fileId.
+     */
+    private function normalizeDriveId(string $maybeId): string
+    {
+        // Si parece URL con /file/d/{id}/
+        if (preg_match('#/file/d/([^/]+)/#', $maybeId, $m)) {
+            return $m[1];
+        }
+        // URL tipo uc?export=download&id={id}
+        if (preg_match('#[?&]id=([a-zA-Z0-9_-]+)#', $maybeId, $m)) {
+            return $m[1];
+        }
+        // Ya es un ID
+        return $maybeId;
     }
 
 
@@ -1749,19 +1911,49 @@ class MeetingController extends Controller
                 'transcript_download_url' => $transcriptUrl,
             ]);
 
-            // 4b. Procesar y guardar tareas en la BD
+            // 4b. Procesar y guardar tareas en la BD (con parseo robusto y upsert)
             if (!empty($analysisResults['tasks']) && is_array($analysisResults['tasks'])) {
                 foreach ($analysisResults['tasks'] as $rawTask) {
-                    $parsed = $this->parseRawTaskForDb($rawTask);
-                    TaskLaravel::create([
+                    // Prefer explicit mapping per user request
+                    // incoming shape example: { id, text, context, assignee, dueDate }
+                    $payload = [
                         'username' => $user->username,
                         'meeting_id' => $transcription->id,
-                        'tarea' => $parsed['tarea'],
-                        'descripcion' => $parsed['descripcion'],
-                        'fecha_inicio' => $parsed['fecha_inicio'],
-                        'fecha_limite' => $parsed['fecha_limite'],
-                        'progreso' => $parsed['progreso'],
-                    ]);
+                        'tarea' => substr((string)($rawTask['text'] ?? ''), 0, 255) ?: 'Sin nombre',
+                        'descripcion' => (string)($rawTask['context'] ?? ''),
+                        'asignado' => (string)($rawTask['assignee'] ?? null),
+                        'fecha_inicio' => null,
+                        'fecha_limite' => null,
+                        'hora_limite' => null,
+                        'prioridad' => null,
+                        'progreso' => 0,
+                    ];
+
+                    // Map dueDate (string like '2025-08-27' or 'No definida') to fecha_inicio
+                    $due = $rawTask['dueDate'] ?? null;
+                    if (is_string($due)) {
+                        const1: {
+                            $s = trim($due);
+                            if ($s !== '' && strtolower($s) !== 'no definida' && strtolower($s) !== 'no asignado') {
+                                // support dd/mm/yyyy and yyyy-mm-dd
+                                if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $s, $m)) {
+                                    $payload['fecha_inicio'] = $m[3] . '-' . $m[2] . '-' . $m[1];
+                                } elseif (preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) {
+                                    $payload['fecha_inicio'] = $s;
+                                }
+                            }
+                        }
+                    }
+
+                    $existing = TaskLaravel::where('meeting_id', $payload['meeting_id'])
+                        ->where('username', $payload['username'])
+                        ->where('tarea', $payload['tarea'])
+                        ->first();
+                    if ($existing) {
+                        $existing->update($payload);
+                    } else {
+                        TaskLaravel::create($payload);
+                    }
                 }
             }
 
@@ -1992,26 +2184,33 @@ class MeetingController extends Controller
             }
 
             // Crear el HTML para el PDF
-            // Si se solicitó la sección de tareas, usar siempre las tareas de la BD
+            // Si se solicitó la sección de tareas, usar siempre las tareas de la BD y mapear a columnas específicas
             if (in_array('tasks', $sections)) {
                 $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
                     ->where('username', $user->username)
-                    ->get(['tarea', 'descripcion', 'fecha_inicio', 'fecha_limite', 'progreso', 'username']);
+                    ->get(['tarea', 'descripcion', 'fecha_inicio', 'fecha_limite', 'progreso', 'asignado']);
+
                 $mapped = $dbTasks->map(function($t) {
-                    $start = $t->fecha_inicio ? ($t->fecha_inicio instanceof \Carbon\Carbon ? $t->fecha_inicio->format('Y-m-d') : (string)$t->fecha_inicio) : 'Sin asignar';
-                    $end = $t->fecha_limite ? ($t->fecha_limite instanceof \Carbon\Carbon ? $t->fecha_limite->format('Y-m-d') : (string)$t->fecha_limite) : 'Sin asignar';
-                    $progress = isset($t->progreso) && is_numeric($t->progreso)
-                        ? (intval($t->progreso) . '%')
-                        : '0%';
+                    $formatDate = function($v) {
+                        if (!$v) return 'Sin asignar';
+                        if ($v instanceof \Carbon\Carbon) return $v->format('Y-m-d');
+                        // Admitir strings "YYYY-MM-DD" o similares
+                        return trim((string)$v) !== '' ? (string)$v : 'Sin asignar';
+                    };
+
+                    $progress = (isset($t->progreso) && is_numeric($t->progreso)) ? intval($t->progreso) : 0;
+
                     return [
-                        'title' => $t->tarea ?? 'Sin nombre',
-                        'description' => $t->descripcion ?? '',
-                        'assigned' => $t->username ?? 'Sin asignar',
-                        'start' => $start,
-                        'end' => $end,
-                        'progress' => $progress,
+                        'from_db' => true,
+                        'tarea' => $t->tarea ?? 'Sin nombre',
+                        'descripcion' => $t->descripcion ?? '',
+                        'fecha_inicio' => $formatDate($t->fecha_inicio),
+                        'fecha_limite' => $formatDate($t->fecha_limite),
+                        'asignado' => ($t->asignado && trim((string)$t->asignado) !== '') ? (string)$t->asignado : 'Sin asignar',
+                        'progreso' => $progress . '%',
                     ];
                 })->toArray();
+
                 $data['tasks'] = $mapped;
             }
 
@@ -2126,6 +2325,35 @@ class MeetingController extends Controller
                         ?? 'Organización';
                     $organizationLogo = $container->group->organization->imagen ?? null;
                 }
+            }
+
+            // Si se solicitó la sección de tareas, usar siempre las tareas de la BD y mapear a columnas específicas
+            if (in_array('tasks', $sections)) {
+                $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
+                    ->where('username', $user->username)
+                    ->get(['tarea', 'descripcion', 'fecha_inicio', 'fecha_limite', 'progreso', 'asignado']);
+
+                $mapped = $dbTasks->map(function($t) {
+                    $formatDate = function($v) {
+                        if (!$v) return 'Sin asignar';
+                        if ($v instanceof \Carbon\Carbon) return $v->format('Y-m-d');
+                        return trim((string)$v) !== '' ? (string)$v : 'Sin asignar';
+                    };
+
+                    $progress = (isset($t->progreso) && is_numeric($t->progreso)) ? intval($t->progreso) : 0;
+
+                    return [
+                        'from_db' => true,
+                        'tarea' => $t->tarea ?? 'Sin nombre',
+                        'descripcion' => $t->descripcion ?? '',
+                        'fecha_inicio' => $formatDate($t->fecha_inicio),
+                        'fecha_limite' => $formatDate($t->fecha_limite),
+                        'asignado' => ($t->asignado && trim((string)$t->asignado) !== '') ? (string)$t->asignado : 'Sin asignar',
+                        'progreso' => $progress . '%',
+                    ];
+                })->toArray();
+
+                $data['tasks'] = $mapped;
             }
 
             // Crear el HTML para el PDF
@@ -2783,6 +3011,50 @@ class MeetingController extends Controller
 
             if (is_array($data['tasks'])) {
                 foreach ($data['tasks'] as $task) {
+                    // Si viene marcado como from_db, renderizar directamente columnas de BD
+                    if (is_array($task) && isset($task['from_db']) && $task['from_db'] === true) {
+                        $nameRaw = (string)($task['tarea'] ?? 'Sin nombre');
+                        $descRaw = (string)($task['descripcion'] ?? '');
+                        $startRaw = (string)($task['fecha_inicio'] ?? 'Sin asignar');
+                        $endRaw = (string)($task['fecha_limite'] ?? 'Sin asignar');
+                        $assignedRaw = (string)($task['asignado'] ?? 'Sin asignar');
+                        $progressRaw = (string)($task['progreso'] ?? '0%');
+
+                        // Extraer hasta 2 fechas ISO/fecha simple desde la descripción si están embebidas
+                        $descTmp = ' ' . $descRaw . ' ';
+                        $datePattern = '/\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)?/';
+                        $matches = [];
+                        if (preg_match_all($datePattern, $descTmp, $matches)) {
+                            $foundDates = $matches[0];
+                            // Normalizar a Y-m-d
+                            $norm = function($s) {
+                                $ts = @strtotime($s);
+                                return $ts ? date('Y-m-d', $ts) : $s;
+                            };
+                            if (($startRaw === '' || strtolower($startRaw) === 'sin asignar') && isset($foundDates[0])) {
+                                $startRaw = $norm($foundDates[0]);
+                            }
+                            if (($endRaw === '' || strtolower($endRaw) === 'sin asignar') && isset($foundDates[1])) {
+                                $endRaw = $norm($foundDates[1]);
+                            }
+                            // Remover las fechas de la descripción
+                            foreach ($foundDates as $d) {
+                                $descTmp = preg_replace('/\s*' . preg_quote($d, '/') . '\s*/', ' ', $descTmp, 1);
+                            }
+                        }
+                        // Limpieza de comas/espacios sobrantes
+                        $descTmp = trim(preg_replace(['/\s{2,}/', '/\s*,\s*,+/'], [' ', ', '], $descTmp));
+
+                        $tdName = htmlspecialchars($nameRaw);
+                        $tdDesc = htmlspecialchars($descTmp);
+                        $tdStart = htmlspecialchars($startRaw ?: 'Sin asignar');
+                        $tdEnd = htmlspecialchars($endRaw ?: 'Sin asignar');
+                        $tdAssigned = htmlspecialchars($assignedRaw ?: 'Sin asignar');
+                        $tdProgress = htmlspecialchars($progressRaw ?: '0%');
+                        $html .= '\n                            <tr>\n                                <td class="task-name">' . $tdName . '</td>\n                                <td class="task-description">' . $tdDesc . '</td>\n                                <td>' . $tdStart . '</td>\n                                <td>' . $tdEnd . '</td>\n                                <td>' . $tdAssigned . '</td>\n                                <td>' . $tdProgress . '</td>\n                            </tr>';
+                        continue;
+                    }
+
                     $t = $parseTask($task);
                     // Sanitizar nombre y completar descripción si faltara
                     $t['name'] = rtrim(trim((string)$t['name']), ",;:");
