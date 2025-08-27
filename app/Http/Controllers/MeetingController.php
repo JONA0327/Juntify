@@ -335,6 +335,7 @@ class MeetingController extends Controller
                     'meeting' => [
                         'id' => $legacyMeeting->id,
                         'meeting_name' => $legacyMeeting->meeting_name,
+                        'is_legacy' => true,
                         'created_at' => $legacyMeeting->created_at->format('d/m/Y H:i'),
                         'audio_path' => $audioPath,
                         'summary' => $processedData['summary'],
@@ -396,6 +397,7 @@ class MeetingController extends Controller
                 'meeting' => [
                     'id' => $meeting->id,
                     'meeting_name' => $meeting->title,
+                    'is_legacy' => false,
                     'created_at' => ($meeting->date ?? $meeting->created_at)->format('d/m/Y H:i'),
                     'audio_path' => $audioPath,
                     'summary' => $meeting->summary,
