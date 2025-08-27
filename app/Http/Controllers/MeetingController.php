@@ -9,6 +9,7 @@ use App\Models\MeetingShare;
 use App\Models\MeetingContentContainer;
 use App\Models\Task;
 use App\Models\Container;
+use App\Models\TaskLaravel;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -1304,10 +1305,9 @@ class MeetingController extends Controller
             // 2. Crear y subir la transcripción
             $analysisResults = $request->input('analysis_results');
             $payload = [
-                'segments' => $request->input('transcription_data'),
                 'summary' => $analysisResults['summary'] ?? null,
                 'keyPoints' => $analysisResults['keyPoints'] ?? [],
-                'tasks' => $analysisResults['tasks'] ?? [],
+                'segments' => $request->input('transcription_data'),
             ];
             $encrypted = \Illuminate\Support\Facades\Crypt::encryptString(json_encode($payload));
 
@@ -1332,6 +1332,22 @@ class MeetingController extends Controller
                 'transcript_download_url' => $transcriptUrl,
             ]);
 
+            // 4b. Procesar y guardar tareas en la BD
+            if (!empty($analysisResults['tasks']) && is_array($analysisResults['tasks'])) {
+                foreach ($analysisResults['tasks'] as $rawTask) {
+                    $parsed = $this->parseRawTaskForDb($rawTask);
+                    TaskLaravel::create([
+                        'username' => $user->username,
+                        'meeting_id' => $transcription->id,
+                        'tarea' => $parsed['tarea'],
+                        'descripcion' => $parsed['descripcion'],
+                        'fecha_inicio' => $parsed['fecha_inicio'],
+                        'fecha_limite' => $parsed['fecha_limite'],
+                        'progreso' => $parsed['progreso'],
+                    ]);
+                }
+            }
+
             // 5. Marcar como exitoso y limpiar
             $pendingRecording->update(['status' => 'success']);
 
@@ -1345,11 +1361,10 @@ class MeetingController extends Controller
             $pendingRecording->delete();
 
             // Extraer datos adicionales para la respuesta
-            $analysisResults = $request->input('analysis_results');
             $audioData = $processInfo['temp_file'] ?? null;
             $audioDuration = 0;
             $speakerCount = 0;
-            $tasks = $analysisResults['tasks'] ?? [];
+            $tasks = TaskLaravel::where('meeting_id', $transcription->id)->get();
 
             // Intentar obtener duración del audio si está disponible
             if ($audioData && file_exists($audioData)) {
