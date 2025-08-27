@@ -72,9 +72,11 @@
                 }
                 // items ya vienen ordenados desc por API
                 for (const m of items) {
+                    const source = m.source || 'transcriptions_laravel';
                     const card = document.createElement('div');
                     card.className = 'meeting-card cursor-pointer';
                     card.setAttribute('data-meeting-id', m.id);
+                    card.setAttribute('data-source', source);
                     card.setAttribute('draggable', 'true');
                     card.innerHTML = `
                         <div class="meeting-card-header">
@@ -106,29 +108,33 @@
                     // Click en toda la tarjeta → cargar panel, verificar si hace falta enriquecer y (re)importar si corresponde
                     const hasJu = !!(m.transcript_drive_id);
                     card.addEventListener('click', async () => {
-                        if (!hasJu) {
-                            alert('Reunión sin archivo .ju; los datos provienen de la base del sistema anterior.');
+                        const src = card.dataset.source || 'transcriptions_laravel';
+                        if (src === 'transcriptions_laravel' && !hasJu) {
                             if (typeof openDownloadModal === 'function') {
                                 openDownloadModal(m.id);
                             }
                         }
                         window.lastSelectedMeetingId = m.id;
+                        window.lastSelectedMeetingSource = src;
                         if (window.showTasksPanel) window.showTasksPanel(true);
-                        // Cargar tareas para decidir si necesitan enriquecimiento
-                        const current = await fetchTasksForMeeting(m.id);
-                        let needImport = false;
-                        if (!current.tasks.length) needImport = true;
-                        else {
-                            const poor = current.tasks.every(t => (!t.descripcion || String(t.descripcion).trim()==='') && !t.fecha_inicio && !t.fecha_limite && (!t.progreso || t.progreso===0));
-                            needImport = poor;
-                        }
-                        if (needImport && hasJu) {
-                            const ok = await importTasks(m.id);
-                            if (!ok) return;
-                            const refreshed = await fetchTasksForMeeting(m.id);
-                            await renderTasksAfterFetch(m.id, refreshed);
+                        const current = await fetchTasksForMeeting(m.id, src);
+                        if (src === 'transcriptions_laravel') {
+                            let needImport = false;
+                            if (!current.tasks.length) needImport = true;
+                            else {
+                                const poor = current.tasks.every(t => (!t.descripcion || String(t.descripcion).trim()==='') && !t.fecha_inicio && !t.fecha_limite && (!t.progreso || t.progreso===0));
+                                needImport = poor;
+                            }
+                            if (needImport && hasJu) {
+                                const ok = await importTasks(m.id);
+                                if (!ok) return;
+                                const refreshed = await fetchTasksForMeeting(m.id, src);
+                                await renderTasksAfterFetch(m.id, src, refreshed);
+                            } else {
+                                await renderTasksAfterFetch(m.id, src, current);
+                            }
                         } else {
-                            await renderTasksAfterFetch(m.id, current);
+                            await renderTasksAfterFetch(m.id, src, current);
                         }
                     });
 
@@ -231,14 +237,19 @@
             }
         }
 
-    async function fetchTasksForMeeting(meetingId){
-        const url = new URL(window.taskLaravel.apiTasks, window.location.origin);
+    async function fetchTasksForMeeting(meetingId, source){
+        let url;
+        if (source === 'meetings') {
+            url = new URL('/api/tasks', window.location.origin);
+        } else {
+            url = new URL(window.taskLaravel.apiTasks, window.location.origin);
+        }
         url.searchParams.set('meeting_id', meetingId);
         const res = await fetch(url);
         return await res.json();
     }
 
-    async function renderTasksAfterFetch(meetingId, prefetched){
+    async function renderTasksAfterFetch(meetingId, source, prefetched){
             const listEl = document.getElementById('tasks-sidebar-list');
             const statTotal = document.getElementById('stat-total');
             const statPending = document.getElementById('stat-pending');
@@ -247,10 +258,26 @@
 
             listEl.innerHTML = '<p class="text-slate-400">Cargando tareas…</p>';
             try {
-        const json = prefetched || await fetchTasksForMeeting(meetingId);
+        const json = prefetched || await fetchTasksForMeeting(meetingId, source);
                 if (!json.success) throw new Error('Error al cargar tareas');
-                const tasks = json.tasks || [];
-                const s = json.stats || {};
+                const raw = json.tasks || [];
+                const tasks = raw.map(t => ({
+                    ...t,
+                    tarea: t.tarea ?? t.text ?? '',
+                    descripcion: t.descripcion ?? t.description ?? null,
+                    fecha_inicio: t.fecha_inicio ?? t.start_date ?? null,
+                    fecha_limite: t.fecha_limite ?? t.due_date ?? null,
+                    hora_limite: t.hora_limite ?? t.due_time ?? null,
+                    prioridad: t.prioridad ?? t.priority ?? null,
+                    progreso: typeof t.progreso === 'number' ? t.progreso : (typeof t.progress === 'number' ? t.progress : (t.completed ? 100 : 0)),
+                    asignado: t.asignado ?? t.assignee ?? null,
+                }));
+                const s = json.stats || {
+                    total: tasks.length,
+                    pending: tasks.filter(t => (t.progreso ?? 0) === 0).length,
+                    in_progress: tasks.filter(t => t.progreso > 0 && t.progreso < 100).length,
+                    completed: tasks.filter(t => t.progreso >= 100).length,
+                };
                 statTotal.textContent = s.total ?? 0;
                 statPending.textContent = s.pending ?? 0;
                 statInprog.textContent = s.in_progress ?? 0;
@@ -262,7 +289,7 @@
             }
         }
 
-    window.loadTasksForMeeting = renderTasksAfterFetch;
+    window.loadTasksForMeeting = (id, src) => renderTasksAfterFetch(id, src);
 
         function renderTasksSidebar(tasks) {
             const listEl = document.getElementById('tasks-sidebar-list');

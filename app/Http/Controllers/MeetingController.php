@@ -121,6 +121,7 @@ class MeetingController extends Controller
                         'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
                         'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
                         'is_legacy' => true,
+                        'source' => 'transcriptions_laravel',
                     ];
                 });
 
@@ -135,6 +136,7 @@ class MeetingController extends Controller
                         'audio_folder' => $this->getFolderName($meeting->recordings_folder_id),
                         'transcript_folder' => 'Base de datos',
                         'is_legacy' => false,
+                        'source' => 'meetings',
                     ];
                 });
 
