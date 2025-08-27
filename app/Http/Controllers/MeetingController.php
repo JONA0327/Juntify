@@ -7,7 +7,6 @@ use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\MeetingShare;
 use App\Models\MeetingContentContainer;
-use App\Models\Task;
 use App\Models\Container;
 use App\Models\TaskLaravel;
 use App\Services\GoogleDriveService;
@@ -957,8 +956,17 @@ class MeetingController extends Controller
         }
 
         if (in_array('tasks', $sections)) {
-            $tasks = Task::where('meeting_id', $meeting->id)
-                ->get(['text', 'assignee', 'due_date', 'completed', 'priority', 'description']);
+            $tasks = TaskLaravel::where('meeting_id', $meeting->id)
+                ->get(['tarea', 'descripcion', 'fecha_limite', 'progreso'])
+                ->map(function ($task) {
+                    return [
+                        'text' => $task->tarea,
+                        'description' => $task->descripcion,
+                        'due_date' => $task->fecha_limite,
+                        'completed' => ($task->progreso ?? 0) >= 100,
+                        'progress' => $task->progreso ?? 0,
+                    ];
+                });
         }
 
         $pdf = Pdf::loadView('pdf.meeting-report', [
@@ -1576,27 +1584,26 @@ class MeetingController extends Controller
             }
 
             // Crear el HTML para el PDF
-            // Si se solicitó la sección de tareas, intentar usar las tareas de la BD (si existen)
+            // Si se solicitó la sección de tareas, usar siempre las tareas de la BD
             if (in_array('tasks', $sections)) {
-                $dbTasks = Task::where('meeting_id', $meeting->id)
-                    ->get(['text', 'description', 'assignee', 'due_date', 'completed', 'progress']);
-                if ($dbTasks->count() > 0) {
-                    $mapped = $dbTasks->map(function($t) {
-                        $end = $t->due_date ? ($t->due_date instanceof \Carbon\Carbon ? $t->due_date->format('Y-m-d') : (string)$t->due_date) : 'Sin asignar';
-                        $progress = isset($t->progress) && is_numeric($t->progress)
-                            ? (intval($t->progress) . '%')
-                            : ($t->completed ? '100%' : '0%');
-                        return [
-                            'title' => $t->text ?? 'Sin nombre',
-                            'description' => $t->description ?? '',
-                            'assigned' => $t->assignee ?? 'Sin asignar',
-                            'start' => 'Sin asignar',
-                            'end' => $end,
-                            'progress' => $progress,
-                        ];
-                    })->toArray();
-                    $data['tasks'] = $mapped;
-                }
+                $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
+                    ->get(['tarea', 'descripcion', 'fecha_inicio', 'fecha_limite', 'progreso', 'username']);
+                $mapped = $dbTasks->map(function($t) {
+                    $start = $t->fecha_inicio ? ($t->fecha_inicio instanceof \Carbon\Carbon ? $t->fecha_inicio->format('Y-m-d') : (string)$t->fecha_inicio) : 'Sin asignar';
+                    $end = $t->fecha_limite ? ($t->fecha_limite instanceof \Carbon\Carbon ? $t->fecha_limite->format('Y-m-d') : (string)$t->fecha_limite) : 'Sin asignar';
+                    $progress = isset($t->progreso) && is_numeric($t->progreso)
+                        ? (intval($t->progreso) . '%')
+                        : '0%';
+                    return [
+                        'title' => $t->tarea ?? 'Sin nombre',
+                        'description' => $t->descripcion ?? '',
+                        'assigned' => $t->username ?? 'Sin asignar',
+                        'start' => $start,
+                        'end' => $end,
+                        'progress' => $progress,
+                    ];
+                })->toArray();
+                $data['tasks'] = $mapped;
             }
 
             // Crear el HTML para el PDF
