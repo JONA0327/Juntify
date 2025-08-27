@@ -1843,34 +1843,65 @@ class MeetingController extends Controller
         try {
             $user = Auth::user();
 
-            // Validar que la reunión pertenece al usuario
+            // Intentar buscar primero en transcriptions_laravel
             $meeting = TranscriptionLaravel::where('id', $id)
                 ->where('username', $user->username)
-                ->firstOrFail();
+                ->first();
+
+            $isLegacy = true;
+
+            // Si no existe, buscar en meetings (reuniones modernas)
+            if (!$meeting) {
+                $meeting = Meeting::where('id', $id)
+                    ->where('username', $user->username)
+                    ->firstOrFail();
+                $isLegacy = false;
+            }
 
             // Validar request
             $request->validate([
-                'meeting_name' => 'required|string',
                 'sections' => 'required|array',
-                'data' => 'required|array'
+                'data' => 'required|array',
             ]);
 
             $data = $request->input('data');
             $sections = $request->input('sections');
-            $meetingName = $request->input('meeting_name');
 
-            // Usar la fecha real de created_at de la base de datos
-            $realCreatedAt = $meeting->created_at;
+            // Datos base de la reunión
+            if ($isLegacy) {
+                $meetingName = $meeting->meeting_name;
+                $realCreatedAt = $meeting->created_at;
 
-            // Verificar si la reunión pertenece a una organización
-            $hasOrganization = $meeting->containers()->exists();
-            $organizationName = null;
-            $organizationLogo = null;
-            if ($hasOrganization) {
-                $container = $meeting->containers()->first();
-                if ($container && isset($container->organization)) {
-                    $organizationName = $container->organization->name ?? 'Organización';
-                    $organizationLogo = $container->organization->imagen ?? null;
+                $hasOrganization = $meeting->containers()->exists();
+                $organizationName = null;
+                $organizationLogo = null;
+                if ($hasOrganization) {
+                    $container = $meeting->containers()->with('group.organization')->first();
+                    if ($container && $container->group && $container->group->organization) {
+                        $organizationName = $container->group->organization->name
+                            ?? $container->group->organization->nombre_organizacion
+                            ?? 'Organización';
+                        $organizationLogo = $container->group->organization->imagen ?? null;
+                    }
+                }
+            } else {
+                $meetingName = $meeting->title;
+                $realCreatedAt = $meeting->created_at ?? $meeting->date;
+
+                $container = MeetingContentContainer::whereHas('meetingRelations', function ($q) use ($meeting) {
+                        $q->where('meeting_id', $meeting->id);
+                    })
+                    ->with('group.organization')
+                    ->first();
+
+                $hasOrganization = $container !== null;
+                $organizationName = null;
+                $organizationLogo = null;
+                if ($container && $container->group && $container->group->organization) {
+                    $organizationName = $container->group->organization->name
+                        ?? $container->group->organization->nombre_organizacion
+                        ?? 'Organización';
+                    $organizationLogo = $container->group->organization->imagen ?? null;
                 }
             }
 
