@@ -13,6 +13,24 @@ async function loadAudioFromIdbWithRetries(key, tries = 5, delayMs = 200) {
     return null;
 }
 
+function clearStoredAudioKeys() {
+    try { sessionStorage.removeItem('uploadedAudioKey'); } catch (_) {}
+    try { sessionStorage.removeItem('recordingBlob'); } catch (_) {}
+    try { sessionStorage.removeItem('recordingSegments'); } catch (_) {}
+    try { sessionStorage.removeItem('recordingMetadata'); } catch (_) {}
+    try { localStorage.removeItem('pendingAudioData'); } catch (_) {}
+}
+
+async function discardAudio() {
+    try { await clearAllAudio(); } catch (_) {}
+    clearStoredAudioKeys();
+    showNotification('El audio se descartó para evitar conflictos en futuras grabaciones', 'warning');
+}
+
+window.addEventListener('beforeunload', () => {
+    discardAudio();
+});
+
 // ===== VARIABLES GLOBALES =====
 let currentStep = 1;
 let selectedAnalyzer = 'general';
@@ -298,6 +316,7 @@ async function startTranscription() {
 
         downloadAudio();
         showNotification('Se descargó una copia de seguridad del audio', 'info');
+        await discardAudio();
 
         progressText.textContent = 'Error al subir audio. Reintenta o verifica tu conexión.';
         showRetryTranscription();
@@ -363,6 +382,7 @@ function pollTranscription(id) {
                 }
                 downloadAudio();
                 showNotification('Se descargó una copia de seguridad del audio', 'info');
+                await discardAudio();
                 clearInterval(interval);
                 clearInterval(typingInterval);
             }
@@ -372,6 +392,9 @@ function pollTranscription(id) {
         } catch (err) {
             console.error(err);
             progressText.textContent = 'Error de servidor';
+            downloadAudio();
+            showNotification('Se descargó una copia de seguridad del audio', 'info');
+            await discardAudio();
             clearInterval(interval);
             clearInterval(typingInterval);
         }
@@ -779,6 +802,7 @@ async function processAnalysis() {
         showNotification('Error al analizar la reunión', 'error');
         downloadAudio();
         showNotification('Se descargó una copia de seguridad del audio', 'info');
+        await discardAudio();
         clearInterval(interval);
         return;
     }
@@ -1120,6 +1144,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         } catch (e) {
             console.error('Error al convertir audio a base64', e);
             showNotification('No se pudo procesar el audio', 'error');
+            await discardAudio();
             resetUI();
             showStep(4);
             return { success: false, message: 'No se pudo procesar el audio' };
@@ -1199,6 +1224,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
 
                 addMessage(`⚠️ ${errorMsg}`);
                 showNotification(errorMsg, 'error');
+                await discardAudio();
                 resetUI();
                 showStep(4);
                 return { success: false, message: errorMsg };
@@ -1213,6 +1239,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                 console.error('Contenido de respuesta:', responseText.substring(0, 500));
                 addMessage('⚠️ Error al procesar respuesta del servidor');
                 showNotification('Error al procesar respuesta del servidor', 'error');
+                await discardAudio();
                 resetUI();
                 showStep(4);
                 return { success: false, message: 'Error al procesar respuesta del servidor' };
@@ -1305,6 +1332,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         showNotification(msg, 'error');
         downloadAudio();
         showNotification('Se descargó una copia de seguridad del audio', 'info');
+        await discardAudio();
         resetUI();
         showStep(4);
         return { success: false, message: msg };
@@ -1549,6 +1577,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 } catch (fetchError) {
                     console.error("❌ Error al obtener audio del servidor:", fetchError);
                     showNotification('Error al cargar el archivo de audio: ' + fetchError.message, 'error');
+                    await discardAudio();
                     return;
                 }
             } else {
@@ -1558,7 +1587,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
         } catch (e) {
             console.error("❌ Error al parsear datos del audio pendiente:", e);
-            localStorage.removeItem('pendingAudioData');
+            await discardAudio();
         }
     }
 
@@ -1573,6 +1602,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         } catch (e) {
             console.error('Error loading audio from IndexedDB', e);
             showNotification('Error al cargar el audio guardado', 'error');
+            await discardAudio();
         }
     }
 
@@ -1590,6 +1620,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 audioSegments = arr.map(base64ToBlob);
             } catch (e) {
                 console.error('Error al cargar segmentos de audio', e);
+                await discardAudio();
             }
         }
 
@@ -1600,6 +1631,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 console.log('Segmentos grabados:', parsed.segmentCount, 'Duración:', parsed.durationMs, 'ms');
             } catch (e) {
                 console.error('Error al leer metadata de grabación', e);
+                await discardAudio();
             }
         }
 
