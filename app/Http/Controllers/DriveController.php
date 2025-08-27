@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Crypt;
 use App\Models\TranscriptionLaravel;
 use App\Models\PendingRecording;
 use App\Models\Notification;
+use App\Models\TaskLaravel;
+use App\Traits\MeetingContentParsing;
 use Illuminate\Support\Facades\Log;
 use Google\Service\Drive as DriveService;
 use Google\Service\Exception as GoogleServiceException;
@@ -20,6 +22,8 @@ use Throwable;
 
 class DriveController extends Controller
 {
+    use MeetingContentParsing;
+
     protected GoogleDriveService $drive;
 
     public function __construct(GoogleDriveService $drive)
@@ -745,7 +749,6 @@ class DriveController extends Controller
                 'segments'  => $v['transcriptionData'],
                 'summary'   => $analysis['summary']   ?? null,
                 'keyPoints' => $analysis['keyPoints'] ?? [],
-                'tasks'     => $analysis['tasks']     ?? [],
             ];
             $encrypted = Crypt::encryptString(json_encode($payload));
 
@@ -835,11 +838,10 @@ class DriveController extends Controller
                 }
             }
             $speakerCount = count($speakers);
-            $tasks        = $analysis['tasks'] ?? [];
 
             // 8. Guarda en BD y responde
             try {
-                TranscriptionLaravel::create([
+                $meeting = TranscriptionLaravel::create([
                     'username'               => Auth::user()->username,
                     'meeting_name'           => $meetingName,
                     'audio_drive_id'         => $audioFileId,
@@ -847,6 +849,25 @@ class DriveController extends Controller
                     'transcript_drive_id'    => $transcriptFileId,
                     'transcript_download_url' => $transcriptUrl,
                 ]);
+
+                $savedTasks = [];
+                foreach ($analysis['tasks'] ?? [] as $rawTask) {
+                    $parsed = $this->parseRawTaskForDb($rawTask);
+                    $taskModel = TaskLaravel::updateOrCreate(
+                        [
+                            'username'   => Auth::user()->username,
+                            'meeting_id' => $meeting->id,
+                            'tarea'      => $parsed['tarea'],
+                        ],
+                        [
+                            'descripcion'  => $parsed['descripcion'],
+                            'fecha_inicio' => $parsed['fecha_inicio'],
+                            'fecha_limite' => $parsed['fecha_limite'],
+                            'progreso'     => $parsed['progreso'],
+                        ]
+                    );
+                    $savedTasks[] = $taskModel;
+                }
             } catch (\Throwable $e) {
                 Log::error('saveResults db failure', [
                     'error'                 => $e->getMessage(),
@@ -868,7 +889,7 @@ class DriveController extends Controller
                 'drive_path'              => $drivePath,
                 'audio_duration'          => $duration,
                 'speaker_count'           => $speakerCount,
-                'tasks'                   => $tasks,
+                'tasks'                   => $savedTasks ?? [],
             ], 200);
 
         } catch (RuntimeException $e) {
