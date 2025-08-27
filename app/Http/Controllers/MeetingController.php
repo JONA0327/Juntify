@@ -27,6 +27,7 @@ use Illuminate\View\View;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Traits\GoogleDriveHelpers;
 use App\Traits\MeetingContentParsing;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class MeetingController extends Controller
 {
@@ -1207,7 +1208,12 @@ class MeetingController extends Controller
                 ->header('Content-Type', 'application/octet-stream')
                 ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
 
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['error' => 'Reunión no encontrada'], 404);
         } catch (\Exception $e) {
+            if ($e->getMessage() === 'No se encontró token de Google para el usuario') {
+                return response()->json(['error' => $e->getMessage()], 401);
+            }
             Log::error('Error downloading .ju file', [
                 'meeting_id' => $id,
                 'error' => $e->getMessage()
@@ -1243,7 +1249,12 @@ class MeetingController extends Controller
                 ->header('Content-Type', 'audio/mpeg')
                 ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
 
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['error' => 'Reunión no encontrada'], 404);
         } catch (\Exception $e) {
+            if ($e->getMessage() === 'No se encontró token de Google para el usuario') {
+                return response()->json(['error' => $e->getMessage()], 401);
+            }
             Log::error('Error downloading audio file', [
                 'meeting_id' => $id,
                 'error' => $e->getMessage()
