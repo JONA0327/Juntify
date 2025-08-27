@@ -33,6 +33,7 @@ let pendingAudioBlob = null;
 let pendingSaveContext = null;
 let postponeMode = false;
 window.postponeMode = postponeMode;
+let limitWarningShown = false;
 
 // SVG paths for dynamic icons
 const ICON_PATHS = {
@@ -63,7 +64,7 @@ function setIcon(svgEl, name) {
 }
 
 // ===== CONFIGURACIÓN DE GRABACIÓN =====
-const MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 horas
+const MAX_DURATION_MS = 2 * 60 * 60 * 1000; // 2 horas
 const SEGMENT_MS = 10 * 60 * 1000; // 10 minutos
 let recordedSegments = [];
 let segmentTimeout = null;
@@ -248,6 +249,7 @@ async function startRecording() {
 
         recordedSegments = [];
         startTime = Date.now();
+        limitWarningShown = false;
         isRecording = true;
 
         updateRecordingUI(true);
@@ -432,14 +434,12 @@ async function finalizeRecording() {
 
     const finalBlob = new Blob(recordedSegments, { type: 'audio/webm;codecs=opus' });
     const sizeMB = finalBlob.size / (1024 * 1024);
-    const durationMs = Date.now() - (meetingStartTime || startTime || Date.now());
-    const durationMin = durationMs / 60000;
 
     const now = new Date();
     const name = `grabacion-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
 
-    if (sizeMB > 100 || durationMin > 10) {
-        showError('La grabación supera los límites de 100 MB o 10 minutos.');
+    if (sizeMB > 100) {
+        showError('La grabación supera el límite de 100 MB.');
         const upload = confirm('¿Deseas subirla en segundo plano? Cancelar para descargarla.');
         pendingSaveContext = 'recording';
         if (upload) {
@@ -606,6 +606,17 @@ function updateTimer() {
     if (isPaused || !startTime) return;
 
     const elapsed = Date.now() - startTime;
+
+    if (elapsed >= MAX_DURATION_MS) {
+        stopRecording();
+        return;
+    }
+
+    if (!limitWarningShown && elapsed >= MAX_DURATION_MS - 5 * 60 * 1000) {
+        showWarning('Quedan 5 minutos para el límite de grabación');
+        limitWarningShown = true;
+    }
+
     const minutes = Math.floor(elapsed / 60000);
     const seconds = Math.floor((elapsed % 60000) / 1000);
 
@@ -639,6 +650,24 @@ function showSuccess(message) {
     notification.innerHTML = `
         <div class="notification-content">
             <span class="notification-icon">✅</span>
+            <span class="notification-message">${message}</span>
+        </div>
+    `;
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+        notification.remove();
+    }, 5000);
+}
+
+// Función para mostrar advertencias
+function showWarning(message) {
+    const notification = document.createElement('div');
+    notification.className = 'notification warning';
+    notification.innerHTML = `
+        <div class="notification-content">
+            <span class="notification-icon">⚠️</span>
             <span class="notification-message">${message}</span>
         </div>
     `;
@@ -1123,6 +1152,7 @@ async function startMeetingRecording() {
 
         meetingRecording = true;
         meetingStartTime = Date.now();
+        limitWarningShown = false;
 
         // Actualizar UI
         updateMeetingRecordingUI(true);
@@ -1272,9 +1302,20 @@ function updateMeetingRecordingUI(recording) {
 
 // Actualizar timer de reunión
 function updateMeetingTimer() {
-    if (!meetingStartTime) return;
+    if (!meetingStartTime || !meetingRecording) return;
 
     const elapsed = Date.now() - meetingStartTime;
+
+    if (elapsed >= MAX_DURATION_MS) {
+        stopMeetingRecording();
+        return;
+    }
+
+    if (!limitWarningShown && elapsed >= MAX_DURATION_MS - 5 * 60 * 1000) {
+        showWarning('Quedan 5 minutos para el límite de grabación');
+        limitWarningShown = true;
+    }
+
     const minutes = Math.floor(elapsed / 60000);
     const seconds = Math.floor((elapsed % 60000) / 1000);
 
