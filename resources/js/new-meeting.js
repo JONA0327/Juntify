@@ -1014,8 +1014,12 @@ async function processAudioFile() {
             progressText.textContent = 'Limpiando datos anteriores...';
         }
 
+        // Guardar temporalmente el archivo antes de limpiar datos previos
+        const fileToProcess = uploadedFile;
+
         // LIMPIAR DATOS ANTERIORES ANTES DE PROCESAR EL NUEVO ARCHIVO
         await clearPreviousAudioData();
+        uploadedFile = fileToProcess;
 
         if (progressContainer) {
             progressFill.style.width = '20%';
