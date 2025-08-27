@@ -445,7 +445,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1500;
+    z-index: 1000;
     padding: 2rem;
     opacity: 0;
     pointer-events: none;
@@ -457,13 +457,13 @@
     pointer-events: all;
 }
 
-.meeting-modal .modal-content {
+.modal-content {
     background: linear-gradient(135deg,
                 var(--bg-slate-900) 0%,
                 var(--bg-slate-800) 100%);
     border: 1px solid var(--border-slate-700);
     border-radius: 1rem;
-    max-width: 1100px; /* más ancho para mejor lectura */
+    max-width: 1000px;
     width: 100%;
     max-height: 90vh;
     overflow: hidden;
@@ -480,7 +480,7 @@
 /* =========================================
    HEADER DEL MODAL
    ========================================= */
-.meeting-modal .modal-header {
+.modal-header {
     padding: 2rem 2rem 1rem;
     border-bottom: 1px solid var(--border-slate-700);
     display: flex;
@@ -489,18 +489,18 @@
     gap: 1rem;
 }
 
-.meeting-modal .modal-title-section {
+.modal-title-section {
     flex: 1;
 }
 
-.meeting-modal .modal-title {
+.modal-title {
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--text-slate-200);
     margin-bottom: 0.5rem;
 }
 
-.meeting-modal .modal-title.editable {
+.modal-title.editable {
     background: rgba(30, 41, 59, 0.5);
     border: 1px solid var(--border-slate-700);
     border-radius: 0.5rem;
@@ -509,19 +509,19 @@
     color: var(--text-slate-200);
 }
 
-.meeting-modal .modal-title.editable:focus {
+.modal-title.editable:focus {
     outline: none;
     border-color: var(--primary-yellow);
     background: rgba(30, 41, 59, 0.8);
 }
 
-.meeting-modal .modal-subtitle {
+.modal-subtitle {
     color: var(--text-slate-400);
     font-size: 0.875rem;
     margin-bottom: 1rem;
 }
 
-.meeting-modal .title-actions {
+.title-actions {
     display: flex;
     gap: 0.5rem;
     margin-top: 0.5rem;
@@ -609,31 +609,23 @@
     border-bottom-color: var(--primary-yellow);
 }
 
-.meeting-modal .tab-content {
+.tab-content {
     display: none;
 }
 
-.meeting-modal .tab-content.active {
+.tab-content.active {
     display: block;
 }
 
 /* =========================================
    CONTENIDO DEL MODAL
    ========================================= */
-.meeting-modal .modal-body {
+.modal-body {
     padding: 2rem;
     display: flex;
     flex-direction: column;
     max-height: calc(90vh - 160px);
     overflow-y: auto;
-    /* Scroll invisible */
-    -ms-overflow-style: none; /* IE y Edge */
-    scrollbar-width: none;    /* Firefox */
-}
-
-.meeting-modal .modal-body::-webkit-scrollbar { /* Chrome, Safari, Opera */
-    width: 0;
-    height: 0;
 }
 
 .modal-section {
@@ -642,7 +634,7 @@
     flex-direction: column;
 }
 
-.meeting-modal .section-title {
+.section-title {
     font-size: 1.125rem;
     font-weight: 600;
     color: var(--text-slate-200);
@@ -652,29 +644,19 @@
     gap: 0.5rem;
 }
 
-.meeting-modal .section-title svg {
+.section-title svg {
     width: 1.25rem;
     height: 1.25rem;
     color: var(--primary-yellow);
 }
 
-.meeting-modal .section-content {
+.section-content {
     background: rgba(15, 23, 42, 0.5);
     border: 1px solid rgba(51, 65, 85, 0.3);
     border-radius: 0.75rem;
     padding: 1.5rem;
     color: var(--text-slate-200);
     line-height: 1.6;
-    /* Asegurar scroll interno cuando se usa con max-height inline */
-    overflow-y: auto;
-    /* Scroll invisible */
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-
-.meeting-modal .section-content::-webkit-scrollbar {
-    width: 0;
-    height: 0;
 }
 
 /* =========================================
