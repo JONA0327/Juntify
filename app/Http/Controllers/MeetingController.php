@@ -312,10 +312,69 @@ class MeetingController extends Controller
 
             if ($legacyMeeting) {
                 if (empty($legacyMeeting->transcript_drive_id)) {
+                    // Reconstruct meeting data from legacy database tables when .ju file is missing
+                    $summary = DB::table('meeting_files')
+                        ->where('meeting_id', $legacyMeeting->id)
+                        ->value('summary');
+
+                    $keyPoints = DB::table('key_points')
+                        ->join('transcriptions_laravel', 'key_points.meeting_id', '=', 'transcriptions_laravel.id')
+                        ->where('key_points.meeting_id', $legacyMeeting->id)
+                        ->where('transcriptions_laravel.username', $user->username)
+                        ->orderBy('key_points.order_num')
+                        ->pluck('key_points.point_text')
+                        ->toArray();
+
+                    $segmentsData = DB::table('transcriptions')
+                        ->join('transcriptions_laravel', 'transcriptions.meeting_id', '=', 'transcriptions_laravel.id')
+                        ->where('transcriptions.meeting_id', $legacyMeeting->id)
+                        ->where('transcriptions_laravel.username', $user->username)
+                        ->orderBy('transcriptions.id')
+                        ->get(['transcriptions.time', 'transcriptions.speaker', 'transcriptions.text', 'transcriptions.display_speaker']);
+
+                    $segments = $segmentsData->map(function ($t) {
+                        return [
+                            'time' => $t->time,
+                            'speaker' => $t->speaker,
+                            'text' => $t->text,
+                            'display_speaker' => $t->display_speaker,
+                        ];
+                    })->toArray();
+
+                    $transcriptionText = $segmentsData->pluck('text')->implode(' ');
+                    $speakers = collect($segments)->pluck('display_speaker')->filter()->unique()->values()->toArray();
+
+                    $tasks = TaskLaravel::where('meeting_id', $legacyMeeting->id)
+                        ->where('username', $user->username)
+                        ->get();
+
+                    $audioData = $this->googleDriveService->findAudioInFolder(
+                        $legacyMeeting->audio_drive_id,
+                        $legacyMeeting->meeting_name
+                    );
+                    $audioPath = $audioData['downloadUrl'] ?? null;
+                    $audioDriveId = $audioData['fileId'] ?? null;
+
                     return response()->json([
-                        'success' => false,
-                        'message' => 'Transcripción no disponible',
-                    ], 404);
+                        'success' => true,
+                        'meeting' => [
+                            'id' => $legacyMeeting->id,
+                            'meeting_name' => $legacyMeeting->meeting_name,
+                            'is_legacy' => true,
+                            'created_at' => $legacyMeeting->created_at->format('d/m/Y H:i'),
+                            'audio_path' => $audioPath,
+                            'audio_drive_id' => $audioDriveId,
+                            'summary' => $summary ?? 'No hay resumen disponible',
+                            'key_points' => $keyPoints,
+                            'transcription' => $transcriptionText,
+                            'tasks' => $tasks,
+                            'speakers' => $speakers,
+                            'segments' => $segments,
+                            'audio_folder' => $this->getFolderName($legacyMeeting->audio_drive_id),
+                            'transcript_folder' => 'Base de datos',
+                            'needs_encryption' => false,
+                        ]
+                    ]);
                 }
 
                 $transcriptContent = $this->downloadFromDrive($legacyMeeting->transcript_drive_id);
