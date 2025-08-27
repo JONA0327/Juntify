@@ -347,13 +347,45 @@ class MeetingController extends Controller
                         ->where('username', $user->username)
                         ->get();
 
-                    $audioData = $this->googleDriveService->findAudioInFolder(
-                        $legacyMeeting->audio_drive_id,
-                        $legacyMeeting->meeting_name,
-                        (string) $legacyMeeting->id
-                    );
-                    $audioPath = $audioData['downloadUrl'] ?? null;
-                    $audioDriveId = $audioData['fileId'] ?? null;
+                    // Determinar si ya tenemos un archivo de audio directo o una URL descargable
+                    $audioPath = null;
+                    $audioDriveId = null;
+                    $hasDirectUrl = !empty($legacyMeeting->audio_download_url);
+                    $isFileId = false;
+                    if (!empty($legacyMeeting->audio_drive_id)) {
+                        try {
+                            $info = $this->googleDriveService->getFileInfo($legacyMeeting->audio_drive_id);
+                            $isFileId = $info && $info->getMimeType() !== 'application/vnd.google-apps.folder';
+                        } catch (\Exception $e) {
+                            Log::warning('Error checking audio_drive_id', [
+                                'meeting_id' => $legacyMeeting->id,
+                                'audio_drive_id' => $legacyMeeting->audio_drive_id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+
+                    if ($hasDirectUrl || $isFileId) {
+                        $tempMeeting = (object) [
+                            'id' => $legacyMeeting->id,
+                            'meeting_name' => $legacyMeeting->meeting_name,
+                            'audio_drive_id' => $legacyMeeting->audio_drive_id,
+                            'audio_download_url' => $legacyMeeting->audio_download_url,
+                        ];
+                        $audioDriveId = $legacyMeeting->audio_drive_id;
+                        $audioPath = $this->getAudioPath($tempMeeting);
+                        if ($audioPath && !str_starts_with($audioPath, 'http')) {
+                            $audioPath = $this->publicUrlFromStoragePath($audioPath);
+                        }
+                    } else {
+                        $audioData = $this->googleDriveService->findAudioInFolder(
+                            $legacyMeeting->audio_drive_id,
+                            $legacyMeeting->meeting_name,
+                            (string) $legacyMeeting->id
+                        );
+                        $audioPath = $audioData['downloadUrl'] ?? null;
+                        $audioDriveId = $audioData['fileId'] ?? null;
+                    }
 
                     return response()->json([
                         'success' => true,
@@ -384,13 +416,47 @@ class MeetingController extends Controller
                 $needsEncryption = $transcriptResult['needs_encryption'];
 
                 $transcriptData = $this->extractMeetingDataFromJson($transcriptData);
-                $audioData = $this->googleDriveService->findAudioInFolder(
-                    $legacyMeeting->audio_drive_id,
-                    $legacyMeeting->meeting_name,
-                    (string) $legacyMeeting->id
-                );
-                $audioPath = $audioData['downloadUrl'] ?? null;
-                $audioDriveId = $audioData['fileId'] ?? null;
+
+                // Determinar si ya tenemos un archivo de audio directo o una URL descargable
+                $audioPath = null;
+                $audioDriveId = null;
+                $hasDirectUrl = !empty($legacyMeeting->audio_download_url);
+                $isFileId = false;
+                if (!empty($legacyMeeting->audio_drive_id)) {
+                    try {
+                        $info = $this->googleDriveService->getFileInfo($legacyMeeting->audio_drive_id);
+                        $isFileId = $info && $info->getMimeType() !== 'application/vnd.google-apps.folder';
+                    } catch (\Exception $e) {
+                        Log::warning('Error checking audio_drive_id', [
+                            'meeting_id' => $legacyMeeting->id,
+                            'audio_drive_id' => $legacyMeeting->audio_drive_id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                if ($hasDirectUrl || $isFileId) {
+                    $tempMeeting = (object) [
+                        'id' => $legacyMeeting->id,
+                        'meeting_name' => $legacyMeeting->meeting_name,
+                        'audio_drive_id' => $legacyMeeting->audio_drive_id,
+                        'audio_download_url' => $legacyMeeting->audio_download_url,
+                    ];
+                    $audioDriveId = $legacyMeeting->audio_drive_id;
+                    $audioPath = $this->getAudioPath($tempMeeting);
+                    if ($audioPath && !str_starts_with($audioPath, 'http')) {
+                        $audioPath = $this->publicUrlFromStoragePath($audioPath);
+                    }
+                } else {
+                    $audioData = $this->googleDriveService->findAudioInFolder(
+                        $legacyMeeting->audio_drive_id,
+                        $legacyMeeting->meeting_name,
+                        (string) $legacyMeeting->id
+                    );
+                    $audioPath = $audioData['downloadUrl'] ?? null;
+                    $audioDriveId = $audioData['fileId'] ?? null;
+                }
+
                 $processedData = $this->processTranscriptData($transcriptData);
                 unset($processedData['tasks']);
 
