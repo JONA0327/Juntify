@@ -844,7 +844,6 @@ class MeetingController extends Controller
             ]);
 
             // Eliminar archivos de Google Drive PRIMERO
-            $driveErrors = [];
 
             // Eliminar archivo .ju de Drive
             if ($meeting->transcript_drive_id) {
@@ -854,11 +853,14 @@ class MeetingController extends Controller
                         'file_id' => $meeting->transcript_drive_id
                     ]);
                 } catch (\Exception $e) {
-                    $driveErrors[] = 'Error al eliminar archivo .ju: ' . $e->getMessage();
                     Log::error('Error al eliminar archivo de transcripción de Drive', [
                         'file_id' => $meeting->transcript_drive_id,
                         'error' => $e->getMessage()
                     ]);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Error al eliminar archivo .ju: ' . $e->getMessage(),
+                    ], 500);
                 }
             }
 
@@ -870,20 +872,15 @@ class MeetingController extends Controller
                         'file_id' => $meeting->audio_drive_id
                     ]);
                 } catch (\Exception $e) {
-                    $driveErrors[] = 'Error al eliminar archivo de audio: ' . $e->getMessage();
                     Log::error('Error al eliminar archivo de audio de Drive', [
                         'file_id' => $meeting->audio_drive_id,
                         'error' => $e->getMessage()
                     ]);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Error al eliminar archivo de audio: ' . $e->getMessage(),
+                    ], 500);
                 }
-            }
-
-            // Si hubo errores en Drive pero no son críticos, continuar con la eliminación de BD
-            if (!empty($driveErrors)) {
-                Log::warning("Errores en Drive durante eliminación, pero continuando", [
-                    'errors' => $driveErrors,
-                    'meeting_id' => $id
-                ]);
             }
 
             // Eliminar registro de la base de datos
@@ -891,17 +888,11 @@ class MeetingController extends Controller
 
             Log::info("Reunión eliminada completamente", [
                 'meeting_id' => $id,
-                'drive_errors' => $driveErrors
             ]);
-
-            $message = 'Reunión eliminada correctamente';
-            if (!empty($driveErrors)) {
-                $message .= ', pero con algunos errores en Drive: ' . implode(', ', $driveErrors);
-            }
 
             return response()->json([
                 'success' => true,
-                'message' => $message
+                'message' => 'Reunión eliminada correctamente'
             ]);
 
         } catch (\Exception $e) {
