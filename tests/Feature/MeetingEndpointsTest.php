@@ -10,6 +10,7 @@ use App\Models\Container;
 use App\Models\Meeting;
 use App\Models\GoogleToken;
 use App\Services\GoogleDriveService;
+use Mockery;
 
 uses(RefreshDatabase::class);
 
@@ -252,5 +253,66 @@ test('show legacy meeting returns audio data', function () {
             'audio_drive_id' => 'file456',
             'is_legacy' => true,
         ]);
+});
+
+
+test('destroy meeting returns 500 when Google Drive deletion fails', function () {
+    $user = User::factory()->create(['username' => 'user']);
+
+    GoogleToken::create([
+        'username' => $user->username,
+        'access_token' => 'token',
+        'refresh_token' => 'refresh',
+        'expiry_date' => now()->addDay(),
+    ]);
+
+    $meeting = TranscriptionLaravel::factory()->create([
+        'username' => $user->username,
+        'transcript_drive_id' => 'drive-file',
+    ]);
+
+    $mock = Mockery::mock(GoogleDriveService::class);
+    $mock->shouldReceive('setAccessToken')->andReturnNull();
+    $mock->shouldReceive('getClient')->andReturn(new class {
+        public function isAccessTokenExpired() { return false; }
+    });
+    $mock->shouldReceive('deleteFile')->andThrow(new \Error('fail'));
+
+    app()->instance(GoogleDriveService::class, $mock);
+
+    $response = $this->actingAs($user)->deleteJson('/api/meetings/' . $meeting->id);
+
+    $response->assertStatus(500);
+    $this->assertDatabaseHas('transcriptions_laravel', ['id' => $meeting->id]);
+});
+
+test('destroy meeting removes record on successful Google Drive deletion', function () {
+    $user = User::factory()->create(['username' => 'user']);
+
+    GoogleToken::create([
+        'username' => $user->username,
+        'access_token' => 'token',
+        'refresh_token' => 'refresh',
+        'expiry_date' => now()->addDay(),
+    ]);
+
+    $meeting = TranscriptionLaravel::factory()->create([
+        'username' => $user->username,
+        'transcript_drive_id' => 'drive-file',
+    ]);
+
+    $mock = Mockery::mock(GoogleDriveService::class);
+    $mock->shouldReceive('setAccessToken')->andReturnNull();
+    $mock->shouldReceive('getClient')->andReturn(new class {
+        public function isAccessTokenExpired() { return false; }
+    });
+    $mock->shouldReceive('deleteFile')->andReturnNull();
+
+    app()->instance(GoogleDriveService::class, $mock);
+
+    $response = $this->actingAs($user)->deleteJson('/api/meetings/' . $meeting->id);
+
+    $response->assertOk();
+    $this->assertDatabaseMissing('transcriptions_laravel', ['id' => $meeting->id]);
 });
 
