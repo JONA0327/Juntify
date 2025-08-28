@@ -647,6 +647,27 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             this.isJoining = false;
         }
     },
+    async leaveOrganization() {
+        try {
+            const response = await fetch('/api/organizations/leave', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                const data = await response.json().catch(() => ({}));
+                this.showError(data.message || 'Error al salir de la organización');
+            }
+        } catch (error) {
+            console.error('Error leaving organization:', error);
+            this.showError('Error al salir de la organización');
+        }
+    },
     async removeMember(user) {
         try {
             const response = await fetch(`/api/groups/${this.currentGroup.id}/members/${user.id}`, {
