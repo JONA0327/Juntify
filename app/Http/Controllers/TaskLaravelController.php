@@ -294,8 +294,25 @@ class TaskLaravelController extends Controller
     public function show(int $id): JsonResponse
     {
         $user = Auth::user();
-        $task = TaskLaravel::where('id', $id)->where('username', $user->username)->firstOrFail();
-        return response()->json(['success' => true, 'task' => $task]);
+        $task = TaskLaravel::with('meeting:id,meeting_name')
+            ->where('id', $id)
+            ->where('username', $user->username)
+            ->firstOrFail();
+
+        $taskArr = $task->only([
+            'id',
+            'tarea',
+            'prioridad',
+            'descripcion',
+            'fecha_inicio',
+            'fecha_limite',
+            'hora_limite',
+            'asignado',
+            'progreso',
+        ]);
+        $taskArr['meeting_name'] = $task->meeting->meeting_name ?? null;
+
+        return response()->json(['success' => true, 'task' => $taskArr]);
     }
 
     /**

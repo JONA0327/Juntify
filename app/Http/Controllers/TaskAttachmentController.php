@@ -35,7 +35,12 @@ class TaskAttachmentController extends Controller
     public function folders(Request $request): JsonResponse
     {
         $this->setGoogleDriveToken($request);
-        $folders = $this->googleDriveService->listFolders("mimeType='application/vnd.google-apps.folder' and trashed=false");
+        $parentId = $request->query('parents');
+        if ($parentId) {
+            $folders = $this->googleDriveService->listSubfolders($parentId);
+        } else {
+            $folders = $this->googleDriveService->listFolders("mimeType='application/vnd.google-apps.folder' and trashed=false");
+        }
         $out = array_map(fn($f) => ['id' => $f->getId(), 'name' => $f->getName()], $folders);
         return response()->json(['success' => true, 'folders' => $out]);
     }

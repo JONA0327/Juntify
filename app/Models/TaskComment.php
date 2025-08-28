@@ -14,6 +14,7 @@ class TaskComment extends Model
         'task_id',
         'author',
         'text',
+        'parent_id',
         'date',
     ];
 
@@ -24,6 +25,16 @@ class TaskComment extends Model
     public function task()
     {
         return $this->belongsTo(TaskLaravel::class, 'task_id');
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(self::class, 'parent_id')->with('children')->orderBy('date', 'asc');
     }
 }
 

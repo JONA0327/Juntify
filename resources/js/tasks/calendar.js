@@ -144,18 +144,52 @@ document.addEventListener('DOMContentLoaded', () => {
     title.textContent = `Tareas para el ${nice}`;
     list.innerHTML = '';
     const dayEvents = eventsByDate[iso] || [];
-    if (dayEvents.length === 0){ list.innerHTML = '<div class="text-slate-400 text-sm">No hay tareas para este día.</div>'; panel.classList.remove('hidden'); return; }
+    if (dayEvents.length === 0){
+      list.innerHTML = '<div class="text-slate-400 text-sm">No hay tareas para este día.</div>';
+      panel.classList.remove('hidden');
+      return;
+    }
     for (const ev of dayEvents){
-      const row = document.createElement('button'); row.className = 'w-full text-left bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 rounded-md px-3 py-2 flex items-center gap-3';
-      const dot = document.createElement('span'); dot.className = 'w-2.5 h-2.5 rounded-full ' + dotColorByStatus(ev.extendedProps?.status);
-      const timeEl = document.createElement('div'); timeEl.className = 'text-xs text-slate-400 w-16'; timeEl.textContent = formatTimeFromEvent(ev);
-      const titleEl = document.createElement('div'); titleEl.className = 'flex-1 text-sm text-slate-200 truncate'; titleEl.textContent = ev.title || 'Tarea';
-      const meta = document.createElement('div'); meta.className = 'text-xs text-slate-400 text-right min-w-[180px]';
-      const pr = ev.extendedProps?.priority || '-'; const prog = typeof ev.extendedProps?.progress === 'number' ? ev.extendedProps.progress + '%' : '-';
+      const pr = ev.extendedProps?.priority || '-';
       const assignee = ev.extendedProps?.asignado || ev.extendedProps?.assignee || '—';
+      const prog = typeof ev.extendedProps?.progress === 'number' ? ev.extendedProps.progress + '%' : '-';
       const remain = calcRemaining(iso, ev);
-      meta.innerHTML = `<div>Prioridad: ${pr} • Progreso: ${prog}</div><div>Asignado: ${assignee}</div><div>${remain}</div>`;
-      row.appendChild(dot); row.appendChild(timeEl); row.appendChild(titleEl); row.appendChild(meta);
+
+      const row = document.createElement('button');
+      row.className = 'w-full text-left rounded-md px-3 py-2 flex items-start gap-3 border ' + colorClasses(ev) + ' hover:opacity-80';
+
+      const dot = document.createElement('span');
+      dot.className = 'w-2.5 h-2.5 rounded-full ' + dotColorByStatus(ev.extendedProps?.status);
+
+      const timeEl = document.createElement('div');
+      timeEl.className = 'text-xs text-slate-400 w-16';
+      timeEl.textContent = formatTimeFromEvent(ev);
+
+      const info = document.createElement('div');
+      info.className = 'flex-1';
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'text-sm text-slate-200 truncate';
+      titleEl.textContent = ev.title || 'Tarea';
+
+      const tags = document.createElement('div');
+      tags.className = 'mt-1 flex flex-wrap gap-1';
+      const prTag = document.createElement('span'); prTag.className = 'task-tag'; prTag.textContent = `Prioridad: ${pr}`;
+      const asTag = document.createElement('span'); asTag.className = 'task-tag'; asTag.textContent = `Asignado: ${assignee}`;
+      tags.appendChild(prTag); tags.appendChild(asTag);
+
+      info.appendChild(titleEl);
+      info.appendChild(tags);
+
+      const meta = document.createElement('div');
+      meta.className = 'text-xs text-slate-400 text-right min-w-[140px]';
+      meta.innerHTML = `<div>Progreso: ${prog}</div><div>${remain}</div>`;
+
+      row.appendChild(dot);
+      row.appendChild(timeEl);
+      row.appendChild(info);
+      row.appendChild(meta);
+
       row.addEventListener('click', ()=> openTaskDetailsModal(ev.id));
       list.appendChild(row);
     }
@@ -215,10 +249,23 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="tab-btn px-3 py-2 text-sm rounded-t text-slate-300 hover:text-white" data-tab="files">Archivos</button>
           </div>
           <div class="p-6">
-            <div class="tab-panel" id="tab-details">
-              <div class="text-slate-300 whitespace-pre-line">${t.descripcion || 'Sin descripción'}</div>
-              <div class="mt-4 text-slate-400 text-sm">Fecha: ${(t.fecha_limite || t.fecha_inicio || '-')}${t.hora_limite ? ' ' + t.hora_limite : ''}</div>
-            </div>
+
+<div class="tab-panel" id="tab-details">
+  <div class="text-slate-300 whitespace-pre-line">${t.descripcion || 'Sin descripción'}</div>
+  <div class="mt-4 text-slate-400 text-sm space-y-1">
+    <div>Reunión: ${t.meeting_name || '-'}</div>
+    <div>Fecha inicio: ${t.fecha_inicio || '-'}</div>
+    <div>Asignado: ${t.asignado || '-'}</div>
+    <div>Progreso: ${(typeof t.progreso === 'number' ? t.progreso : 0)}%</div>
+    <div>Fecha límite: ${(t.fecha_limite || '-')} ${t.hora_limite ? ' ' + t.hora_limite : ''}</div>
+  </div>
+  <div class="mt-4 flex items-center gap-2" id="progress-controls">
+    <input type="range" min="0" max="100" value="${t.progreso || 0}" id="task-progress" class="flex-1" />
+    <span id="task-progress-value" class="text-slate-200 text-sm w-12 text-right">${t.progreso || 0}%</span>
+    <button id="task-progress-save" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2 py-1 rounded">Guardar</button>
+    <button id="task-mark-complete" class="bg-green-600 hover:bg-green-500 text-white text-xs px-2 py-1 rounded">Completar</button>
+  </div>
+</div>
             <div class="tab-panel hidden" id="tab-comments">
               <div id="comments-list" class="flex flex-col gap-3"></div>
               <form id="comment-form" class="mt-3 flex gap-2">
@@ -241,17 +288,54 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>`;
       document.body.appendChild(modal); document.body.classList.add('overflow-hidden');
       modal.addEventListener('click', (e)=>{ if (e.target.dataset.close !== undefined || e.target === modal){ modal.remove(); document.body.classList.remove('overflow-hidden'); } });
-      modal.querySelectorAll('.tab-btn').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-          modal.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active','bg-slate-800','text-slate-200'));
-          btn.classList.add('active','bg-slate-800','text-slate-200');
-          const tab = btn.dataset.tab;
-          modal.querySelectorAll('.tab-panel').forEach(p=>p.classList.add('hidden'));
-          modal.querySelector('#tab-'+tab).classList.remove('hidden');
+        modal.querySelectorAll('.tab-btn').forEach(btn=>{
+          btn.addEventListener('click', ()=>{
+            modal.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active','bg-slate-800','text-slate-200'));
+            btn.classList.add('active','bg-slate-800','text-slate-200');
+            const tab = btn.dataset.tab;
+            modal.querySelectorAll('.tab-panel').forEach(p=>p.classList.add('hidden'));
+            modal.querySelector('#tab-'+tab).classList.remove('hidden');
+          });
         });
-      });
 
-      await loadComments();
+<<<<<<< ours
+        const progressInput = modal.querySelector('#task-progress');
+        const progressValue = modal.querySelector('#task-progress-value');
+        progressInput.addEventListener('input', ()=>{ progressValue.textContent = progressInput.value + '%'; });
+        modal.querySelector('#task-progress-save').addEventListener('click', async ()=>{
+          const value = parseInt(progressInput.value,10);
+          try{
+            const r = await fetch(`/api/tasks-laravel/tasks/${t.id}`, {
+              method:'PUT',
+              headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN': csrf },
+              body: JSON.stringify({ tarea: t.tarea, progreso: value })
+            });
+            const resp = await r.json();
+            if(resp.success){
+              t.progreso = value;
+            } else {
+              alert('No se pudo actualizar progreso');
+            }
+          }catch(_){ alert('No se pudo actualizar progreso'); }
+        });
+        modal.querySelector('#task-mark-complete').addEventListener('click', async ()=>{
+          try{
+            const r = await fetch(`/api/tasks-laravel/tasks/${t.id}/complete`, {
+              method:'POST',
+              headers:{ 'X-CSRF-TOKEN': csrf }
+            });
+            const resp = await r.json();
+            if(resp.success){
+              progressInput.value = 100;
+              progressValue.textContent = '100%';
+              t.progreso = 100;
+            } else {
+              alert('No se pudo completar la tarea');
+            }
+          }catch(_){ alert('No se pudo completar la tarea'); }
+        });
+
+        await loadComments();
       async function loadComments(){
         const res = await fetch(`/api/tasks-laravel/tasks/${t.id}/comments`);
         const data = await res.json();
@@ -266,10 +350,76 @@ document.addEventListener('DOMContentLoaded', () => {
           const resp = await r.json(); if (resp.success){ input.value=''; await loadComments(); }
         };
       }
+=======
+       await loadComments();
+       async function loadComments(){
+         const res = await fetch(`/api/tasks-laravel/tasks/${t.id}/comments`);
+         const data = await res.json();
+         const list = modal.querySelector('#comments-list');
+         list.innerHTML='';
 
-      await loadFolders(); await loadFiles();
-      async function loadFolders(){ const sel = modal.querySelector('#drive-folder'); const res = await fetch('/api/drive/folders'); const data = await res.json(); sel.innerHTML=''; (data.folders||[]).forEach(f=>{ const opt=document.createElement('option'); opt.value=f.id; opt.textContent=f.name; sel.appendChild(opt); }); }
-      async function loadFiles(){ const list = modal.querySelector('#files-list'); const res = await fetch(`/api/tasks-laravel/tasks/${t.id}/files`); const data = await res.json(); list.innerHTML=''; (data.files||[]).forEach(f=>{ const row=document.createElement('div'); row.className='flex items-center justify-between bg-slate-800/60 border border-slate-700 rounded px-3 py-2'; const a=document.createElement('a'); a.href=`/api/tasks-laravel/files/${f.id}/download`; a.target='_blank'; a.textContent=f.name; a.className='text-slate-200 hover:underline'; row.appendChild(a); list.appendChild(row); }); }
+         const renderComment = (c, container)=>{
+           const wrapper = document.createElement('div');
+           wrapper.className = 'mt-2';
+           const box = document.createElement('div');
+           box.className = 'bg-slate-800/70 border border-slate-700 rounded px-3 py-2 text-sm text-slate-200';
+           const when = c.date ? new Date(c.date).toLocaleString() : '';
+           box.textContent = `${c.author}: ${c.text}${when ? ' ('+when+')' : ''}`;
+           const replyBtn = document.createElement('button');
+           replyBtn.textContent = 'Responder';
+           replyBtn.className = 'ml-2 text-xs text-sky-400';
+           box.appendChild(replyBtn);
+           const childrenContainer = document.createElement('div');
+           childrenContainer.className = 'ml-4';
+           wrapper.appendChild(box);
+           wrapper.appendChild(childrenContainer);
+
+           replyBtn.addEventListener('click',()=>{
+             replyBtn.disabled = true;
+             const form = document.createElement('form');
+             form.className = 'mt-1';
+             form.innerHTML = `<input type="text" class="w-full rounded bg-slate-900/70 border border-slate-700 px-2 py-1 text-slate-200 text-sm" placeholder="Respuesta...">`;
+             const input = form.querySelector('input');
+             form.onsubmit = async (e)=>{
+               e.preventDefault();
+               const text = input.value.trim();
+               if(!text) return;
+               const r = await fetch(`/api/tasks-laravel/tasks/${t.id}/comments`, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN': csrf }, body: JSON.stringify({ text, parent_id: c.id })});
+               const resp = await r.json();
+               if(resp.success){ await loadComments(); }
+             };
+             wrapper.insertBefore(form, childrenContainer);
+           });
+
+           container.appendChild(wrapper);
+           (c.children||[]).forEach(ch=>renderComment(ch, childrenContainer));
+         };
+
+         (data.comments||[]).forEach(c=>renderComment(c, list));
+
+         const form = modal.querySelector('#comment-form');
+         form.onsubmit = async (e)=>{
+           e.preventDefault();
+           const input=form.querySelector('input');
+           const text=input.value.trim();
+           if(!text) return;
+           const r = await fetch(`/api/tasks-laravel/tasks/${t.id}/comments`, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN': csrf }, body: JSON.stringify({ text })});
+           const resp = await r.json();
+           if (resp.success){ input.value=''; await loadComments(); }
+         };
+       }
+>>>>>>> theirs
+
+      let meetingFolderId = null;
+      try{
+        const mRes = await fetch(`/api/meetings/${t.meeting_id}`);
+        const mData = await mRes.json();
+        meetingFolderId = mData.meeting?.recordings_folder_id || null;
+      }catch(_){}
+
+      await loadFolders(meetingFolderId); await loadFiles();
+      async function loadFolders(rootId){ const sel = modal.querySelector('#drive-folder'); const url = rootId ? `/api/drive/folders?parents=${encodeURIComponent(rootId)}` : '/api/drive/folders'; const res = await fetch(url); const data = await res.json(); sel.innerHTML=''; (data.folders||[]).forEach(f=>{ const opt=document.createElement('option'); opt.value=f.id; opt.textContent=f.name; sel.appendChild(opt); }); }
+      async function loadFiles(){ const list = modal.querySelector('#files-list'); const res = await fetch(`/api/tasks-laravel/tasks/${t.id}/files`); const data = await res.json(); list.innerHTML=''; (data.files||[]).forEach(f=>{ const row=document.createElement('div'); row.className='flex items-center justify-between bg-slate-800/60 border border-slate-700 rounded px-3 py-2'; const nameLink=document.createElement('a'); nameLink.href=`/api/tasks-laravel/files/${f.id}/download`; nameLink.target='_blank'; nameLink.textContent=f.name; nameLink.className='text-slate-200 hover:underline flex-1'; const preview=document.createElement('a'); preview.href=f.drive_web_link; preview.target='_blank'; preview.textContent='Vista previa'; preview.className='text-xs text-blue-400 hover:underline ml-4'; row.appendChild(nameLink); row.appendChild(preview); list.appendChild(row); }); }
       modal.querySelector('#upload-btn').addEventListener('click', async ()=>{ const fileInput = modal.querySelector('#file-input'); const folder = modal.querySelector('#drive-folder').value; if(!fileInput.files.length){ alert('Selecciona un archivo'); return; } const fd = new FormData(); fd.append('folder_id', folder); fd.append('file', fileInput.files[0]); const r = await fetch(`/api/tasks-laravel/tasks/${t.id}/files`, { method:'POST', headers:{ 'X-CSRF-TOKEN': csrf }, body: fd }); const resp = await r.json(); if(resp.success){ fileInput.value=''; await loadFiles(); } else { alert('No se pudo subir el archivo'); } });
     } catch(e){ console.error(e); alert('Error al abrir detalles de la tarea'); }
   }
