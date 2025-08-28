@@ -11,6 +11,14 @@
             overflow-x: hidden;
         }
 
+        .scrollbar-hide {
+            scrollbar-width: none;
+        }
+
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+
         /* Animated background particles */
         .particles {
             position: fixed;
