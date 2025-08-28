@@ -111,6 +111,9 @@
     <!-- Modal para crear/editar tareas -->
     @include('tasks.partials._modal-task')
 
+    <!-- Modal de detalles de tareas -->
+    @include('tasks.partials._task-details-modal')
+
     <!-- Scripts -->
     <script>
         // Endpoints para tasks_laravel

@@ -310,6 +310,12 @@ class TaskLaravelController extends Controller
             'asignado',
             'progreso',
         ]);
+
+        // Asegurar formato correcto para fecha límite (YYYY-MM-DD para input HTML5)
+        if ($task->fecha_limite) {
+            $taskArr['fecha_limite'] = $task->fecha_limite->format('Y-m-d');
+        }
+
         $taskArr['meeting_name'] = $task->meeting->meeting_name ?? null;
 
         return response()->json(['success' => true, 'task' => $taskArr]);

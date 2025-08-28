@@ -1,11 +1,9 @@
 <!-- Modal para Crear/Editar Tarea -->
 <div id="taskModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[1100]">
     <div class="flex items-center justify-center min-h-screen p-4">
-<<<<<<< ours
+
         <div class="bg-slate-800 rounded-lg shadow-xl w-full max-w-md sm:max-w-lg md:max-w-2xl max-h-screen overflow-y-auto">
-=======
-        <div class="bg-slate-800 rounded-lg shadow-xl max-w-md w-full max-h-screen overflow-y-auto scrollbar-hide">
->>>>>>> theirs
+
             <div class="p-6">
                 <!-- Header del Modal -->
                 <div class="flex justify-between items-center mb-6">
@@ -171,13 +169,30 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
                 .then(resp => {
                     if (!resp.success) throw new Error('No se pudo cargar la tarea');
                     const t = resp.task;
+
                     document.getElementById('taskId').value = t.id;
                     document.getElementById('taskText').value = t.tarea || '';
                     document.getElementById('taskDescription').value = t.descripcion || '';
-                    document.getElementById('taskDueDate').value = t.fecha_limite || '';
-                    document.getElementById('taskDueTime').value = (t.hora_limite || '').toString().slice(0,5);
-                    document.getElementById('taskPriority').value = (t.prioridad || 'media');
-                    document.getElementById('taskAssignee').value = '';
+
+                    // Manejar fecha límite
+                    if (t.fecha_limite) {
+                        document.getElementById('taskDueDate').value = t.fecha_limite;
+                    } else {
+                        document.getElementById('taskDueDate').value = '';
+                    }
+
+                    // Manejar hora límite
+                    if (t.hora_limite) {
+                        // Asegurar formato HH:MM
+                        let horaLimite = t.hora_limite.toString();
+                        if (horaLimite.length > 5) {
+                            horaLimite = horaLimite.slice(0, 5);
+                        }
+                        document.getElementById('taskDueTime').value = horaLimite;
+                    } else {
+                        document.getElementById('taskDueTime').value = '';
+                    }                    document.getElementById('taskPriority').value = (t.prioridad || 'media');
+                    document.getElementById('taskAssignee').value = t.asignado || '';
                     document.getElementById('taskProgress').value = (typeof t.progreso === 'number' ? t.progreso : 0);
                     document.getElementById('taskCompleted').checked = (t.progreso >= 100);
                     updateProgressValue();
@@ -277,6 +292,7 @@ document.getElementById('taskForm').addEventListener('submit', function(e) {
             fecha_inicio: null,
             fecha_limite: entries.due_date || null,
             hora_limite: entries.due_time || null,
+            asignado: entries.assignee || null,
             progreso: parseInt(document.getElementById('taskProgress').value || '0', 10)
         };
         if (!isEdit) {

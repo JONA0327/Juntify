@@ -111,6 +111,9 @@
     <!-- Modal para crear/editar tareas -->
     <?php echo $__env->make('tasks.partials._modal-task', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
 
+    <!-- Modal de detalles de tareas -->
+    <?php echo $__env->make('tasks.partials._task-details-modal', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
+
     <!-- Scripts -->
     <script>
         // Endpoints para tasks_laravel
