@@ -65,12 +65,28 @@
     grid-template-columns: repeat(7, 1fr);
     grid-template-rows: repeat(6, 120px); /* 6 filas de 120px cada una */
     gap: 1px;
+    overflow: visible; /* Permitir que las barras se vean fuera del grid */
 }
 
 /* Estilos para las barras extendidas */
 .extended-task-bar {
     border: 1px solid rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(4px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.2s ease;
+}
+
+.extended-task-bar:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    z-index: 100 !important;
 }
 
 /* Estados de las tareas */
@@ -249,24 +265,41 @@ document.addEventListener('DOMContentLoaded', () => {
             const { start, end } = getMonthRange(date);
             const params = new URLSearchParams({ start: fmtDate(start), end: fmtDate(end) });
             const url = '/api/tasks-laravel/calendar?' + params.toString();
+
+            console.log('🌐 Fetching eventos desde:', url);
+
             const res = await fetch(url, {
                 headers: {
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': csrf
                 }
             });
+
+            console.log('📡 Respuesta recibida:', res.status, res.statusText);
+
             const data = await res.json();
+            console.log('📦 Datos recibidos:', data);
+
             eventsByDate = {};
 
             const events = Array.isArray(data) ? data : [];
+            console.log('📋 Procesando', events.length, 'eventos');
+
             for (const ev of events){
-                if (!ev.start) continue;
+                if (!ev.start) {
+                    console.warn('⚠️ Evento sin fecha de inicio:', ev);
+                    continue;
+                }
                 const day = ev.start.substring(0,10);
                 if (!eventsByDate[day]) eventsByDate[day] = [];
                 eventsByDate[day].push(ev);
+                console.log(`✅ Evento agregado para ${day}:`, ev.title || 'Sin título');
             }
+
+            console.log('📊 Eventos organizados por fecha:', eventsByDate);
+
         } catch (error) {
-            console.error('Error fetching calendar events:', error);
+            console.error('❌ Error fetching calendar events:', error);
         }
     }
 
@@ -310,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const prevMonthLastDate = new Date(date.getFullYear(), date.getMonth(), 0).getDate();
 
         console.log('Creando', totalCells, 'celdas...');
-        
+
         // Mapa para almacenar información de las celdas
         const cellMap = new Map();
 
@@ -369,61 +402,70 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         console.log('✅ Celdas creadas. Renderizando barras extendidas...');
-        
+
         // Renderizar barras extendidas para tareas
         if (taskBarsOverlay) {
             renderExtendedTaskBars(cellMap, today, todayStr);
         }
-        
+
         console.log('✅ Calendario renderizado exitosamente');
     }
 
     function renderExtendedTaskBars(cellMap, today, todayStr) {
         console.log('🎨 Renderizando barras extendidas...');
-        
+
         // Crear un mapa de tareas por fecha para evitar duplicados
         const processedTasks = new Set();
-        
+
+        // Contador de tareas por celda para apilar verticalmente
+        const taskCountByCell = new Map();
+
         for (const [dateStr, events] of Object.entries(eventsByDate)) {
             for (const event of events) {
                 // Evitar duplicados basándose en id único
                 const taskId = event.id || `${event.title}-${event.start}`;
                 if (processedTasks.has(taskId)) continue;
                 processedTasks.add(taskId);
-                
-                // Solo crear barras para tareas con fecha límite futura desde hoy
+
+                // Obtener fecha límite de la tarea
                 const taskEndDate = new Date(event.end || event.start);
+
+                // Solo mostrar tareas que terminen HOY o en el futuro
                 if (taskEndDate < today) continue;
-                
-                console.log(`📊 Procesando tarea: ${event.title} - Desde HOY hasta ${fmtDate(taskEndDate)}`);
-                
+
+                console.log(`📊 Procesando tarea: ${event.title}`);
+                console.log(`📅 Desde HOY (${todayStr}) hasta fecha límite: ${fmtDate(taskEndDate)}`);
+
                 // Calcular duración desde HOY hasta fecha límite
                 const duration = calculateTaskDuration(today, taskEndDate, cellMap);
                 if (duration.isValid) {
-                    createExtendedTaskBar(event, duration, today);
+                    // Contar tareas en la celda de inicio para apilar
+                    const startCellKey = `${duration.startRow}-${duration.startCol}`;
+                    const taskIndex = taskCountByCell.get(startCellKey) || 0;
+                    taskCountByCell.set(startCellKey, taskIndex + 1);
+
+                    createExtendedTaskBar(event, duration, today, taskIndex);
                 }
             }
         }
-    }
-
-    function calculateTaskDuration(startDate, endDate, cellMap) {
+    }    function calculateTaskDuration(startDate, endDate, cellMap) {
         const startStr = fmtDate(startDate);
         const endStr = fmtDate(endDate);
-        
+
         const startCell = cellMap.get(startStr);
         const endCell = cellMap.get(endStr);
-        
+
         if (!startCell || !endCell) {
             console.warn(`⚠️ No se encontraron celdas para el rango ${startStr} -> ${endStr}`);
             return { isValid: false };
         }
-        
+
         // Calcular días de diferencia
         const timeDiff = endDate.getTime() - startDate.getTime();
         const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-        
+
         console.log(`📏 Duración calculada: ${daysDiff} días (${startStr} -> ${endStr})`);
-        
+
         return {
             isValid: true,
             startRow: startCell.row,
@@ -436,49 +478,88 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    function createExtendedTaskBar(event, duration, today) {
+    function createExtendedTaskBar(event, duration, startDate, taskIndex = 0) {
         if (!extendedTaskBarTpl) return;
-        
+
+        // Crear barras para cada fila si la tarea se extiende por múltiples filas
+        const gridCols = 7;
+        const cellWidth = 100 / gridCols;
+
+        if (duration.startRow === duration.endRow) {
+            // Misma fila: crear una sola barra
+            createSingleTaskBar(event, duration, cellWidth, gridCols, taskIndex);
+        } else {
+            // Múltiples filas: crear barras para cada fila
+            // Primera fila
+            const firstRowDuration = {
+                ...duration,
+                endCol: gridCols - 1,
+                endRow: duration.startRow
+            };
+            createSingleTaskBar(event, firstRowDuration, cellWidth, gridCols, taskIndex);
+
+            // Filas intermedias (si las hay)
+            for (let row = duration.startRow + 1; row < duration.endRow; row++) {
+                const middleRowDuration = {
+                    ...duration,
+                    startRow: row,
+                    startCol: 0,
+                    endRow: row,
+                    endCol: gridCols - 1
+                };
+                createSingleTaskBar(event, middleRowDuration, cellWidth, gridCols, 0); // Sin offset en filas intermedias
+            }
+
+            // Última fila
+            if (duration.endRow > duration.startRow) {
+                const lastRowDuration = {
+                    ...duration,
+                    startRow: duration.endRow,
+                    startCol: 0,
+                    endRow: duration.endRow
+                };
+                createSingleTaskBar(event, lastRowDuration, cellWidth, gridCols, 0); // Sin offset en última fila
+            }
+        }
+    }
+
+    function createSingleTaskBar(event, duration, cellWidth, gridCols, taskIndex = 0) {
+        if (!extendedTaskBarTpl) return;
+
         const barElement = extendedTaskBarTpl.content.cloneNode(true);
         const bar = barElement.querySelector('.extended-task-bar');
         const title = barElement.querySelector('.task-title');
         const time = barElement.querySelector('.task-time');
-        
+
         // Configurar contenido
         title.textContent = event.title || 'Sin título';
         time.textContent = formatTimeFromEvent(event);
-        
+
         // Aplicar clases de estado
         bar.classList.add(getStatusClass(event));
-        
+
         // Calcular posición y tamaño
-        const gridCols = 7;
-        const cellWidth = 100 / gridCols; // Porcentaje por columna
-        
-        // Posición inicial
         const leftPercent = duration.startCol * cellWidth;
-        
-        // Ancho de la barra
-        let widthCells = 1; // Mínimo una celda
-        
-        if (duration.startRow === duration.endRow) {
-            // Misma fila: simple diferencia de columnas
-            widthCells = duration.endCol - duration.startCol + 1;
-        } else {
-            // Diferentes filas: hasta el final de la primera fila
-            widthCells = gridCols - duration.startCol;
-        }
-        
+        const widthCells = duration.endCol - duration.startCol + 1;
         const widthPercent = widthCells * cellWidth;
-        
+
+        // Calcular posición vertical con apilamiento
+        const baseTop = duration.startRow * (100/6); // 6 filas del calendario
+        const barHeight = 18; // Altura de cada barra en px
+        const barSpacing = 2; // Espaciado entre barras
+        const verticalOffset = taskIndex * (barHeight + barSpacing);
+
         // Aplicar estilos
         bar.style.left = `${leftPercent}%`;
         bar.style.width = `${widthPercent}%`;
-        bar.style.top = `${duration.startRow * (100/6)}%`; // 6 filas del calendario
-        bar.style.zIndex = '10';
-        
-        console.log(`🎯 Barra creada: ${event.title} - Pos: ${leftPercent}%, Ancho: ${widthPercent}%, Fila: ${duration.startRow}`);
-        
+        bar.style.top = `calc(${baseTop}% + ${30 + verticalOffset}px)`; // 30px offset inicial + apilamiento
+        bar.style.zIndex = `${10 + taskIndex}`;
+        bar.style.height = `${barHeight}px`;
+        bar.style.fontSize = '11px';
+        bar.style.borderRadius = '6px';
+
+        console.log(`🎯 Barra creada: ${event.title} - Fila: ${duration.startRow}, Col: ${duration.startCol}-${duration.endCol}, Índice: ${taskIndex}`);
+
         // Agregar al overlay
         taskBarsOverlay.appendChild(barElement);
     }
