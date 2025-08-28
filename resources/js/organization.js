@@ -103,7 +103,23 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.isCreatingContainer = false;
         this.isLoadingGroup = false;
         this.isJoining = false;
-        debugLog('Estado de organización reiniciado');
+
+        if (import.meta.env.DEV) {
+            console.log('Estado de organización reiniciado');
+        }
+        // Asegurar que cada organización solo contenga grupos asociados al usuario actual
+        this.organizations = this.filterOrgGroups(this.organizations);
+    },
+
+    // Filtrar grupos de las organizaciones por usuario
+    filterOrgGroups(orgs) {
+        return orgs.map(org => ({
+            ...org,
+            groups: (org.groups || []).filter(group =>
+                group.users && group.users.some(user => user.id === this.userId)
+            )
+        }));
+
     },
 
     openOrgModal() {
@@ -956,8 +972,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
                 if (response.ok) {
                     const data = await response.json();
-                    this.organizations = data.organizations || [];
-                    debugLog('Organizaciones recargadas:', this.organizations);
+
+                    this.organizations = this.filterOrgGroups(data.organizations || []);
+                    console.log('Organizaciones recargadas:', this.organizations);
+
                 } else {
                     console.error('Error al recargar organizaciones:', response.status);
                 }
@@ -1040,9 +1058,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     this.selectedOrganization.descripcion = updatedOrg.descripcion;
                     this.selectedOrganization.imagen = updatedOrg.imagen;
 
-                    // Solo actualizar grupos si vienen en la respuesta, sino mantener los existentes
+                    // Solo actualizar grupos si vienen en la respuesta, filtrando por usuario
                     if (updatedOrg.groups) {
-                        this.selectedOrganization.groups = updatedOrg.groups;
+                        const filtered = this.filterOrgGroups([updatedOrg])[0];
+                        this.selectedOrganization.groups = filtered.groups;
                     }
 
                     this.showEditModal = false;
@@ -1059,9 +1078,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                         this.organizations[index].descripcion = updatedOrg.descripcion;
                         this.organizations[index].imagen = updatedOrg.imagen;
 
-                        // Solo actualizar grupos si vienen en la respuesta
+                        // Solo actualizar grupos si vienen en la respuesta, filtrando por usuario
                         if (updatedOrg.groups) {
-                            this.organizations[index].groups = updatedOrg.groups;
+                            const filtered = this.filterOrgGroups([updatedOrg])[0];
+                            this.organizations[index].groups = filtered.groups;
                         }
                     }
 
