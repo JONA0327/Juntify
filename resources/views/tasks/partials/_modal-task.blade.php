@@ -1,7 +1,7 @@
 <!-- Modal para Crear/Editar Tarea -->
 <div id="taskModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-slate-800 rounded-lg shadow-xl max-w-md w-full max-h-screen overflow-y-auto">
+        <div class="bg-slate-800 rounded-lg shadow-xl max-w-md w-full max-h-screen overflow-y-auto scrollbar-hide">
             <div class="p-6">
                 <!-- Header del Modal -->
                 <div class="flex justify-between items-center mb-6">
