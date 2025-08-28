@@ -691,34 +691,6 @@
         </main>
     </div>
 
-    <!-- Modal de éxito/error -->
-    <div x-show="showSuccessModal && successMessage && successMessage.trim() !== ''" @click.self="closeSuccessModal()" @keydown.escape.window="closeSuccessModal()" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" x-cloak>
-        <div class="organization-modal p-6 w-full max-w-md text-slate-200">
-            <div class="text-center">
-                <!-- Icono dinámico según tipo -->
-                <div x-show="!isErrorModal" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-500/20 mb-4">
-                    <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                </div>
-                <div x-show="isErrorModal" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-500/20 mb-4">
-                    <svg class="h-6 w-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </div>
-
-                <!-- Título dinámico -->
-                <h3 class="text-lg font-semibold mb-2" x-text="isErrorModal ? 'Error' : 'Exito'"></h3>
-                <p class="text-slate-300 mb-6" x-text="successMessage"></p>
-                <div class="flex justify-center space-x-3">
-                    <button @click="closeSuccessModal()" class="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
-                        Aceptar
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
 <x-modal name="download-meeting" maxWidth="md">
     <div class="p-6 space-y-4 download-modal">
         <h2 class="text-xl font-semibold">Descargar reunión</h2>
