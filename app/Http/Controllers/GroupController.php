@@ -6,9 +6,13 @@ use App\Mail\GroupInvitation;
 use App\Models\Group;
 use App\Models\Notification;
 use App\Models\User;
+use App\Models\Organization;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+use App\Models\GroupCode;
 
 class GroupController extends Controller
 {
@@ -25,9 +29,34 @@ class GroupController extends Controller
             'descripcion' => 'nullable|string',
         ]);
 
+        // Seguridad adicional: solo owner o usuarios con rol colaborador/administrador en la organización pueden crear grupos
+        $org = Organization::findOrFail($validated['id_organizacion']);
+        $isOwner = $org->admin_id === $user->id;
+        $hasOrgPermission = $org->groups()
+            ->whereHas('users', function($q) use ($user) {
+                $q->where('users.id', $user->id)
+                  ->whereIn('group_user.rol', ['colaborador','administrador']);
+            })->exists();
+
+        if (!($isOwner || $hasOrgPermission)) {
+            abort(403, 'No tienes permisos para crear grupos en esta organización');
+        }
+
         $group = Group::create($validated + ['miembros' => 1]);
+        // El creador queda al menos como colaborador
         $group->users()->attach($user->id, ['rol' => 'colaborador']);
         $group->organization->refreshMemberCount();
+
+        // Generar código de 6 dígitos único para el grupo
+        if (!$group->code) {
+            do {
+                $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            } while (GroupCode::where('code', $code)->exists());
+            GroupCode::create([
+                'group_id' => $group->id,
+                'code' => $code,
+            ]);
+        }
 
         return response()->json($group, 201);
     }
@@ -63,42 +92,132 @@ class GroupController extends Controller
 
     public function invite(Request $request, Group $group)
     {
-        $validated = $request->validate([
-            'email' => 'required|email',
-            'send_notification' => 'boolean',
-        ]);
-
-        $user = User::where('email', $validated['email'])->first();
-        $sendNotification = $validated['send_notification'] ?? false;
-
-        if ($sendNotification && $user) {
-            // Usuario existe en Juntify - enviar notificación interna
-            Notification::create([
-                'remitente' => auth()->id(),
-                'emisor' => $user->id,
-                'status' => 'pending',
-                'message' => "Has sido invitado al grupo {$group->nombre_grupo}",
-                'type' => 'group_invitation',
-                'data' => json_encode(['group_id' => $group->id])
+        try {
+            Log::info('Group invitation attempt', [
+                'group_id' => $group->id,
+                'user_id' => auth()->id(),
+                'request_data' => $request->all()
             ]);
 
+            // Verificar permisos del usuario
+            $user = auth()->user();
+            if (!$user) {
+                Log::error('Unauthorized invitation attempt - no user');
+                return response()->json(['message' => 'No autorizado'], 401);
+            }
+
+            // Verificar rol del usuario en el grupo: solo colaborador o administrador pueden invitar
+            $membership = $group->users()->where('users.id', $user->id)->first();
+            if (!$membership) {
+                Log::error('Unauthorized invitation attempt - user not in group', [
+                    'user_id' => $user->id,
+                    'group_id' => $group->id
+                ]);
+                return response()->json(['message' => 'No tienes permisos para invitar a este grupo'], 403);
+            }
+
+            $userRole = $membership->pivot->rol ?? null;
+            if (!in_array($userRole, ['colaborador', 'administrador'])) {
+                Log::warning('Invitation denied due to insufficient role', [
+                    'user_id' => $user->id,
+                    'group_id' => $group->id,
+                    'user_role' => $userRole
+                ]);
+                return response()->json(['message' => 'Solo colaboradores o administradores pueden invitar'], 403);
+            }
+
+            $validated = $request->validate([
+                'email' => 'required|email',
+                'send_notification' => 'boolean',
+                'role' => 'string|in:invitado,colaborador,administrador'
+            ]);
+
+            $targetUser = User::where('email', $validated['email'])->first();
+            $sendNotification = $validated['send_notification'] ?? false;
+
+            // Verificar si el usuario ya está en el grupo
+            if ($targetUser && $group->users()->where('users.id', $targetUser->id)->exists()) {
+                return response()->json([
+                    'message' => 'El usuario ya es miembro de este grupo'
+                ], 400);
+            }
+
+            // Validación: si el usuario objetivo ya pertenece a otra organización distinta, bloquear
+            if ($targetUser) {
+                $belongsToAnotherOrg = DB::table('groups')
+                    ->join('group_user', 'groups.id', '=', 'group_user.id_grupo')
+                    ->where('group_user.user_id', $targetUser->id)
+                    ->where('groups.id_organizacion', '<>', $group->id_organizacion)
+                    ->exists();
+                if ($belongsToAnotherOrg) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El usuario ya pertenece a otra organización y no puede ser invitado hasta que salga de la actual.'
+                    ], 409);
+                }
+            }
+
+            if ($sendNotification && $targetUser) {
+                // Usuario existe en Juntify - enviar notificación interna
+                Notification::create([
+                    'remitente' => auth()->id(),
+                    'emisor' => $targetUser->id,
+                    'status' => 'pending',
+                    'message' => "Has sido invitado al grupo {$group->nombre_grupo}",
+                    'type' => 'group_invitation',
+                    'data' => json_encode([
+                        'group_id' => $group->id,
+                        'role' => $validated['role'] ?? 'invitado'
+                    ])
+                ]);
+
+                Log::info('Group invitation notification sent', [
+                    'target_user_id' => $targetUser->id,
+                    'group_id' => $group->id
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'type' => 'notification',
+                    'message' => 'Notificación enviada al usuario de Juntify'
+                ]);
+            } else {
+                // Usuario no existe o se forzó email - enviar por correo
+                $code = Str::uuid()->toString();
+
+                Log::info('Group invitation email prepared', [
+                    'email' => $validated['email'],
+                    'group_id' => $group->id,
+                    'code' => $code
+                ]);
+
+                // Aquí puedes implementar el envío de email
+                // Mail::to($validated['email'])->send(new GroupInvitation($code, $group->id));
+
+                return response()->json([
+                    'success' => true,
+                    'type' => 'email',
+                    'message' => 'Invitación enviada por correo electrónico'
+                ]);
+            }
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation error in group invitation', [
+                'errors' => $e->errors(),
+                'group_id' => $group->id
+            ]);
             return response()->json([
-                'success' => true,
-                'type' => 'notification',
-                'message' => 'Notificación enviada al usuario de Juntify'
+                'message' => 'Datos de invitación inválidos',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Unexpected error in group invitation', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'group_id' => $group->id
             ]);
-        } else {
-            // Usuario no existe o se forzó email - enviar por correo
-            $code = Str::uuid()->toString();
-
-            // Aquí puedes implementar el envío de email
-            // Mail::to($validated['email'])->send(new GroupInvitation($code, $group->id));
-
             return response()->json([
-                'success' => true,
-                'type' => 'email',
-                'message' => 'Invitación enviada por correo electrónico'
-            ]);
+                'message' => 'Error interno del servidor'
+            ], 500);
         }
     }
 
@@ -128,6 +247,16 @@ class GroupController extends Controller
 
     public function updateMemberRole(Request $request, Group $group, User $user)
     {
+        // Sólo owner de organización o administradores del grupo pueden cambiar roles
+        $actor = auth()->user();
+        $org = $group->organization;
+        $isOwner = $org->admin_id === $actor->id;
+        $actorMembership = $group->users()->where('users.id', $actor->id)->first();
+        $actorRole = $actorMembership ? $actorMembership->pivot->rol : null;
+        if (!($isOwner || $actorRole === 'administrador')) {
+            return response()->json(['message' => 'No tienes permisos para editar roles'], 403);
+        }
+
         $validated = $request->validate([
             'rol' => 'required|in:invitado,colaborador,administrador',
         ]);
@@ -139,6 +268,16 @@ class GroupController extends Controller
 
     public function removeMember(Group $group, User $user)
     {
+        // Sólo owner de organización o administradores del grupo pueden quitar miembros
+        $actor = auth()->user();
+        $org = $group->organization;
+        $isOwner = $org->admin_id === $actor->id;
+        $actorMembership = $group->users()->where('users.id', $actor->id)->first();
+        $actorRole = $actorMembership ? $actorMembership->pivot->rol : null;
+        if (!($isOwner || $actorRole === 'administrador')) {
+            return response()->json(['message' => 'No tienes permisos para quitar miembros'], 403);
+        }
+
         $group->users()->detach($user->id);
         $group->update(['miembros' => $group->users()->count()]);
 
@@ -153,6 +292,14 @@ class GroupController extends Controller
         }
 
         $organization = $group->organization;
+        // Sólo owner o miembros con rol colaborador/administrador pueden eliminar el grupo
+        $isOwner = $organization->admin_id === $user->id;
+        $actorMembership = $group->users()->where('users.id', $user->id)->first();
+        $actorRole = $actorMembership ? $actorMembership->pivot->rol : null;
+        if (!($isOwner || in_array($actorRole, ['colaborador','administrador']))) {
+            abort(403, 'No tienes permisos para eliminar este grupo');
+        }
+
         $group->users()->detach();
         $group->delete();
         $organization->refreshMemberCount();
@@ -192,4 +339,3 @@ class GroupController extends Controller
         ]);
     }
 }
-

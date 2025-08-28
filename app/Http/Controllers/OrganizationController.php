@@ -5,10 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Organization;
 use App\Models\Group;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class OrganizationController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $user = auth()->user();
         if (!$user) {
@@ -44,6 +45,15 @@ class OrganizationController extends Controller
         $isOnlyGuest = $organizations->every(function($org) {
             return $org->user_role === 'invitado';
         });
+
+        // Si es una petición AJAX/API, devolver JSON
+        if ($request->expectsJson() || $request->is('api/*')) {
+            return response()->json([
+                'organizations' => $organizations,
+                'user' => $user,
+                'isOnlyGuest' => $isOnlyGuest,
+            ]);
+        }
 
         return view('organization.index', [
             'organizations' => $organizations,
@@ -109,8 +119,8 @@ class OrganizationController extends Controller
             ], 404);
         }
 
-        // Agregar usuario al grupo principal
-        $mainGroup->users()->syncWithoutDetaching([$user->id]);
+        // Agregar usuario al grupo principal con rol invitado por defecto
+        $mainGroup->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
         $organization->increment('num_miembros');
 
         return response()->json(['joined' => true]);
@@ -152,16 +162,39 @@ class OrganizationController extends Controller
     public function update(Request $request, Organization $organization)
     {
         $user = auth()->user();
-        if (!$user || in_array($user->roles, ['free', 'basic'])) {
-            abort(403);
+        if (!$user) {
+            Log::error('Organization update: Usuario no autenticado');
+            abort(403, 'Usuario no autenticado');
         }
 
-        $isOwner = $organization->groups()->whereHas('users', function($q) use ($user) {
-            $q->where('users.id', $user->id)->where('group_user.rol', 'owner');
+        Log::info('Organization update attempt', [
+            'user_id' => $user->id,
+            'org_id' => $organization->id,
+            'org_admin_id' => $organization->admin_id,
+            'user_roles' => $user->roles
+        ]);
+
+        // Verificar si el usuario es el administrador de la organización
+        $isOwner = $organization->admin_id === $user->id;
+
+        // También verificar si tiene rol de administrador en algún grupo de la organización
+        $hasAdminRole = $organization->groups()->whereHas('users', function($q) use ($user) {
+            $q->where('users.id', $user->id)->where('group_user.rol', 'administrador');
         })->exists();
 
-        if (!$isOwner) {
-            abort(403);
+        Log::info('Permission check', [
+            'isOwner' => $isOwner,
+            'hasAdminRole' => $hasAdminRole
+        ]);
+
+        if (!$isOwner && !$hasAdminRole) {
+            Log::error('Organization update: Permisos insuficientes', [
+                'user_id' => $user->id,
+                'org_id' => $organization->id,
+                'isOwner' => $isOwner,
+                'hasAdminRole' => $hasAdminRole
+            ]);
+            abort(403, 'No tienes permisos para editar esta organización');
         }
 
         $validated = $request->validate([
@@ -172,7 +205,22 @@ class OrganizationController extends Controller
 
         $organization->update($validated);
 
-        return response()->json($organization->fresh());
+        Log::info('Organization updated successfully', ['org_id' => $organization->id]);
+
+        // Cargar la organización con sus relaciones para mantener la integridad de los datos
+        $organizationWithRelations = $organization->fresh()->load([
+            'groups' => function ($query) {
+                $query->withCount('users');
+            }
+        ]);
+
+        Log::info('Organization with relations loaded', [
+            'org_id' => $organizationWithRelations->id,
+            'groups_count' => $organizationWithRelations->groups->count(),
+            'groups' => $organizationWithRelations->groups->pluck('id', 'nombre_grupo')
+        ]);
+
+        return response()->json($organizationWithRelations);
     }
 
     public function show(Organization $organization)
@@ -211,4 +259,3 @@ class OrganizationController extends Controller
         return response()->json(['deleted' => true]);
     }
 }
-

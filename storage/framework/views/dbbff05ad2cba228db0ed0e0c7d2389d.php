@@ -32,7 +32,29 @@
         <?php echo $__env->make('partials.mobile-nav', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
 
         <main class="w-full pl-24 pt-24" style="margin-top:130px;">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" x-data='organizationPage(<?php echo json_encode($organizations, 15, 512) ?>)'>
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" x-data='organizationPage(<?php echo json_encode($organizations, 15, 512) ?>)' x-init="init()">
+                <!-- Modal de Éxito (dentro del scope de Alpine) -->
+                <div x-show="showSuccessModal && successMessage && successMessage.trim() !== ''"
+                     @click.self="closeSuccessModal()"
+                     @keydown.escape.window="closeSuccessModal()"
+                     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                    <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+                        <div class="text-center">
+                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-500/20 mb-4">
+                                <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2">¡Éxito!</h3>
+                            <p class="text-slate-300 mb-6" x-text="successMessage"></p>
+                            <div class="flex justify-center space-x-3">
+                                <button @click="closeSuccessModal()" class="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                    Aceptar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <!-- Sección de crear/unirse - solo visible cuando no hay organizaciones -->
                 <div x-show="organizations.length === 0" class="mb-6 flex flex-col items-center w-full max-w-sm mx-auto space-y-4">
                     <h1 class="text-2xl font-semibold text-center">Organización</h1>
@@ -156,11 +178,11 @@
                                             <p class="text-slate-400">Miembros: <span class="font-semibold text-yellow-400" x-text="org.num_miembros"></span></p>
                                         </div>
                                     </div>
-                                    <div class="flex space-x-3" x-show="org.is_owner">
+<div class="flex space-x-3" x-show="org.is_owner || org.user_role === 'administrador'">
                                         <button @click="openEditOrgModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
                                             Editar Organización
                                         </button>
-                                        <button @click="deleteOrganization(org)" class="bg-red-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200">
+                                        <button x-show="org.is_owner" @click="deleteOrganization(org)" class="bg-red-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200">
                                             Eliminar
                                         </button>
                                     </div>
@@ -187,9 +209,11 @@
                             <div x-show="mainTab === 'groups'" x-transition>
                                 <div class="flex items-center justify-between mb-6">
                                     <h3 class="text-2xl font-bold text-slate-200">Grupos de la Organización</h3>
-                                    <button @click="openGroupModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                    <?php if(!in_array($user->roles, ['free','basic'])): ?>
+                                    <button x-show="org.user_role !== 'invitado'" @click="openGroupModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
                                         Crear Grupo
                                     </button>
+                                    <?php endif; ?>
                                 </div>
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" x-show="org.groups && org.groups.length">
@@ -209,7 +233,7 @@
                                                 <p class="text-sm text-slate-400">
                                                     Miembros: <span class="text-yellow-400 font-medium" x-text="group.miembros || 0"></span>
                                                 </p>
-                                                <div class="flex space-x-2" x-show="org.is_owner">
+<div class="flex space-x-2" x-show="org.is_owner || org.user_role === 'administrador'">
                                                     <button @click="openEditGroupModal(org, group)" class="px-2 py-1 bg-yellow-500 text-slate-900 rounded text-xs hover:bg-yellow-400 transition-colors duration-200">
                                                         Editar
                                                     </button>
@@ -249,7 +273,7 @@
                                                             <th class="text-left p-3 text-slate-200">Miembro</th>
                                                             <th class="text-left p-3 text-slate-200">Email</th>
                                                             <th class="text-center p-3 text-slate-200">Rol</th>
-                                                            <th class="text-center p-3 text-slate-200" x-show="org.is_owner">Acciones</th>
+<th class="text-center p-3 text-slate-200" x-show="org.is_owner || org.user_role === 'administrador'">Acciones</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -263,14 +287,14 @@
                                                                 <td class="p-3 text-center">
                                                                     <select x-model="user.pivot.rol"
                                                                             @change="updateMemberRole(group.id, user)"
-                                                                            :disabled="!org.is_owner"
+                                                                            :disabled="!(org.is_owner || org.user_role === 'administrador')"
                                                                             class="bg-slate-900/50 border border-slate-600/50 rounded p-2 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400/50">
                                                                         <option value="invitado">Invitado</option>
                                                                         <option value="colaborador">Colaborador</option>
                                                                         <option value="administrador">Administrador</option>
                                                                     </select>
                                                                 </td>
-                                                                <td class="p-3 text-center" x-show="org.is_owner">
+<td class="p-3 text-center" x-show="org.is_owner || org.user_role === 'administrador'">
                                                                     <button @click="removeMember(group.id, user)"
                                                                             class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors duration-200">
                                                                         Quitar
@@ -288,7 +312,7 @@
                                             </div>
 
                                             <!-- Botón para invitar miembros al grupo -->
-                                            <div class="mt-4" x-show="org.is_owner">
+<div class="mt-4" x-show="org.is_owner || org.user_role === 'administrador'">
                                                 <button @click="openInviteModal(group)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium text-sm shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
                                                     Invitar miembro a este grupo
                                                 </button>
@@ -394,17 +418,21 @@
                             <select x-model="inviteRole" class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-yellow-400/50">
                                 <option value="invitado">Invitado</option>
                                 <option value="colaborador">Colaborador</option>
-                                <option value="admin">Administrador</option>
+                                <option value="administrador">Administrador</option>
                             </select>
                         </div>
 
                         <div class="flex justify-end space-x-2">
                             <button @click="showInviteModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
                             <button @click="sendGroupInvitation()"
-                                    :disabled="!inviteEmail"
-                                    :class="{'opacity-50 cursor-not-allowed': !inviteEmail}"
-                                    class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
-                                <span x-text="userExists ? 'Enviar Notificación' : 'Enviar Invitación'"></span>
+                                    :disabled="!inviteEmail || isSendingInvitation"
+                                    :class="{'opacity-50 cursor-not-allowed': !inviteEmail || isSendingInvitation}"
+                                    class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 flex items-center">
+                                <svg x-show="isSendingInvitation" class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span x-text="isSendingInvitation ? 'Enviando...' : (userExists ? 'Enviar Notificación' : 'Enviar Invitación')"></span>
                             </button>
                         </div>
                     </div>
@@ -427,9 +455,9 @@
                         <div x-show="activeTab === 'contenedores'">
                             <div class="flex justify-between items-center mb-4">
                                 <h3 class="text-lg font-semibold">Contenedores del Grupo</h3>
-                                <button @click="openCreateContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
-                                    Crear Contenedor
-                                </button>
+                            <button x-show="org.user_role !== 'invitado'" @click="openCreateContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                Crear Contenedor
+                            </button>
                             </div>
 
                             <!-- Lista de contenedores -->
@@ -444,8 +472,8 @@
                                         </div>
                                         <div class="mt-3 flex space-x-2">
                                             <button @click="viewContainerMeetings(container)" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Ver</button>
-                                            <button @click="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700">Editar</button>
-                                            <button @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Eliminar</button>
+                                            <button x-show="org.user_role !== 'invitado'" @click="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700">Editar</button>
+                                            <button x-show="org.user_role !== 'invitado'" @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Eliminar</button>
                                         </div>
                                     </div>
                                 </template>
@@ -510,10 +538,61 @@
                         <h2 class="text-lg font-semibold mb-4">Editar organización</h2>
                         <input type="text" x-model="editForm.nombre_organizacion" placeholder="Nombre" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
                         <textarea x-model="editForm.descripcion" placeholder="Descripción (opcional)" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
-                        <input type="text" x-model="editForm.imagen" placeholder="URL de imagen (opcional)" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+
+                        <!-- Selector de imagen -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Imagen de la organización</label>
+
+                            <!-- Vista previa de imagen actual -->
+                            <div x-show="editForm.imagen || editForm.newImagePreview" class="mb-3 text-center">
+                                <div class="inline-block relative">
+                                    <img :src="editForm.newImagePreview || editForm.imagen"
+                                         alt="Imagen de organización"
+                                         class="w-24 h-24 object-cover rounded-lg border-2 border-slate-600">
+                                    <div x-show="editForm.newImagePreview"
+                                         class="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                                        Nueva
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-400 mt-1" x-text="editForm.newImagePreview ? 'Nueva imagen seleccionada' : 'Imagen actual'"></p>
+                            </div>
+
+                            <!-- Input de archivo -->
+                            <input type="file"
+                                   id="orgImageInput"
+                                   accept="image/*"
+                                   @change="handleImageChange($event)"
+                                   class="hidden">
+
+                            <!-- Botón para seleccionar imagen -->
+                            <button type="button"
+                                    @click="document.getElementById('orgImageInput').click()"
+                                    class="w-full p-3 bg-slate-800/50 border-2 border-dashed border-slate-600 rounded-lg hover:border-yellow-400/50 transition-colors duration-200 text-center">
+                                <svg class="w-6 h-6 mx-auto mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                                <span class="text-sm text-slate-300">Seleccionar imagen</span>
+                                <span class="block text-xs text-slate-500 mt-1">JPG, PNG, GIF hasta 5MB</span>
+                            </button>
+
+                            <!-- Botón para quitar imagen -->
+                            <button type="button"
+                                    x-show="editForm.imagen || editForm.newImagePreview"
+                                    @click="removeImage()"
+                                    class="w-full mt-2 p-2 text-red-400 hover:text-red-300 text-sm transition-colors duration-200">
+                                Quitar imagen
+                            </button>
+                        </div>
+
                         <div class="flex justify-end space-x-2">
-                            <button @click="showEditModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
-                            <button @click="saveOrganization" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Guardar</button>
+                            <button @click="showEditModal=false; editForm.newImagePreview=null; editForm.newImageFile=null" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
+                            <button @click="saveOrganization" :disabled="isSavingOrganization" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center">
+                                <svg x-show="isSavingOrganization" class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span x-text="isSavingOrganization ? 'Guardando...' : 'Guardar'"></span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -526,7 +605,13 @@
                         <textarea x-model="editGroupForm.descripcion" placeholder="Descripción" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
                         <div class="flex justify-end space-x-2">
                             <button @click="showEditGroupModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
-                            <button @click="saveGroup" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Guardar</button>
+                            <button @click="saveGroup" :disabled="isSavingGroup" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center">
+                                <svg x-show="isSavingGroup" class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span x-text="isSavingGroup ? 'Guardando...' : 'Guardar'"></span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -581,6 +666,34 @@
         </main>
     </div>
 
+    <!-- Modal de éxito/error -->
+    <div x-show="showSuccessModal && successMessage && successMessage.trim() !== ''" @click.self="closeSuccessModal()" @keydown.escape.window="closeSuccessModal()" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" x-cloak>
+        <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+            <div class="text-center">
+                <!-- Icono dinámico según tipo -->
+                <div x-show="!isErrorModal" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-500/20 mb-4">
+                    <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <div x-show="isErrorModal" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-500/20 mb-4">
+                    <svg class="h-6 w-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </div>
+
+                <!-- Título dinámico -->
+                <h3 class="text-lg font-semibold mb-2" x-text="isErrorModal ? 'Error' : 'Exito'"></h3>
+                <p class="text-slate-300 mb-6" x-text="successMessage"></p>
+                <div class="flex justify-center space-x-3">
+                    <button @click="closeSuccessModal()" class="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                        Aceptar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 <?php if (isset($component)) { $__componentOriginal9f64f32e90b9102968f2bc548315018c = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal9f64f32e90b9102968f2bc548315018c = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.modal','data' => ['name' => 'download-meeting','maxWidth' => 'md']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? (array) $attributes->getIterator() : [])); ?>
@@ -631,4 +744,5 @@
 
 </body>
 </html>
+
 <?php /**PATH C:\laragon\www\Juntify\resources\views/organization/index.blade.php ENDPATH**/ ?>

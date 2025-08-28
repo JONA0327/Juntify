@@ -129,15 +129,25 @@
             position: absolute;
             right: 0;
             top: 120%;
-            background: rgba(10, 14, 39, 0.95);
+            background: rgba(10, 14, 39, 0.98);
             border: 1px solid rgba(59, 130, 246, 0.1);
             border-radius: 8px;
-            padding: 1rem;
-            width: 280px;
+            padding: 0.75rem 0.75rem 0.75rem 0.75rem;
+            width: 360px;
             z-index: 1000;
             backdrop-filter: blur(10px);
             max-height: 400px;
             overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .notifications-header {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #e2e8f0;
+            padding: 0.25rem 0.25rem 0.5rem 0.25rem;
+            margin: 0 0 0.5rem 0;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.15);
         }
 
         .notifications-list {
@@ -150,9 +160,10 @@
             font-size: 0.8rem;
             color: #e2e8f0;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
             margin-bottom: 0.5rem;
+            white-space: normal;
+            word-break: break-word;
         }
 
         .dismiss-btn {
@@ -166,6 +177,38 @@
         .dismiss-btn:hover {
             color: #ef4444;
         }
+
+        /* Invitation item improved layout */
+        .invitation-item .message {
+            margin-bottom: 0.25rem;
+            line-height: 1.2;
+        }
+        .invitation-item .meta {
+            color: #94a3b8;
+            margin-bottom: 0.5rem;
+        }
+        .invitation-item .actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .invitation-item .actions .accept-btn,
+        .invitation-item .actions .reject-btn {
+            padding: 0.35rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            border: none;
+            cursor: pointer;
+        }
+        .invitation-item .actions .accept-btn {
+            background: #16a34a;
+            color: #fff;
+        }
+        .invitation-item .actions .accept-btn:hover { background: #22c55e; }
+        .invitation-item .actions .reject-btn {
+            background: #dc2626;
+            color: #fff;
+        }
+        .invitation-item .actions .reject-btn:hover { background: #ef4444; }
 
         /* Mobile navbar button */
         .mobile-navbar-btn {

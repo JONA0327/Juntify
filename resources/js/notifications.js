@@ -17,11 +17,11 @@ const Notifications = (() => {
                 if (n.type === 'group_invitation') {
                     li.className = 'invitation-item p-3 bg-slate-700/50 rounded-lg mb-2';
                     li.innerHTML = `
-                        <div class="text-sm text-slate-200 mb-2">${n.message}</div>
-                        <div class="text-xs text-slate-400 mb-2">De: ${n.remitente ? `${n.remitente.full_name} (@${n.remitente.username})` : 'Usuario'}</div>
-                        <div class="flex space-x-2">
-                            <button class="accept-btn px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700" data-id="${n.id}">Aceptar</button>
-                            <button class="reject-btn px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700" data-id="${n.id}">Rechazar</button>
+                        <div class="message text-sm text-slate-200">${n.message}</div>
+                        <div class="meta text-xs text-slate-400">De: ${n.remitente ? `${n.remitente.full_name} (@${n.remitente.username})` : 'Usuario'}</div>
+                        <div class="actions">
+                            <button class="accept-btn" data-id="${n.id}">Aceptar</button>
+                            <button class="reject-btn" data-id="${n.id}">Rechazar</button>
                         </div>
                     `;
                 } else if (n.type === 'audio_upload') {
@@ -128,6 +128,14 @@ const Notifications = (() => {
                     panel.classList.toggle('hidden');
                 });
             });
+        });
+
+        // Cerrar al hacer click fuera del panel
+        document.addEventListener('click', (e) => {
+            const inside = e.target.closest('.notifications');
+            if (!inside) {
+                document.querySelectorAll('.notifications-panel').forEach(panel => panel.classList.add('hidden'));
+            }
         });
 
         fetchNotifications();

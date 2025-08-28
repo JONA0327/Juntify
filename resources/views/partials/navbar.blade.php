@@ -25,7 +25,11 @@
     </a>
   </li>
   @php
-    $canCreate = auth()->user()->groups()->wherePivot('rol','!=','invitado')->exists();
+    $user = auth()->user();
+    $belongsToAnyGroup = $user && $user->groups()->exists();
+    $hasNonGuestRole   = $user && $user->groups()->wherePivot('rol','!=','invitado')->exists();
+    // Mostrar "Nueva Reunión" si no pertenece a ningún grupo o si tiene algún rol distinto de invitado
+    $canCreate = (!$belongsToAnyGroup) || $hasNonGuestRole;
   @endphp
   @if($canCreate)
   <li>
@@ -45,7 +49,7 @@
       Tareas
     </a>
   </li>
-  @if($hasGroups)
+  @php /* visible for all users */ @endphp
   <li>
     <a href="{{ route('organization.index') }}">
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -54,7 +58,7 @@
       Organización
     </a>
   </li>
-  @endif
+  @php /* end */ @endphp
   <li>
     <a href="{{ $isHome
                   ? '#asistente'

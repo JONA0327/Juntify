@@ -57,7 +57,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     editForm: {
         nombre_organizacion: '',
         descripcion: '',
-        imagen: ''
+        imagen: '',
+        newImagePreview: null,
+        newImageFile: null
     },
     editGroupForm: {
         nombre_grupo: '',
@@ -68,9 +70,30 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     isCreatingGroup: false, // Nueva variable para loading de crear grupo
     isCreatingContainer: false, // Nueva variable para loading de crear contenedor
     isJoining: false, // Nueva variable para loading de unirse
+    isSavingGroup: false, // Nueva variable para loading de guardar grupo
+    isSavingOrganization: false, // Nueva variable para loading de guardar organización
+    isSendingInvitation: false, // Nueva variable para loading de enviar invitación
+    showSuccessModal: false, // Nueva variable para modal de éxito
+    successMessage: '', // Nueva variable para mensaje de éxito
+    isErrorModal: false, // Nueva variable para distinguir entre éxito y error
     userId: Number(document.querySelector('meta[name="user-id"]').getAttribute('content')),
     activeTab: 'contenedores', // Cambiar tab por defecto a contenedores
     isOwner: false,
+
+    // Método de inicialización para resetear estados
+    init() {
+        this.showSuccessModal = false;
+        this.successMessage = '';
+        this.isErrorModal = false;
+        this.isSavingGroup = false;
+        this.isSavingOrganization = false;
+        this.isSendingInvitation = false;
+        this.isCreatingOrg = false;
+        this.isCreatingGroup = false;
+        this.isCreatingContainer = false;
+        this.isJoining = false;
+        console.log('Estado de organización reiniciado');
+    },
 
     openOrgModal() {
         this.newOrg = { nombre_organizacion: '', descripcion: '' };
@@ -94,6 +117,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 },
                 body: JSON.stringify({
@@ -337,7 +362,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
     async checkUserExists() {
-        if (!this.inviteEmail || !this.inviteEmail.includes('@')) {
+        const email = (this.inviteEmail || '').trim();
+        const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+        if (!emailRegex.test(email)) {
             this.userExists = null;
             this.userExistsMessage = '';
             return;
@@ -348,33 +375,51 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
                 },
-                body: JSON.stringify({
-                    email: this.inviteEmail
-                })
+                body: JSON.stringify({ email })
             });
 
             if (response.ok) {
-                const data = await response.json();
-                this.userExists = data.exists;
-                this.userExistsMessage = data.exists
-                    ? '✓ Este usuario existe en Juntify'
-                    : '○ Usuario no registrado, se enviará por email';
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    this.userExists = data.exists;
+                    this.userExistsMessage = data.exists
+                        ? '✓ Este usuario existe en Juntify'
+                        : '○ Usuario no registrado, se enviará por email';
+                } else {
+                    console.error('Server returned non-JSON response');
+                    this.userExists = false;
+                    this.userExistsMessage = '○ Usuario no registrado, se enviará por email';
+                }
+            } else {
+                console.error('Error checking user, status:', response.status);
+                this.userExists = false;
+                this.userExistsMessage = '○ Usuario no registrado, se enviará por email';
             }
         } catch (error) {
             console.error('Error checking user:', error);
-            this.userExists = null;
-            this.userExistsMessage = '';
+            this.userExists = false;
+            this.userExistsMessage = '○ Usuario no registrado, se enviará por email';
         }
     },
     async sendInvitation() {
-        if (!this.inviteEmail) {
-            alert('Por favor ingresa un email');
+        // Prevenir múltiples envíos
+        if (this.isSendingInvitation) {
+            return;
+        }
+
+        if (!this.inviteEmail || !this.inviteEmail.includes('@')) {
+            this.showError('Por favor ingresa un email válido');
             return;
         }
 
         try {
+            this.isSendingInvitation = true; // Activar loading
+
             const response = await fetch(`/api/groups/${this.currentGroup.id}/invite`, {
                 method: 'POST',
                 headers: {
@@ -391,25 +436,44 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 const data = await response.json();
 
                 if (this.userExists) {
-                    alert(`Invitación enviada a ${this.inviteEmail}`);
+                    this.showSuccess(`Invitación enviada a ${this.inviteEmail}`);
                     if (window.notifications) {
                         window.notifications.refresh();
                     }
                 } else {
-                    alert('Invitación enviada por email correctamente');
+                    this.showSuccess('Invitación enviada por email correctamente');
                 }
 
+                // Limpiar formulario
                 this.inviteEmail = '';
                 this.userExists = null;
                 this.userExistsMessage = '';
                 this.showInviteOptions = false;
+            } else {
+                const errorData = await response.json();
+                this.showError(errorData.message || 'Error al enviar la invitación');
             }
         } catch (error) {
             console.error('Error sending invitation:', error);
+            this.showError('Error de conexión al enviar la invitación');
+        } finally {
+            this.isSendingInvitation = false; // Desactivar loading
         }
     },
     async inviteMember(method) {
+        // Prevenir múltiples envíos
+        if (this.isSendingInvitation) {
+            return;
+        }
+
+        if (!this.inviteEmail || !this.inviteEmail.includes('@')) {
+            this.showError('Por favor ingresa un email válido');
+            return;
+        }
+
         try {
+            this.isSendingInvitation = true; // Activar loading
+
             const response = await fetch(`/api/groups/${this.currentGroup.id}/invite`, {
                 method: 'POST',
                 headers: {
@@ -421,12 +485,22 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     method: method
                 })
             });
+
             if (response.ok) {
+                this.showSuccess('Invitación enviada correctamente');
+
+                // Limpiar formulario
                 this.inviteEmail = '';
                 this.showInviteOptions = false;
+            } else {
+                const errorData = await response.json();
+                this.showError(errorData.message || 'Error al enviar la invitación');
             }
         } catch (error) {
             console.error('Error inviting member:', error);
+            this.showError('Error de conexión al enviar la invitación');
+        } finally {
+            this.isSendingInvitation = false; // Desactivar loading
         }
     },
     async joinOrganization() {
@@ -529,16 +603,31 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     openInviteModal(group) {
         this.selectedGroup = group;
         this.inviteEmail = '';
-        this.inviteRole = 'meeting_viewer';
+        this.inviteRole = 'invitado';
         this.userExists = null;
         this.userExistsMessage = '';
         this.showInviteModal = true;
     },
 
     async sendGroupInvitation() {
-        if (!this.selectedGroup || !this.inviteEmail) return;
+        // Prevenir múltiples envíos
+        if (this.isSendingInvitation) {
+            return;
+        }
+
+        if (!this.selectedGroup || !this.inviteEmail) {
+            this.showError('Por favor completa todos los campos requeridos');
+            return;
+        }
+
+        if (!this.inviteEmail.includes('@')) {
+            this.showError('Por favor ingresa un email válido');
+            return;
+        }
 
         try {
+            this.isSendingInvitation = true; // Activar loading
+
             const response = await fetch(`/api/groups/${this.selectedGroup.id}/invite`, {
                 method: 'POST',
                 headers: {
@@ -554,18 +643,53 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
             if (response.ok) {
                 const data = await response.json();
-                alert(data.message || 'Invitación enviada correctamente');
+                this.showSuccess(data.message || 'Invitación enviada correctamente');
                 this.showInviteModal = false;
+
+                // Limpiar formulario
+                this.inviteEmail = '';
+                this.inviteRole = 'invitado';
+                this.userExists = null;
+                this.userExistsMessage = '';
 
                 // Refrescar los datos del grupo
                 await this.refreshGroupData(this.selectedGroup.id);
             } else {
-                const errorData = await response.json();
-                alert(errorData.message || 'Error al enviar la invitación');
+                let errorMessage = 'Error al enviar la invitación';
+
+                try {
+                    const errorData = await response.json();
+                    if (response.status === 422) {
+                        // Error de validación
+                        if (errorData.errors) {
+                            const errorMessages = Object.values(errorData.errors).flat();
+                            errorMessage = errorMessages.join(', ');
+                        } else {
+                            errorMessage = errorData.message || 'Datos de invitación inválidos';
+                        }
+                    } else {
+                        errorMessage = errorData.message || errorMessage;
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing error response:', parseError);
+                    if (response.status === 422) {
+                        errorMessage = 'Datos de invitación inválidos';
+                    } else if (response.status === 403) {
+                        errorMessage = 'No tienes permisos para invitar a este grupo';
+                    } else if (response.status === 401) {
+                        errorMessage = 'Sesión expirada, recarga la página';
+                    } else {
+                        errorMessage = `Error del servidor (${response.status})`;
+                    }
+                }
+
+                this.showError(errorMessage);
             }
         } catch (error) {
             console.error('Error sending group invitation:', error);
-            alert('Error al enviar la invitación');
+            this.showError('Error de conexión al enviar la invitación');
+        } finally {
+            this.isSendingInvitation = false; // Desactivar loading
         }
     },
 
@@ -661,34 +785,197 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             this.editForm = {
                 nombre_organizacion: this.selectedOrganization.nombre_organizacion,
                 descripcion: this.selectedOrganization.descripcion || '',
-                imagen: this.selectedOrganization.imagen || ''
+                imagen: this.selectedOrganization.imagen || '',
+                newImagePreview: null,
+                newImageFile: null
             };
         },
 
-        async saveOrganization() {
+        // Manejar cambio de imagen
+        handleImageChange(event) {
+            const file = event.target.files[0];
+            if (file) {
+                // Validar tipo de archivo
+                if (!file.type.startsWith('image/')) {
+                    alert('Por favor selecciona un archivo de imagen válido');
+                    return;
+                }
+
+                // Validar tamaño (5MB máximo)
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('La imagen es demasiado grande. Máximo 5MB');
+                    return;
+                }
+
+                this.editForm.newImageFile = file;
+
+                // Crear preview
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    this.editForm.newImagePreview = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        },
+
+        // Quitar imagen
+        removeImage() {
+            this.editForm.imagen = '';
+            this.editForm.newImagePreview = null;
+            this.editForm.newImageFile = null;
+            // Limpiar el input de archivo
+            const fileInput = document.getElementById('orgImageInput');
+            if (fileInput) fileInput.value = '';
+        },
+
+        // Función para recargar organizaciones desde el servidor
+        async refreshOrganizations() {
             try {
+                const response = await fetch('/api/organizations', {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    this.organizations = data.organizations || [];
+                    console.log('Organizaciones recargadas:', this.organizations);
+                } else {
+                    console.error('Error al recargar organizaciones:', response.status);
+                }
+            } catch (error) {
+                console.error('Error de red al recargar organizaciones:', error);
+            }
+        },
+
+        // Convertir archivo a base64
+
+        async fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        },
+
+        async saveOrganization() {
+            // Prevenir múltiples envíos
+            if (this.isSavingOrganization) {
+                return;
+            }
+
+            try {
+                this.isSavingOrganization = true; // Activar loading
+
+                // Verificar token CSRF
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                if (!csrfToken) {
+                    this.showError('Error: Token de seguridad no encontrado. Recarga la página.');
+                    return;
+                }
+
+                console.log('Guardando organización:', this.selectedOrganization.id);
+                console.log('Datos del formulario:', this.editForm);
+
+                // Preparar datos para enviar
+                let dataToSend = {
+                    nombre_organizacion: this.editForm.nombre_organizacion,
+                    descripcion: this.editForm.descripcion
+                };
+
+                // Si hay una nueva imagen, convertirla a base64
+                if (this.editForm.newImageFile) {
+                    console.log('Convirtiendo nueva imagen a base64...');
+                    const base64Image = await this.fileToBase64(this.editForm.newImageFile);
+                    dataToSend.imagen = base64Image;
+                } else if (this.editForm.imagen && this.editForm.imagen !== '') {
+                    // Mantener imagen existente
+                    dataToSend.imagen = this.editForm.imagen;
+                } else {
+                    // Sin imagen
+                    dataToSend.imagen = null;
+                }
+
+                console.log('Datos a enviar:', dataToSend);
+
                 const response = await fetch(`/api/organizations/${this.selectedOrganization.id}`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
                     },
-                    body: JSON.stringify(this.editForm)
+                    body: JSON.stringify(dataToSend)
                 });
+
+                console.log('Respuesta del servidor:', response.status, response.statusText);
 
                 if (response.ok) {
                     const updatedOrg = await response.json();
-                    this.selectedOrganization = updatedOrg;
+
+                    console.log('Organización actualizada desde servidor:', updatedOrg);
+
+                    // Actualizar la organización seleccionada manteniendo las relaciones existentes
+                    this.selectedOrganization.nombre_organizacion = updatedOrg.nombre_organizacion;
+                    this.selectedOrganization.descripcion = updatedOrg.descripcion;
+                    this.selectedOrganization.imagen = updatedOrg.imagen;
+
+                    // Solo actualizar grupos si vienen en la respuesta, sino mantener los existentes
+                    if (updatedOrg.groups) {
+                        this.selectedOrganization.groups = updatedOrg.groups;
+                    }
+
                     this.showEditModal = false;
 
-                    // Actualizar en la lista
+                    // Limpiar formulario
+                    this.editForm.newImagePreview = null;
+                    this.editForm.newImageFile = null;
+
+                    // Actualizar en la lista de organizaciones manteniendo los datos existentes
                     const index = this.organizations.findIndex(org => org.id === updatedOrg.id);
                     if (index !== -1) {
-                        this.organizations[index] = updatedOrg;
+                        // Actualizar solo los campos básicos, mantener grupos existentes
+                        this.organizations[index].nombre_organizacion = updatedOrg.nombre_organizacion;
+                        this.organizations[index].descripcion = updatedOrg.descripcion;
+                        this.organizations[index].imagen = updatedOrg.imagen;
+
+                        // Solo actualizar grupos si vienen en la respuesta
+                        if (updatedOrg.groups) {
+                            this.organizations[index].groups = updatedOrg.groups;
+                        }
+                    }
+
+                    console.log('Organización actualizada exitosamente');
+
+                    // Mostrar modal de éxito
+                    this.showSuccess('Organización actualizada exitosamente');
+
+                    // Recargar datos desde el servidor para asegurar sincronización
+                    await this.refreshOrganizations();
+                } else {
+                    // Manejar diferentes tipos de errores
+                    const errorText = await response.text();
+                    console.error('Error del servidor:', response.status, errorText);
+
+                    if (response.status === 403) {
+                        this.showError('Error: No tienes permisos para editar esta organización. Verifica que seas el propietario.');
+                    } else if (response.status === 401) {
+                        this.showError('Error: Tu sesión ha expirado. Por favor, recarga la página e inicia sesión nuevamente.');
+                    } else if (response.status === 422) {
+                        this.showError('Error: Los datos enviados no son válidos. Verifica la información.');
+                    } else {
+                        this.showError(`Error del servidor (${response.status}): ${response.statusText}`);
                     }
                 }
             } catch (error) {
-                console.error('Error al actualizar organización:', error);
+                console.error('Error de red o JavaScript:', error);
+                this.showError('Error de conexión. Verifica tu conexión a internet e intenta nuevamente.');
+            } finally {
+                this.isSavingOrganization = false; // Desactivar loading
             }
         },
 
@@ -703,7 +990,14 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         },
 
         async saveGroup() {
+            // Prevenir múltiples envíos
+            if (this.isSavingGroup) {
+                return;
+            }
+
             try {
+                this.isSavingGroup = true; // Activar loading
+
                 const response = await fetch(`/api/groups/${this.selectedGroup.id}`, {
                     method: 'PATCH',
                     headers: {
@@ -723,23 +1017,50 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                         this.selectedOrganization.groups[index] = updatedGroup;
                     }
 
-                    // Mostrar mensaje de éxito
-                    const notification = document.createElement('div');
-                    notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                    notification.textContent = 'Grupo actualizado correctamente';
-                    document.body.appendChild(notification);
-
-                setTimeout(() => {
-                    document.body.removeChild(notification);
-                }, 3000);
-            } else {
-                throw new Error('Error al actualizar el grupo');
+                    // Mostrar modal de éxito
+                    this.showSuccess('Grupo actualizado correctamente');
+                } else {
+                    throw new Error('Error al actualizar el grupo');
+                }
+            } catch (error) {
+                console.error('Error updating group:', error);
+                this.showError('Error al actualizar el grupo');
+            } finally {
+                this.isSavingGroup = false; // Desactivar loading
             }
-        } catch (error) {
-            console.error('Error updating group:', error);
-            alert('Error al actualizar el grupo');
-        }
-    },
+        },
+
+        // Método para cerrar modal de éxito
+        closeSuccessModal() {
+            this.showSuccessModal = false;
+            this.successMessage = '';
+            this.isErrorModal = false;
+            // Resetear cualquier estado de loading que pueda haber quedado activo
+            this.isSavingGroup = false;
+            this.isSavingOrganization = false;
+            this.isSendingInvitation = false;
+            console.log('Modal de éxito cerrado');
+        },
+
+        // Método auxiliar para mostrar modal de éxito con validación
+        showSuccess(message) {
+            if (message && message.trim() !== '') {
+                this.successMessage = message;
+                this.isErrorModal = false;
+                this.showSuccessModal = true;
+                console.log('Mostrando modal de éxito:', message);
+            }
+        },
+
+        // Método auxiliar para mostrar modal de error
+        showError(message) {
+            if (message && message.trim() !== '') {
+                this.successMessage = message;
+                this.isErrorModal = true;
+                this.showSuccessModal = true;
+                console.log('Mostrando modal de error:', message);
+            }
+        },
 
     // Método para salirse de la organización
     async leaveOrganization() {
@@ -988,5 +1309,3 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     }
 }));
-
-

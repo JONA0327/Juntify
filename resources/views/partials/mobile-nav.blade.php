@@ -3,6 +3,11 @@
   $homeUrl = url('/');
   // ¿estamos en la home sin ancla?
   $isHome = request()->is('/');
+  // Mostrar botón central de "Nueva reunión" según rol en grupos
+  $user = auth()->user();
+  $belongsToAnyGroup = $user && $user->groups()->exists();
+  $hasNonGuestRole   = $user && $user->groups()->wherePivot('rol','!=','invitado')->exists();
+  $canCreateMeeting  = (!$belongsToAnyGroup) || $hasNonGuestRole;
 @endphp
 
 <!-- Barra de navegación móvil exclusiva -->
@@ -27,11 +32,13 @@
     </a>
 
     {{-- Botón central para crear nueva reunión --}}
+    @if(isset($canCreateMeeting) && $canCreateMeeting)
     <a href="{{ route('new-meeting') }}" class="nav-item nav-center {{ request()->routeIs('new-meeting') ? 'active' : '' }}">
         <svg class="nav-icon-center" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
         </svg>
     </a>
+    @endif
 
     {{-- Enlace a la sección 'Tareas' en la página de inicio --}}
     <a href="{{ $isHome ? '#tareas' : $homeUrl . '#tareas' }}" class="nav-item">

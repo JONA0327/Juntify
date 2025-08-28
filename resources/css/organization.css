@@ -1,5 +1,8 @@
 @import './reuniones_v2.css';
 
+/* Hide cloaked Alpine elements until initialized */
+[x-cloak] { display: none !important; }
+
 /* Card styles for organizations */
 .organization-card {
     background: linear-gradient(135deg,
