@@ -114,6 +114,17 @@ class OrganizationController extends Controller
         $organization = Organization::where('id', $token)->firstOrFail();
         $user = $request->user();
 
+        // Verificar si el usuario ya pertenece a otra organización
+        $belongsToAnother = Organization::whereHas('groups.users', function($query) use ($user) {
+            $query->where('users.id', $user->id);
+        })->where('id', '<>', $organization->id)->exists();
+
+        if ($belongsToAnother) {
+            return response()->json([
+                'message' => 'El usuario ya pertenece a una organización y no puede unirse a otra'
+            ], 409);
+        }
+
         // Buscar el grupo principal de la organización
         $mainGroup = $organization->groups()->first();
         if (!$mainGroup) {
