@@ -17,16 +17,13 @@ class OrganizationController extends Controller
         }
 
         // Obtener organizaciones del usuario a través de los grupos
-        $organizations = Organization::whereHas('groups.users', function($query) use ($user) {
+        $organizations = Organization::whereHas('groups.users', function ($query) use ($user) {
             $query->where('users.id', $user->id);
         })->with([
-            'groups.code',
-            'groups' => function($query) use ($user) {
-                $query->whereHas('users', function($subQuery) use ($user) {
+            'groups' => function ($query) use ($user) {
+                $query->whereHas('users', function ($subQuery) use ($user) {
                     $subQuery->where('users.id', $user->id);
-                })->with(['users' => function($q) use ($user) {
-                    $q->where('users.id', $user->id);
-                }]);
+                })->with(['users', 'code']);
             }
         ])->get();
 
