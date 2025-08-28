@@ -569,6 +569,51 @@
                     </div>
                 </div>
                 </div>
+                <!-- Modal ver reuniones del contenedor -->
+                <div x-show="showContainerMeetingsModal" id="container-meetings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-40" x-cloak>
+                    <div class="bg-slate-950 rounded-xl border border-slate-700/50 shadow-2xl shadow-black/20 w-full max-w-6xl max-h-[90vh] overflow-hidden">
+                        <!-- Header del modal -->
+                        <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
+                            <div>
+                                <h2 class="text-2xl font-bold text-white" x-text="selectedContainer?.name || 'Contenedor'"></h2>
+                                <p class="text-slate-400 mt-1" x-text="selectedContainer?.description || 'Reuniones del contenedor'"></p>
+                            </div>
+                            <button @click="showContainerMeetingsModal = false" class="text-slate-400 hover:text-white transition-colors">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <!-- Contenido del modal -->
+                        <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                            <!-- Lista de reuniones -->
+                            <template x-if="selectedContainer?.meetings?.length > 0">
+                                <div class="meetings-grid">
+                                    <template x-for="meeting in selectedContainer.meetings" :key="meeting.id">
+                                        <div>
+                                            <div x-html="createMeetingCard(meeting)"></div>
+                                            <p x-show="!meeting.has_transcript" class="text-xs text-slate-400 mt-2">Transcripción no disponible</p>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <!-- Estado vacío -->
+                            <template x-if="!selectedContainer?.meetings?.length">
+                                <div class="text-center py-16">
+                                    <div class="mx-auto w-24 h-24 bg-slate-800/30 rounded-full flex items-center justify-center mb-6">
+                                        <svg class="w-12 h-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                                        </svg>
+                                    </div>
+                                    <h3 class="text-xl font-semibold text-slate-300 mb-2">No hay reuniones</h3>
+                                    <p class="text-slate-400 max-w-md mx-auto">Este contenedor no tiene reuniones asociadas aún. Las reuniones aparecerán aquí cuando sean agregadas al contenedor.</p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Modal información del grupo -->
                 <div x-show="showGroupInfoModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak x-transition>
@@ -638,52 +683,6 @@
                         <div class="flex justify-end mt-6">
                             <button @click="showGroupInfoModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cerrar</button>
                         </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Modal ver reuniones del contenedor -->
-                <div x-show="showContainerMeetingsModal" id="container-meetings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-40" x-cloak>
-                    <div class="bg-slate-950 rounded-xl border border-slate-700/50 shadow-2xl shadow-black/20 w-full max-w-6xl max-h-[90vh] overflow-hidden">
-                        <!-- Header del modal -->
-                        <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
-                            <div>
-                                <h2 class="text-2xl font-bold text-white" x-text="selectedContainer?.name || 'Contenedor'"></h2>
-                                <p class="text-slate-400 mt-1" x-text="selectedContainer?.description || 'Reuniones del contenedor'"></p>
-                            </div>
-                            <button @click="showContainerMeetingsModal = false" class="text-slate-400 hover:text-white transition-colors">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                </svg>
-                            </button>
-                        </div>
-
-                        <!-- Contenido del modal -->
-                        <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-                            <!-- Lista de reuniones -->
-                            <template x-if="selectedContainer?.meetings?.length > 0">
-                                <div class="meetings-grid">
-                                    <template x-for="meeting in selectedContainer.meetings" :key="meeting.id">
-                                        <div>
-                                            <div x-html="createMeetingCard(meeting)"></div>
-                                            <p x-show="!meeting.has_transcript" class="text-xs text-slate-400 mt-2">Transcripción no disponible</p>
-                                        </div>
-                                    </template>
-                                </div>
-                            </template>
-
-                            <!-- Estado vacío -->
-                            <template x-if="!selectedContainer?.meetings?.length">
-                                <div class="text-center py-16">
-                                    <div class="mx-auto w-24 h-24 bg-slate-800/30 rounded-full flex items-center justify-center mb-6">
-                                        <svg class="w-12 h-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                        </svg>
-                                    </div>
-                                    <h3 class="text-xl font-semibold text-slate-300 mb-2">No hay reuniones</h3>
-                                    <p class="text-slate-400 max-w-md mx-auto">Este contenedor no tiene reuniones asociadas aún. Las reuniones aparecerán aquí cuando sean agregadas al contenedor.</p>
-                                </div>
-                            </template>
                         </div>
                     </div>
                 </div>
