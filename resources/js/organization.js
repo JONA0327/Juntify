@@ -80,7 +80,6 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     userId: Number(document.querySelector('meta[name="user-id"]').getAttribute('content')),
     activeTab: 'contenedores', // Cambiar tab por defecto a contenedores
     isOwner: false,
-    isLoadingGroup: false,
 
     // Método de inicialización para resetear estados
     init() {
