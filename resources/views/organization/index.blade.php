@@ -264,7 +264,8 @@
                                 <div x-show="org.groups && org.groups.length" class="space-y-6">
                                     <template x-for="group in org.groups" :key="group.id">
                                         <div class="bg-slate-700/30 border border-slate-600/50 rounded-lg p-4">
-                                            <h4 class="font-semibold text-lg text-slate-200 mb-4" x-text="group.nombre_grupo"></h4>
+                                            <h4 class="font-semibold text-lg text-slate-200 mb-1" x-text="group.nombre_grupo"></h4>
+                                            <p class="text-sm text-slate-400 mb-4" x-text="group.code ? group.code.code : ''"></p>
 
                                             <div class="overflow-x-auto">
                                                 <table class="w-full border border-slate-600/50 rounded-lg overflow-hidden">
