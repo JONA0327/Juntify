@@ -1,5 +1,13 @@
 import Alpine from 'alpinejs';
 
+const DEBUG = import.meta.env.DEV;
+
+function debugLog(...args) {
+    if (DEBUG) {
+        console.log(...args);
+    }
+}
+
 Alpine.data('organizationPage', (initialOrganizations = []) => ({
     organizations: initialOrganizations,
     showOrgModal: false,
@@ -95,6 +103,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.isCreatingContainer = false;
         this.isLoadingGroup = false;
         this.isJoining = false;
+
         if (import.meta.env.DEV) {
             console.log('Estado de organización reiniciado');
         }
@@ -110,6 +119,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 group.users && group.users.some(user => user.id === this.userId)
             )
         }));
+
     },
 
     openOrgModal() {
@@ -318,14 +328,14 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
     async viewGroup(group) {
-        console.log('=== ViewGroup START ===');
-        console.log('Group:', group);
-        console.log('Current isLoadingGroup:', this.isLoadingGroup);
-        console.log('Current showGroupInfoModal:', this.showGroupInfoModal);
+        debugLog('=== ViewGroup START ===');
+        debugLog('Group:', group);
+        debugLog('Current isLoadingGroup:', this.isLoadingGroup);
+        debugLog('Current showGroupInfoModal:', this.showGroupInfoModal);
 
         // Evitar múltiples clicks
         if (this.isLoadingGroup) {
-            console.log('Already loading, ignoring click');
+            debugLog('Already loading, ignoring click');
             return;
         }
 
@@ -333,23 +343,23 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.currentGroup = group; // Establecer el grupo inmediatamente para mostrar el loading
         this.groupError = null;
         this.showGroupInfoModal = true;
-        console.log('Set isLoadingGroup to true, currentGroup set');
+        debugLog('Set isLoadingGroup to true, currentGroup set');
 
         try {
-            console.log('Fetching group details for ID:', group.id);
+            debugLog('Fetching group details for ID:', group.id);
             const response = await fetch(`/api/groups/${group.id}`);
-            console.log('Response received:', response.status, response.statusText);
+            debugLog('Response received:', response.status, response.statusText);
 
             if (response.ok) {
                 this.currentGroup = await response.json();
-                console.log('Current group loaded from server:', this.currentGroup);
-                console.log('Current user role:', this.currentGroup.current_user_role);
-                console.log('Organization is owner:', this.currentGroup.organization_is_owner);
+                debugLog('Current group loaded from server:', this.currentGroup);
+                debugLog('Current user role:', this.currentGroup.current_user_role);
+                debugLog('Organization is owner:', this.currentGroup.organization_is_owner);
 
                 // Cargar contenedores del grupo
-                console.log('Loading containers...');
+                debugLog('Loading containers...');
                 await this.loadGroupContainers(group.id);
-                console.log('Containers loaded');
+                debugLog('Containers loaded');
 
                 // Establecer datos adicionales
                 this.showInviteOptions = false;
@@ -359,7 +369,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 this.isOwner = org ? org.is_owner : false;
                 this.activeTab = 'contenedores';
 
-                console.log('Additional data set:', {
+                debugLog('Additional data set:', {
                     currentOrg: this.currentOrg,
                     isOwner: this.isOwner,
                     activeTab: this.activeTab
@@ -381,8 +391,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             this.groupError = 'Error de conexión al cargar el grupo';
         } finally {
             this.isLoadingGroup = false;
-            console.log('=== ViewGroup END ===');
-            console.log('Final state - isLoadingGroup:', this.isLoadingGroup, 'showGroupInfoModal:', this.showGroupInfoModal);
+            debugLog('=== ViewGroup END ===');
+            debugLog('Final state - isLoadingGroup:', this.isLoadingGroup, 'showGroupInfoModal:', this.showGroupInfoModal);
         }
     },
 
@@ -398,12 +408,12 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }, 4000);
     },    async loadGroupContainers(groupId) {
         try {
-            console.log('Loading containers for group:', groupId);
+            debugLog('Loading containers for group:', groupId);
             const response = await fetch(`/api/groups/${groupId}/containers`);
             if (response.ok) {
                 const data = await response.json();
                 this.currentGroup.containers = data.containers || [];
-                console.log('Containers loaded:', this.currentGroup.containers);
+                debugLog('Containers loaded:', this.currentGroup.containers);
             } else {
                 console.error('Error loading containers:', response.status);
                 this.currentGroup.containers = [];
@@ -962,8 +972,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
                 if (response.ok) {
                     const data = await response.json();
+
                     this.organizations = this.filterOrgGroups(data.organizations || []);
                     console.log('Organizaciones recargadas:', this.organizations);
+
                 } else {
                     console.error('Error al recargar organizaciones:', response.status);
                 }
@@ -999,8 +1011,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     return;
                 }
 
-                console.log('Guardando organización:', this.selectedOrganization.id);
-                console.log('Datos del formulario:', this.editForm);
+                debugLog('Guardando organización:', this.selectedOrganization.id);
+                debugLog('Datos del formulario:', this.editForm);
 
                 // Preparar datos para enviar
                 let dataToSend = {
@@ -1010,7 +1022,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
                 // Si hay una nueva imagen, convertirla a base64
                 if (this.editForm.newImageFile) {
-                    console.log('Convirtiendo nueva imagen a base64...');
+                    debugLog('Convirtiendo nueva imagen a base64...');
                     const base64Image = await this.fileToBase64(this.editForm.newImageFile);
                     dataToSend.imagen = base64Image;
                 } else if (this.editForm.imagen && this.editForm.imagen !== '') {
@@ -1021,7 +1033,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     dataToSend.imagen = null;
                 }
 
-                console.log('Datos a enviar:', dataToSend);
+                debugLog('Datos a enviar:', dataToSend);
 
                 const response = await fetch(`/api/organizations/${this.selectedOrganization.id}`, {
                     method: 'PATCH',
@@ -1034,12 +1046,12 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     body: JSON.stringify(dataToSend)
                 });
 
-                console.log('Respuesta del servidor:', response.status, response.statusText);
+                debugLog('Respuesta del servidor:', response.status, response.statusText);
 
                 if (response.ok) {
                     const updatedOrg = await response.json();
 
-                    console.log('Organización actualizada desde servidor:', updatedOrg);
+                    debugLog('Organización actualizada desde servidor:', updatedOrg);
 
                     // Actualizar la organización seleccionada manteniendo las relaciones existentes
                     this.selectedOrganization.nombre_organizacion = updatedOrg.nombre_organizacion;
@@ -1073,7 +1085,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                         }
                     }
 
-                    console.log('Organización actualizada exitosamente');
+                    debugLog('Organización actualizada exitosamente');
 
                     // Mostrar modal de éxito
                     this.showSuccess('Organización actualizada exitosamente');
@@ -1164,7 +1176,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             this.isSavingGroup = false;
             this.isSavingOrganization = false;
             this.isSendingInvitation = false;
-            console.log('Modal de éxito cerrado');
+            debugLog('Modal de éxito cerrado');
         },
 
         // Método auxiliar para mostrar modal de éxito con validación
@@ -1173,7 +1185,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 this.successMessage = message;
                 this.isErrorModal = false;
                 this.showSuccessModal = true;
-                console.log('Mostrando modal de éxito:', message);
+                debugLog('Mostrando modal de éxito:', message);
             }
         },
 
@@ -1183,7 +1195,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 this.successMessage = message;
                 this.isErrorModal = true;
                 this.showSuccessModal = true;
-                console.log('Mostrando modal de error:', message);
+                debugLog('Mostrando modal de error:', message);
             }
         },
 
