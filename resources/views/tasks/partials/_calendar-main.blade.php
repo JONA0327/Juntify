@@ -22,7 +22,11 @@
             <div class="bg-slate-800/80 text-slate-300 text-xs uppercase tracking-wide p-3 text-center font-medium">Sáb</div>
         </div>
         <!-- Grid de casillas del calendario -->
-        <div id="cal-cells" class="grid grid-cols-7 bg-slate-900/30"></div>
+        <div class="relative">
+            <div id="cal-cells" class="grid grid-cols-7 bg-slate-900/30"></div>
+            <!-- Overlay para barras extendidas -->
+            <div id="task-bars-overlay" class="absolute inset-0 pointer-events-none"></div>
+        </div>
     </div>
 </div>
 
@@ -40,12 +44,54 @@
     <div class="absolute h-6 rounded-lg text-white text-xs font-medium flex items-center px-2 cursor-pointer hover:opacity-90 transition-opacity z-10"></div>
 </template>
 
+<template id="extended-task-bar-template">
+    <div class="extended-task-bar absolute h-6 rounded-lg text-white text-xs font-medium flex items-center px-2 cursor-pointer hover:opacity-90 transition-opacity z-10 pointer-events-auto">
+        <span class="task-title truncate flex-1"></span>
+        <span class="task-time ml-2 text-[10px] opacity-75"></span>
+    </div>
+</template>
+
 <style>
 /* Asegurar que las celdas del calendario tengan el mismo tamaño */
 #cal-cells {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 1px;
+}
+
+/* Estilos para el overlay de barras extendidas */
+#task-bars-overlay {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: repeat(6, 120px); /* 6 filas de 120px cada una */
+    gap: 1px;
+}
+
+/* Estilos para las barras extendidas */
+.extended-task-bar {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(4px);
+}
+
+/* Estados de las tareas */
+.task-status-pending {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.9));
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.task-status-in_progress {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.8), rgba(217, 119, 6, 0.9));
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.task-status-completed {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.9));
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+.task-status-overdue {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.9));
+    border-color: rgba(239, 68, 68, 0.3);
 }
 
 #cal-cells > div {
@@ -153,6 +199,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const titleEl = document.getElementById('cal-title');
     const cellsContainer = document.getElementById('cal-cells');
     const cellTpl = document.getElementById('cal-cell-template');
+    const taskBarsOverlay = document.getElementById('task-bars-overlay');
+    const extendedTaskBarTpl = document.getElementById('extended-task-bar-template');
     const btnPrev = document.getElementById('cal-prev');
     const btnNext = document.getElementById('cal-next');
     const btnToday = document.getElementById('cal-today');
@@ -161,6 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
         titleEl: !!titleEl,
         cellsContainer: !!cellsContainer,
         cellTpl: !!cellTpl,
+        taskBarsOverlay: !!taskBarsOverlay,
+        extendedTaskBarTpl: !!extendedTaskBarTpl,
         btnPrev: !!btnPrev,
         btnNext: !!btnNext,
         btnToday: !!btnToday
@@ -247,17 +297,22 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Renderizando calendario...', date);
         titleEl.textContent = monthNames[date.getMonth()] + ' ' + date.getFullYear();
         cellsContainer.innerHTML = '';
+        if (taskBarsOverlay) taskBarsOverlay.innerHTML = '';
 
         const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
         const startWeekday = (firstDay.getDay()); // 0=Dom
         const daysInMonth = new Date(date.getFullYear(), date.getMonth()+1, 0).getDate();
         const totalCells = 42;
         const todayStr = fmtDate(new Date());
+        const today = new Date();
         console.log('📆 Fecha de HOY detectada:', todayStr);
         const prevMonthDays = startWeekday;
         const prevMonthLastDate = new Date(date.getFullYear(), date.getMonth(), 0).getDate();
 
         console.log('Creando', totalCells, 'celdas...');
+        
+        // Mapa para almacenar información de las celdas
+        const cellMap = new Map();
 
         // Crear todas las celdas del calendario
         for (let i=0;i<totalCells;i++){
@@ -279,6 +334,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const dayNumEl = cell.querySelector('.day-number');
             const todayBadge = cell.querySelector('.today-badge');
             const iso = fmtDate(cellDate);
+
+            // Almacenar información de la celda
+            cellMap.set(iso, {
+                index: i,
+                element: cell.firstElementChild,
+                date: cellDate,
+                row: Math.floor(i / 7),
+                col: i % 7
+            });
 
             dayNumEl.textContent = String(cellDate.getDate());
             const wrapper = cell.firstElementChild;
@@ -304,9 +368,119 @@ document.addEventListener('DOMContentLoaded', () => {
             cellsContainer.appendChild(cell);
         }
 
-        console.log('Celdas creadas. Renderizando barras de tareas...');
-        // Por ahora, renderizar sin barras complejas
-        console.log('Calendario renderizado exitosamente');
+        console.log('✅ Celdas creadas. Renderizando barras extendidas...');
+        
+        // Renderizar barras extendidas para tareas
+        if (taskBarsOverlay) {
+            renderExtendedTaskBars(cellMap, today, todayStr);
+        }
+        
+        console.log('✅ Calendario renderizado exitosamente');
+    }
+
+    function renderExtendedTaskBars(cellMap, today, todayStr) {
+        console.log('🎨 Renderizando barras extendidas...');
+        
+        // Crear un mapa de tareas por fecha para evitar duplicados
+        const processedTasks = new Set();
+        
+        for (const [dateStr, events] of Object.entries(eventsByDate)) {
+            for (const event of events) {
+                // Evitar duplicados basándose en id único
+                const taskId = event.id || `${event.title}-${event.start}`;
+                if (processedTasks.has(taskId)) continue;
+                processedTasks.add(taskId);
+                
+                // Solo crear barras para tareas con fecha límite futura desde hoy
+                const taskEndDate = new Date(event.end || event.start);
+                if (taskEndDate < today) continue;
+                
+                console.log(`📊 Procesando tarea: ${event.title} - Desde HOY hasta ${fmtDate(taskEndDate)}`);
+                
+                // Calcular duración desde HOY hasta fecha límite
+                const duration = calculateTaskDuration(today, taskEndDate, cellMap);
+                if (duration.isValid) {
+                    createExtendedTaskBar(event, duration, today);
+                }
+            }
+        }
+    }
+
+    function calculateTaskDuration(startDate, endDate, cellMap) {
+        const startStr = fmtDate(startDate);
+        const endStr = fmtDate(endDate);
+        
+        const startCell = cellMap.get(startStr);
+        const endCell = cellMap.get(endStr);
+        
+        if (!startCell || !endCell) {
+            console.warn(`⚠️ No se encontraron celdas para el rango ${startStr} -> ${endStr}`);
+            return { isValid: false };
+        }
+        
+        // Calcular días de diferencia
+        const timeDiff = endDate.getTime() - startDate.getTime();
+        const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+        
+        console.log(`📏 Duración calculada: ${daysDiff} días (${startStr} -> ${endStr})`);
+        
+        return {
+            isValid: true,
+            startRow: startCell.row,
+            startCol: startCell.col,
+            endRow: endCell.row,
+            endCol: endCell.col,
+            daysDiff: daysDiff,
+            startCell: startCell,
+            endCell: endCell
+        };
+    }
+
+    function createExtendedTaskBar(event, duration, today) {
+        if (!extendedTaskBarTpl) return;
+        
+        const barElement = extendedTaskBarTpl.content.cloneNode(true);
+        const bar = barElement.querySelector('.extended-task-bar');
+        const title = barElement.querySelector('.task-title');
+        const time = barElement.querySelector('.task-time');
+        
+        // Configurar contenido
+        title.textContent = event.title || 'Sin título';
+        time.textContent = formatTimeFromEvent(event);
+        
+        // Aplicar clases de estado
+        bar.classList.add(getStatusClass(event));
+        
+        // Calcular posición y tamaño
+        const gridCols = 7;
+        const cellWidth = 100 / gridCols; // Porcentaje por columna
+        
+        // Posición inicial
+        const leftPercent = duration.startCol * cellWidth;
+        
+        // Ancho de la barra
+        let widthCells = 1; // Mínimo una celda
+        
+        if (duration.startRow === duration.endRow) {
+            // Misma fila: simple diferencia de columnas
+            widthCells = duration.endCol - duration.startCol + 1;
+        } else {
+            // Diferentes filas: hasta el final de la primera fila
+            widthCells = gridCols - duration.startCol;
+        }
+        
+        const widthPercent = widthCells * cellWidth;
+        
+        // Aplicar estilos
+        bar.style.left = `${leftPercent}%`;
+        bar.style.width = `${widthPercent}%`;
+        bar.style.top = `${duration.startRow * (100/6)}%`; // 6 filas del calendario
+        bar.style.zIndex = '10';
+        
+        console.log(`🎯 Barra creada: ${event.title} - Pos: ${leftPercent}%, Ancho: ${widthPercent}%, Fila: ${duration.startRow}`);
+        
+        // Agregar al overlay
+        taskBarsOverlay.appendChild(barElement);
     }
 
     function renderTaskBars() {
