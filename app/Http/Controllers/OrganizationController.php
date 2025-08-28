@@ -256,11 +256,12 @@ class OrganizationController extends Controller
             abort(403);
         }
 
-        $isOwner = $organization->groups()->whereHas('users', function($q) use ($user) {
-            $q->where('users.id', $user->id)->where('group_user.rol', 'owner');
+        $isOwner = $organization->admin_id === $user->id;
+        $hasAdminRole = $organization->groups()->whereHas('users', function($q) use ($user) {
+            $q->where('users.id', $user->id)->where('group_user.rol', 'administrador');
         })->exists();
 
-        if (!$isOwner) {
+        if (!$isOwner && !$hasAdminRole) {
             abort(403);
         }
 
