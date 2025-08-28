@@ -60,6 +60,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/api/groups/{group}', [GroupController::class, 'destroy'])->name('api.groups.destroy');
     Route::post('/api/groups/{group}/invite', [GroupController::class, 'invite'])->name('api.groups.invite');
     Route::post('/api/groups/{group}/accept', [GroupController::class, 'accept'])->name('api.groups.accept');
+    Route::post('/api/groups/join-code', [GroupController::class, 'joinByCode'])->name('api.groups.join-code');
     Route::get('/groups/{group}/members', [GroupController::class, 'members'])->name('groups.members');
     Route::patch('/api/groups/{group}/members/{user}', [GroupController::class, 'updateMemberRole'])->name('api.groups.members.update');
     Route::delete('/api/groups/{group}/members/{user}', [GroupController::class, 'removeMember'])->name('api.groups.members.destroy');

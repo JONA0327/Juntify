@@ -90,6 +90,47 @@ class GroupController extends Controller
         return response()->json($group->fresh());
     }
 
+    public function joinByCode(Request $request)
+    {
+        $user = auth()->user();
+
+        $validated = $request->validate([
+            'code' => 'required|string|size:6',
+        ]);
+
+        $groupCode = GroupCode::where('code', $validated['code'])->first();
+        if (!$groupCode) {
+            return response()->json(['message' => 'Código inválido'], 404);
+        }
+
+        $group = $groupCode->group()->with('organization')->first();
+
+        $belongsToAnotherOrg = DB::table('groups')
+            ->join('group_user', 'groups.id', '=', 'group_user.id_grupo')
+            ->where('group_user.user_id', $user->id)
+            ->where('groups.id_organizacion', '<>', $group->id_organizacion)
+            ->exists();
+
+        if ($belongsToAnotherOrg) {
+            return response()->json([
+                'message' => 'Ya perteneces a otra organización'
+            ], 409);
+        }
+
+        if (!$group->users()->where('users.id', $user->id)->exists()) {
+            $group->users()->attach($user->id, ['rol' => 'invitado']);
+            $group->increment('miembros');
+        }
+
+        $organization = $group->organization;
+        $organization->refreshMemberCount();
+
+        return response()->json([
+            'organization' => $organization->fresh(),
+            'group' => $group->fresh()
+        ]);
+    }
+
     public function invite(Request $request, Group $group)
     {
         try {
