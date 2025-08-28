@@ -88,20 +88,9 @@ class OrganizationController extends Controller
         ]);
 
         $organization = Organization::create($validated + [
-            'num_miembros' => 1,
+            'num_miembros' => 0, // Cambiar a 0 ya que no se crea grupo automático
             'admin_id' => $user->id
         ]);
-
-        // Crear grupo principal de la organización
-        $mainGroup = Group::create([
-            'nombre_grupo' => 'General',
-            'descripcion' => 'Grupo principal de la organización',
-            'id_organizacion' => $organization->id,
-            'miembros' => 1
-        ]);
-
-        // Agregar al usuario como administrador del grupo principal
-        $mainGroup->users()->attach($user->id, ['rol' => 'administrador']);
 
         return response()->json($organization, 201);
     }

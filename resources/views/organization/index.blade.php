@@ -219,22 +219,30 @@
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" x-show="org.groups && org.groups.length">
                                     <template x-for="group in org.groups" :key="group.id">
-                                        <div class="bg-slate-700/50 border border-slate-600/50 rounded-lg p-4 hover:bg-slate-700/70 transition-colors duration-200">
+                                        <div @click="viewGroup(group)" class="relative bg-slate-700/50 border border-slate-600/50 rounded-lg p-4 hover:bg-slate-700/70 transition-colors duration-200 cursor-pointer">
+                                            <!-- Loading overlay -->
+                                            <div x-show="isLoadingGroup && currentGroup && currentGroup.id === group.id" class="absolute inset-0 bg-slate-800/80 rounded-lg flex items-center justify-center z-10">
+                                                <svg class="animate-spin h-6 w-6 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                                </svg>
+                                            </div>
+
                                             <div class="flex items-center justify-between mb-3">
                                                 <h4 class="font-semibold text-lg text-slate-200" x-text="group.nombre_grupo"></h4>
-                                                <button @click="viewGroup(group)" class="text-yellow-400 hover:text-yellow-300">
+                                                <div class="text-yellow-400">
                                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                                                     </svg>
-                                                </button>
+                                                </div>
                                             </div>
                                             <p class="text-sm text-slate-400 mb-3" x-text="group.descripcion"></p>
                                             <div class="flex items-center justify-between">
                                                 <p class="text-sm text-slate-400">
                                                     Miembros: <span class="text-yellow-400 font-medium" x-text="group.miembros || 0"></span>
                                                 </p>
-<div class="flex space-x-2" x-show="org.is_owner || org.user_role === 'administrador'">
+<div class="flex space-x-2" x-show="org.is_owner || org.user_role === 'administrador'" @click.stop>
                                                     <button @click="openEditGroupModal(org, group)" class="px-2 py-1 bg-yellow-500 text-slate-900 rounded text-xs hover:bg-yellow-400 transition-colors duration-200">
                                                         Editar
                                                     </button>
@@ -440,7 +448,6 @@
                     </div>
                 </div>
 
-                <!-- Modal información del grupo -->
                 <!-- Modal crear contenedor -->
                 <div x-show="showCreateContainerModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
@@ -564,8 +571,15 @@
                 </div>
 
                 <!-- Modal información del grupo -->
-                <div x-show="showGroupInfoModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
-                    <div class="organization-modal p-6 w-full max-w-4xl text-slate-200">
+                <div x-show="showGroupInfoModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak x-transition>
+                    <div class="organization-modal p-6 w-full max-w-4xl text-slate-200" @click.stop>
+                        <!-- Debug info -->
+                        <div class="text-xs text-yellow-400 mb-2">
+                            DEBUG - Modal visible: <span x-text="showGroupInfoModal"></span>,
+                            Loading: <span x-text="isLoadingGroup"></span>,
+                            Current Group ID: <span x-text="currentGroup?.id || 'none'"></span>
+                        </div>
+
                         <div x-show="isLoadingGroup" class="flex justify-center items-center py-10">
                             <svg class="animate-spin h-8 w-8 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

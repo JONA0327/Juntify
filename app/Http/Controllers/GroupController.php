@@ -8,8 +8,8 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Models\Organization;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use App\Models\GroupCode;
@@ -43,8 +43,10 @@ class GroupController extends Controller
         }
 
         $group = Group::create($validated + ['miembros' => 1]);
-        // El creador queda al menos como colaborador
-        $group->users()->attach($user->id, ['rol' => 'colaborador']);
+
+        // El creador queda como administrador si es owner de la org, sino como colaborador
+        $creatorRole = $isOwner ? 'administrador' : 'colaborador';
+        $group->users()->attach($user->id, ['rol' => $creatorRole]);
         $group->organization->refreshMemberCount();
 
         // Generar código de 6 dígitos único para el grupo
@@ -70,12 +72,20 @@ class GroupController extends Controller
 
         $group->load(['organization', 'users']);
 
+        // Verificar que el usuario tenga permisos para ver el grupo
+        $isOrgOwner = $group->organization && $group->organization->admin_id === $user->id;
+        $isMember = $group->users->contains('id', $user->id);
+
+        if (!$isOrgOwner && !$isMember) {
+            abort(403, 'No tienes permisos para ver este grupo');
+        }
+
         // Agregar información del rol del usuario actual en el grupo
         $currentUserInGroup = $group->users->firstWhere('id', $user->id);
         $group->current_user_role = $currentUserInGroup ? $currentUserInGroup->pivot->rol : null;
 
         // Agregar información de si el usuario es owner de la organización
-        $group->organization_is_owner = $group->organization && $group->organization->id_usuario === $user->id;
+        $group->organization_is_owner = $group->organization && $group->organization->admin_id === $user->id;
 
         return response()->json($group);
     }

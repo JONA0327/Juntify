@@ -69,6 +69,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     isCreatingOrg: false, // Nueva variable para loading de crear organización
     isCreatingGroup: false, // Nueva variable para loading de crear grupo
     isCreatingContainer: false, // Nueva variable para loading de crear contenedor
+    isLoadingGroup: false, // Nueva variable para loading de ver grupo
     isJoining: false, // Nueva variable para loading de unirse
     isSavingGroup: false, // Nueva variable para loading de guardar grupo
     isSavingOrganization: false, // Nueva variable para loading de guardar organización
@@ -92,6 +93,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.isCreatingOrg = false;
         this.isCreatingGroup = false;
         this.isCreatingContainer = false;
+        this.isLoadingGroup = false;
         this.isJoining = false;
         console.log('Estado de organización reiniciado');
     },
@@ -201,13 +203,17 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             });
             if (response.ok) {
                 const updated = await response.json();
-                const idx = this.organizations.findIndex(o => o.id === updated.id);
-                if (idx !== -1) {
-                    updated.groups = this.organizations[idx].groups;
-                    updated.imagen = this.editPreview;
-                    this.organizations[idx] = updated;
-                }
-                this.showEditOrgModal = false;
+
+                // Mostrar mensaje de éxito
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                notification.textContent = 'Organización actualizada exitosamente';
+                document.body.appendChild(notification);
+
+                // Recargar la página después de un breve delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
             }
         } catch (error) {
             console.error('Error updating organization:', error);
@@ -263,11 +269,17 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             });
             if (response.ok) {
                 const updated = await response.json();
-                const idx = this.currentOrg.groups.findIndex(g => g.id === updated.id);
-                if (idx !== -1) {
-                    this.currentOrg.groups[idx] = updated;
-                }
-                this.showEditGroupModal = false;
+
+                // Mostrar mensaje de éxito
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                notification.textContent = 'Grupo actualizado exitosamente';
+                document.body.appendChild(notification);
+
+                // Recargar la página después de un breve delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
             }
         } catch (error) {
             console.error('Error updating group:', error);
@@ -292,36 +304,97 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
     async viewGroup(group) {
+        console.log('=== ViewGroup START ===');
+        console.log('Group:', group);
+        console.log('Current isLoadingGroup:', this.isLoadingGroup);
+        console.log('Current showGroupInfoModal:', this.showGroupInfoModal);
+
+        // Evitar múltiples clicks
+        if (this.isLoadingGroup) {
+            console.log('Already loading, ignoring click');
+            return;
+        }
+
         this.isLoadingGroup = true;
-        this.showGroupInfoModal = true;
+        this.currentGroup = group; // Establecer el grupo inmediatamente para mostrar el loading
+        console.log('Set isLoadingGroup to true, currentGroup set');
+
         try {
+            console.log('Fetching group details for ID:', group.id);
             const response = await fetch(`/api/groups/${group.id}`);
+            console.log('Response received:', response.status, response.statusText);
+
             if (response.ok) {
                 this.currentGroup = await response.json();
+                console.log('Current group loaded from server:', this.currentGroup);
+                console.log('Current user role:', this.currentGroup.current_user_role);
+                console.log('Organization is owner:', this.currentGroup.organization_is_owner);
 
                 // Cargar contenedores del grupo
+                console.log('Loading containers...');
                 await this.loadGroupContainers(group.id);
+                console.log('Containers loaded');
 
+                // Establecer datos adicionales
                 this.showInviteOptions = false;
                 this.inviteEmail = '';
                 const org = this.organizations.find(o => o.groups && o.groups.some(g => g.id === group.id));
                 this.currentOrg = org;
                 this.isOwner = org ? org.is_owner : false;
-                this.activeTab = 'contenedores'; // Cambiar a contenedores por defecto
+                this.activeTab = 'contenedores';
+
+                console.log('Additional data set:', {
+                    currentOrg: this.currentOrg,
+                    isOwner: this.isOwner,
+                    activeTab: this.activeTab
+                });
+
+                // MOSTRAR EL MODAL
+                this.showGroupInfoModal = true;
+                console.log('Modal should be visible now. showGroupInfoModal:', this.showGroupInfoModal);
+
+            } else {
+                console.error('HTTP Error:', response.status, response.statusText);
+                let errorMessage = 'Error al cargar los detalles del grupo';
+                if (response.status === 403) {
+                    errorMessage = 'No tienes permisos para ver este grupo';
+                } else if (response.status === 404) {
+                    errorMessage = 'El grupo no fue encontrado';
+                }
+
+                this.showError(errorMessage);
             }
         } catch (error) {
-            console.error('Error viewing group:', error);
+            console.error('Network/JS Error in viewGroup:', error);
+            this.showError('Error de conexión al cargar el grupo');
         } finally {
             this.isLoadingGroup = false;
+            console.log('=== ViewGroup END ===');
+            console.log('Final state - isLoadingGroup:', this.isLoadingGroup, 'showGroupInfoModal:', this.showGroupInfoModal);
         }
     },
 
-    async loadGroupContainers(groupId) {
+    showError(message) {
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 right-4 bg-red-500 text-white p-3 rounded-lg shadow-lg z-50';
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        setTimeout(() => {
+            if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+            }
+        }, 4000);
+    },    async loadGroupContainers(groupId) {
         try {
+            console.log('Loading containers for group:', groupId);
             const response = await fetch(`/api/groups/${groupId}/containers`);
             if (response.ok) {
                 const data = await response.json();
                 this.currentGroup.containers = data.containers || [];
+                console.log('Containers loaded:', this.currentGroup.containers);
+            } else {
+                console.error('Error loading containers:', response.status);
+                this.currentGroup.containers = [];
             }
         } catch (error) {
             console.error('Error loading group containers:', error);
@@ -348,21 +421,17 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
             if (response.ok) {
                 const group = await response.json();
-                if (!this.currentOrg.groups) {
-                    this.currentOrg.groups = [];
-                }
-                this.currentOrg.groups.push(group);
-                this.showGroupModal = false;
-                this.newGroup = { nombre_grupo: '', descripcion: '', id_organizacion: null };
 
                 // Mostrar mensaje de éxito
                 const notification = document.createElement('div');
                 notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
                 notification.textContent = 'Grupo creado exitosamente';
                 document.body.appendChild(notification);
+
+                // Recargar la página después de un breve delay
                 setTimeout(() => {
-                    document.body.removeChild(notification);
-                }, 3000);
+                    window.location.reload();
+                }, 1500);
             } else {
                 const errorData = await response.json();
                 alert(errorData.message || 'Error al crear el grupo');
@@ -1029,16 +1098,17 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
                 if (response.ok) {
                     const updatedGroup = await response.json();
-                    this.showEditGroupModal = false;
 
-                    // Actualizar en la lista de grupos
-                    const index = this.selectedOrganization.groups.findIndex(g => g.id === updatedGroup.id);
-                    if (index !== -1) {
-                        this.selectedOrganization.groups[index] = updatedGroup;
-                    }
+                    // Mostrar mensaje de éxito
+                    const notification = document.createElement('div');
+                    notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+                    notification.textContent = 'Grupo actualizado exitosamente';
+                    document.body.appendChild(notification);
 
-                    // Mostrar modal de éxito
-                    this.showSuccess('Grupo actualizado correctamente');
+                    // Recargar la página después de un breve delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
                 } else {
                     throw new Error('Error al actualizar el grupo');
                 }
