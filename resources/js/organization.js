@@ -79,6 +79,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     userId: Number(document.querySelector('meta[name="user-id"]').getAttribute('content')),
     activeTab: 'contenedores', // Cambiar tab por defecto a contenedores
     isOwner: false,
+    isLoadingGroup: false,
 
     // Método de inicialización para resetear estados
     init() {
@@ -291,6 +292,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
     async viewGroup(group) {
+        this.isLoadingGroup = true;
+        this.showGroupInfoModal = true;
         try {
             const response = await fetch(`/api/groups/${group.id}`);
             if (response.ok) {
@@ -299,7 +302,6 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 // Cargar contenedores del grupo
                 await this.loadGroupContainers(group.id);
 
-                this.showGroupInfoModal = true;
                 this.showInviteOptions = false;
                 this.inviteEmail = '';
                 const org = this.organizations.find(o => o.groups && o.groups.some(g => g.id === group.id));
@@ -309,6 +311,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             }
         } catch (error) {
             console.error('Error viewing group:', error);
+        } finally {
+            this.isLoadingGroup = false;
         }
     },
 
