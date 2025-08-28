@@ -220,11 +220,19 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
             });
-            if (response.ok) {
-                const idx = this.organizations.findIndex(o => o.id === org.id);
-                if (idx !== -1) {
-                    this.organizations.splice(idx, 1);
+            if (!response.ok) {
+                try {
+                    const errorData = await response.json();
+                    alert(errorData.message || 'Error al eliminar la organización');
+                } catch (parseError) {
+                    alert('Error al eliminar la organización');
                 }
+                return; // Evitar reintentos automáticos
+            }
+
+            const idx = this.organizations.findIndex(o => o.id === org.id);
+            if (idx !== -1) {
+                this.organizations.splice(idx, 1);
             }
         } catch (error) {
             console.error('Error deleting organization:', error);
