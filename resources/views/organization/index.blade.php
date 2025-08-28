@@ -566,6 +566,13 @@
                 <!-- Modal información del grupo -->
                 <div x-show="showGroupInfoModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-4xl text-slate-200">
+                        <div x-show="isLoadingGroup" class="flex justify-center items-center py-10">
+                            <svg class="animate-spin h-8 w-8 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                            </svg>
+                        </div>
+                        <div x-show="!isLoadingGroup">
                         <h2 class="text-lg font-semibold mb-2" x-text="currentGroup?.nombre_grupo"></h2>
                         <p class="text-sm text-slate-400 mb-4" x-text="currentGroup?.descripcion"></p>
 
@@ -616,6 +623,7 @@
 
                         <div class="flex justify-end mt-6">
                             <button @click="showGroupInfoModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cerrar</button>
+                        </div>
                         </div>
                     </div>
                 </div>
