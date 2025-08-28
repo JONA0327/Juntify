@@ -48,6 +48,7 @@ class UserController extends Controller
             // Obtener datos de la invitación
             $data = json_decode($notification->data, true);
             $groupId = $data['group_id'] ?? null;
+            $numMiembros = null;
 
             if ($groupId) {
                 $group = Group::find($groupId);
@@ -55,13 +56,17 @@ class UserController extends Controller
                     // Agregar usuario al grupo
                     $group->users()->syncWithoutDetaching([auth()->id() => ['rol' => 'invitado']]);
                     $group->increment('miembros');
+                    $numMiembros = $group->organization->refreshMemberCount();
                 }
             }
 
             // Eliminar la notificación después de aceptar
             $notification->delete();
 
-            return response()->json(['message' => 'Invitación aceptada']);
+            return response()->json([
+                'message' => 'Invitación aceptada',
+                'num_miembros' => $numMiembros,
+            ]);
         } else {
             // Eliminar la notificación después de rechazar
             $notification->delete();
