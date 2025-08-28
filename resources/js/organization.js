@@ -525,11 +525,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
             const data = await joinRes.json().catch(() => ({}));
             if (joinRes.status === 409) {
-                alert(data.message || 'El usuario ya pertenece a una organización y no puede unirse a otra');
+                this.showError(data.message || 'El usuario ya pertenece a una organización y no puede unirse a otra');
                 return;
             }
             if (!joinRes.ok) {
-                alert(data.message || 'No se pudo unirse al grupo');
+                this.showError(data.message || 'No se pudo unirse al grupo');
                 return;
             }
 
