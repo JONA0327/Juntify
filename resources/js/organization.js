@@ -70,6 +70,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     isCreatingGroup: false, // Nueva variable para loading de crear grupo
     isCreatingContainer: false, // Nueva variable para loading de crear contenedor
     isLoadingGroup: false, // Nueva variable para loading de ver grupo
+    groupError: null, // Mensaje de error al cargar grupo
     isJoining: false, // Nueva variable para loading de unirse
     isSavingGroup: false, // Nueva variable para loading de guardar grupo
     isSavingOrganization: false, // Nueva variable para loading de guardar organización
@@ -318,6 +319,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
         this.isLoadingGroup = true;
         this.currentGroup = group; // Establecer el grupo inmediatamente para mostrar el loading
+        this.groupError = null;
+        this.showGroupInfoModal = true;
         console.log('Set isLoadingGroup to true, currentGroup set');
 
         try {
@@ -350,10 +353,6 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     activeTab: this.activeTab
                 });
 
-                // MOSTRAR EL MODAL
-                this.showGroupInfoModal = true;
-                console.log('Modal should be visible now. showGroupInfoModal:', this.showGroupInfoModal);
-
             } else {
                 console.error('HTTP Error:', response.status, response.statusText);
                 let errorMessage = 'Error al cargar los detalles del grupo';
@@ -363,11 +362,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     errorMessage = 'El grupo no fue encontrado';
                 }
 
-                this.showError(errorMessage);
+                this.groupError = errorMessage;
             }
         } catch (error) {
             console.error('Network/JS Error in viewGroup:', error);
-            this.showError('Error de conexión al cargar el grupo');
+            this.groupError = 'Error de conexión al cargar el grupo';
         } finally {
             this.isLoadingGroup = false;
             console.log('=== ViewGroup END ===');

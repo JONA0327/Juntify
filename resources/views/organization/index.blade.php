@@ -581,7 +581,10 @@
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
                             </svg>
                         </div>
-                        <div x-show="!isLoadingGroup">
+                        <div x-show="groupError" class="py-10 text-center">
+                            <p class="text-red-400" x-text="groupError"></p>
+                        </div>
+                        <div x-show="!isLoadingGroup && !groupError">
                         <h2 class="text-lg font-semibold mb-2" x-text="currentGroup?.nombre_grupo"></h2>
                         <p class="text-sm text-slate-400 mb-4" x-text="currentGroup?.descripcion"></p>
 
