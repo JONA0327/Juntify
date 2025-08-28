@@ -19,13 +19,16 @@ class OrganizationController extends Controller
         // Obtener organizaciones del usuario a través de los grupos
         $organizations = Organization::whereHas('groups.users', function($query) use ($user) {
             $query->where('users.id', $user->id);
-        })->with(['groups' => function($query) use ($user) {
-            $query->whereHas('users', function($subQuery) use ($user) {
-                $subQuery->where('users.id', $user->id);
-            })->with(['users' => function($q) use ($user) {
-                $q->where('users.id', $user->id);
-            }]);
-        }])->get();
+        })->with([
+            'groups.code',
+            'groups' => function($query) use ($user) {
+                $query->whereHas('users', function($subQuery) use ($user) {
+                    $subQuery->where('users.id', $user->id);
+                })->with(['users' => function($q) use ($user) {
+                    $q->where('users.id', $user->id);
+                }]);
+            }
+        ])->get();
 
         // Marcar si el usuario es propietario de la organización y obtener su rol más alto
         $organizations->each(function ($organization) use ($user) {
