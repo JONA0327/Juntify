@@ -514,42 +514,45 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.isJoining = true;
         try {
             const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            const joinRes = await fetch(`/api/organizations/${this.inviteCode}/join`, {
+            const joinRes = await fetch('/api/groups/join-code', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': csrf
-                }
+                },
+                body: JSON.stringify({ code: this.inviteCode })
             });
 
+            const data = await joinRes.json().catch(() => ({}));
             if (!joinRes.ok) {
-                const data = await joinRes.json().catch(() => ({}));
-                alert(data.message || 'No se pudo unirse a la organización');
+                alert(data.message || 'No se pudo unirse al grupo');
                 return;
             }
 
-            const orgRes = await fetch(`/api/organizations/${this.inviteCode}`);
-            if (orgRes.ok) {
-                const org = await orgRes.json();
-                if (!this.organizations.some(o => o.id === org.id)) {
-                    if (!org.groups) {
-                        org.groups = [];
-                    }
-                    this.organizations.push(org);
-                    this.inviteCode = '';
-
-                    // Mostrar mensaje de éxito
-                    const notification = document.createElement('div');
-                    notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                    notification.textContent = 'Te has unido a la organización exitosamente';
-                    document.body.appendChild(notification);
-                    setTimeout(() => {
-                        document.body.removeChild(notification);
-                    }, 3000);
+            const { organization, group } = data;
+            let existingOrg = this.organizations.find(o => o.id === organization.id);
+            if (existingOrg) {
+                if (!existingOrg.groups) existingOrg.groups = [];
+                if (!existingOrg.groups.some(g => g.id === group.id)) {
+                    existingOrg.groups.push(group);
                 }
+            } else {
+                if (!organization.groups) organization.groups = [];
+                if (!organization.groups.some(g => g.id === group.id)) {
+                    organization.groups.push(group);
+                }
+                this.organizations.push(organization);
             }
 
             this.inviteCode = '';
+
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
+            notification.textContent = 'Te has unido a la organización exitosamente';
+            document.body.appendChild(notification);
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 3000);
         } catch (error) {
             console.error('Error joining organization:', error);
             alert('Hubo un problema al unirse a la organización');
