@@ -456,7 +456,7 @@
                         <div x-show="activeTab === 'contenedores'">
                             <div class="flex justify-between items-center mb-4">
                                 <h3 class="text-lg font-semibold">Contenedores del Grupo</h3>
-                            <button x-show="org.user_role !== 'invitado'" @click="openCreateContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                            <button x-show="currentGroup?.current_user_role !== 'invitado'" @click="openCreateContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
                                 Crear Contenedor
                             </button>
                             </div>
@@ -473,8 +473,8 @@
                                         </div>
                                         <div class="mt-3 flex space-x-2">
                                             <button @click="viewContainerMeetings(container)" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Ver</button>
-                                            <button x-show="org.user_role !== 'invitado'" @click="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700">Editar</button>
-                                            <button x-show="org.user_role !== 'invitado'" @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Eliminar</button>
+                                            <button x-show="currentGroup?.current_user_role !== 'invitado'" @click="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700">Editar</button>
+                                            <button x-show="currentGroup?.current_user_role !== 'invitado'" @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Eliminar</button>
                                         </div>
                                     </div>
                                 </template>

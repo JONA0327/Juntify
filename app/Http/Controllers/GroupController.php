@@ -70,6 +70,13 @@ class GroupController extends Controller
 
         $group->load(['organization', 'users']);
 
+        // Agregar información del rol del usuario actual en el grupo
+        $currentUserInGroup = $group->users->firstWhere('id', $user->id);
+        $group->current_user_role = $currentUserInGroup ? $currentUserInGroup->pivot->rol : null;
+
+        // Agregar información de si el usuario es owner de la organización
+        $group->organization_is_owner = $group->organization && $group->organization->id_usuario === $user->id;
+
         return response()->json($group);
     }
 

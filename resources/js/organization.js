@@ -295,11 +295,12 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 this.showInviteOptions = false;
                 this.inviteEmail = '';
                 const org = this.organizations.find(o => o.groups && o.groups.some(g => g.id === group.id));
+                this.currentOrg = org;
                 this.isOwner = org ? org.is_owner : false;
                 this.activeTab = 'contenedores'; // Cambiar a contenedores por defecto
             }
         } catch (error) {
-            console.error('Error loading group:', error);
+            console.error('Error viewing group:', error);
         }
     },
 
