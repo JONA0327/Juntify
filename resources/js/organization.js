@@ -94,7 +94,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.isCreatingContainer = false;
         this.isLoadingGroup = false;
         this.isJoining = false;
-        console.log('Estado de organización reiniciado');
+        if (import.meta.env.DEV) {
+            console.log('Estado de organización reiniciado');
+        }
     },
 
     openOrgModal() {
