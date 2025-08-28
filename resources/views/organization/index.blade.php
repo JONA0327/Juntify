@@ -574,12 +574,6 @@
                 <!-- Modal información del grupo -->
                 <div x-show="showGroupInfoModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak x-transition>
                     <div class="organization-modal p-6 w-full max-w-4xl text-slate-200" @click.stop>
-                        <!-- Debug info -->
-                        <div class="text-xs text-yellow-400 mb-2">
-                            DEBUG - Modal visible: <span x-text="showGroupInfoModal"></span>,
-                            Loading: <span x-text="isLoadingGroup"></span>,
-                            Current Group ID: <span x-text="currentGroup?.id || 'none'"></span>
-                        </div>
 
                         <div x-show="isLoadingGroup" class="flex justify-center items-center py-10">
                             <svg class="animate-spin h-8 w-8 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
