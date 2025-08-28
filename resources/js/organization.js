@@ -1153,34 +1153,6 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             }
         },
 
-    // Método para salirse de la organización
-    async leaveOrganization() {
-        if (!confirm('¿Estás seguro de que quieres salir de esta organización?')) {
-            return;
-        }
-
-        try {
-            const response = await fetch('/api/organizations/leave', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                }
-            });
-
-            if (response.ok) {
-                // Recargar la página para mostrar la vista de unirse/crear
-                window.location.reload();
-            } else {
-                const data = await response.json();
-                alert(data.message || 'Error al salir de la organización');
-            }
-        } catch (error) {
-            console.error('Error leaving organization:', error);
-            alert('Error al salir de la organización');
-        }
-    },
-
     // Funciones para manejar contenedores
     openCreateContainerModal() {
         this.newContainer = { name: '', description: '' };

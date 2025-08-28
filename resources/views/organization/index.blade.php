@@ -79,56 +79,6 @@
                     </button>
                 </div>
 
-                <!-- Vista especial para usuarios invitados -->
-                @if($isOnlyGuest && count($organizations) > 0)
-                    <div class="mb-8">
-                        <div class="text-center mb-6">
-                            <h1 class="text-2xl font-semibold text-slate-200">Mi Grupo</h1>
-                            <p class="text-slate-400 mt-2">Eres invitado en esta organización</p>
-                        </div>
-
-                        @foreach($organizations as $org)
-                            <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-6">
-                                <div class="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h2 class="text-xl font-semibold text-slate-200 mb-2">{{ $org->nombre_organizacion }}</h2>
-                                        <p class="text-slate-300">{{ $org->descripcion }}</p>
-                                        <span class="inline-block bg-blue-600/20 text-blue-400 px-2 py-1 rounded text-sm mt-2">Invitado</span>
-                                    </div>
-                                    <button @click="leaveOrganization()" class="bg-red-600 px-4 py-2 rounded-lg text-white hover:bg-red-700 transition-colors duration-200">
-                                        Salir de la organización
-                                    </button>
-                                </div>
-
-                                <div class="border-t border-slate-700/50 pt-4">
-                                    <h3 class="text-lg font-medium text-slate-200 mb-3">Mis Grupos</h3>
-                                    @if($org->groups && count($org->groups) > 0)
-                                        <div class="space-y-3">
-                                            @foreach($org->groups as $group)
-                                                <div class="bg-slate-700/30 rounded-lg p-4">
-                                                    <div class="flex justify-between items-center">
-                                                        <div>
-                                                            <h4 class="font-medium text-slate-200">{{ $group->nombre_grupo }}</h4>
-                                                            <p class="text-sm text-slate-400 mt-1">{{ $group->descripcion }}</p>
-                                                            <p class="text-sm text-slate-400 mt-1">Miembros: {{ $group->miembros ?? 0 }}</p>
-                                                        </div>
-                                                        <div class="flex items-center space-x-2">
-                                                            <span class="bg-blue-600/20 text-blue-400 px-2 py-1 rounded text-xs">Invitado</span>
-                                                            <button @click="viewGroup({ id: {{ $group->id }} })" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Ver</button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            @endforeach
-                                        </div>
-                                    @else
-                                        <p class="text-slate-400 text-center py-4">No perteneces a ningún grupo en esta organización</p>
-                                    @endif
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
-
                 <!-- Interfaz principal cuando hay organizaciones -->
                 <div x-show="organizations.length > 0" class="mb-8">
                     <!-- Título y header -->
