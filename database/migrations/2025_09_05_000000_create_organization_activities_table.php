@@ -8,12 +8,16 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('organization_activities', function (Blueprint $table) {
+    // Ensure clean state when running this migration alone
+    Schema::dropIfExists('organization_activities');
+
+    Schema::create('organization_activities', function (Blueprint $table) {
             $table->id();
             $table->unsignedInteger('organization_id')->nullable();
             $table->unsignedInteger('group_id')->nullable();
             $table->unsignedBigInteger('container_id')->nullable();
-            $table->unsignedBigInteger('user_id')->nullable();
+            // users.id is a UUID, so this column must be a UUID as well
+            $table->uuid('user_id')->nullable();
             $table->string('action');
             $table->text('description')->nullable();
             $table->timestamps();
