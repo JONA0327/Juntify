@@ -358,6 +358,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
             if (response.ok) {
                 this.currentGroup = await response.json();
+                await this.loadGroupContainers(group.id);
                 console.log('Group loaded with containers:', this.currentGroup.containers?.length || 0);
             } else {
                 throw new Error('Error al cargar el grupo');
@@ -382,18 +383,18 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 document.body.removeChild(notification);
             }
         }, 4000);
-    },    async loadGroupContainers(groupId) {
+    },
+
+    async loadGroupContainers(groupId) {
         try {
             debugLog('Loading containers for group:', groupId);
             const response = await fetch(`/api/groups/${groupId}/containers`);
-            if (response.ok) {
-                const data = await response.json();
-                this.currentGroup.containers = data.containers || [];
-                debugLog('Containers loaded:', this.currentGroup.containers);
-            } else {
-                console.error('Error loading containers:', response.status);
-                this.currentGroup.containers = [];
+            if (!response.ok) {
+                throw new Error(`Error loading containers: ${response.status}`);
             }
+            const data = await response.json();
+            this.currentGroup.containers = data.containers || [];
+            debugLog('Containers loaded:', this.currentGroup.containers);
         } catch (error) {
             console.error('Error loading group containers:', error);
             this.currentGroup.containers = [];
