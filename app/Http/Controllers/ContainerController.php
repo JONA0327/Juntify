@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use App\Services\GoogleDriveService;
 use App\Traits\GoogleDriveHelpers;
@@ -22,6 +23,22 @@ class ContainerController extends Controller
     public function __construct(GoogleDriveService $googleDriveService)
     {
         $this->googleDriveService = $googleDriveService;
+    }
+
+    private function userHasContainerPrivileges($user, $groupId = null): bool
+    {
+        if ($groupId) {
+            $role = DB::table('group_user')
+                ->where('user_id', $user->id)
+                ->where('id_grupo', $groupId)
+                ->value('rol');
+            return $role !== 'invitado';
+        }
+
+        return DB::table('group_user')
+            ->where('user_id', $user->id)
+            ->where('rol', '!=', 'invitado')
+            ->exists();
     }
     /**
      * Muestra la vista principal de contenedores
@@ -87,6 +104,10 @@ class ContainerController extends Controller
 
             $user = Auth::user();
 
+            if (! $this->userHasContainerPrivileges($user, $validated['group_id'] ?? null)) {
+                return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
+            }
+
             $container = MeetingContentContainer::create([
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
@@ -138,6 +159,10 @@ class ContainerController extends Controller
             $container = MeetingContentContainer::where('id', $id)
                 ->where('username', $user->username)
                 ->firstOrFail();
+
+            if (! $this->userHasContainerPrivileges($user, $container->group_id)) {
+                return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
+            }
 
             $container->update([
                 'name' => $validated['name'],
@@ -334,6 +359,10 @@ class ContainerController extends Controller
             $container = MeetingContentContainer::where('id', $id)
                 ->where('username', $user->username)
                 ->firstOrFail();
+
+            if (! $this->userHasContainerPrivileges($user, $container->group_id)) {
+                return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
+            }
 
             $container->update(['is_active' => false]);
 
