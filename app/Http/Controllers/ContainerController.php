@@ -56,6 +56,7 @@ class ContainerController extends Controller
                         'description' => $container->description,
                         'created_at' => $container->created_at->format('d/m/Y H:i'),
                         'meetings_count' => $container->meetingRelations()->count(),
+                        'is_company' => $container->group_id !== null,
                     ];
                 });
 
@@ -103,6 +104,7 @@ class ContainerController extends Controller
                     'description' => $container->description,
                     'created_at' => $container->created_at->format('d/m/Y H:i'),
                     'meetings_count' => 0,
+                    'is_company' => $container->group_id !== null,
                 ]
             ]);
 
@@ -304,6 +306,7 @@ class ContainerController extends Controller
                     'id' => $container->id,
                     'name' => $container->name,
                     'description' => $container->description,
+                    'is_company' => $container->group_id !== null,
                 ],
                 'meetings' => $meetings,
             ];
