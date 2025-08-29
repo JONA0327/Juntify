@@ -66,10 +66,6 @@ Route::middleware('auth')->group(function () {
     Route::delete('/api/groups/{group}/members/{user}', [GroupController::class, 'removeMember'])->name('api.groups.members.destroy');
     Route::get('/api/groups/{group}/containers', [GroupController::class, 'getContainers'])->name('api.groups.containers');
 
-    // Rutas de Contenedores
-    Route::post('/api/containers', [ContainerController::class, 'store'])->name('api.containers.store');
-    Route::delete('/api/containers/{container}', [ContainerController::class, 'destroy'])->name('api.containers.destroy');
-
     // Notificaciones
     Route::get('/api/notifications', [NotificationController::class, 'index'])->name('api.notifications.index');
     Route::delete('/api/notifications/{notification}', [NotificationController::class, 'destroy'])->name('api.notifications.destroy');
@@ -108,11 +104,16 @@ Route::middleware('auth')->group(function () {
     // Rutas de Contenedores
     Route::get('/api/content-containers', [ContainerController::class, 'getContainers'])->name('api.content-containers');
     Route::get('/api/content-containers/{id}/meetings', [ContainerController::class, 'getContainerMeetings'])->name('api.content-containers.meetings');
-    Route::post('/api/content-containers', [ContainerController::class, 'store'])->name('api.content-containers.store');
-    Route::patch('/api/containers/{id}', [ContainerController::class, 'update'])->name('api.containers.update');
-    Route::delete('/api/containers/{id}', [ContainerController::class, 'destroy'])->name('api.containers.destroy');
-    Route::post('/api/content-containers/{id}/meetings', [ContainerController::class, 'addMeeting'])->name('api.content-containers.addMeeting');
-    Route::delete('/api/content-containers/{container}/meetings/{meeting}', [ContainerController::class, 'removeMeeting'])->name('api.content-containers.meetings.destroy');
+
+    Route::middleware('group.role')->group(function () {
+        Route::post('/api/containers', [ContainerController::class, 'store'])->name('api.containers.store');
+        Route::patch('/api/containers/{id}', [ContainerController::class, 'update'])->name('api.containers.update');
+        Route::delete('/api/containers/{id}', [ContainerController::class, 'destroy'])->name('api.containers.destroy');
+
+        Route::post('/api/content-containers', [ContainerController::class, 'store'])->name('api.content-containers.store');
+        Route::post('/api/content-containers/{id}/meetings', [ContainerController::class, 'addMeeting'])->name('api.content-containers.addMeeting');
+        Route::delete('/api/content-containers/{container}/meetings/{meeting}', [ContainerController::class, 'removeMeeting'])->name('api.content-containers.meetings.destroy');
+    });
 
     // Rutas API para reuniones
     Route::get('/api/meetings', [MeetingController::class, 'getMeetings'])->name('api.meetings');

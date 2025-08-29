@@ -90,6 +90,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     activeTab: 'contenedores', // Cambiar tab por defecto a contenedores
     isOwner: false,
 
+    canManageContainers() {
+        return this.currentGroup?.user_role !== 'invitado';
+    },
+
     // Método de inicialización para resetear estados
     init() {
         // Obtener el userId del meta tag
