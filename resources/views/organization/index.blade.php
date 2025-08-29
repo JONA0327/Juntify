@@ -571,7 +571,7 @@
                 </div>
 
                 <!-- Modal información del grupo -->
-                <div x-show="showGroupInfoModal" @click.self="showGroupInfoModal=false" @keydown.escape.window="showGroupInfoModal=false" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak x-transition>
+                <div @click.self="showGroupInfoModal=false" @keydown.escape.window="showGroupInfoModal=false" class="fixed inset-0 bg-black/50 items-center justify-center z-50" :class="showGroupInfoModal ? 'flex' : 'hidden'" x-cloak x-transition.opacity>
                     <div class="organization-modal p-6 w-full max-w-4xl text-slate-200" @click.stop>
                         <!-- Header del modal -->
                         <div class="flex items-center justify-between mb-6">
