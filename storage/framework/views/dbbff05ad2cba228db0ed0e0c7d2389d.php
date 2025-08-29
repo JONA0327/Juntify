@@ -32,7 +32,7 @@
         <?php echo $__env->make('partials.mobile-nav', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
 
         <main class="w-full pl-24 pt-24" style="margin-top:130px;">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" x-data='organizationPage(<?php echo json_encode($organizations, 15, 512) ?>)' x-init="init()">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" x-data='organizationPage(<?php echo json_encode($organizations, 15, 512) ?>)'>
                 <!-- Modal de Éxito (dentro del scope de Alpine) -->
                 <div x-show="showSuccessModal && successMessage && successMessage.trim() !== ''"
                      @click.self="closeSuccessModal()"
@@ -78,56 +78,6 @@
                         </span>
                     </button>
                 </div>
-
-                <!-- Vista especial para usuarios invitados -->
-                <?php if($isOnlyGuest && count($organizations) > 0): ?>
-                    <div class="mb-8">
-                        <div class="text-center mb-6">
-                            <h1 class="text-2xl font-semibold text-slate-200">Mi Grupo</h1>
-                            <p class="text-slate-400 mt-2">Eres invitado en esta organización</p>
-                        </div>
-
-                        <?php $__currentLoopData = $organizations; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $org): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                            <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-6">
-                                <div class="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h2 class="text-xl font-semibold text-slate-200 mb-2"><?php echo e($org->nombre_organizacion); ?></h2>
-                                        <p class="text-slate-300"><?php echo e($org->descripcion); ?></p>
-                                        <span class="inline-block bg-blue-600/20 text-blue-400 px-2 py-1 rounded text-sm mt-2">Invitado</span>
-                                    </div>
-                                    <button @click="leaveOrganization()" class="bg-red-600 px-4 py-2 rounded-lg text-white hover:bg-red-700 transition-colors duration-200">
-                                        Salir de la organización
-                                    </button>
-                                </div>
-
-                                <div class="border-t border-slate-700/50 pt-4">
-                                    <h3 class="text-lg font-medium text-slate-200 mb-3">Mis Grupos</h3>
-                                    <?php if($org->groups && count($org->groups) > 0): ?>
-                                        <div class="space-y-3">
-                                            <?php $__currentLoopData = $org->groups; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $group): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                                                <div class="bg-slate-700/30 rounded-lg p-4">
-                                                    <div class="flex justify-between items-center">
-                                                        <div>
-                                                            <h4 class="font-medium text-slate-200"><?php echo e($group->nombre_grupo); ?></h4>
-                                                            <p class="text-sm text-slate-400 mt-1"><?php echo e($group->descripcion); ?></p>
-                                                            <p class="text-sm text-slate-400 mt-1">Miembros: <?php echo e($group->miembros ?? 0); ?></p>
-                                                        </div>
-                                                        <div class="flex items-center space-x-2">
-                                                            <span class="bg-blue-600/20 text-blue-400 px-2 py-1 rounded text-xs">Invitado</span>
-                                                            <button @click="viewGroup({ id: <?php echo e($group->id); ?> })" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Ver</button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
-                                        </div>
-                                    <?php else: ?>
-                                        <p class="text-slate-400 text-center py-4">No perteneces a ningún grupo en esta organización</p>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
-                    </div>
-                <?php endif; ?>
 
                 <!-- Interfaz principal cuando hay organizaciones -->
                 <div x-show="organizations.length > 0" class="mb-8">
@@ -179,7 +129,13 @@
                                             <p class="text-slate-400">Miembros: <span class="font-semibold text-yellow-400" x-text="org.num_miembros"></span></p>
                                         </div>
                                     </div>
-<div class="flex space-x-3" x-show="org.is_owner || org.user_role === 'administrador'">
+                                    <div x-show="org.user_role === 'invitado'" class="flex flex-col items-end">
+                                        <button @click="leaveOrganization()" class="bg-red-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200">
+                                            Salir de la organización
+                                        </button>
+                                        <span class="mt-2 text-sm text-slate-400" x-text="org.user_role.charAt(0).toUpperCase() + org.user_role.slice(1)"></span>
+                                    </div>
+                                    <div class="flex space-x-3" x-show="org.is_owner || org.user_role === 'administrador'">
                                         <button @click="openEditOrgModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
                                             Editar Organización
                                         </button>
@@ -569,79 +525,6 @@
                     </div>
                 </div>
                 </div>
-
-                <!-- Modal información del grupo -->
-                <div x-show="showGroupInfoModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak x-transition>
-                    <div class="organization-modal p-6 w-full max-w-4xl text-slate-200" @click.stop>
-                        <!-- Debug info -->
-                        <div class="text-xs text-yellow-400 mb-2">
-                            DEBUG - Modal visible: <span x-text="showGroupInfoModal"></span>,
-                            Loading: <span x-text="isLoadingGroup"></span>,
-                            Current Group ID: <span x-text="currentGroup?.id || 'none'"></span>
-                        </div>
-
-                        <div x-show="isLoadingGroup" class="flex justify-center items-center py-10">
-                            <svg class="animate-spin h-8 w-8 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                            </svg>
-                        </div>
-                        <div x-show="!isLoadingGroup">
-                        <h2 class="text-lg font-semibold mb-2" x-text="currentGroup?.nombre_grupo"></h2>
-                        <p class="text-sm text-slate-400 mb-4" x-text="currentGroup?.descripcion"></p>
-
-                        <!-- Tabs -->
-                        <div class="mb-4 border-b border-slate-700/50">
-                            <nav class="flex space-x-4">
-                                <button @click="activeTab = 'contenedores'" :class="activeTab === 'contenedores' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-slate-400'" class="px-3 py-2">Contenedores</button>
-                            </nav>
-                        </div>
-
-                        <!-- Contenido pestaña Contenedores -->
-                        <div x-show="activeTab === 'contenedores'">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="text-lg font-semibold">Contenedores del Grupo</h3>
-                            <button x-show="currentGroup?.current_user_role !== 'invitado'" @click="openCreateContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
-                                Crear Contenedor
-                            </button>
-                            </div>
-
-                            <!-- Lista de contenedores -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                                <template x-for="container in currentGroup?.containers || []" :key="container.id">
-                                    <div class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-                                        <h4 class="font-semibold text-yellow-400 mb-2" x-text="container.name"></h4>
-                                        <p class="text-sm text-slate-300 mb-3" x-text="container.description"></p>
-                                        <div class="flex justify-between items-center text-xs text-slate-400">
-                                            <span x-text="'Reuniones: ' + (container.meetings_count || 0)"></span>
-                                            <span x-text="container.created_at"></span>
-                                        </div>
-                                        <div class="mt-3 flex space-x-2">
-                                            <button @click="viewContainerMeetings(container)" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Ver</button>
-                                            <button x-show="currentGroup?.current_user_role !== 'invitado'" @click="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700">Editar</button>
-                                            <button x-show="currentGroup?.current_user_role !== 'invitado'" @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Eliminar</button>
-                                        </div>
-                                    </div>
-                                </template>
-                            </div>
-
-                            <!-- Mensaje si no hay contenedores -->
-                            <div x-show="!currentGroup?.containers || currentGroup.containers.length === 0" class="text-center py-8 text-slate-400">
-                                <svg class="w-12 h-12 mx-auto mb-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                </svg>
-                                <p>No hay contenedores creados para este grupo</p>
-                                <p class="text-sm">Los contenedores te permiten organizar las reuniones por categorías</p>
-                            </div>
-                        </div>
-
-                        <div class="flex justify-end mt-6">
-                            <button @click="showGroupInfoModal=false" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cerrar</button>
-                        </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Modal ver reuniones del contenedor -->
                 <div x-show="showContainerMeetingsModal" id="container-meetings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-40" x-cloak>
                     <div class="bg-slate-950 rounded-xl border border-slate-700/50 shadow-2xl shadow-black/20 w-full max-w-6xl max-h-[90vh] overflow-hidden">
@@ -688,36 +571,84 @@
                     </div>
                 </div>
 
+                <!-- Modal información del grupo -->
+                <div x-show="showGroupInfoModal" @click.self="showGroupInfoModal=false" @keydown.escape.window="showGroupInfoModal=false" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak x-transition>
+                    <div class="organization-modal p-6 w-full max-w-4xl text-slate-200" @click.stop>
+                        <!-- Header del modal -->
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 class="text-2xl font-bold text-white" x-text="currentGroup?.nombre_grupo || 'Grupo'"></h2>
+                                <p class="text-slate-400 mt-1" x-text="currentGroup?.descripcion || 'Información del grupo'"></p>
+                            </div>
+                            <button @click="showGroupInfoModal = false" class="text-slate-400 hover:text-white transition-colors">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <!-- Loading state -->
+                        <div x-show="isLoadingGroup" class="flex justify-center items-center py-20">
+                            <svg class="animate-spin h-8 w-8 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                            </svg>
+                        </div>
+
+                        <!-- Contenido principal -->
+                        <div x-show="!isLoadingGroup">
+                            <!-- Botón crear contenedor -->
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 class="text-xl font-semibold">Contenedores</h3>
+                                <button @click="openCreateContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                    Crear Contenedor
+                                </button>
+                            </div>
+
+                            <!-- Lista de contenedores -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <template x-for="container in currentGroup?.containers || []" :key="container.id">
+                                    <div class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 hover:bg-slate-700/50 transition-colors">
+                                        <h4 class="font-semibold text-yellow-400 mb-2" x-text="container.name"></h4>
+                                        <p class="text-sm text-slate-300 mb-3" x-text="container.description"></p>
+                                        <div class="flex justify-between items-center text-xs text-slate-400 mb-3">
+                                            <span x-text="'Reuniones: ' + (container.meetings_count || 0)"></span>
+                                            <span x-text="new Date(container.created_at).toLocaleDateString()"></span>
+                                        </div>
+                                        <div class="flex space-x-2">
+                                            <button @click="viewContainerMeetings(container)" class="flex-1 px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors">
+                                                Ver Reuniones
+                                            </button>
+                                            <button @click="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition-colors">
+                                                Editar
+                                            </button>
+                                            <button @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors">
+                                                Eliminar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Estado vacío -->
+                            <div x-show="!currentGroup?.containers || currentGroup.containers.length === 0" class="text-center py-16">
+                                <div class="mx-auto w-16 h-16 bg-slate-800/30 rounded-full flex items-center justify-center mb-4">
+                                    <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-semibold text-slate-300 mb-2">No hay contenedores</h3>
+                                <p class="text-slate-400 mb-4">Los contenedores te permiten organizar las reuniones por categorías</p>
+                                <button @click="openCreateContainerModal()" class="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                    Crear primer contenedor
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </main>
-    </div>
-
-    <!-- Modal de éxito/error -->
-    <div x-show="showSuccessModal && successMessage && successMessage.trim() !== ''" @click.self="closeSuccessModal()" @keydown.escape.window="closeSuccessModal()" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" x-cloak>
-        <div class="organization-modal p-6 w-full max-w-md text-slate-200">
-            <div class="text-center">
-                <!-- Icono dinámico según tipo -->
-                <div x-show="!isErrorModal" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-500/20 mb-4">
-                    <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                </div>
-                <div x-show="isErrorModal" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-500/20 mb-4">
-                    <svg class="h-6 w-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </div>
-
-                <!-- Título dinámico -->
-                <h3 class="text-lg font-semibold mb-2" x-text="isErrorModal ? 'Error' : 'Exito'"></h3>
-                <p class="text-slate-300 mb-6" x-text="successMessage"></p>
-                <div class="flex justify-center space-x-3">
-                    <button @click="closeSuccessModal()" class="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
-                        Aceptar
-                    </button>
-                </div>
-            </div>
-        </div>
     </div>
 
 <?php if (isset($component)) { $__componentOriginal9f64f32e90b9102968f2bc548315018c = $component; } ?>

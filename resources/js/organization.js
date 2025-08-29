@@ -86,12 +86,18 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     showSuccessModal: false, // Nueva variable para modal de éxito
     successMessage: '', // Nueva variable para mensaje de éxito
     isErrorModal: false, // Nueva variable para distinguir entre éxito y error
-    userId: Number(document.querySelector('meta[name="user-id"]').getAttribute('content')),
+    userId: null, // Se inicializará en init()
     activeTab: 'contenedores', // Cambiar tab por defecto a contenedores
     isOwner: false,
 
     // Método de inicialización para resetear estados
     init() {
+        // Obtener el userId del meta tag
+        this.userId = document.querySelector('meta[name="user-id"]').getAttribute('content');
+
+    // Asegurar que el modal esté cerrado al iniciar
+    this.showGroupInfoModal = false;
+
         this.showSuccessModal = false;
         this.successMessage = '';
         this.isErrorModal = false;
@@ -328,71 +334,41 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
     async viewGroup(group) {
-        debugLog('=== ViewGroup START ===');
-        debugLog('Group:', group);
-        debugLog('Current isLoadingGroup:', this.isLoadingGroup);
-        debugLog('Current showGroupInfoModal:', this.showGroupInfoModal);
+        console.log('Opening group modal for:', group.nombre_grupo);
+        console.log('Current showGroupInfoModal before:', this.showGroupInfoModal);
+        console.log('Current isLoadingGroup before:', this.isLoadingGroup);
 
         // Evitar múltiples clicks
         if (this.isLoadingGroup) {
-            debugLog('Already loading, ignoring click');
+            console.log('Already loading, returning');
             return;
         }
 
         this.isLoadingGroup = true;
-        this.currentGroup = group; // Establecer el grupo inmediatamente para mostrar el loading
-        this.groupError = null;
+        this.currentGroup = group;
         this.showGroupInfoModal = true;
-        debugLog('Set isLoadingGroup to true, currentGroup set');
+
+        console.log('Set showGroupInfoModal to:', this.showGroupInfoModal);
+        console.log('Set isLoadingGroup to:', this.isLoadingGroup);
+        console.log('Set currentGroup to:', this.currentGroup.nombre_grupo);
 
         try {
-            debugLog('Fetching group details for ID:', group.id);
+            // Cargar detalles del grupo con contenedores
             const response = await fetch(`/api/groups/${group.id}`);
-            debugLog('Response received:', response.status, response.statusText);
 
             if (response.ok) {
                 this.currentGroup = await response.json();
-                debugLog('Current group loaded from server:', this.currentGroup);
-                debugLog('Current user role:', this.currentGroup.current_user_role);
-                debugLog('Organization is owner:', this.currentGroup.organization_is_owner);
-
-                // Cargar contenedores del grupo
-                debugLog('Loading containers...');
-                await this.loadGroupContainers(group.id);
-                debugLog('Containers loaded');
-
-                // Establecer datos adicionales
-                this.showInviteOptions = false;
-                this.inviteEmail = '';
-                const org = this.organizations.find(o => o.groups && o.groups.some(g => g.id === group.id));
-                this.currentOrg = org;
-                this.isOwner = org ? org.is_owner : false;
-                this.activeTab = 'contenedores';
-
-                debugLog('Additional data set:', {
-                    currentOrg: this.currentOrg,
-                    isOwner: this.isOwner,
-                    activeTab: this.activeTab
-                });
-
+                console.log('Group loaded with containers:', this.currentGroup.containers?.length || 0);
             } else {
-                console.error('HTTP Error:', response.status, response.statusText);
-                let errorMessage = 'Error al cargar los detalles del grupo';
-                if (response.status === 403) {
-                    errorMessage = 'No tienes permisos para ver este grupo';
-                } else if (response.status === 404) {
-                    errorMessage = 'El grupo no fue encontrado';
-                }
-
-                this.groupError = errorMessage;
+                throw new Error('Error al cargar el grupo');
             }
         } catch (error) {
-            console.error('Network/JS Error in viewGroup:', error);
-            this.groupError = 'Error de conexión al cargar el grupo';
+            console.error('Error loading group:', error);
+            this.currentGroup = group; // Fallback al grupo original
         } finally {
             this.isLoadingGroup = false;
-            debugLog('=== ViewGroup END ===');
-            debugLog('Final state - isLoadingGroup:', this.isLoadingGroup, 'showGroupInfoModal:', this.showGroupInfoModal);
+            console.log('Final showGroupInfoModal:', this.showGroupInfoModal);
+            console.log('Final isLoadingGroup:', this.isLoadingGroup);
         }
     },
 
