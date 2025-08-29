@@ -301,16 +301,16 @@
                             </div>
 
                             <!-- Pestaña Actividad -->
-                            <div x-show="mainTab === 'activity'" x-transition x-init="$root.activities[org.id] ?? loadActivities(org.id)">
+                            <div x-show="mainTab === 'activity'" x-transition x-init="if (!activities[org.id]) loadActivities(org.id)">
                                 <h3 class="text-2xl font-bold text-slate-200 mb-4">Actividad reciente</h3>
                                 <ul>
-                                    <template x-for="activity in $root.activities[org.id] ?? []" :key="activity.id">
+                                    <template x-for="activity in activities[org.id] ?? []" :key="activity.id">
                                         <li class="py-2 border-b border-slate-700/50">
                                             <span class="text-yellow-400 font-semibold" x-text="activity.actor"></span>
                                             <span class="ml-2" x-text="activity.action"></span>
                                         </li>
                                     </template>
-                                    <li x-show="!($root.activities[org.id] && $root.activities[org.id].length)" class="text-slate-400">Sin actividad registrada</li>
+                                    <li x-show="!(activities[org.id] && activities[org.id].length)" class="text-slate-400">Sin actividad registrada</li>
                                 </ul>
                             </div>
                         </div>
@@ -618,7 +618,7 @@
                             <!-- Botón crear contenedor -->
                             <div class="flex justify-between items-center mb-6">
                                 <h3 class="text-xl font-semibold">Contenedores</h3>
-                                <button x-show="$root.canManageContainers()" @click="openCreateContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                <button x-show="canManageContainers()" @click="openCreateContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
                                     Crear Contenedor
                                 </button>
                             </div>
@@ -643,7 +643,7 @@
                                             <button @click="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition-colors">
                                                 Editar
                                             </button>
-                                            <button x-show="$root.canManageContainers()" @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors">
+                                            <button x-show="canManageContainers()" @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors">
                                                 Eliminar
                                             </button>
                                         </div>
@@ -660,7 +660,7 @@
                                 </div>
                                 <h3 class="text-lg font-semibold text-slate-300 mb-2">No hay contenedores</h3>
                                 <p class="text-slate-400 mb-4">Los contenedores te permiten organizar las reuniones por categorías</p>
-                                <button x-show="$root.canManageContainers()" @click="openCreateContainerModal()" class="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                <button x-show="canManageContainers()" @click="openCreateContainerModal()" class="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
                                     Crear primer contenedor
                                 </button>
                             </div>
