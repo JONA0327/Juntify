@@ -92,7 +92,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     isOwner: false,
 
     canManageContainers() {
-        return this.currentGroup?.user_role !== 'invitado';
+        const role = this.currentGroup?.user_role;
+        return ['administrador', 'colaborador'].includes(role);
     },
 
     async loadActivities(orgId) {
