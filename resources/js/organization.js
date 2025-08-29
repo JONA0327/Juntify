@@ -393,7 +393,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 throw new Error(`Error loading containers: ${response.status}`);
             }
             const data = await response.json();
-            this.currentGroup.containers = data.containers || [];
+            // Ensure each container keeps the is_company flag
+            this.currentGroup.containers = (data.containers || []).map(c => ({
+                ...c,
+                is_company: c.is_company ?? true
+            }));
             debugLog('Containers loaded:', this.currentGroup.containers);
         } catch (error) {
             console.error('Error loading group containers:', error);
@@ -1207,11 +1211,14 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             if (response.ok) {
                 const container = await response.json();
 
-                // Agregar el contenedor a la lista del grupo actual
+                // Agregar el contenedor a la lista del grupo actual conservando is_company
                 if (!this.currentGroup.containers) {
                     this.currentGroup.containers = [];
                 }
-                this.currentGroup.containers.push(container.container);
+                this.currentGroup.containers.push({
+                    ...container.container,
+                    is_company: container.container.is_company ?? true
+                });
 
                 this.showCreateContainerModal = false;
                 this.newContainer = { name: '', description: '' };
@@ -1249,6 +1256,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 const data = await response.json();
                 this.selectedContainer = {
                     ...container,
+                    is_company: container.is_company ?? false,
                     meetings: data.meetings || []
                 };
                 this.showContainerMeetingsModal = true;
@@ -1329,7 +1337,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     this.currentGroup.containers[index] = {
                         ...this.currentGroup.containers[index],
                         name: this.editContainer.name,
-                        description: this.editContainer.description
+                        description: this.editContainer.description,
+                        is_company: this.currentGroup.containers[index].is_company
                     };
                 }
 
