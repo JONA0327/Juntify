@@ -301,16 +301,16 @@
                             </div>
 
                             <!-- Pestaña Actividad -->
-                            <div x-show="mainTab === 'activity'" x-transition x-init="if (!activities[org.id]) loadActivities(org.id)">
+                            <div x-show="mainTab === 'activity'" x-transition x-init="if (!activities?.[org.id]) loadActivities(org.id)">
                                 <h3 class="text-2xl font-bold text-slate-200 mb-4">Actividad reciente</h3>
                                 <ul>
-                                    <template x-for="activity in activities[org.id] ?? []" :key="activity.id">
+                                    <template x-for="activity in activities?.[org.id] ?? []" :key="activity.id">
                                         <li class="py-2 border-b border-slate-700/50">
                                             <span class="text-yellow-400 font-semibold" x-text="activity.actor"></span>
                                             <span class="ml-2" x-text="activity.action"></span>
                                         </li>
                                     </template>
-                                    <li x-show="!(activities[org.id] && activities[org.id].length)" class="text-slate-400">Sin actividad registrada</li>
+                                    <li x-show="!(activities?.[org.id]?.length)" class="text-slate-400">Sin actividad registrada</li>
                                 </ul>
                             </div>
                         </div>

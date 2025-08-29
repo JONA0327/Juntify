@@ -102,9 +102,12 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             if (response.ok) {
                 const data = await response.json();
                 this.activities[orgId] = data.activities;
+            } else {
+                this.activities[orgId] = [];
             }
         } catch (error) {
             console.error('Error loading activities:', error);
+            this.activities[orgId] = [];
         }
     },
 
