@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 use App\Models\TranscriptionLaravel;
+use App\Models\OrganizationActivity;
+use App\Models\Group;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -116,6 +118,21 @@ class ContainerController extends Controller
                 'is_active' => true,
             ]);
 
+            $organizationId = null;
+            if ($container->group_id) {
+                $group = Group::find($container->group_id);
+                $organizationId = $group ? $group->id_organizacion : null;
+            }
+
+            OrganizationActivity::create([
+                'organization_id' => $organizationId,
+                'group_id' => $container->group_id,
+                'container_id' => $container->id,
+                'user_id' => $user->id,
+                'action' => 'create',
+                'description' => $user->name . ' creó el contenedor ' . $container->name,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Contenedor creado exitosamente',
@@ -167,6 +184,21 @@ class ContainerController extends Controller
             $container->update([
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
+            ]);
+
+            $organizationId = null;
+            if ($container->group_id) {
+                $group = Group::find($container->group_id);
+                $organizationId = $group ? $group->id_organizacion : null;
+            }
+
+            OrganizationActivity::create([
+                'organization_id' => $organizationId,
+                'group_id' => $container->group_id,
+                'container_id' => $container->id,
+                'user_id' => $user->id,
+                'action' => 'update',
+                'description' => $user->name . ' actualizó el contenedor ' . $container->name,
             ]);
 
             return response()->json([
@@ -365,6 +397,21 @@ class ContainerController extends Controller
             }
 
             $container->update(['is_active' => false]);
+
+            $organizationId = null;
+            if ($container->group_id) {
+                $group = Group::find($container->group_id);
+                $organizationId = $group ? $group->id_organizacion : null;
+            }
+
+            OrganizationActivity::create([
+                'organization_id' => $organizationId,
+                'group_id' => $container->group_id,
+                'container_id' => $container->id,
+                'user_id' => $user->id,
+                'action' => 'delete',
+                'description' => $user->name . ' eliminó el contenedor ' . $container->name,
+            ]);
 
             return response()->json([
                 'success' => true,

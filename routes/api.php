@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AnalyzerController;
 use App\Http\Controllers\DriveController;
 use App\Http\Controllers\PendingRecordingController;
+use App\Http\Controllers\OrganizationActivityController;
 
 /*
 |--------------------------------------------------------------------------
@@ -29,3 +30,6 @@ Route::post('/drive/upload-pending-audio', [DriveController::class, 'uploadPendi
 
 Route::get('/pending-recordings/{pendingRecording}', [PendingRecordingController::class, 'show'])
     ->middleware('auth:sanctum');
+
+Route::get('/organization-activities', [OrganizationActivityController::class, 'index'])
+    ->middleware(['web', 'auth']);
