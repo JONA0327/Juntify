@@ -104,6 +104,11 @@
                                     class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
                                 Permisos
                             </button>
+                            <button @click="mainTab = 'activity'"
+                                    :class="mainTab === 'activity' ? 'bg-yellow-400 text-slate-900' : 'text-slate-400 hover:text-slate-200'"
+                                    class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
+                                Actividad
+                            </button>
                         </nav>
                     </div>
 
@@ -293,6 +298,20 @@
                                         Ir a crear grupos
                                     </button>
                                 </div>
+                            </div>
+
+                            <!-- Pestaña Actividad -->
+                            <div x-show="mainTab === 'activity'" x-transition x-init="activities[org.id] || loadActivities(org.id)">
+                                <h3 class="text-2xl font-bold text-slate-200 mb-4">Actividad reciente</h3>
+                                <ul>
+                                    <template x-for="activity in activities[org.id] || []" :key="activity.id">
+                                        <li class="py-2 border-b border-slate-700/50">
+                                            <span class="text-yellow-400 font-semibold" x-text="activity.actor"></span>
+                                            <span class="ml-2" x-text="activity.action"></span>
+                                        </li>
+                                    </template>
+                                    <li x-show="!activities[org.id] || activities[org.id].length === 0" class="text-slate-400">Sin actividad registrada</li>
+                                </ul>
                             </div>
                         </div>
                     </template>

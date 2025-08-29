@@ -88,10 +88,23 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     isErrorModal: false, // Nueva variable para distinguir entre éxito y error
     userId: null, // Se inicializará en init()
     activeTab: 'contenedores', // Cambiar tab por defecto a contenedores
+    activities: {},
     isOwner: false,
 
     canManageContainers() {
         return this.currentGroup?.user_role !== 'invitado';
+    },
+
+    async loadActivities(orgId) {
+        try {
+            const response = await fetch(`/api/organization-activities?organization_id=${orgId}`);
+            if (response.ok) {
+                const data = await response.json();
+                this.activities[orgId] = data.activities;
+            }
+        } catch (error) {
+            console.error('Error loading activities:', error);
+        }
     },
 
     // Método de inicialización para resetear estados
