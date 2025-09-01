@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\GoogleToken;
+use App\Models\UserApiKey;
 
 class User extends Authenticatable
 {
@@ -42,6 +43,11 @@ class User extends Authenticatable
     public function googleToken(): HasOne
     {
         return $this->hasOne(GoogleToken::class, 'username', 'username');
+    }
+
+    public function apiKey(): HasOne
+    {
+        return $this->hasOne(UserApiKey::class);
     }
 
     public function organization(): BelongsTo
