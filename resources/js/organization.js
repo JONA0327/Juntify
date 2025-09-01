@@ -99,6 +99,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     alertMessage: '',
     alertType: 'success',
     alertTimeout: null,
+    apiKey: '',
+    apiKeyVisible: false,
+    isRegeneratingApiKey: false,
+    isApiKeyLoading: false,
 
     canManageContainers() {
         // Backend may return current_user_role; also allow org owner
@@ -120,6 +124,47 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             console.error('Error loading activities:', error);
             this.activities[orgId] = [];
         }
+    },
+
+    async fetchApiKey() {
+        this.isApiKeyLoading = true;
+        try {
+            const response = await fetch('/api/user/api-key');
+            if (response.ok) {
+                const data = await response.json();
+                this.apiKey = data.api_key;
+            }
+        } catch (error) {
+            console.error('Error fetching API key:', error);
+        } finally {
+            this.isApiKeyLoading = false;
+        }
+    },
+
+    async regenerateApiKey() {
+        if (this.isRegeneratingApiKey) return;
+        this.isRegeneratingApiKey = true;
+        try {
+            const response = await fetch('/api/user/api-key', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json'
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                this.apiKey = data.api_key;
+            }
+        } catch (error) {
+            console.error('Error regenerating API key:', error);
+        } finally {
+            this.isRegeneratingApiKey = false;
+        }
+    },
+
+    toggleApiKeyVisibility() {
+        this.apiKeyVisible = !this.apiKeyVisible;
     },
 
     // Método de inicialización para resetear estados
@@ -147,6 +192,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             console.log('Estado de organización reiniciado');
         }
         // Asegurar que cada organización solo contenga grupos asociados al usuario actual
+        this.fetchApiKey();
         this.organizations = this.filterOrgGroups(this.organizations);
     },
     openConfirmDeleteGroup(org, group) {
