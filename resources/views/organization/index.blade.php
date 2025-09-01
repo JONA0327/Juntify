@@ -307,7 +307,8 @@
                                     <template x-for="activity in activities?.[org.id] ?? []" :key="activity.id">
                                         <li class="py-2 border-b border-slate-700/50">
                                             <span class="text-yellow-400 font-semibold" x-text="activity.actor"></span>
-                                            <span class="ml-2" x-text="activity.action"></span>
+                                            <span class="ml-2" x-text="activity.description"></span>
+                                            <span class="ml-2 text-slate-400 text-sm" x-text="activity.created_at"></span>
                                         </li>
                                     </template>
                                     <li x-show="!(activities?.[org.id]?.length)" class="text-slate-400">Sin actividad registrada</li>
