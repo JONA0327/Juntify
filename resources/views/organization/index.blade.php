@@ -629,7 +629,7 @@
                                     <div class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 hover:bg-slate-700/50 transition-colors">
                                         <h4 class="font-semibold text-yellow-400 mb-2">
                                             <span x-text="container.name"></span>
-                                            <span class="company-badge ml-2" x-show="container.is_company">Empresa</span>
+                                            <span class="company-badge ml-2" x-show="container.group_name" x-text="container.group_name"></span>
                                         </h4>
                                         <p class="text-sm text-slate-300 mb-3" x-text="container.description"></p>
                                         <div class="flex justify-between items-center text-xs text-slate-400 mb-3">

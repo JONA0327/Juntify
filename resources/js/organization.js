@@ -424,10 +424,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 throw new Error(`Error loading containers: ${response.status}`);
             }
             const data = await response.json();
-            // Ensure each container keeps the is_company flag
+            // Ensure each container keeps the is_company flag and group name
             this.currentGroup.containers = (data.containers || []).map(c => ({
                 ...c,
-                is_company: c.is_company ?? true
+                is_company: c.is_company ?? true,
+                group_name: c.group_name ?? null
             }));
             debugLog('Containers loaded:', this.currentGroup.containers);
         } catch (error) {
@@ -1248,7 +1249,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 }
                 this.currentGroup.containers.push({
                     ...container.container,
-                    is_company: container.container.is_company ?? true
+                    is_company: container.container.is_company ?? true,
+                    group_name: container.container.group_name ?? null
                 });
 
                 this.showCreateContainerModal = false;
@@ -1295,6 +1297,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 this.selectedContainer = {
                     ...container,
                     is_company: container.is_company ?? false,
+                    group_name: container.group_name ?? null,
                     meetings: data.meetings || []
                 };
                 this.showContainerMeetingsModal = true;
@@ -1376,7 +1379,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                         ...this.currentGroup.containers[index],
                         name: this.editContainer.name,
                         description: this.editContainer.description,
-                        is_company: this.currentGroup.containers[index].is_company
+                        is_company: this.currentGroup.containers[index].is_company,
+                        group_name: this.currentGroup.containers[index].group_name
                     };
                 }
 
