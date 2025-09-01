@@ -38,6 +38,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
     Route::get('/reuniones', [MeetingController::class, 'index'])->name('reuniones.index');
     Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
+    Route::get('/organization/api-guide', function () {
+        return view('organization.api-guide');
+    })->name('organization.api-guide');
 
     // Rutas de Organizaciones
     Route::get('/api/organizations', [OrganizationController::class, 'index'])->name('api.organizations.index');

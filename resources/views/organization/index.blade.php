@@ -110,6 +110,11 @@
                                     class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
                                 Actividad
                             </button>
+                            <button @click="mainTab = 'config'"
+                                    :class="mainTab === 'config' ? 'bg-yellow-400 text-slate-900' : 'text-slate-400 hover:text-slate-200'"
+                                    class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
+                                Configuración
+                            </button>
                         </nav>
                     </div>
 
@@ -314,6 +319,22 @@
                                     </template>
                                     <li x-show="!(activities?.[org.id]?.length)" class="text-slate-400">Sin actividad registrada</li>
                                 </ul>
+                            </div>
+                            <!-- Pestaña Configuración -->
+                            <div x-show="mainTab === 'config'" x-transition>
+                                <h3 class="text-2xl font-bold text-slate-200 mb-4">API de Organizaciones</h3>
+                                <p class="mb-2">Ejemplos de consultas:</p>
+                                <pre class="bg-slate-700/50 p-4 rounded-lg overflow-auto text-sm">
+GET {{ route('api.organizations.index') }}
+POST {{ route('api.organizations.store') }}
+PATCH {{ url('/api/organizations/{id}') }}
+GET {{ url('/api/groups/{id}') }}
+                                </pre>
+                                <p class="text-slate-400 mt-2">Recuerda enviar el encabezado Authorization: Bearer &lt;token&gt;</p>
+                                <a href="{{ route('organization.api-guide') }}"
+                                   class="inline-block mt-4 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                    Ver guía completa
+                                </a>
                             </div>
                         </div>
                     </template>
