@@ -64,7 +64,8 @@ class ContainerController extends Controller
         try {
             $user = Auth::user();
 
-            $containers = MeetingContentContainer::where('username', $user->username)
+            $containers = MeetingContentContainer::with('group')
+                ->where('username', $user->username)
                 ->where('is_active', true)
                 ->orderBy('created_at', 'desc')
                 ->get()
@@ -76,6 +77,7 @@ class ContainerController extends Controller
                         'created_at' => $container->created_at->format('d/m/Y H:i'),
                         'meetings_count' => $container->meetingRelations()->count(),
                         'is_company' => $container->group_id !== null,
+                        'group_name' => $container->group->nombre_grupo ?? null,
                     ];
                 });
 
@@ -118,6 +120,7 @@ class ContainerController extends Controller
                 'is_active' => true,
             ]);
 
+            $group = null;
             $organizationId = null;
             if ($container->group_id) {
                 $group = Group::find($container->group_id);
@@ -143,6 +146,7 @@ class ContainerController extends Controller
                     'created_at' => $container->created_at->format('d/m/Y H:i'),
                     'meetings_count' => 0,
                     'is_company' => $container->group_id !== null,
+                    'group_name' => $group->nombre_grupo ?? null,
                 ]
             ]);
 
@@ -187,6 +191,7 @@ class ContainerController extends Controller
             ]);
 
             $organizationId = null;
+            $group = null;
             if ($container->group_id) {
                 $group = Group::find($container->group_id);
                 $organizationId = $group ? $group->id_organizacion : null;
@@ -210,6 +215,8 @@ class ContainerController extends Controller
                     'description' => $container->description,
                     'created_at' => $container->created_at->format('d/m/Y H:i'),
                     'meetings_count' => $container->meetingRelations()->count(),
+                    'is_company' => $container->group_id !== null,
+                    'group_name' => $group->nombre_grupo ?? null,
                 ]
             ]);
 
@@ -331,7 +338,8 @@ class ContainerController extends Controller
             Log::info("Getting container meetings for container ID: {$id}, user: {$user->username}");
 
             // Verificar que el contenedor pertenece al usuario
-            $container = MeetingContentContainer::where('id', $id)
+            $container = MeetingContentContainer::with('group')
+                ->where('id', $id)
                 ->where('username', $user->username)
                 ->where('is_active', true)
                 ->firstOrFail();
@@ -364,6 +372,7 @@ class ContainerController extends Controller
                     'name' => $container->name,
                     'description' => $container->description,
                     'is_company' => $container->group_id !== null,
+                    'group_name' => $container->group->nombre_grupo ?? null,
                 ],
                 'meetings' => $meetings,
             ];
