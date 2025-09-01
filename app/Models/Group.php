@@ -22,6 +22,18 @@ class Group extends Model
         'miembros' => 'integer',
     ];
 
+    protected static function booted()
+    {
+        static::deleting(function ($group) {
+            foreach ($group->containers as $container) {
+                $container->meetingRelations()->delete();
+                $container->delete();
+            }
+            $group->code()->delete();
+            $group->users()->detach();
+        });
+    }
+
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class, 'id_organizacion');
