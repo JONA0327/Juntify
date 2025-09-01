@@ -428,23 +428,24 @@ class GroupController extends Controller
             abort(403, 'No tienes permisos para eliminar este grupo');
         }
 
-        $groupUsers = $group->users()->pluck('users.id');
-        $group->users()->detach();
         $groupName = $group->nombre_grupo;
         $groupId = $group->id;
         $organizationId = $group->id_organizacion;
-        $group->delete();
-        $organization->refreshMemberCount();
 
-        if ($isOwner || in_array($actorRole, ['colaborador', 'administrador'])) {
-            OrganizationActivity::create([
-                'organization_id' => $organizationId,
-                'group_id' => $groupId,
-                'user_id' => $user->id,
-                'action' => 'group_delete',
-                'description' => $user->full_name . ' eliminó el grupo ' . $groupName,
-            ]);
-        }
+        DB::transaction(function () use ($group, $organization, $groupName, $groupId, $organizationId, $user, $isOwner, $actorRole) {
+            $group->delete();
+            $organization->refreshMemberCount();
+
+            if ($isOwner || in_array($actorRole, ['colaborador', 'administrador'])) {
+                OrganizationActivity::create([
+                    'organization_id' => $organizationId,
+                    'group_id' => $groupId,
+                    'user_id' => $user->id,
+                    'action' => 'group_delete',
+                    'description' => $user->full_name . ' eliminó el grupo ' . $groupName,
+                ]);
+            }
+        });
 
         return response()->json(['deleted' => true]);
     }

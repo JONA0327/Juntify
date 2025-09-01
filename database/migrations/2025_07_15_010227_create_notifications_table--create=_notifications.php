@@ -16,6 +16,8 @@ return new class extends Migration
             $table->text('message');
             $table->string('type');
             $table->timestamps();
+            $table->foreign('remitente')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('emisor')->references('id')->on('users')->onDelete('cascade');
         });
     }
     public function down()
