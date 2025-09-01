@@ -4,7 +4,7 @@ use App\Models\Organization;
 use App\Models\Group;
 use App\Models\User;
 
-it('refreshMemberCount counts unique users across groups and updates num_miembros', function () {
+it('refreshMemberCount counts users from organization_user table', function () {
     $organization = Organization::create([
         'nombre_organizacion' => 'Org',
         'descripcion' => 'desc',
@@ -28,9 +28,12 @@ it('refreshMemberCount counts unique users across groups and updates num_miembro
     $user1 = User::factory()->create();
     $user2 = User::factory()->create();
 
-    $group1->users()->attach($user1->id, ['rol' => 'meeting_viewer']);
-    $group1->users()->attach($user2->id, ['rol' => 'meeting_viewer']);
-    $group2->users()->attach($user1->id, ['rol' => 'meeting_viewer']);
+    $organization->users()->attach($user1->id, ['rol' => 'invitado']);
+    $organization->users()->attach($user2->id, ['rol' => 'invitado']);
+
+    $group1->users()->attach($user1->id, ['rol' => 'invitado']);
+    $group1->users()->attach($user2->id, ['rol' => 'invitado']);
+    $group2->users()->attach($user1->id, ['rol' => 'invitado']);
 
     $organization->refreshMemberCount();
 

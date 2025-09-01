@@ -73,7 +73,7 @@ class OrganizationController extends Controller
         }
 
         // Verificar si el usuario ya pertenece a una organización
-        $hasOrganization = Organization::whereHas('groups.users', function($query) use ($user) {
+        $hasOrganization = Organization::whereHas('users', function($query) use ($user) {
             $query->where('users.id', $user->id);
         })->exists();
 
@@ -91,9 +91,12 @@ class OrganizationController extends Controller
         ]);
 
         $organization = Organization::create($validated + [
-            'num_miembros' => 0, // Cambiar a 0 ya que no se crea grupo automático
+            'num_miembros' => 0,
             'admin_id' => $user->id
         ]);
+
+        $organization->users()->attach($user->id, ['rol' => 'administrador']);
+        $organization->refreshMemberCount();
 
         return response()->json($organization, 201);
     }
@@ -104,7 +107,7 @@ class OrganizationController extends Controller
         $user = $request->user();
 
         // Verificar si el usuario ya pertenece a alguna organización
-        $alreadyMember = Organization::whereHas('groups.users', function($query) use ($user) {
+        $alreadyMember = Organization::whereHas('users', function($query) use ($user) {
             $query->where('users.id', $user->id);
         })->exists();
 
@@ -124,7 +127,8 @@ class OrganizationController extends Controller
 
         // Agregar usuario al grupo principal con rol invitado por defecto
         $mainGroup->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
-        $organization->increment('num_miembros');
+        $organization->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
+        $organization->refreshMemberCount();
 
         OrganizationActivity::create([
             'organization_id' => $organization->id,
@@ -146,7 +150,7 @@ class OrganizationController extends Controller
         }
 
         // Obtener todas las organizaciones del usuario
-        $organizations = Organization::whereHas('groups.users', function($query) use ($user) {
+        $organizations = Organization::whereHas('users', function($query) use ($user) {
             $query->where('users.id', $user->id);
         })->get();
 
@@ -164,7 +168,7 @@ class OrganizationController extends Controller
                 $group->update(['miembros' => $group->users()->count()]);
             }
 
-            // Actualizar contador de miembros de la organización
+            $organization->users()->detach($user->id);
             $organization->refreshMemberCount();
         }
 

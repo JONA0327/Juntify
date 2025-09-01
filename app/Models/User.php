@@ -49,15 +49,11 @@ class User extends Authenticatable
         return $this->belongsTo(Organization::class, 'current_organization_id');
     }
 
-    public function organizations()
+    public function organizations(): BelongsToMany
     {
-        // Obtener organizaciones a través de los grupos del usuario
-        return Organization::whereIn('id', function($query) {
-            $query->select('groups.id_organizacion')
-                  ->from('groups')
-                  ->join('group_user', 'groups.id', '=', 'group_user.id_grupo')
-                  ->where('group_user.user_id', $this->id);
-        });
+        return $this->belongsToMany(Organization::class, 'organization_user', 'user_id', 'organization_id')
+                    ->withPivot('rol')
+                    ->withTimestamps();
     }
 
     public function groups(): BelongsToMany
