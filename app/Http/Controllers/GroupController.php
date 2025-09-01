@@ -7,6 +7,7 @@ use App\Models\Group;
 use App\Models\Notification;
 use App\Models\User;
 use App\Models\Organization;
+use App\Models\OrganizationActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -48,6 +49,16 @@ class GroupController extends Controller
         $creatorRole = $isOwner ? 'administrador' : 'colaborador';
         $group->users()->attach($user->id, ['rol' => $creatorRole]);
         $group->organization->refreshMemberCount();
+
+        if (in_array($creatorRole, ['administrador', 'colaborador'])) {
+            OrganizationActivity::create([
+                'organization_id' => $group->id_organizacion,
+                'group_id' => $group->id,
+                'user_id' => $user->id,
+                'action' => 'group_create',
+                'description' => $user->full_name . ' creó el grupo ' . $group->nombre_grupo,
+            ]);
+        }
 
         // Generar código de 6 dígitos único para el grupo
         if (!$group->code) {
@@ -103,6 +114,19 @@ class GroupController extends Controller
         ]);
 
         $group->update($validated);
+
+        $membership = $group->users()->where('users.id', $user->id)->first();
+        $userRole = $membership ? $membership->pivot->rol : null;
+
+        if (in_array($userRole, ['administrador', 'colaborador'])) {
+            OrganizationActivity::create([
+                'organization_id' => $group->id_organizacion,
+                'group_id' => $group->id,
+                'user_id' => $user->id,
+                'action' => 'group_update',
+                'description' => $user->full_name . ' actualizó el grupo ' . $group->nombre_grupo,
+            ]);
+        }
 
         return response()->json($group->fresh());
     }
@@ -359,8 +383,21 @@ class GroupController extends Controller
         }
 
         $group->users()->detach();
+        $groupName = $group->nombre_grupo;
+        $groupId = $group->id;
+        $organizationId = $group->id_organizacion;
         $group->delete();
         $organization->refreshMemberCount();
+
+        if ($isOwner || in_array($actorRole, ['colaborador', 'administrador'])) {
+            OrganizationActivity::create([
+                'organization_id' => $organizationId,
+                'group_id' => $groupId,
+                'user_id' => $user->id,
+                'action' => 'group_delete',
+                'description' => $user->full_name . ' eliminó el grupo ' . $groupName,
+            ]);
+        }
 
         return response()->json(['deleted' => true]);
     }
