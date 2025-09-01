@@ -78,28 +78,24 @@ class GroupController extends Controller
     {
         try {
             $user = auth()->user();
-            if (!$user || in_array($user->roles, ['free', 'basic'])) {
+            if (!$user) {
                 return response()->json(['message' => 'No autorizado'], 403);
+            }
+
+            $membership = $group->users()->where('users.id', $user->id)->first();
+            $isOrgOwner = $group->organization && $group->organization->admin_id === $user->id;
+            $roleAllowed = $membership && in_array($membership->pivot->rol, ['invitado', 'colaborador', 'administrador']);
+
+            if (!($isOrgOwner || $roleAllowed)) {
+                return response()->json(['message' => 'No tienes permisos para ver este grupo'], 403);
             }
 
             $group->load(['organization', 'users', 'containers' => function($q) {
                 $q->where('is_active', true)->orderBy('created_at', 'desc');
             }]);
 
-            // Verificar que el usuario tenga permisos para ver el grupo
-            $isOrgOwner = $group->organization && $group->organization->admin_id === $user->id;
-            $isMember = $group->users->contains('id', $user->id);
-
-            if (!$isOrgOwner && !$isMember) {
-                return response()->json(['message' => 'No tienes permisos para ver este grupo'], 403);
-            }
-
-            // Agregar información del rol del usuario actual en el grupo
-            $currentUserInGroup = $group->users->firstWhere('id', $user->id);
-            $group->current_user_role = $currentUserInGroup ? $currentUserInGroup->pivot->rol : null;
-
-            // Agregar información de si el usuario es owner de la organización
-            $group->organization_is_owner = $group->organization && $group->organization->admin_id === $user->id;
+            $group->current_user_role = $membership ? $membership->pivot->rol : null;
+            $group->organization_is_owner = $isOrgOwner;
 
             return response()->json($group);
         } catch (\Throwable $e) {
@@ -471,19 +467,19 @@ class GroupController extends Controller
     public function getContainers(Group $group)
     {
         $user = auth()->user();
-        if (!$user || in_array($user->roles, ['free', 'basic'])) {
+        if (!$user) {
             abort(403);
         }
 
-        // Verificar acceso: miembro del grupo (cualquier rol, incluso invitado) o dueño de la organización
-        $isMember = $group->users()->where('user_id', $user->id)->exists();
+        $membership = $group->users()->where('users.id', $user->id)->first();
         $isOrgOwner = optional($group->organization)->admin_id === $user->id;
-        if (!($isMember || $isOrgOwner)) {
+        $roleAllowed = $membership && in_array($membership->pivot->rol, ['invitado', 'colaborador', 'administrador']);
+        if (!($isOrgOwner || $roleAllowed)) {
             abort(403, 'No tienes acceso a este grupo');
         }
 
-    $containers = $group->containers()
-        ->with('group')
+        $containers = $group->containers()
+            ->with('group')
             ->where('is_active', true)
             ->orderBy('created_at', 'desc')
             ->get()
@@ -494,8 +490,8 @@ class GroupController extends Controller
                     'description' => $container->description,
                     'created_at' => $container->created_at->format('d/m/Y H:i'),
                     'meetings_count' => $container->meetingRelations()->count(),
-            'is_company' => true,
-            'group_name' => $container->group->nombre_grupo ?? null,
+                    'is_company' => true,
+                    'group_name' => $container->group->nombre_grupo ?? null,
                 ];
             });
 
