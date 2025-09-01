@@ -379,6 +379,7 @@ class GroupController extends Controller
         }
 
         $containers = $group->containers()
+            ->with('group')
             ->where('is_active', true)
             ->orderBy('created_at', 'desc')
             ->get()
@@ -389,6 +390,7 @@ class GroupController extends Controller
                     'description' => $container->description,
                     'created_at' => $container->created_at->format('d/m/Y H:i'),
                     'meetings_count' => $container->meetingRelations()->count(),
+                    'group_name' => $container->group->nombre_grupo ?? null,
                 ];
             });
 
