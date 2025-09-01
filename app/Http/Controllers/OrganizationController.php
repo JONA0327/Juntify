@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Organization;
 use App\Models\Group;
+use App\Models\OrganizationActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -124,6 +125,15 @@ class OrganizationController extends Controller
         // Agregar usuario al grupo principal con rol invitado por defecto
         $mainGroup->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
         $organization->increment('num_miembros');
+
+        OrganizationActivity::create([
+            'organization_id' => $organization->id,
+            'group_id' => $mainGroup->id,
+            'user_id' => $user->id,
+            'target_user_id' => $user->id,
+            'action' => 'join_org',
+            'description' => $user->full_name . ' se unió a la organización',
+        ]);
 
         return response()->json(['joined' => true]);
     }

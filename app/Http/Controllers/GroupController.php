@@ -161,6 +161,15 @@ class GroupController extends Controller
         if (!$group->users()->where('users.id', $user->id)->exists()) {
             $group->users()->attach($user->id, ['rol' => 'invitado']);
             $group->increment('miembros');
+
+            OrganizationActivity::create([
+                'organization_id' => $group->id_organizacion,
+                'group_id' => $group->id,
+                'user_id' => $user->id,
+                'target_user_id' => $user->id,
+                'action' => 'join_group',
+                'description' => $user->full_name . ' se unió al grupo ' . $group->nombre_grupo,
+            ]);
         }
 
         $organization = $group->organization;
@@ -258,6 +267,15 @@ class GroupController extends Controller
                     'group_id' => $group->id
                 ]);
 
+                OrganizationActivity::create([
+                    'organization_id' => $group->id_organizacion,
+                    'group_id' => $group->id,
+                    'user_id' => $user->id,
+                    'target_user_id' => $targetUser->id,
+                    'action' => 'invite_user',
+                    'description' => $user->full_name . ' invitó al correo ' . $validated['email'],
+                ]);
+
                 return response()->json([
                     'success' => true,
                     'type' => 'notification',
@@ -275,6 +293,15 @@ class GroupController extends Controller
 
                 // Aquí puedes implementar el envío de email
                 // Mail::to($validated['email'])->send(new GroupInvitation($code, $group->id));
+
+                OrganizationActivity::create([
+                    'organization_id' => $group->id_organizacion,
+                    'group_id' => $group->id,
+                    'user_id' => $user->id,
+                    'target_user_id' => $targetUser?->id,
+                    'action' => 'invite_user',
+                    'description' => $user->full_name . ' invitó al correo ' . $validated['email'],
+                ]);
 
                 return response()->json([
                     'success' => true,
@@ -314,6 +341,15 @@ class GroupController extends Controller
         Notification::where('emisor', $user->id)
             ->where('type', 'group_invitation')
             ->delete();
+
+        OrganizationActivity::create([
+            'organization_id' => $group->id_organizacion,
+            'group_id' => $group->id,
+            'user_id' => $user->id,
+            'target_user_id' => $user->id,
+            'action' => 'join_group',
+            'description' => $user->full_name . ' se unió al grupo ' . $group->nombre_grupo,
+        ]);
 
         $group->load('users');
 
