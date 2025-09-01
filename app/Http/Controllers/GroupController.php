@@ -398,6 +398,16 @@ class GroupController extends Controller
 
         $group->users()->detach($user->id);
         $group->update(['miembros' => $group->users()->count()]);
+        $org->refreshMemberCount();
+
+        OrganizationActivity::create([
+            'organization_id' => $group->id_organizacion,
+            'group_id' => $group->id,
+            'user_id' => $actor->id,
+            'target_user_id' => $user->id,
+            'action' => 'remove_member',
+            'description' => $actor->full_name . ' expulsó a ' . $user->full_name . ' del grupo ' . $group->nombre_grupo,
+        ]);
 
         return response()->json(['removed' => true]);
     }
