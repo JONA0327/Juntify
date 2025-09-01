@@ -90,6 +90,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     activeTab: 'contenedores', // Cambiar tab por defecto a contenedores
     activities: {},
     isOwner: false,
+    showAlert: false,
+    alertMessage: '',
+    alertType: 'success',
+    alertTimeout: null,
 
     canManageContainers() {
         // Backend may return current_user_role; also allow org owner
@@ -200,13 +204,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 this.preview = null;
 
                 // Mostrar mensaje de éxito
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                notification.textContent = 'Organización creada exitosamente';
-                document.body.appendChild(notification);
-                setTimeout(() => {
-                    document.body.removeChild(notification);
-                }, 3000);
+                this.showStatus('Organización creada exitosamente');
             } else {
                 const errorData = await response.json();
                 alert(errorData.message || 'Error al crear la organización');
@@ -258,10 +256,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 const updated = await response.json();
 
                 // Mostrar mensaje de éxito
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                notification.textContent = 'Organización actualizada exitosamente';
-                document.body.appendChild(notification);
+                this.showStatus('Organización actualizada exitosamente');
 
                 // Recargar la página después de un breve delay
                 setTimeout(() => {
@@ -324,10 +319,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 const updated = await response.json();
 
                 // Mostrar mensaje de éxito
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                notification.textContent = 'Grupo actualizado exitosamente';
-                document.body.appendChild(notification);
+                this.showStatus('Grupo actualizado exitosamente');
 
                 // Recargar la página después de un breve delay
                 setTimeout(() => {
@@ -404,16 +396,18 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
 
-    showError(message) {
-        const notification = document.createElement('div');
-        notification.className = 'fixed top-4 right-4 bg-red-500 text-white p-3 rounded-lg shadow-lg z-50';
-        notification.textContent = message;
-        document.body.appendChild(notification);
-        setTimeout(() => {
-            if (document.body.contains(notification)) {
-                document.body.removeChild(notification);
-            }
-        }, 4000);
+    showStatus(message, type = 'success') {
+        this.alertMessage = message;
+        this.alertType = type;
+        this.showAlert = true;
+        clearTimeout(this.alertTimeout);
+        this.alertTimeout = setTimeout(() => {
+            this.hideStatus();
+        }, 3000);
+    },
+    hideStatus() {
+        this.showAlert = false;
+        this.alertMessage = '';
     },
 
     async loadGroupContainers(groupId) {
@@ -458,10 +452,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 const group = await response.json();
 
                 // Mostrar mensaje de éxito
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                notification.textContent = 'Grupo creado exitosamente';
-                document.body.appendChild(notification);
+                this.showStatus('Grupo creado exitosamente');
 
                 // Recargar la página después de un breve delay
                 setTimeout(() => {
@@ -667,13 +658,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
             this.inviteCode = '';
 
-            const notification = document.createElement('div');
-            notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-            notification.textContent = 'Te has unido a la organización exitosamente';
-            document.body.appendChild(notification);
-            setTimeout(() => {
-                document.body.removeChild(notification);
-            }, 3000);
+            this.showStatus('Te has unido a la organización exitosamente');
         } catch (error) {
             console.error('Error joining organization:', error);
             alert('Hubo un problema al unirse a la organización');
@@ -872,14 +857,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
             if (response.ok) {
                 // Mostrar mensaje de éxito
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                notification.textContent = 'Rol actualizado correctamente';
-                document.body.appendChild(notification);
-
-                setTimeout(() => {
-                    document.body.removeChild(notification);
-                }, 3000);
+                this.showStatus('Rol actualizado correctamente');
             } else {
                 throw new Error('Error al actualizar el rol');
             }
@@ -907,14 +885,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 await this.refreshGroupData(groupId);
 
                 // Mostrar mensaje de éxito
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                notification.textContent = 'Miembro removido correctamente';
-                document.body.appendChild(notification);
-
-                setTimeout(() => {
-                    document.body.removeChild(notification);
-                }, 3000);
+                this.showStatus('Miembro removido correctamente');
             } else {
                 throw new Error('Error al remover el miembro');
             }
@@ -1160,10 +1131,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     const updatedGroup = await response.json();
 
                     // Mostrar mensaje de éxito
-                    const notification = document.createElement('div');
-                    notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                    notification.textContent = 'Grupo actualizado exitosamente';
-                    document.body.appendChild(notification);
+                    this.showStatus('Grupo actualizado exitosamente');
 
                     // Recargar la página después de un breve delay
                     setTimeout(() => {
@@ -1257,13 +1225,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 this.newContainer = { name: '', description: '' };
 
                 // Mostrar mensaje de éxito
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                notification.textContent = 'Contenedor creado exitosamente';
-                document.body.appendChild(notification);
-                setTimeout(() => {
-                    document.body.removeChild(notification);
-                }, 3000);
+                this.showStatus('Contenedor creado exitosamente');
             } else {
                 let msg = 'Error al crear el contenedor';
                 try {
@@ -1387,13 +1349,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 this.showEditContainerModal = false;
 
                 // Mostrar mensaje de éxito
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                notification.textContent = 'Contenedor actualizado exitosamente';
-                document.body.appendChild(notification);
-                setTimeout(() => {
-                    document.body.removeChild(notification);
-                }, 3000);
+                this.showStatus('Contenedor actualizado exitosamente');
             } else {
                 const errorData = await response.json();
                 alert(errorData.message || 'Error al actualizar el contenedor');
@@ -1429,13 +1385,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 }
 
                 // Mostrar mensaje de éxito
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-lg z-50';
-                notification.textContent = 'Contenedor eliminado exitosamente';
-                document.body.appendChild(notification);
-                setTimeout(() => {
-                    document.body.removeChild(notification);
-                }, 3000);
+                this.showStatus('Contenedor eliminado exitosamente');
             } else {
                 const errorData = await response.json();
                 alert(errorData.message || 'Error al eliminar el contenedor');
