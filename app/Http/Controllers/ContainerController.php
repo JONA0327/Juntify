@@ -261,6 +261,21 @@ class ContainerController extends Controller
             'meeting_id' => $meeting->id,
         ]);
 
+        $organizationId = null;
+        if ($container->group_id) {
+            $group = Group::find($container->group_id);
+            $organizationId = $group ? $group->id_organizacion : null;
+        }
+
+        OrganizationActivity::create([
+            'organization_id' => $organizationId,
+            'group_id' => $container->group_id,
+            'container_id' => $container->id,
+            'user_id' => $user->id,
+            'action' => 'add_meeting_to_container',
+            'description' => $user->name . ' agregó la reunión ' . $meeting->meeting_name . ' al contenedor ' . $container->name,
+        ]);
+
         return response()->json(['success' => true]);
     }
 
@@ -283,6 +298,21 @@ class ContainerController extends Controller
             MeetingContentRelation::where('container_id', $container->id)
                 ->where('meeting_id', $meeting->id)
                 ->delete();
+
+            $organizationId = null;
+            if ($container->group_id) {
+                $group = Group::find($container->group_id);
+                $organizationId = $group ? $group->id_organizacion : null;
+            }
+
+            OrganizationActivity::create([
+                'organization_id' => $organizationId,
+                'group_id' => $container->group_id,
+                'container_id' => $container->id,
+                'user_id' => $user->id,
+                'action' => 'remove_meeting_from_container',
+                'description' => $user->name . ' eliminó la reunión ' . $meeting->meeting_name . ' del contenedor ' . $container->name,
+            ]);
 
             return response()->json([
                 'success' => true,
