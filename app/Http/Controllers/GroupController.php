@@ -428,6 +428,7 @@ class GroupController extends Controller
             abort(403, 'No tienes permisos para eliminar este grupo');
         }
 
+        $groupUsers = $group->users()->pluck('users.id');
         $group->users()->detach();
         $groupName = $group->nombre_grupo;
         $groupId = $group->id;

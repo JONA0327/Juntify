@@ -30,17 +30,16 @@ class Organization extends Model
         return $this->belongsTo(User::class, 'admin_id');
     }
 
-    public function users()
+    public function users(): BelongsToMany
     {
-        // Obtener usuarios a través de los grupos de la organización
-        return User::whereHas('groups', function($query) {
-            $query->where('id_organizacion', $this->id);
-        });
+        return $this->belongsToMany(User::class, 'organization_user', 'organization_id', 'user_id')
+                    ->withPivot('rol')
+                    ->withTimestamps();
     }
 
     public function refreshMemberCount(): int
     {
-        $count = $this->users()->distinct()->count('users.id');
+        $count = $this->users()->count();
         $this->update(['num_miembros' => $count]);
 
         return $count;
