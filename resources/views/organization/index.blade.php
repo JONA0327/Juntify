@@ -38,7 +38,7 @@
                      @click.self="closeSuccessModal()"
                      @keydown.escape.window="closeSuccessModal()"
                      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
-                    <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+                    <div class="organization-modal p-6 w-full max-w-md text-slate-200 relative z-[61]">
                         <div class="text-center">
                             <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-500/20 mb-4">
                                 <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -319,7 +319,7 @@
 
                 <!-- Modal crear organización -->
                 <div x-show="showOrgModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
-                    <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+                    <div class="organization-modal p-6 w-full max-w-md text-slate-200 relative z-[61]">
                         <h2 class="text-lg font-semibold mb-4">Crear organización</h2>
                         <input type="text" x-model="newOrg.nombre_organizacion" placeholder="Nombre" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
                         <textarea x-model="newOrg.descripcion" placeholder="Descripción (opcional)" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
@@ -424,7 +424,7 @@
                 </div>
 
                 <!-- Modal crear contenedor -->
-                <div x-show="showCreateContainerModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                <div x-show="showCreateContainerModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-4">Crear Contenedor</h2>
                         <input type="text" x-model="newContainer.name" placeholder="Nombre del contenedor" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
@@ -446,7 +446,7 @@
                 </div>
 
                 <!-- Modal editar contenedor -->
-                <div x-show="showEditContainerModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                <div x-show="showEditContainerModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-4">Editar Contenedor</h2>
                         <input type="text" x-model="editContainer.name" placeholder="Nombre del contenedor" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
@@ -590,7 +590,7 @@
                 </div>
 
                 <!-- Modal información del grupo -->
-                <div @click.self="showGroupInfoModal=false" @keydown.escape.window="showGroupInfoModal=false" class="fixed inset-0 bg-black/50 items-center justify-center z-50" :class="showGroupInfoModal ? 'flex' : 'hidden'" x-cloak x-transition.opacity>
+                <div @click.self="showGroupInfoModal=false" @keydown.escape.window="showGroupInfoModal=false" class="fixed inset-0 bg-black/50 items-center justify-center z-[55]" :class="showGroupInfoModal ? 'flex' : 'hidden'" x-cloak x-transition.opacity>
                     <div class="organization-modal p-6 w-full max-w-4xl text-slate-200" @click.stop>
                         <!-- Header del modal -->
                         <div class="flex items-center justify-between mb-6">

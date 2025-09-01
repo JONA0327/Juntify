@@ -92,8 +92,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     isOwner: false,
 
     canManageContainers() {
-        const role = this.currentGroup?.user_role;
-        return ['administrador', 'colaborador'].includes(role);
+        // Backend may return current_user_role; also allow org owner
+        const role = this.currentGroup?.user_role || this.currentGroup?.current_user_role;
+        const isOwner = !!this.currentGroup?.organization_is_owner;
+        return isOwner || ['administrador', 'colaborador'].includes(role);
     },
 
     async loadActivities(orgId) {
@@ -379,6 +381,14 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
             if (response.ok) {
                 this.currentGroup = await response.json();
+                // Normalize role field for UI checks
+                if (!this.currentGroup.user_role && this.currentGroup.current_user_role) {
+                    this.currentGroup.user_role = this.currentGroup.current_user_role;
+                }
+                if (this.currentGroup.organization_is_owner) {
+                    // owners can manage containers
+                    this.currentGroup.user_role = this.currentGroup.user_role || 'administrador';
+                }
                 await this.loadGroupContainers(group.id);
                 console.log('Group loaded with containers:', this.currentGroup.containers?.length || 0);
             } else {
@@ -1253,8 +1263,15 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     document.body.removeChild(notification);
                 }, 3000);
             } else {
-                const errorData = await response.json();
-                alert(errorData.message || 'Error al crear el contenedor');
+                let msg = 'Error al crear el contenedor';
+                try {
+                    const errorData = await response.json();
+                    msg = errorData.message || msg;
+                } catch {}
+                if (response.status === 403) {
+                    msg = msg || 'No tienes permisos para crear contenedores en este grupo';
+                }
+                this.showError(msg);
             }
         } catch (error) {
             console.error('Error creating container:', error);

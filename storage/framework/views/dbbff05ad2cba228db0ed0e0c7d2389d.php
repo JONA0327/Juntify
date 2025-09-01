@@ -32,13 +32,13 @@
         <?php echo $__env->make('partials.mobile-nav', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
 
         <main class="w-full pl-24 pt-24" style="margin-top:130px;">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" x-data='organizationPage(<?php echo json_encode($organizations, 15, 512) ?>)'>
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" x-data="organizationPage(<?php echo \Illuminate\Support\Js::from($organizations)->toHtml() ?>)">
                 <!-- Modal de Éxito (dentro del scope de Alpine) -->
                 <div x-show="showSuccessModal && successMessage && successMessage.trim() !== ''"
                      @click.self="closeSuccessModal()"
                      @keydown.escape.window="closeSuccessModal()"
                      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
-                    <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+                    <div class="organization-modal p-6 w-full max-w-md text-slate-200 relative z-[61]">
                         <div class="text-center">
                             <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-500/20 mb-4">
                                 <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,6 +103,11 @@
                                     :class="mainTab === 'permissions' ? 'bg-yellow-400 text-slate-900' : 'text-slate-400 hover:text-slate-200'"
                                     class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
                                 Permisos
+                            </button>
+                            <button @click="mainTab = 'activity'"
+                                    :class="mainTab === 'activity' ? 'bg-yellow-400 text-slate-900' : 'text-slate-400 hover:text-slate-200'"
+                                    class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
+                                Actividad
                             </button>
                         </nav>
                     </div>
@@ -294,13 +299,27 @@
                                     </button>
                                 </div>
                             </div>
+
+                            <!-- Pestaña Actividad -->
+                            <div x-show="mainTab === 'activity'" x-transition x-init="if (!activities?.[org.id]) loadActivities(org.id)">
+                                <h3 class="text-2xl font-bold text-slate-200 mb-4">Actividad reciente</h3>
+                                <ul>
+                                    <template x-for="activity in activities?.[org.id] ?? []" :key="activity.id">
+                                        <li class="py-2 border-b border-slate-700/50">
+                                            <span class="text-yellow-400 font-semibold" x-text="activity.actor"></span>
+                                            <span class="ml-2" x-text="activity.action"></span>
+                                        </li>
+                                    </template>
+                                    <li x-show="!(activities?.[org.id]?.length)" class="text-slate-400">Sin actividad registrada</li>
+                                </ul>
+                            </div>
                         </div>
                     </template>
                 </div>
 
                 <!-- Modal crear organización -->
                 <div x-show="showOrgModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
-                    <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+                    <div class="organization-modal p-6 w-full max-w-md text-slate-200 relative z-[61]">
                         <h2 class="text-lg font-semibold mb-4">Crear organización</h2>
                         <input type="text" x-model="newOrg.nombre_organizacion" placeholder="Nombre" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
                         <textarea x-model="newOrg.descripcion" placeholder="Descripción (opcional)" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"></textarea>
@@ -405,7 +424,7 @@
                 </div>
 
                 <!-- Modal crear contenedor -->
-                <div x-show="showCreateContainerModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                <div x-show="showCreateContainerModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-4">Crear Contenedor</h2>
                         <input type="text" x-model="newContainer.name" placeholder="Nombre del contenedor" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
@@ -427,7 +446,7 @@
                 </div>
 
                 <!-- Modal editar contenedor -->
-                <div x-show="showEditContainerModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
+                <div x-show="showEditContainerModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-4">Editar Contenedor</h2>
                         <input type="text" x-model="editContainer.name" placeholder="Nombre del contenedor" class="w-full mb-3 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
@@ -571,7 +590,7 @@
                 </div>
 
                 <!-- Modal información del grupo -->
-                <div @click.self="showGroupInfoModal=false" @keydown.escape.window="showGroupInfoModal=false" class="fixed inset-0 bg-black/50 items-center justify-center z-50" :class="showGroupInfoModal ? 'flex' : 'hidden'" x-cloak x-transition.opacity>
+                <div @click.self="showGroupInfoModal=false" @keydown.escape.window="showGroupInfoModal=false" class="fixed inset-0 bg-black/50 items-center justify-center z-[55]" :class="showGroupInfoModal ? 'flex' : 'hidden'" x-cloak x-transition.opacity>
                     <div class="organization-modal p-6 w-full max-w-4xl text-slate-200" @click.stop>
                         <!-- Header del modal -->
                         <div class="flex items-center justify-between mb-6">
@@ -599,7 +618,7 @@
                             <!-- Botón crear contenedor -->
                             <div class="flex justify-between items-center mb-6">
                                 <h3 class="text-xl font-semibold">Contenedores</h3>
-                                <button @click="openCreateContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                <button x-show="canManageContainers()" @click="openCreateContainerModal()" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
                                     Crear Contenedor
                                 </button>
                             </div>
@@ -608,7 +627,10 @@
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <template x-for="container in currentGroup?.containers || []" :key="container.id">
                                     <div class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 hover:bg-slate-700/50 transition-colors">
-                                        <h4 class="font-semibold text-yellow-400 mb-2" x-text="container.name"></h4>
+                                        <h4 class="font-semibold text-yellow-400 mb-2">
+                                            <span x-text="container.name"></span>
+                                            <span class="company-badge ml-2" x-show="container.is_company">Empresa</span>
+                                        </h4>
                                         <p class="text-sm text-slate-300 mb-3" x-text="container.description"></p>
                                         <div class="flex justify-between items-center text-xs text-slate-400 mb-3">
                                             <span x-text="'Reuniones: ' + (container.meetings_count || 0)"></span>
@@ -621,7 +643,7 @@
                                             <button @click="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition-colors">
                                                 Editar
                                             </button>
-                                            <button @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors">
+                                            <button x-show="canManageContainers()" @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors">
                                                 Eliminar
                                             </button>
                                         </div>
@@ -638,7 +660,7 @@
                                 </div>
                                 <h3 class="text-lg font-semibold text-slate-300 mb-2">No hay contenedores</h3>
                                 <p class="text-slate-400 mb-4">Los contenedores te permiten organizar las reuniones por categorías</p>
-                                <button @click="openCreateContainerModal()" class="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                <button x-show="canManageContainers()" @click="openCreateContainerModal()" class="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
                                     Crear primer contenedor
                                 </button>
                             </div>

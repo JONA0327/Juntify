@@ -34,12 +34,14 @@ class ContainerController extends Controller
                 ->where('user_id', $user->id)
                 ->where('id_grupo', $groupId)
                 ->value('rol');
-            return $role !== 'invitado';
+            // Admite roles nuevos y legados
+            return in_array($role, ['colaborador', 'administrador', 'full_meeting_access'], true);
         }
 
+        // Acciones generales: permitir si tiene algún grupo con rol distinto a invitado
         return DB::table('group_user')
             ->where('user_id', $user->id)
-            ->where('rol', '!=', 'invitado')
+            ->whereIn('rol', ['colaborador', 'administrador', 'full_meeting_access'])
             ->exists();
     }
     /**
@@ -107,7 +109,7 @@ class ContainerController extends Controller
             $user = Auth::user();
 
             if (! $this->userHasContainerPrivileges($user, $validated['group_id'] ?? null)) {
-                return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
+                return response()->json(['success' => false, 'message' => 'No tienes permisos para crear contenedores en este grupo'], 403);
             }
 
             $container = MeetingContentContainer::create([

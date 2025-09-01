@@ -378,7 +378,7 @@ class GroupController extends Controller
             abort(403, 'No tienes acceso a este grupo');
         }
 
-        $containers = $group->containers()
+    $containers = $group->containers()
             ->where('is_active', true)
             ->orderBy('created_at', 'desc')
             ->get()
@@ -389,6 +389,7 @@ class GroupController extends Controller
                     'description' => $container->description,
                     'created_at' => $container->created_at->format('d/m/Y H:i'),
                     'meetings_count' => $container->meetingRelations()->count(),
+            'is_company' => true,
                 ];
             });
 
