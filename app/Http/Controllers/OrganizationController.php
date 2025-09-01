@@ -17,31 +17,60 @@ class OrganizationController extends Controller
             abort(403);
         }
 
-        // Obtener organizaciones del usuario a través de los grupos
-        $organizations = Organization::whereHas('groups', function ($query) use ($user) {
-            $query->whereHas('users', function ($subQuery) use ($user) {
-                $subQuery->where('users.id', $user->id);
-            });
-        })->with([
-            'groups' => function ($query) use ($user) {
+        // Obtener organizaciones del usuario: por pertenencia directa (pivot organization_user)
+        // o por pertenencia a algún grupo de la organización.
+        $organizations = Organization::query()
+            ->whereHas('users', function ($q) use ($user) {
+                $q->where('users.id', $user->id);
+            })
+            ->orWhereHas('groups', function ($query) use ($user) {
                 $query->whereHas('users', function ($subQuery) use ($user) {
                     $subQuery->where('users.id', $user->id);
-                })->with(['users', 'code']);
-            }
-        ])->get();
+                });
+            })
+            ->orWhere('admin_id', $user->id)
+            ->with([
+                // Cargar solo los grupos donde el usuario pertenece (para la UI)
+                'groups' => function ($query) use ($user) {
+                    $query->whereHas('users', function ($subQuery) use ($user) {
+                        $subQuery->where('users.id', $user->id);
+                    })->with(['users', 'code']);
+                },
+                // Cargar relación users filtrada al usuario actual para leer el rol del pivot
+                'users' => function ($q) use ($user) {
+                    $q->where('users.id', $user->id);
+                },
+            ])
+            ->get();
 
         // Marcar si el usuario es propietario de la organización y obtener su rol más alto
         $organizations->each(function ($organization) use ($user) {
-            $organization->is_owner = $organization->admin_id === $user->id;
+            $organization->setAttribute('is_owner', $organization->admin_id === $user->id);
 
-            // Obtener el rol más alto del usuario en esta organización
-            $userRoles = $organization->groups->flatMap->users
-                ->where('id', $user->id)
-                ->pluck('pivot.rol')
-                ->unique();
+            // Intentar obtener rol desde el pivot organization_user primero
+            $orgUser = $organization->users->firstWhere('id', $user->id);
+            $orgPivotRole = $orgUser ? $orgUser->pivot->rol : null;
 
-            $organization->user_role = $userRoles->contains('administrador') ? 'administrador' :
-                                     ($userRoles->contains('colaborador') ? 'colaborador' : 'invitado');
+            if ($orgPivotRole) {
+                $organization->setAttribute('user_role', $orgPivotRole);
+            } else {
+                // Fallback: calcular rol más alto a partir de los grupos
+                $userRoles = $organization->groups->flatMap->users
+                    ->where('id', $user->id)
+                    ->pluck('pivot.rol')
+                    ->unique();
+
+                if ($userRoles->contains('administrador')) {
+                    $organization->setAttribute('user_role', 'administrador');
+                } elseif ($userRoles->contains('colaborador')) {
+                    $organization->setAttribute('user_role', 'colaborador');
+                } elseif ($organization->getAttribute('is_owner')) {
+                    // Si es owner, considérese administrador para efectos de UI/permiso
+                    $organization->setAttribute('user_role', 'administrador');
+                } else {
+                    $organization->setAttribute('user_role', 'invitado');
+                }
+            }
         });
 
         // Verificar si el usuario es solo invitado en todas las organizaciones

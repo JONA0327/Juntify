@@ -76,29 +76,39 @@ class GroupController extends Controller
 
     public function show(Group $group)
     {
-        $user = auth()->user();
-        if (!$user || in_array($user->roles, ['free', 'basic'])) {
-            abort(403);
+        try {
+            $user = auth()->user();
+            if (!$user || in_array($user->roles, ['free', 'basic'])) {
+                return response()->json(['message' => 'No autorizado'], 403);
+            }
+
+            $group->load(['organization', 'users', 'containers' => function($q) {
+                $q->where('is_active', true)->orderBy('created_at', 'desc');
+            }]);
+
+            // Verificar que el usuario tenga permisos para ver el grupo
+            $isOrgOwner = $group->organization && $group->organization->admin_id === $user->id;
+            $isMember = $group->users->contains('id', $user->id);
+
+            if (!$isOrgOwner && !$isMember) {
+                return response()->json(['message' => 'No tienes permisos para ver este grupo'], 403);
+            }
+
+            // Agregar información del rol del usuario actual en el grupo
+            $currentUserInGroup = $group->users->firstWhere('id', $user->id);
+            $group->current_user_role = $currentUserInGroup ? $currentUserInGroup->pivot->rol : null;
+
+            // Agregar información de si el usuario es owner de la organización
+            $group->organization_is_owner = $group->organization && $group->organization->admin_id === $user->id;
+
+            return response()->json($group);
+        } catch (\Throwable $e) {
+            Log::error('Error fetching group', [
+                'group_id' => $group->id ?? null,
+                'message' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'Error interno al cargar el grupo'], 500);
         }
-
-        $group->load(['organization', 'users']);
-
-        // Verificar que el usuario tenga permisos para ver el grupo
-        $isOrgOwner = $group->organization && $group->organization->admin_id === $user->id;
-        $isMember = $group->users->contains('id', $user->id);
-
-        if (!$isOrgOwner && !$isMember) {
-            abort(403, 'No tienes permisos para ver este grupo');
-        }
-
-        // Agregar información del rol del usuario actual en el grupo
-        $currentUserInGroup = $group->users->firstWhere('id', $user->id);
-        $group->current_user_role = $currentUserInGroup ? $currentUserInGroup->pivot->rol : null;
-
-        // Agregar información de si el usuario es owner de la organización
-        $group->organization_is_owner = $group->organization && $group->organization->admin_id === $user->id;
-
-        return response()->json($group);
     }
 
     public function update(Request $request, Group $group)
@@ -419,35 +429,43 @@ class GroupController extends Controller
             abort(403);
         }
 
-        $organization = $group->organization;
-        // Sólo owner o miembros con rol colaborador/administrador pueden eliminar el grupo
-        $isOwner = $organization->admin_id === $user->id;
-        $actorMembership = $group->users()->where('users.id', $user->id)->first();
-        $actorRole = $actorMembership ? $actorMembership->pivot->rol : null;
-        if (!($isOwner || in_array($actorRole, ['colaborador','administrador']))) {
-            abort(403, 'No tienes permisos para eliminar este grupo');
-        }
-
-        $groupName = $group->nombre_grupo;
-        $groupId = $group->id;
-        $organizationId = $group->id_organizacion;
-
-        DB::transaction(function () use ($group, $organization, $groupName, $groupId, $organizationId, $user, $isOwner, $actorRole) {
-            $group->delete();
-            $organization->refreshMemberCount();
-
-            if ($isOwner || in_array($actorRole, ['colaborador', 'administrador'])) {
-                OrganizationActivity::create([
-                    'organization_id' => $organizationId,
-                    'group_id' => $groupId,
-                    'user_id' => $user->id,
-                    'action' => 'group_delete',
-                    'description' => $user->full_name . ' eliminó el grupo ' . $groupName,
-                ]);
+        try {
+            $organization = $group->organization;
+            // Sólo owner o miembros con rol colaborador/administrador pueden eliminar el grupo
+            $isOwner = $organization->admin_id === $user->id;
+            $actorMembership = $group->users()->where('users.id', $user->id)->first();
+            $actorRole = $actorMembership ? $actorMembership->pivot->rol : null;
+            if (!($isOwner || in_array($actorRole, ['colaborador','administrador']))) {
+                return response()->json(['message' => 'No tienes permisos para eliminar este grupo'], 403);
             }
-        });
 
-        return response()->json(['deleted' => true]);
+            $groupName = $group->nombre_grupo;
+            $groupId = $group->id;
+            $organizationId = $group->id_organizacion;
+
+            DB::transaction(function () use ($group, $organization, $groupName, $groupId, $organizationId, $user, $isOwner, $actorRole) {
+                $group->delete();
+                $organization->refreshMemberCount();
+
+                if ($isOwner || in_array($actorRole, ['colaborador', 'administrador'])) {
+                    OrganizationActivity::create([
+                        'organization_id' => $organizationId,
+                        'group_id' => $groupId,
+                        'user_id' => $user->id,
+                        'action' => 'group_delete',
+                        'description' => $user->full_name . ' eliminó el grupo ' . $groupName,
+                    ]);
+                }
+            });
+
+            return response()->json(['deleted' => true]);
+        } catch (\Throwable $e) {
+            Log::error('Error deleting group', [
+                'group_id' => $group->id,
+                'message' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'Error interno al eliminar el grupo'], 500);
+        }
     }
 
     public function getContainers(Group $group)
@@ -457,9 +475,10 @@ class GroupController extends Controller
             abort(403);
         }
 
-        // Verificar que el usuario pertenece al grupo
-        $userInGroup = $group->users()->where('user_id', $user->id)->exists();
-        if (!$userInGroup) {
+        // Verificar acceso: miembro del grupo (cualquier rol, incluso invitado) o dueño de la organización
+        $isMember = $group->users()->where('user_id', $user->id)->exists();
+        $isOrgOwner = optional($group->organization)->admin_id === $user->id;
+        if (!($isMember || $isOrgOwner)) {
             abort(403, 'No tienes acceso a este grupo');
         }
 

@@ -67,8 +67,15 @@ class ContainerController extends Controller
             $user = Auth::user();
 
             $containers = MeetingContentContainer::with('group')
-                ->where('username', $user->username)
                 ->where('is_active', true)
+                ->where(function ($q) use ($user) {
+                    $q->where('username', $user->username)
+                      ->orWhereIn('group_id', function ($sub) use ($user) {
+                          $sub->select('id_grupo')
+                              ->from('group_user')
+                              ->where('user_id', $user->id);
+                      });
+                })
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($container) {
@@ -369,12 +376,32 @@ class ContainerController extends Controller
             $this->setGoogleDriveToken($user);
             Log::info("Getting container meetings for container ID: {$id}, user: {$user->username}");
 
-            // Verificar que el contenedor pertenece al usuario
-            $container = MeetingContentContainer::with('group')
+            // Acceso de lectura a reuniones del contenedor:
+            // - Creador del contenedor (username)
+            // - Miembro del grupo (cualquier rol, incluso invitado)
+            // - Dueño de la organización
+            $container = MeetingContentContainer::with(['group', 'group.organization'])
                 ->where('id', $id)
-                ->where('username', $user->username)
                 ->where('is_active', true)
                 ->firstOrFail();
+
+            $isCreator = $container->username === $user->username;
+            $isMember = $container->group_id
+                ? DB::table('group_user')
+                    ->where('id_grupo', $container->group_id)
+                    ->where('user_id', $user->id)
+                    ->exists()
+                : false;
+            $isOrgOwner = $container->group && $container->group->organization
+                ? $container->group->organization->admin_id === $user->id
+                : false;
+
+            if (!($isCreator || $isMember || $isOrgOwner)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para ver las reuniones de este contenedor'
+                ], 403);
+            }
 
             Log::info("Container found: " . json_encode($container->toArray()));
 

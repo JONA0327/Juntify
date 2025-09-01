@@ -20,6 +20,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     showCreateContainerModal: false, // Nueva variable para modal crear contenedor
     showEditContainerModal: false, // Nueva variable para modal editar contenedor
     showContainerMeetingsModal: false, // Nueva variable para modal ver reuniones del contenedor
+    // Confirmación de borrado de grupo
+    showConfirmDeleteGroupModal: false,
+    groupToDelete: null,
+    orgOfGroupToDelete: null,
+    isDeletingGroup: false,
     selectedContainer: null, // Nueva variable para el contenedor seleccionado
     mainTab: 'organization', // Nueva variable para las pestañas principales
     newOrg: {
@@ -136,12 +141,24 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.isCreatingContainer = false;
         this.isLoadingGroup = false;
         this.isJoining = false;
+    this.isDeletingGroup = false;
 
         if (import.meta.env.DEV) {
             console.log('Estado de organización reiniciado');
         }
         // Asegurar que cada organización solo contenga grupos asociados al usuario actual
         this.organizations = this.filterOrgGroups(this.organizations);
+    },
+    openConfirmDeleteGroup(org, group) {
+        this.orgOfGroupToDelete = org;
+        this.groupToDelete = group;
+        this.showConfirmDeleteGroupModal = true;
+    },
+    closeConfirmDeleteGroup() {
+        this.showConfirmDeleteGroupModal = false;
+        this.groupToDelete = null;
+        this.orgOfGroupToDelete = null;
+        this.isDeletingGroup = false;
     },
 
     // Filtrar grupos de las organizaciones por usuario
@@ -331,21 +348,35 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
     async deleteGroup(org, group) {
+        if (this.isDeletingGroup) return;
+        this.isDeletingGroup = true;
         try {
             const response = await fetch(`/api/groups/${group.id}`, {
                 method: 'DELETE',
                 headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
             });
-            if (response.ok) {
-                const idx = org.groups.findIndex(g => g.id === group.id);
-                if (idx !== -1) {
-                    org.groups.splice(idx, 1);
-                }
+            if (!response.ok) {
+                let message = 'No se pudo eliminar el grupo';
+                try { const data = await response.json(); message = data.message || message; } catch {}
+                this.showStatus(message, 'error');
+                return;
             }
+            // Éxito
+            const idx = org.groups.findIndex(g => g.id === group.id);
+            if (idx !== -1) {
+                org.groups.splice(idx, 1);
+            }
+            this.showStatus('Grupo eliminado');
+            this.closeConfirmDeleteGroup();
         } catch (error) {
             console.error('Error deleting group:', error);
+            this.showStatus('Error al eliminar el grupo', 'error');
+        } finally {
+            this.isDeletingGroup = false;
         }
     },
     async viewGroup(group) {
