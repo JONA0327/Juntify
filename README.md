@@ -108,3 +108,7 @@ This key is used when calling `/analysis` to generate summaries, key points and 
 ## Audio Upload Limits
 
 Audio files up to **100 MB** are supported (≈133 MB when Base64-encoded).
+
+## API Reference
+
+See [docs/api.md](docs/api.md) for authenticated API usage and available endpoints.
