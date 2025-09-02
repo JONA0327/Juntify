@@ -1,4 +1,5 @@
 {
+    "name": "juntify",
     "private": true,
     "type": "module",
     "scripts": {
