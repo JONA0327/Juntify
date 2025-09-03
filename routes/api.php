@@ -37,7 +37,7 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::get('/public/meetings/{meeting}', [MeetingController::class, 'publicShow']);
 });
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+Route::middleware('auth')->get('/user', function (Request $request) {
     return $request->user();
 });
 
@@ -72,12 +72,12 @@ Route::post('/drive/upload-pending-audio', [DriveController::class, 'uploadPendi
     ->middleware(['web', 'auth']);
 
 Route::get('/pending-recordings/{pendingRecording}', [PendingRecordingController::class, 'show'])
-    ->middleware(['auth:sanctum,web']);
+
 
 Route::get('/organization-activities', [OrganizationActivityController::class, 'index'])
     ->middleware(['web', 'auth']);
 
-Route::middleware(['auth:sanctum,web'])->group(function () {
+
     // Rutas de Organizaciones
     Route::get('/organizations', [OrganizationController::class, 'index'])->name('api.organizations.index');
     Route::post('/organizations', [OrganizationController::class, 'store'])->name('api.organizations.store');
