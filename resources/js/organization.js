@@ -900,6 +900,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         const userId = Number(this.memberToRemove.id);
         if (!Number.isInteger(groupId) || !Number.isInteger(userId)) {
             console.error('removeMember: invalid IDs', { groupId, userId });
+            this.closeConfirmRemoveMember();
             this.showError('Datos inválidos para remover miembro');
             return;
         }
@@ -920,17 +921,20 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             if (response.ok) {
                 // Refrescar los datos del grupo
                 await this.refreshGroupData(groupId);
-                this.showStatus('Miembro removido correctamente');
                 this.closeConfirmRemoveMember();
+                this.showGroupInfoModal = false;
+                this.showStatus('Miembro removido correctamente');
             } else {
                 const data = await response.json().catch(() => ({}));
                 if (response.status === 403 || response.status === 500) {
                     console.error('removeMember error', response.status, data);
                 }
+                this.closeConfirmRemoveMember();
                 this.showError(data.message || 'Error al remover el miembro');
             }
         } catch (error) {
             console.error('Error removing member:', error);
+            this.closeConfirmRemoveMember();
             this.showError('Error al remover el miembro del grupo');
         } finally {
             this.isRemovingMember = false;

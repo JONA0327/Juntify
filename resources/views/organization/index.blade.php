@@ -38,8 +38,8 @@
                 <div x-show="showSuccessModal && successMessage && successMessage.trim() !== ''"
                      @click.self="closeSuccessModal()"
                      @keydown.escape.window="closeSuccessModal()"
-                     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
-                    <div class="organization-modal p-6 w-full max-w-md text-slate-200 relative z-[61]">
+                     class="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]" x-cloak>
+                    <div class="organization-modal p-6 w-full max-w-md text-slate-200 relative z-[71]">
                         <div class="text-center">
                             <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-500/20 mb-4">
                                 <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
