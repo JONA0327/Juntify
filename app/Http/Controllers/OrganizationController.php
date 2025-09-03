@@ -10,6 +10,26 @@ use Illuminate\Support\Facades\Log;
 
 class OrganizationController extends Controller
 {
+    public function publicIndex()
+    {
+        $organizations = Organization::query()
+            ->select('id', 'nombre_organizacion', 'descripcion', 'imagen', 'num_miembros')
+            ->get()
+            ->makeHidden(['created_at', 'updated_at', 'admin_id']);
+
+        return response()->json($organizations);
+    }
+
+    public function publicShow($organization)
+    {
+        $organization = Organization::query()
+            ->select('id', 'nombre_organizacion', 'descripcion', 'imagen', 'num_miembros')
+            ->findOrFail($organization)
+            ->makeHidden(['created_at', 'updated_at', 'admin_id']);
+
+        return response()->json($organization);
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
