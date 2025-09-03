@@ -87,12 +87,22 @@ const Notifications = (() => {
                 showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
                 return;
             }
-            if (response.ok) {
-                notifications = notifications.filter(n => n.id != id);
-                render();
+            if (!response.ok) {
+                let message = 'Error al responder la invitación.';
+                try {
+                    const data = await response.json();
+                    if (data.message) message = data.message;
+                } catch (_) { /* ignore */ }
+                showError(message);
+                return;
             }
+            notifications = notifications.filter(n => n.id != id);
+            render();
         } catch (error) {
-            console.error('Error responding to invitation:', error);
+            if (import.meta.env.DEV) {
+                console.debug('Error responding to invitation:', error);
+            }
+            showError('Error de conexión al responder la invitación.');
         }
     }
 
@@ -108,12 +118,22 @@ const Notifications = (() => {
                 showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
                 return;
             }
-            if (response.ok) {
-                notifications = notifications.filter(n => n.id != id);
-                render();
+            if (!response.ok) {
+                let message = 'Error al descartar la notificación.';
+                try {
+                    const data = await response.json();
+                    if (data.message) message = data.message;
+                } catch (_) { /* ignore */ }
+                showError(message);
+                return;
             }
+            notifications = notifications.filter(n => n.id != id);
+            render();
         } catch (error) {
-            console.error('Error dismissing notification:', error);
+            if (import.meta.env.DEV) {
+                console.debug('Error dismissing notification:', error);
+            }
+            showError('Error de conexión al descartar la notificación.');
         }
     }
 
@@ -124,12 +144,22 @@ const Notifications = (() => {
                 showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
                 return;
             }
-            if (response.ok) {
-                notifications = await response.json();
-                render();
+            if (!response.ok) {
+                let message = 'Error al cargar notificaciones.';
+                try {
+                    const data = await response.json();
+                    if (data.message) message = data.message;
+                } catch (_) { /* ignore */ }
+                showError(message);
+                return;
             }
+            notifications = await response.json();
+            render();
         } catch (error) {
-            console.error('Error loading notifications:', error);
+            if (import.meta.env.DEV) {
+                console.debug('Error loading notifications:', error);
+            }
+            showError('Error de conexión al cargar notificaciones.');
         }
     }
 
