@@ -174,10 +174,12 @@ class OrganizationController extends Controller
             ], 404);
         }
 
-        // Agregar usuario al grupo principal con rol invitado por defecto
-        $mainGroup->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
-        $organization->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
-        $organization->refreshMemberCount();
+    // Agregar usuario al grupo principal con rol invitado por defecto
+    $mainGroup->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
+    $mainGroup->update(['miembros' => $mainGroup->users()->count()]);
+    // Asegurar registro en la organización y refrescar contador
+    $organization->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
+    $organization->refreshMemberCount();
 
         OrganizationActivity::create([
             'organization_id' => $organization->id,

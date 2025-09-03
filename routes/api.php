@@ -71,7 +71,7 @@ Route::post('/drive/save-results', [DriveController::class, 'saveResults']);
 Route::post('/drive/upload-pending-audio', [DriveController::class, 'uploadPendingAudio'])
     ->middleware(['web', 'auth']);
 
-Route::get('/pending-recordings/{pendingRecording}', [PendingRecordingController::class, 'show'])
+Route::get('/pending-recordings/{pendingRecording}', [PendingRecordingController::class, 'show']);
 
 
 Route::get('/organization-activities', [OrganizationActivityController::class, 'index'])
@@ -177,4 +177,4 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
     Route::post('/pending-meetings/complete', [MeetingController::class, 'completePendingMeeting']);
     Route::get('/pending-meetings/{id}/info', [MeetingController::class, 'getPendingProcessingInfo']);
     Route::get('/pending-meetings/audio/{tempFileName}', [MeetingController::class, 'getPendingAudioFile']);
-});
+

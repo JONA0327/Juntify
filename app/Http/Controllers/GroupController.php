@@ -67,12 +67,14 @@ class GroupController extends Controller
             abort(403, 'No tienes permisos para crear grupos en esta organización');
         }
 
-        $group = Group::create($validated + ['miembros' => 1]);
+    $group = Group::create($validated + ['miembros' => 1]);
 
         // El creador queda como administrador si es owner de la org, sino como colaborador
         $creatorRole = $isOwner ? 'administrador' : 'colaborador';
-        $group->users()->attach($user->id, ['rol' => $creatorRole]);
-        $group->organization->refreshMemberCount();
+    $group->users()->attach($user->id, ['rol' => $creatorRole]);
+    // Asegurar pertenencia en la organización y refrescar contador
+    $group->organization->users()->syncWithoutDetaching([$user->id => ['rol' => $creatorRole]]);
+    $group->organization->refreshMemberCount();
 
         if (in_array($creatorRole, ['administrador', 'colaborador'])) {
             OrganizationActivity::create([
@@ -189,8 +191,9 @@ class GroupController extends Controller
         }
 
         if (!$group->users()->where('users.id', $user->id)->exists()) {
+            // Añadir al grupo y asegurar pertenencia en la organización
             $group->users()->attach($user->id, ['rol' => 'invitado']);
-            $group->increment('miembros');
+            $group->update(['miembros' => $group->users()->count()]);
 
             OrganizationActivity::create([
                 'organization_id' => $group->id_organizacion,
@@ -203,6 +206,8 @@ class GroupController extends Controller
         }
 
         $organization = $group->organization;
+        // Garantizar registro en pivot organization_user
+        $organization->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
         $organization->refreshMemberCount();
 
         return response()->json([
@@ -364,9 +369,11 @@ class GroupController extends Controller
     {
         $user = auth()->user();
 
-        $group->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
-        $group->increment('miembros');
-        $group->organization->refreshMemberCount();
+    // Añadir al grupo y asegurar pertenencia en la organización
+    $group->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
+    $group->update(['miembros' => $group->users()->count()]);
+    $group->organization->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
+    $group->organization->refreshMemberCount();
 
         Notification::where('emisor', $user->id)
             ->where('type', 'group_invitation')
@@ -426,8 +433,18 @@ class GroupController extends Controller
             return response()->json(['message' => 'No tienes permisos para quitar miembros'], 403);
         }
 
+        // Quitar del grupo
         $group->users()->detach($user->id);
         $group->update(['miembros' => $group->users()->count()]);
+
+        // Si ya no pertenece a ningún otro grupo de la organización, quitarlo de la organización
+        $stillInAnyGroup = Group::where('id_organizacion', $org->id)
+            ->whereHas('users', function ($q) use ($user) {
+                $q->where('users.id', $user->id);
+            })->exists();
+        if (!$stillInAnyGroup) {
+            $org->users()->detach($user->id);
+        }
         $org->refreshMemberCount();
 
         OrganizationActivity::create([
