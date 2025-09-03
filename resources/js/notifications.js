@@ -83,6 +83,10 @@ const Notifications = (() => {
                 },
                 body: JSON.stringify({ action })
             });
+            if (response.status === 401) {
+                showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
+                return;
+            }
             if (response.ok) {
                 notifications = notifications.filter(n => n.id != id);
                 render();
@@ -100,6 +104,10 @@ const Notifications = (() => {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
             });
+            if (response.status === 401) {
+                showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
+                return;
+            }
             if (response.ok) {
                 notifications = notifications.filter(n => n.id != id);
                 render();
@@ -112,6 +120,10 @@ const Notifications = (() => {
     async function fetchNotifications() {
         try {
             const response = await fetch('/api/notifications');
+            if (response.status === 401) {
+                showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
+                return;
+            }
             if (response.ok) {
                 notifications = await response.json();
                 render();
