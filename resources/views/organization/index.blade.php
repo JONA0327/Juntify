@@ -323,7 +323,7 @@
                             <!-- Pestaña Configuración -->
                             <div x-show="mainTab === 'config'" x-transition>
                                 <div class="mb-6">
-                                    <label class="block mb-2">API Key</label>
+                                    <label class="block mb-2">Access Token</label>
                                     <div class="flex items-center space-x-2">
                                         <input :type="apiKeyVisible ? 'text' : 'password'" x-model="apiKey" readonly class="flex-1 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-sm text-slate-200">
                                         <button @click="toggleApiKeyVisibility" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200" x-text="apiKeyVisible ? 'Ocultar' : 'Mostrar'"></button>

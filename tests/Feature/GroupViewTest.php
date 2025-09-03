@@ -36,7 +36,7 @@ it('shows group data and containers for invited user', function () {
         'is_active' => true,
     ]);
 
-    $this->actingAs($user);
+    $this->actingAs($user, 'sanctum');
 
     $groupResponse = $this->getJson("/api/groups/{$group->id}");
     $groupResponse->assertOk()

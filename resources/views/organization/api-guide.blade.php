@@ -32,28 +32,28 @@
             <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 pb-12">
                 <h1 class="text-3xl font-bold mb-8 text-white">API Documentation</h1>
                 
-                <!-- API Key Section -->
+                <!-- Access Token Section -->
                 <section class="mb-10">
-                    <h2 class="text-2xl font-semibold mb-4 text-white">API Key</h2>
-                    <p class="mb-4 text-slate-300">To interact with the API you must first generate an API key. These endpoints require a user session (login) but no existing API key.</p>
+                    <h2 class="text-2xl font-semibold mb-4 text-white">Access Token</h2>
+                    <p class="mb-4 text-slate-300">To interact with the API you must first generate a personal access token. These endpoints require a user session (login) but no existing token.</p>
                     
                     <div class="mb-6">
                         <h3 class="text-lg font-medium mb-3 text-white">Generate a key</h3>
                         <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -X POST {{ url('/api/user/api-key') }} -b cookies.txt -c cookies.txt</code></pre>
                         <p class="font-medium mb-2 text-slate-300">Response</p>
-                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm border border-slate-700"><code class="text-yellow-300">{ "api_key": "YOUR_KEY" }</code></pre>
+                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm border border-slate-700"><code class="text-yellow-300">{ "api_key": "YOUR_TOKEN" }</code></pre>
                     </div>
 
                     <div class="mb-6">
                         <h3 class="text-lg font-medium mb-3 text-white">Retrieve current key</h3>
                         <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl {{ url('/api/user/api-key') }} -b cookies.txt</code></pre>
                         <p class="font-medium mb-2 text-slate-300">Response</p>
-                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm border border-slate-700"><code class="text-yellow-300">{ "api_key": "YOUR_KEY" }</code></pre>
+                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm border border-slate-700"><code class="text-yellow-300">{ "api_key": "YOUR_TOKEN" }</code></pre>
                     </div>
 
                     <div class="bg-blue-900/20 border border-blue-600/30 rounded-lg p-4 mb-6">
                         <p class="text-blue-300">All subsequent requests must send the header:</p>
-                        <pre class="bg-slate-800/50 p-2 rounded mt-2 border border-slate-700"><code class="text-cyan-300">Authorization: Bearer YOUR_KEY</code></pre>
+                        <pre class="bg-slate-800/50 p-2 rounded mt-2 border border-slate-700"><code class="text-cyan-300">Authorization: Bearer YOUR_TOKEN</code></pre>
                     </div>
                 </section>
 
@@ -65,7 +65,7 @@
                     <div class="mb-8 bg-slate-900/50 p-6 rounded-lg border border-slate-700">
                         <h3 class="text-lg font-medium mb-3 text-white">List organizations</h3>
                         <p class="text-slate-400 mb-3"><code class="bg-slate-800 px-2 py-1 rounded text-cyan-300">GET /api/organizations</code></p>
-                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_KEY" {{ url('/api/organizations') }}</code></pre>
+                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_TOKEN" {{ url('/api/organizations') }}</code></pre>
                         <p class="font-medium mb-2 text-slate-300">Response</p>
                         <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm border border-slate-700"><code class="text-yellow-300">{
   "organizations": [
@@ -82,7 +82,7 @@
                     <div class="mb-8 bg-slate-900/50 p-6 rounded-lg border border-slate-700">
                         <h3 class="text-lg font-medium mb-3 text-white">Organization details</h3>
                         <p class="text-slate-400 mb-3"><code class="bg-slate-800 px-2 py-1 rounded text-cyan-300">GET /api/organizations/{id}</code></p>
-                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_KEY" {{ url('/api/organizations/1') }}</code></pre>
+                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_TOKEN" {{ url('/api/organizations/1') }}</code></pre>
                         <p class="font-medium mb-2 text-slate-300">Response</p>
                         <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm border border-slate-700"><code class="text-yellow-300">{
   "organization": {
@@ -97,7 +97,7 @@
                     <div class="mb-8 bg-slate-900/50 p-6 rounded-lg border border-slate-700">
                         <h3 class="text-lg font-medium mb-3 text-white">Group containers</h3>
                         <p class="text-slate-400 mb-3"><code class="bg-slate-800 px-2 py-1 rounded text-cyan-300">GET /api/groups/{group}/containers</code></p>
-                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_KEY" {{ url('/api/groups/1/containers') }}</code></pre>
+                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_TOKEN" {{ url('/api/groups/1/containers') }}</code></pre>
                         <p class="font-medium mb-2 text-slate-300">Response</p>
                         <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm border border-slate-700"><code class="text-yellow-300">{
   "containers": [
@@ -118,7 +118,7 @@
                     <div class="mb-8 bg-slate-900/50 p-6 rounded-lg border border-slate-700">
                         <h3 class="text-lg font-medium mb-3 text-white">Content containers</h3>
                         <p class="text-slate-400 mb-3"><code class="bg-slate-800 px-2 py-1 rounded text-cyan-300">GET /api/content-containers</code></p>
-                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_KEY" {{ url('/api/content-containers') }}</code></pre>
+                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_TOKEN" {{ url('/api/content-containers') }}</code></pre>
                         <p class="font-medium mb-2 text-slate-300">Response</p>
                         <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm border border-slate-700"><code class="text-yellow-300">{
   "success": true,
@@ -140,7 +140,7 @@
                     <div class="mb-8 bg-slate-900/50 p-6 rounded-lg border border-slate-700">
                         <h3 class="text-lg font-medium mb-3 text-white">Meetings in a content container</h3>
                         <p class="text-slate-400 mb-3"><code class="bg-slate-800 px-2 py-1 rounded text-cyan-300">GET /api/content-containers/{id}/meetings</code></p>
-                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_KEY" {{ url('/api/content-containers/7/meetings') }}</code></pre>
+                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_TOKEN" {{ url('/api/content-containers/7/meetings') }}</code></pre>
                         <p class="font-medium mb-2 text-slate-300">Response</p>
                         <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm border border-slate-700"><code class="text-yellow-300">{
   "success": true,
@@ -170,7 +170,7 @@
                     <div class="mb-8 bg-slate-900/50 p-6 rounded-lg border border-slate-700">
                         <h3 class="text-lg font-medium mb-3 text-white">List meetings</h3>
                         <p class="text-slate-400 mb-3"><code class="bg-slate-800 px-2 py-1 rounded text-cyan-300">GET /api/meetings</code></p>
-                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_KEY" {{ url('/api/meetings') }}</code></pre>
+                        <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm mb-4 border border-slate-700"><code class="text-green-400">curl -H "Authorization: Bearer YOUR_TOKEN" {{ url('/api/meetings') }}</code></pre>
                         <p class="font-medium mb-2 text-slate-300">Response</p>
                         <pre class="bg-slate-800/50 p-4 rounded-lg overflow-auto text-sm border border-slate-700"><code class="text-yellow-300">{
   "success": true,
@@ -194,7 +194,7 @@
                     <h2 class="text-2xl font-semibold mb-4 text-white">Errors</h2>
                     <div class="bg-red-900/20 border border-red-600/30 rounded-lg p-4">
                         <ul class="space-y-2 text-red-300">
-                            <li><strong>403 Forbidden</strong> – The API key is missing, invalid, or you lack permissions.</li>
+                        <li><strong>403 Forbidden</strong> – The access token is missing, invalid, or you lack permissions.</li>
                             <li><strong>404 Not Found</strong> – The requested resource does not exist.</li>
                         </ul>
                     </div>
