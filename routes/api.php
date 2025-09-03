@@ -16,7 +16,6 @@ use App\Http\Controllers\TaskCommentController;
 use App\Http\Controllers\TaskAttachmentController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\MeetingController;
-use App\Http\Controllers\AuthTokenController;
 
 /*
 |--------------------------------------------------------------------------
@@ -73,18 +72,12 @@ Route::post('/drive/upload-pending-audio', [DriveController::class, 'uploadPendi
     ->middleware(['web', 'auth']);
 
 Route::get('/pending-recordings/{pendingRecording}', [PendingRecordingController::class, 'show'])
-    ->middleware(['api-key', 'auth:web']);
+
 
 Route::get('/organization-activities', [OrganizationActivityController::class, 'index'])
     ->middleware(['web', 'auth']);
 
-// API Key management (allow session-authenticated UI to access)
-Route::middleware(['web', 'auth'])->group(function () {
-    Route::get('/auth/api-key', [AuthTokenController::class, 'getApiKey']);
-    Route::post('/auth/api-key/rotate', [AuthTokenController::class, 'rotateApiKey']);
-});
 
-Route::middleware(['api-key', 'auth:web'])->group(function () {
     // Rutas de Organizaciones
     Route::get('/organizations', [OrganizationController::class, 'index'])->name('api.organizations.index');
     Route::post('/organizations', [OrganizationController::class, 'store'])->name('api.organizations.store');
