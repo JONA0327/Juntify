@@ -423,40 +423,54 @@ class GroupController extends Controller
 
     public function removeMember(Group $group, User $user)
     {
-        // Sólo owner de organización o administradores del grupo pueden quitar miembros
-        $actor = auth()->user();
-        $org = $group->organization;
-        $isOwner = $org->admin_id === $actor->id;
-        $actorMembership = $group->users()->where('users.id', $actor->id)->first();
-        $actorRole = $actorMembership ? $actorMembership->pivot->rol : null;
-        if (!($isOwner || $actorRole === 'administrador')) {
-            return response()->json(['message' => 'No tienes permisos para quitar miembros'], 403);
+        try {
+            // Sólo owner de organización o administradores del grupo pueden quitar miembros
+            $actor = auth()->user();
+            $org = $group->organization;
+            $isOwner = $org->admin_id === $actor->id;
+            $actorMembership = $group->users()->where('users.id', $actor->id)->first();
+            $actorRole = $actorMembership ? $actorMembership->pivot->rol : null;
+
+            if ($actorRole && !in_array($actorRole, Group::ROLES, true)) {
+                return response()->json(['message' => 'Rol del usuario no válido'], 400);
+            }
+
+            if (!($isOwner || $actorRole === Group::ROLE_ADMINISTRADOR)) {
+                return response()->json(['message' => 'No tienes permisos para quitar miembros'], 403);
+            }
+
+            // Quitar del grupo
+            $group->users()->detach($user->id);
+            $group->update(['miembros' => $group->users()->count()]);
+
+            // Si ya no pertenece a ningún otro grupo de la organización, quitarlo de la organización
+            $stillInAnyGroup = Group::where('id_organizacion', $org->id)
+                ->whereHas('users', function ($q) use ($user) {
+                    $q->where('users.id', $user->id);
+                })->exists();
+            if (!$stillInAnyGroup) {
+                $org->users()->detach($user->id);
+            }
+            $org->refreshMemberCount();
+
+            OrganizationActivity::create([
+                'organization_id' => $group->id_organizacion,
+                'group_id' => $group->id,
+                'user_id' => $actor->id,
+                'target_user_id' => $user->id,
+                'action' => 'remove_member',
+                'description' => $actor->full_name . ' expulsó a ' . $user->full_name . ' del grupo ' . $group->nombre_grupo,
+            ]);
+
+            return response()->json(['removed' => true, 'message' => 'Miembro removido correctamente']);
+        } catch (\Throwable $e) {
+            Log::error('Error removing member', [
+                'group_id' => $group->id ?? null,
+                'user_id' => $user->id ?? null,
+                'message' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'Error interno al remover el miembro'], 500);
         }
-
-        // Quitar del grupo
-        $group->users()->detach($user->id);
-        $group->update(['miembros' => $group->users()->count()]);
-
-        // Si ya no pertenece a ningún otro grupo de la organización, quitarlo de la organización
-        $stillInAnyGroup = Group::where('id_organizacion', $org->id)
-            ->whereHas('users', function ($q) use ($user) {
-                $q->where('users.id', $user->id);
-            })->exists();
-        if (!$stillInAnyGroup) {
-            $org->users()->detach($user->id);
-        }
-        $org->refreshMemberCount();
-
-        OrganizationActivity::create([
-            'organization_id' => $group->id_organizacion,
-            'group_id' => $group->id,
-            'user_id' => $actor->id,
-            'target_user_id' => $user->id,
-            'action' => 'remove_member',
-            'description' => $actor->full_name . ' expulsó a ' . $user->full_name . ' del grupo ' . $group->nombre_grupo,
-        ]);
-
-        return response()->json(['removed' => true]);
     }
 
     public function destroy(Group $group)

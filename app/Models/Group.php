@@ -10,6 +10,15 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Group extends Model
 {
+    public const ROLE_INVITADO = 'invitado';
+    public const ROLE_COLABORADOR = 'colaborador';
+    public const ROLE_ADMINISTRADOR = 'administrador';
+    public const ROLES = [
+        self::ROLE_INVITADO,
+        self::ROLE_COLABORADOR,
+        self::ROLE_ADMINISTRADOR,
+    ];
+
     protected $fillable = [
         'id_organizacion',
         'nombre_grupo',
