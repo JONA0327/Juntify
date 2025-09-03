@@ -896,9 +896,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         if (!this.memberToRemove || !this.groupIdForMemberRemoval) return;
         if (this.isRemovingMember) return;
 
-        const groupId = Number(this.groupIdForMemberRemoval);
-        const userId = Number(this.memberToRemove.id);
-        if (!Number.isInteger(groupId) || !Number.isInteger(userId)) {
+        const groupId = this.groupIdForMemberRemoval;
+        const userId = this.memberToRemove.id;
+        if (!groupId || !userId) {
             console.error('removeMember: invalid IDs', { groupId, userId });
             this.showError('Datos inválidos para remover miembro');
             return;
