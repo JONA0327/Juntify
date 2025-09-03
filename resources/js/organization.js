@@ -25,6 +25,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     groupToDelete: null,
     orgOfGroupToDelete: null,
     isDeletingGroup: false,
+    // Confirmación de expulsión de miembro
+    showConfirmRemoveMemberModal: false,
+    memberToRemove: null,
+    groupIdForMemberRemoval: null,
+    isRemovingMember: false,
     selectedContainer: null, // Nueva variable para el contenedor seleccionado
     mainTab: 'organization', // Nueva variable para las pestañas principales
     newOrg: {
@@ -232,6 +237,18 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.groupToDelete = null;
         this.orgOfGroupToDelete = null;
         this.isDeletingGroup = false;
+    },
+
+    openConfirmRemoveMember(user, groupId) {
+        this.memberToRemove = user;
+        this.groupIdForMemberRemoval = groupId;
+        this.showConfirmRemoveMemberModal = true;
+    },
+    closeConfirmRemoveMember() {
+        this.showConfirmRemoveMemberModal = false;
+        this.memberToRemove = null;
+        this.groupIdForMemberRemoval = null;
+        this.isRemovingMember = false;
     },
 
     // Filtrar grupos de las organizaciones por usuario
@@ -791,29 +808,6 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             this.showError('Error al salir de la organización');
         }
     },
-    async removeMember(user) {
-        try {
-            const response = await fetch(`/api/groups/${this.currentGroup.id}/members/${user.id}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                }
-            });
-            if (response.ok) {
-                this.currentGroup.users = this.currentGroup.users.filter(u => u.id !== user.id);
-                this.currentGroup.miembros--;
-                const org = this.organizations.find(o => o.groups && o.groups.some(g => g.id === this.currentGroup.id));
-                if (org) {
-                    const g = org.groups.find(g => g.id === this.currentGroup.id);
-                    if (g) {
-                        g.miembros = this.currentGroup.miembros;
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error removing member:', error);
-        }
-    },
     async acceptInvitation() {
         try {
             const response = await fetch(`/api/groups/${this.currentGroup.id}/accept`, {
@@ -967,17 +961,17 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             }
         } catch (error) {
             console.error('Error updating member role:', error);
-            alert('Error al actualizar el rol del miembro');
+            this.showError('Error al actualizar el rol del miembro');
         }
     },
 
-    async removeMember(groupId, user) {
-        if (!confirm(`¿Estás seguro de que quieres quitar a ${user.full_name} del grupo?`)) {
-            return;
-        }
+    async removeMember() {
+        if (!this.memberToRemove || !this.groupIdForMemberRemoval) return;
+        if (this.isRemovingMember) return;
 
+        this.isRemovingMember = true;
         try {
-            const response = await fetch(`/api/groups/${groupId}/members/${user.id}`, {
+            const response = await fetch(`/api/groups/${this.groupIdForMemberRemoval}/members/${this.memberToRemove.id}`, {
                 method: 'DELETE',
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
@@ -986,16 +980,18 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
             if (response.ok) {
                 // Refrescar los datos del grupo
-                await this.refreshGroupData(groupId);
-
-                // Mostrar mensaje de éxito
+                await this.refreshGroupData(this.groupIdForMemberRemoval);
                 this.showStatus('Miembro removido correctamente');
+                this.closeConfirmRemoveMember();
             } else {
-                throw new Error('Error al remover el miembro');
+                const data = await response.json().catch(() => ({}));
+                this.showError(data.message || 'Error al remover el miembro');
             }
         } catch (error) {
             console.error('Error removing member:', error);
-            alert('Error al remover el miembro del grupo');
+            this.showError('Error al remover el miembro del grupo');
+        } finally {
+            this.isRemovingMember = false;
         }
     },
 
