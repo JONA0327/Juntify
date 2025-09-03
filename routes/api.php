@@ -16,6 +16,7 @@ use App\Http\Controllers\TaskCommentController;
 use App\Http\Controllers\TaskAttachmentController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\AuthTokenController;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,6 +42,30 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
+// Endpoint de prueba para verificar que API devuelve JSON
+Route::get('/test', function () {
+    return response()->json([
+        'message' => 'API funcionando correctamente',
+        'timestamp' => now(),
+        'status' => 'success'
+    ]);
+});
+
+// Endpoint para crear tokens de API (requiere autenticación web)
+Route::middleware('auth')->post('/create-token', function (Request $request) {
+    $request->validate([
+        'name' => 'required|string|max:255',
+    ]);
+
+    $token = $request->user()->createToken($request->name);
+
+    return response()->json([
+        'token' => $token->plainTextToken,
+        'name' => $request->name,
+        'created_at' => now()
+    ]);
+});
+
 Route::get('/analyzers', [AnalyzerController::class, 'list']);
 Route::post('/drive/save-results', [DriveController::class, 'saveResults']);
 
@@ -48,12 +73,18 @@ Route::post('/drive/upload-pending-audio', [DriveController::class, 'uploadPendi
     ->middleware(['web', 'auth']);
 
 Route::get('/pending-recordings/{pendingRecording}', [PendingRecordingController::class, 'show'])
-    ->middleware('auth:sanctum');
+    ->middleware(['api-key', 'auth:sanctum,web']);
 
 Route::get('/organization-activities', [OrganizationActivityController::class, 'index'])
     ->middleware(['web', 'auth']);
 
-Route::middleware('auth:sanctum')->group(function () {
+// API Key management (allow session-authenticated UI to access)
+Route::middleware(['web', 'auth'])->group(function () {
+    Route::get('/auth/api-key', [AuthTokenController::class, 'getApiKey']);
+    Route::post('/auth/api-key/rotate', [AuthTokenController::class, 'rotateApiKey']);
+});
+
+Route::middleware(['api-key', 'auth:sanctum,web'])->group(function () {
     // Rutas de Organizaciones
     Route::get('/organizations', [OrganizationController::class, 'index'])->name('api.organizations.index');
     Route::post('/organizations', [OrganizationController::class, 'store'])->name('api.organizations.store');

@@ -18,7 +18,8 @@ class ValidateApiKey
             $key = UserApiKey::where('api_key', $apiKey)->first();
 
             if ($key && $key->user) {
-                Auth::login($key->user);
+                // Setear el usuario para esta request (sin sesión)
+                Auth::setUser($key->user);
             }
         }
 

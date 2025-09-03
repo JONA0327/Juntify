@@ -3,6 +3,8 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Http\Request;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -26,5 +28,38 @@ class Handler extends ExceptionHandler
         $this->reportable(function (Throwable $e) {
             //
         });
+    }
+
+    /**
+     * Handle unauthenticated users for API routes
+     */
+    protected function unauthenticated($request, AuthenticationException $exception)
+    {
+        if ($request->expectsJson() || $request->is('api/*')) {
+            return response()->json([
+                'message' => 'Unauthenticated.',
+                'error' => 'Token de autenticación requerido'
+            ], 401);
+        }
+
+        return redirect()->guest($exception->redirectTo() ?? route('login'));
+    }
+
+    /**
+     * Render an exception into an HTTP response.
+     */
+    public function render($request, Throwable $exception)
+    {
+        // Para rutas API, asegurar respuestas JSON
+        if ($request->is('api/*') || $request->expectsJson()) {
+            if ($exception instanceof AuthenticationException) {
+                return response()->json([
+                    'message' => 'Unauthenticated.',
+                    'error' => 'Token de autenticación requerido'
+                ], 401);
+            }
+        }
+
+        return parent::render($request, $exception);
     }
 }

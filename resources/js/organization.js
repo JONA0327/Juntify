@@ -103,6 +103,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     apiKeyVisible: false,
     isRegeneratingApiKey: false,
     isApiKeyLoading: false,
+    isCopyingApiKey: false,
+    copyApiKeyLabel: 'Copiar',
 
     canManageContainers() {
         // Backend may return current_user_role; also allow org owner
@@ -129,7 +131,12 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     async fetchApiKey() {
         this.isApiKeyLoading = true;
         try {
-            const response = await fetch('/api/user/api-key');
+            const response = await fetch('/api/auth/api-key', {
+                headers: {
+                    'Accept': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
             if (response.ok) {
                 const data = await response.json();
                 this.apiKey = data.api_key;
@@ -145,12 +152,13 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         if (this.isRegeneratingApiKey) return;
         this.isRegeneratingApiKey = true;
         try {
-            const response = await fetch('/api/user/api-key', {
+            const response = await fetch('/api/auth/api-key/rotate', {
                 method: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                     'Accept': 'application/json'
-                }
+                },
+                credentials: 'same-origin'
             });
             if (response.ok) {
                 const data = await response.json();
@@ -165,6 +173,25 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
     toggleApiKeyVisibility() {
         this.apiKeyVisible = !this.apiKeyVisible;
+    },
+
+    async copyApiKey() {
+        if (!this.apiKey || this.isCopyingApiKey) return;
+        this.isCopyingApiKey = true;
+        try {
+            await navigator.clipboard.writeText(this.apiKey);
+            const prev = this.copyApiKeyLabel;
+            this.copyApiKeyLabel = 'Copiado';
+            this.showStatus('Token copiado al portapapeles');
+            setTimeout(() => {
+                this.copyApiKeyLabel = prev;
+            }, 2000);
+        } catch (e) {
+            console.error('No se pudo copiar el token', e);
+            this.showStatus('No se pudo copiar el token', 'error');
+        } finally {
+            this.isCopyingApiKey = false;
+        }
     },
 
     // Método de inicialización para resetear estados
