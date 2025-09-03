@@ -896,22 +896,37 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         if (!this.memberToRemove || !this.groupIdForMemberRemoval) return;
         if (this.isRemovingMember) return;
 
+        const groupId = Number(this.groupIdForMemberRemoval);
+        const userId = Number(this.memberToRemove.id);
+        if (!Number.isInteger(groupId) || !Number.isInteger(userId)) {
+            console.error('removeMember: invalid IDs', { groupId, userId });
+            this.showError('Datos inválidos para remover miembro');
+            return;
+        }
+
+        console.log('removeMember request', { groupId, userId });
+
         this.isRemovingMember = true;
         try {
-            const response = await fetch(`/api/groups/${this.groupIdForMemberRemoval}/members/${this.memberToRemove.id}`, {
+            const response = await fetch(`/api/groups/${groupId}/members/${userId}`, {
                 method: 'DELETE',
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
             });
 
+            console.log('removeMember response status', response.status);
+
             if (response.ok) {
                 // Refrescar los datos del grupo
-                await this.refreshGroupData(this.groupIdForMemberRemoval);
+                await this.refreshGroupData(groupId);
                 this.showStatus('Miembro removido correctamente');
                 this.closeConfirmRemoveMember();
             } else {
                 const data = await response.json().catch(() => ({}));
+                if (response.status === 403 || response.status === 500) {
+                    console.error('removeMember error', response.status, data);
+                }
                 this.showError(data.message || 'Error al remover el miembro');
             }
         } catch (error) {
