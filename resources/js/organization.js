@@ -104,12 +104,6 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     alertMessage: '',
     alertType: 'success',
     alertTimeout: null,
-    apiKey: '',
-    apiKeyVisible: false,
-    isRegeneratingApiKey: false,
-    isApiKeyLoading: false,
-    isCopyingApiKey: false,
-    copyApiKeyLabel: 'Copiar',
 
     canManageContainers() {
         // Backend may return current_user_role; also allow org owner
@@ -130,72 +124,6 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         } catch (error) {
             console.error('Error loading activities:', error);
             this.activities[orgId] = [];
-        }
-    },
-
-    async fetchApiKey() {
-        this.isApiKeyLoading = true;
-        try {
-            const response = await fetch('/api/auth/api-key', {
-                headers: {
-                    'Accept': 'application/json'
-                },
-                credentials: 'same-origin'
-            });
-            if (response.ok) {
-                const data = await response.json();
-                this.apiKey = data.api_key;
-            }
-        } catch (error) {
-            console.error('Error fetching API key:', error);
-        } finally {
-            this.isApiKeyLoading = false;
-        }
-    },
-
-    async regenerateApiKey() {
-        if (this.isRegeneratingApiKey) return;
-        this.isRegeneratingApiKey = true;
-        try {
-            const response = await fetch('/api/auth/api-key/rotate', {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    'Accept': 'application/json'
-                },
-                credentials: 'same-origin'
-            });
-            if (response.ok) {
-                const data = await response.json();
-                this.apiKey = data.api_key;
-            }
-        } catch (error) {
-            console.error('Error regenerating API key:', error);
-        } finally {
-            this.isRegeneratingApiKey = false;
-        }
-    },
-
-    toggleApiKeyVisibility() {
-        this.apiKeyVisible = !this.apiKeyVisible;
-    },
-
-    async copyApiKey() {
-        if (!this.apiKey || this.isCopyingApiKey) return;
-        this.isCopyingApiKey = true;
-        try {
-            await navigator.clipboard.writeText(this.apiKey);
-            const prev = this.copyApiKeyLabel;
-            this.copyApiKeyLabel = 'Copiado';
-            this.showStatus('Token copiado al portapapeles');
-            setTimeout(() => {
-                this.copyApiKeyLabel = prev;
-            }, 2000);
-        } catch (e) {
-            console.error('No se pudo copiar el token', e);
-            this.showStatus('No se pudo copiar el token', 'error');
-        } finally {
-            this.isCopyingApiKey = false;
         }
     },
 
@@ -224,7 +152,6 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             console.log('Estado de organización reiniciado');
         }
         // Asegurar que cada organización solo contenga grupos asociados al usuario actual
-        this.fetchApiKey();
         this.organizations = this.filterOrgGroups(this.organizations);
     },
     openConfirmDeleteGroup(org, group) {
