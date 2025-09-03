@@ -15,7 +15,6 @@ use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\UserApiKeyController;
 
 
 Route::get('/', function () {
@@ -33,12 +32,7 @@ Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
 Route::get('/google/reauth', [GoogleAuthController::class, 'redirect'])->name('google.reauth');
 
-Route::middleware('auth')->group(function () {
-    Route::get('/api/user/api-key', [UserApiKeyController::class, 'show']);
-    Route::post('/api/user/api-key', [UserApiKeyController::class, 'generate']);
-});
-
-Route::middleware(['api-key', 'auth'])->group(function () {
+Route::middleware(['auth'])->group(function () {
     // Perfil
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
@@ -82,14 +76,14 @@ Route::get('/new-meeting', function () {
 
 Route::post('/transcription', [TranscriptionController::class, 'store'])
     ->name('transcription.store')
-    ->middleware(['api-key', 'auth', 'group.role']);
+    ->middleware(['auth', 'group.role']);
 Route::get('/transcription/{id}', [TranscriptionController::class, 'show'])->name('transcription.show');
 Route::post('/analysis', [\App\Http\Controllers\AnalysisController::class, 'analyze'])
     ->name('analysis')
-    ->middleware(['api-key', 'auth', 'group.role']);
+    ->middleware(['auth', 'group.role']);
 
 // Admin routes (solo para roles específicos)
-Route::middleware(['api-key', 'auth'])->group(function () {
+Route::middleware(['auth'])->group(function () {
     Route::get('/admin', function () {
         $user = auth()->user();
         if (!in_array($user->roles, ['superadmin', 'developer'])) {
