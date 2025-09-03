@@ -41,6 +41,26 @@ class MeetingController extends Controller
         $this->googleDriveService = $googleDriveService;
     }
 
+    public function publicIndex()
+    {
+        $meetings = Meeting::query()
+            ->select('id', 'title', 'date', 'duration')
+            ->get()
+            ->makeHidden(['created_at', 'updated_at']);
+
+        return response()->json($meetings);
+    }
+
+    public function publicShow($meeting)
+    {
+        $meeting = Meeting::query()
+            ->select('id', 'title', 'date', 'duration')
+            ->findOrFail($meeting)
+            ->makeHidden(['created_at', 'updated_at']);
+
+        return response()->json($meeting);
+    }
+
     /**
      * Muestra la página principal de reuniones.
      *

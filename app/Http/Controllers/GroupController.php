@@ -17,6 +17,30 @@ use App\Models\GroupCode;
 
 class GroupController extends Controller
 {
+    public function publicIndex(Request $request)
+    {
+        $query = Group::query()
+            ->select('id', 'id_organizacion', 'nombre_grupo', 'descripcion', 'miembros');
+
+        if ($request->filled('id_organizacion')) {
+            $query->where('id_organizacion', $request->input('id_organizacion'));
+        }
+
+        $groups = $query->get()->makeHidden(['created_at', 'updated_at']);
+
+        return response()->json($groups);
+    }
+
+    public function publicShow($group)
+    {
+        $group = Group::query()
+            ->select('id', 'id_organizacion', 'nombre_grupo', 'descripcion', 'miembros')
+            ->findOrFail($group)
+            ->makeHidden(['created_at', 'updated_at']);
+
+        return response()->json($group);
+    }
+
     public function store(Request $request)
     {
         $user = auth()->user();

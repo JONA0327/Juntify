@@ -28,6 +28,15 @@ use App\Http\Controllers\MeetingController;
 |
 */
 
+Route::middleware('throttle:60,1')->group(function () {
+    Route::get('/public/organizations', [OrganizationController::class, 'publicIndex']);
+    Route::get('/public/organizations/{organization}', [OrganizationController::class, 'publicShow']);
+    Route::get('/public/groups', [GroupController::class, 'publicIndex']);
+    Route::get('/public/groups/{group}', [GroupController::class, 'publicShow']);
+    Route::get('/public/meetings', [MeetingController::class, 'publicIndex']);
+    Route::get('/public/meetings/{meeting}', [MeetingController::class, 'publicShow']);
+});
+
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
