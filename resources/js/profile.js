@@ -483,30 +483,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const notificationsList = document.getElementById('notifications-list');
   if (notificationsList) {
-    axios.get('/api/notifications').then(res => {
-      const items = res.data;
-      notificationsList.innerHTML = '';
-      if (items.length === 0) {
-        notificationsList.innerHTML = '<p style="color: #cbd5e1; text-align: center; padding: 2rem;">No tienes notificaciones nuevas.</p>';
-      } else {
-        items.forEach(n => {
-          const div = document.createElement('div');
-          div.className = 'notification-item';
-          div.innerHTML = `<span class="icon">📨</span><span class="text">${n.message}</span><button class="delete" data-id="${n.id}">✖</button>`;
-          notificationsList.appendChild(div);
+      axios.get('/api/notifications')
+        .then(res => {
+          const items = res.data;
+          notificationsList.innerHTML = '';
+          if (items.length === 0) {
+            notificationsList.innerHTML = '<p style="color: #cbd5e1; text-align: center; padding: 2rem;">No tienes notificaciones nuevas.</p>';
+          } else {
+            items.forEach(n => {
+              const div = document.createElement('div');
+              div.className = 'notification-item';
+              div.innerHTML = `<span class="icon">📨</span><span class="text">${n.message}</span><button class="delete" data-id="${n.id}">✖</button>`;
+              notificationsList.appendChild(div);
+            });
+          }
+        })
+        .catch(err => {
+          if (err.response && err.response.status === 401) {
+            showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
+          }
         });
-      }
-    });
 
     notificationsList.addEventListener('click', e => {
       if (e.target.classList.contains('delete')) {
         const id = e.target.dataset.id;
-        axios.delete(`/api/notifications/${id}`).then(() => {
-          e.target.parentElement.remove();
-          if (!notificationsList.children.length) {
-            notificationsList.innerHTML = '<p style="color: #cbd5e1; text-align: center; padding: 2rem;">No tienes notificaciones nuevas.</p>';
-          }
-        });
+          axios.delete(`/api/notifications/${id}`)
+            .then(() => {
+              e.target.parentElement.remove();
+              if (!notificationsList.children.length) {
+                notificationsList.innerHTML = '<p style="color: #cbd5e1; text-align: center; padding: 2rem;">No tienes notificaciones nuevas.</p>';
+              }
+            })
+            .catch(err => {
+              if (err.response && err.response.status === 401) {
+                showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
+              }
+            });
       }
     });
   }

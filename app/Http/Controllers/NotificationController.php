@@ -9,6 +9,10 @@ class NotificationController extends Controller
 {
     public function index()
     {
+        if (!auth()->check()) {
+            return response()->json([], 401);
+        }
+
         $user = auth()->user();
         $notifications = Notification::where('emisor', $user->id)
             ->with(['remitente:id,username,full_name'])
@@ -20,6 +24,10 @@ class NotificationController extends Controller
 
     public function destroy(Notification $notification)
     {
+        if (!auth()->check()) {
+            return response()->json([], 401);
+        }
+
         $user = auth()->user();
         if ($notification->emisor !== $user->id) {
             abort(403);
