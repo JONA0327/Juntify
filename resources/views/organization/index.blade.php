@@ -41,12 +41,22 @@
                      class="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200 relative z-[71]">
                         <div class="text-center">
-                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-500/20 mb-4">
-                                <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                                </svg>
+                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4"
+                                 x-bind:class="isErrorModal ? 'bg-red-500/20' : 'bg-green-500/20'">
+                                <template x-if="!isErrorModal">
+                                    <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </template>
+                                <template x-if="isErrorModal">
+                                    <svg class="h-6 w-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.22 19h13.56c1.2 0 1.93-1.28 1.34-2.33L13.34 4.66c-.6-1.04-2.08-1.04-2.69 0L3.88 16.67c-.59 1.05.14 2.33 1.34 2.33z"></path>
+                                    </svg>
+                                </template>
                             </div>
-                            <h3 class="text-lg font-semibold mb-2">¡Éxito!</h3>
+                            <h3 class="text-lg font-semibold mb-2"
+                                x-text="isErrorModal ? 'Error' : '¡Éxito!'"
+                                x-bind:class="isErrorModal ? 'text-red-400' : 'text-green-400'"></h3>
                             <p class="text-slate-300 mb-6" x-text="successMessage"></p>
                             <div class="flex justify-center space-x-3">
                                 <button @click="closeSuccessModal()" class="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
