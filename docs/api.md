@@ -1,8 +1,8 @@
 # API Documentation
 
-## API Key
+## Access Token
 
-To interact with the API you must first generate an API key. These endpoints require a user session (login) but no existing API key.
+To interact with the API you must first generate a personal access token. These endpoints require a user session (login) but no existing token.
 
 ### Generate a key
 
@@ -12,7 +12,7 @@ curl -X POST http://localhost/api/user/api-key -b cookies.txt -c cookies.txt
 
 **Response**
 ```json
-{ "api_key": "YOUR_KEY" }
+{ "api_key": "YOUR_TOKEN" }
 ```
 
 ### Retrieve current key
@@ -23,13 +23,13 @@ curl http://localhost/api/user/api-key -b cookies.txt
 
 **Response**
 ```json
-{ "api_key": "YOUR_KEY" }
+{ "api_key": "YOUR_TOKEN" }
 ```
 
 All subsequent requests must send the header:
 
 ```
-Authorization: Bearer YOUR_KEY
+Authorization: Bearer YOUR_TOKEN
 ```
 
 ## Endpoints
@@ -38,7 +38,7 @@ Authorization: Bearer YOUR_KEY
 `GET /api/organizations`
 
 ```bash
-curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/organizations
+curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost/api/organizations
 ```
 
 **Response**
@@ -57,7 +57,7 @@ curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/organizations
 ### Organization details
 `GET /api/organizations/{id}`
 ```bash
-curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/organizations/1
+curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost/api/organizations/1
 ```
 
 **Response**
@@ -75,7 +75,7 @@ curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/organizations/1
 `GET /api/groups/{group}/containers`
 
 ```bash
-curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/groups/1/containers
+curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost/api/groups/1/containers
 ```
 
 **Response**
@@ -99,7 +99,7 @@ curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/groups/1/container
 `GET /api/content-containers`
 
 ```bash
-curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/content-containers
+curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost/api/content-containers
 ```
 
 **Response**
@@ -124,7 +124,7 @@ curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/content-containers
 `GET /api/content-containers/{id}/meetings`
 
 ```bash
-curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/content-containers/7/meetings
+curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost/api/content-containers/7/meetings
 ```
 
 **Response**
@@ -157,7 +157,7 @@ curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/content-containers
 `GET /api/meetings`
 
 ```bash
-curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/meetings
+curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost/api/meetings
 ```
 
 **Response**
@@ -180,5 +180,5 @@ curl -H "Authorization: Bearer YOUR_KEY" http://localhost/api/meetings
 
 ## Errors
 
-- **403 Forbidden** – The API key is missing, invalid, or you lack permissions.
+- **403 Forbidden** – The access token is missing, invalid, or you lack permissions.
 - **404 Not Found** – The requested resource does not exist.

@@ -34,7 +34,7 @@ it('downloads PDF with Spanish keys', function () {
     $process->setAccessible(true);
     $processed = $process->invoke($controller, $normalized);
 
-    actingAs($user);
+    actingAs($user, 'sanctum');
     $response = $this->post('/api/meetings/' . $meeting->id . '/download-pdf', [
         'meeting_name' => 'Reunión Prueba',
         'sections' => ['summary', 'key_points', 'tasks', 'transcription'],
@@ -67,7 +67,7 @@ it('previews PDF when sections are missing', function () {
     $process->setAccessible(true);
     $processed = $process->invoke($controller, $normalized);
 
-    actingAs($user);
+    actingAs($user, 'sanctum');
     $response = $this->post('/api/meetings/' . $meeting->id . '/preview-pdf', [
         'meeting_name' => 'Reunión Prueba',
         'sections' => ['summary'],

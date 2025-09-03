@@ -11,7 +11,7 @@ uses(RefreshDatabase::class);
 test('user can create container', function () {
     $user = User::factory()->create(['username' => 'alice']);
 
-    $response = $this->actingAs($user)->postJson('/api/content-containers', [
+    $response = $this->actingAs($user, 'sanctum')->postJson('/api/content-containers', [
         'name' => 'New Container',
     ]);
 
@@ -45,7 +45,7 @@ test('user can add meeting to container and list meetings', function () {
         'transcript_drive_id' => null,
     ]);
 
-    $addResponse = $this->actingAs($user)->postJson("/api/content-containers/{$container->id}/meetings", [
+    $addResponse = $this->actingAs($user, 'sanctum')->postJson("/api/content-containers/{$container->id}/meetings", [
         'meeting_id' => $meeting->id,
     ]);
 
@@ -56,7 +56,7 @@ test('user can add meeting to container and list meetings', function () {
         'meeting_id' => $meeting->id,
     ]);
 
-    $listResponse = $this->actingAs($user)->getJson("/api/content-containers/{$container->id}/meetings");
+    $listResponse = $this->actingAs($user, 'sanctum')->getJson("/api/content-containers/{$container->id}/meetings");
 
     $listResponse->assertOk()
         ->assertJson([
@@ -91,7 +91,7 @@ test('user can remove meeting from container', function () {
         'meeting_id' => $meeting->id,
     ]);
 
-    $response = $this->actingAs($user)->deleteJson("/api/content-containers/{$container->id}/meetings/{$meeting->id}");
+    $response = $this->actingAs($user, 'sanctum')->deleteJson("/api/content-containers/{$container->id}/meetings/{$meeting->id}");
 
     $response->assertOk()->assertJson(['success' => true]);
 

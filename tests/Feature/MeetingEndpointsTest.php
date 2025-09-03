@@ -31,7 +31,7 @@ test('shared meetings endpoint returns meetings for authenticated user', functio
         'to_username' => $recipient->username,
     ]);
 
-    $response = $this->actingAs($recipient)->getJson('/api/shared-meetings');
+    $response = $this->actingAs($recipient, 'sanctum')->getJson('/api/shared-meetings');
 
     $response->assertOk()
         ->assertJson([
@@ -66,7 +66,7 @@ test('containers endpoint returns containers with meeting count', function () {
         'meeting_id' => $meeting->id,
     ]);
 
-    $response = $this->actingAs($user)->getJson('/api/content-containers');
+    $response = $this->actingAs($user, 'sanctum')->getJson('/api/content-containers');
 
     $response->assertOk()
         ->assertJson([
@@ -134,7 +134,7 @@ test('/api/meetings excludes meetings inside containers', function () {
     ]);
     $container->meetings()->attach($meetingWith->id);
 
-    $response = $this->actingAs($user)->getJson('/api/meetings');
+    $response = $this->actingAs($user, 'sanctum')->getJson('/api/meetings');
 
     $response->assertOk()
         ->assertJsonCount(1, 'meetings')
@@ -181,7 +181,7 @@ test('/api/meetings returns is_legacy flag', function () {
         'recordings_folder_id' => null,
     ]);
 
-    $response = $this->actingAs($user)->getJson('/api/meetings');
+    $response = $this->actingAs($user, 'sanctum')->getJson('/api/meetings');
 
     $response->assertOk()
         ->assertJsonFragment(['id' => $legacy->id, 'is_legacy' => true])
@@ -214,7 +214,7 @@ test('show meeting returns is_legacy flag', function () {
         'recordings_folder_id' => null,
     ]);
 
-    $response = $this->actingAs($user)->getJson('/api/meetings/' . $meeting->id);
+    $response = $this->actingAs($user, 'sanctum')->getJson('/api/meetings/' . $meeting->id);
 
     $response->assertOk()
         ->assertJsonFragment(['id' => $meeting->id, 'is_legacy' => false]);
@@ -245,7 +245,7 @@ test('show legacy meeting returns audio data', function () {
         public function getFileInfo($fileId) { return new class { public function getParents(){ return []; } public function getName(){ return 'Parent'; } }; }
     });
 
-    $response = $this->actingAs($user)->getJson('/api/meetings/' . $meeting->id);
+    $response = $this->actingAs($user, 'sanctum')->getJson('/api/meetings/' . $meeting->id);
 
     $response->assertOk()
         ->assertJsonFragment([
@@ -280,7 +280,7 @@ test('destroy meeting returns 500 when Google Drive deletion fails', function ()
 
     app()->instance(GoogleDriveService::class, $mock);
 
-    $response = $this->actingAs($user)->deleteJson('/api/meetings/' . $meeting->id);
+    $response = $this->actingAs($user, 'sanctum')->deleteJson('/api/meetings/' . $meeting->id);
 
     $response->assertStatus(500);
     $this->assertDatabaseHas('transcriptions_laravel', ['id' => $meeting->id]);
@@ -310,7 +310,7 @@ test('destroy meeting removes record on successful Google Drive deletion', funct
 
     app()->instance(GoogleDriveService::class, $mock);
 
-    $response = $this->actingAs($user)->deleteJson('/api/meetings/' . $meeting->id);
+    $response = $this->actingAs($user, 'sanctum')->deleteJson('/api/meetings/' . $meeting->id);
 
     $response->assertOk();
     $this->assertDatabaseMissing('transcriptions_laravel', ['id' => $meeting->id]);
