@@ -1,3 +1,5 @@
+import { showError } from './utils/alerts.js';
+
 const Notifications = (() => {
     let notifications = [];
 

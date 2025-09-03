@@ -1,4 +1,5 @@
 import { saveAudioBlob, loadAudioBlob, clearAllAudio } from './idb.js';
+import { showError } from './utils/alerts.js';
 
 // ===== VARIABLES GLOBALES =====
 let isRecording = false;
@@ -640,25 +641,6 @@ function updateTimer() {
 
     const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     document.getElementById('timer-counter').textContent = timeString;
-}
-
-// Función para mostrar errores
-function showError(message) {
-    // Crear notificación de error
-    const notification = document.createElement('div');
-    notification.className = 'notification error';
-    notification.innerHTML = `
-        <div class="notification-content">
-            <span class="notification-icon">❌</span>
-            <span class="notification-message">${message}</span>
-        </div>
-    `;
-
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-        notification.remove();
-    }, 5000);
 }
 
 // Función para mostrar éxito

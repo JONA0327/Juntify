@@ -1,5 +1,7 @@
 // resources/js/profile.js
 
+import { showError } from './utils/alerts.js';
+
 // Configura Axios para incluir el token CSRF en cada petición
 axios.defaults.headers.common['X-CSRF-TOKEN'] = document
   .querySelector('meta[name="csrf-token"]')
