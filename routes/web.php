@@ -15,7 +15,6 @@ use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\UserApiKeyController;
 
 
 Route::get('/', function () {
@@ -33,10 +32,6 @@ Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
 Route::get('/google/reauth', [GoogleAuthController::class, 'redirect'])->name('google.reauth');
 
-Route::middleware('auth')->group(function () {
-    Route::get('/api/user/api-key', [UserApiKeyController::class, 'show']);
-    Route::post('/api/user/api-key', [UserApiKeyController::class, 'generate']);
-});
 
 Route::middleware(['api-key', 'auth'])->group(function () {
     // Perfil
