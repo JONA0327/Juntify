@@ -295,8 +295,17 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         if (import.meta.env.DEV) {
             console.log('Estado de organización reiniciado');
         }
-    // Usar los grupos tal como vienen del backend (evitar filtrado que oculte todo)
-    this.organizations = Array.isArray(this.organizations) ? this.organizations : [];
+        // Restaurar comportamiento: mostrar solo los grupos donde el usuario pertenece
+        // Nota: El backend carga cada grupo con 'users' filtrado al usuario actual,
+        // así que pertenencia = (group.users || []).length > 0
+        if (Array.isArray(this.organizations)) {
+            this.organizations = this.organizations.map(org => ({
+                ...org,
+                groups: (org.groups || []).filter(g => Array.isArray(g.users) && g.users.length > 0)
+            }));
+        } else {
+            this.organizations = [];
+        }
     },
     openConfirmDeleteGroup(org, group) {
         this.orgOfGroupToDelete = org;

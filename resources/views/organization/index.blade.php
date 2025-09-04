@@ -190,7 +190,7 @@
                                     @endif
                                 </div>
 
-                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" x-show="org.groups && org.groups.length">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" x-show="Array.isArray(org.groups) && org.groups.length">
                                     <template x-for="group in org.groups" :key="group.id">
                                         <div @click="viewGroup(group)" class="relative bg-slate-700/50 border border-slate-600/50 rounded-lg p-4 hover:bg-slate-700/70 transition-colors duration-200 cursor-pointer">
                                             <!-- Loading overlay -->
@@ -260,7 +260,7 @@
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        <template x-for="user in group.users || []" :key="user.id">
+                                                        <template x-for="user in (group.users || [])" :key="user.id">
                                                             <tr class="border-t border-slate-600/50 hover:bg-slate-700/20">
                                                                 <td class="p-3 text-slate-200">
                                                                     <div class="font-medium" x-text="user.full_name"></div>
