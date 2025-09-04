@@ -26,7 +26,13 @@ trait GoogleDriveHelpers
             'expiry_date' => $googleToken->expiry_date
         ]);
 
-        $this->googleDriveService->setAccessToken($googleToken->access_token);
+        $tokenData = $googleToken->access_token;
+        if (is_string($tokenData)) {
+            $decoded = json_decode($tokenData, true);
+            $tokenData = json_last_error() === JSON_ERROR_NONE ? $decoded : $tokenData;
+        }
+
+        $this->googleDriveService->setAccessToken($tokenData);
 
         if ($this->googleDriveService->getClient()->isAccessTokenExpired()) {
             Log::info('setGoogleDriveToken: Google Client says token is expired, refreshing');
@@ -36,7 +42,7 @@ trait GoogleDriveHelpers
                 }
                 $newTokens = $this->googleDriveService->refreshToken($googleToken->refresh_token);
                 $googleToken->update([
-                    'access_token' => $newTokens['access_token'],
+                    'access_token' => $newTokens,
                     'expiry_date' => now()->addSeconds($newTokens['expires_in'] ?? 3600)
                 ]);
                 Log::info('setGoogleDriveToken: Token refreshed successfully', [
