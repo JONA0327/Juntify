@@ -306,6 +306,46 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         } else {
             this.organizations = [];
         }
+
+        // Al abrir la pestaña de Permisos, cargar la lista completa de miembros por grupo
+        this.$watch('mainTab', (tab) => {
+            if (tab === 'permissions') {
+                this.loadPermissionsMembers();
+            }
+        });
+    },
+
+    async loadPermissionsMembers() {
+        try {
+            if (!Array.isArray(this.organizations)) return;
+            for (const org of this.organizations) {
+                if (!Array.isArray(org.groups)) continue;
+                for (const group of org.groups) {
+                    // Evitar recargas múltiples
+                    if (group._membersLoaded) continue;
+                    try {
+                        const res = await fetch(`/api/groups/${group.id}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            // Sustituir por la lista completa de usuarios
+                            group.users = Array.isArray(data.users) ? data.users : [];
+                            // Mantener código disponible
+                            if (!group.code && data.code) {
+                                group.code = data.code;
+                            }
+                            group._membersLoaded = true;
+                        } else {
+                            group._membersLoaded = true;
+                        }
+                    } catch (e) {
+                        console.error('Error loading members for group', group.id, e);
+                        group._membersLoaded = true;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error loading permissions members', e);
+        }
     },
     openConfirmDeleteGroup(org, group) {
         this.orgOfGroupToDelete = org;
