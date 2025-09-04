@@ -111,6 +111,24 @@
                             <option value="" disabled selected>🔍 Selecciona un micrófono...</option>
                         </select>
                     </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Carpeta principal</label>
+                        <select class="form-select" id="root-folder-select"></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Subcarpeta para transcripción</label>
+                        <div class="flex mt-1">
+                            <select class="form-select flex-1" id="transcription-subfolder-select"></select>
+                            <button type="button" class="ml-2 btn btn-secondary" onclick="createOrgSubfolder()">Nueva</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Subcarpeta para audio</label>
+                        <select class="form-select" id="audio-subfolder-select"></select>
+                    </div>
                 </div>
 
                 <!-- Contenedor para las interfaces de grabación -->

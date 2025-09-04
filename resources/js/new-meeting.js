@@ -1458,6 +1458,38 @@ async function loadDriveFolders() {
     }
 }
 
+async function createOrgSubfolder() {
+    const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
+    if (!organizationId) {
+        alert('Organización no definida');
+        return;
+    }
+
+    const name = prompt('Nombre de la subcarpeta');
+    if (!name) return;
+
+    try {
+        const res = await fetch(`/api/organizations/${organizationId}/drive/subfolders`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            },
+            body: JSON.stringify({ name }),
+        });
+
+        if (res.ok) {
+            await loadDriveFolders();
+            alert('Subcarpeta creada correctamente');
+        } else {
+            alert('Error al crear la subcarpeta');
+        }
+    } catch (e) {
+        console.error('Error creating subfolder', e);
+        alert('Error al crear la subcarpeta');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const driveSelect = document.getElementById('drive-select');
     if (driveSelect) {
@@ -1479,6 +1511,7 @@ window.pauseRecording = pauseRecording;
 window.resumeRecording = resumeRecording;
 window.discardRecording = discardRecording;
 window.togglePostponeMode = togglePostponeMode;
+window.createOrgSubfolder = createOrgSubfolder;
 
 // Funciones del grabador de reuniones que faltaban
 window.toggleSystemAudio = toggleSystemAudio;

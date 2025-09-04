@@ -68,6 +68,14 @@ class OrganizationDriveController extends Controller
     {
         $request->validate(['name' => 'required|string']);
 
+        $user = $request->user();
+        $isOwner = $organization->admin_id === $user->id;
+        $role = $organization->users()->where('user_id', $user->id)->value('rol');
+
+        if (! $isOwner && ! in_array($role, ['colaborador', 'administrador'], true)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $root = $organization->folder;
         if (!$root) {
             return response()->json(['message' => 'Root folder not found'], 404);
