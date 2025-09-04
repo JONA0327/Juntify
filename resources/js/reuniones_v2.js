@@ -3309,6 +3309,82 @@ function retryLoadContainerMeetings() {
     }
 }
 
+// =========================================================
+// Drive folder selector with organization support
+// =========================================================
+async function loadDriveFolders() {
+    const role = window.userRole || document.body.dataset.userRole;
+    const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
+    const driveSelect = document.getElementById('drive-select');
+    const rootSelect = document.getElementById('root-folder-select');
+    const transcriptionSelect = document.getElementById('transcription-subfolder-select');
+    const audioSelect = document.getElementById('audio-subfolder-select');
+
+    let useOrg = role === 'colaborador';
+    if (role === 'administrador' && driveSelect) {
+        useOrg = driveSelect.value === 'organization';
+    }
+
+    const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';
+    try {
+        const res = await fetch(endpoint);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (driveSelect && role === 'colaborador') {
+            driveSelect.style.display = 'none';
+        }
+
+        if (rootSelect) {
+            rootSelect.innerHTML = '';
+            if (data.root_folder) {
+                const opt = document.createElement('option');
+                opt.value = data.root_folder.google_id;
+                opt.textContent = `\uD83D\uDCC1 ${data.root_folder.name}`;
+                rootSelect.appendChild(opt);
+            }
+        }
+
+        const populate = (select) => {
+            if (!select) return;
+            select.innerHTML = '';
+            const list = data.subfolders || [];
+            if (list.length) {
+                const none = document.createElement('option');
+                none.value = '';
+                none.textContent = 'Sin subcarpeta';
+                select.appendChild(none);
+                list.forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f.google_id;
+                    opt.textContent = `\uD83D\uDCC2 ${f.name}`;
+                    select.appendChild(opt);
+                });
+            } else {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = 'No se encontraron subcarpetas';
+                select.appendChild(opt);
+            }
+        };
+
+        populate(transcriptionSelect);
+        populate(audioSelect);
+    } catch (e) {
+        console.error('Error loading drive folders', e);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const driveSelect = document.getElementById('drive-select');
+    if (driveSelect) {
+        driveSelect.addEventListener('change', loadDriveFolders);
+    }
+    if (document.getElementById('root-folder-select')) {
+        loadDriveFolders();
+    }
+});
+
 // ===============================================
 // FUNCIONES GLOBALES PARA HTML INLINE
 // ===============================================
