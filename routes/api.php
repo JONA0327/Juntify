@@ -156,10 +156,6 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
     Route::get('/drive/folders', [TaskAttachmentController::class, 'folders'])->name('api.drive.folders');
     Route::get('/tasks-laravel/files/{file}/download', [TaskAttachmentController::class, 'download'])->name('api.tasks-laravel.files.download');
 
-    // Rutas de Contenedores
-    Route::get('/content-containers', [ContainerController::class, 'getContainers'])->name('api.content-containers');
-    Route::get('/content-containers/{id}/meetings', [ContainerController::class, 'getContainerMeetings'])->name('api.content-containers.meetings');
-
     Route::middleware('group.role')->group(function () {
         Route::post('/containers', [ContainerController::class, 'store'])->name('api.containers.store');
         Route::patch('/containers/{id}', [ContainerController::class, 'update'])->name('api.containers.update');
@@ -170,8 +166,13 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
         Route::delete('/content-containers/{container}/meetings/{meeting}', [ContainerController::class, 'removeMeeting'])->name('api.content-containers.meetings.destroy');
     });
 
-    // Rutas API para reuniones
+    // Rutas API para reuniones y contenedores
     Route::middleware(['web', 'auth'])->group(function () {
+        // Rutas de Contenedores
+        Route::get('/content-containers', [ContainerController::class, 'getContainers'])->name('api.content-containers');
+        Route::get('/content-containers/{id}/meetings', [ContainerController::class, 'getContainerMeetings'])->name('api.content-containers.meetings');
+
+        // Rutas de reuniones
         Route::get('/meetings', [MeetingController::class, 'getMeetings'])->name('api.meetings');
         Route::get('/shared-meetings', [MeetingController::class, 'getSharedMeetings'])->name('api.shared-meetings');
         Route::get('/meetings/{id}', [MeetingController::class, 'show'])->name('api.meetings.show');

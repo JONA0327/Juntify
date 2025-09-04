@@ -66,6 +66,23 @@ class ContainerController extends Controller
         try {
             $user = Auth::user();
 
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            Log::info("Getting containers for user: {$user->username}");
+
+            // Inicializar token de Google Drive de forma segura
+            try {
+                $this->setGoogleDriveToken($user);
+                Log::info("Google Drive token set successfully for user: {$user->username}");
+            } catch (\Exception $e) {
+                Log::warning("No Google Drive token available for user {$user->username}: {$e->getMessage()}");
+            }
+
             $containers = MeetingContentContainer::with('group')
                 ->where('is_active', true)
                 ->where(function ($q) use ($user) {
@@ -90,12 +107,15 @@ class ContainerController extends Controller
                     ];
                 });
 
+            Log::info("Retrieved {$containers->count()} containers for user: {$user->username}");
+
             return response()->json([
                 'success' => true,
                 'containers' => $containers
             ]);
 
         } catch (\Exception $e) {
+            Log::error("Error in getContainers: {$e->getMessage()}");
             return response()->json([
                 'success' => false,
                 'message' => 'Error al cargar contenedores: ' . $e->getMessage()
@@ -338,32 +358,74 @@ class ContainerController extends Controller
      */
     public function getMeetings($id): JsonResponse
     {
-        $user = Auth::user();
-        $this->setGoogleDriveToken($user);
+        try {
+            $user = Auth::user();
+            Log::info("Getting meetings for container ID: {$id}, user: {$user->username}");
 
-        $container = MeetingContentContainer::where('id', $id)
-            ->where('username', $user->username)
-            ->firstOrFail();
+            // Inicializar token de Google Drive de forma segura
+            try {
+                $this->setGoogleDriveToken($user);
+                Log::info("Google Drive token set successfully for user: {$user->username}");
+            } catch (\Exception $e) {
+                Log::warning("No Google Drive token available for user {$user->username}: {$e->getMessage()}");
+            }
 
-        $meetings = $container->meetings()
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($meeting) {
-                return [
-                    'id' => $meeting->id,
-                    'meeting_name' => $meeting->meeting_name,
-                    'created_at' => $meeting->created_at->format('d/m/Y H:i'),
-                    'audio_drive_id' => $meeting->audio_drive_id,
-                    'transcript_drive_id' => $meeting->transcript_drive_id,
-                    'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
-                    'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
-                ];
-            });
+            $container = MeetingContentContainer::where('id', $id)
+                ->where('username', $user->username)
+                ->firstOrFail();
 
-        return response()->json([
-            'success' => true,
-            'meetings' => $meetings,
-        ]);
+            $meetings = $container->meetings()
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($meeting) {
+                    $audioFolder = null;
+                    $transcriptFolder = null;
+
+                    // Obtener nombre de carpeta de audio de forma segura
+                    if ($meeting->audio_drive_id) {
+                        try {
+                            $audioFolder = $this->getFolderName($meeting->audio_drive_id);
+                        } catch (\Exception $e) {
+                            Log::warning("Error getting audio folder name for meeting {$meeting->id}: {$e->getMessage()}");
+                            $audioFolder = 'Error al cargar carpeta';
+                        }
+                    }
+
+                    // Obtener nombre de carpeta de transcripción de forma segura
+                    if ($meeting->transcript_drive_id) {
+                        try {
+                            $transcriptFolder = $this->getFolderName($meeting->transcript_drive_id);
+                        } catch (\Exception $e) {
+                            Log::warning("Error getting transcript folder name for meeting {$meeting->id}: {$e->getMessage()}");
+                            $transcriptFolder = 'Error al cargar carpeta';
+                        }
+                    }
+
+                    return [
+                        'id' => $meeting->id,
+                        'meeting_name' => $meeting->meeting_name,
+                        'created_at' => $meeting->created_at->format('d/m/Y H:i'),
+                        'audio_drive_id' => $meeting->audio_drive_id,
+                        'transcript_drive_id' => $meeting->transcript_drive_id,
+                        'audio_folder' => $audioFolder,
+                        'transcript_folder' => $transcriptFolder,
+                    ];
+                });
+
+            Log::info("Retrieved {$meetings->count()} meetings for container {$id}");
+
+            return response()->json([
+                'success' => true,
+                'meetings' => $meetings,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Error in getMeetings: {$e->getMessage()}");
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar las reuniones del contenedor: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -373,8 +435,15 @@ class ContainerController extends Controller
     {
         try {
             $user = Auth::user();
-            $this->setGoogleDriveToken($user);
             Log::info("Getting container meetings for container ID: {$id}, user: {$user->username}");
+
+            // Inicializar token de Google Drive de forma segura
+            try {
+                $this->setGoogleDriveToken($user);
+                Log::info("Google Drive token set successfully for user: {$user->username}");
+            } catch (\Exception $e) {
+                Log::warning("No Google Drive token available for user {$user->username}: {$e->getMessage()}");
+            }
 
             // Acceso de lectura a reuniones del contenedor:
             // - Creador del contenedor (username)
@@ -410,14 +479,37 @@ class ContainerController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($meeting) {
+                    $audioFolder = null;
+                    $transcriptFolder = null;
+
+                    // Obtener nombre de carpeta de audio de forma segura
+                    if ($meeting->audio_drive_id) {
+                        try {
+                            $audioFolder = $this->getFolderName($meeting->audio_drive_id);
+                        } catch (\Exception $e) {
+                            Log::warning("Error getting audio folder name for meeting {$meeting->id}: {$e->getMessage()}");
+                            $audioFolder = 'Error al cargar carpeta';
+                        }
+                    }
+
+                    // Obtener nombre de carpeta de transcripción de forma segura
+                    if ($meeting->transcript_drive_id) {
+                        try {
+                            $transcriptFolder = $this->getFolderName($meeting->transcript_drive_id);
+                        } catch (\Exception $e) {
+                            Log::warning("Error getting transcript folder name for meeting {$meeting->id}: {$e->getMessage()}");
+                            $transcriptFolder = 'Error al cargar carpeta';
+                        }
+                    }
+
                     return [
                         'id' => $meeting->id,
                         'meeting_name' => $meeting->meeting_name,
                         'created_at' => $meeting->created_at->format('d/m/Y H:i'),
                         'audio_drive_id' => $meeting->audio_drive_id,
                         'transcript_drive_id' => $meeting->transcript_drive_id,
-                        'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
-                        'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
+                        'audio_folder' => $audioFolder,
+                        'transcript_folder' => $transcriptFolder,
                         'has_transcript' => !empty($meeting->transcript_drive_id),
                     ];
                 });
@@ -436,7 +528,7 @@ class ContainerController extends Controller
                 'meetings' => $meetings,
             ];
 
-            Log::info("Response data: " . json_encode($response));
+            Log::info("Response data prepared for container {$id}");
 
             return response()->json($response);
 

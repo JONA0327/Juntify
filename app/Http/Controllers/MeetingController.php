@@ -587,9 +587,6 @@ class MeetingController extends Controller
 
             // Reunión moderna en base de datos
             $meeting = Meeting::with([
-                'tasks' => function ($q) use ($user) {
-                    $q->where('username', $user->username);
-                },
                 'keyPoints' => function ($q) use ($user) {
                     $q->whereHas('meeting', function ($mq) use ($user) {
                         $mq->where('username', $user->username);
@@ -667,6 +664,11 @@ class MeetingController extends Controller
 
             $transcriptionText = $segments->pluck('text')->implode(' ');
 
+            // Obtener las tareas de la tabla TaskLaravel
+            $tasks = TaskLaravel::where('meeting_id', $meeting->id)
+                ->where('username', $user->username)
+                ->get();
+
             return response()->json([
                 'success' => true,
                 'meeting' => [
@@ -679,7 +681,7 @@ class MeetingController extends Controller
                     'summary' => $meeting->summary,
                     'key_points' => $meeting->keyPoints->pluck('point_text'),
                     'transcription' => $transcriptionText,
-                    'tasks' => $meeting->tasks,
+                    'tasks' => $tasks,
                     'speakers' => $meeting->speaker_map ?? [],
                     'segments' => $segments,
                     'audio_folder' => $this->getFolderName($meeting->recordings_folder_id),

@@ -27,11 +27,6 @@ class Meeting extends Model
         'speaker_map' => 'array',
     ];
 
-    public function tasks()
-    {
-        return $this->hasMany(Task::class, 'meeting_id');
-    }
-
     public function keyPoints()
     {
         return $this->hasMany(KeyPoint::class, 'meeting_id');

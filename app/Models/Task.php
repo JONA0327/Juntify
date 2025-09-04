@@ -11,7 +11,6 @@ class Task extends Model
     use HasFactory;
 
     protected $fillable = [
-        'username',
         'meeting_id',
         'text',
         'description',
@@ -29,11 +28,6 @@ class Task extends Model
     ];
 
     // Relaciones
-    public function user()
-    {
-        return $this->belongsTo(User::class, 'username', 'username');
-    }
-
     public function assignedUser()
     {
         return $this->belongsTo(User::class, 'assignee', 'username');
