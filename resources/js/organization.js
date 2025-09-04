@@ -271,10 +271,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
     // Método de inicialización para resetear estados
     init() {
-        // Obtener el userId del meta tag y convertirlo a número
-        this.userId = Number(document
+        // Obtener el userId (UUID string) del meta tag sin convertir
+        this.userId = document
             .querySelector('meta[name="user-id"]')
-            .getAttribute('content'));
+            .getAttribute('content');
 
     // Asegurar que el modal esté cerrado al iniciar
     this.showGroupInfoModal = false;
@@ -295,8 +295,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         if (import.meta.env.DEV) {
             console.log('Estado de organización reiniciado');
         }
-        // Asegurar que cada organización solo contenga grupos asociados al usuario actual
-        this.organizations = this.filterOrgGroups(this.organizations);
+    // Usar los grupos tal como vienen del backend (evitar filtrado que oculte todo)
+    this.organizations = Array.isArray(this.organizations) ? this.organizations : [];
     },
     openConfirmDeleteGroup(org, group) {
         this.orgOfGroupToDelete = org;
@@ -322,12 +322,12 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.isRemovingMember = false;
     },
 
-    // Filtrar grupos de las organizaciones por usuario
+    // Filtrar grupos de las organizaciones por usuario (comparación por UUID string)
     filterOrgGroups(orgs) {
         return orgs.map(org => ({
             ...org,
             groups: (org.groups || []).filter(group =>
-                group.users && group.users.some(user => Number(user.id) === this.userId)
+                group.users && group.users.some(user => String(user.id) === String(this.userId))
             )
         }));
 

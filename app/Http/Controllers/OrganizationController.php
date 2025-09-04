@@ -87,7 +87,7 @@ class OrganizationController extends Controller
             })
             ->orWhere('admin_id', $user->id)
             ->with([
-                // Cargar todos los grupos con sus usuarios y código
+                // Cargar todos los grupos de la organización con sus usuarios y código
                 'groups' => function ($query) {
                     $query->with(['users', 'code']);
                 },

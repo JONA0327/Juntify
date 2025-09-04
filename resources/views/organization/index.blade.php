@@ -378,17 +378,17 @@
                             </div>
 
                             <!-- Pestaña Actividad -->
-                            <div x-show="mainTab === 'activity'" x-transition x-init="if (!activities?.[org.id]) loadActivities(org.id)">
+                <div x-show="mainTab === 'activity'" x-transition x-init="if (!activities || !activities[org.id]) loadActivities(org.id)">
                                 <h3 class="text-2xl font-bold text-slate-200 mb-4">Actividad reciente</h3>
                                 <ul>
-                                    <template x-for="activity in activities?.[org.id] ?? []" :key="activity.id">
+                    <template x-for="activity in ((activities && activities[org.id]) ? activities[org.id] : [])" :key="activity.id">
                                         <li class="py-2 border-b border-slate-700/50">
                                             <span class="text-yellow-400 font-semibold" x-text="activity.actor"></span>
                                             <span class="ml-2" x-text="activity.description"></span>
                                             <span class="ml-2 text-slate-400 text-sm" x-text="activity.created_at"></span>
                                         </li>
                                     </template>
-                                    <li x-show="!(activities?.[org.id]?.length)" class="text-slate-400">Sin actividad registrada</li>
+                    <li x-show="!(activities && activities[org.id] && activities[org.id].length)" class="text-slate-400">Sin actividad registrada</li>
                                 </ul>
                             </div>
 
@@ -426,7 +426,7 @@
                 <div x-show="showConfirmDeleteGroupModal" @keydown.escape.window="closeConfirmDeleteGroup()" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[62]" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-2">Confirmar eliminación</h2>
-                        <p class="text-slate-300 mb-4">¿Seguro que deseas eliminar el grupo <span class="font-semibold text-yellow-400" x-text="groupToDelete?.nombre_grupo"></span>? Esta acción no se puede deshacer.</p>
+                        <p class="text-slate-300 mb-4">¿Seguro que deseas eliminar el grupo <span class="font-semibold text-yellow-400" x-text="groupToDelete && groupToDelete.nombre_grupo ? groupToDelete.nombre_grupo : ''"></span>? Esta acción no se puede deshacer.</p>
                         <div class="flex justify-end space-x-2">
                             <button @click="closeConfirmDeleteGroup()" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
                             <button @click="deleteGroup(orgOfGroupToDelete, groupToDelete)" :disabled="isDeletingGroup" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50">
@@ -447,7 +447,7 @@
                 <div x-show="showConfirmRemoveMemberModal" @keydown.escape.window="closeConfirmRemoveMember()" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[62]" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-2">Confirmar expulsión</h2>
-                        <p class="text-slate-300 mb-4">¿Seguro que deseas expulsar a <span class="font-semibold text-yellow-400" x-text="memberToRemove?.full_name"></span>? Esta acción no se puede deshacer.</p>
+                        <p class="text-slate-300 mb-4">¿Seguro que deseas expulsar a <span class="font-semibold text-yellow-400" x-text="memberToRemove && memberToRemove.full_name ? memberToRemove.full_name : ''"></span>? Esta acción no se puede deshacer.</p>
                         <div class="flex justify-end space-x-2">
                             <button @click="closeConfirmRemoveMember()" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
                             <button @click="removeMember()" :disabled="isRemovingMember" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50">
@@ -490,7 +490,7 @@
                 <div x-show="showInviteModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-4">Invitar miembro</h2>
-                        <p class="text-sm text-slate-400 mb-4" x-text="'Invitar a: ' + (selectedGroup?.nombre_grupo || '')"></p>
+                        <p class="text-sm text-slate-400 mb-4" x-text="'Invitar a: ' + ((selectedGroup && selectedGroup.nombre_grupo) ? selectedGroup.nombre_grupo : '')"></p>
 
                         <input type="email"
                                x-model="inviteEmail"
@@ -670,8 +670,8 @@
                         <!-- Header del modal -->
                         <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
                             <div>
-                                <h2 class="text-2xl font-bold text-white" x-text="selectedContainer?.name || 'Contenedor'"></h2>
-                                <p class="text-slate-400 mt-1" x-text="selectedContainer?.description || 'Reuniones del contenedor'"></p>
+                                <h2 class="text-2xl font-bold text-white" x-text="(selectedContainer && selectedContainer.name) ? selectedContainer.name : 'Contenedor'"></h2>
+                                <p class="text-slate-400 mt-1" x-text="(selectedContainer && selectedContainer.description) ? selectedContainer.description : 'Reuniones del contenedor'"></p>
                             </div>
                             <button @click="showContainerMeetingsModal = false" class="text-slate-400 hover:text-white transition-colors">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -683,7 +683,7 @@
                         <!-- Contenido del modal -->
                         <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
                             <!-- Lista de reuniones -->
-                            <template x-if="selectedContainer?.meetings?.length > 0">
+                            <template x-if="selectedContainer && selectedContainer.meetings && selectedContainer.meetings.length > 0">
                                 <div class="meetings-grid">
                                     <template x-for="meeting in selectedContainer.meetings" :key="meeting.id">
                                         <div>
@@ -695,7 +695,7 @@
                             </template>
 
                             <!-- Estado vacío -->
-                            <template x-if="!selectedContainer?.meetings?.length">
+                            <template x-if="!(selectedContainer && selectedContainer.meetings && selectedContainer.meetings.length)">
                                 <div class="text-center py-16">
                                     <div class="mx-auto w-24 h-24 bg-slate-800/30 rounded-full flex items-center justify-center mb-6">
                                         <svg class="w-12 h-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -716,8 +716,8 @@
                         <!-- Header del modal -->
                         <div class="flex items-center justify-between mb-6">
                             <div>
-                                <h2 class="text-2xl font-bold text-white" x-text="currentGroup?.nombre_grupo || 'Grupo'"></h2>
-                                <p class="text-slate-400 mt-1" x-text="currentGroup?.descripcion || 'Información del grupo'"></p>
+                                <h2 class="text-2xl font-bold text-white" x-text="(currentGroup && currentGroup.nombre_grupo) ? currentGroup.nombre_grupo : 'Grupo'"></h2>
+                                <p class="text-slate-400 mt-1" x-text="(currentGroup && currentGroup.descripcion) ? currentGroup.descripcion : 'Información del grupo'"></p>
                             </div>
                             <button @click="showGroupInfoModal = false" class="text-slate-400 hover:text-white transition-colors">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -746,7 +746,7 @@
 
                             <!-- Lista de contenedores -->
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <template x-for="container in currentGroup?.containers || []" :key="container.id">
+                                <template x-for="container in (currentGroup && currentGroup.containers ? currentGroup.containers : [])" :key="container.id">
                                     <div class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 hover:bg-slate-700/50 transition-colors">
                                         <h4 class="font-semibold text-yellow-400 mb-2">
                                             <span x-text="container.name"></span>
@@ -773,7 +773,7 @@
                             </div>
 
                             <!-- Estado vacío -->
-                            <div x-show="!currentGroup?.containers || currentGroup.containers.length === 0" class="text-center py-16">
+                            <div x-show="!(currentGroup && currentGroup.containers && currentGroup.containers.length)" class="text-center py-16">
                                 <div class="mx-auto w-16 h-16 bg-slate-800/30 rounded-full flex items-center justify-center mb-4">
                                     <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
