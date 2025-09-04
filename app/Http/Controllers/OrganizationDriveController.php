@@ -8,6 +8,7 @@ use App\Models\OrganizationGoogleToken;
 use App\Models\OrganizationSubfolder;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class OrganizationDriveController extends Controller
 {
@@ -50,7 +51,15 @@ class OrganizationDriveController extends Controller
 
     protected function initDrive(Organization $organization): OrganizationGoogleToken
     {
-        $token = $organization->googleToken()->firstOrFail();
+        $token = $organization->googleToken;
+
+        if (!$token) {
+            throw new \Exception("La organización no tiene configurado un token de Google Drive");
+        }
+
+        if (!$token->isConnected()) {
+            throw new \Exception("El token de Google Drive no está configurado correctamente");
+        }
 
         $client = $this->drive->getClient();
         $client->setAccessToken([
@@ -58,6 +67,7 @@ class OrganizationDriveController extends Controller
             'refresh_token' => $token->refresh_token,
             'expiry_date'   => $token->expiry_date,
         ]);
+
         if ($client->isAccessTokenExpired()) {
             $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
             if (!isset($new['error'])) {
@@ -66,6 +76,8 @@ class OrganizationDriveController extends Controller
                     'expiry_date'  => now()->addSeconds($new['expires_in']),
                 ]);
                 $client->setAccessToken($new);
+            } else {
+                throw new \Exception("No se pudo renovar el token de Google Drive: " . ($new['error'] ?? 'Error desconocido'));
             }
         }
 
@@ -205,25 +217,32 @@ class OrganizationDriveController extends Controller
         if (!$this->userIsMember($organization)) {
             abort(403, 'No autorizado');
         }
+
         // Check if organization has a connected Google token
         $token = $organization->googleToken;
-        $connected = (bool) $token;
+        $connected = $token && $token->isConnected();
 
         $root = $organization->folder;
         $subfolders = [];
 
         if ($connected && $root) {
-            // Initialize drive client and list subfolders
-            $this->initDrive($organization);
-            $files = $this->drive->listSubfolders($root->google_id);
-            foreach ($files as $file) {
-                $subfolders[] = OrganizationSubfolder::updateOrCreate(
-                    [
-                        'organization_folder_id' => $root->id,
-                        'google_id'              => $file->getId(),
-                    ],
-                    ['name' => $file->getName()]
-                );
+            try {
+                // Initialize drive client and list subfolders
+                $this->initDrive($organization);
+                $files = $this->drive->listSubfolders($root->google_id);
+                foreach ($files as $file) {
+                    $subfolders[] = OrganizationSubfolder::updateOrCreate(
+                        [
+                            'organization_folder_id' => $root->id,
+                            'google_id'              => $file->getId(),
+                        ],
+                        ['name' => $file->getName()]
+                    );
+                }
+            } catch (\Exception $e) {
+                // Si hay problemas con Drive, marcar como desconectado
+                Log::warning("Error accessing Drive for organization {$organization->id}: " . $e->getMessage());
+                $connected = false;
             }
         }
 

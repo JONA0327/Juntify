@@ -17,6 +17,21 @@ class OrganizationGoogleToken extends Model
         'expiry_date' => 'datetime',
     ];
 
+    public function organization()
+    {
+        return $this->belongsTo(Organization::class);
+    }
+
+    public function isConnected(): bool
+    {
+        return !empty($this->access_token) && !empty($this->refresh_token);
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->expiry_date && $this->expiry_date->isPast();
+    }
+
     public function getAccessTokenAttribute($value)
     {
         $decoded = json_decode($value, true);

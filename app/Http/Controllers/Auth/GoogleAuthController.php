@@ -78,22 +78,25 @@ class GoogleAuthController extends Controller
 
         $user = Auth::user();
 
-        GoogleToken::updateOrCreate(
-            ['username' => $user->username],
-            [
-                'access_token'  => $token['access_token'] ?? '',
-                'refresh_token' => $token['refresh_token'] ?? '',
-                'expiry_date'   => now()->addSeconds($token['expires_in'] ?? 3600),
-            ]
-        );
-
         $from = session()->pull('google_oauth_from'); // consume flag
         $orgId = session()->pull('google_oauth_org_id');
         $returnUrl = session()->pull('google_oauth_return');
 
+        // Separar completamente los tokens: personal vs organizacional
         if ($from === 'organization' && $orgId) {
+            // Guardar solo en organization_google_tokens para organizaciones
             OrganizationGoogleToken::updateOrCreate(
                 ['organization_id' => $orgId],
+                [
+                    'access_token'  => $token['access_token'] ?? '',
+                    'refresh_token' => $token['refresh_token'] ?? '',
+                    'expiry_date'   => now()->addSeconds($token['expires_in'] ?? 3600),
+                ]
+            );
+        } else {
+            // Guardar solo en google_tokens para uso personal
+            GoogleToken::updateOrCreate(
+                ['username' => $user->username],
                 [
                     'access_token'  => $token['access_token'] ?? '',
                     'refresh_token' => $token['refresh_token'] ?? '',
@@ -138,5 +141,35 @@ class GoogleAuthController extends Controller
         }
 
         return redirect()->back()->with('success', 'Google Drive desconectado');
+    }
+
+    public function disconnectOrganization(Request $request)
+    {
+        $organizationId = $request->input('organization_id');
+
+        if (!$organizationId) {
+            return redirect()->back()->withErrors(['error' => 'ID de organización requerido']);
+        }
+
+        $orgToken = OrganizationGoogleToken::where('organization_id', $organizationId)->first();
+
+        if ($orgToken) {
+            $client = $this->createClient();
+            if ($orgToken->access_token) {
+                try {
+                    $client->revokeToken($orgToken->access_token);
+                } catch (\Throwable $e) {
+                    // Ignore revoke errors
+                }
+            }
+
+            $orgToken->update([
+                'access_token'  => null,
+                'refresh_token' => null,
+                'expiry_date'   => null,
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Google Drive organizacional desconectado');
     }
 }

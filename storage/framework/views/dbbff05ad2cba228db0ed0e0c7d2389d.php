@@ -182,7 +182,7 @@
                                 <div class="mt-8 p-6 bg-slate-700/30 rounded-lg" x-init="loadDriveSubfolders(org)">
                                     <!-- Conectar / Desconectar - solo visible cuando no está conectado -->
                                     <div x-show="!getDriveState(org.id).connected" class="mb-4">
-                                        <button @click="connectDrive()"
+                                        <button @click="connectDrive(org)"
                                                 class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
                                             Conectar Google Drive
                                         </button>
@@ -196,7 +196,7 @@
                                                     Carpeta raíz:
                                                     <span class="font-semibold text-yellow-400" x-text="getDriveState(org.id).rootFolder?.name"></span>
                                                 </p>
-                                                <button @click="disconnectDrive()"
+                                                <button @click="disconnectDrive(org)"
                                                         class="bg-red-600 px-3 py-1.5 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200 text-sm">
                                                     Desconectar Google Drive
                                                 </button>
@@ -219,7 +219,7 @@
                                                         </span>
                                                     </button>
                                                 </div>
-                                                <button @click="disconnectDrive()"
+                                                <button @click="disconnectDrive(org)"
                                                         class="bg-red-600 px-3 py-1.5 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200 text-sm">
                                                     Desconectar Google Drive
                                                 </button>

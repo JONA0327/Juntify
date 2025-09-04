@@ -126,35 +126,15 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
         Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('api.notifications.destroy');
     });
 
-    // Rutas de Tareas
-    Route::get('/tasks', [TaskController::class, 'getTasks'])->name('api.tasks');
-    Route::get('/tasks/{task}', [TaskController::class, 'show'])->name('api.tasks.show');
-    Route::post('/tasks', [TaskController::class, 'store'])->name('api.tasks.store');
-    Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('api.tasks.update');
-    Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('api.tasks.destroy');
-    Route::post('/tasks/{task}/complete', [TaskController::class, 'complete'])->name('api.tasks.complete');
-
-    // Nueva BD de tareas: tasks_laravel
-    Route::get('/tasks-laravel/meetings', [TaskLaravelController::class, 'meetings'])->name('api.tasks-laravel.meetings');
-    Route::post('/tasks-laravel/import/{meetingId}', [TaskLaravelController::class, 'importFromJu'])->name('api.tasks-laravel.import');
-    Route::post('/tasks-laravel/exists', [TaskLaravelController::class, 'exists'])->name('api.tasks-laravel.exists');
-    Route::get('/tasks-laravel/tasks', [TaskLaravelController::class, 'tasks'])->name('api.tasks-laravel.tasks');
-    Route::get('/tasks-laravel/tasks/{id}', [TaskLaravelController::class, 'show'])->name('api.tasks-laravel.tasks.show');
-    Route::post('/tasks-laravel/tasks', [TaskLaravelController::class, 'store'])->name('api.tasks-laravel.tasks.store');
-    Route::put('/tasks-laravel/tasks/{id}', [TaskLaravelController::class, 'update'])->name('api.tasks-laravel.tasks.update');
-    Route::delete('/tasks-laravel/tasks/{id}', [TaskLaravelController::class, 'destroy'])->name('api.tasks-laravel.tasks.destroy');
-    Route::post('/tasks-laravel/tasks/{id}/complete', [TaskLaravelController::class, 'complete'])->name('api.tasks-laravel.tasks.complete');
-    Route::get('/tasks-laravel/calendar', [TaskLaravelController::class, 'calendar'])->name('api.tasks-laravel.calendar');
-
-    // Comentarios de tareas
-    Route::get('/tasks-laravel/tasks/{task}/comments', [TaskCommentController::class, 'index'])->name('api.tasks-laravel.comments.index');
-    Route::post('/tasks-laravel/tasks/{task}/comments', [TaskCommentController::class, 'store'])->name('api.tasks-laravel.comments.store');
-
-    // Archivos asociados a tareas
-    Route::get('/tasks-laravel/tasks/{task}/files', [TaskAttachmentController::class, 'index'])->name('api.tasks-laravel.files.index');
-    Route::post('/tasks-laravel/tasks/{task}/files', [TaskAttachmentController::class, 'store'])->name('api.tasks-laravel.files.store');
-    Route::get('/drive/folders', [TaskAttachmentController::class, 'folders'])->name('api.drive.folders');
-    Route::get('/tasks-laravel/files/{file}/download', [TaskAttachmentController::class, 'download'])->name('api.tasks-laravel.files.download');
+    // Rutas de Tareas (tabla tasks tradicional)
+    Route::middleware(['auth:web'])->group(function () {
+        Route::get('/tasks', [TaskController::class, 'getTasks'])->name('api.tasks');
+        Route::get('/tasks/{task}', [TaskController::class, 'show'])->name('api.tasks.show');
+        Route::post('/tasks', [TaskController::class, 'store'])->name('api.tasks.store');
+        Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('api.tasks.update');
+        Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('api.tasks.destroy');
+        Route::post('/tasks/{task}/complete', [TaskController::class, 'complete'])->name('api.tasks.complete');
+    });
 
     Route::middleware('group.role')->group(function () {
         Route::post('/containers', [ContainerController::class, 'store'])->name('api.containers.store');

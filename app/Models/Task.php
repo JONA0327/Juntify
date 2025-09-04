@@ -12,6 +12,7 @@ class Task extends Model
 
     protected $fillable = [
         'meeting_id',
+        'user_id',
         'text',
         'description',
         'assignee',
@@ -28,6 +29,11 @@ class Task extends Model
     ];
 
     // Relaciones
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'username');
+    }
+
     public function assignedUser()
     {
         return $this->belongsTo(User::class, 'assignee', 'username');

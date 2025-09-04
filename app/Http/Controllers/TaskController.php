@@ -3,17 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Task;
+use App\Models\TaskLaravel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
 class TaskController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('auth');
-    }
-
     /**
      * Mostrar la vista principal de tareas
      */
@@ -23,7 +19,7 @@ class TaskController extends Controller
 
         // Obtener tareas del usuario autenticado o asignadas a él
         $query = Task::where(function($q) use ($username) {
-            $q->where('username', $username)
+            $q->where('user_id', $username)
               ->orWhere('assignee', $username);
     })->with(['user', 'assignedUser', 'meeting']);
 
@@ -49,19 +45,19 @@ class TaskController extends Controller
         // Estadísticas para el dashboard
         $stats = [
             'total' => Task::where(function($q) use ($username) {
-                $q->where('username', $username)->orWhere('assignee', $username);
+                $q->where('user_id', $username)->orWhere('assignee', $username);
             })->count(),
             'pending' => Task::where(function($q) use ($username) {
-                $q->where('username', $username)->orWhere('assignee', $username);
+                $q->where('user_id', $username)->orWhere('assignee', $username);
             })->where('completed', false)->count(),
             'in_progress' => Task::where(function($q) use ($username) {
-                $q->where('username', $username)->orWhere('assignee', $username);
+                $q->where('user_id', $username)->orWhere('assignee', $username);
             })->where('completed', false)->where('progress', '>', 0)->count(),
             'completed' => Task::where(function($q) use ($username) {
-                $q->where('username', $username)->orWhere('assignee', $username);
+                $q->where('user_id', $username)->orWhere('assignee', $username);
             })->where('completed', true)->count(),
             'overdue' => Task::where(function($q) use ($username) {
-                $q->where('username', $username)->orWhere('assignee', $username);
+                $q->where('user_id', $username)->orWhere('assignee', $username);
             })->overdue()->count(),
         ];
 
@@ -75,8 +71,63 @@ class TaskController extends Controller
     {
         $username = $this->getValidatedUsername();
 
+        // Si se especifica meeting_id, SIEMPRE usar tasks_laravel (tanto para meetings como para transcriptions_laravel)
+        if ($request->has('meeting_id')) {
+            $meetingId = $request->meeting_id;
+
+            // Usar tasks_laravel para todas las reuniones
+            $tasks = \App\Models\TaskLaravel::where('meeting_id', $meetingId)
+                ->where('username', $username)
+                ->get();
+
+            // Formatear las tareas de tasks_laravel
+            $events = $tasks->map(function($task) {
+                $status = $task->progreso >= 100 ? 'completed' : ($task->progreso > 0 ? 'in_progress' : 'pending');
+                return [
+                    'id' => $task->id,
+                    'title' => $task->tarea,
+                    'text' => $task->tarea, // Para compatibilidad con el panel de tareas
+                    'tarea' => $task->tarea,
+                    'start' => $task->fecha_limite ? $task->fecha_limite->toISOString() : null,
+                    'color' => $this->getEventColorFromProgress($task->progreso),
+                    'description' => $task->descripcion,
+                    'descripcion' => $task->descripcion,
+                    'due_date' => $task->fecha_limite,
+                    'fecha_limite' => $task->fecha_limite,
+                    'fecha_inicio' => $task->fecha_inicio,
+                    'hora_limite' => $task->hora_limite,
+                    'priority' => $task->prioridad,
+                    'prioridad' => $task->prioridad,
+                    'assignee' => $task->asignado,
+                    'asignado' => $task->asignado,
+                    'progress' => $task->progreso,
+                    'progreso' => $task->progreso, // Para compatibilidad
+                    'completed' => $task->progreso >= 100,
+                    'extendedProps' => [
+                        'description' => $task->descripcion,
+                        'status' => $status,
+                        'priority' => $task->prioridad,
+                        'assignee' => $task->asignado,
+                        'progress' => $task->progreso,
+                        'meeting_id' => $task->meeting_id,
+                    ]
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'tasks' => $events,
+                'stats' => [
+                    'total' => $events->count(),
+                    'pending' => $events->where('progreso', 0)->count(),
+                    'in_progress' => $events->where('progreso', '>', 0)->where('progreso', '<', 100)->count(),
+                    'completed' => $events->where('progreso', '>=', 100)->count(),
+                ]
+            ]);
+        }
+
         $query = Task::where(function($q) use ($username) {
-            $q->where('username', $username)
+            $q->where('user_id', $username)
               ->orWhere('assignee', $username);
         })->with(['user', 'assignedUser', 'meeting']);
 
@@ -88,13 +139,21 @@ class TaskController extends Controller
 
         $tasks = $query->get();
 
-        // Formatear para FullCalendar
+        // Formatear para FullCalendar o para el panel de tareas según el caso
         $events = $tasks->map(function($task) {
             return [
                 'id' => $task->id,
                 'title' => $task->text,
+                'text' => $task->text, // Para compatibilidad con el panel de tareas
                 'start' => $task->due_date ? $task->due_date->toISOString() : null,
                 'color' => $this->getEventColor($task),
+                'description' => $task->description,
+                'due_date' => $task->due_date,
+                'priority' => $task->priority,
+                'assignee' => $task->assignee,
+                'progress' => $task->progress,
+                'progreso' => $task->progress, // Para compatibilidad
+                'completed' => $task->completed,
                 'extendedProps' => [
                     'description' => $task->description,
                     'status' => $task->status,
@@ -105,6 +164,20 @@ class TaskController extends Controller
                 ]
             ];
         });
+
+        // Si se está filtrando por meeting_id, devolver formato compatible con el panel de tareas
+        if ($request->has('meeting_id')) {
+            return response()->json([
+                'success' => true,
+                'tasks' => $events,
+                'stats' => [
+                    'total' => $events->count(),
+                    'pending' => $events->where('completed', false)->where('progress', 0)->count(),
+                    'in_progress' => $events->where('completed', false)->where('progress', '>', 0)->count(),
+                    'completed' => $events->where('completed', true)->count(),
+                ]
+            ]);
+        }
 
         return response()->json($events);
     }
@@ -117,7 +190,7 @@ class TaskController extends Controller
         $username = $this->getValidatedUsername();
 
         // Verificar que el usuario pueda ver esta tarea
-        if ($task->username !== $username && $task->assignee !== $username) {
+        if ($task->user_id !== $username && $task->assignee !== $username) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
@@ -148,7 +221,7 @@ class TaskController extends Controller
             'description' => $request->description,
             'due_date' => $request->due_date,
             'priority' => $request->priority ?? 'media',
-            'username' => $username,
+            'user_id' => $username,
             'assignee' => $request->assignee,
             'meeting_id' => $request->meeting_id,
             'progress' => $request->progress ?? 0,
@@ -170,7 +243,7 @@ class TaskController extends Controller
         $username = $this->getValidatedUsername();
 
         // Verificar que el usuario pueda editar esta tarea
-        if ($task->username !== $username && $task->assignee !== $username) {
+        if ($task->user_id !== $username && $task->assignee !== $username) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
@@ -204,7 +277,7 @@ class TaskController extends Controller
         $username = $this->getValidatedUsername();
 
         // Verificar que el usuario pueda eliminar esta tarea
-        if ($task->username !== $username) {
+        if ($task->user_id !== $username) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
@@ -224,7 +297,7 @@ class TaskController extends Controller
         $username = $this->getValidatedUsername();
 
         // Verificar que el usuario pueda completar esta tarea
-        if ($task->username !== $username && $task->assignee !== $username) {
+        if ($task->user_id !== $username && $task->assignee !== $username) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
@@ -259,6 +332,22 @@ class TaskController extends Controller
             'baja' => '#6b7280', // Gris
             default => '#6b7280'
         };
+    }
+
+    /**
+     * Obtener color del evento para tareas de tasks_laravel basado en progreso
+     */
+    private function getEventColorFromProgress($progreso)
+    {
+        if ($progreso >= 100) {
+            return '#10b981'; // Verde para completadas
+        }
+
+        if ($progreso > 0) {
+            return '#f59e0b'; // Naranja para en progreso
+        }
+
+        return '#6b7280'; // Gris para pendientes
     }
 
     /**

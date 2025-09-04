@@ -148,22 +148,38 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         return this.driveData[orgId];
     },
 
-    connectDrive() {
+    connectDrive(org) {
         // Include source so callback redirects back to organizations
-        window.location.href = '/auth/google/redirect?from=organization';
+        // Pasamos el organization_id de la organización específica
+        if (org && org.id) {
+            window.location.href = `/auth/google/redirect?from=organization&organization_id=${org.id}`;
+        } else {
+            this.showStatus('Error: No se pudo identificar la organización', 'error');
+        }
     },
 
-    async disconnectDrive() {
+    async disconnectDrive(org) {
         try {
-            const res = await fetch('/drive/disconnect', { method: 'POST', headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') } });
+            if (!org || !org.id) {
+                this.showStatus('Error: No se pudo identificar la organización', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('organization_id', org.id);
+
+            const res = await fetch('/drive/disconnect-organization', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: formData
+            });
+
             if (res.ok) {
-                // Refresh drive status for all orgs
-                if (Array.isArray(this.organizations)) {
-                    for (const org of this.organizations) {
-                        await this.loadDriveSubfolders(org);
-                    }
-                }
-                this.showStatus('Google Drive desconectado');
+                // Refresh drive status for this specific org
+                await this.loadDriveSubfolders(org);
+                this.showStatus('Google Drive organizacional desconectado');
             } else {
                 this.showStatus('No se pudo desconectar', 'error');
             }
