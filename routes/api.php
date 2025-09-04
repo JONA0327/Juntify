@@ -100,6 +100,7 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
             ->middleware('organization.role:colaborador,administrador')
             ->name('api.organizations.drive.subfolders.index');
         Route::get('/organizations/{organization}/drive/status', [OrganizationDriveController::class, 'status'])
+            ->middleware('organization.role:colaborador,administrador')
             ->name('api.organizations.drive.status');
     });
 

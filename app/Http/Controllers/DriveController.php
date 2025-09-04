@@ -383,7 +383,7 @@ class DriveController extends Controller
             $v = $request->validate([
                 'meetingName' => 'required|string',
                 'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4',
-                'drive'       => 'nullable|string|in:personal,organization',
+                'rootFolder'  => 'required|string',
             ]);
 
             $user = Auth::user();
@@ -394,35 +394,38 @@ class DriveController extends Controller
                 ->where('organization_id', $user->current_organization_id)
                 ->first()?->pivot->rol;
 
-            $driveSelection = $v['drive'] ?? null;
             $useOrgDrive = false;
             if ($organizationFolder) {
                 if ($orgRole === 'colaborador') {
-                    if ($driveSelection && $driveSelection !== 'organization') {
+                    if ($v['rootFolder'] !== $organizationFolder->google_id && $v['rootFolder'] !== (string) $organizationFolder->id) {
                         return response()->json([
                             'message' => 'Colaboradores solo pueden usar la carpeta de la organización'
                         ], 403);
                     }
                     $useOrgDrive = true;
-                } elseif ($orgRole === 'administrador' && $driveSelection === 'organization') {
+                } elseif ($orgRole === 'administrador' && ($v['rootFolder'] === $organizationFolder->google_id || $v['rootFolder'] === (string) $organizationFolder->id)) {
                     $useOrgDrive = true;
                 }
             }
 
-            $token = GoogleToken::where('username', $user->username)->first();
-            if (!$useOrgDrive && ! $token) {
-                Log::error('uploadPendingAudio: google token not found', [
-                    'username' => $user->username,
-                ]);
-                return response()->json(['message' => 'Token de Google no encontrado'], 400);
-            }
-
             if ($useOrgDrive) {
                 $rootFolder = $organizationFolder;
-                $rootFolderId = $rootFolder->google_id;
+                $rootFolderId = $organizationFolder->google_id;
             } else {
+                $token = GoogleToken::where('username', $user->username)->first();
+                if (! $token) {
+                    Log::error('uploadPendingAudio: google token not found', [
+                        'username' => $user->username,
+                    ]);
+                    return response()->json(['message' => 'Token de Google no encontrado'], 400);
+                }
+
                 $rootFolder = Folder::where('google_token_id', $token->id)
                     ->whereNull('parent_id')
+                    ->where(function ($q) use ($v) {
+                        $q->where('google_id', $v['rootFolder'])
+                          ->orWhere('id', $v['rootFolder']);
+                    })
                     ->first();
                 if (! $rootFolder) {
                     Log::error('uploadPendingAudio: root folder not found', [
@@ -742,10 +745,17 @@ class DriveController extends Controller
             }
         } else {
             // Personal drive
-            $rootFolder = Folder::where(function($q) use ($v) {
-                $q->where('google_id', $v['rootFolder'])
-                  ->orWhere('id', $v['rootFolder']);
-            })->first();
+            $token = GoogleToken::where('username', $user->username)->first();
+            if (! $token) {
+                return response()->json(['message' => 'Token de Google no encontrado'], 400);
+            }
+
+            $rootFolder = Folder::where('google_token_id', $token->id)
+                ->where(function($q) use ($v) {
+                    $q->where('google_id', $v['rootFolder'])
+                      ->orWhere('id', $v['rootFolder']);
+                })
+                ->first();
             if (!$rootFolder) {
                 return response()->json(['message' => 'Carpeta principal no encontrada en la base de datos'], 400);
             }

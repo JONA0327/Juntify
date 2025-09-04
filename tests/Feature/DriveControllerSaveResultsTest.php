@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Models\GoogleToken;
+use App\Models\Folder;
 use App\Services\GoogleServiceAccount;
 use Illuminate\Support\Facades\Config;
 use Mockery;
@@ -11,11 +12,18 @@ it('shares both folders with the service account when saving results', function 
 
     $user = User::factory()->create(['username' => 'testuser']);
 
-    GoogleToken::create([
+    $token = GoogleToken::create([
         'username'      => $user->username,
         'access_token'  => 'access',
         'refresh_token' => 'refresh',
         'expiry_date'   => now()->addHour(),
+    ]);
+
+    Folder::create([
+        'google_token_id' => $token->id,
+        'google_id'       => 'root123',
+        'name'            => 'Root',
+        'parent_id'       => null,
     ]);
 
     $service = Mockery::mock(GoogleServiceAccount::class);
@@ -57,11 +65,18 @@ it('derives the audio extension from the mime type map', function () {
 
     $user = User::factory()->create(['username' => 'testuser']);
 
-    GoogleToken::create([
+    $token = GoogleToken::create([
         'username'      => $user->username,
         'access_token'  => 'access',
         'refresh_token' => 'refresh',
         'expiry_date'   => now()->addHour(),
+    ]);
+
+    Folder::create([
+        'google_token_id' => $token->id,
+        'google_id'       => 'root123',
+        'name'            => 'Root',
+        'parent_id'       => null,
     ]);
 
     $service = Mockery::mock(GoogleServiceAccount::class);
