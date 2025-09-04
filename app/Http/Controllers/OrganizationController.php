@@ -5,11 +5,48 @@ namespace App\Http\Controllers;
 use App\Models\Organization;
 use App\Models\Group;
 use App\Models\OrganizationActivity;
+use App\Models\GoogleToken;
+use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class OrganizationController extends Controller
 {
+    protected GoogleDriveService $drive;
+
+    public function __construct(GoogleDriveService $drive)
+    {
+        $this->drive = $drive;
+    }
+
+    protected function initAdminDrive(Organization $organization): ?GoogleToken
+    {
+        $admin = $organization->admin;
+        $token = GoogleToken::where('username', $admin->username)->first();
+        if (!$token) {
+            return null;
+        }
+
+        $client = $this->drive->getClient();
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expiry_date'   => $token->expiry_date,
+        ]);
+
+        if ($client->isAccessTokenExpired()) {
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (!isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
+        }
+
+        return $token;
+    }
     public function publicIndex()
     {
         $organizations = Organization::query()
@@ -203,6 +240,12 @@ class OrganizationController extends Controller
             'description' => $user->full_name . ' se unió a la organización',
         ]);
 
+        $organization->load('folder');
+        if ($organization->folder) {
+            $this->initAdminDrive($organization);
+            $this->drive->shareFolder($organization->folder->google_id, $user->email);
+        }
+
         return response()->json(['joined' => true]);
     }
 
@@ -234,6 +277,12 @@ class OrganizationController extends Controller
 
             $organization->users()->detach($user->id);
             $organization->refreshMemberCount();
+
+            $organization->load('folder');
+            if ($organization->folder) {
+                $this->initAdminDrive($organization);
+                $this->drive->revokeFolderPermission($organization->folder->google_id, $user->email);
+            }
         }
 
         return response()->json(['left' => true]);
@@ -331,10 +380,21 @@ class OrganizationController extends Controller
             abort(403);
         }
 
+        $organization->load(['groups', 'users', 'folder']);
+        if ($organization->folder) {
+            $this->initAdminDrive($organization);
+            $folderId = $organization->folder->google_id;
+            foreach ($organization->users as $member) {
+                $this->drive->revokeFolderPermission($folderId, $member->email);
+            }
+            $this->drive->revokeFolderPermission($folderId, config('services.google.service_account_email'));
+        }
+
         foreach ($organization->groups as $group) {
             $group->users()->detach();
         }
 
+        $organization->users()->detach();
         $organization->delete();
 
         return response()->json(['deleted' => true]);

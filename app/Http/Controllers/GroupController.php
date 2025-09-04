@@ -8,6 +8,8 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Models\Organization;
 use App\Models\OrganizationActivity;
+use App\Models\GoogleToken;
+use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -17,6 +19,41 @@ use App\Models\GroupCode;
 
 class GroupController extends Controller
 {
+    protected GoogleDriveService $drive;
+
+    public function __construct(GoogleDriveService $drive)
+    {
+        $this->drive = $drive;
+    }
+
+    protected function initAdminDrive(Organization $organization): ?GoogleToken
+    {
+        $admin = $organization->admin;
+        $token = GoogleToken::where('username', $admin->username)->first();
+        if (!$token) {
+            return null;
+        }
+
+        $client = $this->drive->getClient();
+        $client->setAccessToken([
+            'access_token'  => $token->access_token,
+            'refresh_token' => $token->refresh_token,
+            'expiry_date'   => $token->expiry_date,
+        ]);
+
+        if ($client->isAccessTokenExpired()) {
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (!isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new['access_token'],
+                    'expiry_date'  => now()->addSeconds($new['expires_in']),
+                ]);
+                $client->setAccessToken($new);
+            }
+        }
+
+        return $token;
+    }
     public function publicIndex(Request $request)
     {
         $query = Group::query()
@@ -470,6 +507,11 @@ class GroupController extends Controller
                 })->exists();
             if (!$stillInAnyGroup) {
                 $org->users()->detach($user->id);
+                $org->load('folder');
+                if ($org->folder) {
+                    $this->initAdminDrive($org);
+                    $this->drive->revokeFolderPermission($org->folder->google_id, $user->email);
+                }
             }
             $org->refreshMemberCount();
 
