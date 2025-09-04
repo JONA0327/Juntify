@@ -7,6 +7,7 @@ use App\Http\Controllers\DriveController;
 use App\Http\Controllers\PendingRecordingController;
 use App\Http\Controllers\OrganizationActivityController;
 use App\Http\Controllers\OrganizationController;
+use App\Http\Controllers\OrganizationDriveController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\NotificationController;
@@ -86,6 +87,14 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
     Route::patch('/organizations/{organization}', [OrganizationController::class, 'update'])->name('api.organizations.update');
     Route::get('/organizations/{organization}', [OrganizationController::class, 'show'])->name('api.organizations.show');
     Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy'])->name('api.organizations.destroy');
+
+    // Rutas de Google Drive para organizaciones
+    Route::middleware(['web', 'auth'])->group(function () {
+        Route::post('/organizations/{organization}/drive/root-folder', [OrganizationDriveController::class, 'createRootFolder'])->name('api.organizations.drive.root-folder');
+        Route::post('/organizations/{organization}/drive/subfolders', [OrganizationDriveController::class, 'createSubfolder'])->name('api.organizations.drive.subfolders.store');
+        Route::get('/organizations/{organization}/drive/subfolders', [OrganizationDriveController::class, 'listSubfolders'])->name('api.organizations.drive.subfolders.index');
+        Route::get('/organizations/{organization}/drive/status', [OrganizationDriveController::class, 'status'])->name('api.organizations.drive.status');
+    });
 
     // Rutas de Usuarios
     Route::post('/users/check-email', [UserController::class, 'checkEmail'])->name('api.users.check-email');
