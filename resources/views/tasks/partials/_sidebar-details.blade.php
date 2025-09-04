@@ -79,7 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { start, end } = getMonthRange(date);
             const params = new URLSearchParams({ start: fmtDate(start), end: fmtDate(end) });
-            const url = '/api/tasks-laravel/calendar?' + params.toString();
+            const base = window.taskData?.apiTasks || '/api/tasks-laravel/calendar';
+            const url = new URL(base, window.location.origin);
+            url.search = params.toString();
             const res = await fetch(url, {
                 headers: {
                     'Accept': 'application/json',

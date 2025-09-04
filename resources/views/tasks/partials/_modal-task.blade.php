@@ -143,7 +143,7 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
         completedContainer.classList.remove('hidden');
 
         // Para todas las reuniones, usar tasks_laravel
-        fetch(`/api/tasks-laravel/tasks/${taskId}`)
+        fetch(new URL(`/api/tasks-laravel/tasks/${taskId}`, window.location.origin))
             .then(response => response.json())
             .then(resp => {
                 if (!resp.success) throw new Error('No se pudo cargar la tarea');
@@ -234,10 +234,10 @@ document.getElementById('taskForm').addEventListener('submit', function(e) {
             payload.meeting_id = window.lastSelectedMeetingId;
         }
 
-        const url = isEdit ? `/api/tasks-laravel/tasks/${editingTaskId}` : '/api/tasks-laravel/tasks';
+        const endpoint = isEdit ? `/api/tasks-laravel/tasks/${editingTaskId}` : '/api/tasks-laravel/tasks';
         const method = isEdit ? 'PUT' : 'POST';
 
-        fetch(url, {
+        fetch(new URL(endpoint, window.location.origin), {
             method: method,
             headers: {
                 'Content-Type': 'application/json',
@@ -284,10 +284,10 @@ document.getElementById('taskForm').addEventListener('submit', function(e) {
             payload.meeting_id = window.lastSelectedMeetingId;
         }
 
-        const url = editingTaskId ? `/api/tasks-laravel/tasks/${editingTaskId}` : '/api/tasks-laravel/tasks';
+        const endpoint = editingTaskId ? `/api/tasks-laravel/tasks/${editingTaskId}` : '/api/tasks-laravel/tasks';
         const method = editingTaskId ? 'PUT' : 'POST';
 
-        fetch(url, {
+        fetch(new URL(endpoint, window.location.origin), {
             method: method,
             headers: {
                 'Content-Type': 'application/json',

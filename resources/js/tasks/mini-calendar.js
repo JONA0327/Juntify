@@ -22,7 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
   async function fetchEvents(date){
     const {start,end} = getMonthRange(date);
     const params = new URLSearchParams({ start: fmtDate(start), end: fmtDate(end) });
-    const url = (window.taskData?.apiTasks || '/api/tasks') + '?' + params.toString();
+    const base = window.taskData?.apiTasks || '/api/tasks';
+    const url = new URL(base, window.location.origin);
+    url.search = params.toString();
     const res = await fetch(url); const data = await res.json();
     eventsByDate = {}; for (const ev of data){ if (!ev.start) continue; const day = ev.start.substring(0,10); if (!eventsByDate[day]) eventsByDate[day]=[]; eventsByDate[day].push(ev); }
   }

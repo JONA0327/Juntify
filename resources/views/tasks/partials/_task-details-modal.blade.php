@@ -145,7 +145,7 @@ function closeTaskDetailsModal() {
 
 async function loadTaskDetails(taskId) {
     try {
-        const response = await fetch(`/api/tasks-laravel/tasks/${taskId}`, {
+        const response = await fetch(new URL(`/api/tasks-laravel/tasks/${taskId}`, window.location.origin), {
             headers: {
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]')?.content || '')
@@ -219,7 +219,7 @@ function populateTaskDetails(task) {
 
 async function loadTaskComments(taskId) {
     try {
-        const response = await fetch(`/api/tasks-laravel/tasks/${taskId}/comments`, {
+        const response = await fetch(new URL(`/api/tasks-laravel/tasks/${taskId}/comments`, window.location.origin), {
             headers: {
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]')?.content || '')
@@ -255,7 +255,7 @@ async function loadTaskComments(taskId) {
 
 async function loadTaskFiles(taskId) {
     try {
-        const response = await fetch(`/api/tasks-laravel/tasks/${taskId}/files`, {
+        const response = await fetch(new URL(`/api/tasks-laravel/tasks/${taskId}/files`, window.location.origin), {
             headers: {
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]')?.content || '')
@@ -299,7 +299,7 @@ document.getElementById('addCommentBtn').addEventListener('click', async () => {
     if (!commentText || !currentTaskDetailsId) return;
 
     try {
-        const response = await fetch(`/api/tasks-laravel/tasks/${currentTaskDetailsId}/comments`, {
+        const response = await fetch(new URL(`/api/tasks-laravel/tasks/${currentTaskDetailsId}/comments`, window.location.origin), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -332,7 +332,7 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
     }
 
     try {
-        const response = await fetch(`/api/tasks-laravel/tasks/${currentTaskDetailsId}/files`, {
+        const response = await fetch(new URL(`/api/tasks-laravel/tasks/${currentTaskDetailsId}/files`, window.location.origin), {
             method: 'POST',
             headers: {
                 'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]')?.content || '')
@@ -352,7 +352,7 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
 
 async function completeTask(taskId) {
     try {
-        const response = await fetch(`/api/tasks-laravel/tasks/${taskId}/complete`, {
+        const response = await fetch(new URL(`/api/tasks-laravel/tasks/${taskId}/complete`, window.location.origin), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -374,7 +374,7 @@ async function completeTask(taskId) {
 }
 
 function downloadFile(fileId) {
-    window.open(`/api/tasks-laravel/files/${fileId}/download`, '_blank');
+    window.open(new URL(`/api/tasks-laravel/files/${fileId}/download`, window.location.origin), '_blank');
 }
 
 function formatDate(dateString) {
