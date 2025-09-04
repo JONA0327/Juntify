@@ -95,13 +95,13 @@ function connectDrive() {
 function showCreateFolderModal() {
   const modal = document.getElementById('create-folder-modal');
   const input = document.getElementById('folder-name-input');
-  
+
   // Generar nombre sugerido
   const suggestedName = `Juntify-Reuniones-${new Date().getFullYear()}`;
   input.value = suggestedName;
-  
+
   modal.classList.add('show');
-  
+
   // Focus en el input después de la animación
   setTimeout(() => {
     input.focus();
@@ -115,7 +115,7 @@ function showCreateFolderModal() {
 function closeCreateFolderModal() {
   const modal = document.getElementById('create-folder-modal');
   const input = document.getElementById('folder-name-input');
-  
+
   modal.classList.remove('show');
   input.value = '';
 }
@@ -128,16 +128,16 @@ function confirmCreateFolder() {
   const name = input.value.trim();
   const btn = document.getElementById('confirm-create-btn');
   const mainInput = document.getElementById('main-folder-input');
-  
+
   if (!name) {
     alert('Por favor ingresa un nombre para la carpeta');
     input.focus();
     return;
   }
-  
+
   btn.disabled = true;
   btn.textContent = '⏳ Creando...';
-  
+
   axios.post('/drive/main-folder', { name })
     .then(res => {
       mainInput.value = res.data.id;
@@ -210,21 +210,21 @@ function showCreateSubfolderModal() {
   const modal = document.getElementById('create-subfolder-modal');
   const input = document.getElementById('subfolder-name-input');
   const mainFolderId = document.getElementById('main-folder-input').value.trim();
-  
+
   if (!mainFolderId) {
     showErrorMessage('Primero debes establecer la carpeta principal');
     return;
   }
-  
+
   // Generar nombre sugerido
   const currentDate = new Date();
   const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const suggestedName = `Reuniones-${monthNames[currentDate.getMonth()]}-${currentDate.getFullYear()}`;
   input.value = suggestedName;
-  
+
   modal.classList.add('show');
-  
+
   // Focus en el input después de la animación
   setTimeout(() => {
     input.focus();
@@ -238,7 +238,7 @@ function showCreateSubfolderModal() {
 function closeCreateSubfolderModal() {
   const modal = document.getElementById('create-subfolder-modal');
   const input = document.getElementById('subfolder-name-input');
-  
+
   modal.classList.remove('show');
   input.value = '';
 }
@@ -257,7 +257,7 @@ function confirmCreateSubfolder() {
     input.focus();
     return;
   }
-  
+
   if (!mainFolderId) {
     showErrorMessage('Primero debes establecer la carpeta principal');
     closeCreateSubfolderModal();
@@ -266,7 +266,7 @@ function confirmCreateSubfolder() {
 
   btn.disabled = true;
   btn.textContent = '⏳ Creando...';
-  
+
   axios.post('/drive/subfolder', { name, parentId: mainFolderId })
     .then(res => {
       addSubfolderToList(name, res.data.id);
@@ -331,9 +331,9 @@ function showSuccessMessage(message) {
     animation: slideInRight 0.3s ease;
   `;
   notification.textContent = `✅ ${message}`;
-  
+
   document.body.appendChild(notification);
-  
+
   // Remover después de 3 segundos
   setTimeout(() => {
     notification.style.animation = 'slideOutRight 0.3s ease';
@@ -367,9 +367,9 @@ function showErrorMessage(message) {
     animation: slideInRight 0.3s ease;
   `;
   notification.textContent = `❌ ${message}`;
-  
+
   document.body.appendChild(notification);
-  
+
   // Remover después de 4 segundos
   setTimeout(() => {
     notification.style.animation = 'slideOutRight 0.3s ease';
@@ -388,7 +388,7 @@ style.textContent = `
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
   }
-  
+
   @keyframes slideOutRight {
     from { transform: translateX(0); opacity: 1; }
     to { transform: translateX(100%); opacity: 0; }
@@ -403,7 +403,7 @@ document.addEventListener('click', e => {
     const folderName = folderDiv.querySelector('div > div').textContent;
     const id = folderDiv.dataset.id;
 
-    
+
     if (confirm(`¿Estás seguro de que quieres eliminar la subcarpeta "${folderName}"?`)) {
             axios.delete('/drive/subfolder/' + id)
         .then(() => {
