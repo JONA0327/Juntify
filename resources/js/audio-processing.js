@@ -926,8 +926,22 @@ function updateAnalysisPreview() {
 }
 
 async function loadDriveFolders() {
+    const role = window.userRole || document.body.dataset.userRole;
+    const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
+    const driveSelect = document.getElementById('drive-select');
+    const rootSelect = document.getElementById('root-folder-select');
+    const transcriptionSelect = document.getElementById('transcription-subfolder-select');
+    const audioSelect = document.getElementById('audio-subfolder-select');
+
+    let useOrg = role === 'colaborador';
+    if (role === 'administrador' && driveSelect) {
+        useOrg = driveSelect.value === 'organization';
+    }
+
+    const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';
+
     try {
-        const res = await fetch('/drive/sync-subfolders');
+        const res = await fetch(endpoint);
 
         if (res.status === 401 || res.status === 403) {
             window.location.href = '/login';
@@ -947,15 +961,15 @@ async function loadDriveFolders() {
 
         const data = await res.json();
 
-        const rootSelect = document.getElementById('root-folder-select');
-        const transcriptionSelect = document.getElementById('transcription-subfolder-select');
-        const audioSelect = document.getElementById('audio-subfolder-select');
+        if (driveSelect && role === 'colaborador') {
+            driveSelect.style.display = 'none';
+        }
 
         if (rootSelect) {
             rootSelect.innerHTML = '';
             if (data.root_folder) {
                 const opt = document.createElement('option');
-                opt.value = data.root_folder.google_id; // Usar google_id en lugar de id
+                opt.value = data.root_folder.google_id;
                 opt.textContent = `\uD83D\uDCC1 ${data.root_folder.name}`;
                 rootSelect.appendChild(opt);
             }
@@ -972,7 +986,7 @@ async function loadDriveFolders() {
                 select.appendChild(noneOpt);
                 list.forEach(f => {
                     const opt = document.createElement('option');
-                    opt.value = f.google_id; // Usar google_id para Drive
+                    opt.value = f.google_id;
                     opt.textContent = `\uD83D\uDCC2 ${f.name}`;
                     select.appendChild(opt);
                 });
@@ -1588,6 +1602,17 @@ document.addEventListener('click', e => {
 document.addEventListener('DOMContentLoaded', async function() {
     createParticles();
     await loadAvailableAnalyzers();
+
+    const driveSelect = document.getElementById('drive-select');
+    if (driveSelect) {
+        const saved = sessionStorage.getItem('selectedDrive');
+        if (saved) driveSelect.value = saved;
+        driveSelect.addEventListener('change', () => {
+            sessionStorage.setItem('selectedDrive', driveSelect.value);
+            loadDriveFolders();
+        });
+    }
+    await loadDriveFolders();
 
     audioPlayer = document.getElementById('recorded-audio');
     if (audioPlayer) {

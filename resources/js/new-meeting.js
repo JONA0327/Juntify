@@ -202,6 +202,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sync initial
         setPostponeMode(checkbox.checked);
     }
+
+    const driveSelect = document.getElementById('drive-select');
+    if (driveSelect) {
+        const saved = sessionStorage.getItem('selectedDrive');
+        if (saved) driveSelect.value = saved;
+        driveSelect.addEventListener('change', () => {
+            sessionStorage.setItem('selectedDrive', driveSelect.value);
+        });
+    }
 });
 
 // ===== FUNCIONES DE GRABACIÓN =====
@@ -1392,115 +1401,6 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
-// =========================================================
-// Drive folder selector with organization support
-// =========================================================
-async function loadDriveFolders() {
-    const role = window.userRole || document.body.dataset.userRole;
-    const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
-    const driveSelect = document.getElementById('drive-select');
-    const rootSelect = document.getElementById('root-folder-select');
-    const transcriptionSelect = document.getElementById('transcription-subfolder-select');
-    const audioSelect = document.getElementById('audio-subfolder-select');
-
-    let useOrg = role === 'colaborador';
-    if (role === 'administrador' && driveSelect) {
-        useOrg = driveSelect.value === 'organization';
-    }
-
-    const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';
-    try {
-        const res = await fetch(endpoint);
-        if (!res.ok) return;
-        const data = await res.json();
-
-        if (driveSelect && role === 'colaborador') {
-            driveSelect.style.display = 'none';
-        }
-
-        if (rootSelect) {
-            rootSelect.innerHTML = '';
-            if (data.root_folder) {
-                const opt = document.createElement('option');
-                opt.value = data.root_folder.google_id;
-                opt.textContent = `\uD83D\uDCC1 ${data.root_folder.name}`;
-                rootSelect.appendChild(opt);
-            }
-        }
-
-        const populate = (select) => {
-            if (!select) return;
-            select.innerHTML = '';
-            const list = data.subfolders || [];
-            if (list.length) {
-                const none = document.createElement('option');
-                none.value = '';
-                none.textContent = 'Sin subcarpeta';
-                select.appendChild(none);
-                list.forEach(f => {
-                    const opt = document.createElement('option');
-                    opt.value = f.google_id;
-                    opt.textContent = `\uD83D\uDCC2 ${f.name}`;
-                    select.appendChild(opt);
-                });
-            } else {
-                const opt = document.createElement('option');
-                opt.value = '';
-                opt.textContent = 'No se encontraron subcarpetas';
-                select.appendChild(opt);
-            }
-        };
-
-        populate(transcriptionSelect);
-        populate(audioSelect);
-    } catch (e) {
-        console.error('Error loading drive folders', e);
-    }
-}
-
-async function createOrgSubfolder() {
-    const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
-    if (!organizationId) {
-        alert('Organización no definida');
-        return;
-    }
-
-    const name = prompt('Nombre de la subcarpeta');
-    if (!name) return;
-
-    try {
-        const res = await fetch(`/api/organizations/${organizationId}/drive/subfolders`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-            },
-            body: JSON.stringify({ name }),
-        });
-
-        if (res.ok) {
-            await loadDriveFolders();
-            alert('Subcarpeta creada correctamente');
-        } else {
-            alert('Error al crear la subcarpeta');
-        }
-    } catch (e) {
-        console.error('Error creating subfolder', e);
-        alert('Error al crear la subcarpeta');
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const driveSelect = document.getElementById('drive-select');
-    if (driveSelect) {
-        driveSelect.addEventListener('change', loadDriveFolders);
-    }
-    if (document.getElementById('root-folder-select')) {
-        loadDriveFolders();
-    }
-});
-
-
 // Hacer las funciones globales para que funcionen con onclick en el HTML
 window.selectRecordingMode = selectRecordingMode;
 window.toggleRecording = toggleRecording;
@@ -1511,8 +1411,6 @@ window.pauseRecording = pauseRecording;
 window.resumeRecording = resumeRecording;
 window.discardRecording = discardRecording;
 window.togglePostponeMode = togglePostponeMode;
-window.createOrgSubfolder = createOrgSubfolder;
-
 // Funciones del grabador de reuniones que faltaban
 window.toggleSystemAudio = toggleSystemAudio;
 window.toggleMicrophoneAudio = toggleMicrophoneAudio;
