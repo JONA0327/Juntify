@@ -82,6 +82,11 @@
 
                 <div style="margin-bottom: 1.5rem;">
                     <label class="form-label">Carpeta Principal</label>
+                    @if(!empty($folderMessage))
+                        <div class="info-item">
+                            <span class="info-value" style="color: #ef4444;">{{ $folderMessage }}</span>
+                        </div>
+                    @endif
                     @if($folder)
                         <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
                             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
