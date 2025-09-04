@@ -99,6 +99,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     userId: null, // Se inicializará en init()
     activeTab: 'contenedores', // Cambiar tab por defecto a contenedores
     activities: {},
+    driveData: {},
     isOwner: false,
     showAlert: false,
     alertMessage: '',
@@ -124,6 +125,117 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         } catch (error) {
             console.error('Error loading activities:', error);
             this.activities[orgId] = [];
+        }
+    },
+
+    getDriveState(orgId) {
+        if (!this.driveData[orgId]) {
+            this.driveData[orgId] = {
+                rootFolder: null,
+                subfolders: [],
+                isLoading: false,
+                isCreatingRoot: false,
+                isCreatingSubfolder: false,
+                newSubfolderName: '',
+            };
+        }
+        return this.driveData[orgId];
+    },
+
+    connectDrive() {
+        window.location.href = '/auth/google/redirect';
+    },
+
+    async createOrganizationFolder(org) {
+        const state = this.getDriveState(org.id);
+        if (state.isCreatingRoot) return;
+        state.isCreatingRoot = true;
+        try {
+            const response = await fetch(`/api/organizations/${org.id}/drive/root`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                state.rootFolder = data.folder;
+                this.showStatus('Carpeta de organización creada correctamente');
+                await this.loadDriveSubfolders(org);
+            } else {
+                let msg = 'Error al crear la carpeta de organización';
+                try {
+                    const err = await response.json();
+                    msg = err.message || msg;
+                } catch {}
+                this.showStatus(msg, 'error');
+            }
+        } catch (e) {
+            console.error('Error creating organization folder:', e);
+            this.showStatus('Error al crear la carpeta de organización', 'error');
+        } finally {
+            state.isCreatingRoot = false;
+        }
+    },
+
+    async loadDriveSubfolders(org) {
+        const state = this.getDriveState(org.id);
+        state.isLoading = true;
+        try {
+            const response = await fetch(`/api/organizations/${org.id}/drive/subfolders`);
+            if (response.ok) {
+                const data = await response.json();
+                state.rootFolder = data.root_folder;
+                state.subfolders = data.subfolders || [];
+            } else {
+                state.rootFolder = null;
+                state.subfolders = [];
+            }
+        } catch (e) {
+            console.error('Error loading subfolders:', e);
+            state.rootFolder = null;
+            state.subfolders = [];
+        } finally {
+            state.isLoading = false;
+        }
+    },
+
+    async createSubfolder(org) {
+        const state = this.getDriveState(org.id);
+        if (state.isCreatingSubfolder) return;
+        const name = state.newSubfolderName?.trim();
+        if (!name) {
+            alert('El nombre de la subcarpeta es requerido');
+            return;
+        }
+        state.isCreatingSubfolder = true;
+        try {
+            const response = await fetch(`/api/organizations/${org.id}/drive/subfolders`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                body: JSON.stringify({ name }),
+            });
+            if (response.ok) {
+                state.newSubfolderName = '';
+                this.showStatus('Subcarpeta creada correctamente');
+                await this.loadDriveSubfolders(org);
+            } else {
+                let msg = 'Error al crear la subcarpeta';
+                try {
+                    const err = await response.json();
+                    msg = err.message || msg;
+                } catch {}
+                this.showStatus(msg, 'error');
+            }
+        } catch (e) {
+            console.error('Error creating subfolder:', e);
+            this.showStatus('Error al crear la subcarpeta', 'error');
+        } finally {
+            state.isCreatingSubfolder = false;
         }
     },
 
