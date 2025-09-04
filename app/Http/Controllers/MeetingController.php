@@ -235,10 +235,15 @@ class MeetingController extends Controller
                 'meetings' => $meetings,
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            Log::error('Error al cargar reuniones', [
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Error al cargar reuniones: ' . $e->getMessage()
+                'message' => 'Error al cargar reuniones',
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
