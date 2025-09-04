@@ -2,7 +2,7 @@
 
 use App\Models\User;
 use App\Models\Organization;
-use App\Models\GoogleToken;
+use App\Models\OrganizationGoogleToken;
 use App\Models\OrganizationFolder;
 use App\Models\OrganizationSubfolder;
 use App\Services\GoogleDriveService;
@@ -26,8 +26,8 @@ it('returns root and subfolders for collaborator', function () {
     $organization->users()->attach($admin->id, ['rol' => 'administrador']);
     $organization->users()->attach($collab->id, ['rol' => 'colaborador']);
 
-    $token = GoogleToken::create([
-        'username'      => $admin->username,
+    $token = OrganizationGoogleToken::create([
+        'organization_id' => $organization->id,
         'access_token'  => 'access',
         'refresh_token' => 'refresh',
         'expiry_date'   => now()->addHour(),
@@ -35,7 +35,7 @@ it('returns root and subfolders for collaborator', function () {
 
     $root = OrganizationFolder::create([
         'organization_id' => $organization->id,
-        'google_token_id' => $token->id,
+        'organization_google_token_id' => $token->id,
         'google_id'       => 'root123',
         'name'            => 'Root',
     ]);

@@ -11,13 +11,16 @@ return new class extends Migration
         Schema::create('organization_folders', function (Blueprint $table) {
             $table->increments('id');
             $table->unsignedInteger('organization_id');
-            $table->unsignedInteger('google_token_id');
+            $table->unsignedInteger('organization_google_token_id');
             $table->string('google_id')->unique();
             $table->string('name');
             $table->timestamps();
 
             $table->foreign('organization_id')->references('id')->on('organizations')->onDelete('cascade');
-            $table->foreign('google_token_id')->references('id')->on('google_tokens')->onDelete('cascade');
+            $table->foreign('organization_google_token_id')
+                ->references('id')
+                ->on('organization_google_tokens')
+                ->onDelete('cascade');
         });
     }
 

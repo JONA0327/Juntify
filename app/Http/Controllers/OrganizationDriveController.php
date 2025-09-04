@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Organization;
-use App\Models\GoogleToken;
 use App\Models\OrganizationFolder;
+use App\Models\OrganizationGoogleToken;
 use App\Models\OrganizationSubfolder;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
@@ -48,10 +48,9 @@ class OrganizationDriveController extends Controller
         return $inOrg || $inGroup;
     }
 
-    protected function initAdminDrive(Organization $organization): GoogleToken
+    protected function initDrive(Organization $organization): OrganizationGoogleToken
     {
-        $admin = $organization->admin;
-        $token = GoogleToken::where('username', $admin->username)->firstOrFail();
+        $token = $organization->googleToken()->firstOrFail();
 
         $client = $this->drive->getClient();
         $client->setAccessToken([
@@ -78,13 +77,13 @@ class OrganizationDriveController extends Controller
         if (!$this->userCanManage($organization)) {
             abort(403, 'No autorizado');
         }
-        $token = $this->initAdminDrive($organization);
+        $token = $this->initDrive($organization);
 
         $folderId = $this->drive->createFolder($organization->nombre_organizacion);
 
         $folder = OrganizationFolder::create([
             'organization_id' => $organization->id,
-            'google_token_id' => $token->id,
+            'organization_google_token_id' => $token->id,
             'google_id'       => $folderId,
             'name'            => $organization->nombre_organizacion,
         ]);
@@ -109,7 +108,7 @@ class OrganizationDriveController extends Controller
             return response()->json(['message' => 'Root folder not found'], 404);
         }
 
-        $this->initAdminDrive($organization);
+        $this->initDrive($organization);
 
         $folderId = $this->drive->createFolder($request->input('name'), $root->google_id);
 
@@ -137,7 +136,7 @@ class OrganizationDriveController extends Controller
             return response()->json(['message' => 'Root folder not found'], 404);
         }
 
-        $this->initAdminDrive($organization);
+        $this->initDrive($organization);
 
         $files = $this->drive->listSubfolders($root->google_id);
         $subfolders = [];
@@ -171,7 +170,7 @@ class OrganizationDriveController extends Controller
             'name' => 'required|string|max:255'
         ]);
 
-        $this->initAdminDrive($organization);
+        $this->initDrive($organization);
         $this->drive->renameFile($subfolder->google_id, $validated['name']);
 
         $subfolder->update(['name' => $validated['name']]);
@@ -189,7 +188,7 @@ class OrganizationDriveController extends Controller
             abort(404);
         }
 
-        $this->initAdminDrive($organization);
+        $this->initDrive($organization);
         // Eliminar primero en Drive, luego en BD
         $this->drive->deleteFile($subfolder->google_id);
         $subfolder->delete();
@@ -206,10 +205,8 @@ class OrganizationDriveController extends Controller
         if (!$this->userIsMember($organization)) {
             abort(403, 'No autorizado');
         }
-        // Check if admin has connected Google (GoogleToken exists)
-        $admin = $organization->admin;
-        $token = $admin ? GoogleToken::where('username', $admin->username)->first() : null;
-
+        // Check if organization has a connected Google token
+        $token = $organization->googleToken;
         $connected = (bool) $token;
 
         $root = $organization->folder;
@@ -217,7 +214,7 @@ class OrganizationDriveController extends Controller
 
         if ($connected && $root) {
             // Initialize drive client and list subfolders
-            $this->initAdminDrive($organization);
+            $this->initDrive($organization);
             $files = $this->drive->listSubfolders($root->google_id);
             foreach ($files as $file) {
                 $subfolders[] = OrganizationSubfolder::updateOrCreate(

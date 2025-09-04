@@ -10,6 +10,7 @@ use Google\Service\Calendar;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\GoogleToken;
+use App\Models\OrganizationGoogleToken;
 
 class GoogleAuthController extends Controller
 {
@@ -31,10 +32,15 @@ class GoogleAuthController extends Controller
         // Track source to decide post-OAuth redirect
         $from = $request->query('from');
         if ($from === 'organization') {
-            session(['google_oauth_from' => 'organization']);
+            $orgId = $request->query('organization_id');
+            session([
+                'google_oauth_from' => 'organization',
+                'google_oauth_org_id' => $orgId,
+            ]);
         } else {
             // Clear any stale flag
             session()->forget('google_oauth_from');
+            session()->forget('google_oauth_org_id');
         }
         // Optional explicit return URL (must be a safe relative path)
         $returnUrl = $request->query('return');
@@ -82,7 +88,19 @@ class GoogleAuthController extends Controller
         );
 
         $from = session()->pull('google_oauth_from'); // consume flag
+        $orgId = session()->pull('google_oauth_org_id');
         $returnUrl = session()->pull('google_oauth_return');
+
+        if ($from === 'organization' && $orgId) {
+            OrganizationGoogleToken::updateOrCreate(
+                ['organization_id' => $orgId],
+                [
+                    'access_token'  => $token['access_token'] ?? '',
+                    'refresh_token' => $token['refresh_token'] ?? '',
+                    'expiry_date'   => now()->addSeconds($token['expires_in'] ?? 3600),
+                ]
+            );
+        }
 
         if ($returnUrl) {
             return redirect($returnUrl)

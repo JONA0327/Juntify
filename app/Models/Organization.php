@@ -52,6 +52,11 @@ class Organization extends Model
         return $this->hasOne(OrganizationFolder::class);
     }
 
+    public function googleToken(): HasOne
+    {
+        return $this->hasOne(OrganizationGoogleToken::class);
+    }
+
     public function subfolders(): HasManyThrough
     {
         return $this->hasManyThrough(

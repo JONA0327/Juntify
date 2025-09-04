@@ -2,7 +2,7 @@
 
 use App\Models\User;
 use App\Models\Organization;
-use App\Models\GoogleToken;
+use App\Models\OrganizationGoogleToken;
 use App\Models\OrganizationFolder;
 use App\Services\GoogleDriveService;
 use Google\Client;
@@ -28,8 +28,8 @@ it('allows collaborator to create organization subfolder', function () {
     $organization->users()->attach($admin->id, ['rol' => 'administrador']);
     $organization->users()->attach($collab->id, ['rol' => 'colaborador']);
 
-    $token = GoogleToken::create([
-        'username'      => $admin->username,
+    $token = OrganizationGoogleToken::create([
+        'organization_id' => $organization->id,
         'access_token'  => 'access',
         'refresh_token' => 'refresh',
         'expiry_date'   => now()->addHour(),
@@ -37,7 +37,7 @@ it('allows collaborator to create organization subfolder', function () {
 
     $root = OrganizationFolder::create([
         'organization_id' => $organization->id,
-        'google_token_id' => $token->id,
+        'organization_google_token_id' => $token->id,
         'google_id'       => 'root123',
         'name'            => 'Root',
     ]);
@@ -81,8 +81,8 @@ it('allows administrator to create organization subfolder', function () {
 
     $organization->users()->attach($admin->id, ['rol' => 'administrador']);
 
-    $token = GoogleToken::create([
-        'username'      => $admin->username,
+    $token = OrganizationGoogleToken::create([
+        'organization_id' => $organization->id,
         'access_token'  => 'access',
         'refresh_token' => 'refresh',
         'expiry_date'   => now()->addHour(),
@@ -90,7 +90,7 @@ it('allows administrator to create organization subfolder', function () {
 
     $root = OrganizationFolder::create([
         'organization_id' => $organization->id,
-        'google_token_id' => $token->id,
+        'organization_google_token_id' => $token->id,
         'google_id'       => 'root123',
         'name'            => 'Root',
     ]);

@@ -10,7 +10,7 @@ class OrganizationFolder extends Model
 {
     protected $fillable = [
         'organization_id',
-        'google_token_id',
+        'organization_google_token_id',
         'google_id',
         'name',
     ];
@@ -22,7 +22,7 @@ class OrganizationFolder extends Model
 
     public function googleToken(): BelongsTo
     {
-        return $this->belongsTo(GoogleToken::class);
+        return $this->belongsTo(OrganizationGoogleToken::class, 'organization_google_token_id');
     }
 
     public function subfolders(): HasMany
