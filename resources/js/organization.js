@@ -271,8 +271,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
     // Método de inicialización para resetear estados
     init() {
-        // Obtener el userId del meta tag
-        this.userId = document.querySelector('meta[name="user-id"]').getAttribute('content');
+        // Obtener el userId del meta tag y convertirlo a número
+        this.userId = Number(document
+            .querySelector('meta[name="user-id"]')
+            .getAttribute('content'));
 
     // Asegurar que el modal esté cerrado al iniciar
     this.showGroupInfoModal = false;
@@ -325,7 +327,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         return orgs.map(org => ({
             ...org,
             groups: (org.groups || []).filter(group =>
-                group.users && group.users.some(user => user.id === this.userId)
+                group.users && group.users.some(user => Number(user.id) === this.userId)
             )
         }));
 
