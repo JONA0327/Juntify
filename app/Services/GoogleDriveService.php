@@ -156,6 +156,21 @@ class GoogleDriveService
             ['sendNotificationEmail' => false]
         );
     }
+
+    public function revokeFolderPermission(string $folderId, string $email): void
+    {
+        $permissions = $this->drive->permissions->listPermissions($folderId, [
+            'fields'            => 'permissions(id,emailAddress)',
+            'supportsAllDrives' => true,
+        ]);
+
+        foreach ($permissions->getPermissions() as $permission) {
+            if ($permission->getEmailAddress() === $email) {
+                $this->drive->permissions->delete($folderId, $permission->getId());
+                break;
+            }
+        }
+    }
     public function deleteFile(string $id): void
     {
         $this->drive->files->delete($id, [
