@@ -173,7 +173,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         if (state.isCreatingRoot) return;
         state.isCreatingRoot = true;
         try {
-            const response = await fetch(`/api/organizations/${org.id}/drive/root`, {
+            const response = await fetch(`/api/organizations/${org.id}/drive/root-folder`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
