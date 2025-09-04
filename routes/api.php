@@ -171,27 +171,29 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
     });
 
     // Rutas API para reuniones
-    Route::get('/meetings', [MeetingController::class, 'getMeetings'])->name('api.meetings');
-    Route::get('/shared-meetings', [MeetingController::class, 'getSharedMeetings'])->name('api.shared-meetings');
-    Route::get('/meetings/{id}', [MeetingController::class, 'show'])->name('api.meetings.show');
-    Route::put('/meetings/{id}/name', [MeetingController::class, 'updateName'])->name('api.meetings.updateName');
-    Route::put('/meetings/{id}/segments', [MeetingController::class, 'updateSegments'])->name('api.meetings.updateSegments');
-    Route::delete('/meetings/{id}', [MeetingController::class, 'destroy'])->name('api.meetings.destroy');
-    Route::post('/meetings/cleanup', [MeetingController::class, 'cleanupModal'])->name('api.meetings.cleanup');
-    Route::post('/meetings/{id}/encrypt', [MeetingController::class, 'encryptJu'])->name('api.meetings.encrypt');
+    Route::middleware(['web', 'auth'])->group(function () {
+        Route::get('/meetings', [MeetingController::class, 'getMeetings'])->name('api.meetings');
+        Route::get('/shared-meetings', [MeetingController::class, 'getSharedMeetings'])->name('api.shared-meetings');
+        Route::get('/meetings/{id}', [MeetingController::class, 'show'])->name('api.meetings.show');
+        Route::put('/meetings/{id}/name', [MeetingController::class, 'updateName'])->name('api.meetings.updateName');
+        Route::put('/meetings/{id}/segments', [MeetingController::class, 'updateSegments'])->name('api.meetings.updateSegments');
+        Route::delete('/meetings/{id}', [MeetingController::class, 'destroy'])->name('api.meetings.destroy');
+        Route::post('/meetings/cleanup', [MeetingController::class, 'cleanupModal'])->name('api.meetings.cleanup');
+        Route::post('/meetings/{id}/encrypt', [MeetingController::class, 'encryptJu'])->name('api.meetings.encrypt');
 
-    // Rutas de descarga
-    Route::get('/meetings/{id}/download-ju', [MeetingController::class, 'downloadJuFile'])->name('api.meetings.download-ju');
-    Route::get('/meetings/{id}/download-audio', [MeetingController::class, 'downloadAudioFile'])->name('api.meetings.download-audio');
-    Route::get('/meetings/{meeting}/download-report', [MeetingController::class, 'downloadReport'])->name('api.meetings.download-report');
-    Route::post('/meetings/{id}/download-pdf', [MeetingController::class, 'downloadPdf'])->name('api.meetings.download-pdf');
-    Route::post('/meetings/{id}/preview-pdf', [MeetingController::class, 'previewPdf'])->name('api.meetings.preview-pdf');
-    Route::get('/meetings/{meeting}/audio', [MeetingController::class, 'streamAudio'])->name('api.meetings.audio');
+        // Rutas de descarga
+        Route::get('/meetings/{id}/download-ju', [MeetingController::class, 'downloadJuFile'])->name('api.meetings.download-ju');
+        Route::get('/meetings/{id}/download-audio', [MeetingController::class, 'downloadAudioFile'])->name('api.meetings.download-audio');
+        Route::get('/meetings/{meeting}/download-report', [MeetingController::class, 'downloadReport'])->name('api.meetings.download-report');
+        Route::post('/meetings/{id}/download-pdf', [MeetingController::class, 'downloadPdf'])->name('api.meetings.download-pdf');
+        Route::post('/meetings/{id}/preview-pdf', [MeetingController::class, 'previewPdf'])->name('api.meetings.preview-pdf');
+        Route::get('/meetings/{meeting}/audio', [MeetingController::class, 'streamAudio'])->name('api.meetings.audio');
 
-    // API para reuniones pendientes
-    Route::get('/pending-meetings', [MeetingController::class, 'getPendingMeetings']);
-    Route::post('/pending-meetings/{id}/analyze', [MeetingController::class, 'analyzePendingMeeting']);
-    Route::post('/pending-meetings/complete', [MeetingController::class, 'completePendingMeeting']);
-    Route::get('/pending-meetings/{id}/info', [MeetingController::class, 'getPendingProcessingInfo']);
-    Route::get('/pending-meetings/audio/{tempFileName}', [MeetingController::class, 'getPendingAudioFile']);
+        // API para reuniones pendientes
+        Route::get('/pending-meetings', [MeetingController::class, 'getPendingMeetings']);
+        Route::post('/pending-meetings/{id}/analyze', [MeetingController::class, 'analyzePendingMeeting']);
+        Route::post('/pending-meetings/complete', [MeetingController::class, 'completePendingMeeting']);
+        Route::get('/pending-meetings/{id}/info', [MeetingController::class, 'getPendingProcessingInfo']);
+        Route::get('/pending-meetings/audio/{tempFileName}', [MeetingController::class, 'getPendingAudioFile']);
+    });
 
