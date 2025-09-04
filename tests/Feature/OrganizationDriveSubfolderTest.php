@@ -67,6 +67,59 @@ it('allows collaborator to create organization subfolder', function () {
     ]);
 });
 
+it('allows administrator to create organization subfolder', function () {
+    Config::set('services.google.service_account_email', 'svc@test');
+
+    $admin = User::factory()->create(['username' => 'admin']);
+
+    $organization = Organization::create([
+        'nombre_organizacion' => 'Org',
+        'descripcion' => 'desc',
+        'num_miembros' => 0,
+        'admin_id' => $admin->id,
+    ]);
+
+    $organization->users()->attach($admin->id, ['rol' => 'administrador']);
+
+    $token = GoogleToken::create([
+        'username'      => $admin->username,
+        'access_token'  => 'access',
+        'refresh_token' => 'refresh',
+        'expiry_date'   => now()->addHour(),
+    ]);
+
+    $root = OrganizationFolder::create([
+        'organization_id' => $organization->id,
+        'google_token_id' => $token->id,
+        'google_id'       => 'root123',
+        'name'            => 'Root',
+    ]);
+
+    $client = Mockery::mock(Client::class);
+    $client->shouldReceive('setAccessToken');
+    $client->shouldReceive('isAccessTokenExpired')->andReturnFalse();
+
+    $service = Mockery::mock(GoogleDriveService::class);
+    $service->shouldReceive('getClient')->andReturn($client);
+    $service->shouldReceive('createFolder')->once()->with('SubFolder', 'root123')->andReturn('sub123');
+    $service->shouldReceive('shareFolder')->once()->with('sub123', 'svc@test');
+
+    app()->instance(GoogleDriveService::class, $service);
+
+    $response = $this->actingAs($admin)->postJson(
+        "/api/organizations/{$organization->id}/drive/subfolders",
+        ['name' => 'SubFolder']
+    );
+
+    $response->assertStatus(201)->assertJsonStructure(['id']);
+
+    $this->assertDatabaseHas('organization_subfolders', [
+        'organization_folder_id' => $root->id,
+        'google_id' => 'sub123',
+        'name' => 'SubFolder',
+    ]);
+});
+
 it('denies subfolder creation to non-collaborator', function () {
     $admin = User::factory()->create(['username' => 'admin']);
     $collab = User::factory()->create(['username' => 'collab']);
