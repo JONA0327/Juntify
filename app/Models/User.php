@@ -7,6 +7,8 @@ use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+
 use App\Models\GoogleToken;
 
 class User extends Authenticatable
@@ -59,5 +61,22 @@ class User extends Authenticatable
     public function groups(): BelongsToMany
     {
         return $this->belongsToMany(Group::class, 'group_user', 'user_id', 'id_grupo');
+    }
+
+    public function organizationFolder(): HasOne
+    {
+        return $this->hasOne(OrganizationFolder::class, 'organization_id', 'current_organization_id');
+    }
+
+    public function organizationSubfolders(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            OrganizationSubfolder::class,
+            OrganizationFolder::class,
+            'organization_id',      // Foreign key on organization_folders table
+            'organization_folder_id', // Foreign key on organization_subfolders table
+            'current_organization_id', // Local key on users table
+            'id'                     // Local key on organization_folders table
+        );
     }
 }

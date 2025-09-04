@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Organization extends Model
 {
@@ -43,6 +45,23 @@ class Organization extends Model
         $this->update(['num_miembros' => $count]);
 
         return $count;
+    }
+
+    public function folder(): HasOne
+    {
+        return $this->hasOne(OrganizationFolder::class);
+    }
+
+    public function subfolders(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            OrganizationSubfolder::class,
+            OrganizationFolder::class,
+            'organization_id',      // Foreign key on organization_folders table
+            'organization_folder_id', // Foreign key on organization_subfolders table
+            'id',                    // Local key on organizations table
+            'id'                     // Local key on organization_folders table
+        );
     }
 }
 
