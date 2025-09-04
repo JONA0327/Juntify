@@ -90,7 +90,7 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
     Route::post('/organizations/{organization}/drive/root', [OrganizationDriveController::class, 'createRootFolder'])
         ->middleware(['web', 'auth', 'organization.role:administrador']);
     Route::post('/organizations/{organization}/drive/subfolders', [OrganizationDriveController::class, 'createSubfolder'])
-        ->middleware(['web', 'auth', 'organization.role:colaborador,administrador']);
+        ->middleware(['web', 'auth', 'organization.role:colaborador']);
     Route::get('/organizations/{organization}/drive/subfolders', [OrganizationDriveController::class, 'listSubfolders'])
         ->middleware(['web', 'auth', 'organization.role']);
     Route::get('/organizations/{organization}/drive/status', [OrganizationDriveController::class, 'status'])
