@@ -37,7 +37,9 @@
   if (typeof window.fetch === 'function') {
     const originalFetch = window.fetch.bind(window);
     window.fetch = async (input, init = {}) => {
-  const url = typeof input === 'string' ? input : input?.url || '';
+  const url = typeof input === 'string'
+    ? input
+    : (input?.url || input?.href || '');
   const isSameOrigin = url.startsWith('/') || url.startsWith(window.location.origin);
 
   // Prepare options & headers without mutating caller's object
