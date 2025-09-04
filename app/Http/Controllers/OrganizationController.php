@@ -87,11 +87,9 @@ class OrganizationController extends Controller
             })
             ->orWhere('admin_id', $user->id)
             ->with([
-                // Cargar solo los grupos donde el usuario pertenece (para la UI)
-                'groups' => function ($query) use ($user) {
-                    $query->whereHas('users', function ($subQuery) use ($user) {
-                        $subQuery->where('users.id', $user->id);
-                    })->with(['users', 'code']);
+                // Cargar todos los grupos con sus usuarios y código
+                'groups' => function ($query) {
+                    $query->with(['users', 'code']);
                 },
                 // Cargar relación users filtrada al usuario actual para leer el rol del pivot
                 'users' => function ($q) use ($user) {
@@ -103,6 +101,12 @@ class OrganizationController extends Controller
         // Marcar si el usuario es propietario de la organización y obtener su rol más alto
         $organizations->each(function ($organization) use ($user) {
             $organization->setAttribute('is_owner', $organization->admin_id === $user->id);
+
+            // Determinar rol del usuario en cada grupo y adjuntarlo
+            $organization->groups->each(function ($group) use ($user) {
+                $groupUser = $group->users->firstWhere('id', $user->id);
+                $group->setAttribute('current_user_role', $groupUser ? $groupUser->pivot->rol : null);
+            });
 
             // Rol desde el pivot organization_user (si existe)
             $orgUser = $organization->users->firstWhere('id', $user->id);
