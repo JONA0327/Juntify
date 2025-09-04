@@ -110,7 +110,7 @@
                                     class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
                                 Grupos
                             </button>
-                            <button @click="mainTab = 'permissions'"
+                            <button @click="mainTab = 'permissions'; loadPermissionsMembers()"
                                     :class="mainTab === 'permissions' ? 'bg-yellow-400 text-slate-900' : 'text-slate-400 hover:text-slate-200'"
                                     class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
                                 Permisos
@@ -177,72 +177,7 @@
                                         <div class="text-slate-400">Año de Creación</div>
                                     </div>
                                 </div>
-
-                                <!-- Sección Drive -->
-                                <div class="mt-6" x-init="loadDriveSubfolders(org)">
-                                    <div class="flex items-center justify-between mb-4">
-                                        <h3 class="text-2xl font-bold text-slate-200">Drive
-                                            <span class="ml-2 text-xs px-2 py-1 rounded-full"
-                                                  :class="getDriveState(org.id).connected ? 'bg-green-500/20 text-green-300' : 'bg-slate-500/20 text-slate-300'">
-                                                <span x-text="getDriveState(org.id).connected ? 'Conectado' : 'No conectado'"></span>
-                                            </span>
-                                        </h3>
-                                        <div class="flex space-x-2" x-show="org.is_owner || org.user_role === 'administrador'">
-                                            <template x-if="!getDriveState(org.id).connected">
-                                                <button @click="connectDrive()" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Conectar Drive</button>
-                                            </template>
-                                            <template x-if="getDriveState(org.id).connected">
-                                                <button @click="disconnectDrive()" class="bg-slate-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-slate-700 transition-colors duration-200">Desconectar</button>
-                                            </template>
-                                            <button x-show="getDriveState(org.id).connected && !getDriveState(org.id).rootFolder" @click="createOrganizationFolder(org)" :disabled="getDriveState(org.id).isCreatingRoot" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                <span x-show="!getDriveState(org.id).isCreatingRoot">Crear carpeta de organización</span>
-                                                <span x-show="getDriveState(org.id).isCreatingRoot" class="flex items-center">
-                                                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                                                    </svg>
-                                                    Creando...
-                                                </span>
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div x-show="org.is_owner || org.user_role === 'colaborador' || org.user_role === 'administrador'" class="bg-slate-700/30 p-4 rounded-lg">
-                                        <template x-if="!getDriveState(org.id).connected">
-                                            <p class="text-slate-400">No conectado a Google Drive. Pulsa "Conectar Drive" con la cuenta del administrador.</p>
-                                        </template>
-                                        <template x-if="getDriveState(org.id).connected && !getDriveState(org.id).rootFolder && !getDriveState(org.id).isLoading">
-                                            <p class="text-slate-400">No se ha creado una carpeta de organización.</p>
-                                        </template>
-
-                                        <template x-if="getDriveState(org.id).isLoading">
-                                            <p class="text-slate-400">Cargando...</p>
-                                        </template>
-
-                                        <div x-show="getDriveState(org.id).rootFolder && !getDriveState(org.id).isLoading">
-                                            <div class="flex items-center mb-4">
-                                                <input type="text" x-model="getDriveState(org.id).newSubfolderName" placeholder="Nombre de subcarpeta" class="flex-1 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
-                                                <button @click="createSubfolder(org)" :disabled="getDriveState(org.id).isCreatingSubfolder" class="ml-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                    <span x-show="!getDriveState(org.id).isCreatingSubfolder">Crear</span>
-                                                    <span x-show="getDriveState(org.id).isCreatingSubfolder" class="flex items-center">
-                                                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                                                        </svg>
-                                                        Creando...
-                                                    </span>
-                                                </button>
-                                            </div>
-
-                                            <ul class="space-y-2" x-show="getDriveState(org.id).subfolders.length">
-                                                <template x-for="sub in getDriveState(org.id).subfolders" :key="sub.google_id">
-                                                    <li class="p-2 bg-slate-800 rounded" x-text="sub.name"></li>
-                                                </template>
-                                            </ul>
-                                            <p x-show="!getDriveState(org.id).subfolders.length" class="text-slate-400">No hay subcarpetas</p>
-                                        </div>
-                                    </div>
-                                </div>
+                            </div>
 
                             <!-- Pestaña Grupos -->
                             <div x-show="mainTab === 'groups'" x-transition>
@@ -255,7 +190,7 @@
                                     <?php endif; ?>
                                 </div>
 
-                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" x-show="org.groups && org.groups.length">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" x-show="Array.isArray(org.groups) && org.groups.length">
                                     <template x-for="group in org.groups" :key="group.id">
                                         <div @click="viewGroup(group)" class="relative bg-slate-700/50 border border-slate-600/50 rounded-lg p-4 hover:bg-slate-700/70 transition-colors duration-200 cursor-pointer">
                                             <!-- Loading overlay -->
@@ -325,7 +260,7 @@
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        <template x-for="user in group.users || []" :key="user.id">
+                                                        <template x-for="user in (group.users || [])" :key="user.id">
                                                             <tr class="border-t border-slate-600/50 hover:bg-slate-700/20">
                                                                 <td class="p-3 text-slate-200">
                                                                     <div class="font-medium" x-text="user.full_name"></div>
@@ -378,17 +313,17 @@
                             </div>
 
                             <!-- Pestaña Actividad -->
-                <div x-show="mainTab === 'activity'" x-transition x-init="if (!activities || !activities[org.id]) loadActivities(org.id)">
+                            <div x-show="mainTab === 'activity'" x-transition x-init="if (!activities?.[org.id]) loadActivities(org.id)">
                                 <h3 class="text-2xl font-bold text-slate-200 mb-4">Actividad reciente</h3>
                                 <ul>
-                    <template x-for="activity in ((activities && activities[org.id]) ? activities[org.id] : [])" :key="activity.id">
+                                    <template x-for="activity in activities?.[org.id] ?? []" :key="activity.id">
                                         <li class="py-2 border-b border-slate-700/50">
                                             <span class="text-yellow-400 font-semibold" x-text="activity.actor"></span>
                                             <span class="ml-2" x-text="activity.description"></span>
                                             <span class="ml-2 text-slate-400 text-sm" x-text="activity.created_at"></span>
                                         </li>
                                     </template>
-                    <li x-show="!(activities && activities[org.id] && activities[org.id].length)" class="text-slate-400">Sin actividad registrada</li>
+                                    <li x-show="!(activities?.[org.id]?.length)" class="text-slate-400">Sin actividad registrada</li>
                                 </ul>
                             </div>
 
@@ -426,7 +361,7 @@
                 <div x-show="showConfirmDeleteGroupModal" @keydown.escape.window="closeConfirmDeleteGroup()" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[62]" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-2">Confirmar eliminación</h2>
-                        <p class="text-slate-300 mb-4">¿Seguro que deseas eliminar el grupo <span class="font-semibold text-yellow-400" x-text="groupToDelete && groupToDelete.nombre_grupo ? groupToDelete.nombre_grupo : ''"></span>? Esta acción no se puede deshacer.</p>
+                        <p class="text-slate-300 mb-4">¿Seguro que deseas eliminar el grupo <span class="font-semibold text-yellow-400" x-text="groupToDelete?.nombre_grupo"></span>? Esta acción no se puede deshacer.</p>
                         <div class="flex justify-end space-x-2">
                             <button @click="closeConfirmDeleteGroup()" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
                             <button @click="deleteGroup(orgOfGroupToDelete, groupToDelete)" :disabled="isDeletingGroup" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50">
@@ -447,7 +382,7 @@
                 <div x-show="showConfirmRemoveMemberModal" @keydown.escape.window="closeConfirmRemoveMember()" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[62]" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-2">Confirmar expulsión</h2>
-                        <p class="text-slate-300 mb-4">¿Seguro que deseas expulsar a <span class="font-semibold text-yellow-400" x-text="memberToRemove && memberToRemove.full_name ? memberToRemove.full_name : ''"></span>? Esta acción no se puede deshacer.</p>
+                        <p class="text-slate-300 mb-4">¿Seguro que deseas expulsar a <span class="font-semibold text-yellow-400" x-text="memberToRemove?.full_name"></span>? Esta acción no se puede deshacer.</p>
                         <div class="flex justify-end space-x-2">
                             <button @click="closeConfirmRemoveMember()" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
                             <button @click="removeMember()" :disabled="isRemovingMember" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50">
@@ -490,7 +425,7 @@
                 <div x-show="showInviteModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
                     <div class="organization-modal p-6 w-full max-w-md text-slate-200">
                         <h2 class="text-lg font-semibold mb-4">Invitar miembro</h2>
-                        <p class="text-sm text-slate-400 mb-4" x-text="'Invitar a: ' + ((selectedGroup && selectedGroup.nombre_grupo) ? selectedGroup.nombre_grupo : '')"></p>
+                        <p class="text-sm text-slate-400 mb-4" x-text="'Invitar a: ' + (selectedGroup?.nombre_grupo || '')"></p>
 
                         <input type="email"
                                x-model="inviteEmail"
@@ -670,8 +605,8 @@
                         <!-- Header del modal -->
                         <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
                             <div>
-                                <h2 class="text-2xl font-bold text-white" x-text="(selectedContainer && selectedContainer.name) ? selectedContainer.name : 'Contenedor'"></h2>
-                                <p class="text-slate-400 mt-1" x-text="(selectedContainer && selectedContainer.description) ? selectedContainer.description : 'Reuniones del contenedor'"></p>
+                                <h2 class="text-2xl font-bold text-white" x-text="selectedContainer?.name || 'Contenedor'"></h2>
+                                <p class="text-slate-400 mt-1" x-text="selectedContainer?.description || 'Reuniones del contenedor'"></p>
                             </div>
                             <button @click="showContainerMeetingsModal = false" class="text-slate-400 hover:text-white transition-colors">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -683,7 +618,7 @@
                         <!-- Contenido del modal -->
                         <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
                             <!-- Lista de reuniones -->
-                            <template x-if="selectedContainer && selectedContainer.meetings && selectedContainer.meetings.length > 0">
+                            <template x-if="selectedContainer?.meetings?.length > 0">
                                 <div class="meetings-grid">
                                     <template x-for="meeting in selectedContainer.meetings" :key="meeting.id">
                                         <div>
@@ -695,7 +630,7 @@
                             </template>
 
                             <!-- Estado vacío -->
-                            <template x-if="!(selectedContainer && selectedContainer.meetings && selectedContainer.meetings.length)">
+                            <template x-if="!selectedContainer?.meetings?.length">
                                 <div class="text-center py-16">
                                     <div class="mx-auto w-24 h-24 bg-slate-800/30 rounded-full flex items-center justify-center mb-6">
                                         <svg class="w-12 h-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -716,8 +651,8 @@
                         <!-- Header del modal -->
                         <div class="flex items-center justify-between mb-6">
                             <div>
-                                <h2 class="text-2xl font-bold text-white" x-text="(currentGroup && currentGroup.nombre_grupo) ? currentGroup.nombre_grupo : 'Grupo'"></h2>
-                                <p class="text-slate-400 mt-1" x-text="(currentGroup && currentGroup.descripcion) ? currentGroup.descripcion : 'Información del grupo'"></p>
+                                <h2 class="text-2xl font-bold text-white" x-text="currentGroup?.nombre_grupo || 'Grupo'"></h2>
+                                <p class="text-slate-400 mt-1" x-text="currentGroup?.descripcion || 'Información del grupo'"></p>
                             </div>
                             <button @click="showGroupInfoModal = false" class="text-slate-400 hover:text-white transition-colors">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -746,7 +681,7 @@
 
                             <!-- Lista de contenedores -->
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <template x-for="container in (currentGroup && currentGroup.containers ? currentGroup.containers : [])" :key="container.id">
+                                <template x-for="container in currentGroup?.containers || []" :key="container.id">
                                     <div class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 hover:bg-slate-700/50 transition-colors">
                                         <h4 class="font-semibold text-yellow-400 mb-2">
                                             <span x-text="container.name"></span>
@@ -773,7 +708,7 @@
                             </div>
 
                             <!-- Estado vacío -->
-                            <div x-show="!(currentGroup && currentGroup.containers && currentGroup.containers.length)" class="text-center py-16">
+                            <div x-show="!currentGroup?.containers || currentGroup.containers.length === 0" class="text-center py-16">
                                 <div class="mx-auto w-16 h-16 bg-slate-800/30 rounded-full flex items-center justify-center mb-4">
                                     <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>

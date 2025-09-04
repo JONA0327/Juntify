@@ -36,6 +36,16 @@ class GoogleAuthController extends Controller
             // Clear any stale flag
             session()->forget('google_oauth_from');
         }
+        // Optional explicit return URL (must be a safe relative path)
+        $returnUrl = $request->query('return');
+        if ($returnUrl && is_string($returnUrl)) {
+            // Basic safety: allow only relative URLs within app
+            if (str_starts_with($returnUrl, '/') && !preg_match('#^//|https?://#i', $returnUrl)) {
+                session(['google_oauth_return' => $returnUrl]);
+            }
+        } else {
+            session()->forget('google_oauth_return');
+        }
         $client = $this->createClient();
         return redirect()->away($client->createAuthUrl());
     }
@@ -72,7 +82,12 @@ class GoogleAuthController extends Controller
         );
 
         $from = session()->pull('google_oauth_from'); // consume flag
+        $returnUrl = session()->pull('google_oauth_return');
 
+        if ($returnUrl) {
+            return redirect($returnUrl)
+                ->with('success', 'Google Drive conectado. Ya puedes gestionar carpetas de la organización.');
+        }
         if ($from === 'organization') {
             return redirect()->route('organization.index')
                              ->with('success', 'Google Drive conectado. Ya puedes gestionar carpetas de la organización.');

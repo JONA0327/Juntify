@@ -38,6 +38,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
     Route::get('/reuniones', [MeetingController::class, 'index'])->name('reuniones.index');
     Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
+    // Vista de configuración de Drive por organización (sin afectar perfil)
+    Route::get('/organizations/{organization}/drive', [OrganizationController::class, 'driveSettings'])
+        ->name('organizations.drive');
 
     // Rutas de Tareas
     Route::get('/tareas', [TaskController::class, 'index'])->name('tareas.index');

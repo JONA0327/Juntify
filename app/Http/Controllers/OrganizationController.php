@@ -10,6 +10,30 @@ use Illuminate\Support\Facades\Log;
 
 class OrganizationController extends Controller
 {
+    public function driveSettings(Organization $organization)
+    {
+        $user = auth()->user();
+        if (!$user) {
+            abort(403);
+        }
+
+        // Permitir solo al owner o administradores de algún grupo de la organización
+        $isOwner = $organization->admin_id === $user->id;
+        $hasAdminRole = $organization->groups()->whereHas('users', function($q) use ($user) {
+            $q->where('users.id', $user->id)->where('group_user.rol', 'administrador');
+        })->exists();
+
+        if (!($isOwner || $hasAdminRole)) {
+            abort(403, 'No tienes permisos para configurar Drive de esta organización');
+        }
+
+        $organization->load(['folder', 'subfolders']);
+
+        return view('organization.drive', [
+            'organization' => $organization,
+            'user' => $user,
+        ]);
+    }
     public function publicIndex()
     {
         $organizations = Organization::query()
