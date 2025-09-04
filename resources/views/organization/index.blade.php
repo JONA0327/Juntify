@@ -145,20 +145,21 @@
                                             <p class="text-slate-400">Miembros: <span class="font-semibold text-yellow-400" x-text="org.num_miembros"></span></p>
                                         </div>
                                     </div>
-                                    <div x-show="org.user_role === 'invitado'" class="flex flex-col items-end">
-                                        <button @click="leaveOrganization()" class="bg-red-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200">
-                                            Salir de la organización
-                                        </button>
-                                        <span class="mt-2 text-sm text-slate-400" x-text="org.user_role.charAt(0).toUpperCase() + org.user_role.slice(1)"></span>
-                                    </div>
-                                    <div class="flex space-x-3" x-show="org.is_owner || org.user_role === 'administrador'">
-                                        <button @click="openEditOrgModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
-                                            Editar Organización
-                                        </button>
-                                        <button x-show="org.is_owner" @click="deleteOrganization(org)" class="bg-red-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200">
-                                            Eliminar
-                                        </button>
-                                    </div>
+                                                                                                            <!-- Acciones y rol (columna derecha unificada) -->
+                                                                                                            <div class="flex flex-col items-end text-right">
+                                                                                                                <!-- Botones de administración (owner o admin) -->
+                                                                                                                <div class="flex space-x-3 items-center" x-show="org.is_owner || org.user_role === 'administrador'">
+                                                                                                                    <button @click="openEditOrgModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Editar Organización</button>
+                                                                                                                    <button x-show="org.is_owner" @click="deleteOrganization(org)" class="bg-red-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200">Eliminar</button>
+                                                                                                                </div>
+                                                                                                                <!-- Botón salir (colaborador e invitado) -->
+                                                                                                                <div x-show="org.user_role === 'colaborador' || org.user_role === 'invitado'" class="mt-0">
+                                                                                                                    <button @click="leaveOrganization()" class="bg-red-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200">Salir de la organización</button>
+                                                                                                                </div>
+                                                                                                                <!-- Texto de rol (siempre debajo de los botones) -->
+                                                                                                                <p class="mt-3 text-slate-100 text-base md:text-lg font-semibold" x-text="(org.is_owner ? 'Administrador' : (org.user_role ? org.user_role.charAt(0).toUpperCase() + org.user_role.slice(1) : ''))"></p>
+                                                                                                            </div>
+
                                 </div>
 
                                 <!-- Estadísticas de la organización -->

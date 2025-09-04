@@ -1,6 +1,7 @@
         // Create animated particles
         function createParticles() {
             const particlesContainer = document.getElementById('particles');
+            if (!particlesContainer) return; // Page without particles container
             const particleCount = 100;
 
             for (let i = 0; i < particleCount; i++) {
@@ -123,6 +124,7 @@
         // Enhanced sphere interaction
         document.addEventListener('DOMContentLoaded', function() {
             const sphereContainer = document.querySelector('.sphere-container');
+            if (!sphereContainer) return; // Page without sphere container
 
             sphereContainer.addEventListener('mouseenter', function() {
                 this.style.transform = 'scale(1.05)';

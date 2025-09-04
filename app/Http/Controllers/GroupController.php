@@ -418,7 +418,24 @@ class GroupController extends Controller
 
         $group->users()->updateExistingPivot($user->id, ['rol' => $validated['rol']]);
 
-        return response()->json(['role_updated' => true]);
+        // Sincronizar el rol en la organización al rol más alto entre todos los grupos de esa organización
+        $roles = $org->groups()
+            ->whereHas('users', function($q) use ($user) { $q->where('users.id', $user->id); })
+            ->with(['users' => function($q) use ($user) { $q->where('users.id', $user->id); }])
+            ->get()
+            ->flatMap->users
+            ->pluck('pivot.rol')
+            ->unique();
+
+        $best = 'invitado';
+        if ($roles->contains('administrador')) {
+            $best = 'administrador';
+        } elseif ($roles->contains('colaborador')) {
+            $best = 'colaborador';
+        }
+        $org->users()->syncWithoutDetaching([$user->id => ['rol' => $best]]);
+
+        return response()->json(['role_updated' => true, 'org_role' => $best]);
     }
 
     public function removeMember(Group $group, User $user)
@@ -426,6 +443,9 @@ class GroupController extends Controller
         try {
             // Sólo owner de organización o administradores del grupo pueden quitar miembros
             $actor = auth()->user();
+            if (!$actor) {
+                return response()->json(['message' => 'No autenticado'], 401);
+            }
             $org = $group->organization;
             $isOwner = $org->admin_id === $actor->id;
             $actorMembership = $group->users()->where('users.id', $actor->id)->first();

@@ -67,30 +67,43 @@ class OrganizationController extends Controller
         $organizations->each(function ($organization) use ($user) {
             $organization->setAttribute('is_owner', $organization->admin_id === $user->id);
 
-            // Intentar obtener rol desde el pivot organization_user primero
+            // Rol desde el pivot organization_user (si existe)
             $orgUser = $organization->users->firstWhere('id', $user->id);
             $orgPivotRole = $orgUser ? $orgUser->pivot->rol : null;
 
-            if ($orgPivotRole) {
-                $organization->setAttribute('user_role', $orgPivotRole);
-            } else {
-                // Fallback: calcular rol más alto a partir de los grupos
-                $userRoles = $organization->groups->flatMap->users
-                    ->where('id', $user->id)
-                    ->pluck('pivot.rol')
-                    ->unique();
+            // Roles desde los grupos en los que participa el usuario dentro de la organización
+            $userRoles = $organization->groups->flatMap->users
+                ->where('id', $user->id)
+                ->pluck('pivot.rol')
+                ->unique();
 
-                if ($userRoles->contains('administrador')) {
-                    $organization->setAttribute('user_role', 'administrador');
-                } elseif ($userRoles->contains('colaborador')) {
-                    $organization->setAttribute('user_role', 'colaborador');
-                } elseif ($organization->getAttribute('is_owner')) {
-                    // Si es owner, considérese administrador para efectos de UI/permiso
-                    $organization->setAttribute('user_role', 'administrador');
-                } else {
-                    $organization->setAttribute('user_role', 'invitado');
+            // Ranking de roles
+            $rank = ['invitado' => 0, 'colaborador' => 1, 'administrador' => 2];
+            $candidates = [];
+
+            if ($orgPivotRole && isset($rank[$orgPivotRole])) {
+                $candidates[] = $orgPivotRole;
+            }
+
+            if ($userRoles->contains('administrador')) {
+                $candidates[] = 'administrador';
+            } elseif ($userRoles->contains('colaborador')) {
+                $candidates[] = 'colaborador';
+            }
+
+            if ($organization->getAttribute('is_owner')) {
+                $candidates[] = 'administrador';
+            }
+
+            // Elegir el más alto; por defecto 'invitado'
+            $finalRole = 'invitado';
+            foreach ($candidates as $candidate) {
+                if ($rank[$candidate] > $rank[$finalRole]) {
+                    $finalRole = $candidate;
                 }
             }
+
+            $organization->setAttribute('user_role', $finalRole);
         });
 
         // Verificar si el usuario es solo invitado en todas las organizaciones

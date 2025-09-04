@@ -40,8 +40,16 @@ class UserController extends Controller
         ]);
 
         // Verificar que la notificación pertenece al usuario autenticado
-        if ($notification->emisor !== auth()->id()) {
-            return response()->json(['error' => 'No autorizado'], 403);
+        $actor = auth()->user();
+        if (!$actor) {
+            return response()->json(['error' => 'No autenticado'], 401);
+        }
+        // Permitir responder si es el invitado (emisor) o quien envió (remitente),
+        // para que el emisor pueda aceptar/rechazar y el remitente pueda cancelar.
+        $isInvitedUser = (string)$notification->emisor === (string)$actor->id;
+        $isSender = (string)$notification->remitente === (string)$actor->id;
+        if (!($isInvitedUser || $isSender)) {
+            return response()->json(['error' => 'No autorizado para responder esta notificación'], 403);
         }
 
         if ($request->action === 'accept') {
@@ -53,10 +61,12 @@ class UserController extends Controller
             if ($groupId) {
                 $group = Group::find($groupId);
                 if ($group) {
-                    // Agregar usuario al grupo
-                    $group->users()->syncWithoutDetaching([auth()->id() => ['rol' => 'invitado']]);
-                    $group->increment('miembros');
-                    $numMiembros = $group->organization->refreshMemberCount();
+                    // Agregar usuario al grupo y asegurar pertenencia a la organización
+                    $group->users()->syncWithoutDetaching([$actor->id => ['rol' => 'invitado']]);
+                    $group->update(['miembros' => $group->users()->count()]);
+                    $org = $group->organization;
+                    $org->users()->syncWithoutDetaching([$actor->id => ['rol' => 'invitado']]);
+                    $numMiembros = $org->refreshMemberCount();
                 }
             }
 

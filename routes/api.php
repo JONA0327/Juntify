@@ -89,21 +89,25 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
 
     // Rutas de Usuarios
     Route::post('/users/check-email', [UserController::class, 'checkEmail'])->name('api.users.check-email');
-    Route::get('/users/notifications', [UserController::class, 'getNotifications'])->name('api.users.notifications');
-    Route::post('/users/notifications/{notification}/respond', [UserController::class, 'respondToNotification'])->name('api.users.notifications.respond');
+    Route::middleware(['web', 'auth'])->group(function () {
+        Route::get('/users/notifications', [UserController::class, 'getNotifications'])->name('api.users.notifications');
+        Route::post('/users/notifications/{notification}/respond', [UserController::class, 'respondToNotification'])->name('api.users.notifications.respond');
+    });
 
     // Rutas de Grupos
-    Route::post('/groups', [GroupController::class, 'store'])->name('api.groups.store');
-    Route::get('/groups/{group}', [GroupController::class, 'show'])->name('api.groups.show');
-    Route::patch('/groups/{group}', [GroupController::class, 'update'])->name('api.groups.update');
-    Route::delete('/groups/{group}', [GroupController::class, 'destroy'])->name('api.groups.destroy');
-    Route::post('/groups/{group}/invite', [GroupController::class, 'invite'])->name('api.groups.invite');
-    Route::post('/groups/{group}/accept', [GroupController::class, 'accept'])->name('api.groups.accept');
-    Route::post('/groups/join-code', [GroupController::class, 'joinByCode'])->name('api.groups.join-code');
-    Route::get('/groups/{group}/members', [GroupController::class, 'members'])->name('groups.members');
-    Route::patch('/groups/{group}/members/{user}', [GroupController::class, 'updateMemberRole'])->name('api.groups.members.update');
-    Route::delete('/groups/{group}/members/{user}', [GroupController::class, 'removeMember'])->name('api.groups.members.destroy');
-    Route::get('/groups/{group}/containers', [GroupController::class, 'getContainers'])->name('api.groups.containers');
+    Route::middleware(['web', 'auth'])->group(function () {
+        Route::post('/groups', [GroupController::class, 'store'])->name('api.groups.store');
+        Route::get('/groups/{group}', [GroupController::class, 'show'])->name('api.groups.show');
+        Route::patch('/groups/{group}', [GroupController::class, 'update'])->name('api.groups.update');
+        Route::delete('/groups/{group}', [GroupController::class, 'destroy'])->name('api.groups.destroy');
+        Route::post('/groups/{group}/invite', [GroupController::class, 'invite'])->name('api.groups.invite');
+        Route::post('/groups/{group}/accept', [GroupController::class, 'accept'])->name('api.groups.accept');
+        Route::post('/groups/join-code', [GroupController::class, 'joinByCode'])->name('api.groups.join-code');
+        Route::get('/groups/{group}/members', [GroupController::class, 'members'])->name('groups.members');
+        Route::patch('/groups/{group}/members/{user}', [GroupController::class, 'updateMemberRole'])->name('api.groups.members.update');
+        Route::delete('/groups/{group}/members/{user}', [GroupController::class, 'removeMember'])->name('api.groups.members.destroy');
+        Route::get('/groups/{group}/containers', [GroupController::class, 'getContainers'])->name('api.groups.containers');
+    });
 
     // Notificaciones
     Route::middleware(['web', 'auth'])->group(function () {
