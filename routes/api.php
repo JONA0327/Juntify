@@ -16,7 +16,6 @@ use App\Http\Controllers\TaskCommentController;
 use App\Http\Controllers\TaskAttachmentController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\MeetingController;
-use App\Http\Controllers\OrganizationDriveController;
 
 /*
 |--------------------------------------------------------------------------
@@ -87,15 +86,6 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
     Route::patch('/organizations/{organization}', [OrganizationController::class, 'update'])->name('api.organizations.update');
     Route::get('/organizations/{organization}', [OrganizationController::class, 'show'])->name('api.organizations.show');
     Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy'])->name('api.organizations.destroy');
-    Route::post('/organizations/{organization}/drive/root', [OrganizationDriveController::class, 'createRootFolder'])
-        ->middleware(['web', 'auth', 'organization.role:administrador']);
-    Route::post('/organizations/{organization}/drive/subfolders', [OrganizationDriveController::class, 'createSubfolder'])
-        ->middleware(['web', 'auth', 'organization.role:colaborador']);
-    Route::get('/organizations/{organization}/drive/subfolders', [OrganizationDriveController::class, 'listSubfolders'])
-        ->middleware(['web', 'auth', 'organization.role']);
-    Route::get('/organizations/{organization}/drive/status', [OrganizationDriveController::class, 'status'])
-        ->middleware(['web', 'auth', 'organization.role']);
-
 
     // Rutas de Usuarios
     Route::post('/users/check-email', [UserController::class, 'checkEmail'])->name('api.users.check-email');
