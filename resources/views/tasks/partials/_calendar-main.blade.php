@@ -270,11 +270,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             console.log('🌐 Fetching eventos desde:', url.toString());
 
+            const headers = {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrf
+            };
+            if (window.authToken) {
+                headers['Authorization'] = `Bearer ${window.authToken}`;
+            }
+
             const res = await fetch(url, {
-                headers: {
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrf
-                }
+                headers,
+                credentials: 'include'
             });
 
             console.log('📡 Respuesta recibida:', res.status, res.statusText);
