@@ -7,6 +7,23 @@ use Illuminate\Support\Facades\Log;
 
 trait GoogleDriveHelpers
 {
+    /**
+     * Cache of file IDs that are known to be invalid to avoid repeated API lookups.
+     *
+     * @var array<string, bool>
+     */
+    protected static array $invalidFileCache = [];
+
+    protected function isInvalidFileId(string $fileId): bool
+    {
+        return isset(self::$invalidFileCache[$fileId]);
+    }
+
+    protected function markInvalidFileId(string $fileId): void
+    {
+        self::$invalidFileCache[$fileId] = true;
+    }
+
     protected function setGoogleDriveToken($userOrRequest)
     {
         $user = $userOrRequest instanceof Request ? $userOrRequest->user() : $userOrRequest;
@@ -64,6 +81,10 @@ trait GoogleDriveHelpers
                 return 'Sin especificar';
             }
 
+            if ($this->isInvalidFileId($fileId)) {
+                return 'Archivo no encontrado';
+            }
+
             $file = $this->googleDriveService->getFileInfo($fileId);
 
             if ($file->getParents()) {
@@ -72,7 +93,7 @@ trait GoogleDriveHelpers
                     $parent = $this->googleDriveService->getFileInfo($parentId);
                     return $parent->getName() ?: 'Carpeta sin nombre';
                 } catch (\Exception $parentException) {
-                    Log::warning('getFolderName: Error getting parent folder name', [
+                    Log::notice('getFolderName: Error getting parent folder name', [
                         'parent_id' => $parentId,
                         'error' => $parentException->getMessage()
                     ]);
@@ -82,15 +103,18 @@ trait GoogleDriveHelpers
 
             return 'Carpeta raíz';
         } catch (\Exception $e) {
-            Log::warning('getFolderName: Error getting folder name', [
-                'file_id' => $fileId,
-                'error' => $e->getMessage()
-            ]);
+            if (!$this->isInvalidFileId($fileId)) {
+                Log::notice('getFolderName: Error getting folder name', [
+                    'file_id' => $fileId,
+                    'error' => $e->getMessage()
+                ]);
+            }
 
             // Handle specific error cases
             if (str_contains($e->getMessage(), 'File not found') ||
                 str_contains($e->getMessage(), '404') ||
                 str_contains($e->getMessage(), 'notFound')) {
+                $this->markInvalidFileId($fileId);
                 return 'Archivo no encontrado';
             }
 
@@ -101,6 +125,7 @@ trait GoogleDriveHelpers
                 return 'Juntify Recordings';
             }
 
+            $this->markInvalidFileId($fileId);
             return 'Error al obtener carpeta';
         }
     }
