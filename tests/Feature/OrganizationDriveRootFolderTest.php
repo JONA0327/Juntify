@@ -2,7 +2,7 @@
 
 use App\Models\User;
 use App\Models\Organization;
-use App\Models\GoogleToken;
+use App\Models\OrganizationGoogleToken;
 use App\Models\OrganizationFolder;
 use App\Services\GoogleDriveService;
 use Google\Client;
@@ -26,8 +26,8 @@ it('allows administrator to create organization root folder', function () {
 
     $organization->users()->attach($admin->id, ['rol' => 'administrador']);
 
-    $token = GoogleToken::create([
-        'username'      => $admin->username,
+    $token = OrganizationGoogleToken::create([
+        'organization_id' => $organization->id,
         'access_token'  => 'access',
         'refresh_token' => 'refresh',
         'expiry_date'   => now()->addHour(),
