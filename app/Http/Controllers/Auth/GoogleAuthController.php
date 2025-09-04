@@ -26,8 +26,16 @@ class GoogleAuthController extends Controller
         return $client;
     }
 
-    public function redirect()
+    public function redirect(Request $request)
     {
+        // Track source to decide post-OAuth redirect
+        $from = $request->query('from');
+        if ($from === 'organization') {
+            session(['google_oauth_from' => 'organization']);
+        } else {
+            // Clear any stale flag
+            session()->forget('google_oauth_from');
+        }
         $client = $this->createClient();
         return redirect()->away($client->createAuthUrl());
     }
@@ -54,8 +62,8 @@ class GoogleAuthController extends Controller
 
         $user = Auth::user();
 
-        $user->googleToken()->updateOrCreate(
-            [],
+        GoogleToken::updateOrCreate(
+            ['username' => $user->username],
             [
                 'access_token'  => $token['access_token'] ?? '',
                 'refresh_token' => $token['refresh_token'] ?? '',
@@ -63,11 +71,15 @@ class GoogleAuthController extends Controller
             ]
         );
 
+        $from = session()->pull('google_oauth_from'); // consume flag
+
+        if ($from === 'organization') {
+            return redirect()->route('organization.index')
+                             ->with('success', 'Google Drive conectado. Ya puedes gestionar carpetas de la organización.');
+        }
+
         return redirect()->route('profile.show')
-                         ->with(
-                             'success',
-                             'Google Drive conectado. Crea tu carpeta principal desde tu perfil.'
-                         );
+                         ->with('success', 'Google Drive conectado. Crea tu carpeta principal desde tu perfil.');
     }
 
     public function disconnect()

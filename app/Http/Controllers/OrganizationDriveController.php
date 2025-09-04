@@ -125,4 +125,41 @@ class OrganizationDriveController extends Controller
             'subfolders'  => $subfolders,
         ]);
     }
+
+    /**
+     * Returns Drive connection and folder status for an organization.
+     * Always 200 with flags to avoid noisy 404s in the UI.
+     */
+    public function status(Organization $organization)
+    {
+        // Check if admin has connected Google (GoogleToken exists)
+        $admin = $organization->admin;
+        $token = $admin ? GoogleToken::where('username', $admin->username)->first() : null;
+
+        $connected = (bool) $token;
+
+        $root = $organization->folder;
+        $subfolders = [];
+
+        if ($connected && $root) {
+            // Initialize drive client and list subfolders
+            $this->initAdminDrive($organization);
+            $files = $this->drive->listSubfolders($root->google_id);
+            foreach ($files as $file) {
+                $subfolders[] = OrganizationSubfolder::updateOrCreate(
+                    [
+                        'organization_folder_id' => $root->id,
+                        'google_id'              => $file->getId(),
+                    ],
+                    ['name' => $file->getName()]
+                );
+            }
+        }
+
+        return response()->json([
+            'connected'   => $connected,
+            'root_folder' => $root,
+            'subfolders'  => $subfolders,
+        ]);
+    }
 }

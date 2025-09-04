@@ -181,10 +181,20 @@
                                 <!-- Sección Drive -->
                                 <div class="mt-6" x-init="loadDriveSubfolders(org)">
                                     <div class="flex items-center justify-between mb-4">
-                                        <h3 class="text-2xl font-bold text-slate-200">Drive</h3>
+                                        <h3 class="text-2xl font-bold text-slate-200">Drive
+                                            <span class="ml-2 text-xs px-2 py-1 rounded-full"
+                                                  :class="getDriveState(org.id).connected ? 'bg-green-500/20 text-green-300' : 'bg-slate-500/20 text-slate-300'">
+                                                <span x-text="getDriveState(org.id).connected ? 'Conectado' : 'No conectado'"></span>
+                                            </span>
+                                        </h3>
                                         <div class="flex space-x-2" x-show="org.is_owner || org.user_role === 'administrador'">
-                                            <button @click="connectDrive()" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Conectar Drive</button>
-                                            <button @click="createOrganizationFolder(org)" :disabled="getDriveState(org.id).isCreatingRoot" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                            <template x-if="!getDriveState(org.id).connected">
+                                                <button @click="connectDrive()" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Conectar Drive</button>
+                                            </template>
+                                            <template x-if="getDriveState(org.id).connected">
+                                                <button @click="disconnectDrive()" class="bg-slate-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-slate-700 transition-colors duration-200">Desconectar</button>
+                                            </template>
+                                            <button x-show="getDriveState(org.id).connected && !getDriveState(org.id).rootFolder" @click="createOrganizationFolder(org)" :disabled="getDriveState(org.id).isCreatingRoot" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
                                                 <span x-show="!getDriveState(org.id).isCreatingRoot">Crear carpeta de organización</span>
                                                 <span x-show="getDriveState(org.id).isCreatingRoot" class="flex items-center">
                                                     <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -198,7 +208,12 @@
                                     </div>
 
                                     <div x-show="org.is_owner || org.user_role === 'colaborador' || org.user_role === 'administrador'" class="bg-slate-700/30 p-4 rounded-lg">
-                                        <p x-show="!getDriveState(org.id).rootFolder && !getDriveState(org.id).isLoading" class="text-slate-400">No se ha creado una carpeta de organización.</p>
+                                        <template x-if="!getDriveState(org.id).connected">
+                                            <p class="text-slate-400">No conectado a Google Drive. Pulsa "Conectar Drive" con la cuenta del administrador.</p>
+                                        </template>
+                                        <template x-if="getDriveState(org.id).connected && !getDriveState(org.id).rootFolder && !getDriveState(org.id).isLoading">
+                                            <p class="text-slate-400">No se ha creado una carpeta de organización.</p>
+                                        </template>
 
                                         <template x-if="getDriveState(org.id).isLoading">
                                             <p class="text-slate-400">Cargando...</p>

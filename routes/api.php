@@ -93,6 +93,8 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
         ->middleware(['web', 'auth', 'organization.role:colaborador,administrador']);
     Route::get('/organizations/{organization}/drive/subfolders', [OrganizationDriveController::class, 'listSubfolders'])
         ->middleware(['web', 'auth', 'organization.role']);
+    Route::get('/organizations/{organization}/drive/status', [OrganizationDriveController::class, 'status'])
+        ->middleware(['web', 'auth', 'organization.role']);
 
 
     // Rutas de Usuarios

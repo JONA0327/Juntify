@@ -133,6 +133,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             this.driveData[orgId] = {
                 rootFolder: null,
                 subfolders: [],
+                connected: false,
                 isLoading: false,
                 isCreatingRoot: false,
                 isCreatingSubfolder: false,
@@ -143,7 +144,28 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     },
 
     connectDrive() {
-        window.location.href = '/auth/google/redirect';
+        // Include source so callback redirects back to organizations
+        window.location.href = '/auth/google/redirect?from=organization';
+    },
+
+    async disconnectDrive() {
+        try {
+            const res = await fetch('/drive/disconnect', { method: 'POST', headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') } });
+            if (res.ok) {
+                // Refresh drive status for all orgs
+                if (Array.isArray(this.organizations)) {
+                    for (const org of this.organizations) {
+                        await this.loadDriveSubfolders(org);
+                    }
+                }
+                this.showStatus('Google Drive desconectado');
+            } else {
+                this.showStatus('No se pudo desconectar', 'error');
+            }
+        } catch (e) {
+            console.error('Error disconnecting drive', e);
+            this.showStatus('Error al desconectar', 'error');
+        }
     },
 
     async createOrganizationFolder(org) {
@@ -183,14 +205,22 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         const state = this.getDriveState(org.id);
         state.isLoading = true;
         try {
-            const response = await fetch(`/api/organizations/${org.id}/drive/subfolders`);
-            if (response.ok) {
-                const data = await response.json();
-                state.rootFolder = data.root_folder;
-                state.subfolders = data.subfolders || [];
-            } else {
-                state.rootFolder = null;
-                state.subfolders = [];
+            // First, get status to know if connected and if root exists
+            const statusRes = await fetch(`/api/organizations/${org.id}/drive/status`);
+            if (statusRes.ok) {
+                const status = await statusRes.json();
+                state.connected = !!status.connected;
+                state.rootFolder = status.root_folder || null;
+                state.subfolders = status.subfolders || [];
+                // If connected and root exists but no subfolders were returned (some backends may skip), fetch explicitly
+                if (state.connected && state.rootFolder && (!Array.isArray(state.subfolders) || !state.subfolders.length)) {
+                    const response = await fetch(`/api/organizations/${org.id}/drive/subfolders`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        state.rootFolder = data.root_folder;
+                        state.subfolders = data.subfolders || [];
+                    }
+                }
             }
         } catch (e) {
             console.error('Error loading subfolders:', e);
