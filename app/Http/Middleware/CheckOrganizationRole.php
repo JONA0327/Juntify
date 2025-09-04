@@ -23,6 +23,7 @@ class CheckOrganizationRole
             return response()->json(['message' => 'Organization not found'], 404);
         }
 
+        $roles = array_map('strtolower', $roles);
         $allowedRoles = $roles ?: ['invitado', 'colaborador', 'administrador'];
 
         $userRole = null;
@@ -32,6 +33,7 @@ class CheckOrganizationRole
             $membership = $organization->users()->where('users.id', $user->id)->first();
             $userRole = $membership ? $membership->pivot->rol : null;
         }
+        $userRole = $userRole ? strtolower($userRole) : null;
 
         if (! $userRole || ! in_array($userRole, $allowedRoles)) {
             return response()->json(['message' => 'Forbidden'], 403);
