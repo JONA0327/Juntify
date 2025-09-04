@@ -7,6 +7,7 @@ use App\Models\Folder;
 use App\Models\Subfolder;
 use App\Models\GoogleToken;
 use App\Services\GoogleDriveService;
+use App\Services\GoogleCalendarService;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -21,9 +22,10 @@ class ProfileController extends Controller
     {
         $user = Auth::user();
 
-        $token = GoogleToken::where('username', $user->username)->first();
-        $lastSync = optional($token)->updated_at;
-        $subfolders = collect();
+        $token          = GoogleToken::where('username', $user->username)->first();
+        $lastSync       = optional($token)->updated_at;
+        $subfolders     = collect();
+        $folderMessage  = null;
 
         if (!$token || !$token->access_token) {
             $driveConnected    = false;
@@ -51,37 +53,9 @@ class ProfileController extends Controller
             }
         }
 
-        if (!$token->recordings_folder_id) {
-            $driveConnected    = true;
-            $calendarConnected = false;
-            $folder = null;
-            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync'));
-        }
-
-        try {
-            $file       = $drive->getDrive()->files->get(
-                $token->recordings_folder_id,
-                ['fields' => 'name']
-            );
-            $folderName = $file->getName() ?? "recordings_{$user->username}";
-        } catch (\Throwable $e) {
-            $folderName = "recordings_{$user->username}";
-        }
-
-        $folder = Folder::updateOrCreate(
-            [
-                'google_token_id' => $token->id,
-                'google_id'       => $token->recordings_folder_id,
-            ],
-            [
-                'name'      => $folderName,
-                'parent_id' => null,
-            ]
-        );
-
         $driveConnected = true;
 
-        $calendarService = new \App\Services\GoogleCalendarService();
+        $calendarService = new GoogleCalendarService();
         $calendarClient  = $calendarService->getClient();
         $calendarClient->setAccessToken($client->getAccessToken());
 
@@ -92,9 +66,34 @@ class ProfileController extends Controller
             $calendarConnected = false;
         }
 
-        $subfolders = Subfolder::where('folder_id', $folder->id)->get();
+        $folder = null;
+        if ($token->recordings_folder_id) {
+            try {
+                $file       = $drive->getDrive()->files->get(
+                    $token->recordings_folder_id,
+                    ['fields' => 'name']
+                );
+                $folderName = $file->getName() ?? "recordings_{$user->username}";
 
-        return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync'));
+                $folder = Folder::updateOrCreate(
+                    [
+                        'google_token_id' => $token->id,
+                        'google_id'       => $token->recordings_folder_id,
+                    ],
+                    [
+                        'name'      => $folderName,
+                        'parent_id' => null,
+                    ]
+                );
+
+                $subfolders = Subfolder::where('folder_id', $folder->id)->get();
+            } catch (\Throwable $e) {
+                $token->update(['recordings_folder_id' => null]);
+                $folderMessage = 'No se pudo acceder a la carpeta principal. Configúrala nuevamente.';
+            }
+        }
+
+        return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage'));
     }
 
     /**
