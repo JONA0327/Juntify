@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function openTaskDetailsModal(taskId){
     try{
-      const res = await fetch(new URL(`/api/tasks-laravel/tasks/${taskId}`, window.location.origin));
+      const res = await fetch(new URL(`/api/tasks-laravel/tasks/${taskId}`, window.location.origin), { credentials: 'same-origin' });
       const data = await res.json();
       if (!data.success) throw new Error('No se pudo cargar la tarea');
       const t = data.task;
@@ -299,118 +299,111 @@ document.addEventListener('DOMContentLoaded', () => {
             modal.querySelector('#tab-'+tab).classList.remove('hidden');
           });
         });
-
-<<<<<<< ours
         const progressInput = modal.querySelector('#task-progress');
-        const progressValue = modal.querySelector('#task-progress-value');
-        progressInput.addEventListener('input', ()=>{ progressValue.textContent = progressInput.value + '%'; });
-        modal.querySelector('#task-progress-save').addEventListener('click', async ()=>{
-          const value = parseInt(progressInput.value,10);
-          try{
-            const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}`, window.location.origin), {
-              method:'PUT',
-              headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN': csrf },
-              body: JSON.stringify({ tarea: t.tarea, progreso: value })
-            });
-            const resp = await r.json();
-            if(resp.success){
-              t.progreso = value;
-            } else {
-              alert('No se pudo actualizar progreso');
-            }
-          }catch(_){ alert('No se pudo actualizar progreso'); }
-        });
-        modal.querySelector('#task-mark-complete').addEventListener('click', async ()=>{
-          try{
-            const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/complete`, window.location.origin), {
-              method:'POST',
-              headers:{ 'X-CSRF-TOKEN': csrf }
-            });
-            const resp = await r.json();
-            if(resp.success){
-              progressInput.value = 100;
-              progressValue.textContent = '100%';
-              t.progreso = 100;
-            } else {
-              alert('No se pudo completar la tarea');
-            }
-          }catch(_){ alert('No se pudo completar la tarea'); }
-        });
+      const progressValue = modal.querySelector('#task-progress-value');
+      progressInput.addEventListener('input', ()=>{ progressValue.textContent = progressInput.value + '%'; });
+      modal.querySelector('#task-progress-save').addEventListener('click', async ()=>{
+        const value = parseInt(progressInput.value,10);
+        try{
+          const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}`, window.location.origin), {
+            method:'PUT',
+            headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN': csrf },
+            body: JSON.stringify({ tarea: t.tarea, progreso: value }),
+            credentials: 'same-origin'
+          });
+          const resp = await r.json();
+          if(resp.success){
+            t.progreso = value;
+          } else {
+            alert('No se pudo actualizar progreso');
+          }
+        }catch(_){ alert('No se pudo actualizar progreso'); }
+      });
+      modal.querySelector('#task-mark-complete').addEventListener('click', async ()=>{
+        try{
+          const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/complete`, window.location.origin), {
+            method:'POST',
+            headers:{ 'X-CSRF-TOKEN': csrf },
+            credentials: 'same-origin'
+          });
+          const resp = await r.json();
+          if(resp.success){
+            progressInput.value = 100;
+            progressValue.textContent = '100%';
+            t.progreso = 100;
+          } else {
+            alert('No se pudo completar la tarea');
+          }
+        }catch(_){ alert('No se pudo completar la tarea'); }
+      });
 
-        await loadComments();
+      await loadComments();
       async function loadComments(){
-        const res = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/comments`, window.location.origin));
+        const res = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/comments`, window.location.origin), { credentials: 'same-origin' });
         const data = await res.json();
-        const list = modal.querySelector('#comments-list'); list.innerHTML='';
-        (data.comments||[]).forEach(c=>{
-          const item = document.createElement('div'); item.className='bg-slate-800/70 border border-slate-700 rounded px-3 py-2 text-sm text-slate-200';
-          const when = c.date ? new Date(c.date).toLocaleString() : ''; item.textContent = `${c.author}: ${c.text}${when ? ' ('+when+')' : ''}`; list.appendChild(item);
-        });
+        const list = modal.querySelector('#comments-list');
+        list.innerHTML='';
+
+        const renderComment = (c, container)=>{
+          const wrapper = document.createElement('div');
+          wrapper.className = 'mt-2';
+          const box = document.createElement('div');
+          box.className = 'bg-slate-800/70 border border-slate-700 rounded px-3 py-2 text-sm text-slate-200';
+          const when = c.date ? new Date(c.date).toLocaleString() : '';
+          box.textContent = `${c.author}: ${c.text}${when ? ' ('+when+')' : ''}`;
+          const replyBtn = document.createElement('button');
+          replyBtn.textContent = 'Responder';
+          replyBtn.className = 'ml-2 text-xs text-sky-400';
+          box.appendChild(replyBtn);
+          const childrenContainer = document.createElement('div');
+          childrenContainer.className = 'ml-4';
+          wrapper.appendChild(box);
+          wrapper.appendChild(childrenContainer);
+
+          replyBtn.addEventListener('click',()=>{
+            replyBtn.disabled = true;
+            const form = document.createElement('form');
+            form.className = 'mt-1';
+            form.innerHTML = `<input type="text" class="w-full rounded bg-slate-900/70 border border-slate-700 px-2 py-1 text-slate-200 text-sm" placeholder="Respuesta...">`;
+            const input = form.querySelector('input');
+            form.onsubmit = async (e)=>{
+              e.preventDefault();
+              const text = input.value.trim();
+              if(!text) return;
+              const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/comments`, window.location.origin), {
+                method:'POST',
+                headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN': csrf },
+                body: JSON.stringify({ text, parent_id: c.id }),
+                credentials: 'same-origin'
+              });
+              const resp = await r.json();
+              if(resp.success){ await loadComments(); }
+            };
+            wrapper.insertBefore(form, childrenContainer);
+          });
+
+          container.appendChild(wrapper);
+          (c.children||[]).forEach(ch=>renderComment(ch, childrenContainer));
+        };
+
+        (data.comments||[]).forEach(c=>renderComment(c, list));
+
         const form = modal.querySelector('#comment-form');
-        form.onsubmit = async (e)=>{ e.preventDefault(); const input=form.querySelector('input'); const text=input.value.trim(); if(!text) return;
-          const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/comments`, window.location.origin), { method:'POST', headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN': csrf }, body: JSON.stringify({ text })});
-          const resp = await r.json(); if (resp.success){ input.value=''; await loadComments(); }
+        form.onsubmit = async (e)=>{
+          e.preventDefault();
+          const input=form.querySelector('input');
+          const text=input.value.trim();
+          if(!text) return;
+          const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/comments`, window.location.origin), {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN': csrf },
+            body: JSON.stringify({ text }),
+            credentials: 'same-origin'
+          });
+          const resp = await r.json();
+          if (resp.success){ input.value=''; await loadComments(); }
         };
       }
-=======
-       await loadComments();
-       async function loadComments(){
-         const res = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/comments`, window.location.origin));
-         const data = await res.json();
-         const list = modal.querySelector('#comments-list');
-         list.innerHTML='';
-
-         const renderComment = (c, container)=>{
-           const wrapper = document.createElement('div');
-           wrapper.className = 'mt-2';
-           const box = document.createElement('div');
-           box.className = 'bg-slate-800/70 border border-slate-700 rounded px-3 py-2 text-sm text-slate-200';
-           const when = c.date ? new Date(c.date).toLocaleString() : '';
-           box.textContent = `${c.author}: ${c.text}${when ? ' ('+when+')' : ''}`;
-           const replyBtn = document.createElement('button');
-           replyBtn.textContent = 'Responder';
-           replyBtn.className = 'ml-2 text-xs text-sky-400';
-           box.appendChild(replyBtn);
-           const childrenContainer = document.createElement('div');
-           childrenContainer.className = 'ml-4';
-           wrapper.appendChild(box);
-           wrapper.appendChild(childrenContainer);
-
-           replyBtn.addEventListener('click',()=>{
-             replyBtn.disabled = true;
-             const form = document.createElement('form');
-             form.className = 'mt-1';
-             form.innerHTML = `<input type="text" class="w-full rounded bg-slate-900/70 border border-slate-700 px-2 py-1 text-slate-200 text-sm" placeholder="Respuesta...">`;
-             const input = form.querySelector('input');
-             form.onsubmit = async (e)=>{
-               e.preventDefault();
-               const text = input.value.trim();
-               if(!text) return;
-               const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/comments`, window.location.origin), { method:'POST', headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN': csrf }, body: JSON.stringify({ text, parent_id: c.id })});
-               const resp = await r.json();
-               if(resp.success){ await loadComments(); }
-             };
-             wrapper.insertBefore(form, childrenContainer);
-           });
-
-           container.appendChild(wrapper);
-           (c.children||[]).forEach(ch=>renderComment(ch, childrenContainer));
-         };
-
-         (data.comments||[]).forEach(c=>renderComment(c, list));
-
-         const form = modal.querySelector('#comment-form');
-         form.onsubmit = async (e)=>{
-           e.preventDefault();
-           const input=form.querySelector('input');
-           const text=input.value.trim();
-           if(!text) return;
-           const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/comments`, window.location.origin), { method:'POST', headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN': csrf }, body: JSON.stringify({ text })});
-           const resp = await r.json();
-           if (resp.success){ input.value=''; await loadComments(); }
-         };
-       }
->>>>>>> theirs
 
       let meetingFolderId = null;
       try{
@@ -421,8 +414,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       await loadFolders(meetingFolderId); await loadFiles();
       async function loadFolders(rootId){ const sel = modal.querySelector('#drive-folder'); const url = rootId ? `/api/drive/folders?parents=${encodeURIComponent(rootId)}` : '/api/drive/folders'; const res = await fetch(url); const data = await res.json(); sel.innerHTML=''; (data.folders||[]).forEach(f=>{ const opt=document.createElement('option'); opt.value=f.id; opt.textContent=f.name; sel.appendChild(opt); }); }
-      async function loadFiles(){ const list = modal.querySelector('#files-list'); const res = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/files`, window.location.origin)); const data = await res.json(); list.innerHTML=''; (data.files||[]).forEach(f=>{ const row=document.createElement('div'); row.className='flex items-center justify-between bg-slate-800/60 border border-slate-700 rounded px-3 py-2'; const nameLink=document.createElement('a'); nameLink.href=`/api/tasks-laravel/files/${f.id}/download`; nameLink.target='_blank'; nameLink.textContent=f.name; nameLink.className='text-slate-200 hover:underline flex-1'; const preview=document.createElement('a'); preview.href=f.drive_web_link; preview.target='_blank'; preview.textContent='Vista previa'; preview.className='text-xs text-blue-400 hover:underline ml-4'; row.appendChild(nameLink); row.appendChild(preview); list.appendChild(row); }); }
-      modal.querySelector('#upload-btn').addEventListener('click', async ()=>{ const fileInput = modal.querySelector('#file-input'); const folder = modal.querySelector('#drive-folder').value; if(!fileInput.files.length){ alert('Selecciona un archivo'); return; } const fd = new FormData(); fd.append('folder_id', folder); fd.append('file', fileInput.files[0]); const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/files`, window.location.origin), { method:'POST', headers:{ 'X-CSRF-TOKEN': csrf }, body: fd }); const resp = await r.json(); if(resp.success){ fileInput.value=''; await loadFiles(); } else { alert('No se pudo subir el archivo'); } });
+        async function loadFiles(){ const list = modal.querySelector('#files-list'); const res = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/files`, window.location.origin), { credentials: 'same-origin' }); const data = await res.json(); list.innerHTML=''; (data.files||[]).forEach(f=>{ const row=document.createElement('div'); row.className='flex items-center justify-between bg-slate-800/60 border border-slate-700 rounded px-3 py-2'; const nameLink=document.createElement('a'); nameLink.href=`/api/tasks-laravel/files/${f.id}/download`; nameLink.target='_blank'; nameLink.textContent=f.name; nameLink.className='text-slate-200 hover:underline flex-1'; const preview=document.createElement('a'); preview.href=f.drive_web_link; preview.target='_blank'; preview.textContent='Vista previa'; preview.className='text-xs text-blue-400 hover:underline ml-4'; row.appendChild(nameLink); row.appendChild(preview); list.appendChild(row); }); }
+        modal.querySelector('#upload-btn').addEventListener('click', async ()=>{ const fileInput = modal.querySelector('#file-input'); const folder = modal.querySelector('#drive-folder').value; if(!fileInput.files.length){ alert('Selecciona un archivo'); return; } const fd = new FormData(); fd.append('folder_id', folder); fd.append('file', fileInput.files[0]); const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/files`, window.location.origin), { method:'POST', headers:{ 'X-CSRF-TOKEN': csrf }, body: fd, credentials: 'same-origin' }); const resp = await r.json(); if(resp.success){ fileInput.value=''; await loadFiles(); } else { alert('No se pudo subir el archivo'); } });
     } catch(e){ console.error(e); alert('Error al abrir detalles de la tarea'); }
   }
 });
