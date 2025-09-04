@@ -177,6 +177,84 @@
                                         <div class="text-slate-400">Año de Creación</div>
                                     </div>
                                 </div>
+
+                                <!-- Gestión de Google Drive -->
+                                <div class="mt-8 p-6 bg-slate-700/30 rounded-lg" x-init="loadDriveSubfolders(org)">
+                                    <!-- Conectar / Desconectar -->
+                                    <div class="mb-4 flex space-x-4">
+                                        <button x-show="!getDriveState(org.id).connected"
+                                                @click="connectDrive()"
+                                                class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                            Conectar Google Drive
+                                        </button>
+                                        <button x-show="getDriveState(org.id).connected"
+                                                @click="disconnectDrive()"
+                                                class="bg-red-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200">
+                                            Desconectar Google Drive
+                                        </button>
+                                    </div>
+
+                                    <!-- Estado de carpeta raíz -->
+                                    <div x-show="getDriveState(org.id).connected" class="space-y-4">
+                                        <template x-if="getDriveState(org.id).rootFolder">
+                                            <p class="text-slate-300">
+                                                Carpeta raíz:
+                                                <span class="font-semibold text-yellow-400" x-text="getDriveState(org.id).rootFolder?.name"></span>
+                                            </p>
+                                        </template>
+                                        <template x-if="!getDriveState(org.id).rootFolder">
+                                            <div>
+                                                <p class="text-slate-300 mb-2">La organización no tiene una carpeta raíz.</p>
+                                                <button @click="createOrganizationFolder(org)"
+                                                        :disabled="getDriveState(org.id).isCreatingRoot"
+                                                        class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                    <span x-show="!getDriveState(org.id).isCreatingRoot">Crear carpeta raíz</span>
+                                                    <span x-show="getDriveState(org.id).isCreatingRoot" class="flex items-center justify-center">
+                                                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                                        </svg>
+                                                        Creando...
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        </template>
+
+                                        <!-- Subcarpetas -->
+                                        <div class="mt-4">
+                                            <h4 class="font-semibold mb-2">Subcarpetas</h4>
+                                            <template x-if="getDriveState(org.id).isLoading">
+                                                <p class="text-slate-400">Cargando...</p>
+                                            </template>
+                                            <ul x-show="!getDriveState(org.id).isLoading && getDriveState(org.id).subfolders.length"
+                                                class="list-disc ml-5 text-slate-300">
+                                                <template x-for="folder in getDriveState(org.id).subfolders" :key="folder.id">
+                                                    <li x-text="folder.name"></li>
+                                                </template>
+                                            </ul>
+                                            <p x-show="!getDriveState(org.id).isLoading && !getDriveState(org.id).subfolders.length"
+                                               class="text-slate-400">No hay subcarpetas.</p>
+                                            <div class="mt-3 flex space-x-2">
+                                                <input type="text"
+                                                       x-model="getDriveState(org.id).newSubfolderName"
+                                                       placeholder="Nombre de la subcarpeta"
+                                                       class="flex-1 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+                                                <button @click="createSubfolder(org)"
+                                                        :disabled="getDriveState(org.id).isCreatingSubfolder"
+                                                        class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                    <span x-show="!getDriveState(org.id).isCreatingSubfolder">Añadir</span>
+                                                    <span x-show="getDriveState(org.id).isCreatingSubfolder" class="flex items-center justify-center">
+                                                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                                        </svg>
+                                                        Creando...
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Pestaña Grupos -->
