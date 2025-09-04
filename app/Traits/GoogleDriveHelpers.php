@@ -15,6 +15,10 @@ trait GoogleDriveHelpers
             throw new \Exception('No se encontró token de Google para el usuario');
         }
 
+        if (!$googleToken->access_token) {
+            throw new \Exception('Token de acceso de Google no válido');
+        }
+
         Log::info('setGoogleDriveToken: Setting token', [
             'username' => $user->username,
             'has_access_token' => !empty($googleToken->access_token),
@@ -27,6 +31,9 @@ trait GoogleDriveHelpers
         if ($this->googleDriveService->getClient()->isAccessTokenExpired()) {
             Log::info('setGoogleDriveToken: Google Client says token is expired, refreshing');
             try {
+                if (!$googleToken->refresh_token) {
+                    throw new \Exception('No hay refresh token disponible');
+                }
                 $newTokens = $this->googleDriveService->refreshToken($googleToken->refresh_token);
                 $googleToken->update([
                     'access_token' => $newTokens['access_token'],
@@ -55,16 +62,31 @@ trait GoogleDriveHelpers
 
             if ($file->getParents()) {
                 $parentId = $file->getParents()[0];
-                $parent = $this->googleDriveService->getFileInfo($parentId);
-                return $parent->getName() ?: 'Carpeta sin nombre';
+                try {
+                    $parent = $this->googleDriveService->getFileInfo($parentId);
+                    return $parent->getName() ?: 'Carpeta sin nombre';
+                } catch (\Exception $parentException) {
+                    Log::warning('getFolderName: Error getting parent folder name', [
+                        'parent_id' => $parentId,
+                        'error' => $parentException->getMessage()
+                    ]);
+                    return 'Carpeta no disponible';
+                }
             }
 
             return 'Carpeta raíz';
         } catch (\Exception $e) {
-            Log::warning('getFolderName: Error getting folder name (first attempt)', [
+            Log::warning('getFolderName: Error getting folder name', [
                 'file_id' => $fileId,
                 'error' => $e->getMessage()
             ]);
+
+            // Handle specific error cases
+            if (str_contains($e->getMessage(), 'File not found') ||
+                str_contains($e->getMessage(), '404') ||
+                str_contains($e->getMessage(), 'notFound')) {
+                return 'Archivo no encontrado';
+            }
 
             if (str_contains($e->getMessage(), 'API key') ||
                 str_contains($e->getMessage(), 'PERMISSION_DENIED') ||

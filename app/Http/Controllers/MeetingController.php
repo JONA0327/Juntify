@@ -126,20 +126,62 @@ class MeetingController extends Controller
         try {
             $user = Auth::user();
 
-            // Configurar el cliente de Google Drive con el token del usuario
-            $this->setGoogleDriveToken($user);
+            // Configurar el cliente de Google Drive con el token del usuario solo si existe
+            $hasGoogleToken = false;
+            try {
+                if ($user->googleToken) {
+                    $this->setGoogleDriveToken($user);
+                    $hasGoogleToken = true;
+                }
+            } catch (\Exception $e) {
+                Log::warning('getMeetings: Could not set Google Drive token', [
+                    'user' => $user->username,
+                    'error' => $e->getMessage()
+                ]);
+                $hasGoogleToken = false;
+            }
 
             $legacyMeetings = TranscriptionLaravel::where('username', $user->username)
                 ->whereDoesntHave('containers')
                 ->orderBy('created_at', 'desc')
                 ->get()
-                ->map(function ($meeting) {
+                ->map(function ($meeting) use ($hasGoogleToken) {
+                    $audioFolder = 'Sin especificar';
+                    $transcriptFolder = 'Sin especificar';
+
+                    if ($hasGoogleToken) {
+                        try {
+                            $audioFolder = $this->getFolderName($meeting->audio_drive_id);
+                        } catch (\Exception $e) {
+                            $audioFolder = 'Error al cargar carpeta';
+                            Log::warning('getMeetings: Error getting audio folder name', [
+                                'meeting_id' => $meeting->id,
+                                'audio_drive_id' => $meeting->audio_drive_id,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+
+                        try {
+                            $transcriptFolder = $this->getFolderName($meeting->transcript_drive_id);
+                        } catch (\Exception $e) {
+                            $transcriptFolder = 'Error al cargar carpeta';
+                            Log::warning('getMeetings: Error getting transcript folder name', [
+                                'meeting_id' => $meeting->id,
+                                'transcript_drive_id' => $meeting->transcript_drive_id,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+                    } else {
+                        $audioFolder = 'Google Drive no conectado';
+                        $transcriptFolder = 'Google Drive no conectado';
+                    }
+
                     return [
                         'id' => $meeting->id,
                         'meeting_name' => $meeting->meeting_name,
                         'created_at' => $meeting->created_at,
-                        'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
-                        'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
+                        'audio_folder' => $audioFolder,
+                        'transcript_folder' => $transcriptFolder,
                         'is_legacy' => true,
                         'source' => 'transcriptions_laravel',
                     ];
@@ -148,12 +190,29 @@ class MeetingController extends Controller
             $modernMeetings = Meeting::where('username', $user->username)
                 ->orderBy('created_at', 'desc')
                 ->get()
-                ->map(function ($meeting) {
+                ->map(function ($meeting) use ($hasGoogleToken) {
+                    $audioFolder = 'Base de datos';
+
+                    if ($hasGoogleToken && $meeting->recordings_folder_id) {
+                        try {
+                            $audioFolder = $this->getFolderName($meeting->recordings_folder_id);
+                        } catch (\Exception $e) {
+                            $audioFolder = 'Error al cargar carpeta';
+                            Log::warning('getMeetings: Error getting recordings folder name', [
+                                'meeting_id' => $meeting->id,
+                                'recordings_folder_id' => $meeting->recordings_folder_id,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+                    } elseif (!$hasGoogleToken && $meeting->recordings_folder_id) {
+                        $audioFolder = 'Google Drive no conectado';
+                    }
+
                     return [
                         'id' => $meeting->id,
                         'meeting_name' => $meeting->title,
                         'created_at' => $meeting->created_at ?? $meeting->date,
-                        'audio_folder' => $this->getFolderName($meeting->recordings_folder_id),
+                        'audio_folder' => $audioFolder,
                         'transcript_folder' => 'Base de datos',
                         'is_legacy' => false,
                         'source' => 'meetings',

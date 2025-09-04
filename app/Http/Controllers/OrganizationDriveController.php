@@ -18,6 +18,36 @@ class OrganizationDriveController extends Controller
         $this->drive = $drive;
     }
 
+    protected function userCanManage(Organization $organization): bool
+    {
+        $user = auth()->user();
+        if (!$user) return false;
+        if ($organization->admin_id === $user->id) return true;
+        // Colaborador o Administrador a nivel de organización
+        $orgRole = $organization->users()
+            ->where('users.id', $user->id)
+            ->wherePivotIn('rol', ['colaborador', 'administrador'])
+            ->exists();
+        if ($orgRole) return true;
+        // Colaborador o Administrador en cualquier grupo de la organización
+        return $organization->groups()->whereHas('users', function($q) use ($user) {
+            $q->where('users.id', $user->id)->whereIn('group_user.rol', ['colaborador', 'administrador']);
+        })->exists();
+    }
+
+    protected function userIsMember(Organization $organization): bool
+    {
+        $user = auth()->user();
+        if (!$user) return false;
+        if ($organization->admin_id === $user->id) return true;
+        // miembro por pertenencia a la organización o a cualquier grupo
+        $inOrg = $organization->users()->where('users.id', $user->id)->exists();
+        $inGroup = $organization->groups()->whereHas('users', function($q) use ($user) {
+            $q->where('users.id', $user->id);
+        })->exists();
+        return $inOrg || $inGroup;
+    }
+
     protected function initAdminDrive(Organization $organization): GoogleToken
     {
         $admin = $organization->admin;
@@ -45,6 +75,9 @@ class OrganizationDriveController extends Controller
 
     public function createRootFolder(Organization $organization)
     {
+        if (!$this->userCanManage($organization)) {
+            abort(403, 'No autorizado');
+        }
         $token = $this->initAdminDrive($organization);
 
         $folderId = $this->drive->createFolder($organization->nombre_organizacion);
@@ -66,6 +99,9 @@ class OrganizationDriveController extends Controller
 
     public function createSubfolder(Request $request, Organization $organization)
     {
+        if (!$this->userCanManage($organization)) {
+            abort(403, 'No autorizado');
+        }
         $request->validate(['name' => 'required|string']);
 
         $root = $organization->folder;
@@ -93,6 +129,9 @@ class OrganizationDriveController extends Controller
 
     public function listSubfolders(Organization $organization)
     {
+        if (!$this->userIsMember($organization)) {
+            abort(403, 'No autorizado');
+        }
         $root = $organization->folder;
         if (!$root) {
             return response()->json(['message' => 'Root folder not found'], 404);
@@ -118,12 +157,55 @@ class OrganizationDriveController extends Controller
         ]);
     }
 
+    public function renameSubfolder(Request $request, Organization $organization, OrganizationSubfolder $subfolder)
+    {
+        if (!$this->userCanManage($organization)) {
+            abort(403, 'No autorizado');
+        }
+        // Validar pertenencia
+        if ($subfolder->folder->organization_id !== $organization->id) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255'
+        ]);
+
+        $this->initAdminDrive($organization);
+        $this->drive->renameFile($subfolder->google_id, $validated['name']);
+
+        $subfolder->update(['name' => $validated['name']]);
+
+        return response()->json($subfolder->fresh());
+    }
+
+    public function deleteSubfolder(Organization $organization, OrganizationSubfolder $subfolder)
+    {
+        if (!$this->userCanManage($organization)) {
+            abort(403, 'No autorizado');
+        }
+        // Validar pertenencia
+        if ($subfolder->folder->organization_id !== $organization->id) {
+            abort(404);
+        }
+
+        $this->initAdminDrive($organization);
+        // Eliminar primero en Drive, luego en BD
+        $this->drive->deleteFile($subfolder->google_id);
+        $subfolder->delete();
+
+        return response()->json(['deleted' => true]);
+    }
+
     /**
      * Returns Drive connection and folder status for an organization.
      * Always 200 with flags to avoid noisy 404s in the UI.
      */
     public function status(Organization $organization)
     {
+        if (!$this->userIsMember($organization)) {
+            abort(403, 'No autorizado');
+        }
         // Check if admin has connected Google (GoogleToken exists)
         $admin = $organization->admin;
         $token = $admin ? GoogleToken::where('username', $admin->username)->first() : null;

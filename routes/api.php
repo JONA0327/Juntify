@@ -88,20 +88,14 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
     Route::get('/organizations/{organization}', [OrganizationController::class, 'show'])->name('api.organizations.show');
     Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy'])->name('api.organizations.destroy');
 
-    // Rutas de Google Drive para organizaciones
+    // Rutas de Google Drive para organizaciones (control de permisos en el controlador)
     Route::middleware(['web', 'auth'])->group(function () {
-        Route::post('/organizations/{organization}/drive/root-folder', [OrganizationDriveController::class, 'createRootFolder'])
-            ->middleware('organization.role:administrador')
-            ->name('api.organizations.drive.root-folder');
-        Route::post('/organizations/{organization}/drive/subfolders', [OrganizationDriveController::class, 'createSubfolder'])
-            ->middleware('organization.role:colaborador,administrador')
-            ->name('api.organizations.drive.subfolders.store');
-        Route::get('/organizations/{organization}/drive/subfolders', [OrganizationDriveController::class, 'listSubfolders'])
-            ->middleware('organization.role:colaborador,administrador')
-            ->name('api.organizations.drive.subfolders.index');
-        Route::get('/organizations/{organization}/drive/status', [OrganizationDriveController::class, 'status'])
-            ->middleware('organization.role:colaborador,administrador')
-            ->name('api.organizations.drive.status');
+        Route::post('/organizations/{organization}/drive/root-folder', [OrganizationDriveController::class, 'createRootFolder'])->name('api.organizations.drive.root-folder');
+        Route::post('/organizations/{organization}/drive/subfolders', [OrganizationDriveController::class, 'createSubfolder'])->name('api.organizations.drive.subfolders.store');
+        Route::get('/organizations/{organization}/drive/subfolders', [OrganizationDriveController::class, 'listSubfolders'])->name('api.organizations.drive.subfolders.index');
+        Route::get('/organizations/{organization}/drive/status', [OrganizationDriveController::class, 'status'])->name('api.organizations.drive.status');
+        Route::patch('/organizations/{organization}/drive/subfolders/{subfolder}', [OrganizationDriveController::class, 'renameSubfolder'])->name('api.organizations.drive.subfolders.update');
+        Route::delete('/organizations/{organization}/drive/subfolders/{subfolder}', [OrganizationDriveController::class, 'deleteSubfolder'])->name('api.organizations.drive.subfolders.destroy');
     });
 
     // Rutas de Usuarios

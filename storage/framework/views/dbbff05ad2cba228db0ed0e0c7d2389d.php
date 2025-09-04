@@ -177,6 +177,118 @@
                                         <div class="text-slate-400">Año de Creación</div>
                                     </div>
                                 </div>
+
+                                <!-- Gestión de Google Drive -->
+                                <div class="mt-8 p-6 bg-slate-700/30 rounded-lg" x-init="loadDriveSubfolders(org)">
+                                    <!-- Conectar / Desconectar - solo visible cuando no está conectado -->
+                                    <div x-show="!getDriveState(org.id).connected" class="mb-4">
+                                        <button @click="connectDrive()"
+                                                class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
+                                            Conectar Google Drive
+                                        </button>
+                                    </div>
+
+                                    <!-- Estado de carpeta raíz -->
+                                    <div x-show="getDriveState(org.id).connected" class="space-y-4">
+                                        <template x-if="getDriveState(org.id).rootFolder">
+                                            <div class="flex items-center justify-between">
+                                                <p class="text-slate-300">
+                                                    Carpeta raíz:
+                                                    <span class="font-semibold text-yellow-400" x-text="getDriveState(org.id).rootFolder?.name"></span>
+                                                </p>
+                                                <button @click="disconnectDrive()"
+                                                        class="bg-red-600 px-3 py-1.5 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200 text-sm">
+                                                    Desconectar Google Drive
+                                                </button>
+                                            </div>
+                                        </template>
+                                        <template x-if="!getDriveState(org.id).rootFolder">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <p class="text-slate-300 mb-2">La organización no tiene una carpeta raíz.</p>
+                                                    <button @click="createOrganizationFolder(org)"
+                                                            :disabled="getDriveState(org.id).isCreatingRoot"
+                                                            class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                        <span x-show="!getDriveState(org.id).isCreatingRoot">Crear carpeta raíz</span>
+                                                        <span x-show="getDriveState(org.id).isCreatingRoot" class="flex items-center justify-center">
+                                                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                                            </svg>
+                                                            Creando...
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                                <button @click="disconnectDrive()"
+                                                        class="bg-red-600 px-3 py-1.5 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200 text-sm">
+                                                    Desconectar Google Drive
+                                                </button>
+                                            </div>
+                                        </template>
+
+                                        <!-- Subcarpetas -->
+                                        <div class="mt-4">
+                                            <h4 class="font-semibold mb-3">Subcarpetas</h4>
+                                            <template x-if="getDriveState(org.id).isLoading">
+                                                <p class="text-slate-400">Cargando...</p>
+                                            </template>
+
+                                            <div x-show="!getDriveState(org.id).isLoading && getDriveState(org.id).subfolders.length"
+                                                 class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                <template x-for="sf in getDriveState(org.id).subfolders" :key="sf.id">
+                                                    <div class="group flex items-center gap-3 p-3 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-800/80 transition">
+                                                        <!-- Folder icon -->
+                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 text-yellow-400">
+                                                          <path d="M2.25 12.75v6.375A2.625 2.625 0 004.875 21.75h14.25a2.625 2.625 0 002.625-2.625V9.375A2.625 2.625 0 0019.125 6.75H12L9.75 4.5H4.875A2.625 2.625 0 002.25 7.125v5.625z" />
+                                                        </svg>
+
+                                                        <!-- Name / edit -->
+                                                        <div class="flex-1 min-w-0">
+                                                            <div x-show="!sf._isEditing" class="truncate font-medium text-slate-200" x-text="sf.name"></div>
+                                                            <div x-show="sf._isEditing" class="flex items-center gap-2">
+                                                                <input type="text" x-model="sf._editingName" class="w-full p-1.5 rounded bg-slate-900/50 border border-slate-700/50 text-slate-200 text-sm" />
+                                                                <button @click="saveSubfolderName(org, sf)" class="px-2 py-1 bg-green-600 text-white rounded text-xs">Guardar</button>
+                                                                <button @click="sf._isEditing=false" class="px-2 py-1 bg-slate-600 text-white rounded text-xs">Cancelar</button>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- Actions -->
+                                                        <div class="opacity-0 group-hover:opacity-100 transition flex items-center gap-1">
+                                                            <button @click="startEditSubfolder(sf)" title="Renombrar" class="p-1.5 rounded hover:bg-slate-700">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="w-4 h-4 text-slate-300"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-9 7h9m-9 4h9m2.586-10.414l2.828 2.828M15 7l3-3 2.828 2.828-3 3z"/></svg>
+                                                            </button>
+                                                            <button @click="openConfirmDeleteSubfolder(org, sf)" title="Eliminar" class="p-1.5 rounded hover:bg-red-800/40">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="w-4 h-4 text-red-400"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2m-9 0h10"/></svg>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+
+                        <p x-show="!getDriveState(org.id).isLoading && !getDriveState(org.id).subfolders.length"
+                           class="text-slate-400">No hay subcarpetas.</p>
+
+                        <div class="mt-4 flex space-x-2" x-show="org.user_role !== 'invitado'">
+                            <input type="text"
+                                   x-model="getDriveState(org.id).newSubfolderName"
+                                   placeholder="Nombre de la subcarpeta"
+                                   class="flex-1 p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+                            <button @click="createSubfolder(org)"
+                                    :disabled="getDriveState(org.id).isCreatingSubfolder"
+                                    class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span x-show="!getDriveState(org.id).isCreatingSubfolder">Añadir</span>
+                                <span x-show="getDriveState(org.id).isCreatingSubfolder" class="flex items-center justify-center">
+                                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                    </svg>
+                                    Creando...
+                                </span>
+                            </button>
+                        </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Pestaña Grupos -->
@@ -329,6 +441,27 @@
 
                         </div>
                     </template>
+                </div>
+
+                <!-- Modal confirmación eliminar subcarpeta (Drive) -->
+                <div x-show="showConfirmDeleteSubfolderModal" @keydown.escape.window="closeConfirmDeleteSubfolder()" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[62]" x-cloak>
+                    <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+                        <h2 class="text-lg font-semibold mb-2">Eliminar subcarpeta</h2>
+                        <p class="text-slate-300 mb-4">¿Seguro que deseas eliminar la subcarpeta <span class="font-semibold text-yellow-400" x-text="subfolderToDelete?.name"></span>? Esta acción la eliminará de Google Drive y luego de la base de datos.</p>
+                        <div class="flex justify-end space-x-2">
+                            <button @click="closeConfirmDeleteSubfolder()" class="px-4 py-2 bg-slate-800/50 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/50 transition-colors duration-200">Cancelar</button>
+                            <button @click="confirmDeleteSubfolder()" :disabled="isDeletingSubfolder" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50">
+                                <span x-show="!isDeletingSubfolder">Eliminar</span>
+                                <span x-show="isDeletingSubfolder" class="flex items-center">
+                                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Eliminando...
+                                </span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Modal crear organización -->
