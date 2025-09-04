@@ -106,7 +106,7 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
     Route::get('/groups/{group}/containers', [GroupController::class, 'getContainers'])->name('api.groups.containers');
 
     // Notificaciones
-    Route::middleware('auth')->group(function () {
+    Route::middleware(['web', 'auth'])->group(function () {
         Route::get('/notifications', [NotificationController::class, 'index'])->name('api.notifications.index');
         Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('api.notifications.destroy');
     });
