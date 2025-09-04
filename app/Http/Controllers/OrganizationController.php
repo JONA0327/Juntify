@@ -50,11 +50,14 @@ class OrganizationController extends Controller
             })
             ->orWhere('admin_id', $user->id)
             ->with([
-                // Cargar solo los grupos donde el usuario pertenece (para la UI)
+                // Cargar todos los grupos de la organización y el rol del usuario en cada uno
                 'groups' => function ($query) use ($user) {
-                    $query->whereHas('users', function ($subQuery) use ($user) {
-                        $subQuery->where('users.id', $user->id);
-                    })->with(['users', 'code']);
+                    $query->with([
+                        'users' => function ($subQuery) use ($user) {
+                            $subQuery->where('users.id', $user->id);
+                        },
+                        'code',
+                    ]);
                 },
                 // Cargar relación users filtrada al usuario actual para leer el rol del pivot
                 'users' => function ($q) use ($user) {
@@ -63,7 +66,8 @@ class OrganizationController extends Controller
             ])
             ->get();
 
-        // Marcar si el usuario es propietario de la organización y obtener su rol más alto
+        // Marcar si el usuario es propietario de la organización, obtener su rol más alto
+        // y anotar el rol del usuario dentro de cada grupo
         $organizations->each(function ($organization) use ($user) {
             $organization->setAttribute('is_owner', $organization->admin_id === $user->id);
 
@@ -104,6 +108,12 @@ class OrganizationController extends Controller
             }
 
             $organization->setAttribute('user_role', $finalRole);
+
+            // Rol del usuario en cada grupo
+            $organization->groups->each(function ($group) {
+                $membership = $group->users->first();
+                $group->setAttribute('user_role', $membership ? $membership->pivot->rol : null);
+            });
         });
 
         // Verificar si el usuario es solo invitado en todas las organizaciones
