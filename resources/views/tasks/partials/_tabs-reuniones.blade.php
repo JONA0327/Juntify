@@ -201,7 +201,8 @@
 
             async function existsTasksForMeeting(meetingId) {
                 try {
-                    const res = await fetch(window.taskLaravel.apiExists, {
+                    const url = new URL(window.taskLaravel.apiExists, window.location.origin);
+                    const res = await fetch(url, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -220,7 +221,8 @@
 
         async function importTasks(meetingId) {
             try {
-                const res = await fetch(window.taskLaravel.apiImport(meetingId), {
+                const url = new URL(window.taskLaravel.apiImport(meetingId), window.location.origin);
+                const res = await fetch(url, {
                     method: 'POST',
                     headers: { 'X-CSRF-TOKEN': window.taskLaravel.csrf }
                 });
