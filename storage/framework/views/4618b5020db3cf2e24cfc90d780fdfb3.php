@@ -557,6 +557,14 @@
                             </h3>
 
                             <div class="form-group">
+                                <label class="form-label">Drive</label>
+                                <select class="form-select" id="drive-select">
+                                    <option value="personal">Personal</option>
+                                    <option value="organization">Organization</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
                                 <label class="form-label">Carpeta principal</label>
                                 <select class="form-select" id="root-folder-select"></select>
                             </div>

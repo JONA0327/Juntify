@@ -49,7 +49,7 @@
                     <h1 class="page-title">Bienvenido, <?php echo e($user->full_name); ?></h1>
                     <p class="page-subtitle">Gestiona tu cuenta y configuraciones</p>
                 </div>
-                
+
                 <!-- CÓDIGO DEL AVATAR/BADGE RESTAURADO -->
                 <div class="user-avatar">
                     <?php
@@ -75,7 +75,7 @@
 
             <!-- Content Sections -->
             <?php echo $__env->make('partials.profile._section-info', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
-            <?php echo $__env->make('partials.profile._section-connect', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
+            <?php echo $__env->make('partials.profile._section-connect', ['folder' => $folder, 'subfolders' => $subfolders, 'folderMessage' => $folderMessage], \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
             <?php echo $__env->make('partials.profile._section-plans', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
             <?php echo $__env->make('partials.profile._section-other', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
 
@@ -84,6 +84,69 @@
 
     <!-- Modals -->
     <?php echo $__env->make('partials.profile._modals', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
+
+    <!-- Google Connection Monitor Styles -->
+    <style>
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .google-connection-indicator {
+            display: inline-flex;
+            align-items: center;
+            color: #3b82f6;
+        }
+
+        .google-refresh-spinner {
+            color: #3b82f6;
+        }
+
+        .google-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 9999;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        }
+
+        .google-notification.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .google-notification.success {
+            background-color: #10b981;
+            border: 1px solid #059669;
+        }
+
+        .google-notification.error {
+            background-color: #ef4444;
+            border: 1px solid #dc2626;
+        }
+
+        .google-notification.info {
+            background-color: #3b82f6;
+            border: 1px solid #2563eb;
+        }
+    </style>
+
+    <!-- Google Connection Monitor Script -->
+    <script src="<?php echo e(asset('js/google-connection-monitor.js')); ?>"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof GoogleConnectionMonitor !== 'undefined') {
+                const monitor = new GoogleConnectionMonitor();
+                monitor.init();
+            }
+        });
+    </script>
 
 </body>
 </html>

@@ -143,7 +143,7 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
         completedContainer.classList.remove('hidden');
 
         // Para todas las reuniones, usar tasks_laravel
-        fetch(`/api/tasks-laravel/tasks/${taskId}`)
+        fetch(new URL(`/api/tasks-laravel/tasks/${taskId}`, window.location.origin))
             .then(response => response.json())
             .then(resp => {
                 if (!resp.success) throw new Error('No se pudo cargar la tarea');
@@ -234,10 +234,10 @@ document.getElementById('taskForm').addEventListener('submit', function(e) {
             payload.meeting_id = window.lastSelectedMeetingId;
         }
 
-        const url = isEdit ? `/api/tasks-laravel/tasks/${editingTaskId}` : '/api/tasks-laravel/tasks';
+        const endpoint = isEdit ? `/api/tasks-laravel/tasks/${editingTaskId}` : '/api/tasks-laravel/tasks';
         const method = isEdit ? 'PUT' : 'POST';
 
-        fetch(url, {
+        fetch(new URL(endpoint, window.location.origin), {
             method: method,
             headers: {
                 'Content-Type': 'application/json',
@@ -264,54 +264,6 @@ document.getElementById('taskForm').addEventListener('submit', function(e) {
         });
     } else {
         alert('Selecciona una reunión primero para asociar la tarea.');
-    }
-    } else {
-        const payload = {
-            tarea: entries.text,
-            descripcion: entries.description || null,
-            prioridad: entries.priority || null,
-            fecha_inicio: null,
-            fecha_limite: entries.due_date || null,
-            hora_limite: entries.due_time || null,
-            asignado: entries.assignee || null,
-            progreso: parseInt(document.getElementById('taskProgress').value || '0', 10)
-        };
-        if (!isEdit) {
-            if (!window.lastSelectedMeetingId) {
-                alert('Selecciona una reunión primero para asociar la tarea.');
-                return;
-            }
-            payload.meeting_id = window.lastSelectedMeetingId;
-        }
-
-        const url = editingTaskId ? `/api/tasks-laravel/tasks/${editingTaskId}` : '/api/tasks-laravel/tasks';
-        const method = editingTaskId ? 'PUT' : 'POST';
-
-        fetch(url, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': (window.taskLaravel?.csrf || window.taskData?.csrfToken)
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.success) {
-                closeTaskModal();
-                if (window.loadTasksForMeeting && window.lastSelectedMeetingId) {
-                    window.loadTasksForMeeting(window.lastSelectedMeetingId, source);
-                } else {
-                    location.reload();
-                }
-            } else {
-                alert('Error al guardar la tarea: ' + (result.message || 'Error desconocido'));
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error al guardar la tarea');
-        });
     }
 });
 

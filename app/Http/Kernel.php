@@ -66,5 +66,6 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'group.role' => \App\Http\Middleware\CheckGroupRole::class,
         'organization.role' => \App\Http\Middleware\CheckOrganizationRole::class,
+        'google.refresh' => \App\Http\Middleware\RefreshGoogleToken::class,
     ];
 }

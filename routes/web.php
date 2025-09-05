@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\RegisterController;
@@ -35,10 +36,18 @@ Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
 Route::get('/google/reauth', [GoogleAuthController::class, 'redirect'])->name('google.reauth');
 
 Route::middleware(['auth'])->group(function () {
-    // Perfil
-    Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+    // Perfil - con refresh automático de token
+    Route::get('/profile', [ProfileController::class, 'show'])
+        ->middleware('google.refresh')
+        ->name('profile.show');
+
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
-    Route::get('/reuniones', [MeetingController::class, 'index'])->name('reuniones.index');
+
+    // Reuniones - con refresh automático de token
+    Route::get('/reuniones', [MeetingController::class, 'index'])
+        ->middleware('google.refresh')
+        ->name('reuniones.index');
+
     Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
     // Vista de configuración de Drive por organización (sin afectar perfil)
     Route::get('/organizations/{organization}/drive', [OrganizationController::class, 'driveSettings'])
@@ -49,6 +58,13 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post('/drive/disconnect', [GoogleAuthController::class, 'disconnect'])->name('drive.disconnect');
     Route::post('/drive/disconnect-organization', [GoogleAuthController::class, 'disconnectOrganization'])->name('drive.disconnect.organization');
+
+    // Endpoint para verificar estado de conexión Google
+    Route::get('/api/google/connection-status', function(App\Services\GoogleTokenRefreshService $tokenService) {
+        $user = Auth::user();
+        $status = $tokenService->checkConnectionStatus($user);
+        return response()->json($status);
+    })->name('api.google.status');
 
     // Rutas POST para manejo de carpetas
     Route::post('/drive/main-folder',     [DriveController::class, 'createMainFolder'])

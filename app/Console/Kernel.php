@@ -12,6 +12,9 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+        // Renovar tokens de Google cada 30 minutos
+        $schedule->command('google:refresh-tokens')->everyThirtyMinutes();
+
         // $schedule->command('inspire')->hourly();
         $schedule->command('activities:cleanup')->cron('0 0 1 * *');
     }

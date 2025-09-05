@@ -41,8 +41,14 @@ class DriveController extends Controller
         ]);
         $token  = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
         $client = $this->drive->getClient();
+
+        $accessTokenString = $token->getAccessTokenString();
+        if (!$accessTokenString) {
+            return back()->withErrors(['token' => 'Token de Google inválido']);
+        }
+
         $client->setAccessToken([
-            'access_token'  => $token->access_token,
+            'access_token'  => $accessTokenString,
             'refresh_token' => $token->refresh_token,
             'expiry_date'   => $token->expiry_date,
         ]);

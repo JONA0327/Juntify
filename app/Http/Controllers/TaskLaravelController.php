@@ -333,12 +333,14 @@ class TaskLaravelController extends Controller
         if (!$token) return null;
 
         $client = $calendar->getClient();
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expires_in'    => max(1, Carbon::parse($token->expiry_date)->timestamp - time()),
-            'created'       => time(),
-        ]);
+
+        // Usar el método del modelo para obtener el token como array completo
+        $tokenArray = $token->getTokenArray();
+        if (empty($tokenArray['access_token'])) {
+            return null;
+        }
+
+        $client->setAccessToken($tokenArray);
         if ($client->isAccessTokenExpired() && $token->refresh_token) {
             $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
             if (!isset($new['error'])) {

@@ -118,15 +118,15 @@
     <script>
         // Endpoints para tasks_laravel
         window.taskLaravel = {
-            apiMeetings: '<?php echo e(route("api.tasks-laravel.meetings")); ?>',
+            apiMeetings: '<?php echo e(route("api.tasks-laravel.meetings", [], false)); ?>',
             apiImport: (id) => `/api/tasks-laravel/import/${id}`,
-            apiExists: '<?php echo e(route("api.tasks-laravel.exists")); ?>',
-            apiTasks: '<?php echo e(route("api.tasks-laravel.tasks")); ?>',
+            apiExists: '<?php echo e(route("api.tasks-laravel.exists", [], false)); ?>',
+            apiTasks: '<?php echo e(route("api.tasks-laravel.tasks", [], false)); ?>',
             csrf: '<?php echo e(csrf_token()); ?>'
         };
         // Calendario: usar events de tasks_laravel
         window.taskData = {
-            apiTasks: '<?php echo e(route("api.tasks-laravel.calendar")); ?>'
+            apiTasks: '<?php echo e(route("api.tasks-laravel.calendar", [], false)); ?>'
         };
 
         // Utilidad para mostrar/ocultar panel de tareas

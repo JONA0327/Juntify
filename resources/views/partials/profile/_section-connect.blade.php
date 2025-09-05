@@ -17,9 +17,15 @@
                 </h3>
                 <div class="info-item">
                     <span class="info-label">Estado</span>
-                    <span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">
+                    <span class="status-badge google-connection-status" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">
                         Desconectado
                     </span>
+                    <div class="google-connection-indicator" style="display: none; margin-left: 10px;">
+                        <svg class="google-refresh-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation: spin 1s linear infinite;">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="31.416" opacity="0.3"/>
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="23.562"/>
+                        </svg>
+                    </div>
                 </div>
                 <div class="info-item">
                     <span class="info-value">Debes reconectar tu cuenta de Google.</span>
@@ -46,13 +52,25 @@
                 </h3>
                 <div class="info-item">
                     <span class="info-label">Drive</span>
-                    <span class="status-badge status-active">Conectado</span>
+                    <span class="status-badge status-active google-drive-status">Conectado</span>
+                    <div class="google-connection-indicator" style="display: none; margin-left: 10px;">
+                        <svg class="google-refresh-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation: spin 1s linear infinite;">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="31.416" opacity="0.3"/>
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="23.562"/>
+                        </svg>
+                    </div>
                 </div>
                 <div class="info-item">
                     <span class="info-label">Calendar</span>
-                    <span id="calendar-status" class="status-badge {{ $calendarConnected ? 'status-active' : '' }}" @unless($calendarConnected) style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);" @endunless>
+                    <span id="calendar-status" class="status-badge google-calendar-status {{ $calendarConnected ? 'status-active' : '' }}" @unless($calendarConnected) style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);" @endunless>
                         {{ $calendarConnected ? 'Conectado' : 'Sin acceso' }}
                     </span>
+                    <div class="google-connection-indicator" style="display: none; margin-left: 10px;">
+                        <svg class="google-refresh-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation: spin 1s linear infinite;">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="31.416" opacity="0.3"/>
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="23.562"/>
+                        </svg>
+                    </div>
                 </div>
                 <div class="info-item" id="calendar-advice" @if($calendarConnected) style="display:none;" @endif>
                     <span class="info-value">Vuelve a conectar a través de <a href="{{ route('google.reauth') }}" style="text-decoration: underline;">Google OAuth</a>.</span>

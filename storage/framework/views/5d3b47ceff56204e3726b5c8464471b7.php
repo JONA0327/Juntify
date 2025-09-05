@@ -17,9 +17,15 @@
                 </h3>
                 <div class="info-item">
                     <span class="info-label">Estado</span>
-                    <span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">
+                    <span class="status-badge google-connection-status" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">
                         Desconectado
                     </span>
+                    <div class="google-connection-indicator" style="display: none; margin-left: 10px;">
+                        <svg class="google-refresh-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation: spin 1s linear infinite;">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="31.416" opacity="0.3"/>
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="23.562"/>
+                        </svg>
+                    </div>
                 </div>
                 <div class="info-item">
                     <span class="info-value">Debes reconectar tu cuenta de Google.</span>
@@ -46,14 +52,26 @@
                 </h3>
                 <div class="info-item">
                     <span class="info-label">Drive</span>
-                    <span class="status-badge status-active">Conectado</span>
+                    <span class="status-badge status-active google-drive-status">Conectado</span>
+                    <div class="google-connection-indicator" style="display: none; margin-left: 10px;">
+                        <svg class="google-refresh-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation: spin 1s linear infinite;">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="31.416" opacity="0.3"/>
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="23.562"/>
+                        </svg>
+                    </div>
                 </div>
                 <div class="info-item">
                     <span class="info-label">Calendar</span>
-                    <span id="calendar-status" class="status-badge <?php echo e($calendarConnected ? 'status-active' : ''); ?>" <?php if (! ($calendarConnected)): ?> style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);" <?php endif; ?>>
+                    <span id="calendar-status" class="status-badge google-calendar-status <?php echo e($calendarConnected ? 'status-active' : ''); ?>" <?php if (! ($calendarConnected)): ?> style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);" <?php endif; ?>>
                         <?php echo e($calendarConnected ? 'Conectado' : 'Sin acceso'); ?>
 
                     </span>
+                    <div class="google-connection-indicator" style="display: none; margin-left: 10px;">
+                        <svg class="google-refresh-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation: spin 1s linear infinite;">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="31.416" opacity="0.3"/>
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.416" stroke-dashoffset="23.562"/>
+                        </svg>
+                    </div>
                 </div>
                 <div class="info-item" id="calendar-advice" <?php if($calendarConnected): ?> style="display:none;" <?php endif; ?>>
                     <span class="info-value">Vuelve a conectar a través de <a href="<?php echo e(route('google.reauth')); ?>" style="text-decoration: underline;">Google OAuth</a>.</span>
@@ -83,11 +101,16 @@
 
                 <div style="margin-bottom: 1.5rem;">
                     <label class="form-label">Carpeta Principal</label>
+                    <?php if(!empty($folderMessage)): ?>
+                        <div class="info-item">
+                            <span class="info-value" style="color: #ef4444;"><?php echo e($folderMessage); ?></span>
+                        </div>
+                    <?php endif; ?>
                     <?php if($folder): ?>
                         <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
                             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                                 <span style="font-size: 1.2rem;">📁</span>
-                                <div style="flex: 1; min-width: 0;">
+                                <div id="main-folder-name" data-name="<?php echo e($folder->name ?? ''); ?>" data-id="<?php echo e($folder->google_id ?? ''); ?>" style="flex: 1; min-width: 0;">
                                     <div style="color: #ffffff; font-weight: 600; word-break: break-all;">
                                         <?php echo e($folder->name); ?>
 

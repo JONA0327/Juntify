@@ -8,6 +8,7 @@ use App\Models\Subfolder;
 use App\Models\GoogleToken;
 use App\Services\GoogleDriveService;
 use App\Services\GoogleCalendarService;
+use App\Services\GoogleTokenRefreshService;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -18,14 +19,17 @@ use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
-    public function show(GoogleDriveService $drive, GoogleAuthController $auth)
+    public function show(GoogleDriveService $drive, GoogleAuthController $auth, GoogleTokenRefreshService $tokenService)
     {
         $user = Auth::user();
 
-        $token          = GoogleToken::where('username', $user->username)->first();
-        $lastSync       = optional($token)->updated_at;
-        $subfolders     = collect();
-        $folderMessage  = null;
+        // Usar el nuevo servicio para verificar y renovar automáticamente el token
+        $connectionStatus = $tokenService->checkConnectionStatus($user);
+
+        $token = GoogleToken::where('username', $user->username)->first();
+        $lastSync = optional($token)->updated_at;
+        $subfolders = collect();
+        $folderMessage = null;
 
         $folder = null;
         if ($token && $token->recordings_folder_id) {
@@ -37,47 +41,34 @@ class ProfileController extends Controller
             }
         }
 
-        if (!$token || !$token->access_token) {
-            $driveConnected    = false;
+        // Si no hay conexión válida
+        if (!$connectionStatus['drive_connected'] && !$connectionStatus['calendar_connected']) {
+            $driveConnected = false;
             $calendarConnected = false;
+            $folderMessage = $connectionStatus['needs_reconnection']
+                ? 'Token expirado. Se intentó renovar automáticamente pero falló. Necesitas reconectarte.'
+                : $connectionStatus['message'];
+
             return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage'));
         }
 
-        $client = $drive->getClient();
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expires_in'    => max(1, Carbon::parse($token->expiry_date)->timestamp - time()),
-            'created'       => time(),
-        ]);
+        $driveConnected = $connectionStatus['drive_connected'];
+        $calendarConnected = $connectionStatus['calendar_connected'];
 
-        if ($client->isAccessTokenExpired() && $token->refresh_token) {
-            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
-            if (!isset($new['error'])) {
-                $token->update([
-                    'access_token' => $new['access_token'],
-                    'expiry_date'  => now()->addSeconds($new['expires_in']),
-                ]);
-                $client->setAccessToken($new);
-            }
-        }
-
-        $driveConnected = true;
-
-        $calendarService = new GoogleCalendarService();
-        $calendarClient  = $calendarService->getClient();
-        $calendarClient->setAccessToken($client->getAccessToken());
-
-        try {
-            $calendarService->getCalendar()->calendarList->get('primary');
-            $calendarConnected = true;
-        } catch (\Throwable $e) {
-            $calendarConnected = false;
-        }
-
-        if ($token->recordings_folder_id) {
+        // Si hay token válido, obtener información de la carpeta
+        if ($token && $token->recordings_folder_id) {
             try {
-                $file       = $drive->getDrive()->files->get(
+                $client = $drive->getClient();
+
+                // Usar el método del modelo para obtener el token como array completo
+                $tokenArray = $token->getTokenArray();
+                if (empty($tokenArray['access_token'])) {
+                    throw new \Exception("Token inválido");
+                }
+
+                $client->setAccessToken($tokenArray);
+
+                $file = $drive->getDrive()->files->get(
                     $token->recordings_folder_id,
                     ['fields' => 'name']
                 );
@@ -96,7 +87,7 @@ class ProfileController extends Controller
 
                 $subfolders = Subfolder::where('folder_id', $folder->id)->get();
             } catch (\Throwable $e) {
-                $folderMessage = 'No se pudo acceder a la carpeta principal. Intenta reconectarte.';
+                $folderMessage = 'No se pudo acceder a la carpeta principal. El token se renovó automáticamente pero hay problemas de permisos.';
             }
         }
 
