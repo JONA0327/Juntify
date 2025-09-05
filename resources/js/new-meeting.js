@@ -67,8 +67,8 @@ function setIcon(svgEl, name) {
 // ===== CONFIGURACIÓN DE GRABACIÓN =====
 const MAX_DURATION_MS = 2 * 60 * 60 * 1000; // 2 horas
 const SEGMENT_MS = 10 * 60 * 1000; // 10 minutos
-let recordedSegments = [];
-let segmentTimeout = null;
+// Se almacenan todos los trozos generados por una única sesión del MediaRecorder
+let recordedChunks = [];
 let recordingStream = null;
 
 // ===== FUNCIONES DE LIMPIEZA =====
@@ -94,7 +94,7 @@ async function clearPreviousAudioData() {
         // Limpiar variables locales
         uploadedFile = null;
         pendingAudioBlob = null;
-        recordedSegments = [];
+        recordedChunks = [];
 
         console.log('✅ Datos de audio limpiados correctamente');
 
@@ -257,7 +257,7 @@ async function startRecording() {
         const bufferLength = analyser.frequencyBinCount;
         dataArray = new Uint8Array(bufferLength);
 
-        recordedSegments = [];
+        recordedChunks = [];
         startTime = Date.now();
         limitWarningShown = false;
         isRecording = true;
@@ -267,58 +267,31 @@ async function startRecording() {
         recordingTimer = setInterval(updateTimer, 100);
         startAudioAnalysis();
 
-        startNewSegment();
+        let bitsPerSecond = 128000; // calidad media por defecto
+
+        mediaRecorder = new MediaRecorder(recordingStream, {
+            mimeType: 'audio/webm;codecs=opus',
+            audioBitsPerSecond: bitsPerSecond
+        });
+
+        mediaRecorder.ondataavailable = event => {
+            if (event.data && event.data.size > 0) {
+                recordedChunks.push(event.data);
+                // Alternativa: enviar cada segmento al servidor para remuxeo con ffmpeg
+                // sendChunkToServer(event.data);
+            }
+        };
+
+        mediaRecorder.onstop = () => {
+            finalizeRecording();
+        };
+
+        // Genera datos periódicos sin reiniciar el MediaRecorder
+        mediaRecorder.start(SEGMENT_MS);
     } catch (error) {
         console.error('Error al acceder al micrófono:', error);
         showError('No se pudo acceder al micrófono. Por favor, permite el acceso.');
     }
-}
-
-// Inicia la grabación de un nuevo segmento de 10 minutos
-function startNewSegment() {
-    if (!recordingStream) return;
-
-    let chunks = [];
-    let bitsPerSecond = 128000; // calidad media por defecto
-
-    mediaRecorder = new MediaRecorder(recordingStream, {
-        mimeType: 'audio/webm;codecs=opus',
-        audioBitsPerSecond: bitsPerSecond
-    });
-
-    mediaRecorder.ondataavailable = event => {
-        if (event.data && event.data.size > 0) {
-            chunks.push(event.data);
-        }
-    };
-
-    mediaRecorder.onstop = () => {
-        clearTimeout(segmentTimeout);
-        const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
-        if (blob.size > 0 && !discardRequested) {
-            recordedSegments.push(blob);
-        }
-
-        if (discardRequested) {
-            discardRequested = false;
-            return;
-        }
-
-        const elapsed = Date.now() - startTime;
-        if (isRecording && elapsed < MAX_DURATION_MS) {
-            startNewSegment();
-        } else {
-            isRecording = false;
-            finalizeRecording();
-        }
-    };
-
-    mediaRecorder.start();
-    segmentTimeout = setTimeout(() => {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-        }
-    }, SEGMENT_MS);
 }
 
 // Pausar grabación
@@ -363,7 +336,7 @@ function discardRecording() {
     discardRequested = true;
     isRecording = false;
     isPaused = false;
-    recordedSegments = [];
+    recordedChunks = [];
 
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
@@ -407,12 +380,6 @@ function resetRecordingControls() {
 function stopRecording() {
     isRecording = false;
     isPaused = false;
-
-    if (segmentTimeout) {
-        clearTimeout(segmentTimeout);
-        segmentTimeout = null;
-    }
-
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
     } else {
@@ -442,7 +409,7 @@ async function finalizeRecording() {
     resetAudioVisualizer();
     resetRecordingControls();
 
-    const finalBlob = new Blob(recordedSegments, { type: 'audio/webm;codecs=opus' });
+    const finalBlob = new Blob(recordedChunks, { type: 'audio/webm;codecs=opus' });
     const sizeMB = finalBlob.size / (1024 * 1024);
 
     const now = new Date();
@@ -808,14 +775,25 @@ async function analyzeNow() {
 
 function handlePostActionCleanup(uploaded) {
     if (pendingSaveContext === 'recording') {
-        recordedSegments = [];
+        recordedChunks = [];
         startTime = null;
     } else if (pendingSaveContext === 'meeting') {
-        recordedSegments = [];
+        recordedChunks = [];
         meetingStartTime = null;
     } else if (pendingSaveContext === 'upload' && !uploaded) {
         removeSelectedFile();
     }
+}
+
+/**
+ * Ejemplo opcional: enviar cada segmento al servidor para que pueda
+ * ser remuxeado con ffmpeg utilizando `-f concat` antes de la
+ * transcripción.
+ */
+function sendChunkToServer(chunk) {
+    // const formData = new FormData();
+    // formData.append('chunk', chunk);
+    // return fetch('/upload-chunk', { method: 'POST', body: formData });
 }
 
 function blobToBase64(blob) {
