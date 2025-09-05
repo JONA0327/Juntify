@@ -75,7 +75,7 @@
 
             <!-- Content Sections -->
             @include('partials.profile._section-info')
-            @include('partials.profile._section-connect')
+            @include('partials.profile._section-connect', ['folder' => $folder, 'subfolders' => $subfolders, 'folderMessage' => $folderMessage])
             @include('partials.profile._section-plans')
             @include('partials.profile._section-other')
 
