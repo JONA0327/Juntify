@@ -956,8 +956,8 @@ function setupFileUpload() {
 // Manejar la selección de archivo
 function handleFileSelection(file) {
     // Validar tipo de archivo
-    const validTypes = ['audio/mp3', 'audio/wav', 'audio/m4a', 'audio/flac', 'audio/ogg', 'audio/aac', 'audio/mpeg'];
-    if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|flac|ogg|aac)$/i)) {
+    const validTypes = ['audio/mp3', 'audio/wav', 'audio/m4a', 'audio/flac', 'audio/ogg', 'audio/aac', 'audio/mpeg', 'audio/webm'];
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|flac|ogg|aac|webm)$/i)) {
         showError('Tipo de archivo no soportado. Por favor selecciona un archivo de audio válido.');
         return;
     }
