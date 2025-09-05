@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\TranscriptionLaravel;
 use App\Models\GoogleToken;
 use App\Models\Folder;
+use App\Models\OrganizationFolder;
+use App\Models\OrganizationSubfolder;
 use App\Models\MeetingShare;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
@@ -16,6 +18,7 @@ use App\Models\Transcription;
 use App\Models\Task;
 use Carbon\Carbon;
 use App\Services\GoogleDriveService;
+use Google\Service\Drive\DriveFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -1895,8 +1898,8 @@ class MeetingController extends Controller
                 throw new \Exception('Información del proceso no encontrada');
             }
 
-            $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
             $newMeetingName = $request->input('meeting_name');
+
 
             Log::info('Datos recibidos para completePendingMeeting', [
                 'root_folder' => $request->input('root_folder'),
@@ -1905,69 +1908,127 @@ class MeetingController extends Controller
                 'all_inputs' => $request->all()
             ]);
 
-            // Determinar las carpetas de destino
-            $rootFolder = \App\Models\Folder::where('google_id', $request->input('root_folder'))->first();
-
+            // Determinar carpetas de destino y token
+            $rootInput = $request->input('root_folder');
+            $rootFolder = Folder::where('google_id', $rootInput)->first();
+            $usingOrgDrive = false;
             if (!$rootFolder) {
-                // Intentar buscar por id en lugar de google_id
-                $rootFolder = \App\Models\Folder::where('id', $request->input('root_folder'))->first();
-
+                $rootFolder = Folder::where('id', $rootInput)->first();
+            }
+            if (!$rootFolder) {
+                $rootFolder = OrganizationFolder::where('google_id', $rootInput)->first();
                 if (!$rootFolder) {
-                    // Obtener token del usuario para mostrar carpetas disponibles
-                    $token = \App\Models\GoogleToken::where('username', $user->username)->first();
-                    $availableFolders = [];
-                    if ($token) {
-                        $availableFolders = \App\Models\Folder::where('google_token_id', $token->id)
-                            ->get(['id', 'google_id', 'name'])->toArray();
-                    }
-
-                    Log::error('No se encontró la carpeta raíz', [
-                        'root_folder_value' => $request->input('root_folder'),
-                        'available_folders' => $availableFolders
-                    ]);
-                    throw new \Exception('Carpeta raíz no encontrada: ' . $request->input('root_folder'));
+                    $rootFolder = OrganizationFolder::where('id', $rootInput)->first();
                 }
+                if ($rootFolder) {
+                    $usingOrgDrive = true;
+                }
+            }
+            if (!$rootFolder) {
+                $token = GoogleToken::where('username', $user->username)->first();
+                $availableFolders = [];
+                if ($token) {
+                    $availableFolders = Folder::where('google_token_id', $token->id)
+                        ->get(['id', 'google_id', 'name'])->toArray();
+                }
+                Log::error('No se encontró la carpeta raíz', [
+                    'root_folder_value' => $rootInput,
+                    'available_folders' => $availableFolders,
+                ]);
+                throw new \Exception('Carpeta raíz no encontrada: ' . $rootInput);
+            }
+
+            if ($usingOrgDrive) {
+                $orgToken = $rootFolder->googleToken;
+                if (!$orgToken) {
+                    throw new \Exception('Token de Google Drive de la organización no encontrado');
+                }
+                $client = $this->googleDriveService->getClient();
+                $client->setAccessToken([
+                    'access_token' => $orgToken->access_token,
+                    'refresh_token' => $orgToken->refresh_token,
+                    'expiry_date' => $orgToken->expiry_date,
+                ]);
+                if ($client->isAccessTokenExpired()) {
+                    $new = $client->fetchAccessTokenWithRefreshToken($orgToken->refresh_token);
+                    if (!isset($new['error'])) {
+                        $orgToken->update([
+                            'access_token' => $new['access_token'],
+                            'expiry_date' => now()->addSeconds($new['expires_in']),
+                        ]);
+                        $client->setAccessToken($new);
+                    } else {
+                        throw new \Exception('No se pudo renovar el token de Google Drive');
+                    }
+                }
+            } else {
+                $this->setGoogleDriveToken($user);
             }
 
             $transcriptionFolderId = $rootFolder->google_id;
             if ($request->input('transcription_subfolder')) {
-                $sub = \App\Models\Subfolder::where('google_id', $request->input('transcription_subfolder'))
-                    ->where('folder_id', $rootFolder->id)
-                    ->first();
+                if ($usingOrgDrive) {
+                    $sub = OrganizationSubfolder::where('google_id', $request->input('transcription_subfolder'))
+                        ->where('organization_folder_id', $rootFolder->id)
+                        ->first();
+                } else {
+                    $sub = \App\Models\Subfolder::where('google_id', $request->input('transcription_subfolder'))
+                        ->where('folder_id', $rootFolder->id)
+                        ->first();
+                }
                 if ($sub) {
                     $transcriptionFolderId = $sub->google_id;
                 } else {
                     Log::warning('Subcarpeta de transcripción no encontrada', [
                         'transcription_subfolder' => $request->input('transcription_subfolder'),
-                        'root_folder_id' => $rootFolder->id
+                        'root_folder_id' => $rootFolder->id,
                     ]);
                 }
             }
 
             $audioFolderId = $rootFolder->google_id;
             if ($request->input('audio_subfolder')) {
-                $sub = \App\Models\Subfolder::where('google_id', $request->input('audio_subfolder'))
-                    ->where('folder_id', $rootFolder->id)
-                    ->first();
+                if ($usingOrgDrive) {
+                    $sub = OrganizationSubfolder::where('google_id', $request->input('audio_subfolder'))
+                        ->where('organization_folder_id', $rootFolder->id)
+                        ->first();
+                } else {
+                    $sub = \App\Models\Subfolder::where('google_id', $request->input('audio_subfolder'))
+                        ->where('folder_id', $rootFolder->id)
+                        ->first();
+                }
                 if ($sub) {
                     $audioFolderId = $sub->google_id;
                 } else {
                     Log::warning('Subcarpeta de audio no encontrada', [
                         'audio_subfolder' => $request->input('audio_subfolder'),
-                        'root_folder_id' => $rootFolder->id
+                        'root_folder_id' => $rootFolder->id,
                     ]);
                 }
-            }            // 1. Mover y renombrar el audio en Google Drive
+            }
+            // 1. Mover y renombrar el audio en Google Drive
             $oldFileId = $processInfo['drive_file_id'];
             $audioExtension = pathinfo($processInfo['original_name'], PATHINFO_EXTENSION);
             $newAudioName = $newMeetingName . '.' . $audioExtension;
 
             // Mover el archivo a la nueva ubicación con nuevo nombre
-            $newAudioFileId = $serviceAccount->moveAndRenameFile(
-                $oldFileId,
-                $audioFolderId,
-                $newAudioName
-            );
+            $drive = $this->googleDriveService->getDrive();
+            $file = $drive->files->get($oldFileId, [
+                'fields' => 'parents,name',
+                'supportsAllDrives' => true,
+            ]);
+            $currentParents = $file->getParents();
+            $updateData = ['name' => $newAudioName];
+            $options = [
+                'addParents' => $audioFolderId,
+                'fields' => 'id,parents',
+                'supportsAllDrives' => true,
+            ];
+            if ($currentParents) {
+                $options['removeParents'] = implode(',', $currentParents);
+            }
+            $updatedFile = $drive->files->update($oldFileId, new DriveFile($updateData), $options);
+            $newAudioFileId = $updatedFile->getId();
 
             // 2. Crear y subir la transcripción
             $analysisResults = $request->input('analysis_results');
@@ -1976,9 +2037,9 @@ class MeetingController extends Controller
                 'keyPoints' => $analysisResults['keyPoints'] ?? [],
                 'segments' => $request->input('transcription_data'),
             ];
-            $encrypted = \Illuminate\Support\Facades\Crypt::encryptString(json_encode($payload));
+            $encrypted = Crypt::encryptString(json_encode($payload));
 
-            $transcriptFileId = $serviceAccount->uploadFile(
+            $transcriptFileId = $this->googleDriveService->uploadFile(
                 $newMeetingName . '.ju',
                 'application/json',
                 $transcriptionFolderId,
@@ -1986,8 +2047,8 @@ class MeetingController extends Controller
             );
 
             // 3. Obtener URLs de descarga
-            $audioUrl = $serviceAccount->getFileLink($newAudioFileId);
-            $transcriptUrl = $serviceAccount->getFileLink($transcriptFileId);
+            $audioUrl = $this->googleDriveService->getFileLink($newAudioFileId);
+            $transcriptUrl = $this->googleDriveService->getFileLink($transcriptFileId);
 
             // 4. Guardar en la BD principal (TranscriptionLaravel)
             $transcription = \App\Models\TranscriptionLaravel::create([
