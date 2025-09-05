@@ -43,6 +43,8 @@ return [
     'assemblyai' => [
         'api_key' => env('ASSEMBLYAI_API_KEY'),
         'verify_ssl' => env('ASSEMBLYAI_VERIFY_SSL', true),
+        'timeout' => env('ASSEMBLYAI_TIMEOUT', 300),
+        'connect_timeout' => env('ASSEMBLYAI_CONNECT_TIMEOUT', 60),
     ],
 
     'openai' => [

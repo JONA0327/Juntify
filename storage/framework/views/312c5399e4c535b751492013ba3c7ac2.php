@@ -11,7 +11,7 @@
 
         <!-- Timer -->
         <div class="timer-display">
-            <span class="time-counter" id="timer-counter">00:00</span>
+            <span class="time-counter" id="timer-counter">00:00:00</span>
             <span class="timer-label" id="timer-label">Listo para grabar</span>
         </div>
     </div>

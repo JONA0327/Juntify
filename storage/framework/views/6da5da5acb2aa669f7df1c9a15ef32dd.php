@@ -23,8 +23,8 @@
 <?php endif; ?>
         <h3 class="upload-title">Arrastra y suelta tu archivo de audio aquí</h3>
         <p class="upload-subtitle">O haz clic para seleccionar un archivo de audio</p>
-        <p class="upload-formats">Formatos soportados: MP3, WAV, M4A, FLAC, OGG, AAC</p>
-        <input type="file" id="audio-file-input" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,audio/*" style="display: none;">
+        <p class="upload-formats">Formatos soportados: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM</p>
+        <input type="file" id="audio-file-input" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,.webm,audio/*" style="display: none;">
         <button class="btn btn-primary upload-btn">
             <?php if (isset($component)) { $__componentOriginalce262628e3a8d44dc38fd1f3965181bc = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalce262628e3a8d44dc38fd1f3965181bc = $attributes; } ?>

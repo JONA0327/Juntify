@@ -196,6 +196,14 @@ function togglePostponeMode() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Limpiar estado de descarte de audio al llegar a nueva reunión
+    try {
+        sessionStorage.removeItem('audioDiscarded');
+        console.log('✅ [new-meeting] Estado de descarte limpiado al iniciar nueva reunión');
+    } catch (e) {
+        console.warn('No se pudo limpiar estado de descarte:', e);
+    }
+
     const checkbox = document.getElementById('postpone-toggle');
     if (checkbox) {
         checkbox.addEventListener('change', () => setPostponeMode(checkbox.checked));

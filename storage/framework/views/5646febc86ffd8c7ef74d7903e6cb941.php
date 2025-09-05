@@ -174,7 +174,7 @@
         <!-- Timer y controles -->
         <div class="meeting-timer-section">
             <div class="meeting-timer-display">
-                <span class="meeting-time-counter" id="meeting-timer-counter">00:00</span>
+                <span class="meeting-time-counter" id="meeting-timer-counter">00:00:00</span>
                 <span class="meeting-timer-label" id="meeting-timer-label">Listo para grabar</span>
             </div>
 

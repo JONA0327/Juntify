@@ -3312,6 +3312,118 @@ function retryLoadContainerMeetings() {
 // =========================================================
 // Drive folder selector with organization support
 // =========================================================
+async function loadDriveOptions() {
+    const role = window.userRole || document.body.dataset.userRole;
+    const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
+    const driveSelect = document.getElementById('drive-select');
+
+    if (!driveSelect) {
+        console.warn('🔍 [reuniones_v2 - loadDriveOptions] Drive select element not found');
+        return;
+    }
+
+    // Allow both administrators and colaboradores to see drive options
+    console.log('🔍 [reuniones_v2 - loadDriveOptions] Loading drive options for role:', role);
+
+    try {
+        // Clear existing options
+        driveSelect.innerHTML = '';
+
+        // Load personal drive name
+        console.log('🔍 [reuniones_v2 - loadDriveOptions] Fetching personal drive data...');
+        try {
+            const personalRes = await fetch('/drive/sync-subfolders');
+            console.log('🔍 [reuniones_v2 - loadDriveOptions] Personal drive response status:', personalRes.status);
+
+            if (personalRes.ok) {
+                const personalData = await personalRes.json();
+                console.log('🔍 [reuniones_v2 - loadDriveOptions] Personal drive data:', personalData);
+
+                if (personalData.root_folder) {
+                    const personalOpt = document.createElement('option');
+                    personalOpt.value = 'personal';
+                    personalOpt.textContent = `🏠 ${personalData.root_folder.name}`;
+                    driveSelect.appendChild(personalOpt);
+                    console.log('✅ [reuniones_v2 - loadDriveOptions] Added personal option:', personalData.root_folder.name);
+                }
+            } else {
+                console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Personal drive request failed:', await personalRes.text());
+            }
+        } catch (e) {
+            console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Could not load personal drive name:', e);
+            // Fallback to default
+            const personalOpt = document.createElement('option');
+            personalOpt.value = 'personal';
+            personalOpt.textContent = 'Personal';
+            driveSelect.appendChild(personalOpt);
+            console.log('📝 [reuniones_v2 - loadDriveOptions] Added fallback personal option');
+        }
+
+        // Load organization drive name (for both admin and colaborador)
+        if (organizationId) {
+            console.log('🔍 [reuniones_v2 - loadDriveOptions] Fetching organization drive data...');
+            try {
+                const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
+                console.log('🔍 [reuniones_v2 - loadDriveOptions] Organization drive response status:', orgRes.status);
+
+                if (orgRes.ok) {
+                    const orgData = await orgRes.json();
+                    console.log('🔍 [reuniones_v2 - loadDriveOptions] Organization drive data:', orgData);
+
+                    if (orgData.root_folder) {
+                        const orgOpt = document.createElement('option');
+                        orgOpt.value = 'organization';
+                        orgOpt.textContent = `🏢 ${orgData.root_folder.name}`;
+                        driveSelect.appendChild(orgOpt);
+                        console.log('✅ [reuniones_v2 - loadDriveOptions] Added organization option:', orgData.root_folder.name);
+                    }
+                } else {
+                    console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Organization drive request failed:', await orgRes.text());
+                }
+            } catch (e) {
+                console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Could not load organization drive name:', e);
+                // Fallback to default
+                const orgOpt = document.createElement('option');
+                orgOpt.value = 'organization';
+                orgOpt.textContent = 'Organization';
+                driveSelect.appendChild(orgOpt);
+                console.log('📝 [reuniones_v2 - loadDriveOptions] Added fallback organization option');
+            }
+        }
+
+        // Set default selection based on role
+        if (driveSelect.options.length > 0) {
+            const saved = sessionStorage.getItem('selectedDrive');
+            if (saved && driveSelect.querySelector(`option[value="${saved}"]`)) {
+                driveSelect.value = saved;
+                console.log('📄 [reuniones_v2 - loadDriveOptions] Restored saved selection:', saved);
+            } else {
+                // For colaboradores in organizations, default to organization
+                if (role === 'colaborador' && organizationId && driveSelect.querySelector('option[value="organization"]')) {
+                    driveSelect.value = 'organization';
+                    console.log('👥 [reuniones_v2 - loadDriveOptions] Set default to organization for colaborador');
+                } else {
+                    driveSelect.selectedIndex = 0;
+                    console.log('🎯 [reuniones_v2 - loadDriveOptions] Set default to first option');
+                }
+            }
+        }
+
+        // Show the selector for both admin and colaborador
+        driveSelect.style.display = 'block';
+        console.log('👁️ [reuniones_v2 - loadDriveOptions] Drive selector is now visible');
+
+    } catch (e) {
+        console.error('❌ [reuniones_v2 - loadDriveOptions] Error loading drive options:', e);
+        // Fallback to original options
+        driveSelect.innerHTML = `
+            <option value="personal">Personal</option>
+            <option value="organization">Organization</option>
+        `;
+        console.log('🔄 [reuniones_v2 - loadDriveOptions] Fallback to default options');
+    }
+}
+
 async function loadDriveFolders() {
     const role = window.userRole || document.body.dataset.userRole;
     const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
@@ -3320,35 +3432,80 @@ async function loadDriveFolders() {
     const transcriptionSelect = document.getElementById('transcription-subfolder-select');
     const audioSelect = document.getElementById('audio-subfolder-select');
 
-    let useOrg = role === 'colaborador';
-    if (role === 'administrador' && driveSelect) {
+    console.log('🔍 [reuniones_v2 - loadDriveFolders] Starting with debug info:', {
+        role,
+        organizationId,
+        driveSelectValue: driveSelect?.value,
+        driveSelectExists: !!driveSelect
+    });
+
+    // First, load drive options with real folder names
+    await loadDriveOptions();
+
+    // Updated logic to allow colaboradores to choose between personal and organization
+    let useOrg;
+    if (role === 'colaborador') {
+        // For colaboradores, check the drive select value if it exists
+        useOrg = driveSelect ? driveSelect.value === 'organization' : true; // default to org if no selector
+    } else if (role === 'administrador' && driveSelect) {
         useOrg = driveSelect.value === 'organization';
+    } else {
+        useOrg = false; // default to personal
     }
 
+    console.log('🔍 [reuniones_v2 - loadDriveFolders] Drive selection logic:', {
+        role,
+        useOrg,
+        driveSelectValue: driveSelect?.value,
+        reasoning: role === 'colaborador' ? 'colaborador can choose' : 'administrator choice'
+    });
+
     const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';
+    console.log('🔍 [reuniones_v2 - loadDriveFolders] Using endpoint:', endpoint);
     try {
         const res = await fetch(endpoint);
-        if (!res.ok) return;
-        const data = await res.json();
+        console.log('🔍 [reuniones_v2 - loadDriveFolders] Fetch response status:', res.status);
 
-        if (driveSelect && role === 'colaborador') {
-            driveSelect.style.display = 'none';
+        if (!res.ok) {
+            console.error('🔍 [reuniones_v2 - loadDriveFolders] Request failed with status:', res.status);
+            return;
         }
+
+        const data = await res.json();
+        console.log('🔍 [reuniones_v2 - loadDriveFolders] Received data:', data);
+
+        // Don't hide drive select for colaboradores anymore - they can choose
+        console.log('🔍 [reuniones_v2 - loadDriveFolders] Drive select visibility:', {
+            role,
+            willHide: false, // Changed: don't hide for colaboradores
+            driveSelectExists: !!driveSelect
+        });
 
         if (rootSelect) {
             rootSelect.innerHTML = '';
             if (data.root_folder) {
                 const opt = document.createElement('option');
                 opt.value = data.root_folder.google_id;
-                opt.textContent = `\uD83D\uDCC1 ${data.root_folder.name}`;
+                opt.textContent = `📁 ${data.root_folder.name}`;
                 rootSelect.appendChild(opt);
+                console.log('✅ [reuniones_v2 - loadDriveFolders] Added root folder option:', {
+                    name: data.root_folder.name,
+                    googleId: data.root_folder.google_id
+                });
+            } else {
+                console.warn('⚠️ [reuniones_v2 - loadDriveFolders] No root folder found in response');
             }
         }
 
-        const populate = (select) => {
-            if (!select) return;
+        const populate = (select, selectName) => {
+            if (!select) {
+                console.warn(`⚠️ [reuniones_v2 - loadDriveFolders] ${selectName} select not found`);
+                return;
+            }
             select.innerHTML = '';
             const list = data.subfolders || [];
+            console.log(`🔍 [reuniones_v2 - loadDriveFolders] Populating ${selectName} with ${list.length} subfolders:`, list);
+
             if (list.length) {
                 const none = document.createElement('option');
                 none.value = '';
@@ -3357,30 +3514,51 @@ async function loadDriveFolders() {
                 list.forEach(f => {
                     const opt = document.createElement('option');
                     opt.value = f.google_id;
-                    opt.textContent = `\uD83D\uDCC2 ${f.name}`;
+                    opt.textContent = `📂 ${f.name}`;
                     select.appendChild(opt);
+                    console.log(`✅ [reuniones_v2 - loadDriveFolders] Added ${selectName} subfolder:`, f.name);
                 });
             } else {
                 const opt = document.createElement('option');
                 opt.value = '';
                 opt.textContent = 'No se encontraron subcarpetas';
                 select.appendChild(opt);
+                console.log(`📝 [reuniones_v2 - loadDriveFolders] No subfolders found for ${selectName}`);
             }
         };
 
-        populate(transcriptionSelect);
-        populate(audioSelect);
+        populate(transcriptionSelect, 'transcription');
+        populate(audioSelect, 'audio');
+
+        console.log('✅ [reuniones_v2 - loadDriveFolders] Successfully loaded drive folders');
+
     } catch (e) {
-        console.error('Error loading drive folders', e);
+        console.error('❌ [reuniones_v2 - loadDriveFolders] Error loading drive folders:', e);
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Debug inicial para reuniones
+    console.log('🚀 [reuniones_v2] Iniciando aplicación...');
+    console.log('🔍 [reuniones_v2] Variables globales:', {
+        userRole: window.userRole || document.body.dataset.userRole,
+        organizationId: window.currentOrganizationId || document.body.dataset.organizationId,
+        bodyDatasets: Object.keys(document.body.dataset),
+        windowVars: Object.keys(window).filter(k => k.includes('user') || k.includes('org'))
+    });
+
     const driveSelect = document.getElementById('drive-select');
+    console.log('🔍 [reuniones_v2] Drive select element found:', !!driveSelect);
+
     if (driveSelect) {
-        driveSelect.addEventListener('change', loadDriveFolders);
+        driveSelect.addEventListener('change', () => {
+            console.log('🔄 [reuniones_v2] Drive selection changed to:', driveSelect.value);
+            loadDriveFolders();
+        });
     }
+
     if (document.getElementById('root-folder-select')) {
+        console.log('🔍 [reuniones_v2] About to call loadDriveFolders...');
         loadDriveFolders();
     }
 });

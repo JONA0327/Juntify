@@ -96,6 +96,18 @@ Route::get('/new-meeting', function () {
 Route::post('/transcription', [TranscriptionController::class, 'store'])
     ->name('transcription.store')
     ->middleware(['auth', 'group.role']);
+
+// Rutas para subida por chunks (archivos grandes)
+Route::post('/transcription/chunked/init', [TranscriptionController::class, 'initChunkedUpload'])
+    ->name('transcription.chunked.init')
+    ->middleware(['auth', 'group.role']);
+Route::post('/transcription/chunked/upload', [TranscriptionController::class, 'uploadChunk'])
+    ->name('transcription.chunked.upload')
+    ->middleware(['auth', 'group.role']);
+Route::post('/transcription/chunked/finalize', [TranscriptionController::class, 'finalizeChunkedUpload'])
+    ->name('transcription.chunked.finalize')
+    ->middleware(['auth', 'group.role']);
+
 Route::get('/transcription/{id}', [TranscriptionController::class, 'show'])->name('transcription.show');
 Route::post('/analysis', [\App\Http\Controllers\AnalysisController::class, 'analyze'])
     ->name('analysis')

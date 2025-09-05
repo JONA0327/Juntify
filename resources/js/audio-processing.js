@@ -21,7 +21,24 @@ function clearStoredAudioKeys() {
     try { localStorage.removeItem('pendingAudioData'); } catch (_) {}
 }
 
+// Función para limpiar completamente el estado de descarte
+function clearDiscardState() {
+    audioDiscarded = false;
+    try {
+        sessionStorage.removeItem('audioDiscarded');
+        console.log('✅ [clearDiscardState] Estado de descarte limpiado completamente');
+    } catch (e) {
+        console.warn('No se pudo limpiar el estado de descarte:', e);
+    }
+}
+
 async function discardAudio() {
+    audioDiscarded = true; // Marcar que el audio fue descartado
+    try {
+        sessionStorage.setItem('audioDiscarded', 'true'); // Persistir en sessionStorage
+    } catch (e) {
+        console.warn('No se pudo guardar el estado de descarte:', e);
+    }
     try { await clearAllAudio(); } catch (_) {}
     clearStoredAudioKeys();
     showNotification('El audio se descartó para evitar conflictos en futuras grabaciones', 'warning');
@@ -37,6 +54,19 @@ let selectedAnalyzer = 'general';
 let availableAnalyzers = [];
 let audioData = null;
 let audioSegments = [];
+let audioDiscarded = false; // Variable para controlar si el audio fue descartado
+
+// Verificar si el audio fue descartado previamente
+try {
+    const discardedStatus = sessionStorage.getItem('audioDiscarded');
+    if (discardedStatus === 'true') {
+        audioDiscarded = true;
+        console.log('🚫 [Init] Audio fue descartado previamente, bloqueando procesamiento');
+    }
+} catch (e) {
+    console.warn('No se pudo verificar el estado de descarte:', e);
+}
+
 // Array que almacena la transcripción completa. Cada elemento
 // representa un segmento con propiedades como:
 // {
@@ -184,6 +214,13 @@ function renderAnalyzerCards() {
 // ===== PASO 1: PROCESAMIENTO DE AUDIO =====
 
 async function startAudioProcessing() {
+    // Verificar si el audio fue descartado
+    if (audioDiscarded) {
+        console.log('🚫 [startAudioProcessing] Audio fue descartado, cancelando procesamiento');
+        showNotification('El procesamiento fue cancelado porque el audio fue descartado', 'warning');
+        return;
+    }
+
     showStep(1);
 
     const progressBar = document.getElementById('audio-progress');
@@ -248,6 +285,13 @@ async function mergeAudioSegments(segments) {
 // ===== PASO 2: TRANSCRIPCIÓN =====
 
 async function startTranscription() {
+    // Verificar si el audio fue descartado
+    if (audioDiscarded) {
+        console.log('🚫 [startTranscription] Audio fue descartado, cancelando transcripción');
+        showNotification('La transcripción fue cancelada porque el audio fue descartado', 'warning');
+        return;
+    }
+
     showStep(2);
 
     const existingRetry = document.getElementById('retry-transcription');
@@ -270,16 +314,33 @@ async function startTranscription() {
 
     progressBar.style.width = '0%';
     progressPercent.textContent = '0%';
-    progressText.textContent = 'Subiendo audio...';
+    progressText.textContent = 'Preparando audio...';
 
-    const formData = new FormData();
     const audioBlob = typeof audioData === 'string' ? base64ToBlob(audioData) : audioData;
+
+    // Para audios grandes (>10MB), usar subida por chunks
+    const audioSizeMB = audioBlob.size / (1024 * 1024);
+    console.log(`🔍 [startTranscription] Audio size: ${audioSizeMB.toFixed(2)} MB`);
+
+    if (audioSizeMB > 10) {
+        console.log('📤 [startTranscription] Using chunked upload for large audio');
+        await startChunkedTranscription(audioBlob, lang, progressBar, progressText, progressPercent);
+    } else {
+        console.log('📤 [startTranscription] Using standard upload for small audio');
+        await startStandardTranscription(audioBlob, lang, progressBar, progressText, progressPercent);
+    }
+}
+
+async function startStandardTranscription(audioBlob, lang, progressBar, progressText, progressPercent) {
+    const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm');
     formData.append('language', lang);
 
-
     try {
+        progressText.textContent = 'Subiendo audio...';
+
         const { data } = await axios.post('/transcription', formData, {
+            timeout: 0, // Sin límite de tiempo
             onUploadProgress: (e) => {
                 if (e.total) {
                     const percent = (e.loaded / e.total) * 10; // 0-10% of total
@@ -288,39 +349,150 @@ async function startTranscription() {
                 }
             }
         });
-        console.log("✅ Transcripción iniciada:", data);
+
+        console.log("✅ [startStandardTranscription] Transcripción iniciada:", data);
 
         progressBar.style.width = '10%';
         progressPercent.textContent = '10%';
         progressText.textContent = 'En cola...';
 
         pollTranscription(data.id);
-    } catch (e) {
-        console.error("❌ Error:", e);
 
-        let userMessage = '';
-        if (e.code === 'ERR_CONNECTION') {
-            userMessage = '⚠️ Problema de conexión. Verifica tu conexión e intenta nuevamente.';
-        } else if (e.code === 'ERR_TIMEOUT') {
-            userMessage = '⚠️ La solicitud tardó demasiado. Reintenta o revisa tu conexión.';
-        } else if (e.response) {
-            console.error("📡 STATUS:", e.response.status);
-            console.error("📩 HEADERS:", e.response.headers);
-            console.error("📦 BODY:", e.response.data);
-            userMessage = "🧠 Error del servidor: " + JSON.stringify(e.response.data);
-        } else {
-            userMessage = "❌ Error desconocido. Revisa consola.";
+    } catch (e) {
+        await handleTranscriptionError(e);
+    }
+}
+
+async function startChunkedTranscription(audioBlob, lang, progressBar, progressText, progressPercent) {
+    const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB chunks
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 2000; // 2 seconds
+
+    try {
+        progressText.textContent = 'Preparando subida por fragmentos...';
+
+        // Paso 1: Inicializar transcripción por chunks
+        console.log('🔧 [startChunkedTranscription] Initializing chunked upload');
+
+        const initResponse = await axios.post('/transcription/chunked/init', {
+            filename: 'recording.webm',
+            size: audioBlob.size,
+            language: lang,
+            chunks: Math.ceil(audioBlob.size / CHUNK_SIZE)
+        }, { timeout: 30000 }); // 30 segundos para inicialización
+
+        const { upload_id, chunk_urls } = initResponse.data;
+        console.log(`✅ [startChunkedTranscription] Upload initialized with ${chunk_urls.length} chunks`);
+
+        // Paso 2: Subir chunks en paralelo (máximo 3 a la vez)
+        const chunks = [];
+        for (let i = 0; i < audioBlob.size; i += CHUNK_SIZE) {
+            chunks.push({
+                index: chunks.length,
+                blob: audioBlob.slice(i, i + CHUNK_SIZE),
+                url: chunk_urls[chunks.length]
+            });
         }
 
-        alert(userMessage);
+        let completedChunks = 0;
+        const uploadPromises = [];
+        const concurrentUploads = 3;
 
-        downloadAudio();
-        showNotification('Se descargó una copia de seguridad del audio', 'info');
-        await discardAudio();
+        const uploadChunk = async (chunk, retryCount = 0) => {
+            try {
+                progressText.textContent = `Subiendo fragmento ${chunk.index + 1}/${chunks.length}...`;
 
-        progressText.textContent = 'Error al subir audio. Reintenta o verifica tu conexión.';
-        showRetryTranscription();
+                const formData = new FormData();
+                formData.append('chunk', chunk.blob);
+                formData.append('chunk_index', chunk.index);
+                formData.append('upload_id', upload_id);
+
+                await axios.post('/transcription/chunked/upload', formData, {
+                    timeout: 180000, // 3 minutos por chunk
+                    onUploadProgress: (e) => {
+                        if (e.total) {
+                            const chunkProgress = (e.loaded / e.total);
+                            const totalProgress = ((completedChunks + chunkProgress) / chunks.length) * 8; // 0-8% del total
+                            progressBar.style.width = totalProgress + '%';
+                            progressPercent.textContent = Math.round(totalProgress) + '%';
+                        }
+                    }
+                });
+
+                completedChunks++;
+                console.log(`✅ [uploadChunk] Chunk ${chunk.index + 1}/${chunks.length} uploaded successfully`);
+
+            } catch (error) {
+                if (retryCount < MAX_RETRIES) {
+                    console.warn(`⚠️ [uploadChunk] Chunk ${chunk.index + 1} failed, retrying (${retryCount + 1}/${MAX_RETRIES}):`, error.message);
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, retryCount))); // Exponential backoff
+                    return uploadChunk(chunk, retryCount + 1);
+                } else {
+                    console.error(`❌ [uploadChunk] Chunk ${chunk.index + 1} failed after ${MAX_RETRIES} retries:`, error);
+                    throw error;
+                }
+            }
+        };
+
+        // Subir chunks en lotes concurrentes
+        for (let i = 0; i < chunks.length; i += concurrentUploads) {
+            const batch = chunks.slice(i, i + concurrentUploads);
+            const batchPromises = batch.map(chunk => uploadChunk(chunk));
+            await Promise.all(batchPromises);
+        }
+
+        // Paso 3: Finalizar la transcripción
+        progressBar.style.width = '9%';
+        progressPercent.textContent = '9%';
+        progressText.textContent = 'Finalizando subida...';
+
+        console.log('🔧 [startChunkedTranscription] Finalizing upload');
+
+        const finalizeResponse = await axios.post('/transcription/chunked/finalize', {
+            upload_id: upload_id
+        }, { timeout: 60000 }); // 1 minuto para finalización
+
+        console.log("✅ [startChunkedTranscription] Transcripción iniciada:", finalizeResponse.data);
+
+        progressBar.style.width = '10%';
+        progressPercent.textContent = '10%';
+        progressText.textContent = 'En cola...';
+
+        pollTranscription(finalizeResponse.data.id);
+
+    } catch (e) {
+        await handleTranscriptionError(e);
     }
+}
+
+async function handleTranscriptionError(e) {
+    console.error("❌ [handleTranscriptionError] Error:", e);
+
+    let userMessage = '';
+    if (e.code === 'ERR_CONNECTION') {
+        userMessage = '⚠️ Problema de conexión. Verifica tu conexión e intenta nuevamente.';
+    } else if (e.code === 'ERR_TIMEOUT') {
+        userMessage = '⚠️ La solicitud tardó demasiado. Reintenta o revisa tu conexión.';
+    } else if (e.response) {
+        console.error("📡 STATUS:", e.response.status);
+        console.error("📩 HEADERS:", e.response.headers);
+        console.error("📦 BODY:", e.response.data);
+        userMessage = "🧠 Error del servidor: " + JSON.stringify(e.response.data);
+    } else {
+        userMessage = "❌ Error desconocido. Revisa consola.";
+    }
+
+    alert(userMessage);
+
+    downloadAudio();
+    showNotification('Se descargó una copia de seguridad del audio', 'info');
+    await discardAudio();
+
+    const progressText = document.getElementById('transcription-progress-text');
+    if (progressText) {
+        progressText.textContent = 'Error al subir audio. Reintenta o verifica tu conexión.';
+    }
+    showRetryTranscription();
 }
 
 function showRetryTranscription() {
@@ -925,6 +1097,124 @@ function updateAnalysisPreview() {
     }
 }
 
+async function loadDriveOptions() {
+    const role = window.userRole || document.body.dataset.userRole;
+    const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
+    const driveSelect = document.getElementById('drive-select');
+
+    console.log('🔍 [loadDriveOptions] Debug Info:', {
+        role,
+        organizationId,
+        driveSelectExists: !!driveSelect
+    });
+
+    if (!driveSelect) {
+        console.warn('🔍 [loadDriveOptions] Drive select element not found');
+        return;
+    }
+
+    // Allow both administrators and colaboradores to see drive options
+    console.log('🔍 [loadDriveOptions] Loading drive options for role:', role);
+
+    try {
+        // Clear existing options
+        driveSelect.innerHTML = '';
+
+        // Load personal drive name
+        console.log('🔍 [loadDriveOptions] Fetching personal drive data...');
+        try {
+            const personalRes = await fetch('/drive/sync-subfolders');
+            console.log('🔍 [loadDriveOptions] Personal drive response status:', personalRes.status);
+
+            if (personalRes.ok) {
+                const personalData = await personalRes.json();
+                console.log('🔍 [loadDriveOptions] Personal drive data:', personalData);
+
+                if (personalData.root_folder) {
+                    const personalOpt = document.createElement('option');
+                    personalOpt.value = 'personal';
+                    personalOpt.textContent = `🏠 ${personalData.root_folder.name}`;
+                    driveSelect.appendChild(personalOpt);
+                    console.log('✅ [loadDriveOptions] Added personal option:', personalData.root_folder.name);
+                }
+            } else {
+                console.warn('⚠️ [loadDriveOptions] Personal drive request failed:', await personalRes.text());
+            }
+        } catch (e) {
+            console.warn('⚠️ [loadDriveOptions] Could not load personal drive name:', e);
+            // Fallback to default
+            const personalOpt = document.createElement('option');
+            personalOpt.value = 'personal';
+            personalOpt.textContent = 'Personal';
+            driveSelect.appendChild(personalOpt);
+            console.log('📝 [loadDriveOptions] Added fallback personal option');
+        }
+
+        // Load organization drive name (for both admin and colaborador)
+        if (organizationId) {
+            console.log('🔍 [loadDriveOptions] Fetching organization drive data...');
+            try {
+                const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
+                console.log('🔍 [loadDriveOptions] Organization drive response status:', orgRes.status);
+
+                if (orgRes.ok) {
+                    const orgData = await orgRes.json();
+                    console.log('🔍 [loadDriveOptions] Organization drive data:', orgData);
+
+                    if (orgData.root_folder) {
+                        const orgOpt = document.createElement('option');
+                        orgOpt.value = 'organization';
+                        orgOpt.textContent = `🏢 ${orgData.root_folder.name}`;
+                        driveSelect.appendChild(orgOpt);
+                        console.log('✅ [loadDriveOptions] Added organization option:', orgData.root_folder.name);
+                    }
+                } else {
+                    console.warn('⚠️ [loadDriveOptions] Organization drive request failed:', await orgRes.text());
+                }
+            } catch (e) {
+                console.warn('⚠️ [loadDriveOptions] Could not load organization drive name:', e);
+                // Fallback to default
+                const orgOpt = document.createElement('option');
+                orgOpt.value = 'organization';
+                orgOpt.textContent = 'Organization';
+                driveSelect.appendChild(orgOpt);
+                console.log('📝 [loadDriveOptions] Added fallback organization option');
+            }
+        }
+
+        // Set default selection based on role
+        if (driveSelect.options.length > 0) {
+            const saved = sessionStorage.getItem('selectedDrive');
+            if (saved && driveSelect.querySelector(`option[value="${saved}"]`)) {
+                driveSelect.value = saved;
+                console.log('📄 [loadDriveOptions] Restored saved selection:', saved);
+            } else {
+                // For colaboradores in organizations, default to organization
+                if (role === 'colaborador' && organizationId && driveSelect.querySelector('option[value="organization"]')) {
+                    driveSelect.value = 'organization';
+                    console.log('👥 [loadDriveOptions] Set default to organization for colaborador');
+                } else {
+                    driveSelect.selectedIndex = 0;
+                    console.log('🎯 [loadDriveOptions] Set default to first option');
+                }
+            }
+        }
+
+        // Show the selector for both admin and colaborador
+        driveSelect.style.display = 'block';
+        console.log('👁️ [loadDriveOptions] Drive selector is now visible');
+
+    } catch (e) {
+        console.error('❌ [loadDriveOptions] Error loading drive options:', e);
+        // Fallback to original options
+        driveSelect.innerHTML = `
+            <option value="personal">Personal</option>
+            <option value="organization">Organization</option>
+        `;
+        console.log('🔄 [loadDriveOptions] Fallback to default options');
+    }
+}
+
 async function loadDriveFolders() {
     const role = window.userRole || document.body.dataset.userRole;
     const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
@@ -933,52 +1223,98 @@ async function loadDriveFolders() {
     const transcriptionSelect = document.getElementById('transcription-subfolder-select');
     const audioSelect = document.getElementById('audio-subfolder-select');
 
-    let useOrg = role === 'colaborador';
-    if (role === 'administrador' && driveSelect) {
+    console.log('🔍 [loadDriveFolders] Starting with debug info:', {
+        role,
+        organizationId,
+        driveSelectValue: driveSelect?.value,
+        driveSelectExists: !!driveSelect
+    });
+
+    // First, load drive options with real folder names
+    await loadDriveOptions();
+
+    // Updated logic to allow colaboradores to choose between personal and organization
+    let useOrg;
+    if (role === 'colaborador') {
+        // For colaboradores, check the drive select value if it exists
+        useOrg = driveSelect ? driveSelect.value === 'organization' : true; // default to org if no selector
+    } else if (role === 'administrador' && driveSelect) {
         useOrg = driveSelect.value === 'organization';
+    } else {
+        useOrg = false; // default to personal
     }
+
+    console.log('🔍 [loadDriveFolders] Drive selection logic:', {
+        role,
+        useOrg,
+        driveSelectValue: driveSelect?.value,
+        reasoning: role === 'colaborador' ? 'colaborador can choose' : 'administrator choice'
+    });
 
     const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';
 
+    console.log('🔍 [loadDriveFolders] Using endpoint:', endpoint);
+
     try {
         const res = await fetch(endpoint);
+        console.log('🔍 [loadDriveFolders] Fetch response status:', res.status);
 
         if (res.status === 401 || res.status === 403) {
+            console.warn('🔍 [loadDriveFolders] Authentication error, redirecting to login');
             window.location.href = '/login';
             return;
         }
 
         if (!res.ok) {
+            console.error('🔍 [loadDriveFolders] Request failed with status:', res.status);
             showNotification('No se pudieron cargar las carpetas de Drive', 'error');
             return;
         }
 
         const contentType = res.headers.get('content-type') || '';
+        console.log('🔍 [loadDriveFolders] Response content type:', contentType);
+
         if (!contentType.includes('application/json')) {
+            console.error('🔍 [loadDriveFolders] Unexpected response content type');
             showNotification('Respuesta inesperada del servidor', 'error');
             return;
         }
 
         const data = await res.json();
+        console.log('🔍 [loadDriveFolders] Received data:', data);
 
-        if (driveSelect && role === 'colaborador') {
-            driveSelect.style.display = 'none';
-        }
+        // Don't hide drive select for colaboradores anymore - they can choose
+        console.log('🔍 [loadDriveFolders] Drive select visibility:', {
+            role,
+            willHide: false, // Changed: don't hide for colaboradores
+            driveSelectExists: !!driveSelect
+        });
 
         if (rootSelect) {
             rootSelect.innerHTML = '';
             if (data.root_folder) {
                 const opt = document.createElement('option');
                 opt.value = data.root_folder.google_id;
-                opt.textContent = `\uD83D\uDCC1 ${data.root_folder.name}`;
+                opt.textContent = `📁 ${data.root_folder.name}`;
                 rootSelect.appendChild(opt);
+                console.log('✅ [loadDriveFolders] Added root folder option:', {
+                    name: data.root_folder.name,
+                    googleId: data.root_folder.google_id
+                });
+            } else {
+                console.warn('⚠️ [loadDriveFolders] No root folder found in response');
             }
         }
 
-        const populateSubSelect = (select) => {
-            if (!select) return;
+        const populateSubSelect = (select, selectName) => {
+            if (!select) {
+                console.warn(`⚠️ [loadDriveFolders] ${selectName} select not found`);
+                return;
+            }
             select.innerHTML = '';
             const list = data.subfolders || [];
+            console.log(`🔍 [loadDriveFolders] Populating ${selectName} with ${list.length} subfolders:`, list);
+
             if (list.length) {
                 const noneOpt = document.createElement('option');
                 noneOpt.value = '';
@@ -987,21 +1323,26 @@ async function loadDriveFolders() {
                 list.forEach(f => {
                     const opt = document.createElement('option');
                     opt.value = f.google_id;
-                    opt.textContent = `\uD83D\uDCC2 ${f.name}`;
+                    opt.textContent = `📂 ${f.name}`;
                     select.appendChild(opt);
+                    console.log(`✅ [loadDriveFolders] Added ${selectName} subfolder:`, f.name);
                 });
             } else {
                 const opt = document.createElement('option');
                 opt.value = '';
                 opt.textContent = 'No se encontraron subcarpetas';
                 select.appendChild(opt);
+                console.log(`📝 [loadDriveFolders] No subfolders found for ${selectName}`);
             }
         };
 
-        populateSubSelect(transcriptionSelect);
-        populateSubSelect(audioSelect);
+        populateSubSelect(transcriptionSelect, 'transcription');
+        populateSubSelect(audioSelect, 'audio');
+
+        console.log('✅ [loadDriveFolders] Successfully loaded drive folders');
+
     } catch (e) {
-        console.error('Error syncing subfolders', e);
+        console.error('❌ [loadDriveFolders] Error syncing subfolders:', e);
         showNotification('No se pudo conectar con el servidor', 'error');
     }
 }
@@ -1417,6 +1758,15 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
 function showCompletion({ drivePath, audioDuration, speakerCount, tasks }) {
     showStep(8);
 
+    // Limpiar el estado de descarte cuando se completa exitosamente
+    audioDiscarded = false;
+    try {
+        sessionStorage.removeItem('audioDiscarded');
+        console.log('✅ [showCompletion] Estado de descarte limpiado - procesamiento completado exitosamente');
+    } catch (e) {
+        console.warn('No se pudo limpiar el estado de descarte:', e);
+    }
+
     const pathEl = document.getElementById('completion-drive-path');
     if (pathEl) pathEl.textContent = drivePath || '';
 
@@ -1448,6 +1798,8 @@ function goBackToAnalysis() {
 
 function cancelProcess() {
     if (confirm('¿Estás seguro de que quieres cancelar? Se perderá todo el progreso.')) {
+        audioDiscarded = true; // Marcar que el audio fue descartado
+        discardAudio(); // Limpiar audio y storage
         window.location.href = '/new-meeting';
     }
 }
@@ -1600,18 +1952,40 @@ document.addEventListener('click', e => {
 });
 
 document.addEventListener('DOMContentLoaded', async function() {
+    // Verificar inmediatamente si el audio fue descartado
+    if (audioDiscarded) {
+        console.log('🚫 [DOMContentLoaded] Audio fue descartado, redirigiendo a nueva reunión...');
+        showNotification('El audio fue descartado. Redirigiendo...', 'warning');
+        setTimeout(() => {
+            window.location.href = '/new-meeting';
+        }, 2000);
+        return;
+    }
+
+    // Debug inicial
+    console.log('🚀 [audio-processing] Iniciando aplicación...');
+    console.log('🔍 [audio-processing] Variables globales:', {
+        userRole: window.userRole || document.body.dataset.userRole,
+        organizationId: window.currentOrganizationId || document.body.dataset.organizationId,
+        bodyDatasets: Object.keys(document.body.dataset),
+        windowVars: Object.keys(window).filter(k => k.includes('user') || k.includes('org'))
+    });
+
     createParticles();
     await loadAvailableAnalyzers();
 
     const driveSelect = document.getElementById('drive-select');
+    console.log('🔍 [audio-processing] Drive select element found:', !!driveSelect);
+
     if (driveSelect) {
-        const saved = sessionStorage.getItem('selectedDrive');
-        if (saved) driveSelect.value = saved;
         driveSelect.addEventListener('change', () => {
+            console.log('🔄 [audio-processing] Drive selection changed to:', driveSelect.value);
             sessionStorage.setItem('selectedDrive', driveSelect.value);
             loadDriveFolders();
         });
     }
+
+    console.log('🔍 [audio-processing] About to call loadDriveFolders...');
     await loadDriveFolders();
 
     audioPlayer = document.getElementById('recorded-audio');
@@ -1650,9 +2024,13 @@ document.addEventListener('DOMContentLoaded', async function() {
                         // Limpiar datos temporales
                         localStorage.removeItem('pendingAudioData');
 
-                        // Iniciar procesamiento después de 1s
+                        // Iniciar procesamiento después de 1s solo si no fue descartado
                         setTimeout(() => {
-                            startAudioProcessing();
+                            if (!audioDiscarded) {
+                                startAudioProcessing();
+                            } else {
+                                console.log('🚫 [PendingAudio] Audio fue descartado, no se iniciará el procesamiento automático');
+                            }
                         }, 1000);
                         return;
                     } else {
@@ -1725,9 +2103,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Iniciar automáticamente el procesamiento de audio
+    // Iniciar automáticamente el procesamiento de audio solo si no fue descartado
     setTimeout(() => {
-        startAudioProcessing();
+        if (!audioDiscarded) {
+            startAudioProcessing();
+        } else {
+            console.log('🚫 [DOMContentLoaded] Audio fue descartado, no se iniciará el procesamiento automático');
+        }
     }, 1000);
 });
 
@@ -1773,5 +2155,6 @@ window.openGlobalSpeakerModal = openGlobalSpeakerModal;
 window.closeGlobalSpeakerModal = closeGlobalSpeakerModal;
 window.confirmGlobalSpeakerChange = confirmGlobalSpeakerChange;
 window.seekAudio = seekAudio;
+window.clearDiscardState = clearDiscardState; // Función para limpiar estado de descarte
 // Hacer accesible la transcripción para otros scripts o para depuración
 window.transcriptionData = transcriptionData;
