@@ -91,7 +91,7 @@
                         <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
                             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                                 <span style="font-size: 1.2rem;">📁</span>
-                                <div style="flex: 1; min-width: 0;">
+                                <div id="main-folder-name" data-name="{{ $folder->name ?? '' }}" data-id="{{ $folder->google_id ?? '' }}" style="flex: 1; min-width: 0;">
                                     <div style="color: #ffffff; font-weight: 600; word-break: break-all;">
                                         {{ $folder->name }}
                                     </div>
