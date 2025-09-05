@@ -107,20 +107,31 @@ class ProcessChunkedTranscription implements ShouldQueue
 
         $audioUrl = $uploadResponse->json('upload_url');
 
+        $supportsExtras = $language === 'en';
+
+        $payload = [
+            'audio_url' => $audioUrl,
+            'language_code' => $language,
+            'speaker_labels' => true,
+        ];
+
+        if ($supportsExtras) {
+            $payload['auto_chapters'] = true;
+            $payload['summarization'] = true;
+            $payload['summary_model'] = 'informative';
+            $payload['summary_type'] = 'bullets';
+        } else {
+            Log::info('AssemblyAI extras disabled due to unsupported language', [
+                'language' => $language,
+            ]);
+        }
+
         $transcriptResponse = Http::withHeaders([
             'authorization' => $apiKey,
             'content-type' => 'application/json',
         ])
             ->timeout(60)
-            ->post('https://api.assemblyai.com/v2/transcript', [
-                'audio_url' => $audioUrl,
-                'language_code' => $language,
-                'speaker_labels' => true,
-                'auto_chapters' => true,
-                'summarization' => true,
-                'summary_model' => 'informative',
-                'summary_type' => 'bullets',
-            ]);
+            ->post('https://api.assemblyai.com/v2/transcript', $payload);
 
         if (! $transcriptResponse->successful()) {
             throw new \Exception('AssemblyAI transcript creation failed: ' . $transcriptResponse->body());
