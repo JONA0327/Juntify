@@ -189,7 +189,9 @@ function setMainFolder() {
   btn.disabled = true;
   axios.post('/drive/set-main-folder', { id: mainFolderId })
     .then(() => {
-      mainFolderName.textContent  = mainFolderId;
+      if (mainFolderName) {
+        mainFolderName.textContent = mainFolderId;
+      }
       subfolderCard.style.display = 'block';
       alert('Carpeta principal establecida: ' + mainFolderId);
       input.dataset.id = mainFolderId;
