@@ -87,6 +87,7 @@ async function clearPreviousAudioData() {
         sessionStorage.removeItem('recordingSegments');
         sessionStorage.removeItem('recordingMetadata');
         sessionStorage.removeItem('pendingAudioBlob');
+        sessionStorage.removeItem('audioDiscarded');
 
         // Limpiar localStorage de audios pendientes
         localStorage.removeItem('pendingAudioData');
