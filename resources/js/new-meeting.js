@@ -608,7 +608,7 @@ function updateRecordingUI(recording) {
         timerCounter.classList.remove('recording');
         timerLabel.textContent = 'Listo para grabar';
         timerLabel.classList.remove('recording');
-        timerCounter.textContent = '00:00';
+        timerCounter.textContent = '00:00:00';
         visualizer.classList.remove('active');
         if (actions) actions.classList.remove('show');
     }
@@ -645,10 +645,11 @@ function updateTimer() {
         limitWarningShown = true;
     }
 
-    const minutes = Math.floor(elapsed / 60000);
+    const hours = Math.floor(elapsed / 3600000);
+    const minutes = Math.floor((elapsed % 3600000) / 60000);
     const seconds = Math.floor((elapsed % 60000) / 1000);
 
-    const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     document.getElementById('timer-counter').textContent = timeString;
 }
 
@@ -1353,7 +1354,7 @@ function updateMeetingRecordingUI(recording) {
         timerCounter.classList.remove('recording');
         timerLabel.textContent = 'Listo para grabar';
         timerLabel.classList.remove('recording');
-        timerCounter.textContent = '00:00';
+        timerCounter.textContent = '00:00:00';
     }
 }
 
@@ -1373,10 +1374,11 @@ function updateMeetingTimer() {
         limitWarningShown = true;
     }
 
-    const minutes = Math.floor(elapsed / 60000);
+    const hours = Math.floor(elapsed / 3600000);
+    const minutes = Math.floor((elapsed % 3600000) / 60000);
     const seconds = Math.floor((elapsed % 60000) / 1000);
 
-    const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     document.getElementById('meeting-timer-counter').textContent = timeString;
 }
 
