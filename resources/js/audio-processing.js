@@ -45,7 +45,7 @@ async function discardAudio() {
 }
 
 window.addEventListener('beforeunload', () => {
-    discardAudio();
+    if (!processingFinished) discardAudio();
 });
 
 // ===== VARIABLES GLOBALES =====
@@ -55,6 +55,7 @@ let availableAnalyzers = [];
 let audioData = null;
 let audioSegments = [];
 let audioDiscarded = false; // Variable para controlar si el audio fue descartado
+let processingFinished = false; // Flag para indicar si el procesamiento finalizó exitosamente
 
 // Verificar si el audio fue descartado previamente
 try {
@@ -1756,6 +1757,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
 // ===== PASO 8: COMPLETADO =====
 
 function showCompletion({ drivePath, audioDuration, speakerCount, tasks }) {
+    processingFinished = true;
     showStep(8);
 
     // Limpiar el estado de descarte cuando se completa exitosamente
