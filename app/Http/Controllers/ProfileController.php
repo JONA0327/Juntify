@@ -27,11 +27,20 @@ class ProfileController extends Controller
         $subfolders     = collect();
         $folderMessage  = null;
 
+        $folder = null;
+        if ($token && $token->recordings_folder_id) {
+            $folder = Folder::where('google_token_id', $token->id)
+                           ->where('google_id', $token->recordings_folder_id)
+                           ->first();
+            if ($folder) {
+                $subfolders = Subfolder::where('folder_id', $folder->id)->get();
+            }
+        }
+
         if (!$token || !$token->access_token) {
             $driveConnected    = false;
             $calendarConnected = false;
-            $folder           = null;
-            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync'));
+            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage'));
         }
 
         $client = $drive->getClient();
@@ -66,7 +75,6 @@ class ProfileController extends Controller
             $calendarConnected = false;
         }
 
-        $folder = null;
         if ($token->recordings_folder_id) {
             try {
                 $file       = $drive->getDrive()->files->get(
@@ -88,8 +96,7 @@ class ProfileController extends Controller
 
                 $subfolders = Subfolder::where('folder_id', $folder->id)->get();
             } catch (\Throwable $e) {
-                $token->update(['recordings_folder_id' => null]);
-                $folderMessage = 'No se pudo acceder a la carpeta principal. Configúrala nuevamente.';
+                $folderMessage = 'No se pudo acceder a la carpeta principal. Intenta reconectarte.';
             }
         }
 
