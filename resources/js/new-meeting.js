@@ -243,6 +243,7 @@ async function getAudioConstraints() {
 // Función para iniciar grabación
 async function startRecording() {
     try {
+        discardRequested = false;
         // LIMPIAR DATOS ANTERIORES ANTES DE INICIAR NUEVA GRABACIÓN
         await clearPreviousAudioData();
 
@@ -291,6 +292,11 @@ async function startRecording() {
         };
 
         mediaRecorder.onstop = () => {
+            if (discardRequested) {
+                discardRequested = false;
+                recordingStream = null;
+                return;
+            }
             finalizeRecording();
         };
 
@@ -349,6 +355,12 @@ function discardRecording() {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
         mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
+    recordingStream = null;
+    try {
+        sessionStorage.setItem('audioDiscarded', 'true');
+    } catch (e) {
+        console.warn('No se pudo guardar estado de descarte:', e);
     }
     if (audioContext && audioContext.state !== 'closed') {
         audioContext.close();
