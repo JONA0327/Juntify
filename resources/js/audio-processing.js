@@ -451,7 +451,7 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
 
         const finalizeResponse = await axios.post('/transcription/chunked/finalize', {
             upload_id: upload_id
-        }, { timeout: 60000 }); // 1 minuto para finalización
+        }, { timeout: 300000 }); // Aumentado a 5 minutos para finalización
 
         console.log("✅ [startChunkedTranscription] Transcripción iniciada:", finalizeResponse.data);
 
