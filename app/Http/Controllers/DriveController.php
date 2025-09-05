@@ -266,19 +266,35 @@ class DriveController extends Controller
 
             $files = $response->getFiles();
 
-            // 4. Crear o recuperar la carpeta raíz en BD
-            $rootFolder = Folder::firstOrCreate(
+            // 4. Obtener nombre real de la carpeta raíz
+            $rootName = null;
+            try {
+                $rootData = $drive->files->get(
+                    $token->recordings_folder_id,
+                    ['fields' => 'name']
+                );
+                $rootName = $rootData->getName();
+            } catch (\Throwable $e) {
+                Log::warning('syncDriveSubfolders root name fetch failed', [
+                    'username'  => $username,
+                    'folder_id' => $token->recordings_folder_id,
+                    'error'     => $e->getMessage(),
+                ]);
+            }
+
+            // 5. Crear o actualizar la carpeta raíz en BD con el nombre obtenido
+            $rootFolder = Folder::updateOrCreate(
                 [
                     'google_token_id' => $token->id,
                     'google_id'       => $token->recordings_folder_id,
                 ],
                 [
-                    'name'      => "recordings_{$username}",
+                    'name'      => $rootName ?? "recordings_{$username}",
                     'parent_id' => null,
                 ]
             );
 
-            // 5. Sincronizar subcarpetas en BD
+            // 6. Sincronizar subcarpetas en BD
             $subfolders = [];
             foreach ($files as $file) {
                 $subfolders[] = Subfolder::updateOrCreate(
@@ -292,7 +308,7 @@ class DriveController extends Controller
                 );
             }
 
-            // 6. Devolver JSON con el resultado
+            // 7. Devolver JSON con el resultado
             return response()->json([
                 'root_folder' => $rootFolder,
                 'subfolders'  => $subfolders,
