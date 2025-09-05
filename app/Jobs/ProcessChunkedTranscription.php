@@ -33,10 +33,14 @@ class ProcessChunkedTranscription implements ShouldQueue
         $uploadDir = storage_path("app/temp-uploads/{$this->uploadId}");
         $metadataPath = "{$uploadDir}/metadata.json";
 
+        $finalFilePath = null;
+
         try {
             $metadata = json_decode(file_get_contents($metadataPath), true);
 
-            $finalFilePath = "{$uploadDir}/final_audio";
+            $extension = pathinfo($metadata['filename'] ?? '', PATHINFO_EXTENSION);
+            $extension = $extension ? ".{$extension}" : '';
+            $finalFilePath = "{$uploadDir}/final_audio{$extension}";
             $finalFile = fopen($finalFilePath, 'wb');
 
             for ($i = 0; $i < $metadata['chunks_expected']; $i++) {
@@ -72,7 +76,7 @@ class ProcessChunkedTranscription implements ShouldQueue
                 'error' => $e->getMessage(),
             ]);
         } finally {
-            $this->cleanupTempFiles($uploadDir);
+            $this->cleanupTempFiles($uploadDir, $finalFilePath);
         }
     }
 
@@ -86,8 +90,8 @@ class ProcessChunkedTranscription implements ShouldQueue
         $timeout = (int) config('services.assemblyai.timeout', 300);
         $connectTimeout = (int) config('services.assemblyai.connect_timeout', 60);
 
-        $filePath = $this->convertWebmToMp3($filePath);
-        $audioData = file_get_contents($filePath);
+        $processedPath = $this->convertWebmToMp3($filePath);
+        $audioData = file_get_contents($processedPath);
 
         $uploadResponse = Http::withHeaders([
             'authorization' => $apiKey,
@@ -141,9 +145,19 @@ class ProcessChunkedTranscription implements ShouldQueue
         return $transcriptResponse->json('id');
     }
 
-    private function cleanupTempFiles(string $uploadDir): void
+    private function cleanupTempFiles(string $uploadDir, ?string $finalFilePath = null): void
     {
         try {
+            if ($finalFilePath) {
+                if (file_exists($finalFilePath)) {
+                    unlink($finalFilePath);
+                }
+                $convertedPath = $finalFilePath . '.mp3';
+                if (file_exists($convertedPath)) {
+                    unlink($convertedPath);
+                }
+            }
+
             if (is_dir($uploadDir)) {
                 $files = glob($uploadDir . '/*');
                 foreach ($files as $file) {
