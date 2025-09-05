@@ -86,6 +86,7 @@ class ProcessChunkedTranscription implements ShouldQueue
         $timeout = (int) config('services.assemblyai.timeout', 300);
         $connectTimeout = (int) config('services.assemblyai.connect_timeout', 60);
 
+        $filePath = $this->convertWebmToMp3($filePath);
         $audioData = file_get_contents($filePath);
 
         $uploadResponse = Http::withHeaders([
@@ -158,6 +159,44 @@ class ProcessChunkedTranscription implements ShouldQueue
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function convertWebmToMp3(string $filePath): string
+    {
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $mime = @mime_content_type($filePath);
+        if ($extension !== 'webm' && (! $mime || stripos($mime, 'webm') === false)) {
+            return $filePath;
+        }
+
+        $tempPath = $filePath . '.mp3';
+        try {
+            $cmd = sprintf(
+                'ffmpeg -y -i %s -vn -acodec libmp3lame -q:a 2 %s 2>&1',
+                escapeshellarg($filePath),
+                escapeshellarg($tempPath)
+            );
+            exec($cmd, $output, $returnVar);
+            if ($returnVar === 0 && file_exists($tempPath)) {
+                Log::info('Converted WEBM to MP3', [
+                    'source' => $filePath,
+                    'target' => $tempPath,
+                ]);
+                return $tempPath;
+            }
+            Log::warning('WEBM to MP3 conversion failed', [
+                'source' => $filePath,
+                'exit_code' => $returnVar,
+                'output' => $output ?? [],
+            ]);
+        } catch (Throwable $e) {
+            Log::warning('WEBM to MP3 conversion error', [
+                'source' => $filePath,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $filePath;
     }
 }
 
