@@ -8,6 +8,8 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
+use App\Jobs\ProcessChunkedTranscription;
 
 class TranscriptionController extends Controller
 {
@@ -206,6 +208,26 @@ class TranscriptionController extends Controller
 
     public function show(string $id)
     {
+        $cacheKey = "chunked_transcription:{$id}";
+        if (Cache::has($cacheKey)) {
+            $data = Cache::get($cacheKey);
+
+            if (isset($data['error'])) {
+                return response()->json([
+                    'status' => 'error',
+                    'error' => $data['error'],
+                ]);
+            }
+
+            if (!isset($data['transcription_id'])) {
+                return response()->json([
+                    'status' => $data['status'] ?? 'queued',
+                ]);
+            }
+
+            $id = $data['transcription_id'];
+        }
+
         $apiKey = config('services.assemblyai.api_key');
 
         $response = Http::withHeaders([
@@ -214,7 +236,11 @@ class TranscriptionController extends Controller
             ->get("https://api.assemblyai.com/v2/transcript/{$id}");
 
         if (!$response->successful()) {
-            return response()->json(['error' => 'Status check failed', 'details' => $response->json()], 500);
+            return response()->json([
+                'status' => 'error',
+                'error' => 'Status check failed',
+                'details' => $response->json(),
+            ], 500);
         }
 
         return $response->json();
@@ -349,54 +375,16 @@ class TranscriptionController extends Controller
             ], 400);
         }
 
-        try {
-            // Combinar todos los chunks en un solo archivo
-            $finalFilePath = "{$uploadDir}/final_audio";
-            $finalFile = fopen($finalFilePath, 'wb');
+        $trackingId = (string) Str::uuid();
+        Cache::put("chunked_transcription:{$trackingId}", [
+            'status' => 'queued',
+        ]);
 
-            for ($i = 0; $i < $metadata['chunks_expected']; $i++) {
-                $chunkPath = "{$uploadDir}/chunk_{$i}";
-                if (!file_exists($chunkPath)) {
-                    fclose($finalFile);
-                    throw new \Exception("Missing chunk {$i}");
-                }
+        ProcessChunkedTranscription::dispatch($uploadId, $trackingId);
 
-                $chunkData = file_get_contents($chunkPath);
-                fwrite($finalFile, $chunkData);
-            }
-
-            fclose($finalFile);
-
-            Log::info('Chunks combined successfully', [
-                'upload_id' => $uploadId,
-                'final_size' => filesize($finalFilePath),
-                'expected_size' => $metadata['total_size']
-            ]);
-
-            // Procesar con AssemblyAI
-            $transcriptionId = $this->processLargeAudioFile($finalFilePath, $metadata['language']);
-
-            // Limpiar archivos temporales
-            $this->cleanupTempFiles($uploadDir);
-
-            return response()->json(['id' => $transcriptionId]);
-
-        } catch (\Throwable $e) {
-            Log::error('Failed to finalize chunked upload', [
-                'upload_id' => $uploadId,
-                'error' => $e->getMessage()
-            ]);
-
-            // Limpiar archivos temporales en caso de error
-            $this->cleanupTempFiles($uploadDir);
-
-            $failedPath = $this->saveFailedAudio($finalFilePath ?? null);
-            return response()->json([
-                'error' => 'Failed to process combined audio',
-                'details' => $e->getMessage(),
-                'failed_audio' => $failedPath
-            ], 500);
-        }
+        return response()->json([
+            'tracking_id' => $trackingId,
+        ], 202);
     }
 
     private function processLargeAudioFile($filePath, $language)
