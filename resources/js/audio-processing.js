@@ -459,7 +459,7 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
         progressPercent.textContent = '10%';
         progressText.textContent = 'En cola...';
 
-        pollTranscription(finalizeResponse.data.id);
+        pollTranscription(finalizeResponse.data.tracking_id);
 
     } catch (e) {
         await handleTranscriptionError(e);
