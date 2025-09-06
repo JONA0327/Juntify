@@ -283,8 +283,27 @@ async function startRecording() {
 
         let bitsPerSecond = 128000; // calidad media por defecto
 
+        // Función para obtener el mejor formato de audio disponible (solo MP4/MP3)
+        function getOptimalAudioFormat() {
+            const formats = [
+                'audio/mp4',                // MP4 audio - PRIORIDAD MÁXIMA para reuniones
+                'audio/mpeg',               // MP3 - Respaldo estable
+            ];
+
+            for (const format of formats) {
+                if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(format)) {
+                    console.log(`🎵 [Recording] Formato seleccionado: ${format}`);
+                    return format;
+                }
+            }
+
+            console.error('🎵 [Recording] ERROR: Navegador no compatible con MP4/MP3');
+            throw new Error('Este navegador no soporta los formatos de audio requeridos (MP4/MP3). Por favor, usa un navegador más reciente.');
+        }
+
+        const optimalFormat = getOptimalAudioFormat();
         mediaRecorder = new MediaRecorder(recordingStream, {
-            mimeType: 'audio/webm;codecs=opus',
+            mimeType: optimalFormat,
             audioBitsPerSecond: bitsPerSecond
         });
 
@@ -982,10 +1001,19 @@ function setupFileUpload() {
 
 // Manejar la selección de archivo
 function handleFileSelection(file) {
-    // Validar tipo de archivo
-    const validTypes = ['audio/mp3', 'audio/wav', 'audio/m4a', 'audio/flac', 'audio/ogg', 'audio/aac', 'audio/mpeg', 'audio/webm'];
-    if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|flac|ogg|aac|webm)$/i)) {
-        showError('Tipo de archivo no soportado. Por favor selecciona un archivo de audio válido.');
+    // Validar que NO sea WebM
+    const isWebM = file.type.includes('webm') || file.name.toLowerCase().includes('.webm');
+    if (isWebM) {
+        showError('❌ Archivos WebM no están permitidos. Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3) para asegurar la calidad de transcripción.');
+        return;
+    }
+
+    // Solo permitir formatos MP4/MP3
+    const validTypes = ['audio/mp3', 'audio/m4a', 'audio/mpeg', 'audio/mp4'];
+    const validExtensions = /\.(mp3|m4a)$/i;
+
+    if (!validTypes.includes(file.type) && !file.name.match(validExtensions)) {
+        showError('❌ Tipo de archivo no soportado. Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3).');
         return;
     }
 

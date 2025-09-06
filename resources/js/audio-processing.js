@@ -48,6 +48,73 @@ window.addEventListener('beforeunload', () => {
     if (!processingFinished) discardAudio();
 });
 
+// Función para detectar y manejar archivos de audio largos (solo MP4/MP3)
+function detectLargeAudioFile(audioBlob) {
+    if (!audioBlob) return false;
+
+    const isMP4 = audioBlob.type.includes('mp4') ||
+                  (audioBlob.name && audioBlob.name.toLowerCase().includes('.m4a'));
+
+    const isMP3 = audioBlob.type.includes('mpeg') ||
+                  (audioBlob.name && audioBlob.name.toLowerCase().includes('.mp3'));
+
+    const isLargeAudio = isMP4 || isMP3;
+
+    if (isLargeAudio) {
+        const sizeMB = audioBlob.size / (1024 * 1024);
+        const formatName = isMP3 ? 'MP3' : isMP4 ? 'MP4' : 'Audio';
+
+        console.log(`� [detectLargeAudioFile] ${formatName} file detected: ${sizeMB.toFixed(2)} MB`);
+
+        if (sizeMB > 50) { // Archivos grandes (>50MB)
+            showNotification(
+                `Audio ${formatName} de ${sizeMB.toFixed(1)}MB detectado. Formato óptimo para reuniones largas.`,
+                'success'
+            );
+        }
+
+        return { isLargeAudio: true, format: formatName, isMP4, isMP3 };
+    }
+
+    return { isLargeAudio: false };
+}
+
+// Función para obtener el formato de audio preferido (solo MP4/MP3)
+function getPreferredAudioFormat() {
+    // Solo formatos estables para reuniones - NO WebM
+    const formats = [
+        'audio/mp4',            // MP4 audio - PRIORIDAD MÁXIMA
+        'audio/mpeg',           // MP3 - Respaldo estable
+    ];
+
+    for (const format of formats) {
+        if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(format)) {
+            console.log(`🎵 [getPreferredAudioFormat] Formato seleccionado: ${format}`);
+            return format;
+        }
+    }
+
+    console.error('🎵 [getPreferredAudioFormat] ERROR: Ningún formato soportado. Este navegador no es compatible.');
+    throw new Error('Navegador no compatible: No soporta audio/mp4 ni audio/mpeg');
+}
+
+// Función para obtener la extensión de archivo basada en el MIME type (solo MP4/MP3)
+function getFileExtensionForMimeType(mimeType) {
+    const extensions = {
+        'audio/mp4': 'm4a',
+        'audio/mpeg': 'mp3'
+    };
+
+    for (const [mime, ext] of Object.entries(extensions)) {
+        if (mimeType.includes(mime)) {
+            return ext;
+        }
+    }
+
+    // Solo MP4 como fallback - NO más WebM
+    return 'm4a';
+}
+
 // ===== VARIABLES GLOBALES =====
 let currentStep = 1;
 let selectedAnalyzer = 'general';
@@ -280,7 +347,7 @@ async function mergeAudioSegments(segments) {
         progressPercent.textContent = Math.round(percent) + '%';
     }
 
-    return new Blob(buffers, { type: segments[0]?.type || 'audio/webm;codecs=opus' });
+    return new Blob(buffers, { type: segments[0]?.type || getPreferredAudioFormat() });
 }
 
 // ===== PASO 2: TRANSCRIPCIÓN =====
@@ -292,6 +359,9 @@ async function startTranscription() {
         showNotification('La transcripción fue cancelada porque el audio fue descartado', 'warning');
         return;
     }
+
+    // Detectar archivos de audio y aplicar optimizaciones
+    detectLargeAudioFile(audioData);
 
     showStep(2);
 
@@ -334,7 +404,8 @@ async function startTranscription() {
 
 async function startStandardTranscription(audioBlob, lang, progressBar, progressText, progressPercent) {
     const formData = new FormData();
-    formData.append('audio', audioBlob, 'recording.webm');
+    const fileName = `recording.${getFileExtensionForMimeType(audioBlob.type)}`;
+    formData.append('audio', audioBlob, fileName);
     formData.append('language', lang);
 
     try {
@@ -376,7 +447,7 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
         console.log('🔧 [startChunkedTranscription] Initializing chunked upload');
 
         const initResponse = await axios.post('/transcription/chunked/init', {
-            filename: 'recording.webm',
+            filename: `recording.${getFileExtensionForMimeType(audioBlob.type)}`,
             size: audioBlob.size,
             language: lang,
             chunks: Math.ceil(audioBlob.size / CHUNK_SIZE)
@@ -688,18 +759,96 @@ function updateSegmentButtons(activeIndex) {
     });
 }
 
-function playSegmentAudio(segmentIndex) {
-    const segment = transcriptionData[segmentIndex];
-    if (!segment) return;
-
+// Función helper para inicializar el audio player de manera robusta
+function initializeAudioPlayer() {
     if (!audioPlayer) {
         audioPlayer = document.getElementById('recorded-audio');
     }
-    if (!audioPlayer.src) {
-        const src = typeof audioData === 'string' ? audioData : URL.createObjectURL(audioData);
-        audioPlayer.src = src;
+
+    if (!audioPlayer) {
+        console.error('🎵 [initializeAudioPlayer] Audio player element not found');
+        return false;
     }
 
+    // Establecer fuente si no la tiene
+    if (!audioPlayer.src && audioData) {
+        try {
+            const src = typeof audioData === 'string' ? audioData : URL.createObjectURL(audioData);
+            audioPlayer.src = src;
+            console.log('🎵 [initializeAudioPlayer] Audio source set successfully');
+        } catch (error) {
+            console.error('🎵 [initializeAudioPlayer] Error setting audio source:', error);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// Función mejorada para esperar a que el audio esté listo
+function waitForAudioReady(player, timeoutMs = 10000) {
+    return new Promise((resolve, reject) => {
+        if (player.readyState >= 2) {
+            resolve();
+            return;
+        }
+
+        const onCanPlay = () => {
+            player.removeEventListener('canplay', onCanPlay);
+            player.removeEventListener('canplaythrough', onCanPlayThrough);
+            player.removeEventListener('error', onError);
+            clearTimeout(timeoutId);
+            resolve();
+        };
+
+        const onCanPlayThrough = () => {
+            player.removeEventListener('canplay', onCanPlay);
+            player.removeEventListener('canplaythrough', onCanPlayThrough);
+            player.removeEventListener('error', onError);
+            clearTimeout(timeoutId);
+            resolve();
+        };
+
+        const onError = (error) => {
+            player.removeEventListener('canplay', onCanPlay);
+            player.removeEventListener('canplaythrough', onCanPlayThrough);
+            player.removeEventListener('error', onError);
+            clearTimeout(timeoutId);
+            reject(new Error('Error cargando el audio: ' + (error.message || 'Unknown error')));
+        };
+
+        player.addEventListener('canplay', onCanPlay);
+        player.addEventListener('canplaythrough', onCanPlayThrough);
+        player.addEventListener('error', onError);
+
+        const timeoutId = setTimeout(() => {
+            player.removeEventListener('canplay', onCanPlay);
+            player.removeEventListener('canplaythrough', onCanPlayThrough);
+            player.removeEventListener('error', onError);
+            reject(new Error('Timeout: El audio está tardando mucho en cargar'));
+        }, timeoutMs);
+
+        // Intentar cargar el audio si no lo está haciendo
+        if (player.networkState === HTMLMediaElement.NETWORK_EMPTY) {
+            player.load();
+        }
+    });
+}
+
+function playSegmentAudio(segmentIndex) {
+    const segment = transcriptionData[segmentIndex];
+    if (!segment) {
+        console.error('🎵 [playSegmentAudio] Segment not found:', segmentIndex);
+        return;
+    }
+
+    // Inicializar el audio player
+    if (!initializeAudioPlayer()) {
+        alert('Error inicializando el reproductor de audio. Intenta refrescar la página.');
+        return;
+    }
+
+    // Si ya está reproduciendo el mismo segmento, pausar
     if (currentSegmentIndex === segmentIndex && !audioPlayer.paused) {
         audioPlayer.pause();
         if (segmentEndHandler) {
@@ -711,46 +860,80 @@ function playSegmentAudio(segmentIndex) {
         return;
     }
 
+    // Limpiar handler anterior
     if (segmentEndHandler) {
         audioPlayer.removeEventListener('timeupdate', segmentEndHandler);
         segmentEndHandler = null;
     }
 
+    // Pausar si está reproduciendo
     if (!audioPlayer.paused) {
         audioPlayer.pause();
     }
-    audioPlayer.currentTime = segment.start;
-    const stopTime = segment.end;
 
-    segmentEndHandler = () => {
-        if (audioPlayer.currentTime >= stopTime) {
-            audioPlayer.pause();
-            audioPlayer.removeEventListener('timeupdate', segmentEndHandler);
-            segmentEndHandler = null;
+    // Función asíncrona para manejar la reproducción
+    const startPlayback = async () => {
+        try {
+            console.log(`🎵 [playSegmentAudio] Starting segment ${segmentIndex}: ${segment.start}s - ${segment.end}s`);
+
+            // Esperar a que el audio esté listo
+            await waitForAudioReady(audioPlayer, 15000); // 15 segundos de timeout
+
+            // Configurar el tiempo de inicio
+            audioPlayer.currentTime = segment.start;
+            const stopTime = segment.end;
+
+            // Crear handler para detener al final del segmento
+            segmentEndHandler = () => {
+                if (audioPlayer.currentTime >= stopTime) {
+                    audioPlayer.pause();
+                    audioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+                    segmentEndHandler = null;
+                    updateSegmentButtons(null);
+                    currentSegmentIndex = null;
+                    console.log(`🎵 [playSegmentAudio] Segment ${segmentIndex} finished`);
+                }
+            };
+
+            audioPlayer.addEventListener('timeupdate', segmentEndHandler);
+
+            // Intentar reproducir
+            await audioPlayer.play();
+
+            // Actualizar UI
+            updateSegmentButtons(segmentIndex);
+            currentSegmentIndex = segmentIndex;
+
+            console.log(`🎵 [playSegmentAudio] Successfully playing segment ${segmentIndex}`);
+
+        } catch (error) {
+            console.error('🎵 [playSegmentAudio] Error during playback:', error);
+
+            // Limpiar handlers
+            if (segmentEndHandler) {
+                audioPlayer.removeEventListener('timeupdate', segmentEndHandler);
+                segmentEndHandler = null;
+            }
             updateSegmentButtons(null);
             currentSegmentIndex = null;
+
+            // Mostrar mensaje de error más específico
+            if (error.message.includes('Timeout') || error.message.includes('tardando mucho')) {
+                alert('⏳ El audio está tardando en cargar. Esto puede deberse a:\n• Archivo muy grande\n• Conexión lenta\n• Problema con el formato de audio\n\nIntenta refrescar la página o usa un archivo más pequeño.');
+            } else if (error.message.includes('Error cargando')) {
+                alert('❌ Error cargando el archivo de audio.\n\nPosibles soluciones:\n• Refrescar la página\n• Verificar que el archivo no esté dañado\n• Intentar con un formato diferente (MP3/MP4)');
+            } else if (error.name === 'NotSupportedError') {
+                alert('❌ Formato de audio no soportado por tu navegador.\n\nIntenta:\n• Usar Chrome, Firefox o Safari más recientes\n• Convertir el archivo a MP3 o MP4');
+            } else if (error.name === 'NotAllowedError') {
+                alert('🔒 Reproducción bloqueada por el navegador.\n\nHaz clic en el botón de play del audio principal primero.');
+            } else {
+                alert('❌ No se pudo reproducir este segmento.\n\nError: ' + error.message);
+            }
         }
     };
 
-    audioPlayer.addEventListener('timeupdate', segmentEndHandler);
-    if (audioPlayer.readyState < 2) {
-        alert('El audio no está listo para reproducirse.');
-        audioPlayer.removeEventListener('timeupdate', segmentEndHandler);
-        segmentEndHandler = null;
-        updateSegmentButtons(null);
-        currentSegmentIndex = null;
-        return;
-    }
-    audioPlayer.play().catch(error => {
-        console.warn('Error reproduciendo segmento de audio:', error);
-        alert('No se pudo reproducir este segmento de audio.');
-        audioPlayer.removeEventListener('timeupdate', segmentEndHandler);
-        segmentEndHandler = null;
-        updateSegmentButtons(null);
-        currentSegmentIndex = null;
-    });
-    currentSegmentIndex = segmentIndex;
-    updateSegmentButtons(segmentIndex);
+    // Ejecutar la reproducción
+    startPlayback();
 }
 
 let selectedSegmentIndex = null;
@@ -1501,7 +1684,8 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
     const analysis = analysisResults;
 
     let audio = audioData;
-    let audioMimeType = 'audio/webm';
+    // Configurar el tipo MIME preferido: MP3 si está disponible, sino WebM como fallback
+    let audioMimeType = getPreferredAudioFormat();
     if (audio && typeof audio !== 'string') {
         audioMimeType = audio.type || audioMimeType;
         try {

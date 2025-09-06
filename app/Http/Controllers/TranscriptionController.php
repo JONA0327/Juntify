@@ -13,17 +13,100 @@ use App\Jobs\ProcessChunkedTranscription;
 
 class TranscriptionController extends Controller
 {
+    /**
+     * Optimiza la configuración de transcripción para formatos MP4/MP3
+     * Solo acepta formatos estables para reuniones
+     */
+    private function getOptimizedConfigForFormat($mimeType, $isMP4, $isMP3, $baseConfig)
+    {
+        // Para archivos MP3, usar configuración estándar con optimizaciones
+        if ($isMP3) {
+            $mp3Config = $baseConfig;
+            $mp3Config['speaker_labels'] = true;    // MP3 maneja bien speaker labels
+            $mp3Config['format_text'] = true;       // MP3 es más eficiente con formato
+            $mp3Config['speed_boost'] = false;      // Sin speed boost para asegurar calidad
+
+            Log::info('Applied MP3 optimized config', [
+                'speaker_labels' => $mp3Config['speaker_labels'],
+                'format_text' => $mp3Config['format_text'],
+                'speed_boost' => $mp3Config['speed_boost'],
+            ]);
+
+            return $mp3Config;
+        }
+
+        // Para archivos MP4, usar configuración optimizada
+        if ($isMP4) {
+            $mp4Config = $baseConfig;
+            $mp4Config['speaker_labels'] = true;    // MP4 maneja excelente speaker labels
+            $mp4Config['format_text'] = true;       // MP4 es muy eficiente con formato
+            $mp4Config['speed_boost'] = false;      // Sin speed boost para máxima calidad
+
+            Log::info('Applied MP4 optimized config', [
+                'speaker_labels' => $mp4Config['speaker_labels'],
+                'format_text' => $mp4Config['format_text'],
+                'speed_boost' => $mp4Config['speed_boost'],
+            ]);
+
+            return $mp4Config;
+        }
+
+        // Para otros formatos, usar configuración estándar
+        return $baseConfig;
+    }
+
     public function store(Request $request)
     {
-        // Aumentar el tiempo límite para archivos grandes
-        set_time_limit(600); // 10 minutos
-
         $request->validate([
             'audio'    => 'required|file|max:102400', // Máximo 100MB
             'language' => 'nullable|in:es,en,fr,de',
         ]);
 
         $file = $request->file('audio');
+
+        // Solo permitir formatos MP4/MP3 - NO WebM
+        $mimeType = $file->getMimeType();
+        $fileName = $file->getClientOriginalName();
+
+        $isWebM = strpos($mimeType, 'webm') !== false ||
+                  strpos($fileName, '.webm') !== false;
+
+        // Rechazar archivos WebM
+        if ($isWebM) {
+            Log::warning('Archivo WebM rechazado', [
+                'tipo' => $mimeType,
+                'nombre' => $fileName,
+                'tamaño' => $file->getSize()
+            ]);
+
+            return response()->json([
+                'error' => 'Formato WebM no permitido',
+                'message' => 'Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3) para asegurar la calidad de transcripción.',
+                'accepted_formats' => ['audio/mp4', 'audio/mpeg']
+            ], 422);
+        }
+
+        $isMP4 = strpos($mimeType, 'mp4') !== false ||
+                 strpos($fileName, '.m4a') !== false;
+
+        $isMP3 = strpos($mimeType, 'mpeg') !== false ||
+                 strpos($fileName, '.mp3') !== false;
+
+        $isLargeAudio = $isMP4 || $isMP3;
+
+        if ($isLargeAudio) {
+            Log::info('Archivo de audio aceptado', [
+                'tipo' => $mimeType,
+                'nombre' => $fileName,
+                'es_mp4' => $isMP4,
+                'es_mp3' => $isMP3,
+                'tamaño' => $file->getSize()
+            ]);
+            set_time_limit(7200); // 2 horas para archivos grandes
+        } else {
+            set_time_limit(600); // 10 minutos para otros formatos
+        }
+
         $filePath = $file->getRealPath();
 
         $language = $request->input('language', 'es');
@@ -31,11 +114,24 @@ class TranscriptionController extends Controller
 
         // Log información del archivo
         Log::info('Processing audio file', [
-            'original_name' => $file->getClientOriginalName(),
+            'original_name' => $fileName,
             'size' => $file->getSize(),
-            'mime_type' => $file->getMimeType(),
+            'mime_type' => $mimeType,
             'language' => $language,
+            'is_webm' => $isWebM,
+            'is_mp3' => $isMP3,
         ]);
+
+        // Log específico para archivos grandes
+        if ($isLargeAudio) {
+            Log::info('Archivo de audio grande detectado - aplicando optimizaciones para archivos largos', [
+                'file_size_mb' => round($file->getSize() / 1024 / 1024, 2),
+                'original_name' => $fileName,
+                'timeout_seconds' => 7200,
+                'formato' => $isMP3 ? 'MP3' : ($isMP4 ? 'MP4' : 'Otro'),
+                'expected_processing_time' => '1+ hours for long files',
+            ]);
+        }
 
         if (empty($apiKey)) {
             $failedPath = $this->saveFailedAudio($filePath);
@@ -58,7 +154,10 @@ class TranscriptionController extends Controller
         Log::info('Audio file loaded', ['size_bytes' => strlen($audioData)]);
 
         try {
-            $timeout = config('services.assemblyai.timeout', 300);
+            // Ajustar timeouts específicamente para archivos de audio grandes
+            $timeout = $isLargeAudio ?
+                config('services.assemblyai.timeout', 3600) : // 1 hora para archivos grandes
+                config('services.assemblyai.timeout', 300);  // 5 minutos para otros
             $connectTimeout = config('services.assemblyai.connect_timeout', 60);
 
             $http = Http::timeout($timeout)->connectTimeout($connectTimeout)
@@ -79,6 +178,8 @@ class TranscriptionController extends Controller
             Log::info('Upload response received', [
                 'status' => $response->status(),
                 'successful' => $response->successful(),
+                'timeout_used' => $timeout,
+                'is_webm' => $isWebM,
             ]);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             $failedPath = $this->saveFailedAudio($filePath);
@@ -123,7 +224,10 @@ class TranscriptionController extends Controller
         Log::info('Upload successful', ['upload_url' => $uploadUrl]);
 
         try {
-            $timeout = config('services.assemblyai.timeout', 300);
+            // Ajustar timeouts específicamente para archivos de audio grandes
+            $timeout = $isLargeAudio ?
+                config('services.assemblyai.timeout', 3600) : // 1 hora para archivos grandes
+                config('services.assemblyai.timeout', 300);  // 5 minutos para otros
             $connectTimeout = config('services.assemblyai.connect_timeout', 60);
 
             $transcriptionHttp = Http::timeout($timeout)->connectTimeout($connectTimeout)
@@ -137,17 +241,25 @@ class TranscriptionController extends Controller
                 $transcriptionHttp = $transcriptionHttp->withOptions(['verify' => config('services.assemblyai.verify_ssl', true)]);
             }
 
-            $transcription = $transcriptionHttp->post('https://api.assemblyai.com/v2/transcript', [
+            $baseConfig = [
                 'audio_url'      => $uploadUrl,
                 'speaker_labels' => true,
                 'punctuate'      => true,
                 'format_text'    => true,
                 'language_code'  => $language,
-            ]);
+            ];
+
+            // Aplicar optimizaciones según el formato de audio
+            $transcriptionConfig = $this->getOptimizedConfigForFormat($mimeType, $isMP4, $isMP3, $baseConfig);
+
+            $transcription = $transcriptionHttp->post('https://api.assemblyai.com/v2/transcript', $transcriptionConfig);
 
             Log::info('Transcription request sent', [
                 'status' => $transcription->status(),
                 'successful' => $transcription->successful(),
+                'timeout_used' => $timeout,
+                'is_webm' => $isWebM,
+                'config_applied' => $isWebM ? 'WebM optimizations' : 'Standard config',
             ]);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             $failedPath = $this->saveFailedAudio($filePath);
@@ -258,6 +370,48 @@ class TranscriptionController extends Controller
 
         $uploadId = Str::uuid();
         $language = $request->input('language', 'es');
+        $filename = $request->input('filename');
+
+        // Rechazar archivos WebM
+        $isWebM = strpos(strtolower($filename), '.webm') !== false;
+        if ($isWebM) {
+            Log::warning('WebM chunked upload rejected', [
+                'filename' => $filename,
+                'size_mb' => round($request->input('size') / 1024 / 1024, 2),
+                'chunks' => $request->input('chunks'),
+            ]);
+
+            return response()->json([
+                'error' => 'Formato WebM no permitido',
+                'message' => 'Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3) para asegurar la calidad de transcripción.',
+                'accepted_formats' => ['audio/mp4', 'audio/mpeg']
+            ], 422);
+        }
+
+        // Validar que sea MP4 o MP3
+        $isMP4 = strpos(strtolower($filename), '.m4a') !== false;
+        $isMP3 = strpos(strtolower($filename), '.mp3') !== false;
+
+        if (!$isMP4 && !$isMP3) {
+            Log::warning('Invalid audio format in chunked upload', [
+                'filename' => $filename,
+                'accepted_formats' => ['mp4', 'mp3']
+            ]);
+
+            return response()->json([
+                'error' => 'Formato de audio no soportado',
+                'message' => 'Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3).',
+                'accepted_formats' => ['audio/mp4', 'audio/mpeg']
+            ], 422);
+        }
+
+        Log::info('Valid audio format detected for chunked upload', [
+            'filename' => $filename,
+            'is_mp4' => $isMP4,
+            'is_mp3' => $isMP3,
+            'size_mb' => round($request->input('size') / 1024 / 1024, 2),
+            'chunks' => $request->input('chunks'),
+        ]);
         $chunks = $request->input('chunks');
 
         // Crear directorio temporal para los chunks
@@ -388,7 +542,7 @@ class TranscriptionController extends Controller
         ], 202);
     }
 
-    private function processLargeAudioFile($filePath, $language)
+    private function processLargeAudioFile($filePath, $language, $mimeType = '', $isMP4 = false, $isMP3 = false)
     {
         $apiKey = config('services.assemblyai.api_key');
 
@@ -396,8 +550,28 @@ class TranscriptionController extends Controller
             throw new \Exception('AssemblyAI API key missing');
         }
 
+        // Si no se pasó explícitamente, detectar formato por extensión de archivo
+        if (!$isMP4 && !$isMP3) {
+            $lowerPath = strtolower($filePath);
+            $isMP4 = strpos($lowerPath, '.m4a') !== false;
+            $isMP3 = strpos($lowerPath, '.mp3') !== false;
+        }
+
+        $isLargeAudio = $isMP4 || $isMP3;
+
+        Log::info('Processing large audio file', [
+            'file_path' => basename($filePath),
+            'mime_type' => $mimeType,
+            'is_mp4' => $isMP4,
+            'is_mp3' => $isMP3,
+            'is_large_audio' => $isLargeAudio,
+            'language' => $language,
+        ]);
+
         // Configuración optimizada para archivos grandes
-        $timeout = (int) config('services.assemblyai.timeout', 300);
+        $timeout = $isLargeAudio ?
+            (int) config('services.assemblyai.timeout', 3600) : // 1 hora para archivos grandes
+            (int) config('services.assemblyai.timeout', 300);   // 5 minutos para otros
         $connectTimeout = (int) config('services.assemblyai.connect_timeout', 60);
 
         Log::info('Starting large file upload to AssemblyAI', [
@@ -436,11 +610,16 @@ class TranscriptionController extends Controller
         // Crear transcripción
         $supportsExtras = $language === 'en';
 
-        $payload = [
+        $basePayload = [
             'audio_url' => $audioUrl,
             'language_code' => $language,
             'speaker_labels' => true,
+            'punctuate'      => true,      // Mantiene puntuación
+            'format_text'    => true,      // Mejora formato del texto
         ];
+
+        // Aplicar optimizaciones según el formato de audio
+        $payload = $this->getOptimizedConfigForFormat($mimeType, $isMP4, $isMP3, $basePayload);
 
         if ($supportsExtras) {
             $payload['auto_chapters'] = true;

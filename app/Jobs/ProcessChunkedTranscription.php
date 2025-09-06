@@ -39,29 +39,66 @@ class ProcessChunkedTranscription implements ShouldQueue
         try {
             $metadata = json_decode(file_get_contents($metadataPath), true);
 
-            $extension = pathinfo($metadata['filename'] ?? '', PATHINFO_EXTENSION);
-            $extension = $extension ? ".{$extension}" : '';
-            $finalFilePath = "{$uploadDir}/final_audio{$extension}";
-            $finalFile = fopen($finalFilePath, 'wb');
+            // Detectar si es archivo WebM
+            $filename = $metadata['filename'] ?? '';
+            $isWebM = strpos(strtolower($filename), '.webm') !== false;
 
-            for ($i = 0; $i < $metadata['chunks_expected']; $i++) {
-                $chunkPath = "{$uploadDir}/chunk_{$i}";
-                $chunkData = file_get_contents($chunkPath);
-                fwrite($finalFile, $chunkData);
+            if ($isWebM) {
+                Log::info('WebM file detected in chunked processing', [
+                    'filename' => $filename,
+                    'chunks' => $metadata['chunks_expected'],
+                ]);
             }
 
-            fclose($finalFile);
+            $extension = pathinfo($filename, PATHINFO_EXTENSION);
+            $extension = $extension ? ".{$extension}" : '';
+            $finalFilePath = "{$uploadDir}/final_audio{$extension}";
+
+            // Para archivos WebM, usar una estrategia de combinación más cuidadosa
+            if ($isWebM) {
+                $this->combineWebMChunks($uploadDir, $metadata, $finalFilePath);
+            } else {
+                $this->combineChunksStandard($uploadDir, $metadata, $finalFilePath);
+            }
 
             Log::info('Chunks combined successfully', [
                 'upload_id' => $this->uploadId,
                 'tracking_id' => $this->trackingId,
                 'final_size' => filesize($finalFilePath),
                 'expected_size' => $metadata['total_size'] ?? null,
+                'is_webm' => $isWebM,
+                'chunks_expected' => $metadata['chunks_expected'],
+                'chunks_received' => $metadata['chunks_received'],
+                'file_path' => $finalFilePath,
             ]);
+
+            // Para archivos WebM, verificar integridad adicional
+            if ($isWebM) {
+                $actualSize = filesize($finalFilePath);
+                $expectedSize = $metadata['total_size'] ?? 0;
+
+                if ($actualSize !== $expectedSize) {
+                    Log::warning('WebM file size mismatch detected', [
+                        'expected_size' => $expectedSize,
+                        'actual_size' => $actualSize,
+                        'difference' => $actualSize - $expectedSize,
+                    ]);
+                }
+
+                Log::info('WebM file integrity check', [
+                    'size_match' => $actualSize === $expectedSize,
+                    'file_size_mb' => round($actualSize / 1024 / 1024, 2),
+                ]);
+            }
 
             $processedPath = $finalFilePath;
 
-            $transcriptionId = $this->uploadToAssemblyAI($processedPath, $metadata['language']);
+            // Para archivos WebM, intentar validar y posiblemente convertir
+            if ($isWebM) {
+                $processedPath = $this->processWebMFile($finalFilePath, $metadata);
+            }
+
+            $transcriptionId = $this->uploadToAssemblyAI($processedPath, $metadata['language'], $isWebM);
 
             Cache::put($cacheKey, [
                 'status' => 'processing',
@@ -83,14 +120,17 @@ class ProcessChunkedTranscription implements ShouldQueue
         }
     }
 
-    private function uploadToAssemblyAI(string $filePath, string $language): string
+    private function uploadToAssemblyAI(string $filePath, string $language, bool $isWebM = false): string
     {
         $apiKey = config('services.assemblyai.api_key');
         if (empty($apiKey)) {
             throw new \Exception('AssemblyAI API key missing');
         }
 
-        $timeout = (int) config('services.assemblyai.timeout', 300);
+        // Ajustar timeouts para archivos WebM
+        $timeout = $isWebM ?
+            (int) config('services.assemblyai.timeout', 3600) : // 1 hora para WebM
+            (int) config('services.assemblyai.timeout', 300);  // 5 minutos para otros
         $connectTimeout = (int) config('services.assemblyai.connect_timeout', 60);
 
         $audioData = file_get_contents($filePath);
@@ -116,11 +156,49 @@ class ProcessChunkedTranscription implements ShouldQueue
 
         $supportsExtras = $language === 'en';
 
-        $payload = [
+        $basePayload = [
             'audio_url' => $audioUrl,
             'language_code' => $language,
             'speaker_labels' => true,
+            'punctuate' => true,
+            'format_text' => true,
         ];
+
+        // Para archivos WebM largos, usar configuración minimalista y más robusta
+        if ($isWebM) {
+            $payload = [
+                'audio_url' => $audioUrl,
+                'language_code' => $language,
+                'speaker_labels' => false,          // Desactivar para mejor rendimiento en archivos largos
+                'punctuate' => true,               // Mantener puntuación básica
+                'format_text' => false,            // Desactivar formato para reducir procesamiento
+                'boost_param' => 'default',
+                'filter_profanity' => false,
+                'dual_channel' => false,
+                'speed_boost' => false,            // CRÍTICO: Sin speed boost
+                'auto_highlights' => false,
+                'disfluencies' => false,
+                'entity_detection' => false,
+                'language_detection' => false,
+                'multichannel' => false,
+                'redact_pii' => false,
+                'webhook_url' => null,
+                'word_boost' => [],
+                'audio_start_from' => null,
+                'audio_end_at' => null,            // CRÍTICO: Sin límite de tiempo
+            ];
+
+            Log::info('Applied MINIMAL WebM config for long audio files', [
+                'speaker_labels' => $payload['speaker_labels'],
+                'format_text' => $payload['format_text'],
+                'speed_boost' => $payload['speed_boost'],
+                'audio_end_at' => $payload['audio_end_at'],
+                'timeout_used' => $timeout,
+                'message' => 'Using minimal config to ensure complete transcription',
+            ]);
+        } else {
+            $payload = $basePayload;
+        }
 
         if ($supportsExtras) {
             $payload['auto_chapters'] = true;
@@ -140,11 +218,211 @@ class ProcessChunkedTranscription implements ShouldQueue
             ->timeout(60)
             ->post('https://api.assemblyai.com/v2/transcript', $payload);
 
+        // Log del payload completo para debug en archivos WebM
+        if ($isWebM) {
+            Log::info('AssemblyAI payload sent for WebM file', [
+                'payload' => $payload,
+                'url' => 'https://api.assemblyai.com/v2/transcript',
+            ]);
+        }
+
         if (! $transcriptResponse->successful()) {
             throw new \Exception('AssemblyAI transcript creation failed: ' . $transcriptResponse->body());
         }
 
         return $transcriptResponse->json('id');
+    }
+
+    /**
+     * Procesa y valida archivos WebM combinados
+     * Intenta detectar corrupción y aplicar correcciones
+     */
+    private function processWebMFile(string $filePath, array $metadata): string
+    {
+        Log::info('Processing WebM file for integrity', [
+            'file_path' => basename($filePath),
+            'file_size' => filesize($filePath),
+        ]);
+
+        // Verificar integridad básica del archivo WebM
+        $fileHandle = fopen($filePath, 'rb');
+        $header = fread($fileHandle, 100);
+        fclose($fileHandle);
+
+        // Verificar header WebM
+        $hasWebMHeader = strpos($header, 'webm') !== false ||
+                        strpos($header, 'matroska') !== false ||
+                        substr($header, 0, 4) === "\x1A\x45\xDF\xA3"; // EBML header
+
+        if (!$hasWebMHeader) {
+            Log::warning('WebM file appears to have corrupted header', [
+                'header_preview' => bin2hex(substr($header, 0, 20)),
+            ]);
+        }
+
+        // Intentar obtener duración real con ffprobe si está disponible
+        $ffprobeCommand = "ffprobe -v quiet -show_entries format=duration -of csv=p=0 \"$filePath\" 2>&1";
+        $durationOutput = shell_exec($ffprobeCommand);
+
+        if ($durationOutput && is_numeric(trim($durationOutput))) {
+            $duration = floatval(trim($durationOutput));
+            $minutes = round($duration / 60, 2);
+
+            Log::info('WebM file duration detected by ffprobe', [
+                'duration_seconds' => $duration,
+                'duration_minutes' => $minutes,
+            ]);
+
+            // Si la duración es muy corta comparada con el tamaño del archivo, hay un problema
+            $fileSizeMB = filesize($filePath) / 1024 / 1024;
+            $expectedDurationForSize = $fileSizeMB * 2; // Muy rough estimate: 2 minutos por MB
+
+            // Configuración: convertir solo si se detecta corrupción severa
+            $shouldConvert = $minutes < 15 && $fileSizeMB > 50;
+
+            Log::info('WebM integrity analysis', [
+                'detected_minutes' => $minutes,
+                'file_size_mb' => $fileSizeMB,
+                'should_convert' => $shouldConvert,
+                'reason' => $shouldConvert ? 'Potential corruption detected' : 'File appears healthy',
+            ]);
+
+            if ($shouldConvert) {
+                Log::warning('WebM file may be corrupted - duration too short for file size', [
+                    'detected_minutes' => $minutes,
+                    'file_size_mb' => $fileSizeMB,
+                    'expected_min_duration' => $expectedDurationForSize,
+                ]);
+
+                // Intentar conversión a WAV como último recurso
+                $convertedPath = $this->convertWebMToWav($filePath);
+                if ($convertedPath && file_exists($convertedPath)) {
+                    Log::info('WebM successfully converted to WAV', [
+                        'original_path' => basename($filePath),
+                        'converted_path' => basename($convertedPath),
+                    ]);
+                    return $convertedPath;
+                }
+
+                // Crear una copia con nombre específico para debug
+                $debugPath = dirname($filePath) . '/corrupted_webm_' . time() . '.webm';
+                copy($filePath, $debugPath);
+
+                Log::info('Created debug copy of potentially corrupted WebM', [
+                    'debug_path' => $debugPath,
+                ]);
+            }
+        } else {
+            Log::warning('Could not determine WebM file duration - ffprobe not available or file corrupted');
+        }
+
+        return $filePath; // Por ahora, retornar el archivo original
+    }
+
+    /**
+     * Combina chunks de archivos WebM de manera más cuidadosa
+     */
+    private function combineWebMChunks(string $uploadDir, array $metadata, string $finalFilePath): void
+    {
+        Log::info('Combining WebM chunks with enhanced method', [
+            'chunks_expected' => $metadata['chunks_expected'],
+            'total_size' => $metadata['total_size'],
+        ]);
+
+        $finalFile = fopen($finalFilePath, 'wb');
+        $totalWritten = 0;
+        $chunkSizes = [];
+
+        for ($i = 0; $i < $metadata['chunks_expected']; $i++) {
+            $chunkPath = "{$uploadDir}/chunk_{$i}";
+
+            if (!file_exists($chunkPath)) {
+                Log::error("WebM chunk missing: chunk_{$i}");
+                continue;
+            }
+
+            $chunkData = file_get_contents($chunkPath);
+            $chunkSize = strlen($chunkData);
+            $chunkSizes[] = $chunkSize;
+
+            $written = fwrite($finalFile, $chunkData);
+            $totalWritten += $written;
+
+            Log::debug("WebM chunk_{$i} written", [
+                'chunk_size' => $chunkSize,
+                'written' => $written,
+                'total_written' => $totalWritten,
+            ]);
+
+            // Verificar integridad de escritura
+            if ($written !== $chunkSize) {
+                Log::warning("WebM chunk write mismatch", [
+                    'chunk' => $i,
+                    'expected' => $chunkSize,
+                    'written' => $written,
+                ]);
+            }
+        }
+
+        fclose($finalFile);
+
+        // Verificación final para WebM
+        $finalSize = filesize($finalFilePath);
+        Log::info('WebM chunks combination completed', [
+            'chunks_processed' => count($chunkSizes),
+            'chunk_sizes' => $chunkSizes,
+            'final_size' => $finalSize,
+            'expected_size' => $metadata['total_size'],
+            'size_match' => $finalSize === $metadata['total_size'],
+        ]);
+    }
+
+    /**
+     * Combina chunks usando el método estándar
+     */
+    private function combineChunksStandard(string $uploadDir, array $metadata, string $finalFilePath): void
+    {
+        $finalFile = fopen($finalFilePath, 'wb');
+
+        for ($i = 0; $i < $metadata['chunks_expected']; $i++) {
+            $chunkPath = "{$uploadDir}/chunk_{$i}";
+            $chunkData = file_get_contents($chunkPath);
+            fwrite($finalFile, $chunkData);
+        }
+
+        fclose($finalFile);
+    }
+
+    /**
+     * Convierte WebM corrupto a WAV usando ffmpeg
+     */
+    private function convertWebMToWav(string $webmPath): ?string
+    {
+        $outputPath = dirname($webmPath) . '/converted_' . time() . '.wav';
+
+        // Comando ffmpeg con parámetros robustos para archivos WebM problemáticos
+        $ffmpegCommand = "ffmpeg -i \"$webmPath\" -acodec pcm_s16le -ar 16000 -ac 1 \"$outputPath\" 2>&1";
+
+        Log::info('Attempting WebM to WAV conversion', [
+            'input' => basename($webmPath),
+            'output' => basename($outputPath),
+            'command' => $ffmpegCommand,
+        ]);
+
+        $output = shell_exec($ffmpegCommand);
+
+        if (file_exists($outputPath) && filesize($outputPath) > 0) {
+            Log::info('WebM to WAV conversion successful', [
+                'output_size' => filesize($outputPath),
+                'ffmpeg_output' => $output,
+            ]);
+            return $outputPath;
+        } else {
+            Log::error('WebM to WAV conversion failed', [
+                'ffmpeg_output' => $output,
+            ]);
+            return null;
+        }
     }
 
     private function cleanupTempFiles(string $uploadDir, ?string $finalFilePath = null, ?string $processedPath = null): void

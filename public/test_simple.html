@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Simple - Reproducción de Segmentos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; text-align: center; }
+        .section {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .logs {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        audio {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .file-info {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Test Reproducción de Segmentos - Versión Simple</h1>
+
+        <div class="section">
+            <h3>1. Cargar Audio MP3/MP4</h3>
+            <input type="file" id="audioFile" accept="audio/mp3,audio/mp4,audio/m4a,audio/mpeg" />
+            <button onclick="loadAudio()">📁 Cargar Audio</button>
+
+            <div id="fileInfo" class="file-info" style="display:none;">
+                <strong>Archivo:</strong> <span id="fileName">--</span><br>
+                <strong>Formato:</strong> <span id="fileFormat">--</span><br>
+                <strong>Tamaño:</strong> <span id="fileSize">--</span><br>
+                <strong>Duración:</strong> <span id="fileDuration">--</span>
+            </div>
+        </div>
+
+        <div class="section" id="audioSection" style="display:none;">
+            <h3>2. Reproductor Principal</h3>
+            <audio id="mainAudio" controls></audio>
+        </div>
+
+        <div class="section" id="segmentSection" style="display:none;">
+            <h3>3. Tests de Segmentos</h3>
+            <p>Haz clic en cada botón para probar la reproducción por segmentos:</p>
+
+            <div style="margin: 10px 0;">
+                <strong>Segmento 1 (0-10s):</strong>
+                <button onclick="playSegment(0, 10)">▶️ Reproducir</button>
+                <button onclick="stopSegment()">⏹️ Detener</button>
+            </div>
+
+            <div style="margin: 10px 0;">
+                <strong>Segmento 2 (10-20s):</strong>
+                <button onclick="playSegment(10, 20)">▶️ Reproducir</button>
+                <button onclick="stopSegment()">⏹️ Detener</button>
+            </div>
+
+            <div style="margin: 10px 0;">
+                <strong>Segmento 3 (20-30s):</strong>
+                <button onclick="playSegment(20, 30)">▶️ Reproducir</button>
+                <button onclick="stopSegment()">⏹️ Detener</button>
+            </div>
+
+            <div style="margin: 10px 0;">
+                <strong>Segmento Largo (30-60s):</strong>
+                <button onclick="playSegment(30, 60)">▶️ Reproducir</button>
+                <button onclick="stopSegment()">⏹️ Detener</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>4. Tests Avanzados</h3>
+            <button onclick="testRapidSwitching()">🔄 Cambio Rápido</button>
+            <button onclick="testLongSegment()">⏱️ Segmento Largo</button>
+            <button onclick="clearLogs()">🗑️ Limpiar Logs</button>
+        </div>
+
+        <div class="logs" id="debugLogs">
+            <strong>📝 Debug Logs:</strong><br>
+            [Inicio] Sistema listo para pruebas...
+        </div>
+    </div>
+
+    <script>
+        let audioPlayer = null;
+        let audioFile = null;
+        let segmentTimer = null;
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logs = document.getElementById('debugLogs');
+            logs.innerHTML += `<br>[${timestamp}] ${message}`;
+            logs.scrollTop = logs.scrollHeight;
+            console.log(`[TEST] ${message}`);
+        }
+
+        function loadAudio() {
+            const fileInput = document.getElementById('audioFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Por favor selecciona un archivo de audio');
+                return;
+            }
+
+            log(`📁 Cargando: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`);
+
+            // Validar formato
+            const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/m4a'];
+            const isValidType = validTypes.some(type => file.type.includes(type)) ||
+                               file.name.toLowerCase().match(/\.(mp3|mp4|m4a)$/);
+
+            if (!isValidType) {
+                log(`❌ Formato inválido: ${file.type}`);
+                alert('Solo se permiten archivos MP3, MP4 o M4A');
+                return;
+            }
+
+            audioFile = file;
+            audioPlayer = document.getElementById('mainAudio');
+
+            // Crear URL del archivo
+            const url = URL.createObjectURL(file);
+            audioPlayer.src = url;
+
+            // Mostrar información del archivo
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileFormat').textContent = file.type || 'Detectado por extensión';
+            document.getElementById('fileSize').textContent = (file.size/1024/1024).toFixed(2) + ' MB';
+            document.getElementById('fileInfo').style.display = 'block';
+
+            // Event listeners
+            audioPlayer.onloadedmetadata = function() {
+                const duration = audioPlayer.duration;
+                const minutes = Math.floor(duration / 60);
+                const seconds = Math.floor(duration % 60);
+                document.getElementById('fileDuration').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+                log(`✅ Audio cargado - Duración: ${minutes}:${seconds.toString().padStart(2, '0')}`);
+
+                // Mostrar secciones
+                document.getElementById('audioSection').style.display = 'block';
+                document.getElementById('segmentSection').style.display = 'block';
+            };
+
+            audioPlayer.onerror = function(e) {
+                log(`❌ Error cargando audio: ${e.message || 'Error desconocido'}`);
+                alert('Error cargando el archivo de audio');
+            };
+
+            audioPlayer.oncanplay = function() {
+                log('✅ Audio listo para reproducir');
+            };
+        }
+
+        function playSegment(startTime, endTime) {
+            if (!audioPlayer) {
+                log('❌ No hay audio cargado');
+                alert('Primero carga un archivo de audio');
+                return;
+            }
+
+            log(`🎵 Reproduciendo segmento: ${startTime}s - ${endTime}s`);
+
+            // Limpiar timer anterior
+            if (segmentTimer) {
+                clearInterval(segmentTimer);
+                segmentTimer = null;
+            }
+
+            // Pausar si está reproduciendo
+            audioPlayer.pause();
+
+            // Ir al tiempo de inicio
+            audioPlayer.currentTime = startTime;
+
+            // Reproducir
+            audioPlayer.play().then(() => {
+                log(`✅ Reproducción iniciada en ${startTime}s`);
+
+                // Timer para detener al final del segmento
+                segmentTimer = setInterval(() => {
+                    if (audioPlayer.currentTime >= endTime) {
+                        audioPlayer.pause();
+                        clearInterval(segmentTimer);
+                        segmentTimer = null;
+                        log(`✅ Segmento completado: ${startTime}s - ${endTime}s`);
+                    }
+                }, 100);
+
+            }).catch(error => {
+                log(`❌ Error reproduciendo: ${error.message}`);
+                alert('Error: ' + error.message);
+            });
+        }
+
+        function stopSegment() {
+            if (audioPlayer) {
+                audioPlayer.pause();
+                log('⏹️ Reproducción detenida manualmente');
+            }
+
+            if (segmentTimer) {
+                clearInterval(segmentTimer);
+                segmentTimer = null;
+            }
+        }
+
+        function testRapidSwitching() {
+            log('🔄 Test: Cambio rápido entre segmentos');
+            playSegment(0, 5);
+            setTimeout(() => playSegment(10, 15), 1000);
+            setTimeout(() => playSegment(20, 25), 2000);
+        }
+
+        function testLongSegment() {
+            log('⏱️ Test: Segmento largo');
+            if (audioPlayer && audioPlayer.duration > 60) {
+                playSegment(0, 60);
+            } else {
+                playSegment(0, Math.min(30, audioPlayer?.duration || 30));
+            }
+        }
+
+        function clearLogs() {
+            document.getElementById('debugLogs').innerHTML = '<strong>📝 Debug Logs:</strong><br>[Reinicio] Logs limpiados...';
+        }
+
+        // Inicialización
+        window.addEventListener('load', () => {
+            log('🚀 Test de segmentos iniciado');
+            log('💡 Formatos soportados: MP3, MP4, M4A');
+        });
+    </script>
+</body>
+</html>
