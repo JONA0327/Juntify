@@ -70,6 +70,8 @@ const SEGMENT_MS = 10 * 60 * 1000; // 10 minutos
 // Se almacenan todos los trozos generados por una única sesión del MediaRecorder
 let recordedChunks = [];
 let recordingStream = null;
+let currentRecordingId = null;
+let chunkIndex = 0;
 
 // ===== FUNCIONES DE LIMPIEZA =====
 
@@ -268,6 +270,8 @@ async function startRecording() {
         dataArray = new Uint8Array(bufferLength);
 
         recordedChunks = [];
+        currentRecordingId = crypto.randomUUID();
+        chunkIndex = 0;
         startTime = Date.now();
         limitWarningShown = false;
         isRecording = true;
@@ -287,8 +291,7 @@ async function startRecording() {
         mediaRecorder.ondataavailable = event => {
             if (event.data && event.data.size > 0) {
                 recordedChunks.push(event.data);
-                // Alternativa: enviar cada segmento al servidor para remuxeo con ffmpeg
-                // sendChunkToServer(event.data);
+                sendChunkToServer(event.data, chunkIndex++);
             }
         };
 
@@ -430,7 +433,13 @@ async function finalizeRecording() {
     resetAudioVisualizer();
     resetRecordingControls();
 
-    const finalBlob = new Blob(recordedChunks, { type: 'audio/webm;codecs=opus' });
+    let finalBlob;
+    try {
+        finalBlob = await fetchRemuxedBlob();
+    } catch (e) {
+        console.error('Error al remultiplexar en servidor, usando copia local', e);
+        finalBlob = new Blob(recordedChunks, { type: 'audio/webm;codecs=opus' });
+    }
     const sizeMB = finalBlob.size / (1024 * 1024);
 
     const now = new Date();
@@ -806,15 +815,34 @@ function handlePostActionCleanup(uploaded) {
     }
 }
 
-/**
- * Ejemplo opcional: enviar cada segmento al servidor para que pueda
- * ser remuxeado con ffmpeg utilizando `-f concat` antes de la
- * transcripción.
- */
-function sendChunkToServer(chunk) {
-    // const formData = new FormData();
-    // formData.append('chunk', chunk);
-    // return fetch('/upload-chunk', { method: 'POST', body: formData });
+function sendChunkToServer(chunk, index) {
+    const formData = new FormData();
+    formData.append('chunk', chunk);
+    formData.append('recording_id', currentRecordingId);
+    formData.append('index', index);
+    const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    fetch('/api/recordings/chunk', {
+        method: 'POST',
+        headers: { 'X-CSRF-TOKEN': token },
+        body: formData
+    }).catch(err => console.error('Error enviando segmento', err));
+}
+
+async function fetchRemuxedBlob() {
+    const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    const response = await fetch('/api/recordings/concat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': token
+        },
+        body: JSON.stringify({ recording_id: currentRecordingId })
+    });
+    if (!response.ok) {
+        throw new Error('Remux failed');
+    }
+    const buffer = await response.arrayBuffer();
+    return new Blob([buffer], { type: 'audio/webm;codecs=opus' });
 }
 
 function blobToBase64(blob) {

@@ -17,6 +17,7 @@ use App\Http\Controllers\TaskCommentController;
 use App\Http\Controllers\TaskAttachmentController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\RecordingChunkController;
 
 /*
 |--------------------------------------------------------------------------
@@ -73,6 +74,11 @@ Route::post('/drive/upload-pending-audio', [DriveController::class, 'uploadPendi
     ->middleware(['web', 'auth']);
 
 Route::get('/pending-recordings/{pendingRecording}', [PendingRecordingController::class, 'show']);
+
+Route::middleware(['web', 'auth'])->group(function () {
+    Route::post('/recordings/chunk', [RecordingChunkController::class, 'storeChunk']);
+    Route::post('/recordings/concat', [RecordingChunkController::class, 'concatChunks']);
+});
 
 
 Route::get('/organization-activities', [OrganizationActivityController::class, 'index'])
