@@ -11,7 +11,9 @@ class AudioConverter
      *
      * @param  string      $path           Path to the audio file
      * @param  string|null $extensionHint  Optional extension hint (without dot)
-     * @return string Path to the converted file or original path on failure/if not WEBM
+     * @return string Path to the converted file or original path if not WEBM
+     *
+     * @throws \RuntimeException when conversion fails
      */
     public function convertWebmToMp3(string $path, ?string $extensionHint = null): string
     {
@@ -46,7 +48,7 @@ class AudioConverter
                 escapeshellarg($target)
             );
             exec($cmd, $output, $code);
-            if ($code === 0 && file_exists($target)) {
+            if ($code === 0 && file_exists($target) && filesize($target) > 0) {
                 Log::info('Converted WEBM to MP3', [
                     'source' => $path,
                     'target' => $target,
@@ -66,7 +68,7 @@ class AudioConverter
             ]);
         }
 
-        return $path;
+        throw new \RuntimeException('WEBM to MP3 conversion failed for ' . $path);
     }
 }
 

@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use App\Jobs\ProcessChunkedTranscription;
 use App\Services\AudioConverter;
+use Throwable;
 
 class TranscriptionController extends Controller
 {
@@ -29,7 +30,20 @@ class TranscriptionController extends Controller
         $file = $request->file('audio');
         $filePath = $file->getRealPath();
         // Convertir WEBM a MP3 para evitar limitaciones de AssemblyAI con archivos de video
-        $convertedPath = $this->audioConverter->convertWebmToMp3($filePath, $file->getClientOriginalExtension());
+        try {
+            $convertedPath = $this->audioConverter->convertWebmToMp3($filePath, $file->getClientOriginalExtension());
+        } catch (Throwable $e) {
+            Log::error('Audio conversion failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Audio conversion failed'], 500);
+        }
+
+        if ($file->getClientOriginalExtension() === 'webm') {
+            if (pathinfo($convertedPath, PATHINFO_EXTENSION) !== 'mp3' || !file_exists($convertedPath) || filesize($convertedPath) === 0) {
+                Log::error('Audio conversion produced invalid file', ['path' => $convertedPath]);
+                return response()->json(['error' => 'Audio conversion failed'], 500);
+            }
+        }
+
         if ($convertedPath !== $filePath) {
             $filePath = $convertedPath;
         }

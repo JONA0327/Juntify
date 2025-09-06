@@ -61,6 +61,13 @@ class ProcessChunkedTranscription implements ShouldQueue
             ]);
 
             $processedPath = $audioConverter->convertWebmToMp3($finalFilePath, pathinfo($metadata['filename'] ?? '', PATHINFO_EXTENSION));
+
+            if (pathinfo($metadata['filename'] ?? '', PATHINFO_EXTENSION) === 'webm') {
+                if (pathinfo($processedPath, PATHINFO_EXTENSION) !== 'mp3' || !file_exists($processedPath) || filesize($processedPath) === 0) {
+                    throw new \RuntimeException('Audio conversion failed');
+                }
+            }
+
             $transcriptionId = $this->uploadToAssemblyAI($processedPath, $metadata['language']);
 
             Cache::put($cacheKey, [
