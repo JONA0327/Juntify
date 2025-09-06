@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
+use App\Services\AudioConverter;
 
 class ProcessChunkedTranscription implements ShouldQueue
 {
@@ -25,7 +26,7 @@ class ProcessChunkedTranscription implements ShouldQueue
         $this->trackingId = $trackingId;
     }
 
-    public function handle(): void
+    public function handle(AudioConverter $audioConverter): void
     {
         $cacheKey = "chunked_transcription:{$this->trackingId}";
         Cache::put($cacheKey, ['status' => 'processing']);
@@ -34,6 +35,7 @@ class ProcessChunkedTranscription implements ShouldQueue
         $metadataPath = "{$uploadDir}/metadata.json";
 
         $finalFilePath = null;
+        $processedPath = null;
 
         try {
             $metadata = json_decode(file_get_contents($metadataPath), true);
@@ -58,7 +60,8 @@ class ProcessChunkedTranscription implements ShouldQueue
                 'expected_size' => $metadata['total_size'] ?? null,
             ]);
 
-            $transcriptionId = $this->uploadToAssemblyAI($finalFilePath, $metadata['language']);
+            $processedPath = $audioConverter->convertWebmToMp3($finalFilePath, pathinfo($metadata['filename'] ?? '', PATHINFO_EXTENSION));
+            $transcriptionId = $this->uploadToAssemblyAI($processedPath, $metadata['language']);
 
             Cache::put($cacheKey, [
                 'status' => 'processing',
@@ -76,7 +79,7 @@ class ProcessChunkedTranscription implements ShouldQueue
                 'error' => $e->getMessage(),
             ]);
         } finally {
-            $this->cleanupTempFiles($uploadDir, $finalFilePath);
+            $this->cleanupTempFiles($uploadDir, $finalFilePath, $processedPath);
         }
     }
 
@@ -90,8 +93,7 @@ class ProcessChunkedTranscription implements ShouldQueue
         $timeout = (int) config('services.assemblyai.timeout', 300);
         $connectTimeout = (int) config('services.assemblyai.connect_timeout', 60);
 
-        $processedPath = $this->convertWebmToMp3($filePath);
-        $audioData = file_get_contents($processedPath);
+        $audioData = file_get_contents($filePath);
 
         $uploadResponse = Http::withHeaders([
             'authorization' => $apiKey,
@@ -145,17 +147,14 @@ class ProcessChunkedTranscription implements ShouldQueue
         return $transcriptResponse->json('id');
     }
 
-    private function cleanupTempFiles(string $uploadDir, ?string $finalFilePath = null): void
+    private function cleanupTempFiles(string $uploadDir, ?string $finalFilePath = null, ?string $processedPath = null): void
     {
         try {
-            if ($finalFilePath) {
-                if (file_exists($finalFilePath)) {
-                    unlink($finalFilePath);
-                }
-                $convertedPath = $finalFilePath . '.mp3';
-                if (file_exists($convertedPath)) {
-                    unlink($convertedPath);
-                }
+            if ($finalFilePath && file_exists($finalFilePath)) {
+                unlink($finalFilePath);
+            }
+            if ($processedPath && $processedPath !== $finalFilePath && file_exists($processedPath)) {
+                unlink($processedPath);
             }
 
             if (is_dir($uploadDir)) {
@@ -173,44 +172,6 @@ class ProcessChunkedTranscription implements ShouldQueue
                 'error' => $e->getMessage(),
             ]);
         }
-    }
-
-    private function convertWebmToMp3(string $filePath): string
-    {
-        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-        $mime = @mime_content_type($filePath);
-        if ($extension !== 'webm' && (! $mime || stripos($mime, 'webm') === false)) {
-            return $filePath;
-        }
-
-        $tempPath = $filePath . '.mp3';
-        try {
-            $cmd = sprintf(
-                'ffmpeg -y -i %s -vn -acodec libmp3lame -q:a 2 %s 2>&1',
-                escapeshellarg($filePath),
-                escapeshellarg($tempPath)
-            );
-            exec($cmd, $output, $returnVar);
-            if ($returnVar === 0 && file_exists($tempPath)) {
-                Log::info('Converted WEBM to MP3', [
-                    'source' => $filePath,
-                    'target' => $tempPath,
-                ]);
-                return $tempPath;
-            }
-            Log::warning('WEBM to MP3 conversion failed', [
-                'source' => $filePath,
-                'exit_code' => $returnVar,
-                'output' => $output ?? [],
-            ]);
-        } catch (Throwable $e) {
-            Log::warning('WEBM to MP3 conversion error', [
-                'source' => $filePath,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        return $filePath;
     }
 }
 

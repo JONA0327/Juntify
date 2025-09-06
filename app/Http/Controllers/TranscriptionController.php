@@ -10,9 +10,12 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use App\Jobs\ProcessChunkedTranscription;
+use App\Services\AudioConverter;
 
 class TranscriptionController extends Controller
 {
+    public function __construct(private AudioConverter $audioConverter) {}
+
     public function store(Request $request)
     {
         // Aumentar el tiempo límite para archivos grandes
@@ -26,7 +29,7 @@ class TranscriptionController extends Controller
         $file = $request->file('audio');
         $filePath = $file->getRealPath();
         // Convertir WEBM a MP3 para evitar limitaciones de AssemblyAI con archivos de video
-        $convertedPath = $this->convertWebmToMp3($filePath);
+        $convertedPath = $this->audioConverter->convertWebmToMp3($filePath, $file->getClientOriginalExtension());
         if ($convertedPath !== $filePath) {
             $filePath = $convertedPath;
         }
@@ -209,49 +212,6 @@ class TranscriptionController extends Controller
         } catch (\Throwable $e) {
             return null;
         }
-    }
-
-    private function convertWebmToMp3(string $filePath): string
-    {
-        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-        $mime = @mime_content_type($filePath);
-        if ($extension !== 'webm' && (! $mime || stripos($mime, 'webm') === false)) {
-            return $filePath;
-        }
-
-        $tempDir = storage_path('app/temp-audio');
-        if (! is_dir($tempDir)) {
-            @mkdir($tempDir, 0755, true);
-        }
-        $tempPath = $tempDir . '/' . Str::uuid() . '.mp3';
-
-        try {
-            $cmd = sprintf(
-                'ffmpeg -y -i %s -vn -acodec libmp3lame -q:a 2 %s 2>&1',
-                escapeshellarg($filePath),
-                escapeshellarg($tempPath)
-            );
-            exec($cmd, $output, $returnVar);
-            if ($returnVar === 0 && file_exists($tempPath)) {
-                Log::info('Converted WEBM to MP3', [
-                    'source' => $filePath,
-                    'target' => $tempPath,
-                ]);
-                return $tempPath;
-            }
-            Log::warning('WEBM to MP3 conversion failed', [
-                'source' => $filePath,
-                'exit_code' => $returnVar,
-                'output' => $output ?? [],
-            ]);
-        } catch (\Throwable $e) {
-            Log::warning('WEBM to MP3 conversion error', [
-                'source' => $filePath,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        return $filePath;
     }
 
     public function show(string $id)
