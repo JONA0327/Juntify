@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
-use App\Services\AudioConverter;
 
 class ProcessChunkedTranscription implements ShouldQueue
 {
@@ -26,7 +25,7 @@ class ProcessChunkedTranscription implements ShouldQueue
         $this->trackingId = $trackingId;
     }
 
-    public function handle(AudioConverter $audioConverter): void
+    public function handle(): void
     {
         $cacheKey = "chunked_transcription:{$this->trackingId}";
         Cache::put($cacheKey, ['status' => 'processing']);
@@ -60,13 +59,7 @@ class ProcessChunkedTranscription implements ShouldQueue
                 'expected_size' => $metadata['total_size'] ?? null,
             ]);
 
-            $processedPath = $audioConverter->convertWebmToMp3($finalFilePath, pathinfo($metadata['filename'] ?? '', PATHINFO_EXTENSION));
-
-            if (pathinfo($metadata['filename'] ?? '', PATHINFO_EXTENSION) === 'webm') {
-                if (pathinfo($processedPath, PATHINFO_EXTENSION) !== 'mp3' || !file_exists($processedPath) || filesize($processedPath) === 0) {
-                    throw new \RuntimeException('Audio conversion failed');
-                }
-            }
+            $processedPath = $finalFilePath;
 
             $transcriptionId = $this->uploadToAssemblyAI($processedPath, $metadata['language']);
 
