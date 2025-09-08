@@ -854,7 +854,7 @@ function showUploadRetryUI() {
         // Crear el UI de reintento
         retryUI = document.createElement('div');
         retryUI.id = 'retry-upload-container';
-        retryUI.className = 'retry-upload-container';
+        retryUI.className = 'retry-upload-container my-5 px-5';
         retryUI.innerHTML = `
             <div class="retry-upload-card">
                 <div class="retry-header">
@@ -869,13 +869,13 @@ function showUploadRetryUI() {
                     </div>
                 </div>
                 <div class="retry-actions">
-                    <button class="retry-btn retry-btn-primary" onclick="retryUpload()" id="retry-upload-btn">
+                    <button class="retry-btn btn btn-primary" onclick="retryUpload()" id="retry-upload-btn">
                         🔄 Reintentar Subida
                     </button>
-                    <button class="retry-btn retry-btn-secondary" onclick="downloadFailedAudio()">
+                    <button class="retry-btn btn btn-secondary" onclick="downloadFailedAudio()">
                         💾 Descargar
                     </button>
-                    <button class="retry-btn retry-btn-danger" onclick="discardFailedAudio()">
+                    <button class="retry-btn btn btn-danger" onclick="discardFailedAudio()">
                         🗑️ Descartar
                     </button>
                 </div>
@@ -930,127 +930,9 @@ function addRetryUploadStyles() {
     const styles = document.createElement('style');
     styles.id = 'retry-upload-styles';
     styles.textContent = `
-        .retry-upload-container {
-            margin: 20px 0;
-            padding: 0 20px;
-        }
-
-        .retry-upload-card {
-            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-            border: 1px solid #ffeaa7;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
-            animation: slideDown 0.3s ease-out;
-        }
-
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .retry-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .retry-icon {
-            font-size: 24px;
-            margin-right: 12px;
-        }
-
-        .retry-title {
-            font-weight: bold;
-            font-size: 18px;
-            color: #856404;
-        }
-
-        .retry-content {
-            margin-bottom: 20px;
-        }
-
-        .retry-message {
-            color: #856404;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-
-        .retry-details {
-            display: flex;
-            justify-content: space-between;
-            background: rgba(255, 255, 255, 0.7);
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 13px;
-        }
-
-        .retry-filename {
-            font-weight: bold;
-            color: #495057;
-        }
-
-        .retry-filesize {
-            color: #6c757d;
-        }
-
-        .retry-actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .retry-btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            flex: 1;
-            min-width: 100px;
-        }
-
-        .retry-btn-primary {
-            background: #007bff;
-            color: white;
-        }
-
-        .retry-btn-primary:hover {
-            background: #0056b3;
-            transform: translateY(-1px);
-        }
-
-        .retry-btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-
-        .retry-btn-secondary:hover {
-            background: #545b62;
-            transform: translateY(-1px);
-        }
-
-        .retry-btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-
-        .retry-btn-danger:hover {
-            background: #c82333;
-            transform: translateY(-1px);
-        }
-
-        .retry-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
         .retry-progress {
             margin-top: 15px;
-            background: rgba(255, 255, 255, 0.7);
+            background: var(--surface-light);
             border-radius: 6px;
             padding: 10px;
         }
@@ -1058,7 +940,7 @@ function addRetryUploadStyles() {
         .retry-progress-bar {
             width: 100%;
             height: 6px;
-            background: #e9ecef;
+            background: var(--surface-light);
             border-radius: 3px;
             overflow: hidden;
             margin-bottom: 8px;
@@ -1068,26 +950,22 @@ function addRetryUploadStyles() {
             content: '';
             display: block;
             height: 100%;
-            background: #007bff;
+            background: var(--primary-color);
             width: 0%;
             transition: width 0.3s ease;
         }
 
         .retry-progress-text {
             font-size: 12px;
-            color: #495057;
+            color: var(--text-secondary);
             font-weight: 500;
         }
 
-        @media (max-width: 768px) {
-            .retry-actions {
-                flex-direction: column;
-            }
-
-            .retry-btn {
-                flex: none;
-            }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
+
     `;
     document.head.appendChild(styles);
 }
