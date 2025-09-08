@@ -775,8 +775,8 @@ function showWarning(message) {
     }, 5000);
 }
 
-// Sube un blob de audio en segundo plano
-function uploadInBackground(blob, name, onProgress) {
+// Sube un blob de audio a Drive
+function uploadAudioToDrive(blob, name, onProgress) {
     const formData = new FormData();
     formData.append('audioFile', blob, `${name}.webm`);
     formData.append('meetingName', name);
@@ -833,6 +833,11 @@ function uploadInBackground(blob, name, onProgress) {
 
         xhr.send(formData);
     });
+}
+
+// Función existente para compatibilidad
+function uploadInBackground(blob, name, onProgress) {
+    return uploadAudioToDrive(blob, name, onProgress);
 }
 
 function pollPendingRecordingStatus(id) {
