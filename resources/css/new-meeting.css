@@ -624,6 +624,53 @@ body {
     background: #dc2626;
 }
 
+/* Retry Upload UI */
+.retry-upload-card {
+    @apply bg-yellow-100 border border-yellow-300 rounded-xl p-5 shadow-md;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.retry-title,
+.retry-message {
+    @apply text-yellow-800;
+}
+
+.retry-details {
+    @apply flex justify-between bg-white/70 p-2 rounded-md text-sm;
+}
+
+.retry-filename {
+    @apply font-bold text-gray-700;
+}
+
+.retry-filesize {
+    @apply text-gray-500;
+}
+
+.retry-actions {
+    @apply flex gap-2.5 flex-wrap;
+}
+
+.retry-btn {
+    @apply flex-1;
+    min-width: 100px;
+}
+
+@media (max-width: 768px) {
+    .retry-actions {
+        flex-direction: column;
+    }
+
+    .retry-btn {
+        flex: none;
+    }
+}
+
 
 .pause-btn {
     background: var(--warning-color);
