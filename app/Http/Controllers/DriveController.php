@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Log;
 use Google\Service\Drive as DriveService;
 use Google\Service\Exception as GoogleServiceException;
 use App\Http\Controllers\Auth\GoogleAuthController;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class DriveController extends Controller
@@ -404,7 +405,7 @@ class DriveController extends Controller
         try {
             $v = $request->validate([
                 'meetingName' => 'required|string',
-                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4',
+                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4,video/mp4',
                 'rootFolder'  => 'nullable|string', // Cambiar a nullable
             ]);
 
@@ -609,6 +610,11 @@ class DriveController extends Controller
                 ]);
             }
             return response()->json($response);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => $e->errors()['audioFile'][0] ?? 'Datos inválidos',
+                'errors'  => $e->errors(),
+            ], 422);
         } catch (GoogleServiceException $e) {
             if (str_contains($e->getMessage(), 'invalid_grant')) {
                 Log::warning('uploadPendingAudio invalid_grant', [
