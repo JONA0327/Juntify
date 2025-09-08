@@ -780,7 +780,16 @@ function uploadAudioToDrive(blob, name, onProgress) {
     const formData = new FormData();
     formData.append('audioFile', blob, `${name}.webm`);
     formData.append('meetingName', name);
-    formData.append('rootFolder', 'default'); // Agregar rootFolder requerido
+    // Agregar rootFolder solo si el usuario ha seleccionado una carpeta
+    const rootFolderSelect = document.getElementById('root-folder-select');
+    let selectedRootFolder = rootFolderSelect ? rootFolderSelect.value : null;
+    if (!selectedRootFolder) {
+        // Intentar recuperar de sessionStorage si existe
+        selectedRootFolder = sessionStorage.getItem('selectedRootFolder');
+    }
+    if (selectedRootFolder) {
+        formData.append('rootFolder', selectedRootFolder);
+    }
 
     const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
