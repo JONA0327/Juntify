@@ -405,7 +405,7 @@ class DriveController extends Controller
             $v = $request->validate([
                 'meetingName' => 'required|string',
                 'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4',
-                'rootFolder'  => 'required|string',
+                'rootFolder'  => 'nullable|string', // Cambiar a nullable
             ]);
 
             $user = Auth::user();
@@ -442,16 +442,25 @@ class DriveController extends Controller
                     return response()->json(['message' => 'Token de Google no encontrado'], 400);
                 }
 
-                $rootFolder = Folder::where('google_token_id', $token->id)
-                    ->whereNull('parent_id')
-                    ->where(function ($q) use ($v) {
-                        $q->where('google_id', $v['rootFolder'])
-                          ->orWhere('id', $v['rootFolder']);
-                    })
-                    ->first();
+                // Si no se especifica rootFolder, usar la primera carpeta raíz del usuario
+                if (empty($v['rootFolder'])) {
+                    $rootFolder = Folder::where('google_token_id', $token->id)
+                        ->whereNull('parent_id')
+                        ->first();
+                } else {
+                    $rootFolder = Folder::where('google_token_id', $token->id)
+                        ->whereNull('parent_id')
+                        ->where(function ($q) use ($v) {
+                            $q->where('google_id', $v['rootFolder'])
+                              ->orWhere('id', $v['rootFolder']);
+                        })
+                        ->first();
+                }
+
                 if (! $rootFolder) {
                     Log::error('uploadPendingAudio: root folder not found', [
                         'username' => $user->username,
+                        'rootFolder' => $v['rootFolder'] ?? 'not specified',
                     ]);
                     return response()->json(['message' => 'Carpeta raíz no encontrada'], 400);
                 }
@@ -585,6 +594,11 @@ class DriveController extends Controller
                 'audio_name'         => $fileName,
                 'subfolder_id'       => $subfolder->id,
                 'subfolder_created'  => $subfolderCreated,
+                'folder_info'        => [
+                    'root_folder' => $rootFolder->name ?? 'Grabaciones',
+                    'subfolder'   => $pendingSubfolderName,
+                    'full_path'   => ($rootFolder->name ?? 'Grabaciones') . '/' . $pendingSubfolderName
+                ],
             ];
             if ($subfolderCreated) {
                 \App\Models\PendingFolder::firstOrCreate([

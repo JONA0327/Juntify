@@ -665,21 +665,28 @@ function generateTranscriptionSegments() {
         return;
     }
 
-    const segments = utterances.map(u => {
+    const segments = utterances.map((u, index) => {
         const hasSpeaker = u.speaker !== undefined && u.speaker !== null;
         const speaker = hasSpeaker ? u.speaker : `Hablante ${u.speaker}`;
         const avatar = hasSpeaker
             ? u.speaker.toString().slice(0, 2).toUpperCase()
             : `H${u.speaker}`;
 
-        // Detectar si los tiempos están en milisegundos o segundos
-        // Si el valor es mayor a 1000, probablemente está en milisegundos
-        // Si es menor, probablemente ya está en segundos
+        // Mejorar detección de formato de tiempo
+        // AssemblyAI siempre devuelve tiempo en milisegundos
+        // Pero verificamos por si hay alguna conversión previa
         const isInMilliseconds = u.start > 1000 || u.end > 1000;
 
         // Convertir a segundos solo si está en milisegundos
         const startInSeconds = isInMilliseconds ? u.start / 1000 : u.start;
         const endInSeconds = isInMilliseconds ? u.end / 1000 : u.end;
+
+        // Debug detallado para primeros 3 segments
+        if (index < 3) {
+            console.log(`🎯 [Segment ${index}] Raw times: start=${u.start}, end=${u.end}, detected_ms=${isInMilliseconds}`);
+            console.log(`🎯 [Segment ${index}] Converted: start=${startInSeconds.toFixed(2)}s, end=${endInSeconds.toFixed(2)}s`);
+            console.log(`🎯 [Segment ${index}] Speaker: ${speaker}, Text: "${u.text.substring(0, 50)}..."`);
+        }
 
         return {
             speaker,
@@ -688,6 +695,9 @@ function generateTranscriptionSegments() {
             avatar,
             start: startInSeconds,
             end: endInSeconds,
+            originalStart: u.start, // Guardar valores originales para debugging
+            originalEnd: u.end,
+            wasInMilliseconds: isInMilliseconds
         };
     });
 
@@ -756,6 +766,10 @@ function generateTranscriptionSegments() {
     `).join('');
 
     transcriptionData = segments;
+
+    // Diagnóstico de sincronización
+    diagnoseSynchronizationIssues(segments, utterances);
+
     const speakerSet = new Set(segments.map(s => s.speaker));
     const speakerCountEl = document.getElementById('speaker-count');
     if (speakerCountEl) {
@@ -860,11 +874,19 @@ function waitForAudioReady(player, timeoutMs = 10000) {
 }
 
 function playSegmentAudio(segmentIndex) {
-    const segment = transcriptionData[segmentIndex];
+    // Obtener el segment desde transcriptionData que contiene los segments procesados
+    const segment = transcriptionData && transcriptionData[segmentIndex];
     if (!segment) {
-        console.error('🎵 [playSegmentAudio] Segment not found:', segmentIndex);
+        console.error('🎵 [playSegmentAudio] Segment not found:', segmentIndex, 'Total segments:', transcriptionData?.length);
         return;
     }
+
+    console.log(`🎵 [playSegmentAudio] Playing segment ${segmentIndex}:`, {
+        speaker: segment.speaker,
+        start: segment.start,
+        end: segment.end,
+        text: segment.text?.substring(0, 50) + '...'
+    });
 
     // Inicializar el audio player
     if (!initializeAudioPlayer()) {
@@ -898,14 +920,18 @@ function playSegmentAudio(segmentIndex) {
     // Función asíncrona para manejar la reproducción
     const startPlayback = async () => {
         try {
-            console.log(`🎵 [playSegmentAudio] Starting segment ${segmentIndex}: ${segment.start}s - ${segment.end}s`);
+            // Añadir pequeño buffer para compensar posibles desincronizaciones
+            const startTimeWithBuffer = Math.max(0, segment.start - 0.1); // 100ms antes
+            const endTimeWithBuffer = segment.end + 0.1; // 100ms después
+
+            console.log(`🎵 [playSegmentAudio] Starting segment ${segmentIndex}: ${startTimeWithBuffer.toFixed(2)}s - ${endTimeWithBuffer.toFixed(2)}s (with buffer)`);
 
             // Esperar a que el audio esté listo
             await waitForAudioReady(audioPlayer, 15000); // 15 segundos de timeout
 
-            // Configurar el tiempo de inicio
-            audioPlayer.currentTime = segment.start;
-            const stopTime = segment.end;
+            // Configurar el tiempo de inicio con buffer
+            audioPlayer.currentTime = startTimeWithBuffer;
+            const stopTime = endTimeWithBuffer;
 
             // Crear handler para detener al final del segmento
             segmentEndHandler = () => {
@@ -915,7 +941,7 @@ function playSegmentAudio(segmentIndex) {
                     segmentEndHandler = null;
                     updateSegmentButtons(null);
                     currentSegmentIndex = null;
-                    console.log(`🎵 [playSegmentAudio] Segment ${segmentIndex} finished`);
+                    console.log(`🎵 [playSegmentAudio] Segment ${segmentIndex} finished at ${audioPlayer.currentTime.toFixed(2)}s`);
                 }
             };
 
@@ -2365,6 +2391,77 @@ window.openGlobalSpeakerModal = openGlobalSpeakerModal;
 window.closeGlobalSpeakerModal = closeGlobalSpeakerModal;
 window.confirmGlobalSpeakerChange = confirmGlobalSpeakerChange;
 window.seekAudio = seekAudio;
+
+// Función para diagnosticar problemas de sincronización
+function diagnoseSynchronizationIssues(segments, originalUtterances) {
+    console.log('🔍 [SYNC_DIAGNOSIS] Iniciando diagnóstico de sincronización...');
+
+    if (!segments || !originalUtterances) {
+        console.warn('🔍 [SYNC_DIAGNOSIS] No hay datos para diagnosticar');
+        return;
+    }
+
+    // Verificar si hay desplazamientos temporales
+    let potentialIssues = [];
+    let cumulativeOffset = 0;
+
+    segments.forEach((segment, index) => {
+        const original = originalUtterances[index];
+        if (!original) return;
+
+        // Calcular diferencias
+        const startDiff = Math.abs(segment.start - (original.start / 1000));
+        const endDiff = Math.abs(segment.end - (original.end / 1000));
+
+        if (startDiff > 1 || endDiff > 1) { // Más de 1 segundo de diferencia
+            potentialIssues.push({
+                index,
+                startDiff: startDiff.toFixed(2),
+                endDiff: endDiff.toFixed(2),
+                segmentStart: segment.start.toFixed(2),
+                originalStart: (original.start / 1000).toFixed(2),
+                text: segment.text.substring(0, 50) + '...'
+            });
+        }
+
+        // Verificar saltos temporales grandes entre segmentos consecutivos
+        if (index > 0) {
+            const prevSegment = segments[index - 1];
+            const gap = segment.start - prevSegment.end;
+            if (gap > 5) { // Gaps de más de 5 segundos pueden indicar problemas
+                cumulativeOffset += gap;
+            }
+        }
+    });
+
+    // Reportar hallazgos
+    console.log(`🔍 [SYNC_DIAGNOSIS] Segments analizados: ${segments.length}`);
+    console.log(`🔍 [SYNC_DIAGNOSIS] Problemas de sincronización detectados: ${potentialIssues.length}`);
+
+    if (potentialIssues.length > 0) {
+        console.warn('⚠️ [SYNC_DIAGNOSIS] Posibles problemas de sincronización:', potentialIssues.slice(0, 5));
+        showNotification(`⚠️ Detectados ${potentialIssues.length} posibles problemas de sincronización entre audio y texto`, 'warning');
+    }
+
+    if (cumulativeOffset > 10) {
+        console.warn(`⚠️ [SYNC_DIAGNOSIS] Desplazamiento acumulativo alto: ${cumulativeOffset.toFixed(2)}s`);
+        showNotification(`⚠️ El audio podría estar desplazado ${cumulativeOffset.toFixed(1)}s respecto a la transcripción`, 'warning');
+    }
+
+    // Verificar distribución temporal
+    const totalDuration = segments.length > 0 ? segments[segments.length - 1].end : 0;
+    const averageSegmentLength = totalDuration / segments.length;
+
+    console.log(`🔍 [SYNC_DIAGNOSIS] Duración total: ${totalDuration.toFixed(2)}s`);
+    console.log(`🔍 [SYNC_DIAGNOSIS] Duración promedio por segmento: ${averageSegmentLength.toFixed(2)}s`);
+
+    if (averageSegmentLength < 1) {
+        console.warn('⚠️ [SYNC_DIAGNOSIS] Segmentos muy cortos detectados - esto puede causar problemas de reproducción');
+        showNotification('⚠️ Los segmentos de audio son muy cortos, esto puede afectar la reproducción', 'info');
+    }
+
+    console.log('✅ [SYNC_DIAGNOSIS] Diagnóstico completado');
+}
 window.clearDiscardState = clearDiscardState; // Función para limpiar estado de descarte
 // Hacer accesible la transcripción para otros scripts o para depuración
 window.transcriptionData = transcriptionData;

@@ -36,6 +36,10 @@ let postponeMode = false;
 window.postponeMode = postponeMode;
 let limitWarningShown = false;
 let currentRecordingFormat = null; // Almacenar el formato usado en la grabación actual
+let failedAudioBlob = null; // Almacenar blob que falló al subir
+let failedAudioName = null; // Nombre del archivo que falló
+let retryAttempts = 0; // Contador de intentos de resubida
+const MAX_RETRY_ATTEMPTS = 3; // Máximo número de reintentos
 
 // Función para obtener el mejor formato de audio disponible (solo MP4/MP3)
 function getOptimalAudioFormat() {
@@ -53,6 +57,33 @@ function getOptimalAudioFormat() {
 
     console.error('🎵 [Recording] ERROR: Navegador no compatible con MP4/MP3');
     throw new Error('Este navegador no soporta los formatos de audio requeridos (MP4/MP3). Por favor, usa un navegador más reciente.');
+}
+
+// Función para obtener la extensión correcta del archivo basada en el formato usado
+function getCorrectFileExtension(blob) {
+    // Si tenemos el formato actual almacenado, usarlo
+    if (currentRecordingFormat) {
+        if (currentRecordingFormat.includes('mp4')) return 'mp4';
+        if (currentRecordingFormat.includes('mpeg')) return 'mp3';
+    }
+
+    // Si no, intentar detectar por el tipo del blob
+    if (blob && blob.type) {
+        if (blob.type.includes('mp4')) return 'mp4';
+        if (blob.type.includes('mpeg')) return 'mp3';
+    }
+
+    // Fallback: usar MP4 como default (el formato preferido)
+    return 'mp4';
+}
+
+// Función mejorada para descargar con formato correcto
+function downloadAudioWithCorrectFormat(blob, baseName) {
+    const extension = getCorrectFileExtension(blob);
+    const fileName = `${baseName}.${extension}`;
+    downloadBlob(blob, fileName);
+    console.log(`💾 [Download] Descargando audio en formato ${extension}: ${fileName}`);
+    return fileName;
 }
 
 // SVG paths for dynamic icons
@@ -485,13 +516,13 @@ async function finalizeRecording() {
                 .catch(e => {
                     console.error('Error al subir la grabación', e);
                     showError('Error al subir la grabación. Se descargará el audio');
-                    downloadBlob(finalBlob, name + '.webm');
+                    downloadAudioWithCorrectFormat(finalBlob, name);
                 });
 
             showSuccess('La subida continuará en segundo plano. Revisa el panel de notificaciones para el estado final.');
             handlePostActionCleanup(true);
         } else {
-            downloadBlob(finalBlob, name + '.webm');
+            downloadAudioWithCorrectFormat(finalBlob, name);
             handlePostActionCleanup();
         }
         return;
@@ -506,7 +537,7 @@ async function finalizeRecording() {
         } catch (e) {
             console.error('Error al guardar el audio para subida en segundo plano', e);
             showError('No se pudo guardar el audio localmente. Se descargará el archivo.');
-            downloadBlob(finalBlob, name + '.webm');
+            downloadAudioWithCorrectFormat(finalBlob, name);
             handlePostActionCleanup();
             return;
         }
@@ -716,6 +747,7 @@ function uploadInBackground(blob, name, onProgress) {
     const formData = new FormData();
     formData.append('audioFile', blob, `${name}.webm`);
     formData.append('meetingName', name);
+    formData.append('rootFolder', 'default'); // Agregar rootFolder requerido
 
     const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
@@ -744,16 +776,25 @@ function uploadInBackground(blob, name, onProgress) {
                 if (window.notifications) {
                     window.notifications.refresh();
                 }
+                // Limpiar datos de fallo si la subida fue exitosa
+                clearFailedUploadData();
                 resolve(response);
             } else {
-                showError('Fallo al subir el audio');
+                console.error('Upload failed with status:', xhr.status, xhr.responseText);
+                // Almacenar datos para reintento
+                storeFailedUploadData(blob, name);
+                showUploadRetryUI();
+                showError(`Fallo al subir el audio (Error ${xhr.status}). Puedes reintentarlo más tarde.`);
                 reject(new Error('Upload failed'));
             }
         };
 
         xhr.onerror = () => {
-            console.error('Error uploading audio');
-            showError('Fallo al subir el audio');
+            console.error('Error uploading audio - Network error');
+            // Almacenar datos para reintento
+            storeFailedUploadData(blob, name);
+            showUploadRetryUI();
+            showError('Error de conexión al subir el audio. Puedes reintentarlo más tarde.');
             reject(new Error('Upload failed'));
         };
 
@@ -783,6 +824,272 @@ function pollPendingRecordingStatus(id) {
             .catch(() => setTimeout(check, 5000));
     };
     check();
+}
+
+// Funciones para manejar subidas fallidas
+function storeFailedUploadData(blob, name) {
+    failedAudioBlob = blob;
+    failedAudioName = name;
+    retryAttempts = 0;
+    console.log('📦 [Failed Upload] Datos almacenados para reintento:', {
+        size: (blob.size / (1024 * 1024)).toFixed(2) + ' MB',
+        type: blob.type,
+        name: name
+    });
+}
+
+function clearFailedUploadData() {
+    failedAudioBlob = null;
+    failedAudioName = null;
+    retryAttempts = 0;
+    hideUploadRetryUI();
+    console.log('🧹 [Failed Upload] Datos de subida fallida limpiados');
+}
+
+function showUploadRetryUI() {
+    // Verificar si ya existe el UI de reintento
+    let retryUI = document.getElementById('retry-upload-container');
+
+    if (!retryUI) {
+        // Crear el UI de reintento
+        retryUI = document.createElement('div');
+        retryUI.id = 'retry-upload-container';
+        retryUI.className = 'retry-upload-container';
+        retryUI.innerHTML = `
+            <div class="retry-upload-card">
+                <div class="retry-header">
+                    <div class="retry-icon">⚠️</div>
+                    <div class="retry-title">Subida Fallida</div>
+                </div>
+                <div class="retry-content">
+                    <p class="retry-message">La grabación no se pudo subir a Drive, pero está guardada localmente.</p>
+                    <div class="retry-details">
+                        <span class="retry-filename" id="retry-filename">archivo.mp4</span>
+                        <span class="retry-filesize" id="retry-filesize">0 MB</span>
+                    </div>
+                </div>
+                <div class="retry-actions">
+                    <button class="retry-btn retry-btn-primary" onclick="retryUpload()" id="retry-upload-btn">
+                        🔄 Reintentar Subida
+                    </button>
+                    <button class="retry-btn retry-btn-secondary" onclick="downloadFailedAudio()">
+                        💾 Descargar
+                    </button>
+                    <button class="retry-btn retry-btn-danger" onclick="discardFailedAudio()">
+                        🗑️ Descartar
+                    </button>
+                </div>
+                <div class="retry-progress" id="retry-progress" style="display: none;">
+                    <div class="retry-progress-bar" id="retry-progress-bar"></div>
+                    <span class="retry-progress-text" id="retry-progress-text">Subiendo...</span>
+                </div>
+            </div>
+        `;
+
+        // Buscar donde insertar el UI (después del botón de posponer)
+        const postponeSection = document.querySelector('.postpone-section');
+        if (postponeSection) {
+            postponeSection.parentNode.insertBefore(retryUI, postponeSection.nextSibling);
+        } else {
+            // Fallback: insertar al final del contenedor principal
+            const container = document.querySelector('.recording-container') || document.body;
+            container.appendChild(retryUI);
+        }
+
+        // Agregar estilos CSS si no existen
+        addRetryUploadStyles();
+    }
+
+    // Actualizar información del archivo
+    if (failedAudioBlob && failedAudioName) {
+        const sizeInMB = (failedAudioBlob.size / (1024 * 1024)).toFixed(2);
+        document.getElementById('retry-filename').textContent = `${failedAudioName}.${getFileExtension()}`;
+        document.getElementById('retry-filesize').textContent = `${sizeInMB} MB`;
+    }
+
+    retryUI.style.display = 'block';
+    console.log('🔄 [Retry UI] Interfaz de reintento mostrada');
+}
+
+function hideUploadRetryUI() {
+    const retryUI = document.getElementById('retry-upload-container');
+    if (retryUI) {
+        retryUI.style.display = 'none';
+    }
+}
+
+function getFileExtension() {
+    if (!failedAudioBlob) return 'mp4';
+    return getCorrectFileExtension(failedAudioBlob);
+}
+
+function addRetryUploadStyles() {
+    // Verificar si los estilos ya existen
+    if (document.getElementById('retry-upload-styles')) return;
+
+    const styles = document.createElement('style');
+    styles.id = 'retry-upload-styles';
+    styles.textContent = `
+        .retry-upload-container {
+            margin: 20px 0;
+            padding: 0 20px;
+        }
+
+        .retry-upload-card {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 1px solid #ffeaa7;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .retry-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .retry-icon {
+            font-size: 24px;
+            margin-right: 12px;
+        }
+
+        .retry-title {
+            font-weight: bold;
+            font-size: 18px;
+            color: #856404;
+        }
+
+        .retry-content {
+            margin-bottom: 20px;
+        }
+
+        .retry-message {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .retry-details {
+            display: flex;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .retry-filename {
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .retry-filesize {
+            color: #6c757d;
+        }
+
+        .retry-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .retry-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .retry-btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .retry-btn-primary:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+
+        .retry-btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .retry-btn-secondary:hover {
+            background: #545b62;
+            transform: translateY(-1px);
+        }
+
+        .retry-btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .retry-btn-danger:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
+
+        .retry-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .retry-progress {
+            margin-top: 15px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 6px;
+            padding: 10px;
+        }
+
+        .retry-progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .retry-progress-bar::after {
+            content: '';
+            display: block;
+            height: 100%;
+            background: #007bff;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .retry-progress-text {
+            font-size: 12px;
+            color: #495057;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .retry-actions {
+                flex-direction: column;
+            }
+
+            .retry-btn {
+                flex: none;
+            }
+        }
+    `;
+    document.head.appendChild(styles);
 }
 
 async function analyzeNow() {
@@ -817,7 +1124,7 @@ async function analyzeNow() {
         sessionStorage.removeItem('recordingSegments');
         sessionStorage.removeItem('recordingMetadata');
     } catch (e) {
-        downloadBlob(pendingAudioBlob, 'grabacion_error.webm');
+        downloadAudioWithCorrectFormat(pendingAudioBlob, 'grabacion_error');
         console.error('Error preparando audio', e);
         showError('Error al analizar la grabación. Usa el archivo descargado para reintentar.');
         handlePostActionCleanup();
@@ -1499,3 +1806,280 @@ window.closeMobileDropdown = function() {
   dropdown.classList.remove('show');
   overlay.classList.remove('show');
 };
+
+// Funciones globales para manejar reintentos de subida
+window.retryUpload = async function() {
+    if (!failedAudioBlob || !failedAudioName) {
+        console.error('🔄 [Retry] No hay datos de audio para reintentar');
+        showError('No hay datos de audio para reintentar');
+        return;
+    }
+
+    if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
+        showError(`Has excedido el máximo de intentos (${MAX_RETRY_ATTEMPTS}). Intenta descargar el archivo.`);
+        return;
+    }
+
+    retryAttempts++;
+    console.log(`🔄 [Retry] Intento ${retryAttempts}/${MAX_RETRY_ATTEMPTS}`);
+
+    // Deshabilitar botón y mostrar progreso
+    const retryBtn = document.getElementById('retry-upload-btn');
+    const progressDiv = document.getElementById('retry-progress');
+    const progressBar = document.getElementById('retry-progress-bar');
+    const progressText = document.getElementById('retry-progress-text');
+
+    if (retryBtn) retryBtn.disabled = true;
+    if (progressDiv) progressDiv.style.display = 'block';
+    if (progressText) progressText.textContent = `Reintentando subida (${retryAttempts}/${MAX_RETRY_ATTEMPTS})...`;
+
+    // Create progress notification
+    const notificationId = await createUploadProgressNotification(
+        failedAudioName,
+        `Reintentando subida (${retryAttempts}/${MAX_RETRY_ATTEMPTS})...`
+    );
+
+    try {
+        // Función de progreso
+        const onProgress = (loaded, total) => {
+            const percent = (loaded / total) * 100;
+            if (progressBar) {
+                // Actualizar la barra de progreso usando CSS custom property
+                progressBar.style.setProperty('--progress-width', `${percent}%`);
+                // También actualizar directamente el after pseudo-element via style
+                const afterElement = progressBar.querySelector('::after');
+                if (afterElement) {
+                    afterElement.style.width = `${percent}%`;
+                }
+            }
+            if (progressText) {
+                progressText.textContent = `Subiendo... ${percent.toFixed(0)}%`;
+            }
+
+            // Update notification with progress
+            if (notificationId && percent > 0) {
+                updateUploadProgressNotification(notificationId, `Subiendo... ${percent.toFixed(0)}%`);
+            }
+        };
+
+        // Intentar subida
+        const result = await uploadAudioToDrive(failedAudioBlob, failedAudioName, onProgress);
+
+        // Éxito
+        console.log('✅ [Retry] Subida exitosa en intento', retryAttempts);
+
+        // Create success notification with folder info
+        const folderInfo = result?.folder_info || { root_folder: 'Grabaciones', subfolder: 'Sin clasificar' };
+        await createUploadSuccessNotification(failedAudioName, folderInfo);
+
+        // Clean up progress notification
+        await dismissNotification(notificationId);
+
+        showSuccess(`¡Archivo subido exitosamente en el intento ${retryAttempts}!`);
+        clearFailedUploadData();
+
+    } catch (error) {
+        console.error(`❌ [Retry] Fallo en intento ${retryAttempts}:`, error);
+
+        // Clean up progress notification on error
+        await dismissNotification(notificationId);
+
+        if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
+            showError(`Subida falló después de ${MAX_RETRY_ATTEMPTS} intentos. Puedes descargar el archivo manualmente.`);
+            if (progressText) progressText.textContent = 'Máximo de intentos alcanzado';
+        } else {
+            showError(`Intento ${retryAttempts} falló. Puedes intentar nuevamente.`);
+            if (progressText) progressText.textContent = `Fallo en intento ${retryAttempts}`;
+        }
+    } finally {
+        // Rehabilitar botón y ocultar progreso
+        if (retryBtn) retryBtn.disabled = false;
+        if (progressDiv) {
+            setTimeout(() => {
+                progressDiv.style.display = 'none';
+            }, 2000);
+        }
+    }
+};
+
+window.downloadFailedAudio = function() {
+    if (!failedAudioBlob || !failedAudioName) {
+        console.error('🔄 [Download] No hay datos de audio para descargar');
+        showError('No hay datos de audio para descargar');
+        return;
+    }
+
+    const fileName = downloadAudioWithCorrectFormat(failedAudioBlob, failedAudioName);
+    console.log('💾 [Download] Archivo descargado:', fileName);
+    showSuccess(`Archivo ${fileName} descargado correctamente`);
+};
+
+window.discardFailedAudio = function() {
+    if (confirm('¿Estás seguro de que quieres descartar el audio? Esta acción no se puede deshacer.')) {
+        clearFailedUploadData();
+        console.log('🗑️ [Discard] Audio descartado por el usuario');
+        showSuccess('Audio descartado correctamente');
+    }
+};
+
+// ===== NOTIFICATION MANAGEMENT FUNCTIONS =====
+
+/**
+ * Creates a progress notification for upload operations
+ * @param {string} filename - Name of the file being uploaded
+ * @param {string} message - Progress message to show
+ * @returns {Promise<string>} Notification ID for later updates
+ */
+async function createUploadProgressNotification(filename, message) {
+    try {
+        const response = await fetch('/api/notifications', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify({
+                type: 'audio_upload_progress',
+                message: message,
+                data: {
+                    meeting_name: filename,
+                    status: 'progress'
+                }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to create notification: ${response.status}`);
+        }
+
+        const notification = await response.json();
+        console.log('📧 [notifications] Created progress notification:', notification.id);
+
+        // Refresh notifications display
+        if (window.notifications) {
+            window.notifications.refresh();
+        }
+
+        return notification.id;
+    } catch (error) {
+        console.warn('📧 [notifications] Failed to create progress notification:', error);
+        return null; // Return null if notification creation fails (non-critical)
+    }
+}
+
+/**
+ * Updates an existing progress notification
+ * @param {string} notificationId - ID of the notification to update
+ * @param {string} message - New progress message
+ */
+async function updateUploadProgressNotification(notificationId, message) {
+    if (!notificationId) return;
+
+    try {
+        const response = await fetch(`/api/notifications/${notificationId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify({
+                message: message,
+                data: {
+                    status: 'progress'
+                }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to update notification: ${response.status}`);
+        }
+
+        console.log('📧 [notifications] Updated progress notification:', notificationId);
+
+        // Refresh notifications display
+        if (window.notifications) {
+            window.notifications.refresh();
+        }
+    } catch (error) {
+        console.warn('📧 [notifications] Failed to update progress notification:', error);
+    }
+}
+
+/**
+ * Creates a success notification for completed uploads
+ * @param {string} filename - Name of the uploaded file
+ * @param {Object} folderInfo - Information about the upload destination
+ */
+async function createUploadSuccessNotification(filename, folderInfo) {
+    try {
+        const rootFolder = folderInfo.root_folder || 'Grabaciones';
+        const subfolder = folderInfo.subfolder || 'Sin clasificar';
+        const message = `Se ha subido audio pospuesto a la carpeta: ${rootFolder}/${subfolder}`;
+
+        const response = await fetch('/api/notifications', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify({
+                type: 'audio_upload_success',
+                message: message,
+                data: {
+                    meeting_name: filename,
+                    root_folder: rootFolder,
+                    subfolder: subfolder,
+                    status: 'success'
+                }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to create success notification: ${response.status}`);
+        }
+
+        const notification = await response.json();
+        console.log('📧 [notifications] Created success notification:', notification.id);
+
+        // Refresh notifications display
+        if (window.notifications) {
+            window.notifications.refresh();
+        }
+
+        return notification.id;
+    } catch (error) {
+        console.warn('📧 [notifications] Failed to create success notification:', error);
+        return null;
+    }
+}
+
+/**
+ * Dismisses a notification by ID
+ * @param {string} notificationId - ID of the notification to dismiss
+ */
+async function dismissNotification(notificationId) {
+    if (!notificationId) return;
+
+    try {
+        const response = await fetch(`/api/notifications/${notificationId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to dismiss notification: ${response.status}`);
+        }
+
+        console.log('📧 [notifications] Dismissed notification:', notificationId);
+
+        // Refresh notifications display
+        if (window.notifications) {
+            window.notifications.refresh();
+        }
+    } catch (error) {
+        console.warn('📧 [notifications] Failed to dismiss notification:', error);
+    }
+}

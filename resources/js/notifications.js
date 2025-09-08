@@ -33,6 +33,29 @@ const Notifications = (() => {
                         <span class="text-sm text-slate-200">${name} - ${n.message}</span>
                         <button class="dismiss-btn text-slate-400 hover:text-white" data-id="${n.id}">&times;</button>
                     `;
+                } else if (n.type === 'audio_upload_progress') {
+                    const name = n.data?.meeting_name || 'Audio';
+                    li.className = 'progress-item p-3 bg-blue-700/50 rounded-lg mb-2 flex items-center gap-3';
+                    li.innerHTML = `
+                        <div class="flex-shrink-0">
+                            <div class="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                        <span class="text-sm text-blue-200 flex-grow">${name} - ${n.message}</span>
+                    `;
+                } else if (n.type === 'audio_upload_success') {
+                    const name = n.data?.meeting_name || 'Audio';
+                    li.className = 'success-item p-3 bg-green-700/50 rounded-lg mb-2 flex justify-between items-center';
+                    li.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <div class="flex-shrink-0">
+                                <svg class="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <span class="text-sm text-green-200">${name} - ${n.message}</span>
+                        </div>
+                        <button class="dismiss-btn text-green-400 hover:text-white" data-id="${n.id}">&times;</button>
+                    `;
                 } else {
                     li.className = 'p-3 bg-slate-700/50 rounded-lg mb-2 flex justify-between items-center';
                     li.innerHTML = `

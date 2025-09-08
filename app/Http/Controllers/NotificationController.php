@@ -22,6 +22,54 @@ class NotificationController extends Controller
         return response()->json($notifications);
     }
 
+    public function store(Request $request)
+    {
+        if (!auth()->check()) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $user = auth()->user();
+
+        $request->validate([
+            'type' => 'required|string',
+            'message' => 'required|string',
+            'data' => 'nullable|array'
+        ]);
+
+        $notification = Notification::create([
+            'remitente' => $user->id,
+            'emisor' => $user->id,
+            'type' => $request->type,
+            'message' => $request->message,
+            'data' => $request->data ?? [],
+            'status' => 'active'
+        ]);
+
+        return response()->json($notification, 201);
+    }
+
+    public function update(Request $request, Notification $notification)
+    {
+        if (!auth()->check()) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $user = auth()->user();
+        if ($notification->emisor !== $user->id) {
+            abort(403);
+        }
+
+        $request->validate([
+            'message' => 'sometimes|required|string',
+            'data' => 'sometimes|nullable|array',
+            'status' => 'sometimes|required|string'
+        ]);
+
+        $notification->update($request->only(['message', 'data', 'status']));
+
+        return response()->json($notification);
+    }
+
     public function destroy(Notification $notification)
     {
         if (!auth()->check()) {

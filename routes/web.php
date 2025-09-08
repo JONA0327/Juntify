@@ -24,6 +24,11 @@ Route::get('/', function () {
     return view('index');
 });
 
+// Test route for notifications (remove in production)
+Route::get('/test-notifications', function () {
+    return view('test-notifications');
+})->middleware('auth');
+
 // Rutas de Auth
 Route::get('/login',    [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login',   [LoginController::class, 'login']);
