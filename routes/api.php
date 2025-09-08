@@ -127,7 +127,7 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
     });
 
     // Notificaciones
-    Route::middleware(['web', 'auth'])->group(function () {
+    Route::middleware(['auth'])->group(function () {
         Route::get('/notifications', [NotificationController::class, 'index'])->name('api.notifications.index');
         Route::post('/notifications', [NotificationController::class, 'store'])->name('api.notifications.store');
         Route::put('/notifications/{notification}', [NotificationController::class, 'update'])->name('api.notifications.update');

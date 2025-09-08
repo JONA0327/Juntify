@@ -1850,6 +1850,7 @@ async function createUploadProgressNotification(filename, message) {
     try {
         const response = await fetch('/api/notifications', {
             method: 'POST',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
