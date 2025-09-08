@@ -459,7 +459,46 @@ class DriveController extends Controller
                 }
 
                 if (! $rootFolder) {
-                    Log::error('uploadPendingAudio: root folder not found', [
+                    // Try to create a default root folder if none exists
+                    Log::info('uploadPendingAudio: creating default root folder for user', [
+                        'username' => $user->username,
+                    ]);
+
+                    try {
+                        // Create a default "Grabaciones" folder in user's Drive using existing service
+                        $defaultFolderName = 'Grabaciones';
+
+                        // Use the existing drive service to create folder
+                        $driveService = app(\App\Services\GoogleDriveService::class);
+                        $driveService->setToken($token);
+
+                        $folderId = $driveService->createFolder($defaultFolderName);
+
+                        // Save the folder to database
+                        $rootFolder = Folder::create([
+                            'name' => $defaultFolderName,
+                            'google_id' => $folderId,
+                            'google_token_id' => $token->id,
+                            'parent_id' => null,
+                        ]);
+
+                        Log::info('uploadPendingAudio: default root folder created', [
+                            'username' => $user->username,
+                            'folder_id' => $folderId,
+                            'folder_name' => $defaultFolderName
+                        ]);
+
+                    } catch (\Exception $e) {
+                        Log::error('uploadPendingAudio: failed to create default root folder', [
+                            'username' => $user->username,
+                            'error' => $e->getMessage(),
+                        ]);
+                        return response()->json(['message' => 'No se pudo crear carpeta por defecto: ' . $e->getMessage()], 500);
+                    }
+                }
+
+                if (! $rootFolder) {
+                    Log::error('uploadPendingAudio: root folder still not found after creation attempt', [
                         'username' => $user->username,
                         'rootFolder' => $v['rootFolder'] ?? 'not specified',
                     ]);

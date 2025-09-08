@@ -1,6 +1,7 @@
 import { saveAudioBlob, loadAudioBlob, clearAllAudio } from './idb.js';
 import { showError } from './utils/alerts.js';
-import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
 
 // ===== VARIABLES GLOBALES =====
 let isRecording = false;
@@ -88,23 +89,80 @@ function downloadAudioWithCorrectFormat(blob, baseName) {
     return fileName;
 }
 
+// Función específica para descargar siempre en MP3 cuando hay errores
+async function downloadAudioAsMP3(blob, baseName) {
+    try {
+        let mp3Blob = blob;
+
+        // Si no es MP3, intentar convertir
+        if (!blob.type.includes('mpeg') && !blob.type.includes('mp3')) {
+            console.log('🎵 [Download] Convirtiendo a MP3 para descarga...');
+            mp3Blob = await convertToMp3(blob);
+        }
+
+        const fileName = `${baseName}.mp3`;
+        downloadBlob(mp3Blob, fileName);
+        console.log(`💾 [Download] Audio descargado como MP3: ${fileName}`);
+        return fileName;
+    } catch (error) {
+        console.error('❌ [Download] Error al convertir a MP3:', error);
+        // Fallback: usar la función normal si la conversión falla
+        return downloadAudioWithCorrectFormat(blob, baseName);
+    }
+}
+
 // Helper para convertir blobs WebM/Opus a MP3 usando ffmpeg.wasm
 async function convertToMp3(blob) {
-    if (!ffmpeg) {
-        ffmpeg = createFFmpeg({ log: false });
-        await ffmpeg.load();
+    try {
+        if (!ffmpeg) {
+            ffmpeg = new FFmpeg();
+
+            // Configure FFmpeg with better error handling
+            ffmpeg.on('log', ({ message }) => {
+                console.log('FFmpeg:', message);
+            });
+
+            ffmpeg.on('progress', ({ progress }) => {
+                console.log('FFmpeg progress:', Math.round(progress * 100) + '%');
+            });
+
+            // Load FFmpeg - let it use default configuration
+            await ffmpeg.load();
+
+            console.log('✅ FFmpeg loaded successfully');
+        }
+
+        // Convert blob to Uint8Array for new API
+        const inputData = new Uint8Array(await blob.arrayBuffer());
+        const inputName = 'input.mp4'; // Use mp4 as input since that's what we're recording
+        const outputName = 'output.mp3';
+
+        // Write input file
+        await ffmpeg.writeFile(inputName, inputData);
+
+        // Convert to MP3 with good quality settings
+        await ffmpeg.exec([
+            '-i', inputName,
+            '-codec:a', 'libmp3lame',
+            '-b:a', '128k',
+            '-ar', '44100',
+            outputName
+        ]);
+
+        // Read output file
+        const mp3Data = await ffmpeg.readFile(outputName);
+
+        // Clean up files
+        await ffmpeg.deleteFile(inputName);
+        await ffmpeg.deleteFile(outputName);
+
+        console.log('✅ [FFmpeg] Conversion to MP3 successful');
+        return new Blob([mp3Data], { type: 'audio/mpeg' });
+
+    } catch (error) {
+        console.error('❌ [FFmpeg] Conversion failed:', error);
+        throw error;
     }
-
-    const data = await fetchFile(blob);
-    const inputName = 'input.webm';
-    ffmpeg.FS('writeFile', inputName, data);
-    await ffmpeg.run('-i', inputName, 'output.mp3');
-    const mp3Data = ffmpeg.FS('readFile', 'output.mp3');
-
-    ffmpeg.FS('unlink', inputName);
-    ffmpeg.FS('unlink', 'output.mp3');
-
-    return new Blob([mp3Data.buffer], { type: 'audio/mpeg' });
 }
 
 // SVG paths for dynamic icons
@@ -516,13 +574,19 @@ async function finalizeRecording() {
 
     // Determinar MIME real del primer chunk y convertir si es WebM/Opus
     const realMime = recordedChunks[0]?.type || blobType;
-    if (realMime.includes('opus') || realMime.includes('webm')) {
+
+    // Always try to convert to MP3 for better compatibility
+    if (realMime.includes('opus') || realMime.includes('webm') || realMime.includes('mp4')) {
         try {
             console.log('🎵 [finalizeRecording] Convirtiendo a MP3 desde', realMime);
-            finalBlob = await convertToMp3(finalBlob);
+            const convertedBlob = await convertToMp3(finalBlob);
+            finalBlob = convertedBlob;
             currentRecordingFormat = 'audio/mpeg';
+            console.log('✅ [finalizeRecording] Conversión a MP3 exitosa');
         } catch (e) {
             console.error('🎵 [finalizeRecording] Error al convertir a MP3:', e);
+            console.log('⚠️ [finalizeRecording] Usando blob original sin conversión');
+            // Continue with original blob if conversion fails
         }
     }
 
@@ -778,9 +842,15 @@ function showWarning(message) {
 // Sube un blob de audio a Drive
 function uploadAudioToDrive(blob, name, onProgress) {
     const formData = new FormData();
-    formData.append('audioFile', blob, `${name}.webm`);
+
+    // Use correct file extension based on blob type
+    const fileExtension = getCorrectFileExtension(blob);
+    const fileName = `${name}.${fileExtension}`;
+
+    formData.append('audioFile', blob, fileName);
     formData.append('meetingName', name);
-    formData.append('rootFolder', 'default'); // Agregar rootFolder requerido
+    // Remove the default rootFolder - let backend handle folder creation
+    // formData.append('rootFolder', 'default');
 
     const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
@@ -1040,7 +1110,10 @@ async function analyzeNow() {
         sessionStorage.removeItem('recordingSegments');
         sessionStorage.removeItem('recordingMetadata');
     } catch (e) {
-        downloadAudioWithCorrectFormat(pendingAudioBlob, 'grabacion_error');
+        // Download as MP3 when there's an error for better compatibility
+        downloadAudioAsMP3(pendingAudioBlob, 'grabacion_error').catch(() => {
+            downloadAudioWithCorrectFormat(pendingAudioBlob, 'grabacion_error');
+        });
         console.error('Error preparando audio', e);
         showError('Error al analizar la grabación. Usa el archivo descargado para reintentar.');
         handlePostActionCleanup();
@@ -1818,16 +1891,23 @@ window.retryUpload = async function() {
     }
 };
 
-window.downloadFailedAudio = function() {
+window.downloadFailedAudio = async function() {
     if (!failedAudioBlob || !failedAudioName) {
         console.error('🔄 [Download] No hay datos de audio para descargar');
         showError('No hay datos de audio para descargar');
         return;
     }
 
-    const fileName = downloadAudioWithCorrectFormat(failedAudioBlob, failedAudioName);
-    console.log('💾 [Download] Archivo descargado:', fileName);
-    showSuccess(`Archivo ${fileName} descargado correctamente`);
+    try {
+        const fileName = await downloadAudioAsMP3(failedAudioBlob, failedAudioName);
+        console.log('💾 [Download] Archivo descargado:', fileName);
+        showSuccess(`Archivo ${fileName} descargado correctamente como MP3`);
+    } catch (error) {
+        console.error('❌ [Download] Error al descargar como MP3:', error);
+        // Fallback to normal download
+        const fileName = downloadAudioWithCorrectFormat(failedAudioBlob, failedAudioName);
+        showSuccess(`Archivo ${fileName} descargado (formato original)`);
+    }
 };
 
 window.discardFailedAudio = function() {

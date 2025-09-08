@@ -36,6 +36,8 @@ class Kernel extends HttpKernel
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            // Moved CrossOriginIsolation to specific routes only
+            // \App\Http\Middleware\CrossOriginIsolation::class,
         ],
 
         'api' => [
@@ -67,5 +69,6 @@ class Kernel extends HttpKernel
         'group.role' => \App\Http\Middleware\CheckGroupRole::class,
         'organization.role' => \App\Http\Middleware\CheckOrganizationRole::class,
         'google.refresh' => \App\Http\Middleware\RefreshGoogleToken::class,
+        'cors.ffmpeg' => \App\Http\Middleware\CrossOriginIsolation::class,
     ];
 }

@@ -4,7 +4,11 @@ import laravel from 'laravel-vite-plugin';
 export default defineConfig({
     server: {
         host: '127.0.0.1',
-        port: 5174,
+        port: 5175,
+        cors: true
+    },
+    optimizeDeps: {
+        exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util']
     },
     plugins: [
         laravel({
@@ -29,6 +33,8 @@ export default defineConfig({
                 'resources/css/tasks.css',
                 'resources/css/organization.css',
                 'resources/js/organization.js',
+                'resources/js/ffmpeg-test.js',
+                'resources/js/ffmpeg-test-simple.js',
             ],
             refresh: true,
         }),

@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Request;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\RegisterController;
@@ -28,6 +29,53 @@ Route::get('/', function () {
 Route::get('/test-notifications', function () {
     return view('test-notifications');
 })->middleware('auth');
+
+// Test route for audio upload (remove in production)
+Route::get('/test-upload', function () {
+    return view('test-upload');
+})->middleware('auth');
+
+// Test route for MP3 conversion (remove in production)
+Route::get('/test-mp3', function () {
+    return view('test-mp3');
+})->middleware('auth');
+
+// Public test routes for development (remove in production)
+// Simplified - remove condition for testing
+Route::get('/test-simple', function () {
+    return '<h1>Test route works!</h1>';
+});
+
+Route::get('/test-mp3-simple', function () {
+    return view('test-mp3-simple');
+});
+
+Route::get('/test-mp3-nocors', function () {
+    return view('test-mp3-nocors');
+});
+
+Route::get('/new-meeting-nocors', function () {
+    return view('new-meeting-nocors');
+});
+
+Route::get('/test-basic', function () {
+    return '<!DOCTYPE html>
+<html>
+<head><title>Basic Test</title></head>
+<body><h1>Basic test without any middleware</h1></body>
+</html>';
+});
+
+Route::get('/debug-headers', function (Request $request) {
+    return response()->json([
+        'path' => $request->path(),
+        'headers' => $request->headers->all(),
+        'cors_config' => [
+            'debug' => config('app.debug'),
+            'skip_coep' => env('SKIP_COEP_IN_DEV', true)
+        ]
+    ]);
+});
 
 // Rutas de Auth
 Route::get('/login',    [LoginController::class, 'showLoginForm'])->name('login');
@@ -96,7 +144,16 @@ Route::middleware(['auth'])->group(function () {
 
 Route::get('/new-meeting', function () {
     return view('new-meeting');
-})->name('new-meeting');
+})->name('new-meeting')->middleware('cors.ffmpeg');
+
+// Test routes with FFmpeg middleware
+Route::get('/test-mp3-public', function () {
+    return view('test-mp3');
+})->middleware('cors.ffmpeg');
+
+Route::get('/test-upload-public', function () {
+    return view('test-upload');
+})->middleware('cors.ffmpeg');
 
 Route::post('/transcription', [TranscriptionController::class, 'store'])
     ->name('transcription.store')
