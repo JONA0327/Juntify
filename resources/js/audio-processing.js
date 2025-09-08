@@ -672,15 +672,39 @@ function generateTranscriptionSegments() {
             ? u.speaker.toString().slice(0, 2).toUpperCase()
             : `H${u.speaker}`;
 
+        // Detectar si los tiempos están en milisegundos o segundos
+        // Si el valor es mayor a 1000, probablemente está en milisegundos
+        // Si es menor, probablemente ya está en segundos
+        const isInMilliseconds = u.start > 1000 || u.end > 1000;
+
+        // Convertir a segundos solo si está en milisegundos
+        const startInSeconds = isInMilliseconds ? u.start / 1000 : u.start;
+        const endInSeconds = isInMilliseconds ? u.end / 1000 : u.end;
+
         return {
             speaker,
-            time: `${formatTime(u.start)} - ${formatTime(u.end)}`,
+            time: `${formatTime(isInMilliseconds ? u.start : u.start * 1000)} - ${formatTime(isInMilliseconds ? u.end : u.end * 1000)}`,
             text: u.text,
             avatar,
-            start: u.start / 1000,
-            end: u.end / 1000,
+            start: startInSeconds,
+            end: endInSeconds,
         };
     });
+
+    // Debug logging para detección de múltiples hablantes
+    const uniqueSpeakers = [...new Set(segments.map(s => s.speaker))];
+    console.log(`🎯 [Speaker Detection] Total utterances: ${utterances.length}`);
+    console.log(`🎯 [Speaker Detection] Unique speakers detected: ${uniqueSpeakers.length}`);
+    console.log(`🎯 [Speaker Detection] Speakers:`, uniqueSpeakers);
+    console.log(`🎯 [Speaker Detection] Raw speaker data sample:`, utterances.slice(0, 5).map(u => ({ speaker: u.speaker, text: u.text.substring(0, 50) })));
+
+    if (uniqueSpeakers.length === 1) {
+        console.warn(`⚠️ [Speaker Detection] Only 1 speaker detected in ${utterances.length} utterances - this might indicate a detection issue`);
+        showNotification(`⚠️ Solo se detectó 1 hablante en ${utterances.length} segmentos. Esto podría indicar un problema en la detección de hablantes.`, 'warning');
+    } else {
+        console.log(`✅ [Speaker Detection] Successfully detected ${uniqueSpeakers.length} different speakers`);
+        showNotification(`✅ Detección completada: ${uniqueSpeakers.length} hablantes detectados en ${utterances.length} segmentos`, 'success');
+    }
 
     container.innerHTML = segments.map((segment, index) => `
         <div class="transcript-segment" data-segment="${index}">

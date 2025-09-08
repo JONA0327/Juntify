@@ -109,6 +109,7 @@ Route::post('/transcription/chunked/finalize', [TranscriptionController::class, 
     ->middleware(['auth', 'group.role']);
 
 Route::get('/transcription/{id}', [TranscriptionController::class, 'show'])->name('transcription.show');
+Route::get('/transcription/check/{id}', [TranscriptionController::class, 'checkTranscription'])->name('transcription.check');
 Route::post('/analysis', [\App\Http\Controllers\AnalysisController::class, 'analyze'])
     ->name('analysis')
     ->middleware(['auth', 'group.role']);

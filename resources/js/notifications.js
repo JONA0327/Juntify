@@ -143,7 +143,11 @@ const Notifications = (() => {
         try {
             const response = await fetch('/api/notifications');
             if (response.status === 401) {
-                showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
+                console.log('📧 [notifications] User not authenticated, skipping notifications');
+                return;
+            }
+            if (response.status === 500) {
+                console.warn('📧 [notifications] Server error loading notifications, skipping');
                 return;
             }
             if (!response.ok) {

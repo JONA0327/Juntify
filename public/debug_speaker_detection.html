@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Configuración de Hablantes</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; text-align: center; }
+        
+        .section {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .config-display {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .warning { background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
+        .info { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background-color: #0056b3; }
+        
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .speaker-info {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .recommendation {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Debug Configuración de Detección de Hablantes</h1>
+        
+        <div class="section info">
+            <strong>🎯 Objetivo:</strong> Analizar y optimizar la configuración para mejorar la detección de múltiples hablantes en AssemblyAI.
+        </div>
+        
+        <div class="section">
+            <h3>1. Simular Configuración de Transcripción</h3>
+            <p>Simula la configuración que se envía a AssemblyAI para diferentes tipos de audio:</p>
+            
+            <div style="margin: 10px 0;">
+                <label><strong>Formato de Audio:</strong></label><br>
+                <select id="audioFormat" style="padding: 5px; margin: 5px;">
+                    <option value="mp4">MP4 (.m4a)</option>
+                    <option value="mp3">MP3 (.mp3)</option>
+                    <option value="webm">WebM (obsoleto)</option>
+                </select>
+            </div>
+            
+            <div style="margin: 10px 0;">
+                <label><strong>Tamaño del Audio (MB):</strong></label><br>
+                <input type="number" id="audioSize" value="61.75" min="1" max="500" style="padding: 5px; margin: 5px;">
+            </div>
+            
+            <div style="margin: 10px 0;">
+                <label><strong>Idioma:</strong></label><br>
+                <select id="audioLanguage" style="padding: 5px; margin: 5px;">
+                    <option value="es">Español</option>
+                    <option value="en">Inglés</option>
+                    <option value="fr">Francés</option>
+                    <option value="de">Alemán</option>
+                </select>
+            </div>
+            
+            <button onclick="generateConfig()">🔧 Generar Configuración</button>
+            <button onclick="analyzeCurrentIssue()">🔍 Analizar Problema Actual</button>
+        </div>
+        
+        <div class="section" id="configSection" style="display: none;">
+            <h3>2. Configuración Generada</h3>
+            <div id="configDisplay" class="config-display"></div>
+        </div>
+        
+        <div class="section" id="analysisSection" style="display: none;">
+            <h3>3. Análisis y Recomendaciones</h3>
+            <div id="analysisContent"></div>
+        </div>
+        
+        <div class="section">
+            <h3>4. Problemas Comunes y Soluciones</h3>
+            <div class="analysis-grid">
+                <div class="speaker-info">
+                    <strong>🎯 Detección de 1 Solo Hablante</strong><br>
+                    <small>Cuando hay múltiples personas pero solo detecta una:</small>
+                    <ul style="font-size: 12px;">
+                        <li><code>speakers_expected: null</code> (auto)</li>
+                        <li><code>speed_boost: false</code></li>
+                        <li><code>filter_profanity: false</code></li>
+                        <li>Audio de buena calidad</li>
+                    </ul>
+                </div>
+                <div class="speaker-info">
+                    <strong>🔊 Separación Incorrecta</strong><br>
+                    <small>Cuando detecta hablantes pero mal separados:</small>
+                    <ul style="font-size: 12px;">
+                        <li><code>punctuate: true</code></li>
+                        <li><code>format_text: true</code></li>
+                        <li><code>dual_channel: false</code></li>
+                        <li>Evitar interrupciones</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>5. Test de Configuración Actual</h3>
+            <p>Prueba la configuración actual con tu transcripción problemática:</p>
+            <input type="text" id="transcriptionId" placeholder="ID de transcripción (ej: ce4dde21-1fb6-4655-a38b-63a7d3868383)" style="width: 400px; padding: 5px;">
+            <button onclick="testCurrentConfig()">🧪 Probar Configuración</button>
+            
+            <div id="testResults" style="display: none; margin-top: 15px;"></div>
+        </div>
+    </div>
+
+    <script>
+        function generateConfig() {
+            const format = document.getElementById('audioFormat').value;
+            const size = parseFloat(document.getElementById('audioSize').value);
+            const language = document.getElementById('audioLanguage').value;
+            
+            console.log('Generating config for:', { format, size, language });
+            
+            // Configuración base
+            let config = {
+                audio_url: "https://cdn.assemblyai.com/upload/example.m4a",
+                language_code: language,
+                speaker_labels: true,
+                speakers_expected: null,
+                punctuate: true,
+                format_text: true,
+                dual_channel: false,
+                filter_profanity: false,
+                speed_boost: false
+            };
+            
+            // Optimizaciones por formato
+            if (format === 'mp3') {
+                config._optimization = "MP3 optimized config";
+                // MP3 configs ya aplicadas arriba
+            } else if (format === 'mp4') {
+                config._optimization = "MP4 optimized config";
+                // MP4 configs ya aplicadas arriba
+            } else if (format === 'webm') {
+                config._optimization = "WebM config (DEPRECATED)";
+                config._warning = "WebM format is no longer supported";
+            }
+            
+            // Optimizaciones por tamaño
+            if (size > 50) {
+                config._speaker_optimization = "Large audio optimization applied";
+                config._notes = [
+                    "Large audio detected (>50MB)",
+                    "Using automatic speaker detection",
+                    "Speed boost disabled for accuracy",
+                    "Profanity filter disabled for precision"
+                ];
+            } else {
+                config._speaker_optimization = "Standard audio optimization";
+                config._notes = [
+                    "Standard size audio",
+                    "Using automatic speaker detection",
+                    "Standard quality settings"
+                ];
+            }
+            
+            // Extras para inglés
+            if (language === 'en') {
+                config.auto_chapters = true;
+                config.summarization = true;
+                config.summary_model = "informative";
+                config.summary_type = "bullets";
+                config._extras = "English extras enabled";
+            } else {
+                config._extras = `${language} - basic features only`;
+            }
+            
+            displayConfig(config);
+            analyzeConfig(config, { format, size, language });
+        }
+        
+        function displayConfig(config) {
+            document.getElementById('configSection').style.display = 'block';
+            document.getElementById('configDisplay').textContent = JSON.stringify(config, null, 2);
+        }
+        
+        function analyzeConfig(config, params) {
+            document.getElementById('analysisSection').style.display = 'block';
+            
+            let analysis = '';
+            let recommendations = [];
+            
+            // Análisis de la configuración
+            analysis += `<div class="info"><strong>✅ Configuración Analizada</strong><br>`;
+            analysis += `Formato: ${params.format.toUpperCase()}<br>`;
+            analysis += `Tamaño: ${params.size} MB<br>`;
+            analysis += `Idioma: ${params.language}<br>`;
+            analysis += `Speaker Labels: ${config.speaker_labels ? 'Activado' : 'Desactivado'}<br>`;
+            analysis += `Speakers Expected: ${config.speakers_expected || 'Auto-detección'}<br>`;
+            analysis += `Speed Boost: ${config.speed_boost ? 'Activado' : 'Desactivado'}</div>`;
+            
+            // Recomendaciones basadas en el problema actual
+            if (params.size > 60 && params.format === 'mp3') {
+                recommendations.push("🎯 Audio largo de 20+ minutos detectado");
+                recommendations.push("✅ Configuración óptima para múltiples hablantes aplicada");
+                recommendations.push("🔧 Speed boost desactivado para máxima precisión");
+                recommendations.push("📊 Auto-detección activada (recomendado para grupos)");
+            }
+            
+            if (config.speaker_labels && config.speakers_expected === null) {
+                recommendations.push("✅ Auto-detección de hablantes configurada correctamente");
+            }
+            
+            if (!config.speed_boost) {
+                recommendations.push("✅ Speed boost desactivado para mejor detección");
+            }
+            
+            if (!config.filter_profanity) {
+                recommendations.push("✅ Filtro de profanidad desactivado para mayor precisión");
+            }
+            
+            // Mostrar recomendaciones
+            if (recommendations.length > 0) {
+                analysis += `<div class="recommendation"><strong>📋 Recomendaciones:</strong><ul>`;
+                recommendations.forEach(rec => {
+                    analysis += `<li>${rec}</li>`;
+                });
+                analysis += `</ul></div>`;
+            }
+            
+            document.getElementById('analysisContent').innerHTML = analysis;
+        }
+        
+        function analyzeCurrentIssue() {
+            const analysis = `
+                <div class="warning">
+                    <strong>🚨 Problema Identificado: Solo 1 Hablante Detectado</strong><br><br>
+                    <strong>Síntomas:</strong><br>
+                    • Audio de 20 minutos con múltiples personas<br>
+                    • AssemblyAI reporta "Hablantes detectados: 1"<br>
+                    • Transcripción no separa por hablantes<br><br>
+                    
+                    <strong>Causas Posibles:</strong><br>
+                    • Configuración speaker_labels básica<br>
+                    • Speed boost activado (reduce precisión)<br>
+                    • Filtros que interfieren con detección<br>
+                    • Configuración no optimizada para audio largo<br><br>
+                    
+                    <strong>✅ Soluciones Aplicadas:</strong><br>
+                    • speakers_expected: null (auto-detección mejorada)<br>
+                    • speed_boost: false (máxima precisión)<br>
+                    • filter_profanity: false (sin interferencias)<br>
+                    • Optimización específica para audios >50MB<br>
+                    • punctuate: true (ayuda a separar hablantes)<br>
+                </div>
+            `;
+            
+            document.getElementById('analysisSection').style.display = 'block';
+            document.getElementById('analysisContent').innerHTML = analysis;
+        }
+        
+        async function testCurrentConfig() {
+            const transcriptionId = document.getElementById('transcriptionId').value.trim();
+            
+            if (!transcriptionId) {
+                alert('Por favor ingresa un ID de transcripción');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('testResults');
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = '<div class="info">🔄 Consultando transcripción...</div>';
+            
+            try {
+                const response = await fetch(`/transcription/check/${transcriptionId}`);
+                const data = await response.json();
+                
+                if (data.status === 'completed') {
+                    const utterances = data.utterances || [];
+                    const speakers = [...new Set(utterances.map(u => u.speaker))];
+                    
+                    let results = `
+                        <div class="success">
+                            <strong>✅ Transcripción Encontrada</strong><br>
+                            <strong>ID:</strong> ${data.id}<br>
+                            <strong>Estado:</strong> ${data.status}<br>
+                            <strong>Duración:</strong> ${data.audio_duration ? (data.audio_duration / 1000 / 60).toFixed(1) + ' minutos' : 'No disponible'}<br>
+                            <strong>Utterances:</strong> ${utterances.length}<br>
+                            <strong>Hablantes únicos:</strong> ${speakers.length}<br>
+                            <strong>Lista de hablantes:</strong> ${speakers.join(', ')}<br>
+                        </div>
+                    `;
+                    
+                    if (speakers.length === 1) {
+                        results += `
+                            <div class="error">
+                                <strong>🚨 Problema Confirmado</strong><br>
+                                Solo se detectó 1 hablante (${speakers[0]}) en un audio de ${(data.audio_duration / 1000 / 60).toFixed(1)} minutos.<br>
+                                <strong>Recomendación:</strong> Crear nueva transcripción con configuración mejorada.
+                            </div>
+                        `;
+                    } else {
+                        results += `
+                            <div class="success">
+                                <strong>✅ Detección Correcta</strong><br>
+                                Se detectaron ${speakers.length} hablantes diferentes correctamente.
+                            </div>
+                        `;
+                    }
+                    
+                    resultsDiv.innerHTML = results;
+                } else {
+                    resultsDiv.innerHTML = `<div class="warning">⏳ Estado: ${data.status}<br>La transcripción aún no está completa.</div>`;
+                }
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        // Inicialización
+        window.addEventListener('load', () => {
+            console.log('🔧 Debug tool loaded');
+            generateConfig(); // Generar configuración por defecto
+        });
+    </script>
+</body>
+</html>

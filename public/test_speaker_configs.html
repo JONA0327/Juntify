@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Configuraciones AssemblyAI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; text-align: center; }
+
+        .section {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .config-card {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+        }
+
+        .config-title {
+            background-color: #007bff;
+            color: white;
+            padding: 10px;
+            margin: -20px -20px 15px -20px;
+            border-radius: 5px 5px 0 0;
+            font-weight: bold;
+        }
+
+        .param {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 8px 0;
+            padding: 5px;
+            background-color: #f8f9fa;
+            border-radius: 3px;
+        }
+
+        .param-name {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .param-value {
+            font-family: monospace;
+            background-color: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background-color: #0056b3; }
+        button.test { background-color: #28a745; }
+        button.test:hover { background-color: #218838; }
+
+        .logs {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        .comparison {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .good { color: #28a745; font-weight: bold; }
+        .bad { color: #dc3545; font-weight: bold; }
+        .neutral { color: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Configuraciones AssemblyAI para Múltiples Hablantes</h1>
+
+        <div class="section">
+            <h3>📋 Configuraciones de Test</h3>
+            <p>Estas son diferentes configuraciones optimizadas para detectar múltiples hablantes:</p>
+
+            <div class="config-grid">
+                <!-- Configuración 1: Actual (Problemática) -->
+                <div class="config-card">
+                    <div class="config-title">❌ Config Actual (1 Speaker)</div>
+                    <div class="param">
+                        <span class="param-name">speaker_labels:</span>
+                        <span class="param-value">true</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">speech_threshold:</span>
+                        <span class="param-value">0.3 (MP3) / 0.2 (MP4)</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">speakers_expected:</span>
+                        <span class="param-value">null</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">dual_channel:</span>
+                        <span class="param-value">false</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">speed_boost:</span>
+                        <span class="param-value">false</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">format_text:</span>
+                        <span class="param-value">true</span>
+                    </div>
+                    <button class="test" onclick="showConfigCode('current')">📋 Ver Código</button>
+                </div>
+
+                <!-- Configuración 2: Ultra Sensible -->
+                <div class="config-card">
+                    <div class="config-title">🔍 Config Ultra Sensible</div>
+                    <div class="param">
+                        <span class="param-name">speaker_labels:</span>
+                        <span class="param-value">true</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">speech_threshold:</span>
+                        <span class="param-value">0.1</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">speakers_expected:</span>
+                        <span class="param-value">4</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">dual_channel:</span>
+                        <span class="param-value">false</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">speed_boost:</span>
+                        <span class="param-value">false</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">auto_highlights:</span>
+                        <span class="param-value">false</span>
+                    </div>
+                    <button class="test" onclick="showConfigCode('ultra')">📋 Ver Código</button>
+                </div>
+
+                <!-- Configuración 3: Conservativa -->
+                <div class="config-card">
+                    <div class="config-title">⚖️ Config Conservativa</div>
+                    <div class="param">
+                        <span class="param-name">speaker_labels:</span>
+                        <span class="param-value">true</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">speech_threshold:</span>
+                        <span class="param-value">0.5</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">speakers_expected:</span>
+                        <span class="param-value">2</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">dual_channel:</span>
+                        <span class="param-value">true</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">punctuate:</span>
+                        <span class="param-value">false</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">format_text:</span>
+                        <span class="param-value">false</span>
+                    </div>
+                    <button class="test" onclick="showConfigCode('conservative')">📋 Ver Código</button>
+                </div>
+
+                <!-- Configuración 4: AssemblyAI Recomendada -->
+                <div class="config-card">
+                    <div class="config-title">⭐ Config AssemblyAI Oficial</div>
+                    <div class="param">
+                        <span class="param-name">speaker_labels:</span>
+                        <span class="param-value">true</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">speakers_expected:</span>
+                        <span class="param-value">null</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">language_code:</span>
+                        <span class="param-value">"es"</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">punctuate:</span>
+                        <span class="param-value">true</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">format_text:</span>
+                        <span class="param-value">true</span>
+                    </div>
+                    <div class="param">
+                        <span class="param-name">dual_channel:</span>
+                        <span class="param-value">false</span>
+                    </div>
+                    <button class="test" onclick="showConfigCode('official')">📋 Ver Código</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🔧 Instrucciones de Implementación</h3>
+            <ol>
+                <li><strong>Graba un audio de test</strong> con 2-3 personas hablando claramente</li>
+                <li><strong>Selecciona una configuración</strong> y copia el código mostrado</li>
+                <li><strong>Reemplaza la configuración actual</strong> en TranscriptionController.php</li>
+                <li><strong>Sube el audio de test</strong> y verifica los resultados</li>
+                <li><strong>Usa la página de debug</strong> para analizar la detección de hablantes</li>
+            </ol>
+        </div>
+
+        <div class="comparison">
+            <h3>📊 Comparación Rápida</h3>
+            <ul>
+                <li><span class="bad">Config Actual:</span> Solo detecta 1 hablante - Muy restrictiva</li>
+                <li><span class="good">Config Ultra Sensible:</span> Detectará hasta el más mínimo cambio de voz</li>
+                <li><span class="neutral">Config Conservativa:</span> Balance entre precisión y detección</li>
+                <li><span class="good">Config AssemblyAI Oficial:</span> Configuración recomendada por la documentación</li>
+            </ul>
+        </div>
+
+        <div id="codeDisplay" style="display: none;" class="section">
+            <h3>📝 Código para Implementar</h3>
+            <p>Reemplaza este código en <code>TranscriptionController.php</code> en el método correspondiente:</p>
+            <pre id="codeContent" style="background-color: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 5px; overflow-x: auto;"></pre>
+            <button onclick="copyToClipboard()">📋 Copiar Código</button>
+        </div>
+
+        <div class="logs" id="testLogs">
+            <strong>🧪 Test Logs:</strong><br>
+            [Inicio] Sistema de test de configuraciones iniciado...<br>
+            💡 Selecciona una configuración y sigue las instrucciones para implementarla.
+        </div>
+    </div>
+
+    <script>
+        const configs = {
+            current: `// Configuración Actual (Problemática - Solo 1 speaker)
+$baseConfig = [
+    'language_code' => 'es',
+    'punctuate' => true,
+    'format_text' => true,
+    'dual_channel' => false,
+    'speaker_labels' => true,
+    'speakers_expected' => null,
+    'speech_threshold' => 0.3, // o 0.2 para MP4
+    'speed_boost' => false,
+    'auto_highlights' => false,
+    'content_safety' => false,
+    'iab_categories' => false,
+    'sentiment_analysis' => false,
+    'entity_detection' => false,
+];`,
+
+            ultra: `// Configuración Ultra Sensible (Detecta hasta cambios mínimos)
+$baseConfig = [
+    'language_code' => 'es',
+    'punctuate' => true,
+    'format_text' => false,      // Desactivado para mejor speaker detection
+    'dual_channel' => false,
+    'speaker_labels' => true,
+    'speakers_expected' => 4,    // Forzar detección de múltiples speakers
+    'speech_threshold' => 0.1,   // MUY sensible
+    'speed_boost' => false,
+    'auto_highlights' => false,
+    'content_safety' => false,
+    'iab_categories' => false,
+    'sentiment_analysis' => false,
+    'entity_detection' => false,
+    'filter_profanity' => false,
+    'redact_pii' => false,
+];`,
+
+            conservative: `// Configuración Conservativa (Balance entre precisión y detección)
+$baseConfig = [
+    'language_code' => 'es',
+    'punctuate' => false,        // Menos procesamiento = mejor speaker detection
+    'format_text' => false,      // Texto crudo para mejor análisis
+    'dual_channel' => true,      // Intentar separación por canales
+    'speaker_labels' => true,
+    'speakers_expected' => 2,    // Expectativa mínima conservativa
+    'speech_threshold' => 0.5,   // Menos sensible, más preciso
+    'speed_boost' => false,
+    'auto_highlights' => false,
+    'content_safety' => false,
+    'iab_categories' => false,
+    'sentiment_analysis' => false,
+    'entity_detection' => false,
+];`,
+
+            official: `// Configuración Oficial de AssemblyAI (Documentación recomendada)
+$baseConfig = [
+    'language_code' => 'es',
+    'speaker_labels' => true,    // Activar detección de hablantes
+    'speakers_expected' => null, // Auto-detección
+    'punctuate' => true,
+    'format_text' => true,
+    'dual_channel' => false,     // Recomendado false para mono/stereo mixto
+
+    // Desactivar funciones que pueden interferir
+    'auto_highlights' => false,
+    'content_safety' => false,
+    'iab_categories' => false,
+    'sentiment_analysis' => false,
+    'entity_detection' => false,
+    'speed_boost' => false,      // IMPORTANTE: Sin speed boost para speaker detection
+];`
+        };
+
+        function showConfigCode(configName) {
+            const codeDisplay = document.getElementById('codeDisplay');
+            const codeContent = document.getElementById('codeContent');
+
+            codeContent.textContent = configs[configName];
+            codeDisplay.style.display = 'block';
+
+            log(`📋 Mostrando código para configuración: ${configName}`);
+            codeDisplay.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function copyToClipboard() {
+            const codeContent = document.getElementById('codeContent');
+            const textArea = document.createElement('textarea');
+            textArea.value = codeContent.textContent;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+
+            log('✅ Código copiado al portapapeles');
+            alert('Código copiado al portapapeles!');
+        }
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logs = document.getElementById('testLogs');
+            logs.innerHTML += `<br>[${timestamp}] ${message}`;
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        // Inicialización
+        window.addEventListener('load', () => {
+            log('🚀 Sistema de test de configuraciones iniciado');
+            log('💡 Tip: Prueba primero la "Config Ultra Sensible" para ver si detecta más hablantes');
+            log('📝 Después prueba la "Config AssemblyAI Oficial" como baseline estable');
+        });
+    </script>
+</body>
+</html>

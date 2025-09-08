@@ -19,33 +19,43 @@ class TranscriptionController extends Controller
      */
     private function getOptimizedConfigForFormat($mimeType, $isMP4, $isMP3, $baseConfig)
     {
-        // Para archivos MP3, usar configuración estándar con optimizaciones
+        // Para archivos MP3, mantener configuración ultra sensible
         if ($isMP3) {
             $mp3Config = $baseConfig;
-            $mp3Config['speaker_labels'] = true;    // MP3 maneja bien speaker labels
-            $mp3Config['format_text'] = true;       // MP3 es más eficiente con formato
-            $mp3Config['speed_boost'] = false;      // Sin speed boost para asegurar calidad
+            $mp3Config['speaker_labels'] = true;        // MP3 maneja bien speaker labels
+            $mp3Config['format_text'] = false;          // Desactivado para mejor speaker detection
+            $mp3Config['speed_boost'] = false;          // Sin speed boost para asegurar calidad de speaker detection
+            $mp3Config['speech_threshold'] = 0.1;       // Ultra sensible para MP3
+            $mp3Config['dual_channel'] = false;         // MP3 grabaciones son mono/stereo mixto
+            $mp3Config['speakers_expected'] = 4;        // Forzar detección múltiple
 
-            Log::info('Applied MP3 optimized config', [
+            Log::info('Applied MP3 ULTRA SENSITIVE config for multiple speakers', [
                 'speaker_labels' => $mp3Config['speaker_labels'],
                 'format_text' => $mp3Config['format_text'],
                 'speed_boost' => $mp3Config['speed_boost'],
+                'speech_threshold' => $mp3Config['speech_threshold'],
+                'speakers_expected' => $mp3Config['speakers_expected'],
             ]);
 
             return $mp3Config;
         }
 
-        // Para archivos MP4, usar configuración optimizada
+        // Para archivos MP4, mantener configuración ultra sensible
         if ($isMP4) {
             $mp4Config = $baseConfig;
-            $mp4Config['speaker_labels'] = true;    // MP4 maneja excelente speaker labels
-            $mp4Config['format_text'] = true;       // MP4 es muy eficiente con formato
-            $mp4Config['speed_boost'] = false;      // Sin speed boost para máxima calidad
+            $mp4Config['speaker_labels'] = true;        // MP4 maneja excelente speaker labels
+            $mp4Config['format_text'] = false;          // Desactivado para mejor speaker detection
+            $mp4Config['speed_boost'] = false;          // Sin speed boost para máxima calidad
+            $mp4Config['speech_threshold'] = 0.1;       // Ultra sensible para MP4
+            $mp4Config['dual_channel'] = false;         // Forzar mono-análisis para mejor speaker detection
+            $mp4Config['speakers_expected'] = 4;        // Forzar detección múltiple
 
-            Log::info('Applied MP4 optimized config', [
+            Log::info('Applied MP4 ULTRA SENSITIVE config for multiple speakers', [
                 'speaker_labels' => $mp4Config['speaker_labels'],
                 'format_text' => $mp4Config['format_text'],
                 'speed_boost' => $mp4Config['speed_boost'],
+                'speech_threshold' => $mp4Config['speech_threshold'],
+                'speakers_expected' => $mp4Config['speakers_expected'],
             ]);
 
             return $mp4Config;
@@ -242,11 +252,22 @@ class TranscriptionController extends Controller
             }
 
             $baseConfig = [
-                'audio_url'      => $uploadUrl,
-                'speaker_labels' => true,
-                'punctuate'      => true,
-                'format_text'    => true,
-                'language_code'  => $language,
+                'audio_url'                => $uploadUrl,
+                'language_code'           => 'es',
+                'punctuate'               => true,
+                'format_text'             => false,  // Desactivado para mejor speaker detection
+                'dual_channel'            => false,
+                'speaker_labels'          => true,
+                'speakers_expected'       => 4,      // Forzar detección de múltiples speakers
+                'speech_threshold'        => 0.1,    // MUY sensible
+                'speed_boost'             => false,
+                'auto_highlights'         => false,
+                'content_safety'          => false,
+                'iab_categories'          => false,
+                'sentiment_analysis'      => false,
+                'entity_detection'        => false,
+                'filter_profanity'        => false,
+                'redact_pii'              => false,
             ];
 
             // Aplicar optimizaciones según el formato de audio
@@ -343,20 +364,49 @@ class TranscriptionController extends Controller
 
         $apiKey = config('services.assemblyai.api_key');
 
-        $response = Http::withHeaders([
-            'authorization' => $apiKey,
-        ])
-            ->get("https://api.assemblyai.com/v2/transcript/{$id}");
+        try {
+            $response = Http::withHeaders([
+                'authorization' => $apiKey,
+            ])
+                ->timeout(120) // 2 minutos de timeout para respuestas grandes
+                ->connectTimeout(30) // 30 segundos para conectar
+                ->get("https://api.assemblyai.com/v2/transcript/{$id}");
 
-        if (!$response->successful()) {
+            if (!$response->successful()) {
+                return response()->json([
+                    'status' => 'error',
+                    'error' => 'Status check failed',
+                    'details' => $response->json(),
+                ], 500);
+            }
+
+            return $response->json();
+
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::error('AssemblyAI connection timeout', [
+                'transcript_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+
             return response()->json([
                 'status' => 'error',
-                'error' => 'Status check failed',
-                'details' => $response->json(),
+                'error' => 'Connection timeout with AssemblyAI',
+                'message' => 'La respuesta de AssemblyAI está tardando mucho. Intenta de nuevo en unos momentos.',
+                'transcript_id' => $id
+            ], 504); // Gateway timeout
+        } catch (\Exception $e) {
+            Log::error('AssemblyAI check failed', [
+                'transcript_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'error' => 'Unexpected error during status check',
+                'message' => 'Error inesperado al verificar el estado de la transcripción.',
+                'transcript_id' => $id
             ], 500);
         }
-
-        return $response->json();
     }
 
     public function initChunkedUpload(Request $request)
@@ -611,11 +661,22 @@ class TranscriptionController extends Controller
         $supportsExtras = $language === 'en';
 
         $basePayload = [
-            'audio_url' => $audioUrl,
-            'language_code' => $language,
-            'speaker_labels' => true,
-            'punctuate'      => true,      // Mantiene puntuación
-            'format_text'    => true,      // Mejora formato del texto
+            'audio_url'               => $audioUrl,
+            'language_code'           => $language,
+            'punctuate'               => true,       // Mantiene puntuación
+            'format_text'             => false,      // Desactivado para mejor speaker detection
+            'dual_channel'            => false,      // Force mono analysis
+            'speaker_labels'          => true,
+            'speakers_expected'       => 4,          // Forzar detección de múltiples speakers
+            'speech_threshold'        => 0.1,        // Ultra sensible
+            'speed_boost'             => false,
+            'auto_highlights'         => false,      // Disable to improve speaker detection
+            'content_safety'          => false,      // Disable to improve performance
+            'iab_categories'          => false,      // Disable to improve performance
+            'sentiment_analysis'      => false,      // Disable to improve performance
+            'entity_detection'        => false,      // Disable to improve performance
+            'filter_profanity'        => false,
+            'redact_pii'              => false,
         ];
 
         // Aplicar optimizaciones según el formato de audio
@@ -678,5 +739,108 @@ class TranscriptionController extends Controller
                 'error' => $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * Verifica el estado de una transcripción en AssemblyAI y retorna todos los datos
+     * Útil para debugging de detección de hablantes
+     */
+    public function checkTranscription($id)
+    {
+        try {
+            Log::info('Checking transcription details for debugging', ['transcription_id' => $id]);
+
+            $response = Http::withHeaders([
+                'authorization' => config('app.assemblyai_api_key'),
+                'content-type' => 'application/json',
+            ])->get("https://api.assemblyai.com/v2/transcript/{$id}");
+
+            if ($response->failed()) {
+                Log::error('Failed to retrieve transcription details', [
+                    'transcription_id' => $id,
+                    'status_code' => $response->status(),
+                    'response' => $response->body()
+                ]);
+
+                return response()->json([
+                    'error' => 'Failed to retrieve transcription',
+                    'status_code' => $response->status(),
+                    'details' => $response->body()
+                ], 500);
+            }
+
+            $data = $response->json();
+
+            // Enriquecer con análisis adicional para debugging
+            if (isset($data['utterances']) && is_array($data['utterances'])) {
+                $speakerAnalysis = $this->analyzeSpeakers($data['utterances']);
+                $data['speaker_analysis'] = $speakerAnalysis;
+
+                Log::info('Speaker analysis completed', [
+                    'transcription_id' => $id,
+                    'unique_speakers' => $speakerAnalysis['unique_speakers'],
+                    'total_utterances' => count($data['utterances']),
+                    'speaker_distribution' => $speakerAnalysis['speaker_stats']
+                ]);
+            }
+
+            return response()->json($data);
+
+        } catch (\Exception $e) {
+            Log::error('Exception checking transcription', [
+                'transcription_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Internal server error',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Analiza los speakers de las utterances para debugging
+     */
+    private function analyzeSpeakers(array $utterances)
+    {
+        $speakerStats = [];
+        $uniqueSpeakers = [];
+
+        foreach ($utterances as $utterance) {
+            $speaker = $utterance['speaker'] ?? 'Unknown';
+
+            if (!in_array($speaker, $uniqueSpeakers)) {
+                $uniqueSpeakers[] = $speaker;
+            }
+
+            if (!isset($speakerStats[$speaker])) {
+                $speakerStats[$speaker] = [
+                    'count' => 0,
+                    'total_duration_ms' => 0,
+                    'first_appearance_ms' => $utterance['start'] ?? 0,
+                    'last_appearance_ms' => $utterance['end'] ?? 0,
+                    'avg_confidence' => 0,
+                    'confidence_sum' => 0
+                ];
+            }
+
+            $speakerStats[$speaker]['count']++;
+            $speakerStats[$speaker]['total_duration_ms'] += ($utterance['end'] ?? 0) - ($utterance['start'] ?? 0);
+            $speakerStats[$speaker]['last_appearance_ms'] = $utterance['end'] ?? 0;
+
+            if (isset($utterance['confidence'])) {
+                $speakerStats[$speaker]['confidence_sum'] += $utterance['confidence'];
+                $speakerStats[$speaker]['avg_confidence'] = $speakerStats[$speaker]['confidence_sum'] / $speakerStats[$speaker]['count'];
+            }
+        }
+
+        return [
+            'unique_speakers' => count($uniqueSpeakers),
+            'speaker_list' => $uniqueSpeakers,
+            'speaker_stats' => $speakerStats,
+            'total_utterances' => count($utterances)
+        ];
     }
 }

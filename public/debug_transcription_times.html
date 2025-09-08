@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Tiempos de Transcripción</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; text-align: center; }
+
+        .section {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .debug-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        .debug-table th, .debug-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .debug-table th {
+            background-color: #e9ecef;
+            font-weight: bold;
+        }
+
+        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .warning { background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
+        .info { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background-color: #0056b3; }
+
+        .logs {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        .time-comparison {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .time-comparison > div {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 Debug Tiempos de Transcripción</h1>
+
+        <div class="section info">
+            <strong>🎯 Objetivo:</strong> Verificar exactamente cómo están llegando los tiempos desde AssemblyAI y cómo se están procesando.
+        </div>
+
+        <div class="section">
+            <h3>1. Cargar Transcripción Existente</h3>
+            <p>Ingresa el ID de una transcripción que ya tengas procesada:</p>
+            <input type="text" id="transcriptionId" placeholder="ID de transcripción (ej: abc123...)" style="width: 300px; padding: 5px;">
+            <button onclick="loadTranscription()">📥 Cargar Datos</button>
+
+            <div id="transcriptionStatus" class="section" style="display: none;">
+                <h4>Estado de la Transcripción:</h4>
+                <div id="statusInfo"></div>
+            </div>
+        </div>
+
+        <div class="section" id="dataAnalysis" style="display: none;">
+            <h3>2. Análisis de Datos Raw</h3>
+            <div id="rawDataDisplay"></div>
+        </div>
+
+        <div class="section" id="timeComparison" style="display: none;">
+            <h3>3. Comparación de Tiempos</h3>
+            <p>Verifica cómo se ven los tiempos en diferentes formatos:</p>
+            <div id="timeComparisonTable"></div>
+        </div>
+
+        <div class="section" id="testPlayback" style="display: none;">
+            <h3>4. Test de Reproducción</h3>
+            <p>Carga el audio original para probar si los tiempos coinciden:</p>
+            <input type="file" id="audioFile" accept="audio/mp3,audio/mp4,audio/m4a" />
+            <button onclick="loadTestAudio()">📁 Cargar Audio</button>
+
+            <div id="audioControls" style="display: none;">
+                <audio id="testAudio" controls style="width: 100%; margin: 10px 0;"></audio>
+                <div id="segmentTests"></div>
+            </div>
+        </div>
+
+        <div class="logs" id="debugLogs">
+            <strong>📝 Debug Logs:</strong><br>
+            [Inicio] Sistema de debug iniciado...
+        </div>
+    </div>
+
+    <script>
+        let rawTranscriptionData = null;
+        let processedData = null;
+        let testAudio = null;
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logs = document.getElementById('debugLogs');
+            logs.innerHTML += `<br>[${timestamp}] ${message}`;
+            logs.scrollTop = logs.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        async function loadTranscription() {
+            const transcriptionId = document.getElementById('transcriptionId').value.trim();
+
+            if (!transcriptionId) {
+                alert('Por favor ingresa un ID de transcripción');
+                return;
+            }
+
+            log(`📥 Cargando transcripción: ${transcriptionId}`);
+
+            try {
+                const response = await fetch(`/transcription/check/${transcriptionId}`);
+                const data = await response.json();
+
+                log(`📋 Respuesta recibida - Status: ${data.status}`);
+
+                if (data.status === 'completed') {
+                    rawTranscriptionData = data;
+                    analyzeTranscriptionData(data);
+                    document.getElementById('transcriptionStatus').style.display = 'block';
+                    document.getElementById('statusInfo').innerHTML = `
+                        <div class="success">
+                            <strong>✅ Transcripción completada</strong><br>
+                            <strong>ID:</strong> ${data.id}<br>
+                            <strong>Audio URL:</strong> ${data.audio_url}<br>
+                            <strong>Duración:</strong> ${data.audio_duration ? (data.audio_duration / 1000).toFixed(2) + 's' : 'No disponible'}<br>
+                            <strong>Idioma:</strong> ${data.language_code || 'No especificado'}<br>
+                            <strong>Utterances:</strong> ${data.utterances ? data.utterances.length : 0}
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('transcriptionStatus').style.display = 'block';
+                    document.getElementById('statusInfo').innerHTML = `
+                        <div class="warning">
+                            <strong>⏳ Estado:</strong> ${data.status}<br>
+                            <strong>Mensaje:</strong> La transcripción aún no está completa
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                log(`❌ Error cargando transcripción: ${error.message}`);
+                alert('Error cargando la transcripción: ' + error.message);
+            }
+        }
+
+        function analyzeTranscriptionData(data) {
+            log(`🔬 Analizando datos de transcripción...`);
+
+            const utterances = data.utterances || [];
+
+            if (utterances.length === 0) {
+                log(`❌ No se encontraron utterances en los datos`);
+                return;
+            }
+
+            log(`📊 Encontradas ${utterances.length} utterances`);
+
+            // Mostrar datos raw
+            document.getElementById('dataAnalysis').style.display = 'block';
+            document.getElementById('rawDataDisplay').innerHTML = `
+                <h4>Datos Raw (Primeros 3 utterances):</h4>
+                <pre style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; font-size: 11px;">
+${JSON.stringify(utterances.slice(0, 3), null, 2)}
+                </pre>
+            `;
+
+            // Procesar y comparar tiempos
+            processedData = utterances.map((u, index) => {
+                const rawStart = u.start;
+                const rawEnd = u.end;
+
+                // Detectar si los tiempos están en milisegundos o segundos
+                const seemsLikeMilliseconds = rawStart > 1000; // Si start > 1000, probablemente está en ms
+
+                return {
+                    index,
+                    rawStart,
+                    rawEnd,
+                    seemsLikeMilliseconds,
+                    // Conversiones posibles
+                    startInSeconds: seemsLikeMilliseconds ? rawStart / 1000 : rawStart,
+                    endInSeconds: seemsLikeMilliseconds ? rawEnd / 1000 : rawEnd,
+                    startInMs: seemsLikeMilliseconds ? rawStart : rawStart * 1000,
+                    endInMs: seemsLikeMilliseconds ? rawEnd : rawEnd * 1000,
+                    text: u.text,
+                    speaker: u.speaker,
+                    words: u.words ? u.words.length : 0
+                };
+            });
+
+            displayTimeComparison();
+        }
+
+        function displayTimeComparison() {
+            document.getElementById('timeComparison').style.display = 'block';
+
+            const sample = processedData.slice(0, 5); // Primeros 5 utterances
+
+            let tableHTML = `
+                <table class="debug-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Hablante</th>
+                            <th>Raw Start</th>
+                            <th>Raw End</th>
+                            <th>Formato Detectado</th>
+                            <th>Start (s)</th>
+                            <th>End (s)</th>
+                            <th>Duración (s)</th>
+                            <th>Texto (preview)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            sample.forEach(item => {
+                const duration = item.endInSeconds - item.startInSeconds;
+                const textPreview = item.text.length > 50 ? item.text.substring(0, 50) + '...' : item.text;
+
+                tableHTML += `
+                    <tr>
+                        <td>${item.index}</td>
+                        <td>${item.speaker || 'N/A'}</td>
+                        <td>${item.rawStart}</td>
+                        <td>${item.rawEnd}</td>
+                        <td>${item.seemsLikeMilliseconds ? 'Milisegundos' : 'Segundos'}</td>
+                        <td>${item.startInSeconds.toFixed(2)}</td>
+                        <td>${item.endInSeconds.toFixed(2)}</td>
+                        <td>${duration.toFixed(2)}</td>
+                        <td title="${item.text}">${textPreview}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('timeComparisonTable').innerHTML = tableHTML;
+
+            // Mostrar sección de test de audio
+            document.getElementById('testPlayback').style.display = 'block';
+
+            log(`📋 Tabla de comparación generada con ${sample.length} muestras`);
+        }
+
+        function loadTestAudio() {
+            const fileInput = document.getElementById('audioFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Por favor selecciona un archivo de audio');
+                return;
+            }
+
+            log(`📁 Cargando audio de prueba: ${file.name}`);
+
+            testAudio = document.getElementById('testAudio');
+            const url = URL.createObjectURL(file);
+            testAudio.src = url;
+
+            testAudio.onloadedmetadata = function() {
+                log(`✅ Audio cargado - Duración: ${testAudio.duration.toFixed(2)}s`);
+                document.getElementById('audioControls').style.display = 'block';
+                generateSegmentTests();
+            };
+        }
+
+        function generateSegmentTests() {
+            if (!processedData || processedData.length === 0) {
+                return;
+            }
+
+            const container = document.getElementById('segmentTests');
+            const testSegments = processedData.slice(0, 3); // Primeros 3 para testing
+
+            let html = '<h4>Test de Segmentos:</h4>';
+
+            testSegments.forEach((segment, index) => {
+                html += `
+                    <div style="margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+                        <strong>Segmento ${segment.index} - ${segment.speaker || 'Sin hablante'}</strong><br>
+                        <small>${segment.text.substring(0, 100)}...</small><br>
+                        <div class="time-comparison">
+                            <div>
+                                <strong>Tiempo Raw:</strong><br>
+                                ${segment.rawStart} - ${segment.rawEnd}<br>
+                                <button onclick="testSegment(${segment.rawStart}, ${segment.rawEnd}, 'raw', ${index})">
+                                    ▶️ Test Raw
+                                </button>
+                            </div>
+                            <div>
+                                <strong>Tiempo en Segundos:</strong><br>
+                                ${segment.startInSeconds.toFixed(2)}s - ${segment.endInSeconds.toFixed(2)}s<br>
+                                <button onclick="testSegment(${segment.startInSeconds}, ${segment.endInSeconds}, 'seconds', ${index})">
+                                    ▶️ Test Segundos
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function testSegment(startTime, endTime, format, segmentIndex) {
+            if (!testAudio) {
+                alert('Primero carga un archivo de audio');
+                return;
+            }
+
+            log(`🎵 Testing segmento ${segmentIndex} con formato ${format}: ${startTime} - ${endTime}`);
+
+            // Convertir a segundos si es necesario
+            let startSec = format === 'raw' && startTime > 1000 ? startTime / 1000 : startTime;
+            let endSec = format === 'raw' && endTime > 1000 ? endTime / 1000 : endTime;
+
+            testAudio.currentTime = startSec;
+
+            testAudio.play().then(() => {
+                log(`✅ Reproduciendo: ${startSec.toFixed(2)}s - ${endSec.toFixed(2)}s`);
+
+                setTimeout(() => {
+                    testAudio.pause();
+                    log(`⏹️ Segmento ${segmentIndex} completado`);
+                }, (endSec - startSec) * 1000);
+
+            }).catch(error => {
+                log(`❌ Error reproduciendo: ${error.message}`);
+            });
+        }
+
+        // Inicialización
+        window.addEventListener('load', () => {
+            log('🚀 Sistema de debug iniciado');
+            log('💡 Ingresa un ID de transcripción para analizar los datos');
+        });
+    </script>
+</body>
+</html>

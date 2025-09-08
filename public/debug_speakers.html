@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Detección de Hablantes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; text-align: center; }
+
+        .section {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .debug-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        .debug-table th, .debug-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .debug-table th {
+            background-color: #e9ecef;
+            font-weight: bold;
+        }
+
+        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .warning { background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
+        .info { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background-color: #0056b3; }
+
+        .logs {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        .speaker-analysis {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .speaker-card {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+        }
+
+        .speaker-stats {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug Detección de Hablantes</h1>
+
+        <div class="section info">
+            <strong>🎯 Objetivo:</strong> Diagnosticar por qué AssemblyAI solo detecta 1 hablante cuando deberían ser varios.
+        </div>
+
+        <div class="section">
+            <h3>1. Cargar Transcripción para Análisis</h3>
+            <input type="text" id="transcriptionId" placeholder="ID de transcripción (ej: abc123...)" style="width: 400px; padding: 8px;">
+            <button onclick="analyzeTranscription()">🔍 Analizar Hablantes</button>
+
+            <div id="basicInfo" class="section" style="display: none;">
+                <h4>Información Básica:</h4>
+                <div id="basicInfoContent"></div>
+            </div>
+        </div>
+
+        <div class="section" id="speakerAnalysis" style="display: none;">
+            <h3>2. Análisis de Hablantes</h3>
+            <div id="speakerStats" class="speaker-stats"></div>
+            <div id="speakerBreakdown" class="speaker-analysis"></div>
+        </div>
+
+        <div class="section" id="utteranceAnalysis" style="display: none;">
+            <h3>3. Análisis Detallado de Utterances</h3>
+            <div id="utteranceTable"></div>
+        </div>
+
+        <div class="section" id="recommendations" style="display: none;">
+            <h3>4. Recomendaciones</h3>
+            <div id="recommendationsList"></div>
+        </div>
+
+        <div class="logs" id="debugLogs">
+            <strong>📝 Debug Logs:</strong><br>
+            [Inicio] Sistema de debug de hablantes iniciado...
+        </div>
+    </div>
+
+    <script>
+        let rawData = null;
+        let utterances = null;
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logs = document.getElementById('debugLogs');
+            logs.innerHTML += `<br>[${timestamp}] ${message}`;
+            logs.scrollTop = logs.scrollHeight;
+            console.log(`[SPEAKER_DEBUG] ${message}`);
+        }
+
+        async function analyzeTranscription() {
+            const transcriptionId = document.getElementById('transcriptionId').value.trim();
+
+            if (!transcriptionId) {
+                alert('Por favor ingresa un ID de transcripción');
+                return;
+            }
+
+            log(`🔍 Analizando transcripción: ${transcriptionId}`);
+
+            try {
+                const response = await fetch(`/transcription/check/${transcriptionId}`);
+                const data = await response.json();
+
+                log(`📋 Respuesta recibida - Status: ${data.status}`);
+
+                if (data.status === 'completed') {
+                    rawData = data;
+                    utterances = data.utterances || [];
+
+                    displayBasicInfo(data);
+                    analyzeSpeakers(utterances);
+                    analyzeUtterances(utterances);
+                    generateRecommendations(utterances);
+
+                } else {
+                    log(`❌ Transcripción no completada: ${data.status}`);
+                    alert(`La transcripción no está completada. Estado: ${data.status}`);
+                }
+
+            } catch (error) {
+                log(`❌ Error cargando transcripción: ${error.message}`);
+                alert('Error cargando la transcripción: ' + error.message);
+            }
+        }
+
+        function displayBasicInfo(data) {
+            document.getElementById('basicInfo').style.display = 'block';
+
+            const duration = data.audio_duration ? (data.audio_duration / 1000).toFixed(2) + 's' : 'No disponible';
+            const utteranceCount = data.utterances ? data.utterances.length : 0;
+
+            document.getElementById('basicInfoContent').innerHTML = `
+                <div class="info">
+                    <strong>ID:</strong> ${data.id}<br>
+                    <strong>Duración:</strong> ${duration}<br>
+                    <strong>Idioma:</strong> ${data.language_code || 'No especificado'}<br>
+                    <strong>Total de Utterances:</strong> ${utteranceCount}<br>
+                    <strong>Audio URL:</strong> ${data.audio_url ? 'Disponible' : 'No disponible'}
+                </div>
+            `;
+
+            log(`📊 Información básica cargada: ${utteranceCount} utterances, duración ${duration}`);
+        }
+
+        function analyzeSpeakers(utterances) {
+            if (!utterances || utterances.length === 0) {
+                log(`❌ No hay utterances para analizar`);
+                return;
+            }
+
+            document.getElementById('speakerAnalysis').style.display = 'block';
+
+            // Analizar speakers únicos
+            const speakerStats = {};
+            const speakerSegments = {};
+
+            utterances.forEach((utterance, index) => {
+                const speaker = utterance.speaker || 'Unknown';
+
+                if (!speakerStats[speaker]) {
+                    speakerStats[speaker] = {
+                        count: 0,
+                        totalDuration: 0,
+                        firstAppearance: utterance.start,
+                        lastAppearance: utterance.end,
+                        segments: []
+                    };
+                }
+
+                speakerStats[speaker].count++;
+                speakerStats[speaker].totalDuration += (utterance.end - utterance.start);
+                speakerStats[speaker].lastAppearance = utterance.end;
+                speakerStats[speaker].segments.push({
+                    index,
+                    start: utterance.start,
+                    end: utterance.end,
+                    text: utterance.text.substring(0, 100)
+                });
+            });
+
+            const uniqueSpeakers = Object.keys(speakerStats);
+
+            // Mostrar estadísticas generales
+            document.getElementById('speakerStats').innerHTML = `
+                <strong>📊 Estadísticas de Hablantes:</strong><br>
+                <strong>Hablantes únicos detectados:</strong> ${uniqueSpeakers.length}<br>
+                <strong>Total de utterances:</strong> ${utterances.length}<br>
+                <strong>Promedio de utterances por hablante:</strong> ${(utterances.length / uniqueSpeakers.length).toFixed(1)}
+            `;
+
+            // Mostrar breakdown por hablante
+            let breakdownHTML = '';
+            uniqueSpeakers.forEach(speaker => {
+                const stats = speakerStats[speaker];
+                const durationMinutes = (stats.totalDuration / 1000 / 60).toFixed(2);
+
+                breakdownHTML += `
+                    <div class="speaker-card">
+                        <h4>🗣️ ${speaker}</h4>
+                        <strong>Segmentos:</strong> ${stats.count}<br>
+                        <strong>Duración total:</strong> ${durationMinutes} min<br>
+                        <strong>Primera aparición:</strong> ${(stats.firstAppearance / 1000).toFixed(1)}s<br>
+                        <strong>Última aparición:</strong> ${(stats.lastAppearance / 1000).toFixed(1)}s<br>
+                        <strong>Primer texto:</strong> "${stats.segments[0]?.text}..."
+                    </div>
+                `;
+            });
+
+            document.getElementById('speakerBreakdown').innerHTML = breakdownHTML;
+
+            log(`🎯 Análisis de hablantes completado: ${uniqueSpeakers.length} hablantes únicos`);
+
+            if (uniqueSpeakers.length === 1) {
+                log(`⚠️ ¡PROBLEMA DETECTADO! Solo 1 hablante en ${utterances.length} utterances`);
+            }
+        }
+
+        function analyzeUtterances(utterances) {
+            document.getElementById('utteranceAnalysis').style.display = 'block';
+
+            // Mostrar muestra de utterances para análisis detallado
+            const sampleSize = Math.min(20, utterances.length);
+            const sample = utterances.slice(0, sampleSize);
+
+            let tableHTML = `
+                <p>Muestra de los primeros ${sampleSize} utterances:</p>
+                <table class="debug-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Speaker</th>
+                            <th>Start (s)</th>
+                            <th>End (s)</th>
+                            <th>Duración (s)</th>
+                            <th>Confidence</th>
+                            <th>Texto (preview)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            sample.forEach((utterance, index) => {
+                const duration = ((utterance.end - utterance.start) / 1000).toFixed(2);
+                const startSec = (utterance.start / 1000).toFixed(1);
+                const endSec = (utterance.end / 1000).toFixed(1);
+                const textPreview = utterance.text.length > 80 ? utterance.text.substring(0, 80) + '...' : utterance.text;
+                const confidence = utterance.confidence ? utterance.confidence.toFixed(3) : 'N/A';
+
+                tableHTML += `
+                    <tr>
+                        <td>${index}</td>
+                        <td><strong>${utterance.speaker || 'Unknown'}</strong></td>
+                        <td>${startSec}</td>
+                        <td>${endSec}</td>
+                        <td>${duration}</td>
+                        <td>${confidence}</td>
+                        <td title="${utterance.text}">${textPreview}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('utteranceTable').innerHTML = tableHTML;
+
+            log(`📋 Tabla de utterances generada con ${sampleSize} muestras`);
+        }
+
+        function generateRecommendations(utterances) {
+            document.getElementById('recommendations').style.display = 'block';
+
+            const uniqueSpeakers = [...new Set(utterances.map(u => u.speaker))];
+            const totalDuration = Math.max(...utterances.map(u => u.end)) / 1000 / 60; // minutos
+
+            let recommendations = [];
+
+            if (uniqueSpeakers.length === 1) {
+                recommendations.push(`
+                    <div class="error">
+                        <strong>🔴 PROBLEMA PRINCIPAL:</strong> Solo se detectó 1 hablante en una grabación de ${totalDuration.toFixed(1)} minutos.
+                        <br><strong>Posibles causas:</strong>
+                        <ul>
+                            <li>La configuración de AssemblyAI no está optimizada para múltiples hablantes</li>
+                            <li>La calidad del audio no permite distinguir voces diferentes</li>
+                            <li>Los hablantes tienen voces muy similares</li>
+                            <li>El audio tiene mucho ruido de fondo</li>
+                        </ul>
+                    </div>
+                `);
+
+                recommendations.push(`
+                    <div class="warning">
+                        <strong>💡 RECOMENDACIONES INMEDIATAS:</strong>
+                        <ul>
+                            <li>Verificar que <code>speaker_labels: true</code> está configurado</li>
+                            <li>Ajustar <code>speech_threshold</code> a 0.2 (más sensible)</li>
+                            <li>Asegurar que <code>dual_channel: false</code></li>
+                            <li>Desactivar funciones extras que interfieren con speaker detection</li>
+                        </ul>
+                    </div>
+                `);
+            } else {
+                recommendations.push(`
+                    <div class="success">
+                        <strong>✅ DETECCIÓN EXITOSA:</strong> Se detectaron ${uniqueSpeakers.length} hablantes diferentes.
+                        La configuración actual parece estar funcionando correctamente.
+                    </div>
+                `);
+            }
+
+            if (totalDuration > 15) {
+                recommendations.push(`
+                    <div class="info">
+                        <strong>📊 AUDIOS LARGOS:</strong> Para grabaciones de ${totalDuration.toFixed(1)} minutos,
+                        considera usar configuraciones específicas para mejorar la precisión en conversaciones largas.
+                    </div>
+                `);
+            }
+
+            document.getElementById('recommendationsList').innerHTML = recommendations.join('');
+
+            log(`💡 Generadas ${recommendations.length} recomendaciones`);
+        }
+
+        // Inicialización
+        window.addEventListener('load', () => {
+            log('🚀 Sistema de debug de hablantes iniciado');
+            log('💡 Ingresa un ID de transcripción para analizar la detección de hablantes');
+        });
+    </script>
+</body>
+</html>

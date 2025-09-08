@@ -35,6 +35,25 @@ let pendingSaveContext = null;
 let postponeMode = false;
 window.postponeMode = postponeMode;
 let limitWarningShown = false;
+let currentRecordingFormat = null; // Almacenar el formato usado en la grabación actual
+
+// Función para obtener el mejor formato de audio disponible (solo MP4/MP3)
+function getOptimalAudioFormat() {
+    const formats = [
+        'audio/mp4',                // MP4 audio - PRIORIDAD MÁXIMA para reuniones
+        'audio/mpeg',               // MP3 - Respaldo estable
+    ];
+
+    for (const format of formats) {
+        if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(format)) {
+            console.log(`🎵 [Recording] Formato seleccionado: ${format}`);
+            return format;
+        }
+    }
+
+    console.error('🎵 [Recording] ERROR: Navegador no compatible con MP4/MP3');
+    throw new Error('Este navegador no soporta los formatos de audio requeridos (MP4/MP3). Por favor, usa un navegador más reciente.');
+}
 
 // SVG paths for dynamic icons
 const ICON_PATHS = {
@@ -283,25 +302,10 @@ async function startRecording() {
 
         let bitsPerSecond = 128000; // calidad media por defecto
 
-        // Función para obtener el mejor formato de audio disponible (solo MP4/MP3)
-        function getOptimalAudioFormat() {
-            const formats = [
-                'audio/mp4',                // MP4 audio - PRIORIDAD MÁXIMA para reuniones
-                'audio/mpeg',               // MP3 - Respaldo estable
-            ];
-
-            for (const format of formats) {
-                if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(format)) {
-                    console.log(`🎵 [Recording] Formato seleccionado: ${format}`);
-                    return format;
-                }
-            }
-
-            console.error('🎵 [Recording] ERROR: Navegador no compatible con MP4/MP3');
-            throw new Error('Este navegador no soporta los formatos de audio requeridos (MP4/MP3). Por favor, usa un navegador más reciente.');
-        }
-
+        // Usar la función global para obtener el formato
         const optimalFormat = getOptimalAudioFormat();
+        currentRecordingFormat = optimalFormat; // Almacenar para uso posterior
+
         mediaRecorder = new MediaRecorder(recordingStream, {
             mimeType: optimalFormat,
             audioBitsPerSecond: bitsPerSecond
@@ -453,12 +457,14 @@ async function finalizeRecording() {
     resetRecordingControls();
 
     let finalBlob;
-    try {
-        finalBlob = await fetchRemuxedBlob();
-    } catch (e) {
-        console.error('Error al remultiplexar en servidor, usando copia local', e);
-        finalBlob = new Blob(recordedChunks, { type: 'audio/webm;codecs=opus' });
-    }
+
+    // Usar directamente el blob de la grabación con el formato que se usó durante la grabación
+    const blobType = currentRecordingFormat || 'audio/mp4'; // Fallback a MP4 si no hay formato almacenado
+    finalBlob = new Blob(recordedChunks, { type: blobType });
+
+    console.log('🎵 [finalizeRecording] Using direct blob from MediaRecorder');
+    console.log('🎵 [finalizeRecording] Blob size:', (finalBlob.size / (1024 * 1024)).toFixed(2), 'MB');
+    console.log('🎵 [finalizeRecording] Blob type:', finalBlob.type);
     const sizeMB = finalBlob.size / (1024 * 1024);
 
     const now = new Date();
@@ -826,9 +832,11 @@ function handlePostActionCleanup(uploaded) {
     if (pendingSaveContext === 'recording') {
         recordedChunks = [];
         startTime = null;
+        currentRecordingFormat = null; // Limpiar formato de grabación
     } else if (pendingSaveContext === 'meeting') {
         recordedChunks = [];
         meetingStartTime = null;
+        currentRecordingFormat = null; // Limpiar formato de grabación
     } else if (pendingSaveContext === 'upload' && !uploaded) {
         removeSelectedFile();
     }
