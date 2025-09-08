@@ -1,5 +1,6 @@
 import { saveAudioBlob, loadAudioBlob, clearAllAudio } from './idb.js';
 import { showError } from './utils/alerts.js';
+import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
 
 // ===== VARIABLES GLOBALES =====
 let isRecording = false;
@@ -41,6 +42,7 @@ let failedAudioName = null; // Nombre del archivo que falló
 let retryAttempts = 0; // Contador de intentos de resubida
 const MAX_RETRY_ATTEMPTS = 3; // Máximo número de reintentos
 
+let ffmpeg = null; // Instancia de ffmpeg.wasm
 // Función para obtener el mejor formato de audio disponible (solo MP4/MP3)
 function getOptimalAudioFormat() {
     const formats = [
@@ -61,16 +63,16 @@ function getOptimalAudioFormat() {
 
 // Función para obtener la extensión correcta del archivo basada en el formato usado
 function getCorrectFileExtension(blob) {
-    // Si tenemos el formato actual almacenado, usarlo
-    if (currentRecordingFormat) {
-        if (currentRecordingFormat.includes('mp4')) return 'mp4';
-        if (currentRecordingFormat.includes('mpeg')) return 'mp3';
+    // Primero, intentar detectar por el tipo del blob convertido
+    if (blob && blob.type) {
+        if (blob.type.includes('mpeg')) return 'mp3';
+        if (blob.type.includes('mp4')) return 'mp4';
     }
 
-    // Si no, intentar detectar por el tipo del blob
-    if (blob && blob.type) {
-        if (blob.type.includes('mp4')) return 'mp4';
-        if (blob.type.includes('mpeg')) return 'mp3';
+    // Si no, usar el formato almacenado de la grabación original
+    if (currentRecordingFormat) {
+        if (currentRecordingFormat.includes('mpeg')) return 'mp3';
+        if (currentRecordingFormat.includes('mp4')) return 'mp4';
     }
 
     // Fallback: usar MP4 como default (el formato preferido)
@@ -84,6 +86,25 @@ function downloadAudioWithCorrectFormat(blob, baseName) {
     downloadBlob(blob, fileName);
     console.log(`💾 [Download] Descargando audio en formato ${extension}: ${fileName}`);
     return fileName;
+}
+
+// Helper para convertir blobs WebM/Opus a MP3 usando ffmpeg.wasm
+async function convertToMp3(blob) {
+    if (!ffmpeg) {
+        ffmpeg = createFFmpeg({ log: false });
+        await ffmpeg.load();
+    }
+
+    const data = await fetchFile(blob);
+    const inputName = 'input.webm';
+    ffmpeg.FS('writeFile', inputName, data);
+    await ffmpeg.run('-i', inputName, 'output.mp3');
+    const mp3Data = ffmpeg.FS('readFile', 'output.mp3');
+
+    ffmpeg.FS('unlink', inputName);
+    ffmpeg.FS('unlink', 'output.mp3');
+
+    return new Blob([mp3Data.buffer], { type: 'audio/mpeg' });
 }
 
 // SVG paths for dynamic icons
@@ -493,7 +514,19 @@ async function finalizeRecording() {
     const blobType = currentRecordingFormat || 'audio/mp4'; // Fallback a MP4 si no hay formato almacenado
     finalBlob = new Blob(recordedChunks, { type: blobType });
 
-    console.log('🎵 [finalizeRecording] Using direct blob from MediaRecorder');
+    // Determinar MIME real del primer chunk y convertir si es WebM/Opus
+    const realMime = recordedChunks[0]?.type || blobType;
+    if (realMime.includes('opus') || realMime.includes('webm')) {
+        try {
+            console.log('🎵 [finalizeRecording] Convirtiendo a MP3 desde', realMime);
+            finalBlob = await convertToMp3(finalBlob);
+            currentRecordingFormat = 'audio/mpeg';
+        } catch (e) {
+            console.error('🎵 [finalizeRecording] Error al convertir a MP3:', e);
+        }
+    }
+
+    console.log('🎵 [finalizeRecording] Using blob for processing');
     console.log('🎵 [finalizeRecording] Blob size:', (finalBlob.size / (1024 * 1024)).toFixed(2), 'MB');
     console.log('🎵 [finalizeRecording] Blob type:', finalBlob.type);
     const sizeMB = finalBlob.size / (1024 * 1024);

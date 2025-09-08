@@ -17,6 +17,7 @@
         "vite": "^7.0.5"
     },
     "dependencies": {
+        "@ffmpeg/ffmpeg": "^0.12.10",
         "bcryptjs": "^3.0.2"
     }
 }
