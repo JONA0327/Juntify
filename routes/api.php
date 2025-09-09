@@ -73,9 +73,8 @@ Route::post('/drive/save-results', [DriveController::class, 'saveResults']);
 Route::post('/drive/upload-pending-audio', [DriveController::class, 'uploadPendingAudio'])
     ->middleware(['web', 'auth']);
 
-Route::get('/pending-recordings/{pendingRecording}', [PendingRecordingController::class, 'show']);
-
 Route::middleware(['web', 'auth'])->group(function () {
+    Route::get('/pending-recordings/{pendingRecording}', [PendingRecordingController::class, 'show']);
     Route::post('/recordings/chunk', [RecordingChunkController::class, 'storeChunk']);
     Route::post('/recordings/concat', [RecordingChunkController::class, 'concatChunks']);
 });

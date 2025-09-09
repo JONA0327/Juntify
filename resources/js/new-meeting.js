@@ -959,7 +959,17 @@ function uploadInBackground(blob, name, onProgress) {
 
 function pollPendingRecordingStatus(id) {
     const check = () => {
-        fetch(`/api/pending-recordings/${id}`)
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+        fetch(`/api/pending-recordings/${id}`, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': token
+            }
+        })
             .then(r => r.json())
             .then(data => {
                 if (data.status === 'COMPLETED') {
@@ -976,7 +986,10 @@ function pollPendingRecordingStatus(id) {
                     setTimeout(check, 5000);
                 }
             })
-            .catch(() => setTimeout(check, 5000));
+            .catch((error) => {
+                console.error('Error checking pending recording status:', error);
+                setTimeout(check, 5000);
+            });
     };
     check();
 }
