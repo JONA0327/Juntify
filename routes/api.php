@@ -182,6 +182,7 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
           // Contactos
           Route::get('/contacts', [ContactController::class, 'list'])->name('api.contacts.index');
           Route::post('/contacts', [ContactController::class, 'store'])->name('api.contacts.store');
+          Route::post('/contacts/requests/{notification}/respond', [ContactController::class, 'respond'])->name('api.contacts.requests.respond');
           Route::delete('/contacts/{contact}', [ContactController::class, 'destroy'])->name('api.contacts.destroy');
 
           Route::get('/chats', [ChatController::class, 'index'])->name('api.chats.index');
