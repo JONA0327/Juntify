@@ -595,6 +595,10 @@
     </div>
 
     <!-- JavaScript -->
+    <script>
+        window.userRole = @json($userRole);
+        window.currentOrganizationId = @json($organizationId);
+    </script>
     @vite(['resources/js/audio-processing.js'])
 </body>
 </html>

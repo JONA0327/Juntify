@@ -138,12 +138,20 @@ Route::middleware(['auth'])->group(function () {
          ->name('calendar.createEvent');
 
     Route::get('/audio-processing', function () {
-        return view('audio-processing');
+        $user = auth()->user();
+        return view('audio-processing', [
+            'userRole' => $user->roles ?? 'free',
+            'organizationId' => $user->current_organization_id ?? null
+        ]);
     })->name('audio-processing');
 });
 
 Route::get('/new-meeting', function () {
-    return view('new-meeting');
+    $user = auth()->user();
+    return view('new-meeting', [
+        'userRole' => $user->roles ?? 'free',
+        'organizationId' => $user->current_organization_id ?? null
+    ]);
 })->name('new-meeting')->middleware('cors.ffmpeg');
 
 // Test routes with FFmpeg middleware

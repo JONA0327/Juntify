@@ -1701,6 +1701,12 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         if (text) progressText.textContent = text;
     };
 
+    // Obtener el tipo de drive seleccionado
+    const driveSelect = document.getElementById('drive-select');
+    const driveType = driveSelect ? driveSelect.value : 'personal'; // Default to personal
+
+    console.log('🗂️ [processDatabaseSave] Drive type selected:', driveType);
+
     // Contenedor de mensajes detallados
     const addMessage = (msg) => {
         const section = document.querySelector('#step-saving .progress-section');
@@ -1729,6 +1735,10 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
 
     resetUI();
     addMessage('Iniciando guardado de resultados');
+
+    // Informar al usuario sobre el tipo de drive seleccionado
+    const driveTypeText = driveType === 'organization' ? 'Drive Organizacional' : 'Drive Personal';
+    addMessage(`📁 Tipo de Drive: ${driveTypeText}`);
 
     const transcription = transcriptionData;
     const analysis = analysisResults;
@@ -1891,7 +1901,8 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                     transcriptionData: transcription,
                     analysisResults: analysis,
                     audioData: audio,
-                    audioMimeType
+                    audioMimeType,
+                    driveType // Agregar el tipo de drive seleccionado
                 })
             });
 
@@ -1969,7 +1980,8 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                 drivePath: finalDrivePath,
                 audioDuration: finalAudioDuration,
                 speakerCount: finalSpeakerCount,
-                tasks: finalTasks
+                tasks: finalTasks,
+                driveType: driveType // Pasar el tipo de drive seleccionado
             });
         }, 500);
 
@@ -1990,7 +2002,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
 
 // ===== PASO 8: COMPLETADO =====
 
-function showCompletion({ drivePath, audioDuration, speakerCount, tasks }) {
+function showCompletion({ drivePath, audioDuration, speakerCount, tasks, driveType }) {
     processingFinished = true;
     showStep(8);
 
@@ -2004,7 +2016,11 @@ function showCompletion({ drivePath, audioDuration, speakerCount, tasks }) {
     }
 
     const pathEl = document.getElementById('completion-drive-path');
-    if (pathEl) pathEl.textContent = drivePath || '';
+    if (pathEl) {
+        // Mejorar el mensaje para mostrar el tipo de drive
+        const driveTypeText = driveType === 'organization' ? 'Drive Organizacional' : 'Drive Personal';
+        pathEl.textContent = `${driveTypeText}: ${drivePath || ''}`;
+    }
 
     const durationEl = document.getElementById('completion-audio-duration');
     if (durationEl) durationEl.textContent = `${formatTime((audioDuration || 0) * 1000)} minutos`;

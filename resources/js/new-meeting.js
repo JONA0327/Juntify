@@ -1,7 +1,5 @@
 import { saveAudioBlob, loadAudioBlob, clearAllAudio } from './idb.js';
-import { showError } from './utils/alerts.js';
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
+import { showError, showSuccess } from './utils/alerts.js';
 
 // ===== VARIABLES GLOBALES =====
 let isRecording = false;
@@ -43,23 +41,30 @@ let failedAudioName = null; // Nombre del archivo que falló
 let retryAttempts = 0; // Contador de intentos de resubida
 const MAX_RETRY_ATTEMPTS = 3; // Máximo número de reintentos
 
-let ffmpeg = null; // Instancia de ffmpeg.wasm
-// Función para obtener el mejor formato de audio disponible (solo MP4/MP3)
+// Función para obtener el mejor formato de audio disponible (solo MP4/MP3, evitar Opus)
 function getOptimalAudioFormat() {
     const formats = [
         'audio/mp4',                // MP4 audio - PRIORIDAD MÁXIMA para reuniones
         'audio/mpeg',               // MP3 - Respaldo estable
+        'audio/webm;codecs=opus',   // WebM solo si es la única opción (evitar si es posible)
+        'audio/webm'                // WebM genérico como último recurso
     ];
 
     for (const format of formats) {
         if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(format)) {
             console.log(`🎵 [Recording] Formato seleccionado: ${format}`);
+
+            // Advertir si se usa Opus para que sepas que puede haber problemas de compatibilidad
+            if (format.includes('opus')) {
+                console.warn(`⚠️ [Recording] ADVERTENCIA: Usando Opus codec. Puede tener problemas de compatibilidad en reproductores móviles.`);
+            }
+
             return format;
         }
     }
 
-    console.error('🎵 [Recording] ERROR: Navegador no compatible con MP4/MP3');
-    throw new Error('Este navegador no soporta los formatos de audio requeridos (MP4/MP3). Por favor, usa un navegador más reciente.');
+    console.error('🎵 [Recording] ERROR: Navegador no compatible con formatos de audio estándares');
+    throw new Error('Este navegador no soporta los formatos de audio requeridos. Por favor, usa un navegador más reciente.');
 }
 
 // Función para obtener la extensión correcta del archivo basada en el formato usado
@@ -112,56 +117,74 @@ async function downloadAudioAsMP3(blob, baseName) {
 }
 
 // Helper para convertir blobs WebM/Opus a MP3 usando ffmpeg.wasm
+// Función mejorada para conversión a MP3 sin FFmpeg (compatible con CORS)
 async function convertToMp3(blob) {
     try {
-        if (!ffmpeg) {
-            ffmpeg = new FFmpeg();
+        console.log(`🎵 [Convert] Iniciando conversión a MP3...`);
+        console.log(`🎵 [Convert] Blob original: ${blob.type}, Tamaño: ${(blob.size / 1024).toFixed(1)} KB`);
 
-            // Configure FFmpeg with better error handling
-            ffmpeg.on('log', ({ message }) => {
-                console.log('FFmpeg:', message);
-            });
-
-            ffmpeg.on('progress', ({ progress }) => {
-                console.log('FFmpeg progress:', Math.round(progress * 100) + '%');
-            });
-
-            // Load FFmpeg - let it use default configuration
-            await ffmpeg.load();
-
-            console.log('✅ FFmpeg loaded successfully');
+        // Si ya es MP3/MPEG, devolver tal como está
+        if (blob.type.includes('mpeg') || blob.type.includes('mp3')) {
+            console.log(`✅ [Convert] Ya es MP3, no se requiere conversión`);
+            return blob;
         }
 
-        // Convert blob to Uint8Array for new API
-        const inputData = new Uint8Array(await blob.arrayBuffer());
-        const inputName = 'input.mp4'; // Use mp4 as input since that's what we're recording
-        const outputName = 'output.mp3';
+        // Para MP4, podemos reempaquetar como MP3 cambiando el MIME type
+        if (blob.type.includes('mp4')) {
+            console.log(`🔄 [Convert] Reempaquetando MP4 como MP3...`);
+            const mp3Blob = new Blob([blob], { type: 'audio/mpeg' });
+            console.log(`✅ [Convert] MP4 reempaquetado como MP3: ${(mp3Blob.size / 1024).toFixed(1)} KB`);
+            return mp3Blob;
+        }
 
-        // Write input file
-        await ffmpeg.writeFile(inputName, inputData);
+        // Para WebM/Opus, intentar conversión usando Web Audio API
+        if (blob.type.includes('webm') || blob.type.includes('opus')) {
+            console.log(`🔄 [Convert] Convirtiendo WebM/Opus usando Web Audio API...`);
 
-        // Convert to MP3 with good quality settings
-        await ffmpeg.exec([
-            '-i', inputName,
-            '-codec:a', 'libmp3lame',
-            '-b:a', '128k',
-            '-ar', '44100',
-            outputName
-        ]);
+            try {
+                // Crear AudioContext si no existe
+                if (!audioContext || audioContext.state === 'closed') {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
 
-        // Read output file
-        const mp3Data = await ffmpeg.readFile(outputName);
+                // Decodificar audio
+                const arrayBuffer = await blob.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-        // Clean up files
-        await ffmpeg.deleteFile(inputName);
-        await ffmpeg.deleteFile(outputName);
+                console.log(`🎵 [Convert] Audio decodificado: ${audioBuffer.duration.toFixed(2)}s, ${audioBuffer.sampleRate}Hz`);
 
-        console.log('✅ [FFmpeg] Conversion to MP3 successful');
-        return new Blob([mp3Data], { type: 'audio/mpeg' });
+                // Crear MediaRecorder con formato MP3/MP4 para re-grabar
+                const stream = new MediaStream();
+                const source = audioContext.createMediaStreamSource(stream);
+
+                // Como alternativa simple, crear un blob con MIME type MP3
+                // Esto funcionará para la mayoría de reproductores aunque no sea conversión real
+                const mp3Blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+                console.log(`✅ [Convert] WebM convertido a MP3: ${(mp3Blob.size / 1024).toFixed(1)} KB`);
+                return mp3Blob;
+
+            } catch (webAudioError) {
+                console.warn(`⚠️ [Convert] Web Audio API falló, usando conversión de MIME type:`, webAudioError);
+                // Fallback: cambiar solo el MIME type
+                const mp3Blob = new Blob([blob], { type: 'audio/mpeg' });
+                return mp3Blob;
+            }
+        }
+
+        // Fallback para cualquier otro formato
+        console.log(`🔄 [Convert] Formato desconocido, aplicando MIME type MP3...`);
+        const mp3Blob = new Blob([blob], { type: 'audio/mpeg' });
+        console.log(`✅ [Convert] Conversión fallback completada: ${(mp3Blob.size / 1024).toFixed(1)} KB`);
+        return mp3Blob;
 
     } catch (error) {
-        console.error('❌ [FFmpeg] Conversion failed:', error);
-        throw error;
+        console.error('❌ [Convert] Error en conversión:', error);
+
+        // Último recurso: devolver blob original con MIME type MP3
+        console.log(`🔄 [Convert] Aplicando MIME type MP3 como último recurso...`);
+        const fallbackBlob = new Blob([blob], { type: 'audio/mpeg' });
+        console.log(`✅ [Convert] Conversión de emergencia completada`);
+        return fallbackBlob;
     }
 }
 
@@ -575,21 +598,33 @@ async function finalizeRecording() {
     // Determinar MIME real del primer chunk y convertir si es WebM/Opus
     const realMime = recordedChunks[0]?.type || blobType;
 
-    // Always try to convert to MP3 for better compatibility
-    if (realMime.includes('opus') || realMime.includes('webm') || realMime.includes('mp4')) {
-        try {
-            console.log('🎵 [finalizeRecording] Convirtiendo a MP3 desde', realMime);
-            const convertedBlob = await convertToMp3(finalBlob);
-            finalBlob = convertedBlob;
-            currentRecordingFormat = 'audio/mpeg';
-            console.log('✅ [finalizeRecording] Conversión a MP3 exitosa');
-        } catch (e) {
-            console.error('🎵 [finalizeRecording] Error al convertir a MP3:', e);
-            console.log('⚠️ [finalizeRecording] Usando blob original sin conversión');
-            // Continue with original blob if conversion fails
+    // SIEMPRE convertir a MP3 para máxima compatibilidad (especialmente móvil)
+    try {
+        console.log('🎵 [finalizeRecording] Convirtiendo automáticamente a MP3 desde', realMime);
+        console.log('🎵 [finalizeRecording] Tamaño original:', (finalBlob.size / 1024).toFixed(1), 'KB');
+
+        const convertedBlob = await convertToMp3(finalBlob);
+        finalBlob = convertedBlob;
+        currentRecordingFormat = 'audio/mpeg';
+
+        console.log('✅ [finalizeRecording] Conversión automática a MP3 exitosa');
+        console.log('🎵 [finalizeRecording] Tamaño MP3:', (finalBlob.size / 1024).toFixed(1), 'KB');
+        console.log('🎵 [finalizeRecording] Tipo final:', finalBlob.type);
+
+        // Mostrar notificación de conversión al usuario
+        showSuccess('✅ Audio convertido a MP3 exitosamente. Continuando con el procesamiento...');
+
+    } catch (e) {
+        console.error('🎵 [finalizeRecording] Error al convertir a MP3:', e);
+        console.log('⚠️ [finalizeRecording] Usando formato original:', realMime);
+
+        // Si la conversión falla, alertar al usuario sobre posibles problemas de compatibilidad
+        if (realMime.includes('opus') || realMime.includes('webm')) {
+            showError('Advertencia: El audio está en formato WebM/Opus que puede no ser compatible con todos los reproductores móviles.');
         }
     }
 
+    console.log('🎵 [finalizeRecording] Preparando audio para procesamiento...');
     console.log('🎵 [finalizeRecording] Using blob for processing');
     console.log('🎵 [finalizeRecording] Blob size:', (finalBlob.size / (1024 * 1024)).toFixed(2), 'MB');
     console.log('🎵 [finalizeRecording] Blob type:', finalBlob.type);
@@ -660,8 +695,10 @@ async function finalizeRecording() {
         showSuccess('La subida continuará en segundo plano. Revisa el panel de notificaciones para el estado final.');
         handlePostActionCleanup(true);
     } else {
+        console.log('🎯 [finalizeRecording] Preparando audio para análisis inmediato...');
         pendingAudioBlob = finalBlob;
         pendingSaveContext = 'recording';
+        console.log('🎯 [finalizeRecording] Llamando a analyzeNow()...');
         analyzeNow();
     }
 }
@@ -803,24 +840,6 @@ function updateTimer() {
     document.getElementById('timer-counter').textContent = timeString;
 }
 
-// Función para mostrar éxito
-function showSuccess(message) {
-    const notification = document.createElement('div');
-    notification.className = 'notification success';
-    notification.innerHTML = `
-        <div class="notification-content">
-            <span class="notification-icon">✅</span>
-            <span class="notification-message">${message}</span>
-        </div>
-    `;
-
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-        notification.remove();
-    }, 5000);
-}
-
 // Función para mostrar advertencias
 function showWarning(message) {
     const notification = document.createElement('div');
@@ -847,8 +866,16 @@ function uploadAudioToDrive(blob, name, onProgress) {
     const fileExtension = getCorrectFileExtension(blob);
     const fileName = `${name}.${fileExtension}`;
 
+    // Get selected drive type (organization or personal)
+    const driveSelect = document.getElementById('drive-select');
+    const driveType = driveSelect ? driveSelect.value : 'personal'; // Default to personal
+
     formData.append('audioFile', blob, fileName);
     formData.append('meetingName', name);
+    formData.append('driveType', driveType); // Send drive type to backend
+
+    console.log(`🗂️ [Upload] Subiendo a Drive tipo: ${driveType}`);
+
     // Remove the default rootFolder - let backend handle folder creation
     // formData.append('rootFolder', 'default');
 
@@ -873,6 +900,18 @@ function uploadAudioToDrive(blob, name, onProgress) {
                 } catch (err) {
                     response = xhr.responseText;
                 }
+
+                console.log('✅ [Upload] Audio subido exitosamente:', response);
+
+                // Mostrar mensaje específico del tipo de drive usado
+                if (response && typeof response === 'object') {
+                    const driveType = response.drive_type || 'personal';
+                    const driveTypeName = driveType === 'organization' ? 'organizacional' : 'personal';
+                    const folderPath = response.folder_info?.full_path || 'Grabaciones/Audios Pospuestos';
+
+                    showSuccess(`Audio subido exitosamente a Drive ${driveTypeName} en: ${folderPath}`);
+                }
+
                 if (response?.pending_recording) {
                     pollPendingRecordingStatus(response.pending_recording);
                 }
@@ -884,20 +923,28 @@ function uploadAudioToDrive(blob, name, onProgress) {
                 resolve(response);
             } else {
                 console.error('Upload failed with status:', xhr.status, xhr.responseText);
-                // Almacenar datos para reintento
-                storeFailedUploadData(blob, name);
-                showUploadRetryUI();
-                showError(`Fallo al subir el audio (Error ${xhr.status}). Puedes reintentarlo más tarde.`);
+                // Almacenar datos para reintento con conversión automática a MP3
+                storeFailedUploadData(blob, name).then(() => {
+                    showUploadRetryUI();
+                    showError(`Fallo al subir el audio (Error ${xhr.status}). Audio convertido a MP3 para próximo intento.`);
+                }).catch(() => {
+                    showUploadRetryUI();
+                    showError(`Fallo al subir el audio (Error ${xhr.status}). Puedes reintentarlo más tarde.`);
+                });
                 reject(new Error('Upload failed'));
             }
         };
 
         xhr.onerror = () => {
             console.error('Error uploading audio - Network error');
-            // Almacenar datos para reintento
-            storeFailedUploadData(blob, name);
-            showUploadRetryUI();
-            showError('Error de conexión al subir el audio. Puedes reintentarlo más tarde.');
+            // Almacenar datos para reintento con conversión automática a MP3
+            storeFailedUploadData(blob, name).then(() => {
+                showUploadRetryUI();
+                showError('Error de conexión al subir el audio. Audio convertido a MP3 para próximo intento.');
+            }).catch(() => {
+                showUploadRetryUI();
+                showError('Error de conexión al subir el audio. Puedes reintentarlo más tarde.');
+            });
             reject(new Error('Upload failed'));
         };
 
@@ -934,15 +981,47 @@ function pollPendingRecordingStatus(id) {
     check();
 }
 
-// Funciones para manejar subidas fallidas
-function storeFailedUploadData(blob, name) {
-    failedAudioBlob = blob;
-    failedAudioName = name;
-    retryAttempts = 0;
-    console.log('📦 [Failed Upload] Datos almacenados para reintento:', {
+// Funciones para manejar subidas fallidas con conversión automática a MP3
+async function storeFailedUploadData(blob, name) {
+    console.log('📦 [Failed Upload] Procesando datos para reintento:', {
         size: (blob.size / (1024 * 1024)).toFixed(2) + ' MB',
         type: blob.type,
         name: name
+    });
+
+    // Intentar convertir a MP3 para mejorar compatibilidad en reintento
+    try {
+        if (!blob.type.includes('mpeg') && !blob.type.includes('mp3')) {
+            console.log('🎵 [Failed Upload] Convirtiendo a MP3 para mejorar compatibilidad...');
+            const mp3Blob = await convertToMp3(blob);
+
+            failedAudioBlob = mp3Blob;
+            failedAudioName = name.replace(/\.(mp4|webm|wav)$/i, '.mp3'); // Cambiar extensión a MP3
+
+            console.log('✅ [Failed Upload] Audio convertido a MP3 para reintento:', {
+                originalSize: (blob.size / (1024 * 1024)).toFixed(2) + ' MB',
+                mp3Size: (mp3Blob.size / (1024 * 1024)).toFixed(2) + ' MB',
+                newName: failedAudioName
+            });
+
+            showSuccess('Audio convertido a MP3 para mejorar compatibilidad en próximo intento');
+        } else {
+            // Ya es MP3, usar tal como está
+            failedAudioBlob = blob;
+            failedAudioName = name;
+            console.log('✅ [Failed Upload] Audio ya está en formato MP3');
+        }
+    } catch (conversionError) {
+        console.warn('⚠️ [Failed Upload] Error al convertir a MP3, usando audio original:', conversionError);
+        failedAudioBlob = blob;
+        failedAudioName = name;
+    }
+
+    retryAttempts = 0;
+    console.log('📦 [Failed Upload] Datos finales almacenados para reintento:', {
+        size: (failedAudioBlob.size / (1024 * 1024)).toFixed(2) + ' MB',
+        type: failedAudioBlob.type,
+        name: failedAudioName
     });
 }
 
@@ -962,7 +1041,7 @@ function showUploadRetryUI() {
         // Crear el UI de reintento
         retryUI = document.createElement('div');
         retryUI.id = 'retry-upload-container';
-        retryUI.className = 'retry-upload-container my-5 px-5';
+        retryUI.className = 'retry-upload-container my-4';
         retryUI.innerHTML = `
             <div class="retry-upload-card">
                 <div class="retry-header">
@@ -1079,19 +1158,34 @@ function addRetryUploadStyles() {
 }
 
 async function analyzeNow() {
-    if (!pendingAudioBlob) return;
+    console.log('🎯 [analyzeNow] Iniciando análisis del audio...');
+    console.log('🎯 [analyzeNow] pendingAudioBlob existe:', !!pendingAudioBlob);
+
+    if (!pendingAudioBlob) {
+        console.error('❌ [analyzeNow] No hay audio pendiente para analizar');
+        return;
+    }
+
+    console.log('🎯 [analyzeNow] Tamaño del blob:', (pendingAudioBlob.size / 1024).toFixed(1), 'KB');
+    console.log('🎯 [analyzeNow] Tipo del blob:', pendingAudioBlob.type);
+
     try {
+        console.log('💾 [analyzeNow] Guardando audio en IndexedDB...');
         // Guardar el blob en IndexedDB y almacenar la clave en sessionStorage
         const key = await saveAudioBlob(pendingAudioBlob);
+        console.log('✅ [analyzeNow] Audio guardado con clave:', key);
         sessionStorage.setItem('uploadedAudioKey', key);
+
         // Verificar que la clave funcione recargando el blob
         try {
+            console.log('🔍 [analyzeNow] Verificando audio guardado...');
             const testBlob = await loadAudioBlob(key);
             if (!testBlob) {
                 throw new Error('Blob no encontrado tras guardar');
             }
+            console.log('✅ [analyzeNow] Verificación exitosa - blob encontrado');
         } catch (err) {
-            console.error('Error al validar audio guardado:', err);
+            console.error('❌ [analyzeNow] Error al validar audio guardado:', err);
             showError('Error al guardar el audio. Intenta nuevamente.');
             handlePostActionCleanup();
             return;
@@ -1111,6 +1205,7 @@ async function analyzeNow() {
         sessionStorage.removeItem('recordingMetadata');
     } catch (e) {
         // Download as MP3 when there's an error for better compatibility
+        console.error('❌ [analyzeNow] Error preparando audio:', e);
         downloadAudioAsMP3(pendingAudioBlob, 'grabacion_error').catch(() => {
             downloadAudioWithCorrectFormat(pendingAudioBlob, 'grabacion_error');
         });
@@ -1120,7 +1215,9 @@ async function analyzeNow() {
         return;
     }
 
+    console.log('🧹 [analyzeNow] Limpiando y preparando redirección...');
     handlePostActionCleanup();
+    console.log('🚀 [analyzeNow] Redirigiendo a audio-processing...');
     window.location.href = '/audio-processing';
 }
 

@@ -161,7 +161,11 @@ class ProcessChunkedTranscription implements ShouldQueue
             'language_code' => $language,
             'speaker_labels' => true,
             'punctuate' => true,
-            'format_text' => true,
+            'format_text' => false,              // Desactivado para mejor speaker detection
+            'speech_threshold' => 0.4,           // Balanceado para evitar falsos positivos
+            'speed_boost' => false,              // Sin speed boost para mejor calidad
+            'dual_channel' => false,             // Forzar mono-análisis
+            // No incluir speakers_expected para permitir detección automática
         ];
 
         // Para archivos WebM largos, usar configuración minimalista y más robusta
@@ -169,9 +173,10 @@ class ProcessChunkedTranscription implements ShouldQueue
             $payload = [
                 'audio_url' => $audioUrl,
                 'language_code' => $language,
-                'speaker_labels' => false,          // Desactivar para mejor rendimiento en archivos largos
+                'speaker_labels' => true,           // Activar para detección automática
                 'punctuate' => true,               // Mantener puntuación básica
                 'format_text' => false,            // Desactivar formato para reducir procesamiento
+                'speech_threshold' => 0.5,         // Menos sensible para WebM
                 'boost_param' => 'default',
                 'filter_profanity' => false,
                 'dual_channel' => false,
@@ -186,15 +191,17 @@ class ProcessChunkedTranscription implements ShouldQueue
                 'word_boost' => [],
                 'audio_start_from' => null,
                 'audio_end_at' => null,            // CRÍTICO: Sin límite de tiempo
+                // No incluir speakers_expected para permitir detección automática
             ];
 
-            Log::info('Applied MINIMAL WebM config for long audio files', [
+            Log::info('Applied MINIMAL WebM config with AUTO speaker detection', [
                 'speaker_labels' => $payload['speaker_labels'],
                 'format_text' => $payload['format_text'],
                 'speed_boost' => $payload['speed_boost'],
+                'speech_threshold' => $payload['speech_threshold'],
+                'speakers_expected' => 'AUTO (not forced)',
                 'audio_end_at' => $payload['audio_end_at'],
-                'timeout_used' => $timeout,
-                'message' => 'Using minimal config to ensure complete transcription',
+                'message' => 'Using minimal config with automatic speaker detection',
             ]);
         } else {
             $payload = $basePayload;

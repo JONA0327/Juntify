@@ -625,9 +625,19 @@ body {
 }
 
 /* Retry Upload UI */
+.retry-upload-container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
 .retry-upload-card {
-    @apply bg-yellow-100 border border-yellow-300 rounded-xl p-5 shadow-md;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    backdrop-filter: blur(10px);
     animation: slideDown 0.3s ease-out;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
 @keyframes slideDown {
@@ -635,30 +645,96 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
-.retry-title,
+.retry-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.retry-icon {
+    font-size: 1.5rem;
+}
+
+.retry-title {
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
 .retry-message {
-    @apply text-yellow-800;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
 }
 
 .retry-details {
-    @apply flex justify-between bg-white/70 p-2 rounded-md text-sm;
+    display: flex;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.75rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .retry-filename {
-    @apply font-bold text-gray-700;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
 }
 
 .retry-filesize {
-    @apply text-gray-500;
+    color: var(--text-muted);
+    font-size: 0.9rem;
 }
 
 .retry-actions {
-    @apply flex gap-2.5 flex-wrap;
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
 }
 
 .retry-btn {
-    @apply flex-1;
-    min-width: 100px;
+    flex: 1;
+    min-width: 120px;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+}
+
+.retry-progress {
+    margin-top: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.retry-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.retry-progress-bar::after {
+    content: '';
+    display: block;
+    height: 100%;
+    background: var(--primary-color);
+    border-radius: 4px;
+    width: var(--progress, 0%);
+    transition: width 0.3s ease;
+}
+
+.retry-progress-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    display: block;
+    text-align: center;
 }
 
 @media (max-width: 768px) {

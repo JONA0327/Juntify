@@ -273,6 +273,10 @@
     </div>
 
     <!-- JavaScript -->
+    <script>
+        window.userRole = <?php echo json_encode($userRole, 15, 512) ?>;
+        window.currentOrganizationId = <?php echo json_encode($organizationId, 15, 512) ?>;
+    </script>
     <?php echo app('Illuminate\Foundation\Vite')(['resources/js/new-meeting.js']); ?>
 </body>
 </html>

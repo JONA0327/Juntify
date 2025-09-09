@@ -407,6 +407,7 @@ class DriveController extends Controller
                 'meetingName' => 'required|string',
                 'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4,video/mp4',
                 'rootFolder'  => 'nullable|string', // Cambiar a nullable
+                'driveType'   => 'nullable|string|in:personal,organization', // Nuevo campo para tipo de drive
             ]);
 
             $user = Auth::user();
@@ -417,24 +418,50 @@ class DriveController extends Controller
                 ->where('organization_id', $user->current_organization_id)
                 ->first()?->pivot->rol;
 
+            // Determinar si usar Drive organizacional basado en driveType
+            $driveType = $v['driveType'] ?? 'personal'; // Default a personal si no se especifica
             $useOrgDrive = false;
-            if ($organizationFolder) {
-                if ($orgRole === 'colaborador') {
-                    if ($v['rootFolder'] !== $organizationFolder->google_id && $v['rootFolder'] !== (string) $organizationFolder->id) {
-                        return response()->json([
-                            'message' => 'Colaboradores solo pueden usar la carpeta de la organización'
-                        ], 403);
-                    }
+
+            Log::info('uploadPendingAudio: Drive type selection', [
+                'driveType' => $driveType,
+                'hasOrganizationFolder' => !!$organizationFolder,
+                'orgRole' => $orgRole,
+                'username' => $user->username
+            ]);
+
+            if ($driveType === 'organization' && $organizationFolder) {
+                if ($orgRole === 'colaborador' || $orgRole === 'administrador') {
                     $useOrgDrive = true;
-                } elseif ($orgRole === 'administrador' && ($v['rootFolder'] === $organizationFolder->google_id || $v['rootFolder'] === (string) $organizationFolder->id)) {
-                    $useOrgDrive = true;
+                    Log::info('uploadPendingAudio: Using organization drive', [
+                        'orgRole' => $orgRole,
+                        'orgFolderId' => $organizationFolder->google_id
+                    ]);
+                } else {
+                    Log::warning('uploadPendingAudio: User has no valid role for organization', [
+                        'orgRole' => $orgRole,
+                        'username' => $user->username
+                    ]);
                 }
+            } elseif ($driveType === 'organization' && !$organizationFolder) {
+                Log::warning('uploadPendingAudio: Organization drive requested but no organization folder found', [
+                    'username' => $user->username
+                ]);
+                return response()->json([
+                    'message' => 'No tienes acceso a Drive organizacional o no está configurado'
+                ], 403);
             }
 
             if ($useOrgDrive) {
+                // Usar carpeta de organización
                 $rootFolder = $organizationFolder;
                 $rootFolderId = $organizationFolder->google_id;
+
+                Log::info('uploadPendingAudio: Using organization folder', [
+                    'orgFolderId' => $rootFolderId,
+                    'orgFolderName' => $organizationFolder->name ?? 'Unknown'
+                ]);
             } else {
+                // Usar carpeta personal
                 $token = GoogleToken::where('username', $user->username)->first();
                 if (! $token) {
                     Log::error('uploadPendingAudio: google token not found', [
@@ -634,10 +661,12 @@ class DriveController extends Controller
                 'audio_name'         => $fileName,
                 'subfolder_id'       => $subfolder->id,
                 'subfolder_created'  => $subfolderCreated,
+                'drive_type'         => $useOrgDrive ? 'organization' : 'personal', // Información del tipo de drive usado
                 'folder_info'        => [
                     'root_folder' => $rootFolder->name ?? 'Grabaciones',
                     'subfolder'   => $pendingSubfolderName,
-                    'full_path'   => ($rootFolder->name ?? 'Grabaciones') . '/' . $pendingSubfolderName
+                    'full_path'   => ($rootFolder->name ?? 'Grabaciones') . '/' . $pendingSubfolderName,
+                    'drive_type'  => $useOrgDrive ? 'organization' : 'personal'
                 ],
             ];
             if ($subfolderCreated) {

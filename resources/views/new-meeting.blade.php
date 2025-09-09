@@ -140,6 +140,10 @@
     </div>
 
     <!-- JavaScript -->
+    <script>
+        window.userRole = @json($userRole);
+        window.currentOrganizationId = @json($organizationId);
+    </script>
     @vite(['resources/js/new-meeting.js'])
 </body>
 </html>

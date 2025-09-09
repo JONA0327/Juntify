@@ -14,54 +14,56 @@ use App\Jobs\ProcessChunkedTranscription;
 class TranscriptionController extends Controller
 {
     /**
-     * Optimiza la configuración de transcripción para formatos MP4/MP3
-     * Solo acepta formatos estables para reuniones
+     * Optimiza la configuración de transcripción para mejor detección automática de hablantes
+     * Permite que AssemblyAI detecte automáticamente sin ser demasiado sensible
      */
     private function getOptimizedConfigForFormat($mimeType, $isMP4, $isMP3, $baseConfig)
     {
-        // Para archivos MP3, mantener configuración ultra sensible
+        // Para archivos MP3, usar configuración balanceada para detección automática
         if ($isMP3) {
             $mp3Config = $baseConfig;
-            $mp3Config['speaker_labels'] = true;        // MP3 maneja bien speaker labels
+            $mp3Config['speaker_labels'] = true;        // Activar detección de hablantes
             $mp3Config['format_text'] = false;          // Desactivado para mejor speaker detection
-            $mp3Config['speed_boost'] = false;          // Sin speed boost para asegurar calidad de speaker detection
-            $mp3Config['speech_threshold'] = 0.1;       // Ultra sensible para MP3
+            $mp3Config['speed_boost'] = false;          // Sin speed boost para asegurar calidad
+            $mp3Config['speech_threshold'] = 0.4;       // Menos sensible para evitar falsos positivos
             $mp3Config['dual_channel'] = false;         // MP3 grabaciones son mono/stereo mixto
-            $mp3Config['speakers_expected'] = 4;        // Forzar detección múltiple
+            // Remover speakers_expected para permitir detección automática
+            unset($mp3Config['speakers_expected']);
 
-            Log::info('Applied MP3 ULTRA SENSITIVE config for multiple speakers', [
+            Log::info('Applied MP3 AUTO-DETECTION config for natural speaker detection', [
                 'speaker_labels' => $mp3Config['speaker_labels'],
                 'format_text' => $mp3Config['format_text'],
                 'speed_boost' => $mp3Config['speed_boost'],
                 'speech_threshold' => $mp3Config['speech_threshold'],
-                'speakers_expected' => $mp3Config['speakers_expected'],
+                'speakers_expected' => 'AUTO (not forced)',
             ]);
 
             return $mp3Config;
         }
 
-        // Para archivos MP4, mantener configuración ultra sensible
+        // Para archivos MP4, usar configuración balanceada para detección automática
         if ($isMP4) {
             $mp4Config = $baseConfig;
-            $mp4Config['speaker_labels'] = true;        // MP4 maneja excelente speaker labels
+            $mp4Config['speaker_labels'] = true;        // Activar detección de hablantes
             $mp4Config['format_text'] = false;          // Desactivado para mejor speaker detection
             $mp4Config['speed_boost'] = false;          // Sin speed boost para máxima calidad
-            $mp4Config['speech_threshold'] = 0.1;       // Ultra sensible para MP4
-            $mp4Config['dual_channel'] = false;         // Forzar mono-análisis para mejor speaker detection
-            $mp4Config['speakers_expected'] = 4;        // Forzar detección múltiple
+            $mp4Config['speech_threshold'] = 0.4;       // Menos sensible para evitar falsos positivos
+            $mp4Config['dual_channel'] = false;         // Forzar mono-análisis para mejor detección
+            // Remover speakers_expected para permitir detección automática
+            unset($mp4Config['speakers_expected']);
 
-            Log::info('Applied MP4 ULTRA SENSITIVE config for multiple speakers', [
+            Log::info('Applied MP4 AUTO-DETECTION config for natural speaker detection', [
                 'speaker_labels' => $mp4Config['speaker_labels'],
                 'format_text' => $mp4Config['format_text'],
                 'speed_boost' => $mp4Config['speed_boost'],
                 'speech_threshold' => $mp4Config['speech_threshold'],
-                'speakers_expected' => $mp4Config['speakers_expected'],
+                'speakers_expected' => 'AUTO (not forced)',
             ]);
 
             return $mp4Config;
         }
 
-        // Para otros formatos, usar configuración estándar
+        // Para otros formatos, usar configuración estándar con detección automática
         return $baseConfig;
     }
 
@@ -258,8 +260,8 @@ class TranscriptionController extends Controller
                 'format_text'             => false,  // Desactivado para mejor speaker detection
                 'dual_channel'            => false,
                 'speaker_labels'          => true,
-                'speakers_expected'       => 4,      // Forzar detección de múltiples speakers
-                'speech_threshold'        => 0.1,    // MUY sensible
+                // Permitir detección automática - no forzar número específico
+                'speech_threshold'        => 0.4,    // Balanceado para evitar falsos positivos
                 'speed_boost'             => false,
                 'auto_highlights'         => false,
                 'content_safety'          => false,
