@@ -1,0 +1,266 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\SharedMeeting;
+use App\Models\Meeting;
+use App\Models\Contact;
+use App\Models\Notification;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+class SharedMeetingController extends Controller
+{
+    /**
+     * Obtener contactos del usuario para compartir reunión
+     */
+    public function getContactsForSharing(): JsonResponse
+    {
+        try {
+            $contacts = Contact::where('user_id', Auth::id())
+                ->with('contact:id,name,email')
+                ->get()
+                ->map(function ($contact) {
+                    return [
+                        'id' => $contact->contact_id,
+                        'name' => $contact->contact->name,
+                        'email' => $contact->contact->email,
+                        'avatar' => strtoupper(substr($contact->contact->name, 0, 1))
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'contacts' => $contacts
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error getting contacts for sharing: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar contactos'
+            ], 500);
+        }
+    }
+
+    /**
+     * Compartir una reunión con contactos
+     */
+    public function shareMeeting(Request $request): JsonResponse
+    {
+        $request->validate([
+            'meeting_id' => 'required|exists:meetings,id',
+            'contact_ids' => 'required|array|min:1',
+            'contact_ids.*' => 'exists:users,id',
+            'message' => 'nullable|string|max:500'
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $meeting = Meeting::findOrFail($request->meeting_id);
+            $sharedWith = [];
+            $alreadyShared = [];
+
+            foreach ($request->contact_ids as $contactId) {
+                // Verificar si ya se compartió con este contacto
+                $existingShare = SharedMeeting::where('meeting_id', $request->meeting_id)
+                    ->where('shared_with', $contactId)
+                    ->first();
+
+                if ($existingShare) {
+                    $alreadyShared[] = User::find($contactId)->name;
+                    continue;
+                }
+
+                // Crear el registro de reunión compartida
+                $sharedMeeting = SharedMeeting::create([
+                    'meeting_id' => $request->meeting_id,
+                    'shared_by' => Auth::id(),
+                    'shared_with' => $contactId,
+                    'message' => $request->message,
+                    'status' => 'pending',
+                    'shared_at' => now()
+                ]);
+
+                // Crear notificación
+                Notification::create([
+                    'user_id' => $contactId,
+                    'from_user_id' => Auth::id(),
+                    'type' => 'meeting_share',
+                    'title' => 'Nueva reunión compartida',
+                    'message' => Auth::user()->name . ' ha compartido la reunión "' . $meeting->title . '" contigo.',
+                    'data' => json_encode([
+                        'meeting_id' => $meeting->id,
+                        'shared_meeting_id' => $sharedMeeting->id,
+                        'meeting_title' => $meeting->title,
+                        'shared_by_name' => Auth::user()->name,
+                        'custom_message' => $request->message
+                    ]),
+                    'read' => false
+                ]);
+
+                $sharedWith[] = User::find($contactId)->name;
+            }
+
+            DB::commit();
+
+            $response = [
+                'success' => true,
+                'message' => 'Reunión compartida exitosamente',
+                'shared_with' => $sharedWith
+            ];
+
+            if (!empty($alreadyShared)) {
+                $response['already_shared'] = $alreadyShared;
+                $response['message'] .= '. Algunos contactos ya tenían acceso a esta reunión.';
+            }
+
+            return response()->json($response);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Error sharing meeting: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al compartir la reunión'], 500);
+        }
+    }
+
+    /**
+     * Responder a una invitación de reunión compartida
+     */
+    public function respondToInvitation(Request $request): JsonResponse
+    {
+        $request->validate([
+            'shared_meeting_id' => 'required|exists:shared_meetings,id',
+            'action' => 'required|in:accept,reject'
+        ]);
+
+        try {
+            $sharedMeeting = SharedMeeting::with(['meeting', 'sharedBy'])
+                ->where('id', $request->shared_meeting_id)
+                ->where('shared_with', Auth::id())
+                ->where('status', 'pending')
+                ->firstOrFail();
+
+            $status = $request->action === 'accept' ? 'accepted' : 'rejected';
+
+            $sharedMeeting->update([
+                'status' => $status,
+                'responded_at' => now()
+            ]);
+
+            // Marcar la notificación como leída
+            Notification::where('user_id', Auth::id())
+                ->where('type', 'meeting_share')
+                ->whereJsonContains('data->shared_meeting_id', $sharedMeeting->id)
+                ->update(['read' => true, 'read_at' => now()]);
+
+            // Crear notificación para quien compartió
+            $actionText = $status === 'accepted' ? 'aceptó' : 'rechazó';
+            Notification::create([
+                'user_id' => $sharedMeeting->shared_by,
+                'from_user_id' => Auth::id(),
+                'type' => 'meeting_share_response',
+                'title' => 'Respuesta a reunión compartida',
+                'message' => Auth::user()->name . ' ' . $actionText . ' la reunión "' . $sharedMeeting->meeting->title . '".',
+                'data' => json_encode([
+                    'meeting_id' => $sharedMeeting->meeting_id,
+                    'shared_meeting_id' => $sharedMeeting->id,
+                    'action' => $status,
+                    'responded_by_name' => Auth::user()->name
+                ]),
+                'read' => false
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $status === 'accepted'
+                    ? 'Reunión aceptada. Ahora aparecerá en tu lista de reuniones compartidas.'
+                    : 'Reunión rechazada.',
+                'status' => $status
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error responding to meeting invitation: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al procesar la respuesta'], 500);
+        }
+    }
+
+    /**
+     * Obtener reuniones compartidas del usuario actual
+     */
+    public function getSharedMeetings(): JsonResponse
+    {
+        try {
+            $sharedMeetings = SharedMeeting::with(['meeting', 'sharedBy'])
+                ->where('shared_with', Auth::id())
+                ->where('status', 'accepted')
+                ->orderBy('shared_at', 'desc')
+                ->get()
+                ->map(function ($shared) {
+                    return [
+                        'id' => $shared->id,
+                        'meeting_id' => $shared->meeting_id,
+                        'title' => $shared->meeting->title,
+                        'date' => $shared->meeting->date,
+                        'duration' => $shared->meeting->duration,
+                        'summary' => $shared->meeting->summary,
+                        'shared_by' => [
+                            'id' => $shared->sharedBy->id,
+                            'name' => $shared->sharedBy->name,
+                            'email' => $shared->sharedBy->email
+                        ],
+                        'shared_at' => $shared->shared_at,
+                        'message' => $shared->message,
+                        'recordings_folder_id' => $shared->meeting->recordings_folder_id
+                    ];
+                });
+
+            return response()->json($sharedMeetings);
+        } catch (\Exception $e) {
+            Log::error('Error getting shared meetings: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al cargar reuniones compartidas'], 500);
+        }
+    }
+
+    /**
+     * Obtener reuniones que el usuario ha compartido
+     */
+    public function getMeetingsSharedByUser(): JsonResponse
+    {
+        try {
+            $sharedMeetings = SharedMeeting::with(['meeting', 'sharedWith'])
+                ->where('shared_by', Auth::id())
+                ->orderBy('shared_at', 'desc')
+                ->get()
+                ->groupBy('meeting_id')
+                ->map(function ($shares) {
+                    $firstShare = $shares->first();
+                    return [
+                        'meeting_id' => $firstShare->meeting_id,
+                        'title' => $firstShare->meeting->title,
+                        'date' => $firstShare->meeting->date,
+                        'shared_with_count' => $shares->count(),
+                        'shared_with' => $shares->map(function ($share) {
+                            return [
+                                'id' => $share->shared_with,
+                                'name' => $share->sharedWith->name,
+                                'status' => $share->status,
+                                'responded_at' => $share->responded_at
+                            ];
+                        }),
+                        'shared_at' => $firstShare->shared_at
+                    ];
+                })
+                ->values();
+
+            return response()->json($sharedMeetings);
+        } catch (\Exception $e) {
+            Log::error('Error getting meetings shared by user: ' . $e->getMessage());
+            return response()->json(['error' => 'Error al cargar reuniones compartidas por ti'], 500);
+        }
+    }
+}

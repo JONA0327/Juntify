@@ -67,6 +67,9 @@ class UserController extends Controller
                     $org = $group->organization;
                     $org->users()->syncWithoutDetaching([$actor->id => ['rol' => 'invitado']]);
                     $numMiembros = $org->refreshMemberCount();
+
+                    // Actualizar current_organization_id del usuario
+                    User::where('id', $actor->id)->update(['current_organization_id' => $org->id]);
                 }
             }
 

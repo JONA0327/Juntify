@@ -20,6 +20,7 @@ use App\Http\Controllers\GroupController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\ChatController;
 
 
 Route::get('/', function () {
@@ -97,12 +98,19 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
 
+    // Dashboard - redirige a reuniones
+    Route::get('/dashboard', function () {
+        return redirect()->route('reuniones.index');
+    })->name('dashboard');
+
     // Reuniones - con refresh automático de token
     Route::get('/reuniones', [MeetingController::class, 'index'])
         ->middleware('google.refresh')
         ->name('reuniones.index');
 
     Route::get('/contacts', [ContactController::class, 'index'])->name('contacts.index');
+    Route::get('/chats', [ChatController::class, 'index'])->name('chats.index');
+    Route::get('/chats/{chat}', [ChatController::class, 'showView'])->name('chats.show');
 
     Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
     // Vista de configuración de Drive por organización (sin afectar perfil)

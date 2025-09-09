@@ -210,6 +210,9 @@ class GroupController extends Controller
         $organization->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
         $organization->refreshMemberCount();
 
+        // Actualizar current_organization_id del usuario
+        User::where('id', $user->id)->update(['current_organization_id' => $organization->id]);
+
         return response()->json([
             'organization' => $organization->fresh(),
             'group' => $group->fresh()
@@ -374,6 +377,9 @@ class GroupController extends Controller
     $group->update(['miembros' => $group->users()->count()]);
     $group->organization->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
     $group->organization->refreshMemberCount();
+
+        // Actualizar current_organization_id del usuario
+        User::where('id', $user->id)->update(['current_organization_id' => $group->organization->id]);
 
         Notification::where('emisor', $user->id)
             ->where('type', 'group_invitation')

@@ -1,4 +1,4 @@
-import { showError } from './utils/alerts.js';
+import { showError, showSuccess } from './utils/alerts.js';
 
 const Notifications = (() => {
     let notifications = [];
@@ -24,6 +24,26 @@ const Notifications = (() => {
                         <div class="actions">
                             <button class="accept-btn" data-id="${n.id}">Aceptar</button>
                             <button class="reject-btn" data-id="${n.id}">Rechazar</button>
+                        </div>
+                    `;
+                } else if (n.type === 'meeting_share_request') {
+                    li.className = 'invitation-item p-3 bg-slate-700/50 rounded-lg mb-2';
+                    li.innerHTML = `
+                        <div class="flex items-start gap-3">
+                            <div class="flex-shrink-0 w-8 h-8 bg-yellow-400/20 rounded-lg flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                                </svg>
+                            </div>
+                            <div class="flex-grow">
+                                <div class="message text-sm text-slate-200 font-medium">${n.title}</div>
+                                <div class="message text-sm text-slate-300 mt-1">${n.message}</div>
+                                <div class="meta text-xs text-slate-400 mt-2">De: ${n.from_user ? `${n.from_user.name} (${n.from_user.email})` : 'Usuario'}</div>
+                                <div class="actions mt-3 flex gap-2">
+                                    <button class="accept-share-btn bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded-md transition-colors" data-id="${n.id}">Aceptar</button>
+                                    <button class="reject-share-btn bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded-md transition-colors" data-id="${n.id}">Rechazar</button>
+                                </div>
+                            </div>
                         </div>
                     `;
                 } else if (n.type === 'audio_upload') {
@@ -90,6 +110,18 @@ const Notifications = (() => {
                 respondToInvitation(id, 'reject');
             });
         });
+        document.querySelectorAll('.accept-share-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = e.target.dataset.id;
+                respondToMeetingShareInvitation(id, 'accepted');
+            });
+        });
+        document.querySelectorAll('.reject-share-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = e.target.dataset.id;
+                respondToMeetingShareInvitation(id, 'rejected');
+            });
+        });
         document.querySelectorAll('.dismiss-btn').forEach(btn => {
             btn.addEventListener('click', e => {
                 const id = e.target.dataset.id;
@@ -126,6 +158,65 @@ const Notifications = (() => {
         } catch (error) {
             if (import.meta.env.DEV) {
                 console.debug('Error responding to invitation:', error);
+            }
+            showError('Error de conexión al responder la invitación.');
+        }
+    }
+
+    async function respondToMeetingShareInvitation(notificationId, status) {
+        try {
+            const response = await fetch('/api/shared-meetings/respond', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    notification_id: notificationId,
+                    status: status
+                })
+            });
+
+            if (response.status === 401) {
+                showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
+                return;
+            }
+
+            if (!response.ok) {
+                let message = 'Error al responder la invitación.';
+                try {
+                    const data = await response.json();
+                    if (data.message) message = data.message;
+                } catch (_) { /* ignore */ }
+                showError(message);
+                return;
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                // Remover notificación de la lista
+                notifications = notifications.filter(n => n.id != notificationId);
+                render();
+
+                // Mostrar mensaje de éxito
+                const actionText = status === 'accepted' ? 'aceptado' : 'rechazado';
+                showSuccess(`Has ${actionText} la invitación exitosamente.`);
+
+                // Si se aceptó, refrescar las reuniones compartidas si estamos en esa pestaña
+                if (status === 'accepted' && window.location.pathname.includes('reuniones')) {
+                    const activeTab = document.querySelector('.tab-transition.bg-slate-700\\/50');
+                    if (activeTab && activeTab.dataset.target === 'shared-meetings') {
+                        if (typeof loadSharedMeetings === 'function') {
+                            loadSharedMeetings();
+                        }
+                    }
+                }
+            } else {
+                showError(data.message || 'Error al responder la invitación.');
+            }
+        } catch (error) {
+            if (import.meta.env.DEV) {
+                console.debug('Error responding to meeting share invitation:', error);
             }
             showError('Error de conexión al responder la invitación.');
         }

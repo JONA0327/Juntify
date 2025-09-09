@@ -19,9 +19,10 @@ class ChatMessage extends Model
         'file_path',
         'voice_path',
         'created_at',
+        'read_at',
     ];
 
-    protected $dates = ['created_at'];
+    protected $dates = ['created_at', 'read_at'];
 
     public function chat()
     {

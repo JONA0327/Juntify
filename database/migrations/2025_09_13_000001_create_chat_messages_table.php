@@ -11,11 +11,13 @@ return new class extends Migration
         Schema::create('chat_messages', function (Blueprint $table) {
             $table->id();
             $table->foreignId('chat_id')->constrained('chats')->onDelete('cascade');
-            $table->foreignId('sender_id')->constrained('users')->onDelete('cascade');
+            $table->string('sender_id');
             $table->text('body')->nullable();
             $table->string('file_path')->nullable();
             $table->string('voice_path')->nullable();
             $table->timestamp('created_at')->useCurrent();
+
+            $table->foreign('sender_id')->references('id')->on('users')->onDelete('cascade');
         });
     }
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Organization;
 use App\Models\Group;
+use App\Models\User;
 use App\Models\OrganizationActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -194,6 +195,9 @@ class OrganizationController extends Controller
         $organization->users()->attach($user->id, ['rol' => 'administrador']);
         $organization->refreshMemberCount();
 
+        // Actualizar current_organization_id del usuario
+        User::where('id', $user->id)->update(['current_organization_id' => $organization->id]);
+
         return response()->json($organization, 201);
     }
 
@@ -227,6 +231,9 @@ class OrganizationController extends Controller
     // Asegurar registro en la organización y refrescar contador
     $organization->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
     $organization->refreshMemberCount();
+
+        // Actualizar current_organization_id del usuario
+        User::where('id', $user->id)->update(['current_organization_id' => $organization->id]);
 
         OrganizationActivity::create([
             'organization_id' => $organization->id,

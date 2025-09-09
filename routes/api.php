@@ -20,6 +20,7 @@ use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\RecordingChunkController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\SharedMeetingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -181,13 +182,33 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
 
           // Contactos
           Route::get('/contacts', [ContactController::class, 'list'])->name('api.contacts.index');
+          Route::get('/contacts/requests', [ContactController::class, 'requests'])->name('api.contacts.requests');
           Route::post('/contacts', [ContactController::class, 'store'])->name('api.contacts.store');
           Route::post('/contacts/requests/{notification}/respond', [ContactController::class, 'respond'])->name('api.contacts.requests.respond');
           Route::delete('/contacts/{contact}', [ContactController::class, 'destroy'])->name('api.contacts.destroy');
+          Route::post('/users/search', [ContactController::class, 'searchUsers'])->name('api.users.search');
 
-          Route::get('/chats', [ChatController::class, 'index'])->name('api.chats.index');
+          Route::get('/chats/test', [ChatController::class, 'apiTest'])->name('api.chats.test');
+          Route::get('/chats', [ChatController::class, 'apiIndex'])->name('api.chats.index');
+          Route::post('/chats/create-or-find', [ChatController::class, 'createOrFind'])->name('api.chats.create-or-find');
+          Route::post('/chats/unread-count', [ChatController::class, 'getUnreadCount'])->name('api.chats.unread-count');
           Route::get('/chats/{chat}', [ChatController::class, 'show'])->name('api.chats.show');
           Route::post('/chats/{chat}/messages', [ChatController::class, 'store'])->name('api.chats.messages.store');
+
+          // API para reuniones compartidas
+          Route::get('/shared-meetings/contacts', [SharedMeetingController::class, 'getContactsForSharing'])->name('api.shared-meetings.contacts');
+          Route::post('/shared-meetings/share', [SharedMeetingController::class, 'shareMeeting'])->name('api.shared-meetings.share');
+          Route::post('/shared-meetings/respond', [SharedMeetingController::class, 'respondToInvitation'])->name('api.shared-meetings.respond');
+          Route::get('/shared-meetings', [SharedMeetingController::class, 'getSharedMeetings'])->name('api.shared-meetings.index');
+          Route::get('/shared-meetings/by-user', [SharedMeetingController::class, 'getMeetingsSharedByUser'])->name('api.shared-meetings.by-user');
+
+          // API para notificaciones
+          Route::get('/notifications', [NotificationController::class, 'index'])->name('api.notifications.index');
+          Route::get('/notifications/unread', [NotificationController::class, 'unread'])->name('api.notifications.unread');
+          Route::get('/notifications/count', [NotificationController::class, 'getUnreadCount'])->name('api.notifications.count');
+          Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('api.notifications.read');
+          Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('api.notifications.read-all');
+          Route::delete('/notifications/{id}', [NotificationController::class, 'destroy'])->name('api.notifications.destroy');
 
           // API para reuniones pendientes
           Route::get('/pending-meetings', [MeetingController::class, 'getPendingMeetings']);
