@@ -7,6 +7,7 @@ use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 use App\Models\GoogleToken;
@@ -78,5 +79,15 @@ class User extends Authenticatable
             'current_organization_id', // Local key on users table
             'id'                     // Local key on organization_folders table
         );
+    }
+
+    public function contacts(): HasMany
+    {
+        return $this->hasMany(Contact::class, 'user_id');
+    }
+
+    public function contactOf(): HasMany
+    {
+        return $this->hasMany(Contact::class, 'contact_id');
     }
 }
