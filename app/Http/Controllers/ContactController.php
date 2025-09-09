@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Contact;
+use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class ContactController extends Controller
@@ -51,7 +51,7 @@ class ContactController extends Controller
     }
 
     /**
-     * Crea un nuevo contacto para el usuario autenticado.
+     * Envía una solicitud de contacto al usuario especificado.
      */
     public function store(Request $request): JsonResponse
     {
@@ -59,20 +59,21 @@ class ContactController extends Controller
 
         $data = $request->validate([
             'email' => 'nullable|email',
-            'name' => 'nullable|string',
+            'username' => 'nullable|string',
         ]);
 
-        if (empty($data['email']) && empty($data['name'])) {
+        if (empty($data['email']) && empty($data['username'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Debe proporcionar un correo o nombre.'
+                'message' => 'Debe proporcionar un correo o nombre de usuario.'
             ], 422);
         }
 
-        $contactUser = User::query()
-            ->when(!empty($data['email']), fn($q) => $q->where('email', $data['email']))
-            ->when(empty($data['email']) && !empty($data['name']), fn($q) => $q->where('name', $data['name']))
-            ->first();
+        if (!empty($data['email'])) {
+            $contactUser = User::where('email', $data['email'])->first();
+        } else {
+            $contactUser = User::where('username', $data['username'])->first();
+        }
 
         if (! $contactUser) {
             return response()->json([
@@ -91,20 +92,19 @@ class ContactController extends Controller
             ], 409);
         }
 
-        $contact = Contact::create([
-            'id' => (string) Str::uuid(),
-            'user_id' => $user->id,
-            'contact_id' => $contactUser->id,
+        Notification::create([
+            'remitente' => $user->id,
+            'emisor' => $contactUser->id,
+            'type' => 'contact_request',
+            'message' => 'Solicitud de contacto',
+            'status' => 'pending',
+            'data' => [],
         ]);
 
         return response()->json([
             'success' => true,
-            'contact' => [
-                'id' => $contact->id,
-                'name' => $contactUser->name,
-                'email' => $contactUser->email,
-            ]
-        ], 201);
+            'message' => 'Solicitud enviada'
+        ]);
     }
 
     /**
