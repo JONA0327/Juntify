@@ -170,8 +170,13 @@ class ContactController extends Controller
                 'message' => 'No autorizado'
             ], 403);
         }
+        DB::transaction(function () use ($contact) {
+            Contact::where('user_id', $contact->contact_id)
+                ->where('contact_id', $contact->user_id)
+                ->delete();
 
-        $contact->delete();
+            $contact->delete();
+        });
 
         return response()->json([
             'success' => true,
