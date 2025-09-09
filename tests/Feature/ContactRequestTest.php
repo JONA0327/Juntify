@@ -3,6 +3,7 @@
 use App\Models\Contact;
 use App\Models\Notification;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 it('sends contact request by username', function () {
     $sender = User::factory()->create();
@@ -111,5 +112,36 @@ it('sends contact request by email', function () {
 
     expect(Contact::where('user_id', $sender->id)
         ->where('contact_id', $receiver->id)
+        ->exists())->toBeFalse();
+});
+
+it('deletes a contact and its inverse', function () {
+    $userA = User::factory()->create();
+    $userB = User::factory()->create();
+
+    $contact = Contact::create([
+        'id' => (string) Str::uuid(),
+        'user_id' => $userA->id,
+        'contact_id' => $userB->id,
+    ]);
+
+    Contact::create([
+        'id' => (string) Str::uuid(),
+        'user_id' => $userB->id,
+        'contact_id' => $userA->id,
+    ]);
+
+    $response = $this->actingAs($userA)->deleteJson("/api/contacts/{$contact->id}");
+
+    $response->assertOk()->assertJson([
+        'success' => true,
+        'message' => 'Contacto eliminado',
+    ]);
+
+    expect(Contact::where('user_id', $userA->id)
+        ->where('contact_id', $userB->id)
+        ->exists())->toBeFalse();
+    expect(Contact::where('user_id', $userB->id)
+        ->where('contact_id', $userA->id)
         ->exists())->toBeFalse();
 });
