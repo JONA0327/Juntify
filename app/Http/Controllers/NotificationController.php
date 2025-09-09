@@ -23,12 +23,23 @@ class NotificationController extends Controller
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($notification) {
+                $data = null;
+                if ($notification->data) {
+                    try {
+                        $data = is_array($notification->data)
+                            ? $notification->data
+                            : json_decode($notification->data, true, 512, JSON_THROW_ON_ERROR);
+                    } catch (\Throwable $e) {
+                        $data = null;
+                    }
+                }
+
                 return [
                     'id' => $notification->id,
                     'type' => $notification->type,
                     'title' => $notification->title,
                     'message' => $notification->message,
-                    'data' => $notification->data ? json_decode($notification->data, true) : null,
+                    'data' => $data,
                     'read' => $notification->read,
                     'read_at' => $notification->read_at,
                     'created_at' => $notification->created_at,
@@ -59,12 +70,23 @@ class NotificationController extends Controller
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($notification) {
+                $data = null;
+                if ($notification->data) {
+                    try {
+                        $data = is_array($notification->data)
+                            ? $notification->data
+                            : json_decode($notification->data, true, 512, JSON_THROW_ON_ERROR);
+                    } catch (\Throwable $e) {
+                        $data = null;
+                    }
+                }
+
                 return [
                     'id' => $notification->id,
                     'type' => $notification->type,
                     'title' => $notification->title,
                     'message' => $notification->message,
-                    'data' => $notification->data ? json_decode($notification->data, true) : null,
+                    'data' => $data,
                     'created_at' => $notification->created_at,
                     'from_user' => $notification->fromUser ? [
                         'id' => $notification->fromUser->id,
