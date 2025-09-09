@@ -71,9 +71,10 @@ class MeetingController extends Controller
      */
     public function index()
     {
+        $user = Auth::user();
+
         // Server-side render of meetings list (keeps JS fallback too)
         try {
-            $user = Auth::user();
 
             // Verificar si el usuario es invitado en todas las organizaciones
             $organizations = \App\Models\Organization::whereHas('groups.users', function($query) use ($user) {
@@ -113,11 +114,19 @@ class MeetingController extends Controller
                     ];
                 });
 
-            return view('reuniones', [ 'meetings' => $meetings ]);
+            return view('reuniones', [
+                'meetings' => $meetings,
+                'userRole' => $user->roles ?? 'free',
+                'organizationId' => $user->current_organization_id,
+            ]);
         } catch (\Throwable $e) {
             // If anything fails, return view without meetings (JS will fetch)
             Log::warning('Meetings SSR failed: ' . $e->getMessage());
-            return view('reuniones');
+
+            return view('reuniones', [
+                'userRole' => $user->roles ?? 'free',
+                'organizationId' => $user->current_organization_id,
+            ]);
         }
     }
 

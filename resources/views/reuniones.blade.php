@@ -10,6 +10,12 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
+    <!-- Global Variables -->
+    <script>
+        window.userRole = @json($userRole);
+        window.currentOrganizationId = @json($organizationId);
+    </script>
+
     <!-- Vite Assets -->
     @vite([
         'resources/css/app.css',
