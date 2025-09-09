@@ -19,6 +19,7 @@ use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\RecordingChunkController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\ChatController;
 
 /*
 |--------------------------------------------------------------------------
@@ -182,6 +183,10 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
           Route::get('/contacts', [ContactController::class, 'list'])->name('api.contacts.index');
           Route::post('/contacts', [ContactController::class, 'store'])->name('api.contacts.store');
           Route::delete('/contacts/{contact}', [ContactController::class, 'destroy'])->name('api.contacts.destroy');
+
+          Route::get('/chats', [ChatController::class, 'index'])->name('api.chats.index');
+          Route::get('/chats/{chat}', [ChatController::class, 'show'])->name('api.chats.show');
+          Route::post('/chats/{chat}/messages', [ChatController::class, 'store'])->name('api.chats.messages.store');
 
           // API para reuniones pendientes
           Route::get('/pending-meetings', [MeetingController::class, 'getPendingMeetings']);
