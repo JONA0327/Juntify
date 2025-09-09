@@ -1639,6 +1639,11 @@ function createMeetingCard(meeting) {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12z" />
                         </svg>
                     </button>
+                    <button class="share-btn icon-btn" onclick="openShareModal(${meeting.id})" aria-label="Compartir reunión" title="Compartir reunión">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                        </svg>
+                    </button>
                     <button class="icon-btn edit-btn" onclick="editMeetingName(${meeting.id})" title="Editar nombre de reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -1703,6 +1708,11 @@ function createContainerMeetingCard(meeting) {
                     <button class="icon-btn remove-btn" onclick="removeMeetingFromContainer(${meeting.id})" title="Quitar del contenedor">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2h3" />
+                        </svg>
+                    </button>
+                    <button class="share-btn icon-btn" onclick="openShareModal(${meeting.id})" aria-label="Compartir reunión" title="Compartir reunión">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
                         </svg>
                     </button>
                     <button class="icon-btn edit-btn" onclick="editMeetingName(${meeting.id})" title="Editar nombre de reunión">
@@ -1778,9 +1788,15 @@ function attachMeetingEventListeners() {
                 openDownloadModal(card.dataset.meetingId);
             });
         }
+        const shareBtn = card.querySelector('.share-btn');
+        if (shareBtn) {
+            shareBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+        }
         card.addEventListener('click', function(e) {
             // No abrir modal si se hizo click en los botones de acción
-            if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn') || e.target.closest('.remove-btn') || e.target.closest('.download-btn')) {
+            if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn') || e.target.closest('.remove-btn') || e.target.closest('.download-btn') || e.target.closest('.share-btn')) {
                 return;
             }
 
