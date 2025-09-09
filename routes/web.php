@@ -19,6 +19,7 @@ use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ContactController;
 
 
 Route::get('/', function () {
@@ -100,6 +101,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/reuniones', [MeetingController::class, 'index'])
         ->middleware('google.refresh')
         ->name('reuniones.index');
+
+    Route::get('/contacts', [ContactController::class, 'index'])->name('contacts.index');
 
     Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
     // Vista de configuración de Drive por organización (sin afectar perfil)

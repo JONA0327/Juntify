@@ -18,6 +18,7 @@ use App\Http\Controllers\TaskAttachmentController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\RecordingChunkController;
+use App\Http\Controllers\ContactController;
 
 /*
 |--------------------------------------------------------------------------
@@ -173,12 +174,17 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
         Route::get('/meetings/{id}/download-ju', [MeetingController::class, 'downloadJuFile'])->name('api.meetings.download-ju');
         Route::get('/meetings/{id}/download-audio', [MeetingController::class, 'downloadAudioFile'])->name('api.meetings.download-audio');
         Route::get('/meetings/{meeting}/download-report', [MeetingController::class, 'downloadReport'])->name('api.meetings.download-report');
-        Route::post('/meetings/{id}/download-pdf', [MeetingController::class, 'downloadPdf'])->name('api.meetings.download-pdf');
-        Route::post('/meetings/{id}/preview-pdf', [MeetingController::class, 'previewPdf'])->name('api.meetings.preview-pdf');
-        Route::get('/meetings/{meeting}/audio', [MeetingController::class, 'streamAudio'])->name('api.meetings.audio');
+          Route::post('/meetings/{id}/download-pdf', [MeetingController::class, 'downloadPdf'])->name('api.meetings.download-pdf');
+          Route::post('/meetings/{id}/preview-pdf', [MeetingController::class, 'previewPdf'])->name('api.meetings.preview-pdf');
+          Route::get('/meetings/{meeting}/audio', [MeetingController::class, 'streamAudio'])->name('api.meetings.audio');
 
-        // API para reuniones pendientes
-        Route::get('/pending-meetings', [MeetingController::class, 'getPendingMeetings']);
+          // Contactos
+          Route::get('/contacts', [ContactController::class, 'list'])->name('api.contacts.index');
+          Route::post('/contacts', [ContactController::class, 'store'])->name('api.contacts.store');
+          Route::delete('/contacts/{contact}', [ContactController::class, 'destroy'])->name('api.contacts.destroy');
+
+          // API para reuniones pendientes
+          Route::get('/pending-meetings', [MeetingController::class, 'getPendingMeetings']);
         Route::post('/pending-meetings/{id}/analyze', [MeetingController::class, 'analyzePendingMeeting']);
         Route::post('/pending-meetings/complete', [MeetingController::class, 'completePendingMeeting']);
         Route::get('/pending-meetings/{id}/info', [MeetingController::class, 'getPendingProcessingInfo']);
