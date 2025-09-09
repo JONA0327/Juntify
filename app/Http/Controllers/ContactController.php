@@ -8,6 +8,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class ContactController extends Controller
@@ -104,6 +106,55 @@ class ContactController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Solicitud enviada'
+        ]);
+    }
+
+    /**
+     * Responde a una solicitud de contacto.
+     */
+    public function respond(Request $request, Notification $notification): JsonResponse
+    {
+        $user = Auth::user();
+
+        if ($notification->emisor !== $user->id || $notification->type !== 'contact_request') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Notificación no válida',
+            ], 404);
+        }
+
+        $data = $request->validate([
+            'action' => 'required|in:accept,reject',
+        ]);
+
+        if ($data['action'] === 'accept') {
+            DB::transaction(function () use ($user, $notification) {
+                Contact::create([
+                    'id' => (string) Str::uuid(),
+                    'user_id' => $user->id,
+                    'contact_id' => $notification->remitente,
+                ]);
+
+                Contact::create([
+                    'id' => (string) Str::uuid(),
+                    'user_id' => $notification->remitente,
+                    'contact_id' => $user->id,
+                ]);
+
+                $notification->delete();
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Solicitud aceptada',
+            ]);
+        }
+
+        $notification->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Solicitud rechazada',
         ]);
     }
 
