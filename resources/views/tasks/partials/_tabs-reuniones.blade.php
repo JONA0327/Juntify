@@ -11,6 +11,9 @@
             <li>
                 <button class="tab-transition px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-200 hover:bg-slate-700/50" data-target="containers">Contenedores</button>
             </li>
+            <li>
+                <button class="tab-transition px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-200 hover:bg-slate-700/50" data-target="contacts">Contactos</button>
+            </li>
         </ul>
     </nav>
 
@@ -23,6 +26,9 @@
         </div>
         <div id="containers" class="hidden">
             <div class="meetings-grid" id="containers-grid"></div>
+        </div>
+        <div id="contacts" class="hidden">
+            @include('contacts.index')
         </div>
     </div>
 
@@ -44,6 +50,7 @@
                 if (targetId === 'my-meetings') loadMeetingsInto('#my-meetings-grid', '/api/meetings');
                 if (targetId === 'shared-meetings') loadMeetingsInto('#shared-meetings-grid', '/api/shared-meetings');
                 if (targetId === 'containers') loadContainersInto('#containers-grid');
+                if (targetId === 'contacts') loadContactsInto('#contacts');
             }
 
             // Activar por defecto "Mis reuniones"
@@ -196,6 +203,53 @@
                 } catch (e) {
                     grid.innerHTML = '<div style="grid-column:1 / -1; display:flex; justify-content:center; align-items:center; padding:1.5rem 0;"><div class="loading-card"><p>Error al cargar reuniones del contenedor</p></div></div>';
                     console.error(e);
+                }
+            }
+
+            async function loadContactsInto(containerSelector) {
+                const container = document.querySelector(containerSelector);
+                const list = container?.querySelector('#contacts-list');
+                const userList = container?.querySelector('#organization-users-list');
+                if (list) {
+                    list.innerHTML = '<div class="loading-card"><div class="loading-spinner"></div><p>Cargando contactos...</p></div>';
+                }
+                try {
+                    const res = await fetch('/api/contacts');
+                    const json = await res.json();
+                    if (!json.success) throw new Error(json.message || 'Error');
+                    renderContacts(container, json.contacts || [], json.users || []);
+                } catch (e) {
+                    if (list) list.innerHTML = '<div class="loading-card"><p>Error al cargar contactos</p></div>';
+                    console.error(e);
+                }
+            }
+
+            function renderContacts(container, contacts, users) {
+                const list = container.querySelector('#contacts-list');
+                const userList = container.querySelector('#organization-users-list');
+                if (list) {
+                    list.innerHTML = '';
+                    if (!contacts.length) {
+                        list.innerHTML = '<li>No tienes contactos</li>';
+                    } else {
+                        for (const c of contacts) {
+                            const li = document.createElement('li');
+                            li.textContent = `${c.name} (${c.email})`;
+                            list.appendChild(li);
+                        }
+                    }
+                }
+                if (userList) {
+                    userList.innerHTML = '';
+                    if (!users.length) {
+                        userList.innerHTML = '<li>No hay usuarios</li>';
+                    } else {
+                        for (const u of users) {
+                            const li = document.createElement('li');
+                            li.textContent = `${u.name} (${u.email})`;
+                            userList.appendChild(li);
+                        }
+                    }
                 }
             }
 

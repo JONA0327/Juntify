@@ -78,6 +78,8 @@ function setActiveTab(button) {
         loadSharedMeetings();
     } else if (targetId === 'containers') {
         loadContainers();
+    } else if (targetId === 'contacts') {
+        loadContacts();
     }
 }
 
@@ -161,6 +163,62 @@ async function loadSharedMeetings() {
     } catch (error) {
         console.error('Error loading shared meetings:', error);
         showErrorState(container, 'Error de conexión al cargar reuniones compartidas', loadSharedMeetings);
+    }
+}
+
+// ===============================================
+// CONTACTOS
+// ===============================================
+async function loadContacts() {
+    const container = document.getElementById('contacts');
+    const list = container?.querySelector('#contacts-list');
+    const userList = container?.querySelector('#organization-users-list');
+    if (list) {
+        list.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Cargando contactos...</p></div>';
+    }
+    try {
+        const response = await fetch('/api/contacts', {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+        if (!response.ok) throw new Error('Error al cargar contactos');
+        const data = await response.json();
+        renderContacts(data.contacts || [], data.users || []);
+    } catch (error) {
+        console.error('Error loading contacts:', error);
+        if (list) list.innerHTML = '<li>Error al cargar contactos</li>';
+    }
+}
+
+function renderContacts(contacts, users) {
+    const container = document.getElementById('contacts');
+    const list = container?.querySelector('#contacts-list');
+    const userList = container?.querySelector('#organization-users-list');
+    if (list) {
+        list.innerHTML = '';
+        if (!contacts.length) {
+            list.innerHTML = '<li>No tienes contactos</li>';
+        } else {
+            for (const c of contacts) {
+                const li = document.createElement('li');
+                li.textContent = `${c.name} (${c.email})`;
+                list.appendChild(li);
+            }
+        }
+    }
+    if (userList) {
+        userList.innerHTML = '';
+        if (!users.length) {
+            userList.innerHTML = '<li>No hay usuarios</li>';
+        } else {
+            for (const u of users) {
+                const li = document.createElement('li');
+                li.textContent = `${u.name} (${u.email})`;
+                userList.appendChild(li);
+            }
+        }
     }
 }
 

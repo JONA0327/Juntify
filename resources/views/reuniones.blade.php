@@ -101,6 +101,9 @@
                         <li>
                             <button class="tab-transition px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-200 hover:bg-slate-700/50" data-target="containers">Contenedores</button>
                         </li>
+                        <li>
+                            <button class="tab-transition px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-200 hover:bg-slate-700/50" data-target="contacts">Contactos</button>
+                        </li>
                     </ul>
                 </nav>
 
@@ -133,6 +136,9 @@
 
                     <div id="containers" class="hidden">
                         <div class="loading-card"><p>No tienes contenedores</p></div>
+                    </div>
+                    <div id="contacts" class="hidden">
+                        @include('contacts.index')
                     </div>
                 </div>
 
