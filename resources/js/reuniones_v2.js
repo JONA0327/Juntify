@@ -52,6 +52,11 @@ function setupEventListeners() {
     tabButtons.forEach(btn => {
         btn.addEventListener('click', () => setActiveTab(btn));
     });
+
+    const addContactForm = document.getElementById('add-contact-form');
+    if (addContactForm) {
+        addContactForm.addEventListener('submit', sendContactRequest);
+    }
 }
 
 function setActiveTab(button) {
@@ -190,6 +195,7 @@ async function loadContacts() {
         console.error('Error loading contacts:', error);
         if (list) list.innerHTML = '<li>Error al cargar contactos</li>';
     }
+    await loadContactRequests();
 }
 
 function renderContacts(contacts, users) {
@@ -203,7 +209,12 @@ function renderContacts(contacts, users) {
         } else {
             for (const c of contacts) {
                 const li = document.createElement('li');
-                li.textContent = `${c.name} (${c.email})`;
+                li.textContent = `${c.username} (${c.email})`;
+                const btn = document.createElement('button');
+                btn.textContent = 'Eliminar';
+                btn.className = 'ml-2 text-sm text-red-400 hover:text-red-500';
+                btn.addEventListener('click', () => deleteContact(c.id));
+                li.appendChild(btn);
                 list.appendChild(li);
             }
         }
@@ -215,10 +226,135 @@ function renderContacts(contacts, users) {
         } else {
             for (const u of users) {
                 const li = document.createElement('li');
-                li.textContent = `${u.name} (${u.email})`;
+                li.textContent = `${u.username} (${u.email})`;
                 userList.appendChild(li);
             }
         }
+    }
+}
+
+async function loadContactRequests() {
+    const container = document.getElementById('contacts');
+    const receivedList = container?.querySelector('#received-requests-list');
+    const sentList = container?.querySelector('#sent-requests-list');
+    if (receivedList) receivedList.innerHTML = '<li>Cargando...</li>';
+    if (sentList) sentList.innerHTML = '<li>Cargando...</li>';
+    try {
+        const response = await fetch('/api/contacts/requests', {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+        if (!response.ok) throw new Error('Error al cargar solicitudes');
+        const data = await response.json();
+        renderContactRequests(data.received || [], data.sent || []);
+    } catch (error) {
+        console.error('Error loading contact requests:', error);
+        if (receivedList) receivedList.innerHTML = '<li>Error al cargar solicitudes</li>';
+        if (sentList) sentList.innerHTML = '<li>Error al cargar solicitudes</li>';
+    }
+}
+
+function renderContactRequests(received, sent) {
+    const container = document.getElementById('contacts');
+    const receivedList = container?.querySelector('#received-requests-list');
+    const sentList = container?.querySelector('#sent-requests-list');
+    if (receivedList) {
+        receivedList.innerHTML = '';
+        if (!received.length) {
+            receivedList.innerHTML = '<li>No hay solicitudes</li>';
+        } else {
+            for (const r of received) {
+                const li = document.createElement('li');
+                li.textContent = `${r.username} (${r.email})`;
+                const acceptBtn = document.createElement('button');
+                acceptBtn.textContent = 'Aceptar';
+                acceptBtn.className = 'ml-2 text-sm text-green-400 hover:text-green-500';
+                acceptBtn.addEventListener('click', () => respondContactRequest(r.id, 'accept'));
+                const rejectBtn = document.createElement('button');
+                rejectBtn.textContent = 'Rechazar';
+                rejectBtn.className = 'ml-2 text-sm text-red-400 hover:text-red-500';
+                rejectBtn.addEventListener('click', () => respondContactRequest(r.id, 'reject'));
+                li.appendChild(acceptBtn);
+                li.appendChild(rejectBtn);
+                receivedList.appendChild(li);
+            }
+        }
+    }
+    if (sentList) {
+        sentList.innerHTML = '';
+        if (!sent.length) {
+            sentList.innerHTML = '<li>No hay solicitudes</li>';
+        } else {
+            for (const s of sent) {
+                const li = document.createElement('li');
+                li.textContent = `${s.username} (${s.email})`;
+                sentList.appendChild(li);
+            }
+        }
+    }
+}
+
+async function sendContactRequest(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    const email = formData.get('email');
+    const username = formData.get('username');
+    try {
+        const response = await fetch('/api/contacts/requests', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, username })
+        });
+        if (!response.ok) throw new Error('Error al enviar solicitud');
+        form.reset();
+        await loadContactRequests();
+    } catch (error) {
+        console.error('Error sending contact request:', error);
+        alert('Error al enviar solicitud de contacto');
+    }
+}
+
+async function respondContactRequest(id, action) {
+    try {
+        const response = await fetch(`/api/contacts/requests/${id}/respond`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ action })
+        });
+        if (!response.ok) throw new Error('Error al responder solicitud');
+        await loadContacts();
+    } catch (error) {
+        console.error('Error responding to contact request:', error);
+        alert('Error al procesar la solicitud');
+    }
+}
+
+async function deleteContact(id) {
+    if (!confirm('¿Eliminar contacto?')) return;
+    try {
+        const response = await fetch(`/api/contacts/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+        if (!response.ok) throw new Error('Error al eliminar contacto');
+        await loadContacts();
+    } catch (error) {
+        console.error('Error deleting contact:', error);
+        alert('Error al eliminar contacto');
     }
 }
 
