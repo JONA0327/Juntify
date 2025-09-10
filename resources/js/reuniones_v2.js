@@ -2269,7 +2269,7 @@ function showMeetingModal(meeting) {
                                 </svg>
                                 Transcripción${meeting.segments && meeting.segments.length > 0 ? ' con hablantes' : ''}
                             </h3>
-                            <div class="section-content ${meeting.segments && meeting.segments.length > 0 ? 'transcription-segmented' : 'transcription-full'}" style="max-height: 400px; overflow-y: auto;">
+                            <div class="section-content ${meeting.segments && meeting.segments.length > 0 ? 'transcription-segmented' : 'transcription-full'}" style="max-height: 60vh; overflow-y: auto; padding: 0.25rem 0; background: transparent; border: none;">
                                 ${meeting.segments && meeting.segments.length > 0 ? renderSegments(meeting.segments) : renderTranscription(meeting.transcription)}
                             </div>
                         </div>
@@ -2291,6 +2291,9 @@ function showMeetingModal(meeting) {
         modal.classList.add('active');
     });
 
+    // Ajustar altura de textareas de transcripción al contenido
+    setTimeout(autoResizeTranscripts, 0);
+
     document.querySelectorAll('.modal-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             const target = tab.getAttribute('data-tab');
@@ -2299,6 +2302,11 @@ function showMeetingModal(meeting) {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             const content = document.getElementById(`tab-${target}`);
             if (content) content.classList.add('active');
+
+            // Asegurar que los textos de transcripción se ajusten al contenido
+            if (target === 'transcription') {
+                setTimeout(autoResizeTranscripts, 0);
+            }
         });
     });
 
@@ -2441,6 +2449,19 @@ function showMeetingModal(meeting) {
     }
 }
 
+// Ajusta automáticamente la altura de los textarea de transcripción
+function autoResizeTranscripts() {
+    const areas = document.querySelectorAll('#meetingModal textarea.transcript-text');
+    areas.forEach((ta) => {
+        try {
+            ta.style.height = 'auto';
+            ta.style.overflowY = 'hidden';
+            const newH = Math.max(48, ta.scrollHeight);
+            ta.style.height = newH + 'px';
+        } catch (_) { /* ignore */ }
+    });
+}
+
 // ===============================================
 // FUNCIONES DE RENDERIZADO
 // ===============================================
@@ -2546,48 +2567,48 @@ function renderSegments(segments) {
     });
 
     return `
-        <div class="transcription-segments">
+        <div class="transcription-segments" style="display: flex; flex-direction: column; gap: 1rem; padding: 0; margin: 0; width: 100%;">
             ${meetingSegments.map((segment, index) => `
-                <div class="transcript-segment" data-segment="${index}">
-                    <div class="segment-header">
-                        <div class="speaker-info">
-                            <div class="speaker-avatar">${segment.avatar}</div>
-                            <div class="speaker-details">
-                                <div class="speaker-name">${segment.speaker}</div>
-                                <div class="speaker-time">${segment.time}</div>
+                <div class="transcript-segment" data-segment="${index}" style="background: rgba(51, 65, 85, 0.4); border: 1px solid #475569; border-radius: 12px; padding: 1.5rem; margin: 0; width: 100%; box-sizing: border-box; display: block; position: relative;">
+                    <div class="segment-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; gap: 1rem; width: 100%;">
+                        <div class="speaker-info" style="display: flex; align-items: center; gap: 0.75rem; flex: 1;">
+                            <div class="speaker-avatar" style="width: 2.5rem; height: 2.5rem; border-radius: 50%; background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #0f172a; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.875rem; flex-shrink: 0; text-align: center;">${segment.avatar}</div>
+                            <div class="speaker-details" style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                <div class="speaker-name" style="font-weight: 600; color: #e2e8f0; font-size: 0.875rem; margin: 0; padding: 0;">${segment.speaker}</div>
+                                <div class="speaker-time" style="font-size: 0.75rem; color: #94a3b8; font-family: ui-monospace, monospace; margin: 0; padding: 0;">${segment.time}</div>
                             </div>
                         </div>
-                        <div class="segment-controls">
-                            <button class="control-btn" onclick="playSegmentAudio(${index})" title="Reproducir fragmento">
+                        <div class="segment-controls" style="display: flex; gap: 0.5rem; flex-shrink: 0;">
+                            <button class="control-btn" onclick="playSegmentAudio(${index})" title="Reproducir fragmento" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; padding: 0.5rem; color: #94a3b8; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center;">
                                 ${getPlayIcon('btn-icon')}
                             </button>
-                            <button class="control-btn" onclick="openChangeSpeakerModal(${index})" title="Editar hablante">
-                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <button class="control-btn" onclick="openChangeSpeakerModal(${index})" title="Editar hablante" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; padding: 0.5rem; color: #94a3b8; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center;">
+                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" style="width: 1rem; height: 1rem;">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487l3.651 3.651-9.375 9.375-3.651.975.975-3.651 9.4-9.35zM5.25 18.75h13.5" />
                                 </svg>
                             </button>
-                            <button class="control-btn" onclick="openGlobalSpeakerModal(${index})" title="Cambiar hablante globalmente">
-                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <button class="control-btn" onclick="openGlobalSpeakerModal(${index})" title="Cambiar hablante globalmente" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; padding: 0.5rem; color: #94a3b8; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center;">
+                                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" style="width: 1rem; height: 1rem;">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 15a3 3 0 100-6 3 3 0 000 6zm9 0a3 3 0 10-6 0 3 3 0 006 0zm-9 1.5a4.5 4.5 0 00-4.5 4.5v1.5h9v-1.5a4.5 4.5 0 00-4.5-4.5zm9 0a4.5 4.5 0 014.5 4.5v1.5h-9v-1.5a4.5 4.5 0 014.5-4.5z" />
                                 </svg>
                             </button>
                         </div>
                     </div>
 
-                    <div class="segment-audio">
-                        <div class="audio-player-mini">
-                            <button class="play-btn-mini" onclick="playSegmentAudio(${index})">
+                    <div class="segment-audio" style="margin-bottom: 1rem; width: 100%;">
+                        <div class="audio-player-mini" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: rgba(30, 41, 59, 0.6); border: 1px solid #475569; border-radius: 8px; width: 100%; box-sizing: border-box;">
+                            <button class="play-btn-mini" onclick="playSegmentAudio(${index})" style="background: #fbbf24; border: none; border-radius: 50%; width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;">
                                 ${getPlayIcon('play-icon')}
                             </button>
-                            <div class="audio-timeline-mini" onclick="seekAudio(${index}, event)">
-                                <div class="timeline-progress-mini" style="width: 0%"></div>
+                            <div class="audio-timeline-mini" onclick="seekAudio(${index}, event)" style="flex: 1; height: 4px; background: rgba(255, 255, 255, 0.2); border-radius: 2px; cursor: pointer; position: relative;">
+                                <div class="timeline-progress-mini" style="height: 100%; background: #fbbf24; border-radius: 2px; width: 0%; transition: width 0.1s ease;"></div>
                             </div>
-                            <span class="audio-duration-mini">${segment.time.split(' - ')[1]}</span>
+                            <span class="audio-duration-mini" style="font-size: 0.75rem; color: #94a3b8; font-family: ui-monospace, monospace; min-width: 3rem; text-align: right; margin: 0; padding: 0;">${segment.time.split(' - ')[1]}</span>
                         </div>
                     </div>
 
-                    <div class="segment-content">
-                        <textarea class="transcript-text" placeholder="Texto de la transcripción..." readonly>${segment.text}</textarea>
+                    <div class="segment-content" style="width: 100%; clear: both;">
+                        <textarea class="transcript-text" placeholder="Texto de la transcripción..." readonly style="background: rgba(30, 41, 59, 0.4); border: 1px solid #475569; border-radius: 8px; padding: 1rem; color: #cbd5e1; font-size: 0.95rem; line-height: 1.6; resize: none; min-height: 60px; width: 100%; font-family: inherit; overflow: hidden; display: block; box-sizing: border-box; margin: 0;">${segment.text}</textarea>
                     </div>
                 </div>
             `).join('')}

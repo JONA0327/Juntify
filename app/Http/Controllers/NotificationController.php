@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Log;
 
 class NotificationController extends Controller
 {
@@ -72,8 +73,8 @@ class NotificationController extends Controller
             return response()->json($notifications);
 
         } catch (\Exception $e) {
-            \Log::error('Error en NotificationController::index: ' . $e->getMessage());
-            \Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('Error en NotificationController::index: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             return response()->json(['error' => 'Error interno del servidor'], 500);
         }
     }

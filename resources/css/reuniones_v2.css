@@ -518,8 +518,8 @@
                 var(--bg-slate-800) 100%);
     border: 1px solid var(--border-slate-700);
     border-radius: 1rem;
-    max-width: 1600px; /* Mantener ancho máximo adecuado */
-    width: 90vw; /* Usar 90% del ancho de la ventana para un modal consistente */
+    max-width: 1800px; /* Ancho máximo aumentado para más espacio */
+    width: 95vw; /* Usar 95% del ancho de la ventana para modal más ancho */
     max-height: 95vh; /* Mantener altura */
     min-height: 80vh; /* Mantener altura mínima */
     overflow: hidden;
@@ -538,7 +538,7 @@
    HEADER DEL MODAL
    ========================================= */
 .modal-header {
-    padding: 2rem 2rem 1rem;
+    padding: 2.5rem 2.5rem 1rem; /* Aumentar padding para consistencia con modal-body */
     border-bottom: 1px solid var(--border-slate-700);
     display: flex;
     justify-content: space-between;
@@ -641,7 +641,7 @@
 .modal-nav {
     display: flex;
     border-bottom: 1px solid var(--border-slate-700);
-    margin: 0 2rem;
+    margin: 0 2.5rem; /* Aumentar margin para consistencia con padding del header */
 }
 
 .modal-tab {
@@ -678,7 +678,7 @@
    CONTENIDO DEL MODAL
    ========================================= */
 .modal-body {
-    padding: 2rem;
+    padding: 2.5rem; /* Aumentar padding para aprovechar mejor el espacio extra */
     display: flex;
     flex-direction: column;
     max-height: calc(95vh - 120px); /* Aumentado de 90vh a 95vh y reducido offset de 160px a 120px */
@@ -698,7 +698,7 @@
 @media (min-width: 1024px) {
     .modal-body {
         flex-direction: row;
-        gap: 2rem;
+        gap: 3rem; /* Aumentar gap para aprovechar mejor el espacio extra */
     }
 
     .modal-section {
@@ -1136,6 +1136,239 @@
     margin-bottom: 0;
 }
 
+/* ===============================================
+   ESTILOS SIMPLIFICADOS Y DIRECTOS PARA TRANSCRIPCIÓN
+   =============================================== */
+
+/* Resetear todos los estilos del contenedor de transcripción */
+.transcription-segmented,
+.section-content.transcription-segmented,
+div[class*="transcription"] {
+    all: unset !important;
+    display: block !important;
+    width: 100% !important;
+    max-height: 400px !important;
+    overflow-y: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Contenedor de segmentos */
+.transcription-segments {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+}
+
+/* Cada segmento individual */
+.transcript-segment {
+    background: rgba(51, 65, 85, 0.4) !important;
+    border: 1px solid #475569 !important;
+    border-radius: 12px !important;
+    padding: 1.5rem !important;
+    margin: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    position: relative !important;
+}
+
+.transcript-segment:hover {
+    background: rgba(51, 65, 85, 0.6) !important;
+    border-color: #fbbf24 !important;
+}
+
+/* Header del segmento */
+.transcript-segment .segment-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    margin-bottom: 1rem !important;
+    gap: 1rem !important;
+    width: 100% !important;
+}
+
+/* Info del hablante */
+.transcript-segment .speaker-info {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    flex: 1 !important;
+}
+
+.transcript-segment .speaker-avatar {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    border-radius: 50% !important;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b) !important;
+    color: #0f172a !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-weight: 600 !important;
+    font-size: 0.875rem !important;
+    flex-shrink: 0 !important;
+    text-align: center !important;
+}
+
+.transcript-segment .speaker-details {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.25rem !important;
+}
+
+.transcript-segment .speaker-name {
+    font-weight: 600 !important;
+    color: #e2e8f0 !important;
+    font-size: 0.875rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.transcript-segment .speaker-time {
+    font-size: 0.75rem !important;
+    color: #94a3b8 !important;
+    font-family: ui-monospace, monospace !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Controles */
+.transcript-segment .segment-controls {
+    display: flex !important;
+    gap: 0.5rem !important;
+    flex-shrink: 0 !important;
+}
+
+.transcript-segment .control-btn {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 6px !important;
+    padding: 0.5rem !important;
+    color: #94a3b8 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.transcript-segment .control-btn:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+    color: #e2e8f0 !important;
+    border-color: #fbbf24 !important;
+}
+
+.transcript-segment .btn-icon {
+    width: 1rem !important;
+    height: 1rem !important;
+}
+
+/* Audio mini player */
+.transcript-segment .segment-audio {
+    margin-bottom: 1rem !important;
+    width: 100% !important;
+}
+
+.transcript-segment .audio-player-mini {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    padding: 0.75rem !important;
+    background: rgba(30, 41, 59, 0.6) !important;
+    border: 1px solid #475569 !important;
+    border-radius: 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.transcript-segment .play-btn-mini {
+    background: #fbbf24 !important;
+    border: none !important;
+    border-radius: 50% !important;
+    width: 2rem !important;
+    height: 2rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    flex-shrink: 0 !important;
+}
+
+.transcript-segment .play-btn-mini:hover {
+    transform: scale(1.1) !important;
+    background: #f59e0b !important;
+}
+
+.transcript-segment .play-icon {
+    width: 0.875rem !important;
+    height: 0.875rem !important;
+    color: #0f172a !important;
+}
+
+.transcript-segment .audio-timeline-mini {
+    flex: 1 !important;
+    height: 4px !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-radius: 2px !important;
+    cursor: pointer !important;
+    position: relative !important;
+}
+
+.transcript-segment .timeline-progress-mini {
+    height: 100% !important;
+    background: #fbbf24 !important;
+    border-radius: 2px !important;
+    width: 0% !important;
+    transition: width 0.1s ease !important;
+}
+
+.transcript-segment .audio-duration-mini {
+    font-size: 0.75rem !important;
+    color: #94a3b8 !important;
+    font-family: ui-monospace, monospace !important;
+    min-width: 3rem !important;
+    text-align: right !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Contenido del texto */
+.transcript-segment .segment-content {
+    width: 100% !important;
+    clear: both !important;
+}
+
+.transcript-segment .transcript-text {
+    background: rgba(30, 41, 59, 0.4) !important;
+    border: 1px solid #475569 !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+    color: #cbd5e1 !important;
+    font-size: 0.95rem !important;
+    line-height: 1.6 !important;
+    resize: none !important;
+    min-height: 60px !important;
+    width: 100% !important;
+    font-family: inherit !important;
+    overflow: hidden !important;
+    display: block !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+}
+
+.transcript-segment .transcript-text:focus {
+    outline: none !important;
+    border-color: #fbbf24 !important;
+    background: rgba(30, 41, 59, 0.6) !important;
+}
+
 /* Mejoras para listas existentes */
 .key-points-list li {
     position: relative;
@@ -1173,7 +1406,42 @@
     background: var(--bg-slate-500);
 }
 
-/* Estados responsivos */
+/* ===============================================
+   ESTILOS DE RESPALDO Y FORZADO PARA TRANSCRIPCIÓN
+   =============================================== */
+
+/* Respaldo global para cuando los selectores específicos no funcionen */
+.modal-content .transcription-segmented,
+.meeting-modal .transcription-segmented,
+div[class*="transcription-segmented"] {
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+.modal-content .transcription-segments,
+.meeting-modal .transcription-segments,
+div[class*="transcription-segments"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.modal-content .transcript-segment,
+.meeting-modal .transcript-segment,
+div[class*="transcript-segment"] {
+    background: rgba(51, 65, 85, 0.4) !important;
+    border: 1px solid #374151 !important;
+    border-radius: 12px !important;
+    padding: 1.5rem !important;
+    margin-bottom: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    position: relative !important;
+}
 @media (max-width: 768px) {
     .speakers-grid {
         grid-template-columns: 1fr;
@@ -1193,6 +1461,43 @@
         width: 2rem;
         height: 2rem;
         font-size: 0.875rem;
+    }
+
+    /* Responsivo para transcripción con hablantes */
+    .section-content.transcription-segmented .transcript-segment .segment-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+
+    .section-content.transcription-segmented .transcript-segment .segment-controls {
+        justify-content: flex-end;
+        align-self: flex-end;
+    }
+
+    .section-content.transcription-segmented .transcript-segment .speaker-info {
+        gap: 0.5rem;
+    }
+
+    .section-content.transcription-segmented .transcript-segment .speaker-avatar {
+        width: 2rem;
+        height: 2rem;
+        font-size: 0.75rem;
+    }
+
+    .section-content.transcription-segmented .transcript-segment .audio-player-mini {
+        padding: 0.5rem;
+        gap: 0.5rem;
+    }
+
+    .section-content.transcription-segmented .transcript-segment .play-btn-mini {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+
+    .section-content.transcription-segmented .transcript-segment .play-icon {
+        width: 0.75rem;
+        height: 0.75rem;
     }
 }
 
