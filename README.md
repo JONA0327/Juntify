@@ -109,6 +109,12 @@ This key is used when calling `/analysis` to generate summaries, key points and 
 
 Audio files up to **100 MB** are supported (≈133 MB when Base64-encoded).
 
+## Development Tools
+
+Various one-off scripts for debugging and maintenance have been
+relocated to [tools/](tools/). These scripts are intended for local
+development only and are not included in production deployments.
+
 ## API Reference
 
 See [docs/api.md](docs/api.md) for authenticated API usage and available endpoints.
