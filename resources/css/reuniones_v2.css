@@ -683,6 +683,7 @@
     flex-direction: column;
     max-height: calc(95vh - 120px); /* Aumentado de 90vh a 95vh y reducido offset de 160px a 120px */
     overflow-y: auto;
+    overflow-x: hidden; /* Prevent horizontal scroll on smaller screens */
 
     /* Scroll invisible para WebKit browsers (Chrome, Safari, Edge) */
     scrollbar-width: none; /* Firefox */
@@ -703,6 +704,12 @@
     .modal-section {
         flex: 1;
         margin-bottom: 0;
+    }
+}
+
+@media (max-width: 1023px) {
+    .modal-body {
+        flex-direction: column; /* Stack sections vertically below 1024px */
     }
 }
 
