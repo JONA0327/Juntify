@@ -414,7 +414,7 @@
     </script>
 
     <!-- Modal para compartir reunión -->
-
+    <x-share-modal />
 
 </body>
 </html>
