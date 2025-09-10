@@ -71,89 +71,27 @@ class SharedMeetingController extends Controller
             'contact_ids' => 'required|array|min:1',
             'contact_ids.*' => 'exists:users,id',
             'message' => 'nullable|string|max:500',
-            'is_legacy' => 'sometimes|boolean',
         ]);
 
         try {
             DB::beginTransaction();
-            $isLegacy = (bool) $request->boolean('is_legacy');
 
-            if ($isLegacy) {
-                // Legacy flow: share TranscriptionLaravel meeting via meeting_shares table using usernames
-                $legacyMeeting = \App\Models\TranscriptionLaravel::findOrFail($request->meeting_id);
-                $currentUser = Auth::user();
+            // Obtener contactos válidos asociados al usuario actual
+            $validContactIds = Contact::where('user_id', Auth::id())
+                ->whereIn('contact_id', $request->contact_ids)
+                ->pluck('contact_id')
+                ->toArray();
 
-                $sharedWith = [];
-                $alreadyShared = [];
-
-                foreach ($request->contact_ids as $contactId) {
-                    $contactUser = User::findOrFail($contactId);
-
-                    // Check existing share
-                    $exists = \App\Models\MeetingShare::where('meeting_id', $legacyMeeting->id)
-                        ->where('from_username', $currentUser->username)
-                        ->where('to_username', $contactUser->username)
-                        ->exists();
-                    if ($exists) {
-                        $alreadyShared[] = $contactUser->full_name ?? $contactUser->username ?? 'Usuario';
-                        continue;
-                    }
-
-                    \App\Models\MeetingShare::create([
-                        'meeting_id' => $legacyMeeting->id,
-                        'from_username' => $currentUser->username,
-                        'to_username' => $contactUser->username,
-                    ]);
-
-                    // Notification (legacy compatible minimal fields)
-                    $senderName = $currentUser->full_name ?? $currentUser->username ?? 'Usuario';
-                    Notification::create([
-                        'emisor' => $contactUser->id,
-                        'remitente' => $currentUser->id,
-                        'type' => 'meeting_share',
-                        'title' => 'Nueva reunión compartida',
-                        'message' => $senderName . ' ha compartido la reunión "' . ($legacyMeeting->meeting_name ?? 'Reunión') . '" contigo.',
-                        'data' => json_encode([
-                            'meeting_id' => $legacyMeeting->id,
-                            'source' => 'transcriptions_laravel',
-                            'shared_by_name' => $senderName,
-                            'custom_message' => $request->message,
-                        ]),
-                        'read' => false,
-                        'status' => 'pending',
-                    ]);
-
-                    $sharedWith[] = $contactUser->full_name ?? $contactUser->username ?? 'Usuario';
-                }
-
-                DB::commit();
-
-                $response = [
-                    'success' => true,
-                    'message' => 'Reunión compartida exitosamente',
-                    'shared_with' => $sharedWith,
-                ];
-                if (!empty($alreadyShared)) {
-                    $response['already_shared'] = $alreadyShared;
-                    $response['message'] .= '. Algunos contactos ya tenían acceso a esta reunión.';
-                }
-                return response()->json($response);
-            }
-
-            // Modern flow: share Meeting model via shared_meetings table
             $meeting = Meeting::findOrFail($request->meeting_id);
             $sharedWith = [];
-            $alreadyShared = [];
 
-            foreach ($request->contact_ids as $contactId) {
+            foreach ($validContactIds as $contactId) {
                 // Verificar si ya se compartió con este contacto
                 $existingShare = SharedMeeting::where('meeting_id', $request->meeting_id)
                     ->where('shared_with', $contactId)
                     ->first();
 
                 if ($existingShare) {
-                    $contactUser = User::find($contactId);
-                    $alreadyShared[] = $contactUser ? ($contactUser->full_name ?? $contactUser->username ?? 'Usuario') : 'Usuario desconocido';
                     continue;
                 }
 
@@ -167,14 +105,14 @@ class SharedMeetingController extends Controller
                     'shared_at' => now()
                 ]);
 
-                // Crear notificación usando el esquema correcto
+                // Crear notificación usando el esquema moderno
                 $currentUser = Auth::user();
                 $currentUserName = $currentUser->full_name ?? $currentUser->username ?? 'Usuario';
 
                 Notification::create([
-                    'emisor' => $contactId, // Usuario que recibe la notificación
-                    'remitente' => Auth::id(), // Usuario que envía la notificación
-                    'type' => 'meeting_share',
+                    'user_id' => $contactId,
+                    'from_user_id' => Auth::id(),
+                    'type' => 'meeting_share_request',
                     'title' => 'Nueva reunión compartida',
                     'message' => $currentUserName . ' ha compartido la reunión "' . $meeting->title . '" contigo.',
                     'data' => json_encode([
@@ -189,23 +127,18 @@ class SharedMeetingController extends Controller
                 ]);
 
                 $contactUser = User::find($contactId);
-                $sharedWith[] = $contactUser ? ($contactUser->full_name ?? $contactUser->username ?? 'Usuario') : 'Usuario desconocido';
+                if ($contactUser) {
+                    $sharedWith[] = $contactUser->full_name ?? $contactUser->username ?? 'Usuario';
+                }
             }
 
             DB::commit();
 
-            $response = [
+            return response()->json([
                 'success' => true,
                 'message' => 'Reunión compartida exitosamente',
                 'shared_with' => $sharedWith
-            ];
-
-            if (!empty($alreadyShared)) {
-                $response['already_shared'] = $alreadyShared;
-                $response['message'] .= '. Algunos contactos ya tenían acceso a esta reunión.';
-            }
-
-            return response()->json($response);
+            ]);
 
         } catch (\Exception $e) {
             DB::rollback();
@@ -240,7 +173,7 @@ class SharedMeetingController extends Controller
 
             // Marcar la notificación como leída
             Notification::where('user_id', Auth::id())
-                ->where('type', 'meeting_share')
+                ->where('type', 'meeting_share_request')
                 ->whereJsonContains('data->shared_meeting_id', $sharedMeeting->id)
                 ->update(['read' => true, 'read_at' => now()]);
 
