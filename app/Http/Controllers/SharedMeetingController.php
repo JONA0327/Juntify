@@ -57,14 +57,22 @@ class SharedMeetingController extends Controller
         // Legacy
         $legacy = TranscriptionLaravel::find($meetingId);
         if ($legacy) {
+            // Prefer direct download URLs when available
+            if (!empty($legacy->transcript_download_url)) {
+                $juLink = $this->normalizeDriveUrl($legacy->transcript_download_url);
+            }
+            if (!empty($legacy->audio_download_url)) {
+                $audioLink = $this->normalizeDriveUrl($legacy->audio_download_url);
+            }
+
             // .ju: if we have transcript_drive_id, convert to direct link
-            if (!empty($legacy->transcript_drive_id)) {
+            if (!$juLink && !empty($legacy->transcript_drive_id)) {
                 $fileId = $legacy->transcript_drive_id;
                 $juLink = 'https://drive.google.com/uc?export=download&id=' . $fileId;
             }
 
             // Audio: prefer stored file id; else search inside folder id
-            if (!empty($legacy->audio_drive_id)) {
+            if (!$audioLink && !empty($legacy->audio_drive_id)) {
                 // If it's a folder id, we need to search for the matching audio file
                 if ($useServiceAccount) {
                     /** @var GoogleServiceAccount $sa */
@@ -643,4 +651,11 @@ class SharedMeetingController extends Controller
         }
     }
 
+    private function normalizeDriveUrl(string $url): string
+    {
+        if (preg_match('/https:\/\/drive\.google\.com\/file\/d\/([^\/]+)\/view/', $url, $matches)) {
+            return 'https://drive.google.com/uc?export=download&id=' . $matches[1];
+        }
+        return $url;
+    }
 }
