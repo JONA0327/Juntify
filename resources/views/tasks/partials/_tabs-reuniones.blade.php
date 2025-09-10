@@ -386,3 +386,5 @@
     });
     </script>
 </div>
+
+<x-share-modal />
