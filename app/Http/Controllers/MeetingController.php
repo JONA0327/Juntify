@@ -400,6 +400,7 @@ class MeetingController extends Controller
             }
 
             if ($legacyMeeting) {
+                $ownerUsername = $share?->sharedBy?->username ?? $legacyMeeting->username ?? $user->username;
                 if (empty($legacyMeeting->transcript_drive_id)) {
                     // Reconstruct meeting data from legacy database tables when .ju file is missing
                     $summary = DB::table('meeting_files')
@@ -409,7 +410,7 @@ class MeetingController extends Controller
                     $keyPoints = DB::table('key_points')
                         ->join('transcriptions_laravel', 'key_points.meeting_id', '=', 'transcriptions_laravel.id')
                         ->where('key_points.meeting_id', $legacyMeeting->id)
-                        ->where('transcriptions_laravel.username', $user->username)
+                        ->where('transcriptions_laravel.username', $ownerUsername)
                         ->orderBy('key_points.order_num')
                         ->pluck('key_points.point_text')
                         ->toArray();
@@ -417,7 +418,7 @@ class MeetingController extends Controller
                     $segmentsData = DB::table('transcriptions')
                         ->join('transcriptions_laravel', 'transcriptions.meeting_id', '=', 'transcriptions_laravel.id')
                         ->where('transcriptions.meeting_id', $legacyMeeting->id)
-                        ->where('transcriptions_laravel.username', $user->username)
+                        ->where('transcriptions_laravel.username', $ownerUsername)
                         ->orderBy('transcriptions.id')
                         ->get(['transcriptions.time', 'transcriptions.speaker', 'transcriptions.text', 'transcriptions.display_speaker']);
 
@@ -433,7 +434,7 @@ class MeetingController extends Controller
                         ->toArray();
 
                     $tasks = TaskLaravel::where('meeting_id', $legacyMeeting->id)
-                        ->where('username', $user->username)
+                        ->where('username', $ownerUsername)
                         ->get();
 
                     // Determinar si ya tenemos un archivo de audio directo o una URL descargable
@@ -565,7 +566,7 @@ class MeetingController extends Controller
                 }
 
                 $tasks = TaskLaravel::where('meeting_id', $legacyMeeting->id)
-                    ->where('username', $user->username)
+                    ->where('username', $ownerUsername)
                     ->get();
 
                 return response()->json([
@@ -613,6 +614,7 @@ class MeetingController extends Controller
                 $meetingQuery->where('username', $user->username);
             }
             $meeting = $meetingQuery->firstOrFail();
+            $ownerUsername = $share?->sharedBy?->username ?? $meeting->username ?? $user->username;
 
             // Buscar audio dentro de la carpeta indicada por recordings_folder_id, priorizando coincidencia por ID de reunión
             $audioPath = null;
@@ -679,7 +681,7 @@ class MeetingController extends Controller
 
             // Obtener las tareas de la tabla TaskLaravel
             $tasks = TaskLaravel::where('meeting_id', $meeting->id)
-                ->where('username', $user->username)
+                ->where('username', $ownerUsername)
                 ->get();
 
             return response()->json([
