@@ -194,7 +194,7 @@ async function loadSharedMeetings() {
     try {
         showLoadingState(container);
 
-        const response = await fetch('/api/shared-meetings', {
+        const response = await fetch('/api/shared-meetings/v2', {
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'Accept': 'application/json',
