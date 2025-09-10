@@ -40,8 +40,8 @@ const Notifications = (() => {
                                 <div class="message text-sm text-slate-300 mt-1">${n.message}</div>
                                 <div class="meta text-xs text-slate-400 mt-2">De: ${n.from_user ? `${n.from_user.name} (${n.from_user.email})` : 'Usuario'}</div>
                                 <div class="actions mt-3 flex gap-2">
-                                    <button class="accept-share-btn bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded-md transition-colors" data-id="${n.id}">Aceptar</button>
-                                    <button class="reject-share-btn bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded-md transition-colors" data-id="${n.id}">Rechazar</button>
+                                    <button class="accept-share-btn bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded-md transition-colors" data-id="${n.id}" data-shared-meeting-id="${n.data.shared_meeting_id}">Aceptar</button>
+                                    <button class="reject-share-btn bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded-md transition-colors" data-id="${n.id}" data-shared-meeting-id="${n.data.shared_meeting_id}">Rechazar</button>
                                 </div>
                             </div>
                         </div>
@@ -112,14 +112,14 @@ const Notifications = (() => {
         });
         document.querySelectorAll('.accept-share-btn').forEach(btn => {
             btn.addEventListener('click', e => {
-                const id = e.target.dataset.id;
-                respondToMeetingShareInvitation(id, 'accepted');
+                const id = e.target.dataset.sharedMeetingId;
+                respondToMeetingShareInvitation(id, 'accept');
             });
         });
         document.querySelectorAll('.reject-share-btn').forEach(btn => {
             btn.addEventListener('click', e => {
-                const id = e.target.dataset.id;
-                respondToMeetingShareInvitation(id, 'rejected');
+                const id = e.target.dataset.sharedMeetingId;
+                respondToMeetingShareInvitation(id, 'reject');
             });
         });
         document.querySelectorAll('.dismiss-btn').forEach(btn => {
@@ -163,7 +163,7 @@ const Notifications = (() => {
         }
     }
 
-    async function respondToMeetingShareInvitation(notificationId, status) {
+    async function respondToMeetingShareInvitation(sharedMeetingId, action) {
         try {
             const response = await fetch('/api/shared-meetings/respond', {
                 method: 'POST',
@@ -172,8 +172,8 @@ const Notifications = (() => {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 },
                 body: JSON.stringify({
-                    notification_id: notificationId,
-                    status: status
+                    shared_meeting_id: sharedMeetingId,
+                    action: action
                 })
             });
 
@@ -186,7 +186,9 @@ const Notifications = (() => {
                 let message = 'Error al responder la invitación.';
                 try {
                     const data = await response.json();
-                    if (data.message) message = data.message;
+                    if (data.errors?.shared_meeting_id) message = data.errors.shared_meeting_id[0];
+                    else if (data.errors?.action) message = data.errors.action[0];
+                    else if (data.message) message = data.message;
                 } catch (_) { /* ignore */ }
                 showError(message);
                 return;
@@ -195,15 +197,15 @@ const Notifications = (() => {
             const data = await response.json();
             if (data.success) {
                 // Remover notificación de la lista
-                notifications = notifications.filter(n => n.id != notificationId);
+                notifications = notifications.filter(n => n.data?.shared_meeting_id != sharedMeetingId);
                 render();
 
                 // Mostrar mensaje de éxito
-                const actionText = status === 'accepted' ? 'aceptado' : 'rechazado';
+                const actionText = action === 'accept' ? 'aceptado' : 'rechazado';
                 showSuccess(`Has ${actionText} la invitación exitosamente.`);
 
                 // Si se aceptó, refrescar las reuniones compartidas si estamos en esa pestaña
-                if (status === 'accepted' && window.location.pathname.includes('reuniones')) {
+                if (action === 'accept' && window.location.pathname.includes('reuniones')) {
                     const activeTab = document.querySelector('.tab-transition.bg-slate-700\\/50');
                     if (activeTab && activeTab.dataset.target === 'shared-meetings') {
                         if (typeof loadSharedMeetings === 'function') {
