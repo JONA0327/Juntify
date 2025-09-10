@@ -273,41 +273,4 @@ class SharedMeetingController extends Controller
         }
     }
 
-    /**
-     * Obtener reuniones que el usuario ha compartido
-     */
-    public function getMeetingsSharedByUser(): JsonResponse
-    {
-        try {
-            $sharedMeetings = SharedMeeting::with(['meeting', 'sharedWith'])
-                ->where('shared_by', Auth::id())
-                ->orderBy('shared_at', 'desc')
-                ->get()
-                ->groupBy('meeting_id')
-                ->map(function ($shares) {
-                    $firstShare = $shares->first();
-                    return [
-                        'meeting_id' => $firstShare->meeting_id,
-                        'title' => $firstShare->meeting->title,
-                        'date' => $firstShare->meeting->date,
-                        'shared_with_count' => $shares->count(),
-                        'shared_with' => $shares->map(function ($share) {
-                            return [
-                                'id' => $share->shared_with,
-                                'name' => $share->sharedWith->name,
-                                'status' => $share->status,
-                                'responded_at' => $share->responded_at
-                            ];
-                        }),
-                        'shared_at' => $firstShare->shared_at
-                    ];
-                })
-                ->values();
-
-            return response()->json($sharedMeetings);
-        } catch (\Exception $e) {
-            Log::error('Error getting meetings shared by user: ' . $e->getMessage());
-            return response()->json(['error' => 'Error al cargar reuniones compartidas por ti'], 500);
-        }
-    }
 }
