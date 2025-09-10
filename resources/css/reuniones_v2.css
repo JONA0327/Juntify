@@ -493,10 +493,6 @@
     .meeting-modal {
         padding: 2rem 3rem; /* Más padding en pantallas muy grandes */
     }
-    .modal-content {
-        max-width: 1600px;
-        width: 95%;
-    }
 }
 
 @media (min-width: 768px) {
@@ -505,17 +501,8 @@
     }
 }
 
-@media (max-width: 1200px) {
-    .modal-content {
-        max-width: 98vw !important; /* Aumentado de 95vw a 98vw */
-        width: 98vw !important;
-    }
-}
-
 @media (max-width: 768px) {
     .modal-content {
-        max-width: 98vw !important;
-        width: 98vw !important;
         max-height: 95vh !important;
     }
 }
@@ -531,8 +518,8 @@
                 var(--bg-slate-800) 100%);
     border: 1px solid var(--border-slate-700);
     border-radius: 1rem;
-    max-width: 1600px; /* Aumentado de 1400px a 1600px para más ancho */
-    width: 98%; /* Aumentado de 95% a 98% para usar más espacio de pantalla */
+    max-width: 1600px; /* Mantener ancho máximo adecuado */
+    width: 90vw; /* Usar 90% del ancho de la ventana para un modal consistente */
     max-height: 95vh; /* Mantener altura */
     min-height: 80vh; /* Mantener altura mínima */
     overflow: hidden;
