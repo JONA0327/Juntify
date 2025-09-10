@@ -201,16 +201,24 @@
    CONTENIDO DE TARJETAS
    ========================================= */
 .meeting-card-header {
+    margin-bottom: 1rem;
+}
+
+.meeting-header-top {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     margin-bottom: 1rem;
-    gap: 1rem;
+}
+
+.meeting-icon {
+    display: flex;
+    align-items: center;
+    color: var(--primary-yellow);
 }
 
 .meeting-content {
-    flex: 1;
-    min-width: 0; /* Permite que el contenido se contraiga */
+    margin-bottom: 1rem;
 }
 
 .meeting-title {
@@ -226,7 +234,9 @@
 .meeting-date {
     font-size: 0.875rem;
     color: var(--text-slate-400);
-    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    margin: 0;
 }
 
 .meeting-folders {
@@ -254,11 +264,21 @@
     width: 1rem;
     height: 1rem;
     color: var(--primary-yellow);
+    flex-shrink: 0;
 }
 
 .folder-name {
     color: var(--text-slate-200);
     font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.meeting-card-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1rem;
 }
 
 /* =========================================
@@ -267,8 +287,8 @@
 .meeting-actions {
     display: flex;
     gap: 0.5rem;
-    flex-shrink: 0; /* Evita que los botones se contraigan */
-    align-items: flex-start;
+    flex-shrink: 0;
+    align-items: center;
 }
 
 .icon-btn {
@@ -277,7 +297,6 @@
     border-radius: 0.5rem;
     border: 1px solid rgba(51, 65, 85, 0.55);
     background: rgba(30, 41, 59, 0.85);
-    /* Base icon color with better contrast on dark bg */
     color: var(--text-slate-200);
     display: flex;
     align-items: center;
@@ -285,6 +304,7 @@
     transition: all 0.2s ease;
     cursor: pointer;
     backdrop-filter: blur(4px);
+    position: relative;
 }
 
 .icon-btn:hover {
@@ -319,7 +339,16 @@
     box-shadow: 0 4px 12px rgba(251, 191, 36, 0.25);
 }
 
-.meeting-actions .icon-btn svg {
+.icon-btn.download-btn:hover {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+
+.meeting-actions .icon-btn svg,
+.meeting-card-footer .icon-btn svg {
     width: 1.125rem;
     height: 1.125rem;
     stroke-width: 2;
@@ -327,7 +356,30 @@
     stroke: currentColor;
 }
 
-/* Boost stroke width and ensure visibility regardless of nested shapes */
+/* Asegurar que el botón de descarga tenga el tamaño correcto */
+.download-btn {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid rgba(51, 65, 85, 0.55) !important;
+    background: rgba(30, 41, 59, 0.85) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+    backdrop-filter: blur(4px) !important;
+}
+
+.download-btn svg {
+    width: 1.125rem !important;
+    height: 1.125rem !important;
+    stroke-width: 2 !important;
+    fill: none !important;
+    stroke: currentColor !important;
+}
+
+/* Asegurar que todos los SVGs mantengan el estilo consistente */
 .meetings-grid .icon-btn svg path,
 .meeting-card .icon-btn svg path,
 .meetings-grid .icon-btn svg line,
@@ -345,37 +397,28 @@
     fill: none;
 }
 
-/* Give subtle color cues even when not hovered */
+/* Colores base para los iconos */
 .meeting-actions .edit-btn {
-    color: #34d399; /* verde menta */
+    color: #6ee7b7; /* verde menta */
 }
+
+.meeting-actions .delete-btn {
+    color: #fca5a5; /* rojo suave */
+}
+
+.meeting-actions .container-btn {
+    color: #fde68a; /* amarillo suave */
+}
+
+.meeting-card-footer .download-btn {
+    color: #93c5fd; /* azul suave */
+}
+
 .meeting-actions .delete-btn {
     color: #f87171; /* rojo coral */
 }
 .meeting-actions .container-btn {
     color: #fbbf24; /* amarillo */
-}
-
-/* Estilos específicos para el botón de descarga */
-.download-btn {
-    color: #60a5fa; /* azul claro */
-    z-index: 10;
-}
-
-.download-btn:hover {
-    background: rgba(96, 165, 250, 0.15);
-    color: #60a5fa;
-    border-color: rgba(96, 165, 250, 0.4);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(96, 165, 250, 0.25);
-}
-
-.download-btn svg {
-    width: 1.125rem;
-    height: 1.125rem;
-    stroke-width: 2;
-    fill: none;
-    stroke: currentColor;
 }
 
 /* =========================================
@@ -459,10 +502,43 @@
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    padding: 2rem;
+    padding: 1rem; /* Reducido de 2rem a 1rem para pantallas pequeñas */
     opacity: 0;
     pointer-events: none;
     transition: all 0.3s ease;
+    box-sizing: border-box; /* Asegurar box-sizing correcto */
+}
+
+/* Responsividad mejorada para el modal más ancho */
+@media (min-width: 1400px) {
+    .meeting-modal {
+        padding: 2rem 3rem; /* Más padding en pantallas muy grandes */
+    }
+    .modal-content {
+        max-width: 1600px;
+        width: 95%;
+    }
+}
+
+@media (min-width: 768px) {
+    .meeting-modal {
+        padding: 2rem;
+    }
+}
+
+@media (max-width: 1200px) {
+    .modal-content {
+        max-width: 98vw !important; /* Aumentado de 95vw a 98vw */
+        width: 98vw !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .modal-content {
+        max-width: 98vw !important;
+        width: 98vw !important;
+        max-height: 95vh !important;
+    }
 }
 
 .meeting-modal.active {
@@ -476,14 +552,16 @@
                 var(--bg-slate-800) 100%);
     border: 1px solid var(--border-slate-700);
     border-radius: 1rem;
-    max-width: 1000px;
-    width: 100%;
-    max-height: 90vh;
+    max-width: 1600px; /* Aumentado de 1400px a 1600px para más ancho */
+    width: 98%; /* Aumentado de 95% a 98% para usar más espacio de pantalla */
+    max-height: 95vh; /* Mantener altura */
+    min-height: 80vh; /* Mantener altura mínima */
     overflow: hidden;
     display: flex;
     flex-direction: column;
     transform: scale(0.95);
     transition: transform 0.3s ease;
+    margin: 0 auto; /* Asegurar centrado horizontal perfecto */
 }
 
 .meeting-modal.active .modal-content {
@@ -637,8 +715,17 @@
     padding: 2rem;
     display: flex;
     flex-direction: column;
-    max-height: calc(90vh - 160px);
+    max-height: calc(95vh - 120px); /* Aumentado de 90vh a 95vh y reducido offset de 160px a 120px */
     overflow-y: auto;
+
+    /* Scroll invisible para WebKit browsers (Chrome, Safari, Edge) */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+/* Ocultar scrollbar en navegadores WebKit */
+.modal-body::-webkit-scrollbar {
+    display: none;
 }
 
 .modal-section {
@@ -1943,10 +2030,9 @@
     border: 1px solid #1e40af !important;
     transition: all 0.2s ease;
     color: white !important;
-    width: 2.5rem !important;
-    height: 2.5rem !important;
+    width: 2.25rem !important;
+    height: 2.25rem !important;
     position: relative !important;
-    z-index: 10 !important;
 }
 
 .share-btn:hover {
@@ -1958,8 +2044,8 @@
 
 .share-btn svg {
     color: white !important;
-    width: 1.25rem !important;
-    height: 1.25rem !important;
+    width: 1.125rem !important;
+    height: 1.125rem !important;
 }
 
 /* Contact item styling */

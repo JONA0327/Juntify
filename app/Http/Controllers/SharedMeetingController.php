@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class SharedMeetingController extends Controller
 {
@@ -21,28 +22,83 @@ class SharedMeetingController extends Controller
     public function getContactsForSharing(): JsonResponse
     {
         try {
-            $contacts = Contact::where('user_id', Auth::id())
-                ->with('contact:id,name,email')
-                ->get()
-                ->map(function ($contact) {
-                    return [
-                        'id' => $contact->contact_id,
-                        'name' => $contact->contact->name,
-                        'email' => $contact->contact->email,
-                        'avatar' => strtoupper(substr($contact->contact->name, 0, 1))
-                    ];
-                });
+            $contacts = collect();
+
+            // Intentar obtener contactos de la tabla contacts si existe y tiene datos
+            if (Schema::hasTable('contacts')) {
+                $userContacts = Contact::where('user_id', Auth::id())
+                    ->with(['contact' => function($query) {
+                        $query->select('id', 'full_name', 'username', 'email');
+                    }])
+                    ->get()
+                    ->filter(function($contact) {
+                        return $contact->contact; // Solo incluir si el usuario contacto existe
+                    })
+                    ->map(function ($contact) {
+                        return [
+                            'id' => $contact->contact_id,
+                            'name' => $contact->contact->full_name ?? $contact->contact->username ?? 'Usuario',
+                            'email' => $contact->contact->email ?? '',
+                            'avatar' => strtoupper(substr($contact->contact->full_name ?? $contact->contact->username ?? 'U', 0, 1))
+                        ];
+                    });
+
+                $contacts = $userContacts;
+            }
+
+            // Si no hay contactos específicos, mostrar todos los usuarios como contactos potenciales
+            if ($contacts->isEmpty()) {
+                $users = User::where('id', '!=', Auth::id())
+                    ->select('id', 'full_name', 'username', 'email')
+                    ->limit(50)
+                    ->get()
+                    ->map(function ($user) {
+                        return [
+                            'id' => $user->id,
+                            'name' => $user->full_name ?? $user->username ?? 'Usuario',
+                            'email' => $user->email ?? '',
+                            'avatar' => strtoupper(substr($user->full_name ?? $user->username ?? 'U', 0, 1))
+                        ];
+                    });
+
+                $contacts = $users;
+            }
 
             return response()->json([
                 'success' => true,
-                'contacts' => $contacts
+                'contacts' => $contacts->values() // Asegurar que sea un array indexado numéricamente
             ]);
+
         } catch (\Exception $e) {
             Log::error('Error getting contacts for sharing: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al cargar contactos'
-            ], 500);
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+
+            // Fallback: devolver usuarios como contactos si hay error
+            try {
+                $users = User::where('id', '!=', Auth::id())
+                    ->select('id', 'full_name', 'username', 'email')
+                    ->limit(20)
+                    ->get()
+                    ->map(function ($user) {
+                        return [
+                            'id' => $user->id,
+                            'name' => $user->full_name ?? $user->username ?? 'Usuario',
+                            'email' => $user->email ?? '',
+                            'avatar' => strtoupper(substr($user->full_name ?? $user->username ?? 'U', 0, 1))
+                        ];
+                    });
+
+                return response()->json([
+                    'success' => true,
+                    'contacts' => $users
+                ]);
+            } catch (\Exception $fallbackError) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al cargar contactos',
+                    'contacts' => []
+                ], 500);
+            }
         }
     }
 
@@ -72,7 +128,8 @@ class SharedMeetingController extends Controller
                     ->first();
 
                 if ($existingShare) {
-                    $alreadyShared[] = User::find($contactId)->name;
+                    $contactUser = User::find($contactId);
+                    $alreadyShared[] = $contactUser ? ($contactUser->full_name ?? $contactUser->username ?? 'Usuario') : 'Usuario desconocido';
                     continue;
                 }
 
@@ -86,24 +143,29 @@ class SharedMeetingController extends Controller
                     'shared_at' => now()
                 ]);
 
-                // Crear notificación
+                // Crear notificación usando el esquema correcto
+                $currentUser = Auth::user();
+                $currentUserName = $currentUser->full_name ?? $currentUser->username ?? 'Usuario';
+
                 Notification::create([
-                    'user_id' => $contactId,
-                    'from_user_id' => Auth::id(),
+                    'emisor' => $contactId, // Usuario que recibe la notificación
+                    'remitente' => Auth::id(), // Usuario que envía la notificación
                     'type' => 'meeting_share',
                     'title' => 'Nueva reunión compartida',
-                    'message' => Auth::user()->name . ' ha compartido la reunión "' . $meeting->title . '" contigo.',
+                    'message' => $currentUserName . ' ha compartido la reunión "' . $meeting->title . '" contigo.',
                     'data' => json_encode([
                         'meeting_id' => $meeting->id,
                         'shared_meeting_id' => $sharedMeeting->id,
                         'meeting_title' => $meeting->title,
-                        'shared_by_name' => Auth::user()->name,
+                        'shared_by_name' => $currentUserName,
                         'custom_message' => $request->message
                     ]),
-                    'read' => false
+                    'read' => false,
+                    'status' => 'pending'
                 ]);
 
-                $sharedWith[] = User::find($contactId)->name;
+                $contactUser = User::find($contactId);
+                $sharedWith[] = $contactUser ? ($contactUser->full_name ?? $contactUser->username ?? 'Usuario') : 'Usuario desconocido';
             }
 
             DB::commit();

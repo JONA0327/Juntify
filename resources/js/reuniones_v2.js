@@ -2148,6 +2148,29 @@ function showMeetingModal(meeting) {
         meeting.transcription = meeting.segments.map(s => s.text).join(' ');
     }
 
+    // Calcular número de participantes automáticamente basándose en hablantes únicos
+    let participantCount = 0;
+    if (Array.isArray(meeting.segments) && meeting.segments.length > 0) {
+        const uniqueSpeakers = new Set();
+        meeting.segments.forEach(segment => {
+            if (segment.speaker && segment.speaker.trim()) {
+                // Normalizar nombres de hablantes para evitar duplicados por variaciones menores
+                const normalizedSpeaker = segment.speaker.trim().toLowerCase()
+                    .replace(/\s+/g, ' ') // Normalizar espacios
+                    .replace(/hablante\s*(\d+)/i, 'speaker_$1'); // Normalizar "Hablante X" a "speaker_X"
+                uniqueSpeakers.add(normalizedSpeaker);
+            }
+        });
+        participantCount = uniqueSpeakers.size;
+        console.log('Hablantes únicos encontrados:', Array.from(uniqueSpeakers));
+        console.log('Número de participantes calculado:', participantCount);
+    }
+
+    // Si no se pudo calcular desde los segmentos, usar el valor original o 0
+    if (participantCount === 0) {
+        participantCount = meeting.participants || 0;
+    }
+
     const audioSrc = meeting.audio_path || '';
 
     const modalHtml = `
@@ -2156,7 +2179,7 @@ function showMeetingModal(meeting) {
                 <div class="modal-header">
                     <div class="modal-title-section">
                         <h2 class="modal-title" id="modalTitle">${escapeHtml(meeting.meeting_name)}</h2>
-                        <p class="modal-subtitle">${meeting.created_at} • ${meeting.duration || ''} • ${meeting.participants || 0} participantes</p>
+                        <p class="modal-subtitle">${meeting.created_at} • ${meeting.duration || ''} • ${participantCount} participantes</p>
                     </div>
                     <button class="close-btn" onclick="closeMeetingModal()">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Schema;
 
 class Notification extends Model
 {
@@ -38,7 +39,8 @@ class Notification extends Model
 
     public function fromUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'from_user_id');
+        // La tabla users usa UUIDs, pero notifications.remitente puede contener UUIDs
+        return $this->belongsTo(User::class, 'remitente');
     }
 
     // Relaciones de compatibilidad (antiguos campos)

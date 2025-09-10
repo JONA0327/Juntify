@@ -6,6 +6,7 @@ use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 
 class NotificationController extends Controller
 {
@@ -14,45 +15,67 @@ class NotificationController extends Controller
      */
     public function index(): JsonResponse
     {
-        if (!auth()->check()) {
-            return response()->json([], 401);
-        }
+        try {
+            if (!auth()->check()) {
+                return response()->json([], 401);
+            }
 
-        $notifications = Notification::where('user_id', Auth::id())
-            ->with(['fromUser:id,name,email'])
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($notification) {
-                $data = null;
-                if ($notification->data) {
-                    try {
-                        $data = is_array($notification->data)
-                            ? $notification->data
-                            : json_decode($notification->data, true, 512, JSON_THROW_ON_ERROR);
-                    } catch (\Throwable $e) {
-                        $data = null;
+            // Verificar qué columnas usar basándose en el esquema actual
+            $userIdColumn = Schema::hasColumn('notifications', 'user_id') ? 'user_id' : 'emisor';
+
+            $notifications = Notification::where($userIdColumn, Auth::id())
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($notification) use ($userIdColumn) {
+                    $data = null;
+                    if ($notification->data) {
+                        try {
+                            $data = is_array($notification->data)
+                                ? $notification->data
+                                : json_decode($notification->data, true, 512, JSON_THROW_ON_ERROR);
+                        } catch (\Throwable $e) {
+                            $data = null;
+                        }
                     }
-                }
 
-                return [
-                    'id' => $notification->id,
-                    'type' => $notification->type,
-                    'title' => $notification->title,
-                    'message' => $notification->message,
-                    'data' => $data,
-                    'read' => $notification->read,
-                    'read_at' => $notification->read_at,
-                    'created_at' => $notification->created_at,
-                    'from_user' => $notification->fromUser ? [
-                        'id' => $notification->fromUser->id,
-                        'name' => $notification->fromUser->name,
-                        'email' => $notification->fromUser->email,
-                        'avatar' => strtoupper(substr($notification->fromUser->name, 0, 1))
-                    ] : null
-                ];
-            });
+                    // Obtener información del usuario remitente de manera segura
+                    $fromUser = null;
+                    if ($notification->remitente) {
+                        try {
+                            $user = \App\Models\User::find($notification->remitente);
+                            if ($user) {
+                                $fromUser = [
+                                    'id' => $user->id,
+                                    'name' => $user->full_name ?? $user->username ?? 'Usuario',
+                                    'email' => $user->email ?? '',
+                                    'avatar' => strtoupper(substr($user->full_name ?? $user->username ?? 'U', 0, 1))
+                                ];
+                            }
+                        } catch (\Throwable $e) {
+                            // Si hay error obteniendo el usuario, dejar fromUser como null
+                        }
+                    }
 
-        return response()->json($notifications);
+                    return [
+                        'id' => $notification->id,
+                        'type' => $notification->type ?? 'general',
+                        'title' => $notification->title ?? 'Notificación',
+                        'message' => $notification->message ?? '',
+                        'data' => $data,
+                        'read' => $notification->read ?? false,
+                        'read_at' => $notification->read_at ?? null,
+                        'created_at' => $notification->created_at,
+                        'from_user' => $fromUser
+                    ];
+                });
+
+            return response()->json($notifications);
+
+        } catch (\Exception $e) {
+            \Log::error('Error en NotificationController::index: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
+            return response()->json(['error' => 'Error interno del servidor'], 500);
+        }
     }
 
     /**

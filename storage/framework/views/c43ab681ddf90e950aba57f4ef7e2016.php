@@ -10,6 +10,12 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
+    <!-- Global Variables -->
+    <script>
+        window.userRole = <?php echo json_encode($userRole, 15, 512) ?>;
+        window.currentOrganizationId = <?php echo json_encode($organizationId, 15, 512) ?>;
+    </script>
+
     <!-- Vite Assets -->
     <?php echo app('Illuminate\Foundation\Vite')([
         'resources/css/app.css',
