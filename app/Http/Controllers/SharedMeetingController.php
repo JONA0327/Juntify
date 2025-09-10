@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use App\Services\GoogleDriveService;
 use App\Services\GoogleServiceAccount;
+use Google\Service\Exception as GoogleServiceException;
 
 class SharedMeetingController extends Controller
 {
@@ -105,7 +106,7 @@ class SharedMeetingController extends Controller
                     try {
                         // Try direct file id first
                         $audioId = $legacy->audio_drive_id;
-                        $audioLink = $drive->getWebContentLink($audioId);
+                        $audioLink = $this->getWebContentLinkEnsuringAccess($drive, $shared, $audioId);
                         if (!$audioLink) {
                             // Search in folder by name/id
                             $found = $drive->findAudioInFolder(
@@ -115,10 +116,21 @@ class SharedMeetingController extends Controller
                             );
                             if ($found) {
                                 $audioId = $found['fileId'];
-                                $audioLink = $found['downloadUrl'] ?? $drive->getWebContentLink($audioId) ?: $drive->getFileLink($audioId);
+                                $audioLink = $found['downloadUrl'] ?? $this->getWebContentLinkEnsuringAccess($drive, $shared, $audioId) ?: $drive->getFileLink($audioId);
                             }
                         }
                     } catch (\Throwable $e) { /* ignore */ }
+                }
+            }
+
+            if ($audioId || !empty($legacy->transcript_drive_id)) {
+                try {
+                    $this->grantDriveAccessForShare($shared);
+                } catch (\Throwable $e) {
+                    Log::warning('resolveDriveLinks: grant access failed', [
+                        'shared_meeting_id' => $shared->id,
+                        'error' => $e->getMessage(),
+                    ]);
                 }
             }
 
@@ -160,15 +172,26 @@ class SharedMeetingController extends Controller
                 $found = $drive->findAudioInFolder($folderId, $modern->title, (string)$modern->id);
                 if ($found) {
                     $audioId = $found['fileId'];
-                    $audioLink = $found['downloadUrl'] ?? $drive->getWebContentLink($audioId) ?: $drive->getFileLink($audioId);
+                    $audioLink = $found['downloadUrl'] ?? $this->getWebContentLinkEnsuringAccess($drive, $shared, $audioId) ?: $drive->getFileLink($audioId);
                 } else {
                     $files = $drive->searchFiles($modern->title, $folderId);
                     $first = $files[0] ?? null;
                     if ($first) {
                         $audioId = $first->getId();
-                        $audioLink = $drive->getWebContentLink($audioId) ?: $drive->getFileLink($audioId);
+                        $audioLink = $this->getWebContentLinkEnsuringAccess($drive, $shared, $audioId) ?: $drive->getFileLink($audioId);
                     }
                 }
+            }
+        }
+
+        if ($audioId) {
+            try {
+                $this->grantDriveAccessForShare($shared);
+            } catch (\Throwable $e) {
+                Log::warning('resolveDriveLinks: grant access failed', [
+                    'shared_meeting_id' => $shared->id,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 
@@ -601,6 +624,43 @@ class SharedMeetingController extends Controller
                 'success' => false,
                 'message' => 'Error al eliminar de compartidas'
             ], 500);
+        }
+    }
+
+    private function getWebContentLinkEnsuringAccess(GoogleDriveService $drive, SharedMeeting $sharedMeeting, string $fileId): ?string
+    {
+        try {
+            $file = $drive->getDrive()->files->get($fileId, [
+                'fields' => 'webContentLink',
+                'supportsAllDrives' => true,
+            ]);
+            $link = $file->getWebContentLink();
+            return $link ? $this->normalizeDriveUrl($link) : null;
+        } catch (GoogleServiceException $e) {
+            if ($e->getCode() === 403) {
+                Log::warning('getWebContentLinkEnsuringAccess: permission denied', ['file_id' => $fileId]);
+                try {
+                    $this->grantDriveAccessForShare($sharedMeeting);
+                } catch (\Throwable $shareE) {
+                    Log::warning('getWebContentLinkEnsuringAccess: share failed', ['file_id' => $fileId, 'error' => $shareE->getMessage()]);
+                }
+                try {
+                    $file = $drive->getDrive()->files->get($fileId, [
+                        'fields' => 'webContentLink',
+                        'supportsAllDrives' => true,
+                    ]);
+                    $link = $file->getWebContentLink();
+                    return $link ? $this->normalizeDriveUrl($link) : null;
+                } catch (\Throwable $retryE) {
+                    Log::warning('getWebContentLinkEnsuringAccess: retry failed', ['file_id' => $fileId, 'error' => $retryE->getMessage()]);
+                    return null;
+                }
+            }
+            Log::warning('getWebContentLinkEnsuringAccess error', ['file_id' => $fileId, 'code' => $e->getCode(), 'error' => $e->getMessage()]);
+            return null;
+        } catch (\Throwable $e) {
+            Log::warning('getWebContentLinkEnsuringAccess exception', ['file_id' => $fileId, 'error' => $e->getMessage()]);
+            return null;
         }
     }
 
