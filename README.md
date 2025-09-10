@@ -112,3 +112,23 @@ Audio files up to **100 MB** are supported (≈133 MB when Base64-encoded).
 ## API Reference
 
 See [docs/api.md](docs/api.md) for authenticated API usage and available endpoints.
+
+## Maintenance Scripts
+
+Legacy maintenance scripts have been moved to `scripts/archive` and are excluded from the production code path:
+
+- drop_shared_meetings.php
+- setup_shared_meetings.php
+- analyze_tokens.php
+- check_users_table.php
+- debug_groups_query.php
+- analyze_groups_detailed.php
+- check_notifications.php
+- check_tables.php
+- check_structure.php
+- analyze_groups_correct.php
+- analyze_all_organizations.php
+- TestRolColumn.php
+
+These scripts are retained for historical reference only.
+
