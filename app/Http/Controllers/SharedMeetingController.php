@@ -612,7 +612,7 @@ class SharedMeetingController extends Controller
     {
         try {
             $recipient = User::find($sharedMeeting->shared_with);
-            $sharer = $sharedMeeting->sharedBy; // might be null in old data
+            $sharer    = $sharedMeeting->sharedBy; // might be null in old data
             if (!$recipient || !$recipient->email) {
                 return;
             }
@@ -630,25 +630,187 @@ class SharedMeetingController extends Controller
                 try { $sa->impersonate($sharer->email); } catch (\Throwable $e) { /* continue without impersonation */ }
             }
 
-            // Share .ju for legacy
+            // Prepare GoogleDriveService with sharer's token for fallback
+            $drive = null;
+            if ($sharer && $sharer->googleToken) {
+                try {
+                    /** @var GoogleDriveService $drive */
+                    $drive = app(GoogleDriveService::class);
+                    $token = $sharer->googleToken;
+                    $drive->setAccessToken($token->access_token ? json_decode($token->access_token, true) ?: ['access_token' => $token->access_token] : []);
+                } catch (\Throwable $e) {
+                    Log::warning('grantDriveAccess: unable to set user token', ['error' => $e->getMessage()]);
+                    $drive = null;
+                }
+            }
+
+            // Share .ju/.hu for legacy
             if ($legacy) {
                 if (!empty($legacy->transcript_drive_id)) {
-                    try { $sa->shareItem($legacy->transcript_drive_id, $recipientEmail, 'reader'); } catch (\Throwable $e) { Log::warning('grantDriveAccess: share .ju failed', ['error'=>$e->getMessage()]); }
+                    try {
+                        $this->shareDriveItemWithFallback($sa, $drive, $legacy->transcript_drive_id, $recipientEmail);
+
+                        // Verify extension
+                        try {
+                            $info = $sa->getDrive()->files->get($legacy->transcript_drive_id, [
+                                'fields' => 'name',
+                                'supportsAllDrives' => true,
+                            ]);
+                            $name = $info->getName();
+                            if (!preg_match('/\.(ju|hu|huendry)$/i', $name)) {
+                                Log::warning('grantDriveAccess: transcript_drive_id not ju/hu file', ['name' => $name]);
+                            }
+                        } catch (\Throwable $metaE) {
+                            Log::warning('grantDriveAccess: unable to verify transcript file', ['error' => $metaE->getMessage()]);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('grantDriveAccess: share transcript failed', ['error' => $e->getMessage()]);
+                    }
                 }
+
                 // Share audio: could be file or folder id
                 if (!empty($legacy->audio_drive_id)) {
-                    try { $sa->shareItem($legacy->audio_drive_id, $recipientEmail, 'reader'); } catch (\Throwable $e) { Log::warning('grantDriveAccess: share audio failed', ['error'=>$e->getMessage()]); }
+                    try {
+                        $mime = $this->getMimeType($sa, $drive, $legacy->audio_drive_id);
+                        if ($mime === 'application/vnd.google-apps.folder') {
+                            // Share folder and then search for actual audio file
+                            $this->shareDriveItemWithFallback($sa, $drive, $legacy->audio_drive_id, $recipientEmail);
+                            $audioFileId = $this->findAudioFileInFolder($sa, $drive, $legacy->audio_drive_id, $legacy->meeting_name, (string)$legacy->id);
+                            if ($audioFileId) {
+                                $this->shareDriveItemWithFallback($sa, $drive, $audioFileId, $recipientEmail);
+                            }
+                        } else {
+                            $this->shareDriveItemWithFallback($sa, $drive, $legacy->audio_drive_id, $recipientEmail);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('grantDriveAccess: share audio failed', ['error' => $e->getMessage()]);
+                    }
                 }
                 return;
             }
 
             // Modern meeting: share recordings folder if present
             if ($modern && !empty($modern->recordings_folder_id)) {
-                try { $sa->shareItem($modern->recordings_folder_id, $recipientEmail, 'reader'); } catch (\Throwable $e) { Log::warning('grantDriveAccess: share recordings folder failed', ['error'=>$e->getMessage()]); }
+                try {
+                    $this->shareDriveItemWithFallback($sa, $drive, $modern->recordings_folder_id, $recipientEmail);
+                } catch (\Throwable $e) {
+                    Log::warning('grantDriveAccess: share recordings folder failed', ['error' => $e->getMessage()]);
+                }
             }
         } catch (\Throwable $e) {
-            Log::warning('grantDriveAccessForShare failed', [ 'error' => $e->getMessage() ]);
+            Log::warning('grantDriveAccessForShare failed', ['error' => $e->getMessage()]);
         }
+    }
+
+    private function shareDriveItemWithFallback(GoogleServiceAccount $sa, ?GoogleDriveService $drive, string $itemId, string $email): void
+    {
+        $lastException = null;
+
+        try {
+            $sa->shareItem($itemId, $email, 'reader');
+            $this->verifyPermission($sa->getDrive(), $itemId, $email);
+            return;
+        } catch (\Throwable $e) {
+            Log::warning('shareItem via service account failed', ['item' => $itemId, 'error' => $e->getMessage()]);
+            $lastException = $e;
+        }
+
+        if ($drive) {
+            try {
+                $drive->shareItem($itemId, $email, 'reader');
+                $this->verifyPermission($drive->getDrive(), $itemId, $email);
+                return;
+            } catch (\Throwable $e) {
+                Log::error('shareItem via user token failed', ['item' => $itemId, 'error' => $e->getMessage()]);
+                throw $e;
+            }
+        }
+
+        if ($lastException) {
+            throw $lastException;
+        }
+    }
+
+    private function verifyPermission(\Google\Service\Drive $drive, string $itemId, string $email): void
+    {
+        try {
+            $perms = $drive->permissions->listPermissions($itemId, [
+                'fields' => 'permissions(emailAddress,role)',
+                'supportsAllDrives' => true,
+            ]);
+            $found = false;
+            foreach ($perms->getPermissions() as $perm) {
+                if (strcasecmp($perm->getEmailAddress(), $email) === 0) {
+                    $found = true;
+                    break;
+                }
+            }
+            if (!$found) {
+                Log::error('Permission not applied', ['item' => $itemId, 'email' => $email]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Failed to verify permission', ['item' => $itemId, 'error' => $e->getMessage()]);
+        }
+    }
+
+    private function getMimeType(GoogleServiceAccount $sa, ?GoogleDriveService $drive, string $itemId): ?string
+    {
+        try {
+            $file = $sa->getDrive()->files->get($itemId, [
+                'fields' => 'mimeType',
+                'supportsAllDrives' => true,
+            ]);
+            return $file->getMimeType();
+        } catch (\Throwable $e) {
+            Log::warning('getMimeType via service account failed', ['item' => $itemId, 'error' => $e->getMessage()]);
+        }
+
+        if ($drive) {
+            try {
+                $file = $drive->getDrive()->files->get($itemId, [
+                    'fields' => 'mimeType',
+                    'supportsAllDrives' => true,
+                ]);
+                return $file->getMimeType();
+            } catch (\Throwable $e) {
+                Log::warning('getMimeType via user token failed', ['item' => $itemId, 'error' => $e->getMessage()]);
+            }
+        }
+
+        return null;
+    }
+
+    private function findAudioFileInFolder(GoogleServiceAccount $sa, ?GoogleDriveService $drive, string $folderId, string $meetingTitle, string $meetingId): ?string
+    {
+        // Try with service account first
+        try {
+            $resp = $sa->getDrive()->files->listFiles([
+                'q' => sprintf("'%s' in parents and trashed=false", $folderId),
+                'fields' => 'files(id,name)',
+                'supportsAllDrives' => true,
+            ]);
+            foreach ($resp->getFiles() as $file) {
+                $name = $file->getName();
+                if (preg_match('/^' . preg_quote($meetingTitle, '/') . '/i', $name) || preg_match('/^' . preg_quote($meetingId, '/') . '/i', $name)) {
+                    return $file->getId();
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('findAudioFileInFolder via service account failed', ['error' => $e->getMessage()]);
+        }
+
+        if ($drive) {
+            try {
+                $found = $drive->findAudioInFolder($folderId, $meetingTitle, $meetingId);
+                if ($found && !empty($found['fileId'])) {
+                    return $found['fileId'];
+                }
+            } catch (\Throwable $e) {
+                Log::warning('findAudioFileInFolder via user token failed', ['error' => $e->getMessage()]);
+            }
+        }
+
+        return null;
     }
 
     private function normalizeDriveUrl(string $url): string
