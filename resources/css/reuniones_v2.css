@@ -694,6 +694,13 @@
     display: none;
 }
 
+@media (min-width: 1024px) {
+    .modal-body {
+        flex-direction: row;
+        gap: 2rem;
+    }
+}
+
 .modal-section {
     margin-bottom: 2rem;
     display: flex;
