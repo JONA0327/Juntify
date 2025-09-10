@@ -4797,6 +4797,7 @@ window.attachMeetingEventListeners = attachMeetingEventListeners;
 window.openShareModal = openShareModal;
 window.closeShareModal = closeShareModal;
 window.confirmShare = confirmShare;
+window.toggleContact = toggleContact;
 
 // ===============================================
 // FUNCIONALIDAD DE COMPARTIR REUNIONES
