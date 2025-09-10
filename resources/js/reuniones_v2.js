@@ -5029,7 +5029,7 @@ async function confirmShare() {
             },
             body: JSON.stringify({
                 meeting_id: currentShareMeetingId,
-                user_ids: Array.from(selectedContacts),
+                contact_ids: Array.from(selectedContacts),
                 message: message
             })
         });
