@@ -443,7 +443,14 @@ class MeetingController extends Controller
                     $audioDriveId = null;
                     if ($useServiceAccount) {
                         $audioDriveId = $legacyMeeting->audio_drive_id;
-                        $audioPath = route('api.meetings.audio', ['meeting' => $legacyMeeting->id]);
+                        if (!empty($legacyMeeting->audio_download_url)) {
+                            $audioPath = $this->normalizeDriveUrl($legacyMeeting->audio_download_url);
+                            if ($audioPath && !str_starts_with($audioPath, 'http')) {
+                                $audioPath = $this->publicUrlFromStoragePath($audioPath);
+                            }
+                        } else {
+                            $audioPath = route('api.meetings.audio', ['meeting' => $legacyMeeting->id]);
+                        }
                     } else {
                         $hasDirectUrl = !empty($legacyMeeting->audio_download_url);
                         $isFileId = false;
@@ -555,7 +562,14 @@ class MeetingController extends Controller
                     );
                     $audioDriveId = $audioData['fileId'] ?? null;
                 }
-                $audioPath = route('api.meetings.audio', ['meeting' => $legacyMeeting->id]);
+                if ($useServiceAccount && $hasDirectUrl) {
+                    $audioPath = $this->normalizeDriveUrl($legacyMeeting->audio_download_url);
+                    if ($audioPath && !str_starts_with($audioPath, 'http')) {
+                        $audioPath = $this->publicUrlFromStoragePath($audioPath);
+                    }
+                } else {
+                    $audioPath = route('api.meetings.audio', ['meeting' => $legacyMeeting->id]);
+                }
 
                 $processedData = $this->processTranscriptData($transcriptData);
                 unset($processedData['tasks']);
