@@ -25,14 +25,13 @@ class SharedMeetingController extends Controller
         try {
             $contacts = collect();
 
-            // Intentar obtener contactos de la tabla contacts si existe y tiene datos
             if (Schema::hasTable('contacts')) {
-                $userContacts = Contact::where('user_id', Auth::id())
-                    ->with(['contact' => function($query) {
+                $contacts = Contact::where('user_id', Auth::id())
+                    ->with(['contact' => function ($query) {
                         $query->select('id', 'full_name', 'username', 'email');
                     }])
                     ->get()
-                    ->filter(function($contact) {
+                    ->filter(function ($contact) {
                         return $contact->contact; // Solo incluir si el usuario contacto existe
                     })
                     ->map(function ($contact) {
@@ -43,26 +42,6 @@ class SharedMeetingController extends Controller
                             'avatar' => strtoupper(substr($contact->contact->full_name ?? $contact->contact->username ?? 'U', 0, 1))
                         ];
                     });
-
-                $contacts = $userContacts;
-            }
-
-            // Si no hay contactos específicos, mostrar todos los usuarios como contactos potenciales
-            if ($contacts->isEmpty()) {
-                $users = User::where('id', '!=', Auth::id())
-                    ->select('id', 'full_name', 'username', 'email')
-                    ->limit(50)
-                    ->get()
-                    ->map(function ($user) {
-                        return [
-                            'id' => $user->id,
-                            'name' => $user->full_name ?? $user->username ?? 'Usuario',
-                            'email' => $user->email ?? '',
-                            'avatar' => strtoupper(substr($user->full_name ?? $user->username ?? 'U', 0, 1))
-                        ];
-                    });
-
-                $contacts = $users;
             }
 
             return response()->json([
@@ -74,32 +53,11 @@ class SharedMeetingController extends Controller
             Log::error('Error getting contacts for sharing: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
 
-            // Fallback: devolver usuarios como contactos si hay error
-            try {
-                $users = User::where('id', '!=', Auth::id())
-                    ->select('id', 'full_name', 'username', 'email')
-                    ->limit(20)
-                    ->get()
-                    ->map(function ($user) {
-                        return [
-                            'id' => $user->id,
-                            'name' => $user->full_name ?? $user->username ?? 'Usuario',
-                            'email' => $user->email ?? '',
-                            'avatar' => strtoupper(substr($user->full_name ?? $user->username ?? 'U', 0, 1))
-                        ];
-                    });
-
-                return response()->json([
-                    'success' => true,
-                    'contacts' => $users
-                ]);
-            } catch (\Exception $fallbackError) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Error al cargar contactos',
-                    'contacts' => []
-                ], 500);
-            }
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar contactos',
+                'contacts' => []
+            ], 500);
         }
     }
 
