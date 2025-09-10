@@ -215,6 +215,28 @@ class GoogleDriveService
     }
 
     /**
+     * Devuelve un enlace de descarga (webContentLink) para un archivo si está disponible.
+     */
+    public function getWebContentLink(string $fileId): ?string
+    {
+        try {
+            $file = $this->drive->files->get($fileId, [
+                'fields' => 'webContentLink',
+                'supportsAllDrives' => true,
+            ]);
+            $link = $file->getWebContentLink();
+            return $link ? $this->normalizeDriveUrl($link) : null;
+        } catch (GoogleServiceException $e) {
+            Log::warning('getWebContentLink error', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
      * Descarga el contenido de un archivo de Google Drive
      */
     public function downloadFileContent(string $fileId): ?string

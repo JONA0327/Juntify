@@ -2382,8 +2382,25 @@ function showMeetingModal(meeting) {
             }
         });
 
+        // Inicializar el slider de forma segura hasta conocer la duración
+        progress.min = 0;
+        progress.value = 0;
+        progress.max = 1; // marcador temporal para evitar que la perilla llegue al final sin duración
+
+        // Helper para fijar el max cuando haya duración válida
+        const setProgressMaxFromDuration = () => {
+            const dur = meetingAudioPlayer?.duration;
+            if (typeof dur === 'number' && isFinite(dur) && dur > 0) {
+                // Solo actualizar si cambia significativamente para evitar jitter
+                if (!progress.max || Math.abs(progress.max - dur) > 0.05) {
+                    progress.max = dur;
+                }
+            }
+        };
+
+        // Establecer max al cargar metadatos y en otros eventos relevantes
         meetingAudioPlayer.addEventListener('loadedmetadata', () => {
-            progress.max = meetingAudioPlayer.duration;
+            setProgressMaxFromDuration();
 
             // Rehabilitar controles
             playBtn.disabled = false;
@@ -2402,9 +2419,22 @@ function showMeetingModal(meeting) {
                 errorMsg.remove();
             }
         });
+        ['durationchange','canplay','canplaythrough','progress'].forEach(evt => {
+            meetingAudioPlayer.addEventListener(evt, setProgressMaxFromDuration);
+        });
 
         meetingAudioPlayer.addEventListener('timeupdate', () => {
-            progress.value = meetingAudioPlayer.currentTime;
+            // Asegurar que el max esté sincronizado y el valor no exceda los límites
+            setProgressMaxFromDuration();
+            const cur = meetingAudioPlayer.currentTime || 0;
+            const max = (typeof progress.max === 'number' ? progress.max : parseFloat(progress.max)) || 0;
+            if (max > 0) {
+                progress.value = Math.min(cur, max);
+            } else {
+                // Si aún no hay duración, usar un placeholder para que no se pegue al final
+                progress.max = Math.max(1, cur + 1);
+                progress.value = cur;
+            }
         });
 
         playBtn.addEventListener('click', () => {
@@ -3778,20 +3808,46 @@ async function openDownloadModal(meetingId) {
         // Mostrar loading inicial
         showDownloadModalLoading(meetingId);
 
-        // Paso 1: Descargar y desencriptar el archivo .ju desde Drive
+        // Paso 1: Descargar y desencriptar el archivo .ju desde Drive (con timeout y manejo de errores)
         console.log('Descargando y desencriptando archivo .ju...');
-        const response = await fetch(`/api/meetings/${meetingId}`, {
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                'Accept': 'application/json',
-            }
-        });
+        const controller = new AbortController();
+        const timeoutMs = 15000; // 15s para evitar esperas largas
+        const timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs);
 
-        if (!response.ok) {
-            throw new Error('Error al descargar el archivo de la reunión');
+        let data = null;
+        let response = null;
+        try {
+            response = await fetch(`/api/meetings/${meetingId}`, {
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json',
+                },
+                signal: controller.signal,
+            });
+        } catch (netErr) {
+            console.error('Fallo de red al obtener reunión:', netErr);
+            clearTimeout(timeoutId);
+            showDownloadFallbackModal(meetingId, 'No se pudo conectar para preparar la descarga.');
+            return;
+        } finally {
+            clearTimeout(timeoutId);
         }
 
-        const data = await response.json();
+        if (!response.ok) {
+            let serverMsg = '';
+            try { serverMsg = await response.text(); } catch(_) {}
+            console.error('Error HTTP al preparar descarga', response.status, serverMsg);
+            showDownloadFallbackModal(meetingId, `Error ${response.status} al preparar la descarga.`);
+            return;
+        }
+
+        try {
+            data = await response.json();
+        } catch (parseErr) {
+            console.error('Error parseando JSON de la reunión:', parseErr);
+            showDownloadFallbackModal(meetingId, 'Respuesta inválida del servidor al preparar la descarga.');
+            return;
+        }
 
         if (!data.success) {
             throw new Error(data.message || 'Error al procesar el archivo de la reunión');
@@ -3838,14 +3894,51 @@ async function openDownloadModal(meetingId) {
             errorMessage = error.message;
         }
 
-        alert(errorMessage);
+    // Mostrar un modal de fallback con botones de descarga directa
+    showDownloadFallbackModal(meetingId, errorMessage);
     } finally {
         // Liberar el lock después de un delay
         setTimeout(() => {
             window.downloadModalProcessing = false;
         }, 1000);
     }
-}function showDownloadModalLoading(meetingId) {
+}
+
+// Modal simple de fallback con descargas directas cuando la preparación falla
+function showDownloadFallbackModal(meetingId, message) {
+    // Cerrar loading si existe
+    const loadingModal = document.getElementById('downloadLoadingModal');
+    if (loadingModal) {
+        loadingModal.remove();
+        document.body.style.overflow = '';
+    }
+
+    const html = `
+        <div class="fixed inset-0 z-[9999] overflow-hidden" id="downloadFallbackModal">
+            <div class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm"></div>
+            <div class="fixed inset-0 flex items-center justify-center">
+                <div class="relative bg-slate-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-slate-700 p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <h2 class="text-xl font-semibold text-white">Descarga directa</h2>
+                        <button class="text-slate-400 hover:text-white" onclick="(function(){document.getElementById('downloadFallbackModal')?.remove();document.body.style.overflow='';})();">✕</button>
+                    </div>
+                    <p class="text-slate-300 mb-4">${escapeHtml(message || 'No se pudo preparar la descarga.')}</p>
+                    <div class="space-y-3">
+                        <a href="/api/meetings/${meetingId}/download-ju" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar archivo .ju</a>
+                        <a href="/api/meetings/${meetingId}/download-audio" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar audio</a>
+                        <a href="/google/reauth" class="block w-full text-center px-4 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg">Revalidar sesión de Google Drive</a>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+    // Quitar cualquier modal previo de fallback para evitar duplicados
+    document.getElementById('downloadFallbackModal')?.remove();
+    document.body.insertAdjacentHTML('beforeend', html);
+    document.body.style.overflow = 'hidden';
+}
+
+function showDownloadModalLoading(meetingId) {
     // Crear y mostrar modal de loading centrado perfectamente
     const loadingModal = `
         <div class="fixed inset-0 z-[9999] overflow-hidden" id="downloadLoadingModal">

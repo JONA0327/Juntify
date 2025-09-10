@@ -667,11 +667,90 @@
 }
 
 .tab-content {
-    display: none;
+    display: none !important; /* hidden by default */
 }
 
+/* When active, make the tab fill the modal body */
 .tab-content.active {
-    display: block;
+    display: flex !important;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0; /* allow flex to use full width without overflow */
+    min-height: 0; /* allow child flex items to grow without forcing overflow */
+}
+
+/* Summary tab: stack sections vertically with the audio on top (only when active) */
+#tab-summary.tab-content.active {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+#tab-summary .modal-section {
+    width: 100%;
+}
+
+/* Make the audio bar bigger and more prominent only in the Summary tab */
+#tab-summary .audio-player {
+    padding: 1.75rem 2rem;
+}
+
+#tab-summary .audio-controls {
+    gap: 1.25rem;
+    min-height: 72px;
+    width: 100%; /* allow slider to stretch to the right edge */
+}
+
+#tab-summary #audio-progress {
+    height: 12px;
+    border-radius: 6px;
+    margin: 0; /* remove side margins so it reaches the end */
+    flex: 1 1 auto; /* ensure it takes all remaining space */
+}
+
+#tab-summary #audio-progress:hover {
+    height: 14px;
+}
+
+#tab-summary #audio-progress::-webkit-slider-runnable-track {
+    height: 12px;
+    border-radius: 6px;
+}
+
+#tab-summary #audio-progress::-moz-range-track {
+    height: 12px;
+    border-radius: 6px;
+}
+
+#tab-summary #audio-progress::-ms-track {
+    height: 12px;
+}
+
+#tab-summary #audio-progress::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+    margin-top: -4px; /* center thumb with taller track */
+}
+
+#tab-summary #audio-progress::-webkit-slider-thumb:hover {
+    width: 22px;
+    height: 22px;
+    margin-top: -5px;
+}
+
+#tab-summary #audio-progress::-moz-range-thumb,
+#tab-summary #audio-progress::-ms-thumb {
+    width: 20px;
+    height: 20px;
+}
+
+/* Ensure internal section stretches fully */
+.tab-content.active .modal-section {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
 }
 
 /* =========================================
@@ -739,9 +818,14 @@
     background: rgba(15, 23, 42, 0.5);
     border: 1px solid rgba(51, 65, 85, 0.3);
     border-radius: 0.75rem;
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
     color: var(--text-slate-200);
     line-height: 1.6;
+    width: 100%;
+    max-width: none; /* allow to grow with modal */
+    box-sizing: border-box;
+    flex: 1 1 auto; /* fill available height within section */
+    min-width: 0;
 }
 
 /* =========================================
@@ -1140,26 +1224,27 @@
    ESTILOS SIMPLIFICADOS Y DIRECTOS PARA TRANSCRIPCIÓN
    =============================================== */
 
-/* Resetear todos los estilos del contenedor de transcripción */
-.transcription-segmented,
-.section-content.transcription-segmented,
-div[class*="transcription"] {
-    all: unset !important;
-    display: block !important;
+/* Contenedor de transcripción dentro de la sección: ocupar todo el espacio disponible */
+.section-content.transcription-segmented {
     width: 100% !important;
-    max-height: 400px !important;
+    max-width: none !important;
+    height: auto;
+    max-height: none !important;
     overflow-y: auto !important;
-    padding: 0 !important;
+    padding: 0.25rem 0 !important;
     margin: 0 !important;
     background: transparent !important;
     border: none !important;
+    flex: 1 1 auto !important;
+    min-width: 0;
+    min-height: 0;
 }
 
 /* Contenedor de segmentos */
 .transcription-segments {
     display: flex !important;
     flex-direction: column !important;
-    gap: 1rem !important;
+    gap: 0.5rem !important; /* compact spacing between segments */
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
@@ -1417,6 +1502,9 @@ div[class*="transcription-segmented"] {
     padding: 0 !important;
     background: transparent !important;
     border: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
 }
 
 .modal-content .transcription-segments,
@@ -1424,9 +1512,10 @@ div[class*="transcription-segmented"] {
 div[class*="transcription-segments"] {
     display: flex !important;
     flex-direction: column !important;
-    gap: 1rem !important;
+    gap: 0.75rem !important;
     padding: 0 !important;
     margin: 0 !important;
+    width: 100% !important;
 }
 
 .modal-content .transcript-segment,
