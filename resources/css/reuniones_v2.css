@@ -699,6 +699,11 @@
         flex-direction: row;
         gap: 2rem;
     }
+
+    .modal-section {
+        flex: 1;
+        margin-bottom: 0;
+    }
 }
 
 .modal-section {
