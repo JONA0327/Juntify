@@ -87,7 +87,31 @@ class GoogleServiceAccount
         $this->drive->permissions->create(
             $folderId,
             $permission,
-            ['sendNotificationEmail' => false]
+            [
+                'sendNotificationEmail' => false,
+                'supportsAllDrives' => true,
+            ]
+        );
+    }
+
+    /**
+     * Shares any file/folder with a user (impersonation-friendly). Defaults to reader.
+     */
+    public function shareItem(string $itemId, string $email, string $role = 'reader'): void
+    {
+        $permission = new Permission([
+            'type'         => 'user',
+            'role'         => $role,
+            'emailAddress' => $email,
+        ]);
+
+        $this->drive->permissions->create(
+            $itemId,
+            $permission,
+            [
+                'sendNotificationEmail' => false,
+                'supportsAllDrives' => true,
+            ]
         );
     }
 
@@ -197,7 +221,7 @@ class GoogleServiceAccount
                 return $response->getBody()->getContents();
             }
 
-            return $response->getBody();
+            return (string) $response;
         } catch (\Exception $e) {
             Log::error('Error downloading file from Google Drive', [
                 'file_id' => $fileId,

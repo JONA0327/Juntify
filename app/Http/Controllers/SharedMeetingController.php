@@ -299,6 +299,16 @@ class SharedMeetingController extends Controller
                 if ($contactUser) {
                     $sharedWith[] = $contactUser->full_name ?? $contactUser->username ?? 'Usuario';
                 }
+
+                // Proactively grant Drive permissions to recipient (reader)
+                try {
+                    $this->grantDriveAccessForShare($sharedMeeting);
+                } catch (\Throwable $e) {
+                    Log::warning('shareMeeting: grantDriveAccess failed', [
+                        'shared_meeting_id' => $sharedMeeting->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
             }
 
             DB::commit();
@@ -380,6 +390,18 @@ class SharedMeetingController extends Controller
                 'id' => $sharedMeeting->id,
                 'status' => $status
             ]);
+
+            // If accepted, ensure Drive permissions are in place for the recipient
+            if ($status === 'accepted') {
+                try {
+                    $this->grantDriveAccessForShare($sharedMeeting);
+                } catch (\Throwable $e) {
+                    Log::warning('respondToInvitation: grantDriveAccess failed', [
+                        'shared_meeting_id' => $sharedMeeting->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
 
             // Obtener título de reunión (moderna o legacy)
             $meetingTitle = $sharedMeeting->meeting?->title;
@@ -571,6 +593,53 @@ class SharedMeetingController extends Controller
                 'success' => false,
                 'message' => 'Error al eliminar de compartidas'
             ], 500);
+        }
+    }
+
+    /**
+     * Grants Drive access to the recipient user for the shared meeting assets (.ju and audio).
+     * Uses Service Account impersonating the sharer if necessary.
+     */
+    private function grantDriveAccessForShare(SharedMeeting $sharedMeeting): void
+    {
+        try {
+            $recipient = User::find($sharedMeeting->shared_with);
+            $sharer = $sharedMeeting->sharedBy; // might be null in old data
+            if (!$recipient || !$recipient->email) {
+                return;
+            }
+
+            $recipientEmail = $recipient->email;
+
+            // Determine legacy vs modern
+            $legacy = TranscriptionLaravel::find($sharedMeeting->meeting_id);
+            $modern = $legacy ? null : Meeting::find($sharedMeeting->meeting_id);
+
+            /** @var GoogleServiceAccount $sa */
+            $sa = app(GoogleServiceAccount::class);
+            // Impersonate sharer when available to ensure permission on their files
+            if ($sharer && $sharer->email) {
+                try { $sa->impersonate($sharer->email); } catch (\Throwable $e) { /* continue without impersonation */ }
+            }
+
+            // Share .ju for legacy
+            if ($legacy) {
+                if (!empty($legacy->transcript_drive_id)) {
+                    try { $sa->shareItem($legacy->transcript_drive_id, $recipientEmail, 'reader'); } catch (\Throwable $e) { Log::warning('grantDriveAccess: share .ju failed', ['error'=>$e->getMessage()]); }
+                }
+                // Share audio: could be file or folder id
+                if (!empty($legacy->audio_drive_id)) {
+                    try { $sa->shareItem($legacy->audio_drive_id, $recipientEmail, 'reader'); } catch (\Throwable $e) { Log::warning('grantDriveAccess: share audio failed', ['error'=>$e->getMessage()]); }
+                }
+                return;
+            }
+
+            // Modern meeting: share recordings folder if present
+            if ($modern && !empty($modern->recordings_folder_id)) {
+                try { $sa->shareItem($modern->recordings_folder_id, $recipientEmail, 'reader'); } catch (\Throwable $e) { Log::warning('grantDriveAccess: share recordings folder failed', ['error'=>$e->getMessage()]); }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('grantDriveAccessForShare failed', [ 'error' => $e->getMessage() ]);
         }
     }
 

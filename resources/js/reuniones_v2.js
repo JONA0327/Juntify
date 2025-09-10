@@ -1742,6 +1742,11 @@ function createSharedMeetingCard(shared) {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
                         </svg>
                     </button>
+                    <button class="icon-btn delete-btn" onclick="openUnlinkSharedModal(${sharedId})" title="Quitar de compartidas">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>
@@ -1750,6 +1755,133 @@ function createSharedMeetingCard(shared) {
 
 // Exponer función de tarjeta compartida si es útil externamente
 window.createSharedMeetingCard = createSharedMeetingCard;
+
+// Modal para quitar reunión de compartidas
+function openUnlinkSharedModal(sharedId) {
+    const modalHTML = `
+        <div class="meeting-modal active" id="unlinkSharedModal">
+            <div class="modal-content delete-modal">
+                <div class="modal-header">
+                    <div class="modal-title-section">
+                        <h2 class="modal-title">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                            Quitar de Reuniones Compartidas
+                        </h2>
+                        <p class="modal-subtitle">Esta acción solo quitará la reunión de tu lista. No se borrará para el propietario.</p>
+                    </div>
+
+                    <button class="close-btn" onclick="closeUnlinkSharedModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="delete-confirmation-content">
+                        <div class="warning-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </div>
+                        <h3 class="delete-title">¿Quitar de tus compartidas?</h3>
+                        <p class="delete-message">
+                            Esta acción eliminará la referencia a la reunión en tu lista de "Reuniones compartidas". Los archivos en Drive y los datos del propietario no se verán afectados.
+                        </p>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="modal-btn secondary" onclick="closeUnlinkSharedModal()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Cancelar
+                        </button>
+                        <button id="confirm-unlink-btn" class="modal-btn danger" onclick="confirmUnlinkSharedMeeting(${sharedId})">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Quitar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    document.body.style.overflow = 'hidden';
+}
+
+function closeUnlinkSharedModal() {
+    const modal = document.getElementById('unlinkSharedModal');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+        setTimeout(() => {
+            if (modal && !modal.classList.contains('active')) {
+                modal.remove();
+            }
+        }, 300);
+    }
+}
+
+async function confirmUnlinkSharedMeeting(sharedId) {
+    const btn = document.getElementById('confirm-unlink-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-50');
+    }
+    try {
+        await unlinkSharedMeeting(sharedId);
+        closeUnlinkSharedModal();
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50');
+        }
+    }
+}
+
+// Eliminar una reunión del listado de compartidas (sin borrar la reunión del propietario)
+async function unlinkSharedMeeting(sharedId) {
+    try {
+        const res = await fetch(`/api/shared-meetings/${sharedId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!res.ok) {
+            let msg = 'No se pudo quitar de compartidas';
+            try {
+                const data = await res.json();
+                if (data?.message) msg = data.message;
+            } catch (_) {}
+            throw new Error(msg);
+        }
+
+        let data = null;
+        try { data = await res.json(); } catch (_) { data = { success: true }; }
+
+        if (data.success !== false) {
+            showNotification('Reunión eliminada de tus compartidas', 'success');
+            // Recargar lista de compartidas
+            await loadSharedMeetings();
+        } else {
+            throw new Error(data.message || 'No se pudo quitar de compartidas');
+        }
+    } catch (err) {
+        console.error('unlinkSharedMeeting error:', err);
+        showNotification(err.message || 'Error al quitar de compartidas', 'error');
+    }
+}
+
+// Exponer por si se requiere en ámbito global
+window.unlinkSharedMeeting = unlinkSharedMeeting;
 
 function createContainerMeetingCard(meeting) {
     return `

@@ -153,7 +153,31 @@ class GoogleDriveService
         $this->drive->permissions->create(
             $folderId,
             $permission,
-            ['sendNotificationEmail' => false]
+            [
+                'sendNotificationEmail' => false,
+                'supportsAllDrives' => true,
+            ]
+        );
+    }
+
+    /**
+     * Shares any Drive item (file or folder) with a user. Defaults to reader access.
+     */
+    public function shareItem(string $itemId, string $email, string $role = 'reader'): void
+    {
+        $permission = new Permission([
+            'type'         => 'user',
+            'role'         => $role,
+            'emailAddress' => $email,
+        ]);
+
+        $this->drive->permissions->create(
+            $itemId,
+            $permission,
+            [
+                'sendNotificationEmail' => false,
+                'supportsAllDrives' => true,
+            ]
         );
     }
     public function deleteFile(string $id): void

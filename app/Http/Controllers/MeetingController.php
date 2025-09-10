@@ -437,44 +437,50 @@ class MeetingController extends Controller
                         ->where('username', $ownerUsername)
                         ->get();
 
-                    // Determinar si ya tenemos un archivo de audio directo o una URL descargable
+                    // Determinar si ya tenemos un archivo de audio. Si el usuario no tiene token y es acceso compartido,
+                    // evitamos llamadas a Drive con token de usuario y usamos el endpoint de streaming (con fallback SA).
                     $audioPath = null;
                     $audioDriveId = null;
-                    $hasDirectUrl = !empty($legacyMeeting->audio_download_url);
-                    $isFileId = false;
-                    if (!empty($legacyMeeting->audio_drive_id)) {
-                        try {
-                            $info = $this->googleDriveService->getFileInfo($legacyMeeting->audio_drive_id);
-                            $isFileId = $info && $info->getMimeType() !== 'application/vnd.google-apps.folder';
-                        } catch (\Exception $e) {
-                            Log::warning('Error checking audio_drive_id', [
-                                'meeting_id' => $legacyMeeting->id,
-                                'audio_drive_id' => $legacyMeeting->audio_drive_id,
-                                'error' => $e->getMessage(),
-                            ]);
-                        }
-                    }
-
-                    if ($hasDirectUrl || $isFileId) {
-                        $tempMeeting = (object) [
-                            'id' => $legacyMeeting->id,
-                            'meeting_name' => $legacyMeeting->meeting_name,
-                            'audio_drive_id' => $legacyMeeting->audio_drive_id,
-                            'audio_download_url' => $legacyMeeting->audio_download_url,
-                        ];
+                    if ($useServiceAccount) {
                         $audioDriveId = $legacyMeeting->audio_drive_id;
-                        $audioPath = $this->getAudioPath($tempMeeting);
-                        if ($audioPath && !str_starts_with($audioPath, 'http')) {
-                            $audioPath = $this->publicUrlFromStoragePath($audioPath);
-                        }
+                        $audioPath = route('api.meetings.audio', ['meeting' => $legacyMeeting->id]);
                     } else {
-                        $audioData = $this->googleDriveService->findAudioInFolder(
-                            $legacyMeeting->audio_drive_id,
-                            $legacyMeeting->meeting_name,
-                            (string) $legacyMeeting->id
-                        );
-                        $audioPath = $audioData['downloadUrl'] ?? null;
-                        $audioDriveId = $audioData['fileId'] ?? null;
+                        $hasDirectUrl = !empty($legacyMeeting->audio_download_url);
+                        $isFileId = false;
+                        if (!empty($legacyMeeting->audio_drive_id)) {
+                            try {
+                                $info = $this->googleDriveService->getFileInfo($legacyMeeting->audio_drive_id);
+                                $isFileId = $info && $info->getMimeType() !== 'application/vnd.google-apps.folder';
+                            } catch (\Exception $e) {
+                                Log::warning('Error checking audio_drive_id', [
+                                    'meeting_id' => $legacyMeeting->id,
+                                    'audio_drive_id' => $legacyMeeting->audio_drive_id,
+                                    'error' => $e->getMessage(),
+                                ]);
+                            }
+                        }
+
+                        if ($hasDirectUrl || $isFileId) {
+                            $tempMeeting = (object) [
+                                'id' => $legacyMeeting->id,
+                                'meeting_name' => $legacyMeeting->meeting_name,
+                                'audio_drive_id' => $legacyMeeting->audio_drive_id,
+                                'audio_download_url' => $legacyMeeting->audio_download_url,
+                            ];
+                            $audioDriveId = $legacyMeeting->audio_drive_id;
+                            $audioPath = $this->getAudioPath($tempMeeting);
+                            if ($audioPath && !str_starts_with($audioPath, 'http')) {
+                                $audioPath = $this->publicUrlFromStoragePath($audioPath);
+                            }
+                        } else {
+                            $audioData = $this->googleDriveService->findAudioInFolder(
+                                $legacyMeeting->audio_drive_id,
+                                $legacyMeeting->meeting_name,
+                                (string) $legacyMeeting->id
+                            );
+                            $audioPath = $audioData['downloadUrl'] ?? null;
+                            $audioDriveId = $audioData['fileId'] ?? null;
+                        }
                     }
 
                     return response()->json([
@@ -616,29 +622,34 @@ class MeetingController extends Controller
             $meeting = $meetingQuery->firstOrFail();
             $ownerUsername = $share?->sharedBy?->username ?? $meeting->username ?? $user->username;
 
-            // Buscar audio dentro de la carpeta indicada por recordings_folder_id, priorizando coincidencia por ID de reunión
+            // Buscar audio (evitar llamadas con token de usuario si estamos usando SA)
             $audioPath = null;
             $audioDriveId = null;
-            if (!empty($meeting->recordings_folder_id)) {
-                $audioData = $this->googleDriveService->findAudioInFolder(
-                    $meeting->recordings_folder_id,
-                    $meeting->title,
-                    (string) $meeting->id
-                );
+            if ($useServiceAccount) {
+                // Evitar consultas a Drive con token de usuario; usar streaming con fallback SA
+                $audioPath = route('api.meetings.audio', ['meeting' => $meeting->id]);
+            } else {
+                if (!empty($meeting->recordings_folder_id)) {
+                    $audioData = $this->googleDriveService->findAudioInFolder(
+                        $meeting->recordings_folder_id,
+                        $meeting->title,
+                        (string) $meeting->id
+                    );
 
-                if ($audioData) {
-                    $tempMeeting = (object) [
-                        'id' => $meeting->id,
-                        'meeting_name' => $meeting->title,
-                        'audio_drive_id' => $audioData['fileId'] ?? null,
-                        // Pasar la URL directa si existe para evitar descargas innecesarias
-                        'audio_download_url' => $audioData['downloadUrl'] ?? null,
-                    ];
-                    $audioDriveId = $audioData['fileId'] ?? null;
-                    $audioPath = $this->getAudioPath($tempMeeting);
-                    // Si es una ruta local del storage público, convertirla a URL pública
-                    if ($audioPath && !str_starts_with($audioPath, 'http')) {
-                        $audioPath = $this->publicUrlFromStoragePath($audioPath);
+                    if ($audioData) {
+                        $tempMeeting = (object) [
+                            'id' => $meeting->id,
+                            'meeting_name' => $meeting->title,
+                            'audio_drive_id' => $audioData['fileId'] ?? null,
+                            // Pasar la URL directa si existe para evitar descargas innecesarias
+                            'audio_download_url' => $audioData['downloadUrl'] ?? null,
+                        ];
+                        $audioDriveId = $audioData['fileId'] ?? null;
+                        $audioPath = $this->getAudioPath($tempMeeting);
+                        // Si es una ruta local del storage público, convertirla a URL pública
+                        if ($audioPath && !str_starts_with($audioPath, 'http')) {
+                            $audioPath = $this->publicUrlFromStoragePath($audioPath);
+                        }
                     }
                 }
             }
@@ -646,13 +657,15 @@ class MeetingController extends Controller
             // Fallback: buscar por título en la carpeta y luego globalmente si no se encontró por ID
             if ($audioPath === null) {
                 $audioFile = null;
-                if (!empty($meeting->recordings_folder_id)) {
-                    $files = $this->googleDriveService->searchFiles($meeting->title, $meeting->recordings_folder_id);
-                    $audioFile = $files[0] ?? null;
-                }
-                if (!$audioFile) {
-                    $files = $this->googleDriveService->searchFiles($meeting->title, null);
-                    $audioFile = $files[0] ?? null;
+                if (!$useServiceAccount) {
+                    if (!empty($meeting->recordings_folder_id)) {
+                        $files = $this->googleDriveService->searchFiles($meeting->title, $meeting->recordings_folder_id);
+                        $audioFile = $files[0] ?? null;
+                    }
+                    if (!$audioFile) {
+                        $files = $this->googleDriveService->searchFiles($meeting->title, null);
+                        $audioFile = $files[0] ?? null;
+                    }
                 }
 
                 if ($audioFile) {
@@ -664,6 +677,9 @@ class MeetingController extends Controller
                     ];
                     $audioDriveId = $audioFile->getId();
                     // En lugar de exponer una ruta local/Drive directa, usar nuestro stream endpoint
+                    $audioPath = route('api.meetings.audio', ['meeting' => $meeting->id]);
+                } elseif ($useServiceAccount) {
+                    // Sin búsquedas de Drive: devolver streaming para que resuelva internamente con SA
                     $audioPath = route('api.meetings.audio', ['meeting' => $meeting->id]);
                 }
             }
@@ -1217,33 +1233,13 @@ class MeetingController extends Controller
         try {
             // Si ya tenemos una URL de descarga directa, verificar que sea válida
             if (!empty($meeting->audio_download_url)) {
+                // Normalizar y devolver directamente; dejar que el navegador siga redirecciones de Drive
                 $normalized = $this->normalizeDriveUrl($meeting->audio_download_url);
-
-                try {
-                    $response = Http::head($normalized);
-                    $contentType = $response->header('Content-Type');
-                    if ($response->ok() && $contentType && str_starts_with($contentType, 'audio')) {
-                        Log::info('Usando URL directa de descarga para audio', [
-                            'meeting_id' => $meeting->id,
-                            'url' => $normalized,
-                            'content_type' => $contentType,
-                        ]);
-                        return $normalized;
-                    }
-
-                    Log::warning('URL directa de audio no válida', [
-                        'meeting_id' => $meeting->id,
-                        'url' => $normalized,
-                        'status' => $response->status(),
-                        'content_type' => $contentType,
-                    ]);
-                } catch (\Exception $e) {
-                    Log::warning('Error verificando URL de audio', [
-                        'meeting_id' => $meeting->id,
-                        'url' => $normalized,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
+                Log::info('Usando URL directa de descarga para audio (sin verificación estricta)', [
+                    'meeting_id' => $meeting->id,
+                    'url' => $normalized,
+                ]);
+                return $normalized;
             }
 
             // Si no hay URL directa, descargar desde Drive
@@ -1465,32 +1461,54 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
-            $this->setGoogleDriveToken($user);
+            // Permitir a receptores de compartidos descargar por ID (sin requerir token del usuario)
+            $sharedAccess = SharedMeeting::where('meeting_id', $id)
+                ->where('shared_with', $user->id)
+                ->where('status', 'accepted')
+                ->exists();
 
             $meeting = TranscriptionLaravel::where('id', $id)
-                ->where('username', $user->username)
+                ->when(!$sharedAccess, function ($q) use ($user) {
+                    $q->where('username', $user->username);
+                })
                 ->firstOrFail();
 
             if (empty($meeting->transcript_drive_id)) {
                 return response()->json(['error' => 'No se encontró archivo .ju para esta reunión'], 404);
             }
 
-            // Descargar el contenido del archivo
-            $content = $this->googleDriveService->downloadFileContent($meeting->transcript_drive_id);
+            // 1) Preferir URL directa almacenada en DB
+            if (!empty($meeting->transcript_download_url)) {
+                $direct = $this->normalizeDriveUrl($meeting->transcript_download_url);
+                return redirect()->away($direct);
+            }
 
-            // Crear nombre de archivo
-            $filename = 'meeting_' . $meeting->id . '.ju';
-
-            return response($content)
-                ->header('Content-Type', 'application/octet-stream')
-                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+            // 2) Si el usuario tiene token de Google, intentamos descarga/redirect usando el servicio
+            try {
+                $this->setGoogleDriveToken($user);
+                // Intentar obtener un webContentLink directo
+                try {
+                    $direct = app(\App\Services\GoogleDriveService::class)->getWebContentLink($meeting->transcript_drive_id);
+                    if ($direct) {
+                        return redirect()->away($direct);
+                    }
+                } catch (\Throwable $e) {
+                    // Ignorar y hacer fallback a descarga vía servidor
+                }
+                $content = $this->googleDriveService->downloadFileContent($meeting->transcript_drive_id);
+                $filename = 'meeting_' . $meeting->id . '.ju';
+                return response($content)
+                    ->header('Content-Type', 'application/octet-stream')
+                    ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+            } catch (\Throwable $e) {
+                // 3) Fallback sin token: redirigir a URL estándar de Drive por ID
+                $direct = 'https://drive.google.com/uc?export=download&id=' . $meeting->transcript_drive_id;
+                return redirect()->away($direct);
+            }
 
         } catch (ModelNotFoundException $e) {
             return response()->json(['error' => 'Reunión no encontrada'], 404);
         } catch (\Exception $e) {
-            if ($e->getMessage() === 'No se encontró token de Google para el usuario') {
-                return response()->json(['error' => $e->getMessage()], 401);
-            }
             Log::error('Error downloading .ju file', [
                 'meeting_id' => $id,
                 'error' => $e->getMessage()
@@ -1506,21 +1524,41 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
-            $this->setGoogleDriveToken($user);
+            $sharedAccess = SharedMeeting::where('meeting_id', $id)
+                ->where('shared_with', $user->id)
+                ->where('status', 'accepted')
+                ->exists();
 
             $meeting = TranscriptionLaravel::where('id', $id)
-                ->where('username', $user->username)
+                ->when(!$sharedAccess, function ($q) use ($user) {
+                    $q->where('username', $user->username);
+                })
                 ->firstOrFail();
 
             $fileId = $meeting->audio_drive_id;
             if (empty($fileId)) {
                 // Intentar localizar por carpeta/título
-                $found = $this->googleDriveService->findAudioInFolder(
-                    $meeting->audio_drive_id,
-                    $meeting->meeting_name,
-                    (string) $meeting->id
-                );
-                $fileId = $found['fileId'] ?? null;
+                try {
+                    $this->setGoogleDriveToken($user);
+                    $found = $this->googleDriveService->findAudioInFolder(
+                        $meeting->audio_drive_id,
+                        $meeting->meeting_name,
+                        (string) $meeting->id
+                    );
+                    $fileId = $found['fileId'] ?? null;
+                } catch (\Throwable $e) {
+                    // si no hay token, dejamos fileId como null
+                }
+            }
+
+            // 1) Preferir URL directa almacenada en DB
+            if (!empty($meeting->audio_download_url)) {
+                $direct = $this->normalizeDriveUrl($meeting->audio_download_url);
+                return redirect()->away($direct);
+            }
+
+            if (empty($fileId) && !empty($meeting->audio_drive_id)) {
+                $fileId = $meeting->audio_drive_id;
             }
 
             if (empty($fileId)) {
@@ -1529,31 +1567,37 @@ class MeetingController extends Controller
 
             // Preferir redirigir a Google Drive para evitar tiempos de espera en el servidor
             try {
-                $direct = app(\App\Services\GoogleDriveService::class)->getWebContentLink($fileId);
-                if ($direct) {
-                    return redirect()->away($direct);
+                // Si el usuario tiene token, intentar webContentLink
+                $this->setGoogleDriveToken($user);
+                try {
+                    $direct = app(\App\Services\GoogleDriveService::class)->getWebContentLink($fileId);
+                    if ($direct) {
+                        return redirect()->away($direct);
+                    }
+                } catch (\Throwable $e) {
+                    // ignorar y continuar con fallback
                 }
             } catch (\Exception $e) {
-                Log::warning('No direct webContentLink, fallback to server download', [
-                    'meeting_id' => $id,
-                    'file_id' => $fileId,
-                    'error' => $e->getMessage(),
-                ]);
+                // Sin token: haremos fallback a uc?export con el fileId
             }
 
             // Fallback a descarga a través del servidor (menos ideal por tamaño)
-            $content = $this->googleDriveService->downloadFileContent($fileId);
-            $filename = 'meeting_' . $meeting->id . '_audio';
-            return response($content)
-                ->header('Content-Type', 'application/octet-stream')
-                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+            try {
+                $this->setGoogleDriveToken($user);
+                $content = $this->googleDriveService->downloadFileContent($fileId);
+                $filename = 'meeting_' . $meeting->id . '_audio';
+                return response($content)
+                    ->header('Content-Type', 'application/octet-stream')
+                    ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+            } catch (\Throwable $e) {
+                // Último fallback sin token: redirigir a uc?export por ID
+                $direct = 'https://drive.google.com/uc?export=download&id=' . $fileId;
+                return redirect()->away($direct);
+            }
 
         } catch (ModelNotFoundException $e) {
             return response()->json(['error' => 'Reunión no encontrada'], 404);
         } catch (\Exception $e) {
-            if ($e->getMessage() === 'No se encontró token de Google para el usuario') {
-                return response()->json(['error' => $e->getMessage()], 401);
-            }
             Log::error('Error downloading audio file', [
                 'meeting_id' => $id,
                 'error' => $e->getMessage()
