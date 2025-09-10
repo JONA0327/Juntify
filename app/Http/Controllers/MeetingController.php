@@ -1286,12 +1286,18 @@ class MeetingController extends Controller
             $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meeting->meeting_name);
             $audioFileName = $sanitizedName . '_' . $meeting->id . '.' . $extension;
 
-            return $this->storeTemporaryFile($audioContent, $audioFileName);
+            $storedPath = $this->storeTemporaryFile($audioContent, $audioFileName);
+            Log::info('Archivo de audio descargado y almacenado temporalmente', [
+                'meeting_id' => $meeting->id,
+                'path' => $storedPath,
+            ]);
+            return $storedPath;
 
         } catch (\Exception $e) {
             Log::error('Error obteniendo audio path', [
                 'meeting_id' => $meeting->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'exception' => $e,
             ]);
             return null;
         }
@@ -1743,17 +1749,36 @@ class MeetingController extends Controller
 
                 if (!empty($existingFiles)) {
                     $audioPath = $existingFiles[0];
+                    Log::info('Archivo de audio temporal reutilizado', [
+                        'meeting_id' => $meetingModel->id,
+                        'path' => $audioPath,
+                    ]);
                 } else {
                     $audioPath = $this->getAudioPath($meetingModel);
+                    Log::info('Resultado de getAudioPath para reunión legacy', [
+                        'meeting_id' => $meetingModel->id,
+                        'path' => $audioPath,
+                    ]);
                     if (!$audioPath) {
+                        Log::warning('getAudioPath no retornó ruta válida para reunión legacy', [
+                            'meeting_id' => $meetingModel->id,
+                        ]);
                         return response()->json(['error' => 'Audio no disponible'], 404);
                     }
                     if (str_starts_with($audioPath, 'http')) {
+                        Log::info('Redirigiendo a URL externa de audio', [
+                            'meeting_id' => $meetingModel->id,
+                            'url' => $audioPath,
+                        ]);
                         return redirect()->away($audioPath);
                     }
                 }
 
                 $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
+                Log::info('Transmitiendo archivo de audio legacy', [
+                    'meeting_id' => $meetingModel->id,
+                    'path' => $audioPath,
+                ]);
                 return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
                 // Flujo moderno (Meeting en BD)
@@ -1770,6 +1795,10 @@ class MeetingController extends Controller
 
                 if (!empty($existingFiles)) {
                     $audioPath = $existingFiles[0];
+                    Log::info('Archivo de audio temporal reutilizado (moderno)', [
+                        'meeting_id' => $modern->id,
+                        'path' => $audioPath,
+                    ]);
                     $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
                     return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
                 }
@@ -1795,6 +1824,9 @@ class MeetingController extends Controller
                 }
 
                 if (!$audioData) {
+                    Log::warning('No se encontró archivo de audio en Drive para reunión moderna', [
+                        'meeting_id' => $modern->id,
+                    ]);
                     return response()->json(['error' => 'Audio no disponible'], 404);
                 }
 
@@ -1805,17 +1837,36 @@ class MeetingController extends Controller
                     'audio_download_url' => $audioData['downloadUrl'] ?? null,
                 ];
                 $audioPath = $this->getAudioPath($tempMeeting);
+                Log::info('Resultado de getAudioPath para reunión moderna', [
+                    'meeting_id' => $modern->id,
+                    'path' => $audioPath,
+                ]);
                 if (!$audioPath) {
+                    Log::warning('getAudioPath no retornó ruta válida para reunión moderna', [
+                        'meeting_id' => $modern->id,
+                    ]);
                     return response()->json(['error' => 'Audio no disponible'], 404);
                 }
                 if (str_starts_with($audioPath, 'http')) {
+                    Log::info('Redirigiendo a URL externa de audio (moderno)', [
+                        'meeting_id' => $modern->id,
+                        'url' => $audioPath,
+                    ]);
                     return redirect()->away($audioPath);
                 }
                 $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
+                Log::info('Transmitiendo archivo de audio moderno', [
+                    'meeting_id' => $modern->id,
+                    'path' => $audioPath,
+                ]);
                 return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
             }
         } catch (\Exception $e) {
-            Log::error('Error streaming audio file', [ 'meeting_id' => $meeting, 'error' => $e->getMessage() ]);
+            Log::error('Error streaming audio file', [
+                'meeting_id' => $meeting,
+                'error' => $e->getMessage(),
+                'exception' => $e,
+            ]);
             return response()->json(['error' => 'Error al obtener audio'], 500);
         }
     }
