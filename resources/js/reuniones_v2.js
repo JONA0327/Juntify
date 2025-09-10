@@ -2554,13 +2554,34 @@ function showMeetingModal(meeting) {
         }
 
         // Agregar manejo de errores para carga de audio
-        let triedAudioFallback = false;
-        meetingAudioPlayer.addEventListener('error', (e) => {
+        let triedDirectLinkFallback = false;
+        let triedServerFallback = false;
+        meetingAudioPlayer.addEventListener('error', async (e) => {
             console.error('Error cargando audio:', e);
 
+            // Intentar obtener enlace directo desde Drive si no se ha intentado
+            if (!triedDirectLinkFallback && typeof tryResolveSharedDriveLinks === 'function' && meeting?.shared_meeting_id) {
+                triedDirectLinkFallback = true;
+                try {
+                    const links = await tryResolveSharedDriveLinks(meeting.shared_meeting_id);
+                    const directUrl = links?.audio_link;
+                    if (directUrl) {
+                        console.warn('Reintentando audio con enlace directo de Drive:', directUrl);
+                        meetingAudioPlayer.src = directUrl;
+                        if (fullAudioPlayer) fullAudioPlayer.src = directUrl;
+                        try {
+                            meetingAudioPlayer.load();
+                        } catch (_) {}
+                        return; // esperar siguiente evento (canplay o error)
+                    }
+                } catch (err) {
+                    console.warn('No se pudo resolver enlace directo de Drive:', err);
+                }
+            }
+
             // Intentar fallback a endpoint de streaming del backend si no lo hemos hecho aún
-            if (!triedAudioFallback && meeting?.id) {
-                triedAudioFallback = true;
+            if (!triedServerFallback && meeting?.id) {
+                triedServerFallback = true;
                 const fallbackUrl = `/api/meetings/${meeting.id}/audio`;
                 console.warn('Reintentando audio con fallback del servidor:', fallbackUrl);
                 meetingAudioPlayer.src = fallbackUrl;
