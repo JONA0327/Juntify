@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SharedMeeting;
 use App\Models\Meeting;
+use App\Models\TranscriptionLaravel;
 use App\Models\Contact;
 use App\Models\Notification;
 use App\Models\User;
@@ -108,15 +109,80 @@ class SharedMeetingController extends Controller
     public function shareMeeting(Request $request): JsonResponse
     {
         $request->validate([
-            'meeting_id' => 'required|exists:meetings,id',
+            'meeting_id' => 'required',
             'contact_ids' => 'required|array|min:1',
             'contact_ids.*' => 'exists:users,id',
-            'message' => 'nullable|string|max:500'
+            'message' => 'nullable|string|max:500',
+            'is_legacy' => 'sometimes|boolean',
         ]);
 
         try {
             DB::beginTransaction();
+            $isLegacy = (bool) $request->boolean('is_legacy');
 
+            if ($isLegacy) {
+                // Legacy flow: share TranscriptionLaravel meeting via meeting_shares table using usernames
+                $legacyMeeting = \App\Models\TranscriptionLaravel::findOrFail($request->meeting_id);
+                $currentUser = Auth::user();
+
+                $sharedWith = [];
+                $alreadyShared = [];
+
+                foreach ($request->contact_ids as $contactId) {
+                    $contactUser = User::findOrFail($contactId);
+
+                    // Check existing share
+                    $exists = \App\Models\MeetingShare::where('meeting_id', $legacyMeeting->id)
+                        ->where('from_username', $currentUser->username)
+                        ->where('to_username', $contactUser->username)
+                        ->exists();
+                    if ($exists) {
+                        $alreadyShared[] = $contactUser->full_name ?? $contactUser->username ?? 'Usuario';
+                        continue;
+                    }
+
+                    \App\Models\MeetingShare::create([
+                        'meeting_id' => $legacyMeeting->id,
+                        'from_username' => $currentUser->username,
+                        'to_username' => $contactUser->username,
+                    ]);
+
+                    // Notification (legacy compatible minimal fields)
+                    $senderName = $currentUser->full_name ?? $currentUser->username ?? 'Usuario';
+                    Notification::create([
+                        'emisor' => $contactUser->id,
+                        'remitente' => $currentUser->id,
+                        'type' => 'meeting_share',
+                        'title' => 'Nueva reunión compartida',
+                        'message' => $senderName . ' ha compartido la reunión "' . ($legacyMeeting->meeting_name ?? 'Reunión') . '" contigo.',
+                        'data' => json_encode([
+                            'meeting_id' => $legacyMeeting->id,
+                            'source' => 'transcriptions_laravel',
+                            'shared_by_name' => $senderName,
+                            'custom_message' => $request->message,
+                        ]),
+                        'read' => false,
+                        'status' => 'pending',
+                    ]);
+
+                    $sharedWith[] = $contactUser->full_name ?? $contactUser->username ?? 'Usuario';
+                }
+
+                DB::commit();
+
+                $response = [
+                    'success' => true,
+                    'message' => 'Reunión compartida exitosamente',
+                    'shared_with' => $sharedWith,
+                ];
+                if (!empty($alreadyShared)) {
+                    $response['already_shared'] = $alreadyShared;
+                    $response['message'] .= '. Algunos contactos ya tenían acceso a esta reunión.';
+                }
+                return response()->json($response);
+            }
+
+            // Modern flow: share Meeting model via shared_meetings table
             $meeting = Meeting::findOrFail($request->meeting_id);
             $sharedWith = [];
             $alreadyShared = [];
@@ -257,31 +323,59 @@ class SharedMeetingController extends Controller
     public function getSharedMeetings(): JsonResponse
     {
         try {
+            // Si la tabla/columna aún no existe en este entorno, devolver vacío en lugar de 500
+            if (!Schema::hasTable('shared_meetings') || !Schema::hasColumn('shared_meetings', 'shared_with')) {
+                return response()->json([
+                    'success' => true,
+                    'meetings' => [],
+                    'message' => 'Reuniones compartidas no disponibles aún en este entorno',
+                ]);
+            }
+
             $sharedMeetings = SharedMeeting::with(['meeting', 'sharedBy'])
                 ->where('shared_with', Auth::id())
                 ->where('status', 'accepted')
                 ->orderBy('shared_at', 'desc')
                 ->get()
                 ->map(function ($shared) {
+                    // Relación principal (meetings)
+                    $meeting = $shared->meeting;
+
+                    // Fallback para datos antiguos (transcriptions_laravel)
+                    $legacy = null;
+                    if (!$meeting) {
+                        $legacy = TranscriptionLaravel::find($shared->meeting_id);
+                    }
+
+                    // Datos del usuario que compartió, tolerante a nulos
+                    $sharedBy = $shared->sharedBy;
+                    $sharedByName = $sharedBy?->full_name
+                        ?? $sharedBy?->username
+                        ?? $sharedBy?->name
+                        ?? 'Usuario';
+
                     return [
                         'id' => $shared->id,
                         'meeting_id' => $shared->meeting_id,
-                        'title' => $shared->meeting->title,
-                        'date' => $shared->meeting->date,
-                        'duration' => $shared->meeting->duration,
-                        'summary' => $shared->meeting->summary,
+                        'title' => $meeting?->title ?? $legacy?->meeting_name ?? 'Reunión compartida',
+                        'date' => $meeting?->date ?? $legacy?->created_at,
+                        'duration' => $meeting?->duration ?? null,
+                        'summary' => $meeting?->summary ?? null,
                         'shared_by' => [
-                            'id' => $shared->sharedBy->id,
-                            'name' => $shared->sharedBy->name,
-                            'email' => $shared->sharedBy->email
+                            'id' => $sharedBy?->id,
+                            'name' => $sharedByName,
+                            'email' => $sharedBy?->email ?? ''
                         ],
                         'shared_at' => $shared->shared_at,
                         'message' => $shared->message,
-                        'recordings_folder_id' => $shared->meeting->recordings_folder_id
+                        'recordings_folder_id' => $meeting?->recordings_folder_id ?? $legacy?->audio_drive_id
                     ];
                 });
 
-            return response()->json($sharedMeetings);
+            return response()->json([
+                'success' => true,
+                'meetings' => $sharedMeetings,
+            ]);
         } catch (\Exception $e) {
             Log::error('Error getting shared meetings: ' . $e->getMessage());
             return response()->json(['error' => 'Error al cargar reuniones compartidas'], 500);

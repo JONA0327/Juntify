@@ -9,6 +9,8 @@ class SharedMeeting extends Model
 {
     use HasFactory;
 
+    protected $table = 'shared_meetings';
+
     protected $fillable = [
         'meeting_id',
         'shared_by',

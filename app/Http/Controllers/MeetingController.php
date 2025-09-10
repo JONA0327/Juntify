@@ -267,19 +267,69 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
+
+            // Intentar configurar Google Drive, pero no fallar si no está disponible
+            $hasGoogleToken = false;
+            try {
+                if ($user->googleToken) {
+                    $this->setGoogleDriveToken($user);
+                    $hasGoogleToken = true;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('getSharedMeetings (legacy): Could not set Google Drive token', [
+                    'user' => $user->username,
+                    'error' => $e->getMessage(),
+                ]);
+                $hasGoogleToken = false;
+            }
+
             $meetingIds = MeetingShare::where('to_username', $user->username)->pluck('meeting_id');
             $meetings = TranscriptionLaravel::whereIn('id', $meetingIds)
                 ->orderBy('created_at', 'desc')
                 ->get()
-                ->map(function ($meeting) {
+                ->map(function ($meeting) use ($hasGoogleToken) {
+                    $audioFolder = 'Sin especificar';
+                    $transcriptFolder = 'Sin especificar';
+
+                    if ($hasGoogleToken) {
+                        try {
+                            $audioFolder = $this->getFolderName($meeting->audio_drive_id);
+                        } catch (\Throwable $e) {
+                            $audioFolder = 'Error al cargar carpeta';
+                            Log::warning('getSharedMeetings (legacy): Error getting audio folder name', [
+                                'meeting_id' => $meeting->id,
+                                'audio_drive_id' => $meeting->audio_drive_id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+
+                        try {
+                            $transcriptFolder = $this->getFolderName($meeting->transcript_drive_id);
+                        } catch (\Throwable $e) {
+                            $transcriptFolder = 'Error al cargar carpeta';
+                            Log::warning('getSharedMeetings (legacy): Error getting transcript folder name', [
+                                'meeting_id' => $meeting->id,
+                                'transcript_drive_id' => $meeting->transcript_drive_id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    } else {
+                        if ($meeting->audio_drive_id) {
+                            $audioFolder = 'Google Drive no conectado';
+                        }
+                        if ($meeting->transcript_drive_id) {
+                            $transcriptFolder = 'Google Drive no conectado';
+                        }
+                    }
+
                     return [
                         'id' => $meeting->id,
                         'meeting_name' => $meeting->meeting_name,
                         'created_at' => $meeting->created_at->format('d/m/Y H:i'),
                         'audio_drive_id' => $meeting->audio_drive_id,
                         'transcript_drive_id' => $meeting->transcript_drive_id,
-                        'audio_folder' => $this->getFolderName($meeting->audio_drive_id),
-                        'transcript_folder' => $this->getFolderName($meeting->transcript_drive_id),
+                        'audio_folder' => $audioFolder,
+                        'transcript_folder' => $transcriptFolder,
                     ];
                 });
 
@@ -287,7 +337,7 @@ class MeetingController extends Controller
                 'success' => true,
                 'meetings' => $meetings
             ]);
-        } catch (\Exception $e) {
+    } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error al cargar reuniones compartidas: ' . $e->getMessage()

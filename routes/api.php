@@ -199,7 +199,8 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
           Route::get('/shared-meetings/contacts', [SharedMeetingController::class, 'getContactsForSharing'])->name('api.shared-meetings.contacts');
           Route::post('/shared-meetings/share', [SharedMeetingController::class, 'shareMeeting'])->name('api.shared-meetings.share');
           Route::post('/shared-meetings/respond', [SharedMeetingController::class, 'respondToInvitation'])->name('api.shared-meetings.respond');
-          Route::get('/shared-meetings', [SharedMeetingController::class, 'getSharedMeetings'])->name('api.shared-meetings.index');
+          // Versioned endpoint to avoid clashing with legacy shared meetings list
+          Route::get('/shared-meetings/v2', [SharedMeetingController::class, 'getSharedMeetings'])->name('api.shared-meetings.v2');
           Route::get('/shared-meetings/by-user', [SharedMeetingController::class, 'getMeetingsSharedByUser'])->name('api.shared-meetings.by-user');
 
           // API para notificaciones

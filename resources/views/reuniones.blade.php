@@ -152,6 +152,8 @@
         </main>
     </div>
 
+    {{-- Modal para compartir reunión (included once at the end as a Blade component) --}}
+
     <!-- Modal para cambiar hablante -->
     <div class="modal" id="change-speaker-modal">
         <div class="modal-content">
@@ -412,7 +414,7 @@
     </script>
 
     <!-- Modal para compartir reunión -->
-    <x-share-modal />
+
 
 </body>
 </html>

@@ -39,22 +39,22 @@
                 </svg>
             </div>
             <div class="meeting-actions">
-                <button class="icon-btn container-btn" onclick="openContainerSelectModal(<?php echo e($id); ?>)" aria-label="Añadir a contenedor" title="Añadir a contenedor">
+                <button type="button" class="icon-btn container-btn" onclick="openContainerSelectModal(<?php echo e($id); ?>)" aria-label="Añadir a contenedor" title="Añadir a contenedor">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12z" />
                     </svg>
                 </button>
-                <button class="share-btn icon-btn" onclick="openShareModal(<?php echo e($id); ?>)" aria-label="Compartir reunión" title="Compartir reunión">
+                <button type="button" class="share-btn icon-btn" onclick="(function(btn){ if(!document.getElementById('shareModal')) return; var isLegacy = btn.getAttribute('data-is-legacy') === 'true'; openShareModal(<?php echo e($id); ?>, isLegacy); })(this)" aria-label="Compartir reunión" title="Compartir reunión" data-is-legacy="true">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
                     </svg>
                 </button>
-                <button class="icon-btn edit-btn" onclick="editMeetingName(<?php echo e($id); ?>)" aria-label="Editar reunión" title="Editar nombre de reunión">
+                <button type="button" class="icon-btn edit-btn" onclick="editMeetingName(<?php echo e($id); ?>)" aria-label="Editar reunión" title="Editar nombre de reunión">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                 </button>
-                <button class="icon-btn delete-btn" onclick="deleteMeeting(<?php echo e($id); ?>)" aria-label="Eliminar reunión" title="Eliminar reunión">
+                <button type="button" class="icon-btn delete-btn" onclick="deleteMeeting(<?php echo e($id); ?>)" aria-label="Eliminar reunión" title="Eliminar reunión">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -92,7 +92,7 @@
     </div>
 
     <div class="meeting-card-footer">
-        <button class="download-btn icon-btn" aria-label="Descargar reunión" title="Descargar reunión">
+    <button type="button" class="download-btn icon-btn" aria-label="Descargar reunión" title="Descargar reunión">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
             </svg>

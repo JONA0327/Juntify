@@ -37,7 +37,13 @@ function setupEventListeners() {
     // Listener para cerrar modal con ESC
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
-            closeMeetingModal();
+            // Cerrar el modal de compartir si está abierto; de lo contrario, el modal principal
+            const shareModalEl = document.getElementById('shareModal');
+            if (shareModalEl && !shareModalEl.classList.contains('hidden')) {
+                closeShareModal();
+            } else {
+                closeMeetingModal();
+            }
         }
     });
 
@@ -1639,7 +1645,7 @@ function createMeetingCard(meeting) {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12z" />
                         </svg>
                     </button>
-                    <button class="share-btn icon-btn" onclick="document.getElementById('shareModal') && openShareModal(${meeting.id})" aria-label="Compartir reunión" title="Compartir reunión">
+                    <button class="share-btn icon-btn" onclick="document.getElementById('shareModal') && openShareModal(${meeting.id}, ${meeting.is_legacy ? 'true' : 'false'})" aria-label="Compartir reunión" title="Compartir reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
                         </svg>
@@ -4804,12 +4810,14 @@ window.toggleContact = toggleContact;
 // ===============================================
 
 let currentShareMeetingId = null;
+let currentShareIsLegacy = false;
 let selectedContacts = new Set();
 let allContacts = [];
 
 // Abrir modal de compartir
-function openShareModal(meetingId) {
+function openShareModal(meetingId, isLegacy = false) {
     currentShareMeetingId = meetingId;
+    currentShareIsLegacy = !!isLegacy;
     selectedContacts.clear();
 
     const modal = document.getElementById('shareModal');
@@ -4821,9 +4829,9 @@ function openShareModal(meetingId) {
     modal.classList.remove('hidden');
 
     // Resetear estado
-    const searchInput = document.getElementById('contactSearch');
+    const searchInput = document.getElementById('shareModal-contactSearch');
     if (searchInput) searchInput.value = '';
-    const messageInput = document.getElementById('shareMessage');
+    const messageInput = document.getElementById('shareModal-shareMessage');
     if (messageInput) messageInput.value = '';
     if (selectedContactsContainer) selectedContactsContainer.classList.add('hidden');
     if (confirmBtn) confirmBtn.disabled = true;
@@ -4842,24 +4850,34 @@ function closeShareModal() {
 
     modal.classList.add('hidden');
     currentShareMeetingId = null;
+    currentShareIsLegacy = false;
     selectedContacts.clear();
     allContacts = [];
 }
 
 // Cargar contactos disponibles para compartir
 async function loadContactsForSharing() {
-    const contactsList = document.getElementById('contactsList');
+    const contactsList = document.getElementById('shareModal-contactsList');
 
     try {
         const response = await fetch('/api/shared-meetings/contacts', {
             method: 'GET',
+            credentials: 'include', // ensure session cookies are sent
             headers: {
+                'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            }
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')) || ''
+            },
+            cache: 'no-store'
         });
 
-        const data = await response.json();
+        // If not OK, try to parse JSON error, else show fallback
+        let data = { success: false };
+        try {
+            data = await response.json();
+        } catch (_) {
+            // non-JSON response (e.g., HTML from a redirect)
+        }
 
         if (data.success) {
             allContacts = data.contacts;
@@ -4881,7 +4899,7 @@ async function loadContactsForSharing() {
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Error al cargar contactos
+                Error al cargar contactos. Intenta recargar la página o vuelve a iniciar sesión.
             </div>
         `;
     }
@@ -4889,7 +4907,7 @@ async function loadContactsForSharing() {
 
 // Renderizar lista de contactos
 function renderContactsList(contacts) {
-    const contactsList = document.getElementById('contactsList');
+    const contactsList = document.getElementById('shareModal-contactsList');
 
     if (contacts.length === 0) {
         contactsList.innerHTML = `
@@ -4916,7 +4934,7 @@ function renderContactsList(contacts) {
                     </div>
                 </div>
                 <div class="contact-checkbox">
-                    <input type="checkbox" id="contact-${contact.id}" class="w-4 h-4 text-yellow-400 bg-slate-700 border-slate-600 rounded focus:ring-yellow-400 focus:ring-2">
+                    <input type="checkbox" id="shareModal-contact-${contact.id}" class="w-4 h-4 text-yellow-400 bg-slate-700 border-slate-600 rounded focus:ring-yellow-400 focus:ring-2">
                 </div>
             </div>
         </div>
@@ -4925,7 +4943,7 @@ function renderContactsList(contacts) {
 
 // Toggle selección de contacto
 function toggleContact(contactId) {
-    const checkbox = document.getElementById(`contact-${contactId}`);
+    const checkbox = document.getElementById(`shareModal-contact-${contactId}`);
     const contact = allContacts.find(c => c.id === contactId);
 
     if (!contact) return;
@@ -4978,7 +4996,7 @@ function updateConfirmButton() {
 
 // Setup búsqueda de contactos
 function setupContactSearch() {
-    const searchInput = document.getElementById('contactSearch');
+    const searchInput = document.getElementById('shareModal-contactSearch');
 
     searchInput.addEventListener('input', function(e) {
         const searchTerm = e.target.value.toLowerCase();
@@ -4995,7 +5013,7 @@ function setupContactSearch() {
 
         // Mantener las selecciones después del filtrado
         selectedContacts.forEach(contactId => {
-            const checkbox = document.getElementById(`contact-${contactId}`);
+            const checkbox = document.getElementById(`shareModal-contact-${contactId}`);
             if (checkbox) {
                 checkbox.checked = true;
             }
@@ -5008,7 +5026,7 @@ async function confirmShare() {
     if (selectedContacts.size === 0 || !currentShareMeetingId) return;
 
     const confirmBtn = document.getElementById('confirmShare');
-    const message = document.getElementById('shareMessage').value;
+    const message = document.getElementById('shareModal-shareMessage').value;
 
     // Deshabilitar botón y mostrar loading
     confirmBtn.disabled = true;
@@ -5023,24 +5041,32 @@ async function confirmShare() {
     try {
         const response = await fetch('/api/shared-meetings/share', {
             method: 'POST',
+            credentials: 'include',
             headers: {
+                'Accept': 'application/json',
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
             },
             body: JSON.stringify({
                 meeting_id: currentShareMeetingId,
                 contact_ids: Array.from(selectedContacts),
-                message: message
+                message: message,
+                is_legacy: currentShareIsLegacy
             })
         });
 
-        const data = await response.json();
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (_) {
+            // non-JSON response
+        }
 
-        if (data.success) {
+        if (response.ok && data.success) {
             showNotification('Reunión compartida exitosamente', 'success');
             closeShareModal();
         } else {
-            showNotification(data.message || 'Error al compartir reunión', 'error');
+            showNotification((data && data.message) || 'Error al compartir reunión', 'error');
         }
     } catch (error) {
         console.error('Error sharing meeting:', error);
