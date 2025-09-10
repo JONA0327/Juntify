@@ -112,14 +112,16 @@ const Notifications = (() => {
         });
         document.querySelectorAll('.accept-share-btn').forEach(btn => {
             btn.addEventListener('click', e => {
-                const id = e.target.dataset.sharedMeetingId;
-                respondToMeetingShareInvitation(id, 'accept');
+                const sharedMeetingId = e.target.dataset.sharedMeetingId;
+                const notificationId = e.target.dataset.id;
+                respondToMeetingShareInvitation(sharedMeetingId, 'accept', notificationId);
             });
         });
         document.querySelectorAll('.reject-share-btn').forEach(btn => {
             btn.addEventListener('click', e => {
-                const id = e.target.dataset.sharedMeetingId;
-                respondToMeetingShareInvitation(id, 'reject');
+                const sharedMeetingId = e.target.dataset.sharedMeetingId;
+                const notificationId = e.target.dataset.id;
+                respondToMeetingShareInvitation(sharedMeetingId, 'reject', notificationId);
             });
         });
         document.querySelectorAll('.dismiss-btn').forEach(btn => {
@@ -163,7 +165,7 @@ const Notifications = (() => {
         }
     }
 
-    async function respondToMeetingShareInvitation(sharedMeetingId, action) {
+    async function respondToMeetingShareInvitation(sharedMeetingId, action, notificationId) {
         try {
             const response = await fetch('/api/shared-meetings/respond', {
                 method: 'POST',
@@ -173,7 +175,8 @@ const Notifications = (() => {
                 },
                 body: JSON.stringify({
                     shared_meeting_id: sharedMeetingId,
-                    action: action
+                    action: action,
+                    notification_id: notificationId || null
                 })
             });
 
@@ -197,7 +200,11 @@ const Notifications = (() => {
             const data = await response.json();
             if (data.success) {
                 // Remover notificación de la lista
-                notifications = notifications.filter(n => n.data?.shared_meeting_id != sharedMeetingId);
+                if (notificationId) {
+                    notifications = notifications.filter(n => n.id != notificationId);
+                } else {
+                    notifications = notifications.filter(n => n.data?.shared_meeting_id != sharedMeetingId);
+                }
                 render();
 
                 // Mostrar mensaje de éxito

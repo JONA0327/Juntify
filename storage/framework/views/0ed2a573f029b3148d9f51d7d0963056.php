@@ -14,46 +14,54 @@
             </button>
         </div>
         <div class="modal-body">
-            <p class="modal-description">
-                Selecciona los contactos con los que deseas compartir esta reunión.
-            </p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Columna izquierda: descripción -->
+                <div class="md:col-span-1">
+                    <p class="text-slate-300 leading-relaxed">
+                        Selecciona los contactos con los que deseas compartir esta reunión.
+                    </p>
+                </div>
 
-            <!-- Barra de búsqueda de contactos -->
-            <div class="form-group">
-                <label class="form-label" for="shareModal-contactSearch">Buscar contactos</label>
-                <div class="relative">
-                    <input type="text" id="shareModal-contactSearch" class="modal-input pl-10" placeholder="Buscar por nombre o email..." autocomplete="off">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
+                <!-- Columna derecha: búsqueda, lista, seleccionados y mensaje -->
+                <div class="md:col-span-2 space-y-4">
+                    <!-- Buscar contactos -->
+                    <div class="space-y-2">
+                        <label class="form-label" for="shareModal-contactSearch">Buscar contactos</label>
+                        <div class="contact-search">
+                            <span class="search-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </span>
+                            <input type="text" id="shareModal-contactSearch" class="modal-input pl-10" placeholder="Buscar por nombre o email..." autocomplete="off">
+                        </div>
+                    </div>
+
+                    <!-- Lista de contactos -->
+                    <div class="space-y-2">
+                        <span class="form-label" id="shareModal-contactsList-label">Contactos disponibles</span>
+                        <div id="shareModal-contactsList" class="h-64 overflow-y-auto border border-slate-600 rounded-lg bg-slate-800" role="listbox" aria-labelledby="shareModal-contactsList-label">
+                            <div class="p-4 text-center text-slate-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 002-2v-2a2 2 0 012-2h2m8 0h2a2 2 0 012 2v2a2 2 0 01-2 2h-2m-8 0H6a2 2 0 01-2-2v-2a2 2 0 012-2h2m0 0V6a2 2 0 012-2h2a2 2 0 012 2v2" />
+                                </svg>
+                                Cargando contactos...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contactos seleccionados -->
+                    <div id="selectedContactsContainer" class="hidden">
+                        <span class="form-label" id="selectedContactsLabel">Contactos seleccionados</span>
+                        <div id="selectedContacts" class="flex flex-wrap gap-2" role="list" aria-labelledby="selectedContactsLabel"></div>
+                    </div>
+
+                    <!-- Mensaje opcional -->
+                    <div>
+                        <label class="form-label" for="shareModal-shareMessage">Mensaje (opcional)</label>
+                        <textarea id="shareModal-shareMessage" class="modal-input" rows="3" placeholder="Añade un mensaje para acompañar la invitación..." autocomplete="off"></textarea>
                     </div>
                 </div>
-            </div>
-
-            <!-- Lista de contactos -->
-            <div class="form-group">
-                <span class="form-label" id="shareModal-contactsList-label">Contactos disponibles</span>
-                <div id="shareModal-contactsList" class="max-h-64 overflow-y-auto border border-slate-600 rounded-lg bg-slate-800" role="listbox" aria-labelledby="shareModal-contactsList-label">
-                    <div class="p-4 text-center text-slate-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 002-2v-2a2 2 0 012-2h2m8 0h2a2 2 0 012 2v2a2 2 0 01-2 2h-2m-8 0H6a2 2 0 01-2-2v-2a2 2 0 012-2h2m0 0V6a2 2 0 012-2h2a2 2 0 012 2v2" />
-                        </svg>
-                        Cargando contactos...
-                    </div>
-                </div>
-            </div>
-
-            <!-- Contactos seleccionados -->
-            <div id="selectedContactsContainer" class="form-group hidden">
-                <span class="form-label" id="selectedContactsLabel">Contactos seleccionados</span>
-                <div id="selectedContacts" class="flex flex-wrap gap-2" role="list" aria-labelledby="selectedContactsLabel"></div>
-            </div>
-
-            <!-- Mensaje opcional -->
-            <div class="form-group">
-                <label class="form-label" for="shareModal-shareMessage">Mensaje (opcional)</label>
-                <textarea id="shareModal-shareMessage" class="modal-input" rows="3" placeholder="Añade un mensaje para acompañar la invitación..." autocomplete="off"></textarea>
             </div>
         </div>
         <div class="modal-footer">

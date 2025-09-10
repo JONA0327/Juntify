@@ -12,6 +12,7 @@ use App\Models\MeetingContentRelation;
 use App\Models\Container;
 use App\Models\TaskLaravel;
 use App\Models\Meeting;
+use App\Models\SharedMeeting;
 use App\Models\KeyPoint;
 use App\Models\Transcription;
 use App\Models\Task;
@@ -367,13 +368,36 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
+            $sharedAccess = SharedMeeting::where('meeting_id', $id)
+                ->where('shared_with', $user->id)
+                ->where('status', 'accepted')
+                ->exists();
+            $useServiceAccount = false;
+            $sharerEmail = null;
+            if ($sharedAccess) {
+                $share = SharedMeeting::with('sharedBy')
+                    ->where('meeting_id', $id)
+                    ->where('shared_with', $user->id)
+                    ->first();
+                $sharerEmail = $share?->sharedBy?->email;
+            }
 
             // Intentar buscar una reunión legacy primero
             $legacyMeeting = TranscriptionLaravel::where('id', $id)
-                ->where('username', $user->username)
+                ->when(!$sharedAccess, function ($q) use ($user) {
+                    $q->where('username', $user->username);
+                })
                 ->first();
 
-            $this->setGoogleDriveToken($user);
+            try {
+                $this->setGoogleDriveToken($user);
+            } catch (\Throwable $e) {
+                if ($sharedAccess) {
+                    $useServiceAccount = true;
+                } else {
+                    throw $e;
+                }
+            }
 
             if ($legacyMeeting) {
                 if (empty($legacyMeeting->transcript_drive_id)) {
@@ -475,7 +499,14 @@ class MeetingController extends Controller
                     ]);
                 }
 
-                $transcriptContent = $this->downloadFromDrive($legacyMeeting->transcript_drive_id);
+                if ($useServiceAccount) {
+                    /** @var \App\Services\GoogleServiceAccount $sa */
+                    $sa = app(\App\Services\GoogleServiceAccount::class);
+                    if ($sharerEmail) { $sa->impersonate($sharerEmail); }
+                    $transcriptContent = $sa->downloadFile($legacyMeeting->transcript_drive_id);
+                } else {
+                    $transcriptContent = $this->downloadFromDrive($legacyMeeting->transcript_drive_id);
+                }
                 $transcriptResult = $this->decryptJuFile($transcriptContent);
                 $transcriptData = $transcriptResult['data'];
                 $needsEncryption = $transcriptResult['needs_encryption'];
@@ -489,8 +520,13 @@ class MeetingController extends Controller
                 $isFileId = false;
                 if (!empty($legacyMeeting->audio_drive_id)) {
                     try {
-                        $info = $this->googleDriveService->getFileInfo($legacyMeeting->audio_drive_id);
-                        $isFileId = $info && $info->getMimeType() !== 'application/vnd.google-apps.folder';
+                        if ($useServiceAccount) {
+                            // Con service account no pedimos MIME aquí; asumimos que es archivo si no parece carpeta
+                            $isFileId = true;
+                        } else {
+                            $info = $this->googleDriveService->getFileInfo($legacyMeeting->audio_drive_id);
+                            $isFileId = $info && $info->getMimeType() !== 'application/vnd.google-apps.folder';
+                        }
                     } catch (\Exception $e) {
                         Log::warning('Error checking audio_drive_id', [
                             'meeting_id' => $legacyMeeting->id,
@@ -555,20 +591,28 @@ class MeetingController extends Controller
             }
 
             // Reunión moderna en base de datos
-            $meeting = Meeting::with([
-                'keyPoints' => function ($q) use ($user) {
-                    $q->whereHas('meeting', function ($mq) use ($user) {
-                        $mq->where('username', $user->username);
-                    })->ordered();
+            $meetingQuery = Meeting::with([
+                'keyPoints' => function ($q) use ($user, $sharedAccess) {
+                    if (!$sharedAccess) {
+                        $q->whereHas('meeting', function ($mq) use ($user) {
+                            $mq->where('username', $user->username);
+                        });
+                    }
+                    $q->ordered();
                 },
-                'transcriptions' => function ($q) use ($user) {
-                    $q->whereHas('meeting', function ($mq) use ($user) {
-                        $mq->where('username', $user->username);
-                    })->byTime();
+                'transcriptions' => function ($q) use ($user, $sharedAccess) {
+                    if (!$sharedAccess) {
+                        $q->whereHas('meeting', function ($mq) use ($user) {
+                            $mq->where('username', $user->username);
+                        });
+                    }
+                    $q->byTime();
                 },
-            ])->where('id', $id)
-              ->where('username', $user->username)
-              ->firstOrFail();
+            ])->where('id', $id);
+            if (!$sharedAccess) {
+                $meetingQuery->where('username', $user->username);
+            }
+            $meeting = $meetingQuery->firstOrFail();
 
             // Buscar audio dentro de la carpeta indicada por recordings_folder_id, priorizando coincidencia por ID de reunión
             $audioPath = null;
@@ -678,8 +722,14 @@ class MeetingController extends Controller
             ]);
 
             $user = Auth::user();
+            $sharedAccess = SharedMeeting::where('meeting_id', $id)
+                ->where('shared_with', $user->id)
+                ->where('status', 'accepted')
+                ->exists();
             $meeting = TranscriptionLaravel::where('id', $id)
-                ->where('username', $user->username)
+                ->when(!$sharedAccess, function ($q) use ($user) {
+                    $q->where('username', $user->username);
+                })
                 ->firstOrFail();
 
             $newName = $request->name;
@@ -784,8 +834,14 @@ class MeetingController extends Controller
             ]);
 
             $user = Auth::user();
+            $sharedAccess = SharedMeeting::where('meeting_id', $id)
+                ->where('shared_with', $user->id)
+                ->where('status', 'accepted')
+                ->exists();
             $meeting = TranscriptionLaravel::where('id', $id)
-                ->where('username', $user->username)
+                ->when(!$sharedAccess, function ($q) use ($user) {
+                    $q->where('username', $user->username);
+                })
                 ->firstOrFail();
 
             $driveId = $request->input('newDriveId') ?? $meeting->transcript_drive_id;
@@ -1590,11 +1646,17 @@ class MeetingController extends Controller
         try {
             $user = Auth::user();
             $this->setGoogleDriveToken($user);
+            $sharedAccess = SharedMeeting::where('meeting_id', $meeting)
+                ->where('shared_with', $user->id)
+                ->where('status', 'accepted')
+                ->exists();
 
             // Intentar flujo legacy primero
             try {
                 $meetingModel = TranscriptionLaravel::where('id', $meeting)
-                    ->where('username', $user->username)
+                    ->when(!$sharedAccess, function ($q) use ($user) {
+                        $q->where('username', $user->username);
+                    })
                     ->firstOrFail();
 
                 $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meetingModel->meeting_name);
@@ -1618,7 +1680,9 @@ class MeetingController extends Controller
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
                 // Flujo moderno (Meeting en BD)
                 $modern = Meeting::where('id', $meeting)
-                    ->where('username', $user->username)
+                    ->when(!$sharedAccess, function ($q) use ($user) {
+                        $q->where('username', $user->username);
+                    })
                     ->firstOrFail();
 
                 // Reutilizar si ya existe archivo temporal
@@ -2288,10 +2352,16 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
+            $sharedAccess = SharedMeeting::where('meeting_id', $id)
+                ->where('shared_with', $user->id)
+                ->where('status', 'accepted')
+                ->exists();
 
             // Validar que la reunión pertenece al usuario
             $meeting = TranscriptionLaravel::where('id', $id)
-                ->where('username', $user->username)
+                ->when(!$sharedAccess, function ($q) use ($user) {
+                    $q->where('username', $user->username);
+                })
                 ->firstOrFail();
 
             // Validar request
@@ -2401,10 +2471,16 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
+            $sharedAccess = SharedMeeting::where('meeting_id', $id)
+                ->where('shared_with', $user->id)
+                ->where('status', 'accepted')
+                ->exists();
 
             // Intentar buscar primero en transcriptions_laravel
             $meeting = TranscriptionLaravel::where('id', $id)
-                ->where('username', $user->username)
+                ->when(!$sharedAccess, function ($q) use ($user) {
+                    $q->where('username', $user->username);
+                })
                 ->first();
 
             $isLegacy = true;
@@ -2412,7 +2488,9 @@ class MeetingController extends Controller
             // Si no existe, buscar en meetings (reuniones modernas)
             if (!$meeting) {
                 $meeting = Meeting::where('id', $id)
-                    ->where('username', $user->username)
+                    ->when(!$sharedAccess, function ($q) use ($user) {
+                        $q->where('username', $user->username);
+                    })
                     ->firstOrFail();
                 $isLegacy = false;
             }

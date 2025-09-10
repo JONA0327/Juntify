@@ -208,7 +208,8 @@ async function loadSharedMeetings() {
         const data = await response.json();
 
         if (data.success) {
-            renderMeetings(data.meetings, '#shared-meetings', 'No hay reuniones compartidas');
+            // Usar un cardCreator específico para reuniones compartidas
+            renderMeetings(data.meetings, '#shared-meetings', 'No hay reuniones compartidas', createSharedMeetingCard);
         } else {
             showErrorState(container, data.message || 'Error al cargar reuniones compartidas', loadSharedMeetings);
         }
@@ -787,10 +788,29 @@ async function startChat(contactId) {
         console.error('Error starting chat:', error);
         showNotification('Error al iniciar el chat', 'error');
     }
-}function showNotification(message, type = 'info') {
+}
+function showNotification(message, type = 'info') {
+    // Ensure container below navbar, centered
+    let container = document.getElementById('global-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'global-toast-container';
+        container.style.position = 'fixed';
+        container.style.top = '72px'; // slightly below navbar
+        container.style.left = '50%';
+        container.style.transform = 'translateX(-50%)';
+        container.style.width = 'min(420px, calc(100% - 2rem))';
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.gap = '10px';
+        container.style.zIndex = '9999';
+        container.style.pointerEvents = 'none';
+        document.body.appendChild(container);
+    }
+
     // Crear elemento de notificación
     const notification = document.createElement('div');
-    notification.className = `fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg max-w-sm w-full transform transition-all duration-300 translate-x-full`;
+    notification.className = `p-4 rounded-lg shadow-lg w-full transform transition-all duration-300 opacity-0 translate-y-2`;
 
     // Agregar estilos según el tipo
     switch (type) {
@@ -808,28 +828,27 @@ async function startChat(contactId) {
     }
 
     notification.innerHTML = `
-        <div class="flex items-center justify-between">
-            <p class="font-medium">${message}</p>
-            <button onclick="this.parentElement.parentElement.remove()" class="ml-3 text-white/70 hover:text-white">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-            </button>
+        <div class="flex items-start gap-3">
+            <div class="flex-shrink-0">
+                <svg class="w-5 h-5 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 18a9 9 0 110-18 9 9 0 010 18z"/></svg>
+            </div>
+            <div class="text-sm leading-5">${escapeHtml(message)}</div>
         </div>
     `;
 
-    document.body.appendChild(notification);
+    notification.style.pointerEvents = 'auto';
+    container.appendChild(notification);
 
-    // Animar entrada
+    // Animar entrada (fade/slide)
     setTimeout(() => {
-        notification.classList.remove('translate-x-full');
-    }, 100);
+        notification.classList.remove('opacity-0', 'translate-y-2');
+    }, 10);
 
-    // Auto-remover después de 5 segundos
+    // Auto-remover después de 4s
     setTimeout(() => {
-        notification.classList.add('translate-x-full');
-        setTimeout(() => notification.remove(), 300);
-    }, 5000);
+        notification.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => notification.remove(), 200);
+    }, 4000);
 }
 
 // Variables globales del chat modal
@@ -1674,6 +1693,64 @@ function createMeetingCard(meeting) {
 // Exponer la función para su uso global
 window.createMeetingCard = createMeetingCard;
 
+// Tarjeta específica para reuniones compartidas (solo Descargar y Añadir a contenedor)
+function createSharedMeetingCard(shared) {
+    const meetingId = shared.meeting_id; // ID real de la reunión
+    const sharedId = shared.id; // ID del vínculo compartido
+    const title = shared.title || shared.meeting_name || 'Reunión compartida';
+    let createdAt = '';
+    try {
+        if (shared.date) {
+            const d = new Date(shared.date);
+            if (!isNaN(d.getTime())) {
+                createdAt = d.toLocaleString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            } else if (typeof shared.date === 'string') {
+                createdAt = shared.date;
+            }
+        }
+    } catch (_) {
+        createdAt = typeof shared.date === 'string' ? shared.date : '';
+    }
+
+    return `
+        <div class="meeting-card" data-meeting-id="${meetingId}" data-shared-id="${sharedId}" draggable="true">
+            <div class="meeting-card-header">
+                <div class="meeting-content">
+                    <div class="meeting-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <h3 class="meeting-title">${escapeHtml(title)}</h3>
+                    <p class="meeting-date">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        ${createdAt || ''}
+                    </p>
+                    ${shared.shared_by?.name ? `<p class="text-slate-400 text-sm">Compartido por: ${escapeHtml(shared.shared_by.name)}</p>` : ''}
+                </div>
+
+                <div class="meeting-actions">
+                    <button class="icon-btn container-btn" onclick="openContainerSelectModal(${meetingId})" title="Añadir a contenedor">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12z" />
+                        </svg>
+                    </button>
+                    <button class="download-btn icon-btn" onclick="openDownloadModal(${meetingId}, ${sharedId})" title="Descargar reunión">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Exponer función de tarjeta compartida si es útil externamente
+window.createSharedMeetingCard = createSharedMeetingCard;
+
 function createContainerMeetingCard(meeting) {
     return `
         <div class="meeting-card" data-meeting-id="${meeting.id}" draggable="true">
@@ -1942,9 +2019,11 @@ async function openContainerSelectModal(meetingId) {
                     </button>
                 </div>
                 <div class="modal-body">
-                    <div class="flex items-center justify-center p-8">
-                        <div class="loading-spinner"></div>
-                        <span class="ml-3 text-slate-300">Cargando contenedores...</span>
+                    <div class="modal-center">
+                        <div class="stack-center">
+                            <div class="loading-spinner mb-4"></div>
+                            <span class="text-slate-300">Cargando contenedores...</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1979,7 +2058,7 @@ async function openContainerSelectModal(meetingId) {
 
         // Actualizar modal con los contenedores disponibles
         updateModalContent('Seleccionar contenedor', `
-            <div class="space-y-2">
+            <div class="modal-list-wrap space-y-2">
                 ${containers.map(c => `
                     <button class="w-full text-left px-4 py-3 rounded-lg bg-slate-800/30 border border-slate-700/50 hover:bg-slate-700/50 hover:border-slate-600/50 transition-all duration-200 text-slate-200" data-id="${c.id}">
                         <div class="flex items-center">
@@ -3362,7 +3441,7 @@ function showDeleteConfirmationModal(meetingId) {
 
     const modalHTML = `
         <div class="meeting-modal active" id="deleteConfirmationModal">
-            <div class="modal-content">
+            <div class="modal-content delete-modal">
                 <div class="modal-header">
                     <div class="modal-title-section">
                         <h2 class="modal-title">
@@ -3382,47 +3461,44 @@ function showDeleteConfirmationModal(meetingId) {
                 </div>
 
                 <div class="modal-body">
-                    <div class="modal-section">
-                        <div class="delete-confirmation-content">
-                            <div class="warning-icon">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </div>
-                            <h3 class="delete-title">¿Estás seguro?</h3>
-                            <p class="delete-message">
-                                Estás a punto de eliminar la reunión <strong>"${escapeHtml(meetingName)}"</strong>.
-                                Esta acción eliminará permanentemente:
-                            </p>
-                            <ul class="delete-items">
-                                <li>
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 9v6l6-6" />
-                                    </svg>
-                                    Audio de la reunión
-                                </li>
-                                <li>
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                                    </svg>
-                                    Transcripción completa
-                                </li>
-                                <li>
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    Análisis y resumen
-                                </li>
-                                <li>
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                    </svg>
-                                    Puntos clave y tareas
-                                </li>
-                            </ul>
+                    <div class="delete-confirmation-content">
+                        <div class="warning-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
                         </div>
+                        <h3 class="delete-title">¿Estás seguro?</h3>
+                        <p class="delete-message">
+                            Estás a punto de eliminar la reunión <strong>"${escapeHtml(meetingName)}"</strong>.
+                            Esta acción eliminará permanentemente:
+                        </p>
+                        <ul class="delete-items">
+                            <li>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 9v6l6-6" />
+                                </svg>
+                                Audio de la reunión
+                            </li>
+                            <li>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                                </svg>
+                                Transcripción completa
+                            </li>
+                            <li>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Análisis y resumen
+                            </li>
+                            <li>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                                Puntos clave y tareas
+                            </li>
+                        </ul>
                     </div>
-
                     <div class="modal-actions">
                         <button class="modal-btn secondary" onclick="closeDeleteConfirmationModal()">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -3793,7 +3869,7 @@ function clearContainerErrors() {
     });
 }
 
-async function openDownloadModal(meetingId) {
+async function openDownloadModal(meetingId, sharedMeetingId = null) {
     // Prevenir ejecución múltiple
     if (window.downloadModalProcessing) {
         console.log('Modal de descarga ya en proceso...');
@@ -3814,7 +3890,7 @@ async function openDownloadModal(meetingId) {
         // Mostrar loading inicial
         showDownloadModalLoading(meetingId);
 
-        // Paso 1: Descargar y desencriptar el archivo .ju desde Drive (con timeout y manejo de errores)
+    // Paso 1: Descargar y desencriptar el archivo .ju desde Drive (con timeout y manejo de errores)
         console.log('Descargando y desencriptando archivo .ju...');
         const controller = new AbortController();
         const timeoutMs = 15000; // 15s para evitar esperas largas
@@ -3833,6 +3909,14 @@ async function openDownloadModal(meetingId) {
         } catch (netErr) {
             console.error('Fallo de red al obtener reunión:', netErr);
             clearTimeout(timeoutId);
+            // Intentar resolver enlaces directos si es compartida
+            if (sharedMeetingId) {
+                const links = await tryResolveSharedDriveLinks(sharedMeetingId);
+                if (links) {
+                    showDownloadFallbackModal(meetingId, 'No se pudo preparar la descarga automáticamente.', links);
+                    return;
+                }
+            }
             showDownloadFallbackModal(meetingId, 'No se pudo conectar para preparar la descarga.');
             return;
         } finally {
@@ -3843,6 +3927,13 @@ async function openDownloadModal(meetingId) {
             let serverMsg = '';
             try { serverMsg = await response.text(); } catch(_) {}
             console.error('Error HTTP al preparar descarga', response.status, serverMsg);
+            if (sharedMeetingId) {
+                const links = await tryResolveSharedDriveLinks(sharedMeetingId);
+                if (links) {
+                    showDownloadFallbackModal(meetingId, `Error ${response.status} al preparar la descarga.`, links);
+                    return;
+                }
+            }
             showDownloadFallbackModal(meetingId, `Error ${response.status} al preparar la descarga.`);
             return;
         }
@@ -3851,6 +3942,13 @@ async function openDownloadModal(meetingId) {
             data = await response.json();
         } catch (parseErr) {
             console.error('Error parseando JSON de la reunión:', parseErr);
+            if (sharedMeetingId) {
+                const links = await tryResolveSharedDriveLinks(sharedMeetingId);
+                if (links) {
+                    showDownloadFallbackModal(meetingId, 'Respuesta inválida del servidor al preparar la descarga.', links);
+                    return;
+                }
+            }
             showDownloadFallbackModal(meetingId, 'Respuesta inválida del servidor al preparar la descarga.');
             return;
         }
@@ -3901,7 +3999,16 @@ async function openDownloadModal(meetingId) {
         }
 
     // Mostrar un modal de fallback con botones de descarga directa
-    showDownloadFallbackModal(meetingId, errorMessage);
+    if (sharedMeetingId) {
+        const links = await tryResolveSharedDriveLinks(sharedMeetingId);
+        if (links) {
+            showDownloadFallbackModal(meetingId, errorMessage, links);
+        } else {
+            showDownloadFallbackModal(meetingId, errorMessage);
+        }
+    } else {
+        showDownloadFallbackModal(meetingId, errorMessage);
+    }
     } finally {
         // Liberar el lock después de un delay
         setTimeout(() => {
@@ -3911,7 +4018,7 @@ async function openDownloadModal(meetingId) {
 }
 
 // Modal simple de fallback con descargas directas cuando la preparación falla
-function showDownloadFallbackModal(meetingId, message) {
+function showDownloadFallbackModal(meetingId, message, directLinks = null) {
     // Cerrar loading si existe
     const loadingModal = document.getElementById('downloadLoadingModal');
     if (loadingModal) {
@@ -3930,8 +4037,8 @@ function showDownloadFallbackModal(meetingId, message) {
                     </div>
                     <p class="text-slate-300 mb-4">${escapeHtml(message || 'No se pudo preparar la descarga.')}</p>
                     <div class="space-y-3">
-                        <a href="/api/meetings/${meetingId}/download-ju" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar archivo .ju</a>
-                        <a href="/api/meetings/${meetingId}/download-audio" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar audio</a>
+                        ${directLinks?.ju_link ? `<a href="${directLinks.ju_link}" target="_blank" rel="noopener" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar archivo .ju</a>` : `<a href="/api/meetings/${meetingId}/download-ju" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar archivo .ju</a>`}
+                        ${directLinks?.audio_link ? `<a href="${directLinks.audio_link}" target="_blank" rel="noopener" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar audio</a>` : `<a href="/api/meetings/${meetingId}/download-audio" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar audio</a>`}
                         <a href="/google/reauth" class="block w-full text-center px-4 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg">Revalidar sesión de Google Drive</a>
                     </div>
                 </div>
@@ -3942,6 +4049,28 @@ function showDownloadFallbackModal(meetingId, message) {
     document.getElementById('downloadFallbackModal')?.remove();
     document.body.insertAdjacentHTML('beforeend', html);
     document.body.style.overflow = 'hidden';
+}
+
+// Resuelve enlaces directos a Drive para reuniones compartidas
+async function tryResolveSharedDriveLinks(sharedMeetingId) {
+    try {
+        const res = await fetch('/api/shared-meetings/resolve-drive-links', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ shared_meeting_id: sharedMeetingId })
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data?.success) return null;
+        return { ju_link: data.ju_link || null, audio_link: data.audio_link || null };
+    } catch (e) {
+        console.warn('tryResolveSharedDriveLinks failed', e);
+        return null;
+    }
 }
 
 function showDownloadModalLoading(meetingId) {
@@ -4823,8 +4952,10 @@ function openShareModal(meetingId) {
 
     const selectedContactsContainer = document.getElementById('selectedContactsContainer');
     const confirmBtn = document.getElementById('confirmShare');
-
+    // Ensure modal overrides base `.modal { display: none; }` styles
+    // by adding the `.show` class and removing Tailwind's `hidden`.
     modal.classList.remove('hidden');
+    modal.classList.add('show');
 
     // Resetear estado
     const searchInput = document.getElementById('shareModal-contactSearch');
@@ -4846,6 +4977,8 @@ function closeShareModal() {
     const modal = document.getElementById('shareModal');
     if (!modal) return;
 
+    // Restore initial hidden state and remove the `.show` class
+    modal.classList.remove('show');
     modal.classList.add('hidden');
     currentShareMeetingId = null;
     selectedContacts.clear();
@@ -4918,8 +5051,11 @@ function renderContactsList(contacts) {
         return;
     }
 
-    contactsList.innerHTML = contacts.map(contact => `
-        <div class="contact-item p-3 border-b border-slate-700 hover:bg-slate-700/50 cursor-pointer transition-colors" onclick="toggleContact(${contact.id})">
+    contactsList.innerHTML = contacts.map(contact => {
+        // Asegurar ID como string para evitar errores en inline JS (UUIDs, etc.)
+        const cid = String(contact.id).replace(/'/g, "\\'");
+        return `
+        <div class="contact-item p-3 border-b border-slate-700 hover:bg-slate-700/50 cursor-pointer transition-colors" onclick="toggleContact('${cid}')">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <div class="w-8 h-8 rounded-full bg-yellow-400 text-slate-900 flex items-center justify-center font-semibold text-sm">
@@ -4931,25 +5067,26 @@ function renderContactsList(contacts) {
                     </div>
                 </div>
                 <div class="contact-checkbox">
-                    <input type="checkbox" id="shareModal-contact-${contact.id}" class="w-4 h-4 text-yellow-400 bg-slate-700 border-slate-600 rounded focus:ring-yellow-400 focus:ring-2">
+                    <input type="checkbox" id="shareModal-contact-${cid}" class="w-4 h-4 text-yellow-400 bg-slate-700 border-slate-600 rounded focus:ring-yellow-400 focus:ring-2">
                 </div>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // Toggle selección de contacto
 function toggleContact(contactId) {
-    const checkbox = document.getElementById(`shareModal-contact-${contactId}`);
-    const contact = allContacts.find(c => c.id === contactId);
+    const idStr = String(contactId);
+    const checkbox = document.getElementById(`shareModal-contact-${idStr}`);
+    const contact = allContacts.find(c => String(c.id) === idStr);
 
     if (!contact) return;
 
-    if (selectedContacts.has(contactId)) {
-        selectedContacts.delete(contactId);
+    if (selectedContacts.has(idStr)) {
+        selectedContacts.delete(idStr);
         checkbox.checked = false;
     } else {
-        selectedContacts.add(contactId);
+        selectedContacts.add(idStr);
         checkbox.checked = true;
     }
 
@@ -4970,31 +5107,34 @@ function updateSelectedContactsDisplay() {
     container.classList.remove('hidden');
 
     const selectedContactsArray = Array.from(selectedContacts).map(id =>
-        allContacts.find(c => c.id === id)
+        allContacts.find(c => String(c.id) === String(id))
     ).filter(Boolean);
 
-    selectedContactsDiv.innerHTML = selectedContactsArray.map(contact => `
+    selectedContactsDiv.innerHTML = selectedContactsArray.map(contact => {
+        const cid = String(contact.id).replace(/'/g, "\\'");
+        return `
         <div class="flex items-center gap-2 bg-yellow-400/20 text-yellow-400 px-3 py-1 rounded-full text-sm">
             <span>${contact.name}</span>
-            <button onclick="toggleContact(${contact.id})" class="text-yellow-400 hover:text-yellow-300">
+            <button onclick="toggleContact('${cid}')" class="text-yellow-400 hover:text-yellow-300">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // Actualizar estado del botón confirmar
 function updateConfirmButton() {
     const confirmBtn = document.getElementById('confirmShare');
-    confirmBtn.disabled = selectedContacts.size === 0;
+    if (confirmBtn) confirmBtn.disabled = selectedContacts.size === 0;
 }
 
 // Setup búsqueda de contactos
 function setupContactSearch() {
     const searchInput = document.getElementById('shareModal-contactSearch');
 
+    if (!searchInput) return;
     searchInput.addEventListener('input', function(e) {
         const searchTerm = e.target.value.toLowerCase();
 
@@ -5010,7 +5150,7 @@ function setupContactSearch() {
 
         // Mantener las selecciones después del filtrado
         selectedContacts.forEach(contactId => {
-            const checkbox = document.getElementById(`shareModal-contact-${contactId}`);
+            const checkbox = document.getElementById(`shareModal-contact-${String(contactId)}`);
             if (checkbox) {
                 checkbox.checked = true;
             }
@@ -5046,7 +5186,10 @@ async function confirmShare() {
             },
             body: JSON.stringify({
                 meeting_id: currentShareMeetingId,
-                contact_ids: Array.from(selectedContacts),
+                contact_ids: Array.from(selectedContacts).map(v => {
+                    const n = Number(v);
+                    return Number.isFinite(n) ? n : String(v);
+                }),
                 message: message
             })
         });

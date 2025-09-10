@@ -26,6 +26,7 @@ class NotificationController extends Controller
 
             $notifications = Notification::where($userIdColumn, Auth::id())
                 ->orderBy('created_at', 'desc')
+                ->with('fromUser')
                 ->get()
                 ->map(function ($notification) use ($userIdColumn) {
                     $data = null;
@@ -39,22 +40,17 @@ class NotificationController extends Controller
                         }
                     }
 
-                    // Obtener información del usuario remitente de manera segura
+                    // Información del remitente usando la relación dinámica (from_user_id o remitente)
                     $fromUser = null;
-                    if ($notification->remitente) {
-                        try {
-                            $user = \App\Models\User::find($notification->remitente);
-                            if ($user) {
-                                $fromUser = [
-                                    'id' => $user->id,
-                                    'name' => $user->full_name ?? $user->username ?? 'Usuario',
-                                    'email' => $user->email ?? '',
-                                    'avatar' => strtoupper(substr($user->full_name ?? $user->username ?? 'U', 0, 1))
-                                ];
-                            }
-                        } catch (\Throwable $e) {
-                            // Si hay error obteniendo el usuario, dejar fromUser como null
-                        }
+                    if ($notification->fromUser) {
+                        $u = $notification->fromUser;
+                        $name = $u->full_name ?? $u->username ?? 'Usuario';
+                        $fromUser = [
+                            'id' => $u->id,
+                            'name' => $name,
+                            'email' => $u->email ?? '',
+                            'avatar' => strtoupper(substr($name, 0, 1))
+                        ];
                     }
 
                     return [
@@ -90,7 +86,7 @@ class NotificationController extends Controller
 
         $notifications = Notification::where('user_id', Auth::id())
             ->where('read', false)
-            ->with(['fromUser:id,name,email'])
+            ->with(['fromUser'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($notification) {
@@ -105,6 +101,17 @@ class NotificationController extends Controller
                     }
                 }
 
+                $fromUser = null;
+                if ($notification->fromUser) {
+                    $u = $notification->fromUser;
+                    $name = $u->full_name ?? $u->username ?? 'Usuario';
+                    $fromUser = [
+                        'id' => $u->id,
+                        'name' => $name,
+                        'avatar' => strtoupper(substr($name, 0, 1))
+                    ];
+                }
+
                 return [
                     'id' => $notification->id,
                     'type' => $notification->type,
@@ -112,11 +119,7 @@ class NotificationController extends Controller
                     'message' => $notification->message,
                     'data' => $data,
                     'created_at' => $notification->created_at,
-                    'from_user' => $notification->fromUser ? [
-                        'id' => $notification->fromUser->id,
-                        'name' => $notification->fromUser->name,
-                        'avatar' => strtoupper(substr($notification->fromUser->name, 0, 1))
-                    ] : null
+                    'from_user' => $fromUser
                 ];
             });
 

@@ -523,7 +523,26 @@
     </script>
 
     <!-- Modal para compartir reunión -->
-
+    <?php if (isset($component)) { $__componentOriginal0dc3624784f5ac950932d2feff9a6435 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal0dc3624784f5ac950932d2feff9a6435 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.share-modal','data' => []] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? (array) $attributes->getIterator() : [])); ?>
+<?php $component->withName('share-modal'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag && $constructor = (new ReflectionClass(Illuminate\View\AnonymousComponent::class))->getConstructor()): ?>
+<?php $attributes = $attributes->except(collect($constructor->getParameters())->map->getName()->all()); ?>
+<?php endif; ?>
+<?php $component->withAttributes([]); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal0dc3624784f5ac950932d2feff9a6435)): ?>
+<?php $attributes = $__attributesOriginal0dc3624784f5ac950932d2feff9a6435; ?>
+<?php unset($__attributesOriginal0dc3624784f5ac950932d2feff9a6435); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal0dc3624784f5ac950932d2feff9a6435)): ?>
+<?php $component = $__componentOriginal0dc3624784f5ac950932d2feff9a6435; ?>
+<?php unset($__componentOriginal0dc3624784f5ac950932d2feff9a6435); ?>
+<?php endif; ?>
 
 </body>
 </html>

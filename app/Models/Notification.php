@@ -39,8 +39,9 @@ class Notification extends Model
 
     public function fromUser(): BelongsTo
     {
-        // La tabla users usa UUIDs, pero notifications.remitente puede contener UUIDs
-        return $this->belongsTo(User::class, 'remitente');
+    // Compatibilidad: usar from_user_id si existe la columna; de lo contrario, caer a remitente
+    $foreignKey = Schema::hasColumn('notifications', 'from_user_id') ? 'from_user_id' : 'remitente';
+    return $this->belongsTo(User::class, $foreignKey);
     }
 
     // Relaciones de compatibilidad (antiguos campos)
