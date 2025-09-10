@@ -490,6 +490,13 @@ class MeetingController extends Controller
                         }
                     }
 
+                    if ($sharedAccess && !empty($legacyMeeting->audio_download_url)) {
+                        $audioPath = $this->normalizeDriveUrl($legacyMeeting->audio_download_url);
+                        if ($audioPath && !str_starts_with($audioPath, 'http')) {
+                            $audioPath = $this->publicUrlFromStoragePath($audioPath);
+                        }
+                    }
+
                     return response()->json([
                         'success' => true,
                         'meeting' => [
@@ -588,6 +595,12 @@ class MeetingController extends Controller
                 $tasks = TaskLaravel::where('meeting_id', $legacyMeeting->id)
                     ->where('username', $ownerUsername)
                     ->get();
+                if ($sharedAccess && !empty($legacyMeeting->audio_download_url)) {
+                    $audioPath = $this->normalizeDriveUrl($legacyMeeting->audio_download_url);
+                    if ($audioPath && !str_starts_with($audioPath, 'http')) {
+                        $audioPath = $this->publicUrlFromStoragePath($audioPath);
+                    }
+                }
 
                 return response()->json([
                     'success' => true,
@@ -714,6 +727,16 @@ class MeetingController extends Controller
                 ->where('username', $ownerUsername)
                 ->get();
 
+            if ($sharedAccess) {
+                $legacy = TranscriptionLaravel::find($id);
+                if ($legacy && !empty($legacy->audio_download_url)) {
+                    $audioPath = $this->normalizeDriveUrl($legacy->audio_download_url);
+                    if ($audioPath && !str_starts_with($audioPath, 'http')) {
+                        $audioPath = $this->publicUrlFromStoragePath($audioPath);
+                    }
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'meeting' => [
@@ -721,7 +744,7 @@ class MeetingController extends Controller
                     'meeting_name' => $meeting->title,
                     'is_legacy' => false,
                     'created_at' => ($meeting->date ?? $meeting->created_at)->format('d/m/Y H:i'),
-                    'audio_path' => $audioPath ?? route('api.meetings.audio', ['meeting' => $meeting->id]),
+                    'audio_path' => $sharedAccess ? $audioPath : ($audioPath ?? route('api.meetings.audio', ['meeting' => $meeting->id])),
                     // 'audio_drive_id' opcionalmente podría incluirse si el frontend lo requiere
                     'summary' => $meeting->summary,
                     'key_points' => $meeting->keyPoints->pluck('point_text'),

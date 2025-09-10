@@ -255,6 +255,43 @@ test('show legacy meeting returns audio data', function () {
         ]);
 });
 
+test('show shared legacy meeting returns direct audio url', function () {
+    $owner = User::factory()->create(['username' => 'owner']);
+    $recipient = User::factory()->create();
+
+    $meeting = TranscriptionLaravel::factory()->create([
+        'username' => $owner->username,
+        'meeting_name' => 'Shared Legacy',
+        'audio_drive_id' => 'file123',
+        'transcript_drive_id' => null,
+        'audio_download_url' => 'https://example.com/direct.mp3',
+    ]);
+
+    SharedMeeting::create([
+        'meeting_id' => $meeting->id,
+        'shared_by' => $owner->id,
+        'shared_with' => $recipient->id,
+        'status' => 'accepted',
+        'shared_at' => now(),
+    ]);
+
+    app()->instance(GoogleDriveService::class, new class {
+        public function getFileInfo($fileId) {
+            return new class {
+                public function getParents(){ return []; }
+                public function getName(){ return 'Parent'; }
+            };
+        }
+    });
+
+    $response = $this->actingAs($recipient, 'sanctum')->getJson('/api/meetings/' . $meeting->id);
+
+    $response->assertOk()
+        ->assertJsonFragment([
+            'audio_path' => 'https://example.com/direct.mp3',
+        ]);
+});
+
 
 test('destroy meeting returns 500 when Google Drive deletion fails', function () {
     $user = User::factory()->create(['username' => 'user']);

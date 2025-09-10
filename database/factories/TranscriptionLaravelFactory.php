@@ -17,6 +17,8 @@ class TranscriptionLaravelFactory extends Factory
     {
         return [
             'username'  => User::factory()->create()->username,
+            'meeting_name' => $this->faker->sentence,
+            'audio_download_url' => 'https://example.com/audio.mp3',
             'transcript' => $this->faker->paragraph,
         ];
     }
