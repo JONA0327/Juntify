@@ -502,7 +502,7 @@
 }
 
 @media (max-width: 768px) {
-    .modal-content {
+    .meeting-modal .modal-content {
         max-height: 95vh !important;
     }
 }
@@ -512,22 +512,22 @@
     pointer-events: all;
 }
 
-.modal-content {
+.meeting-modal .modal-content {
     background: linear-gradient(135deg,
                 var(--bg-slate-900) 0%,
                 var(--bg-slate-800) 100%);
     border: 1px solid var(--border-slate-700);
     border-radius: 1rem;
-    max-width: 1800px; /* Ancho máximo aumentado para más espacio */
-    width: 95vw; /* Usar 95% del ancho de la ventana para modal más ancho */
-    max-height: 95vh; /* Mantener altura */
+    max-width: 1200px; /* Ancho máximo del modal */
+    width: 90vw; /* Usar 90% del ancho de la ventana */
+    max-height: 95vh; /* Limitar la altura vertical */
     min-height: 80vh; /* Mantener altura mínima */
     overflow: hidden;
     display: flex;
     flex-direction: column;
     transform: scale(0.95);
     transition: transform 0.3s ease;
-    margin: 0 auto; /* Asegurar centrado horizontal perfecto */
+    margin: 0 auto; /* Mantener centrado horizontal */
 }
 
 .meeting-modal.active .modal-content {
