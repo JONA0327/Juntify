@@ -1639,7 +1639,7 @@ function createMeetingCard(meeting) {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12z" />
                         </svg>
                     </button>
-                    <button class="share-btn icon-btn" onclick="openShareModal(${meeting.id})" aria-label="Compartir reunión" title="Compartir reunión">
+                    <button class="share-btn icon-btn" onclick="document.getElementById('shareModal') && openShareModal(${meeting.id})" aria-label="Compartir reunión" title="Compartir reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
                         </svg>
@@ -1710,7 +1710,7 @@ function createContainerMeetingCard(meeting) {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2h3" />
                         </svg>
                     </button>
-                    <button class="share-btn icon-btn" onclick="openShareModal(${meeting.id})" aria-label="Compartir reunión" title="Compartir reunión">
+                    <button class="share-btn icon-btn" onclick="document.getElementById('shareModal') && openShareModal(${meeting.id})" aria-label="Compartir reunión" title="Compartir reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
                         </svg>
@@ -4812,36 +4812,37 @@ function openShareModal(meetingId) {
     selectedContacts.clear();
 
     const modal = document.getElementById('shareModal');
-    const contactsList = document.getElementById('contactsList');
+    if (!modal) return;
+
     const selectedContactsContainer = document.getElementById('selectedContactsContainer');
     const confirmBtn = document.getElementById('confirmShare');
 
-    if (modal) {
-        modal.classList.remove('hidden');
+    modal.classList.remove('hidden');
 
-        // Resetear estado
-        document.getElementById('contactSearch').value = '';
-        document.getElementById('shareMessage').value = '';
-        selectedContactsContainer.classList.add('hidden');
-        confirmBtn.disabled = true;
+    // Resetear estado
+    const searchInput = document.getElementById('contactSearch');
+    if (searchInput) searchInput.value = '';
+    const messageInput = document.getElementById('shareMessage');
+    if (messageInput) messageInput.value = '';
+    if (selectedContactsContainer) selectedContactsContainer.classList.add('hidden');
+    if (confirmBtn) confirmBtn.disabled = true;
 
-        // Cargar contactos
-        loadContactsForSharing();
+    // Cargar contactos
+    loadContactsForSharing();
 
-        // Setup búsqueda de contactos
-        setupContactSearch();
-    }
+    // Setup búsqueda de contactos
+    setupContactSearch();
 }
 
 // Cerrar modal de compartir
 function closeShareModal() {
     const modal = document.getElementById('shareModal');
-    if (modal) {
-        modal.classList.add('hidden');
-        currentShareMeetingId = null;
-        selectedContacts.clear();
-        allContacts = [];
-    }
+    if (!modal) return;
+
+    modal.classList.add('hidden');
+    currentShareMeetingId = null;
+    selectedContacts.clear();
+    allContacts = [];
 }
 
 // Cargar contactos disponibles para compartir
