@@ -1645,11 +1645,29 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
-            $this->setGoogleDriveToken($user);
-            $sharedAccess = SharedMeeting::where('meeting_id', $meeting)
+
+            // Determinar si el usuario tiene acceso compartido
+            $sharedMeeting = SharedMeeting::with('sharedBy')
+                ->where('meeting_id', $meeting)
                 ->where('shared_with', $user->id)
                 ->where('status', 'accepted')
-                ->exists();
+                ->first();
+            $sharedAccess = (bool) $sharedMeeting;
+
+            // Intentar configurar el token del usuario
+            try {
+                $this->setGoogleDriveToken($user);
+            } catch (\Throwable $e) {
+                if ($sharedAccess && $sharedMeeting?->sharedBy?->email) {
+                    /** @var \App\Services\GoogleServiceAccount $sa */
+                    $sa = app(\App\Services\GoogleServiceAccount::class);
+                    $sa->impersonate($sharedMeeting->sharedBy->email);
+                    $token = $sa->getClient()->fetchAccessTokenWithAssertion();
+                    $this->googleDriveService->setAccessToken($token);
+                } else {
+                    throw $e;
+                }
+            }
 
             // Intentar flujo legacy primero
             try {
