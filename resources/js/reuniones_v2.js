@@ -4179,6 +4179,14 @@ function showDownloadFallbackModal(meetingId, message, directLinks = null) {
         document.body.style.overflow = '';
     }
 
+    const juButton = directLinks?.ju_link
+        ? `<a href="${directLinks.ju_link}" target="_blank" rel="noopener" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar archivo .ju</a>`
+        : `<a href="/api/meetings/${meetingId}/download-ju" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar archivo .ju</a>`;
+
+    const audioButton = directLinks?.audio_link
+        ? `<a href="${directLinks.audio_link}" target="_blank" rel="noopener" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar audio</a>`
+        : `<a href="/api/meetings/${meetingId}/download-audio" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar audio</a>`;
+
     const html = `
         <div class="fixed inset-0 z-[9999] overflow-hidden" id="downloadFallbackModal">
             <div class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm"></div>
@@ -4190,8 +4198,8 @@ function showDownloadFallbackModal(meetingId, message, directLinks = null) {
                     </div>
                     <p class="text-slate-300 mb-4">${escapeHtml(message || 'No se pudo preparar la descarga.')}</p>
                     <div class="space-y-3">
-                        ${directLinks?.ju_link ? `<a href="${directLinks.ju_link}" target="_blank" rel="noopener" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar archivo .ju</a>` : `<a href="/api/meetings/${meetingId}/download-ju" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar archivo .ju</a>`}
-                        ${directLinks?.audio_link ? `<a href="${directLinks.audio_link}" target="_blank" rel="noopener" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar audio</a>` : `<a href="/api/meetings/${meetingId}/download-audio" class="block w-full text-center px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg">Descargar audio</a>`}
+                        ${juButton}
+                        ${audioButton}
                         <a href="/google/reauth" class="block w-full text-center px-4 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg">Revalidar sesión de Google Drive</a>
                     </div>
                 </div>
@@ -4219,7 +4227,10 @@ async function tryResolveSharedDriveLinks(sharedMeetingId) {
         if (!res.ok) return null;
         const data = await res.json();
         if (!data?.success) return null;
-        return { ju_link: data.ju_link || null, audio_link: data.audio_link || null };
+        return {
+            ju_link: data.ju_link || data.transcript_download_url || null,
+            audio_link: data.audio_link || null
+        };
     } catch (e) {
         console.warn('tryResolveSharedDriveLinks failed', e);
         return null;
