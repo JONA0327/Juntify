@@ -2269,7 +2269,7 @@ function showMeetingModal(meeting) {
                                 </svg>
                                 Transcripción${meeting.segments && meeting.segments.length > 0 ? ' con hablantes' : ''}
                             </h3>
-                            <div class="section-content ${meeting.segments && meeting.segments.length > 0 ? 'transcription-segmented' : 'transcription-full'}" style="max-height: 60vh; overflow-y: auto; padding: 0.25rem 0; background: transparent; border: none;">
+                            <div class="section-content ${meeting.segments && meeting.segments.length > 0 ? 'transcription-segmented' : 'transcription-full'}" style="max-height: 60vh; overflow-y: auto; padding: 0.25rem 0; background: transparent; border: none; width: 100%; box-sizing: border-box;">
                                 ${meeting.segments && meeting.segments.length > 0 ? renderSegments(meeting.segments) : renderTranscription(meeting.transcription)}
                             </div>
                         </div>
@@ -2292,7 +2292,7 @@ function showMeetingModal(meeting) {
     });
 
     // Ajustar altura de textareas de transcripción al contenido
-    setTimeout(autoResizeTranscripts, 0);
+    autoResizeTranscripts();
 
     document.querySelectorAll('.modal-tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -2305,7 +2305,7 @@ function showMeetingModal(meeting) {
 
             // Asegurar que los textos de transcripción se ajusten al contenido
             if (target === 'transcription') {
-                setTimeout(autoResizeTranscripts, 0);
+                autoResizeTranscripts();
             }
         });
     });
@@ -2451,14 +2451,16 @@ function showMeetingModal(meeting) {
 
 // Ajusta automáticamente la altura de los textarea de transcripción
 function autoResizeTranscripts() {
-    const areas = document.querySelectorAll('#meetingModal textarea.transcript-text');
-    areas.forEach((ta) => {
-        try {
-            ta.style.height = 'auto';
-            ta.style.overflowY = 'hidden';
-            const newH = Math.max(48, ta.scrollHeight);
-            ta.style.height = newH + 'px';
-        } catch (_) { /* ignore */ }
+    requestAnimationFrame(() => {
+        const areas = document.querySelectorAll('#meetingModal textarea.transcript-text');
+        areas.forEach((ta) => {
+            try {
+                ta.style.height = 'auto';
+                ta.style.overflowY = 'hidden';
+                const newH = Math.max(48, ta.scrollHeight);
+                ta.style.height = newH + 'px';
+            } catch (_) { /* ignore */ }
+        });
     });
 }
 
@@ -2566,7 +2568,7 @@ function renderSegments(segments) {
         return { ...segment, speaker, avatar, start, end, time, text: segment.text || '' };
     });
 
-    return `
+    const html = `
         <div class="transcription-segments" style="display: flex; flex-direction: column; gap: 1rem; padding: 0; margin: 0; width: 100%;">
             ${meetingSegments.map((segment, index) => `
                 <div class="transcript-segment" data-segment="${index}" style="background: rgba(51, 65, 85, 0.4); border: 1px solid #475569; border-radius: 12px; padding: 1.5rem; margin: 0; width: 100%; box-sizing: border-box; display: block; position: relative;">
@@ -2608,12 +2610,15 @@ function renderSegments(segments) {
                     </div>
 
                     <div class="segment-content" style="width: 100%; clear: both;">
-                        <textarea class="transcript-text" placeholder="Texto de la transcripción..." readonly style="background: rgba(30, 41, 59, 0.4); border: 1px solid #475569; border-radius: 8px; padding: 1rem; color: #cbd5e1; font-size: 0.95rem; line-height: 1.6; resize: none; min-height: 60px; width: 100%; font-family: inherit; overflow: hidden; display: block; box-sizing: border-box; margin: 0;">${segment.text}</textarea>
+                        <textarea class="transcript-text" placeholder="Texto de la transcripción..." readonly style="background: rgba(30, 41, 59, 0.4); border: 1px solid #475569; border-radius: 8px; padding: 1rem; color: #cbd5e1; font-size: 0.95rem; line-height: 1.6; resize: none; min-height: 60px; width: 100%; font-family: inherit; overflow: hidden; display: block; box-sizing: border-box; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;">${segment.text}</textarea>
                     </div>
                 </div>
             `).join('')}
         </div>
     `;
+
+    autoResizeTranscripts();
+    return html;
 }
 
 function renderTranscription(transcription) {
@@ -2624,10 +2629,12 @@ function renderTranscription(transcription) {
     // Formatear texto plano con párrafos
     const formatted = transcription.split('\n')
         .filter(line => line.trim())
-        .map(line => `<p>${escapeHtml(line)}</p>`)
+        .map(line => `<p style="white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 0.5rem 0;">${escapeHtml(line)}</p>`)
         .join('');
 
-    return formatted || '<p class="text-slate-400">Contenido no disponible.</p>';
+    autoResizeTranscripts();
+
+    return formatted || '<p class="text-slate-400" style="white-space: pre-wrap; overflow-wrap: anywhere;">Contenido no disponible.</p>';
 }
 
 function getPlayIcon(cls) {
