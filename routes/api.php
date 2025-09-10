@@ -164,7 +164,6 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
 
         // Rutas de reuniones
         Route::get('/meetings', [MeetingController::class, 'getMeetings'])->name('api.meetings');
-        Route::get('/shared-meetings', [MeetingController::class, 'getSharedMeetings'])->name('api.shared-meetings');
         Route::get('/meetings/{id}', [MeetingController::class, 'show'])->name('api.meetings.show');
         Route::put('/meetings/{id}/name', [MeetingController::class, 'updateName'])->name('api.meetings.updateName');
         Route::put('/meetings/{id}/segments', [MeetingController::class, 'updateSegments'])->name('api.meetings.updateSegments');

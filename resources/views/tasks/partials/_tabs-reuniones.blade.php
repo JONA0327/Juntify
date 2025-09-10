@@ -48,7 +48,7 @@
                 document.getElementById(targetId)?.classList.remove('hidden');
 
                 if (targetId === 'my-meetings') loadMeetingsInto('#my-meetings-grid', '/api/meetings');
-                if (targetId === 'shared-meetings') loadMeetingsInto('#shared-meetings-grid', '/api/shared-meetings');
+                if (targetId === 'shared-meetings') loadMeetingsInto('#shared-meetings-grid', '/api/shared-meetings/v2');
                 if (targetId === 'containers') loadContainersInto('#containers-grid');
                 if (targetId === 'contacts') loadContactsInto('#contacts');
             }

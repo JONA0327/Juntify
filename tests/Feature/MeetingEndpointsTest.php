@@ -2,8 +2,8 @@
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Models\User;
+use App\Models\SharedMeeting;
 use App\Models\TranscriptionLaravel;
-use App\Models\MeetingShare;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 use App\Models\Container;
@@ -14,32 +14,32 @@ use Mockery;
 
 uses(RefreshDatabase::class);
 
-test('shared meetings endpoint returns meetings for authenticated user', function () {
-    $owner = User::factory()->create(['username' => 'owner']);
-    $recipient = User::factory()->create(['username' => 'recipient']);
+test('shared meetings v2 endpoint returns meetings for authenticated user', function () {
+    $owner = User::factory()->create();
+    $recipient = User::factory()->create();
 
-    $meeting = TranscriptionLaravel::factory()->create([
+    $meeting = Meeting::factory()->create([
         'username' => $owner->username,
-        'meeting_name' => 'Shared Meeting',
-        'audio_drive_id' => null,
-        'transcript_drive_id' => null,
+        'title' => 'Shared Meeting',
     ]);
 
-    MeetingShare::create([
+    SharedMeeting::create([
         'meeting_id' => $meeting->id,
-        'from_username' => $owner->username,
-        'to_username' => $recipient->username,
+        'shared_by' => $owner->id,
+        'shared_with' => $recipient->id,
+        'status' => 'accepted',
+        'shared_at' => now(),
     ]);
 
-    $response = $this->actingAs($recipient, 'sanctum')->getJson('/api/shared-meetings');
+    $response = $this->actingAs($recipient, 'sanctum')->getJson('/api/shared-meetings/v2');
 
     $response->assertOk()
         ->assertJson([
             'success' => true,
             'meetings' => [
                 [
-                    'id' => $meeting->id,
-                    'meeting_name' => 'Shared Meeting',
+                    'meeting_id' => $meeting->id,
+                    'title' => 'Shared Meeting',
                 ],
             ],
         ]);
