@@ -356,27 +356,9 @@
     stroke: currentColor;
 }
 
-/* Asegurar que el botón de descarga tenga el tamaño correcto */
+/* Estilos para el botón de descarga, heredando tamaño de .icon-btn */
 .download-btn {
-    width: 2.25rem !important;
-    height: 2.25rem !important;
-    border-radius: 0.5rem !important;
-    border: 1px solid rgba(51, 65, 85, 0.55) !important;
-    background: rgba(30, 41, 59, 0.85) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    transition: all 0.2s ease !important;
-    cursor: pointer !important;
-    backdrop-filter: blur(4px) !important;
-}
-
-.download-btn svg {
-    width: 1.125rem !important;
-    height: 1.125rem !important;
-    stroke-width: 2 !important;
-    fill: none !important;
-    stroke: currentColor !important;
+    color: #93c5fd; /* azul suave */
 }
 
 /* Asegurar que todos los SVGs mantengan el estilo consistente */
@@ -410,9 +392,6 @@
     color: #fde68a; /* amarillo suave */
 }
 
-.meeting-card-footer .download-btn {
-    color: #93c5fd; /* azul suave */
-}
 
 .meeting-actions .delete-btn {
     color: #f87171; /* rojo coral */
