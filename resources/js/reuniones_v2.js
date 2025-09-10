@@ -2554,43 +2554,8 @@ function showMeetingModal(meeting) {
         }
 
         // Agregar manejo de errores para carga de audio
-        let triedDirectLinkFallback = false;
-        let triedServerFallback = false;
-        meetingAudioPlayer.addEventListener('error', async (e) => {
+        meetingAudioPlayer.addEventListener('error', (e) => {
             console.error('Error cargando audio:', e);
-
-            // Intentar obtener enlace directo desde Drive si no se ha intentado
-            if (!triedDirectLinkFallback && typeof tryResolveSharedDriveLinks === 'function' && meeting?.shared_meeting_id) {
-                triedDirectLinkFallback = true;
-                try {
-                    const links = await tryResolveSharedDriveLinks(meeting.shared_meeting_id);
-                    const directUrl = links?.audio_link;
-                    if (directUrl) {
-                        console.warn('Reintentando audio con enlace directo de Drive:', directUrl);
-                        meetingAudioPlayer.src = directUrl;
-                        if (fullAudioPlayer) fullAudioPlayer.src = directUrl;
-                        try {
-                            meetingAudioPlayer.load();
-                        } catch (_) {}
-                        return; // esperar siguiente evento (canplay o error)
-                    }
-                } catch (err) {
-                    console.warn('No se pudo resolver enlace directo de Drive:', err);
-                }
-            }
-
-            // Intentar fallback a endpoint de streaming del backend si no lo hemos hecho aún
-            if (!triedServerFallback && meeting?.id) {
-                triedServerFallback = true;
-                const fallbackUrl = `/api/meetings/${meeting.id}/audio`;
-                console.warn('Reintentando audio con fallback del servidor:', fallbackUrl);
-                meetingAudioPlayer.src = fallbackUrl;
-                if (fullAudioPlayer) fullAudioPlayer.src = fallbackUrl;
-                try {
-                    meetingAudioPlayer.load();
-                } catch (_) {}
-                return; // esperar siguiente evento (canplay o error)
-            }
 
             // Deshabilitar controles
             playBtn.disabled = true;
@@ -2602,20 +2567,12 @@ function showMeetingModal(meeting) {
             playBtn.title = 'Error cargando audio';
             pauseBtn.title = 'Error cargando audio';
 
-            // Mostrar mensaje de error y enlace de descarga
+            // Mostrar mensaje de error
             const audioPlayerContainer = document.querySelector('.audio-player');
             if (audioPlayerContainer && !audioPlayerContainer.querySelector('.audio-error')) {
                 const errorMsg = document.createElement('p');
                 errorMsg.className = 'audio-error text-red-500 text-sm mt-2';
-                errorMsg.textContent = 'No se pudo cargar el audio. ';
-
-                const downloadLink = document.createElement('a');
-                const fallbackDownload = meeting?.id ? `/api/meetings/${meeting.id}/audio` : audioSrc;
-                downloadLink.href = encodeURI(fallbackDownload || '');
-                downloadLink.textContent = 'Descargar audio';
-                downloadLink.className = 'underline';
-                errorMsg.appendChild(downloadLink);
-
+                errorMsg.textContent = 'No se pudo cargar el audio.';
                 audioPlayerContainer.appendChild(errorMsg);
             }
         });
