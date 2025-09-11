@@ -228,6 +228,7 @@ class SharedMeetingController extends Controller
             'contact_ids' => 'required|array|min:1',
             'contact_ids.*' => 'exists:users,id',
             'message' => 'nullable|string|max:500',
+            'meeting_title' => 'nullable|string|max:255', // título enviado por el front para validar colisiones
         ]);
 
         try {
@@ -239,16 +240,53 @@ class SharedMeetingController extends Controller
                 ->pluck('contact_id')
                 ->toArray();
 
-            // Buscar reunión en tabla moderna; si no existe, permitir legado (TranscriptionLaravel)
+            // Cargar potencialmente ambos (puede haber colisión de IDs)
+            $legacyMeeting = TranscriptionLaravel::find($request->meeting_id);
             $meeting = Meeting::find($request->meeting_id);
-            $legacyMeeting = null;
-            if (!$meeting) {
-                $legacyMeeting = TranscriptionLaravel::find($request->meeting_id);
-                if (!$legacyMeeting) {
-                    throw new \RuntimeException('Meeting not found');
-                }
+
+            if (!$legacyMeeting && !$meeting) {
+                throw new \RuntimeException('Meeting not found');
             }
-            $meetingTitle = $meeting?->title ?? $legacyMeeting?->meeting_name ?? 'Reunión';
+
+            $providedTitle = $request->meeting_title;
+            $usingLegacy = false;
+
+            if ($legacyMeeting && $meeting) {
+                // Si hay colisión de ID, usamos heurística basada en el título proporcionado.
+                if ($providedTitle) {
+                    $p = mb_strtolower(trim($providedTitle));
+                    $legacyName = mb_strtolower(trim($legacyMeeting->meeting_name ?? ''));
+                    $modernName = mb_strtolower(trim($meeting->title ?? ''));
+
+                    $matchesLegacy = $legacyName !== '' && $p === $legacyName;
+                    $matchesModern = $modernName !== '' && $p === $modernName;
+
+                    if ($matchesLegacy && !$matchesModern) {
+                        $usingLegacy = true; // coincide sólo con legacy
+                    } elseif (!$matchesLegacy && $matchesModern) {
+                        $usingLegacy = false; // coincide sólo con modern
+                    } elseif ($matchesLegacy && $matchesModern) {
+                        // Coincide con ambos, preferimos legacy (mantener compatibilidad histórica)
+                        $usingLegacy = true;
+                    } else {
+                        // No coincide con ninguno: fallback a modern para evitar devolver contenido legacy incorrecto
+                        $usingLegacy = false;
+                    }
+                } else {
+                    // Sin título proporcionado, mantenemos preferencia legacy para compatibilidad
+                    $usingLegacy = true;
+                }
+            } else {
+                // Sólo uno existe
+                $usingLegacy = (bool)$legacyMeeting;
+            }
+
+            if ($usingLegacy) {
+                $meetingTitle = $legacyMeeting->meeting_name ?? 'Reunión';
+                $meeting = null; // aseguramos que el resto del flujo use legacyTitle
+            } else {
+                $meetingTitle = $meeting?->title ?? $legacyMeeting?->meeting_name ?? 'Reunión';
+            }
             $sharedWith = [];
 
             foreach ($validContactIds as $contactId) {
@@ -403,16 +441,13 @@ class SharedMeetingController extends Controller
                 }
             }
 
-            // Obtener título de reunión (moderna o legacy)
-            $meetingTitle = $sharedMeeting->meeting?->title;
-            if (!$meetingTitle) {
-                try {
-                    $legacy = TranscriptionLaravel::find($sharedMeeting->meeting_id);
-                    $meetingTitle = $legacy?->meeting_name ?? 'Reunión';
-                } catch (\Throwable $e) {
-                    $meetingTitle = 'Reunión';
-                }
-            }
+            // Obtener título priorizando siempre legacy para evitar colisión de IDs con meetings
+            try {
+                $legacy = TranscriptionLaravel::find($sharedMeeting->meeting_id);
+            } catch (\Throwable $e) { $legacy = null; }
+            $meetingTitle = $legacy?->meeting_name
+                ?? $sharedMeeting->meeting?->title
+                ?? 'Reunión';
 
             // Eliminar la notificación de invitación al responder (aceptar/rechazar)
             $this->deleteInviteNotification($request->notification_id, $sharedMeeting);
@@ -515,45 +550,46 @@ class SharedMeetingController extends Controller
                 ]);
             }
 
-            $sharedMeetings = SharedMeeting::with(['meeting', 'sharedBy'])
+            $sharedMeetingsQuery = SharedMeeting::with(['meeting', 'sharedBy'])
                 ->where('shared_with', Auth::id())
                 ->where('status', 'accepted')
                 ->orderBy('shared_at', 'desc')
+                ->get();
+
+            // Pre-cargar transcripciones legacy para evitar N+1
+            $legacyMap = TranscriptionLaravel::whereIn('id', $sharedMeetingsQuery->pluck('meeting_id'))
                 ->get()
-                ->map(function ($shared) {
-                    // Relación principal (meetings)
-                    $meeting = $shared->meeting;
+                ->keyBy('id');
 
-                    // Fallback para datos antiguos (transcriptions_laravel)
-                    $legacy = null;
-                    if (!$meeting) {
-                        $legacy = TranscriptionLaravel::find($shared->meeting_id);
-                    }
+            $sharedMeetings = $sharedMeetingsQuery->map(function ($shared) use ($legacyMap) {
+                // Intentar primero legacy
+                $legacy = $legacyMap->get($shared->meeting_id);
+                $meeting = $legacy ? null : $shared->meeting; // sólo usar relación Meeting si no hay legacy
 
-                    // Datos del usuario que compartió, tolerante a nulos
-                    $sharedBy = $shared->sharedBy;
-                    $sharedByName = $sharedBy?->full_name
-                        ?? $sharedBy?->username
-                        ?? $sharedBy?->name
-                        ?? 'Usuario';
+                $sharedBy = $shared->sharedBy;
+                $sharedByName = $sharedBy?->full_name
+                    ?? $sharedBy?->username
+                    ?? $sharedBy?->name
+                    ?? 'Usuario';
 
-                    return [
-                        'id' => $shared->id,
-                        'meeting_id' => $shared->meeting_id,
-                        'title' => $meeting?->title ?? $legacy?->meeting_name ?? 'Reunión compartida',
-                        'date' => $meeting?->date ?? $legacy?->created_at,
-                        'duration' => $meeting?->duration ?? null,
-                        'summary' => $meeting?->summary ?? null,
-                        'shared_by' => [
-                            'id' => $sharedBy?->id,
-                            'name' => $sharedByName,
-                            'email' => $sharedBy?->email ?? ''
-                        ],
-                        'shared_at' => $shared->shared_at,
-                        'message' => $shared->message,
-                        'recordings_folder_id' => $meeting?->recordings_folder_id ?? $legacy?->audio_drive_id
-                    ];
-                });
+                return [
+                    'id' => $shared->id,
+                    'meeting_id' => $shared->meeting_id,
+                    'title' => $legacy?->meeting_name ?? $meeting?->title ?? 'Reunión compartida',
+                    'date' => $legacy?->created_at ?? $meeting?->date,
+                    'duration' => $meeting?->duration ?? null,
+                    'summary' => $meeting?->summary ?? null,
+                    'shared_by' => [
+                        'id' => $sharedBy?->id,
+                        'name' => $sharedByName,
+                        'email' => $sharedBy?->email ?? ''
+                    ],
+                    'shared_at' => $shared->shared_at,
+                    'message' => $shared->message,
+                    // Para legacy exponemos audio_drive_id en el mismo campo usado por el front
+                    'recordings_folder_id' => $legacy?->audio_drive_id ?? $meeting?->recordings_folder_id,
+                ];
+            });
 
             return response()->json([
                 'success' => true,
