@@ -21,6 +21,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\AssistantController;
 
 
 Route::get('/', function () {
@@ -111,6 +112,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/contacts', [ContactController::class, 'index'])->name('contacts.index');
     Route::get('/chats', [ChatController::class, 'index'])->name('chats.index');
     Route::get('/chats/{chat}', [ChatController::class, 'showView'])->name('chats.show');
+    Route::get('/assistant', [AssistantController::class, 'index'])->name('assistant.index');
 
     Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
     // Vista de configuración de Drive por organización (sin afectar perfil)
