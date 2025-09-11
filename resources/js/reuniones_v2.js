@@ -426,35 +426,41 @@ function renderContacts(contacts, users) {
 // Función para verificar mensajes no leídos para todos los contactos
 async function checkUnreadMessagesForContacts() {
     const contactElements = document.querySelectorAll('[id^="chat-btn-"]');
+    const contactIds = Array.from(contactElements).map(el => el.id.replace('chat-btn-', ''));
 
-    for (const element of contactElements) {
-        const contactId = element.id.replace('chat-btn-', '');
-        try {
-            const response = await fetch('/api/chats/unread-count', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({ contact_id: contactId })
+    if (!contactIds.length) return;
+
+    try {
+        const response = await fetch('/api/chats/unread-counts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ contact_ids: contactIds })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const countsMap = {};
+            data.forEach(item => {
+                countsMap[item.contact_id] = item.has_unread;
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                const indicator = document.getElementById(`unread-indicator-${contactId}`);
-
+            contactIds.forEach(id => {
+                const indicator = document.getElementById(`unread-indicator-${id}`);
                 if (indicator) {
-                    if (data.has_unread) {
+                    if (countsMap[id]) {
                         indicator.classList.remove('hidden');
                     } else {
                         indicator.classList.add('hidden');
                     }
                 }
-            }
-        } catch (error) {
-            console.error(`Error checking unread messages for contact ${contactId}:`, error);
+            });
         }
+    } catch (error) {
+        console.error('Error checking unread messages for contacts:', error);
     }
 }
 
