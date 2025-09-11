@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -314,7 +315,7 @@ class SharedMeetingController extends Controller
                 $currentUserName = $currentUser->full_name ?? $currentUser->username ?? 'Usuario';
 
                 // Crear notificación con duplicación de campos para compatibilidad (user_id/emisor, from_user_id/remitente)
-                Notification::create([
+                $notification = Notification::create([
                     'user_id' => $contactId,
                     'emisor' => $contactId,
                     'from_user_id' => Auth::id(),
@@ -332,6 +333,9 @@ class SharedMeetingController extends Controller
                     'read' => false,
                     'status' => 'pending'
                 ]);
+
+                // Invalidate notifications cache for recipient for immediate visibility
+                try { Cache::forget('notifications_user_' . $contactId); } catch (\Throwable $e) { /* ignore */ }
 
                 $contactUser = User::find($contactId);
                 if ($contactUser) {
@@ -456,7 +460,7 @@ class SharedMeetingController extends Controller
             $actionText = $status === 'accepted' ? 'aceptó' : 'rechazó';
             $currentUser = Auth::user();
             $responderName = $currentUser->full_name ?? $currentUser->username ?? 'Usuario';
-            Notification::create([
+            $responseNotification = Notification::create([
                 'user_id' => $sharedMeeting->shared_by,
                 'emisor' => $sharedMeeting->shared_by,
                 'from_user_id' => Auth::id(),
@@ -472,6 +476,7 @@ class SharedMeetingController extends Controller
                 ]),
                 'read' => false
             ]);
+            try { Cache::forget('notifications_user_' . $sharedMeeting->shared_by); } catch (\Throwable $e) { /* ignore */ }
             Log::info('respondToInvitation:createdResponseNotification');
 
             return response()->json([
