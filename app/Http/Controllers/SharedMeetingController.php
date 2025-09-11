@@ -297,7 +297,13 @@ class SharedMeetingController extends Controller
                     ->first();
 
                 if ($existingShare) {
-                    continue;
+                    // Si fue rechazado anteriormente, eliminarlo para permitir un nuevo envío
+                    if ($existingShare->status === 'rejected') {
+                        try { $existingShare->delete(); } catch (\Throwable $e) { /* ignore */ }
+                    } else {
+                        // pending o accepted: no volvemos a crear
+                        continue;
+                    }
                 }
 
                 // Crear el registro de reunión compartida
@@ -423,15 +429,25 @@ class SharedMeetingController extends Controller
                 ]);
             }
 
-            // Actualizar estado cuando es pending
-            $sharedMeeting->update([
-                'status' => $status,
-                'responded_at' => now()
-            ]);
-            Log::info('respondToInvitation:updatedStatus', [
-                'id' => $sharedMeeting->id,
-                'status' => $status
-            ]);
+            // Actualizar o preparar para borrar si rechazo
+            if ($status === 'accepted') {
+                $sharedMeeting->update([
+                    'status' => $status,
+                    'responded_at' => now()
+                ]);
+                Log::info('respondToInvitation:updatedStatus', [
+                    'id' => $sharedMeeting->id,
+                    'status' => $status
+                ]);
+            } else {
+                // Guardar responded_at antes de notificar, y luego borrar
+                try {
+                    $sharedMeeting->update([
+                        'status' => $status,
+                        'responded_at' => now()
+                    ]);
+                } catch (\Throwable $e) { /* ignore */ }
+            }
 
             // If accepted, ensure Drive permissions are in place for the recipient
             if ($status === 'accepted') {
@@ -477,6 +493,16 @@ class SharedMeetingController extends Controller
                 'read' => false
             ]);
             try { Cache::forget('notifications_user_' . $sharedMeeting->shared_by); } catch (\Throwable $e) { /* ignore */ }
+
+            // Si fue rechazado, eliminar el registro para permitir futuros re-envíos
+            if ($status === 'rejected') {
+                try {
+                    $sharedMeeting->delete();
+                    Log::info('respondToInvitation:deletedRejectedShare', ['id' => $sharedMeeting->id]);
+                } catch (\Throwable $e) {
+                    Log::warning('respondToInvitation:deleteRejectedFailed', ['id' => $sharedMeeting->id, 'error' => $e->getMessage()]);
+                }
+            }
             Log::info('respondToInvitation:createdResponseNotification');
 
             return response()->json([
