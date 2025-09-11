@@ -596,6 +596,13 @@ async function searchUser(query) {
         selectedUser = null;
         return;
     }
+    // Evitar llamar API si no cumple longitud mínima (backend exige min:3)
+    if (query.trim().length < 3) {
+        document.getElementById('search-results').classList.add('hidden');
+        document.getElementById('submit-btn').disabled = true;
+        selectedUser = null;
+        return;
+    }
 
     try {
         const response = await fetch('/api/users/search', {
@@ -607,9 +614,14 @@ async function searchUser(query) {
             },
             body: JSON.stringify({ query })
         });
-
-        if (!response.ok) throw new Error('Error al buscar usuarios');
-        const data = await response.json();
+        if (!response.ok) {
+            let info = null;
+            try { info = await response.json(); } catch(_) {}
+            console.warn('[searchUser] fallo', response.status, info);
+            // 419 CSRF / 401 auth / 422 validation
+            return renderSearchResults([]);
+        }
+        const data = await response.json().catch(() => ({ users: [] }));
         renderSearchResults(data.users || []);
     } catch (error) {
         console.error('Error searching users:', error);
