@@ -28,6 +28,7 @@ export default defineConfig({
                 'resources/js/reuniones/globals.js',
                 'resources/js/reuniones/init.js',
                 'resources/css/new-meeting.css',
+                'resources/js/meetings/new-meeting-globals.js',
                 'resources/js/new-meeting.js',
                 'resources/css/audio-processing.css',
                 'resources/js/audio-processing.js',
