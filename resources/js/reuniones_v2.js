@@ -4919,6 +4919,11 @@ window.closeDownloadModal = closeDownloadModal;
 window.showDownloadModalLoading = showDownloadModalLoading;
 window.createDownloadModal = createDownloadModal;
 
+// Funciones del modal de quitar reunión compartida
+window.openUnlinkSharedModal = openUnlinkSharedModal;
+window.closeUnlinkSharedModal = closeUnlinkSharedModal;
+window.confirmUnlinkSharedMeeting = confirmUnlinkSharedMeeting;
+
 // Funciones de contenedores
 window.openCreateContainerModal = openCreateContainerModal;
 window.openEditContainerModal = openEditContainerModal;
