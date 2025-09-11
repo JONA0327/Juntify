@@ -2779,8 +2779,11 @@ class MeetingController extends Controller
             // Crear el HTML para el PDF
             // Si se solicitó la sección de tareas, usar siempre las tareas de la BD y mapear a columnas específicas
             if (in_array('tasks', $sections)) {
+                // Cuando es una reunión compartida, las tareas están guardadas con el username del dueño de la reunión
+                $taskUsername = ($sharedAccess && isset($meeting->username)) ? $meeting->username : $user->username;
+
                 $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
-                    ->where('username', $user->username)
+                    ->where('username', $taskUsername)
                     ->get(['tarea', 'descripcion', 'fecha_inicio', 'fecha_limite', 'progreso', 'asignado']);
 
                 $mapped = $dbTasks->map(function($t) {
@@ -2930,8 +2933,11 @@ class MeetingController extends Controller
 
             // Si se solicitó la sección de tareas, usar siempre las tareas de la BD y mapear a columnas específicas
             if (in_array('tasks', $sections)) {
+                // En reuniones compartidas, las tareas pertenecen al owner (meeting->username)
+                $taskUsername = ($sharedAccess && isset($meeting->username)) ? $meeting->username : $user->username;
+
                 $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
-                    ->where('username', $user->username)
+                    ->where('username', $taskUsername)
                     ->get(['tarea', 'descripcion', 'fecha_inicio', 'fecha_limite', 'progreso', 'asignado']);
 
                 $mapped = $dbTasks->map(function($t) {
