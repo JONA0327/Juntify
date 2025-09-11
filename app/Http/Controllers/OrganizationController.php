@@ -74,19 +74,21 @@ class OrganizationController extends Controller
                 });
             })
             ->orWhere('admin_id', $user->id)
+            ->select(['id', 'nombre_organizacion', 'descripcion', 'imagen', 'num_miembros', 'admin_id'])
             ->with([
                 // Cargar todos los grupos de la organización y el rol del usuario en cada uno
                 'groups' => function ($query) use ($user) {
-                    $query->with([
-                        'users' => function ($subQuery) use ($user) {
-                            $subQuery->where('users.id', $user->id);
-                        },
-                        'code',
-                    ]);
+                    $query->select(['id', 'id_organizacion', 'nombre_grupo', 'descripcion', 'miembros'])
+                        ->with([
+                            'users' => function ($subQuery) use ($user) {
+                                $subQuery->select('users.id')->where('users.id', $user->id);
+                            },
+                            'code:id,group_id,code',
+                        ]);
                 },
                 // Cargar relación users filtrada al usuario actual para leer el rol del pivot
                 'users' => function ($q) use ($user) {
-                    $q->where('users.id', $user->id);
+                    $q->select('users.id')->where('users.id', $user->id);
                 },
             ])
             ->get();
