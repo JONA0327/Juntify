@@ -511,15 +511,90 @@ class MeetingController extends Controller
                     ]);
                 }
 
-                if ($useServiceAccount) {
-                    /** @var \App\Services\GoogleServiceAccount $sa */
-                    $sa = app(\App\Services\GoogleServiceAccount::class);
-                    if ($sharerEmail) { $sa->impersonate($sharerEmail); }
-                    $transcriptContent = $sa->downloadFile($legacyMeeting->transcript_drive_id);
+                // Descargar contenido del .ju con tolerancia a fallos
+                // Secuencia si es compartida: SA (impersonate) -> SA (sin impersonate) -> token del dueño -> token del usuario
+                // Secuencia si no es compartida: token del usuario
+                $transcriptContent = null;
+                $normalizedJuId = $this->normalizeDriveId($legacyMeeting->transcript_drive_id);
+                if ($sharedAccess) {
+                    // 1) Service Account impersonando al propietario
+                    try {
+                        /** @var \App\Services\GoogleServiceAccount $sa */
+                        $sa = app(\App\Services\GoogleServiceAccount::class);
+                        if ($sharerEmail) { $sa->impersonate($sharerEmail); }
+                        $transcriptContent = $sa->downloadFile($normalizedJuId);
+                        Log::info('show(): .ju descargado con SA impersonate', ['meeting_id' => $legacyMeeting->id]);
+                    } catch (\Throwable $e) {
+                        Log::warning('show(): fallo SA con impersonate al descargar .ju, intentando sin impersonate', [
+                            'meeting_id' => $legacyMeeting->id,
+                            'file_id' => $normalizedJuId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                    // 2) SA sin impersonate
+                    if ($transcriptContent === null) {
+                        try {
+                            /** @var \App\Services\GoogleServiceAccount $sa */
+                            $sa = app(\App\Services\GoogleServiceAccount::class);
+                            $transcriptContent = $sa->downloadFile($normalizedJuId);
+                            Log::info('show(): .ju descargado con SA sin impersonate', ['meeting_id' => $legacyMeeting->id]);
+                        } catch (\Throwable $e2) {
+                            Log::warning('show(): fallo SA sin impersonate al descargar .ju, intentando token del dueño', [
+                                'meeting_id' => $legacyMeeting->id,
+                                'file_id' => $normalizedJuId,
+                                'error' => $e2->getMessage(),
+                            ]);
+                        }
+                    }
+                    // 3) Token del dueño
+                    if ($transcriptContent === null && !empty($share?->sharedBy)) {
+                        try {
+                            $this->setGoogleDriveToken($share->sharedBy);
+                            $transcriptContent = $this->downloadFromDrive($normalizedJuId);
+                            Log::info('show(): .ju descargado con token del dueño', ['meeting_id' => $legacyMeeting->id]);
+                        } catch (\Throwable $e3) {
+                            Log::error('show(): fallo token del dueño al descargar .ju', [
+                                'meeting_id' => $legacyMeeting->id,
+                                'file_id' => $normalizedJuId,
+                                'error' => $e3->getMessage(),
+                            ]);
+                        }
+                    }
+                    // 4) Token del usuario (último intento)
+                    if ($transcriptContent === null) {
+                        try {
+                            $this->setGoogleDriveToken($user);
+                            $transcriptContent = $this->downloadFromDrive($normalizedJuId);
+                            Log::info('show(): .ju descargado con token del usuario', ['meeting_id' => $legacyMeeting->id]);
+                        } catch (\Throwable $e4) {
+                            Log::error('show(): no fue posible descargar el .ju con ningún método en flujo compartido', [
+                                'meeting_id' => $legacyMeeting->id,
+                                'file_id' => $normalizedJuId,
+                                'error' => $e4->getMessage(),
+                            ]);
+                        }
+                    }
                 } else {
-                    $transcriptContent = $this->downloadFromDrive($legacyMeeting->transcript_drive_id);
+                    // No compartida: token del usuario
+                    try {
+                        $this->setGoogleDriveToken($user);
+                        $transcriptContent = $this->downloadFromDrive($normalizedJuId);
+                        Log::info('show(): .ju descargado con token del usuario (no compartida)', ['meeting_id' => $legacyMeeting->id]);
+                    } catch (\Throwable $e) {
+                        Log::error('show(): no fue posible descargar el .ju (no compartida)', [
+                            'meeting_id' => $legacyMeeting->id,
+                            'file_id' => $normalizedJuId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
                 }
-                $transcriptResult = $this->decryptJuFile($transcriptContent);
+
+                // Si no se pudo obtener contenido, continuar con fallback de DB más abajo
+                if ($transcriptContent) {
+                    $transcriptResult = $this->decryptJuFile($transcriptContent);
+                } else {
+                    $transcriptResult = ['data' => [], 'needs_encryption' => false];
+                }
                 $transcriptData = $transcriptResult['data'];
                 $needsEncryption = $transcriptResult['needs_encryption'];
 
@@ -593,11 +668,22 @@ class MeetingController extends Controller
                         ->values()
                         ->toArray();
 
+                    Log::info('show(): fallback reconstrucción desde DB activado', [
+                        'meeting_id' => $legacyMeeting->id,
+                        'segments_count' => count($rebuiltSegments),
+                        'has_transcription' => $rebuiltTranscription !== ''
+                    ]);
+
                     // Sobrescribir datos procesados con fallback de DB
                     $processedData['segments'] = $rebuiltSegments;
                     $processedData['transcription'] = $rebuiltTranscription ?: ($processedData['transcription'] ?? '');
                     if (empty($processedData['speakers'])) { $processedData['speakers'] = $rebuiltSpeakers; }
-                    if (empty($processedData['summary']) || stripos($processedData['summary'], 'encriptad') !== false) {
+                    // Si el resumen es placeholder por defecto o estaba vacío/encriptado, reemplazarlo por uno reconstruido
+                    $summaryVal = (string)($processedData['summary'] ?? '');
+                    $isDefaultSummary = $summaryVal === ''
+                        || trim($summaryVal) === 'No hay resumen disponible'
+                        || str_starts_with(trim($summaryVal), 'Resumen no disponible');
+                    if ($isDefaultSummary || stripos($summaryVal, 'encriptad') !== false) {
                         $processedData['summary'] = 'Resumen reconstruido desde base de datos (segmentos históricos).';
                     }
                 }
@@ -1574,6 +1660,26 @@ class MeetingController extends Controller
                             'error' => $e2->getMessage(),
                             'trace' => $e2->getTraceAsString(),
                         ]);
+
+                        // Intento adicional: usar el token del dueño a través de GoogleDriveService
+                        try {
+                            $ownerUser = $meeting->user()->first();
+                            if ($ownerUser) {
+                                $this->setGoogleDriveToken($ownerUser);
+                                $content = $this->googleDriveService->downloadFileContent($meeting->transcript_drive_id);
+                                $filename = 'meeting_' . $meeting->id . '.ju';
+                                return response($content)
+                                    ->header('Content-Type', 'application/octet-stream')
+                                    ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+                            }
+                        } catch (\Throwable $eOwner) {
+                            Log::info('downloadJuFile owner token fallback failed', [
+                                'meeting_id' => $id,
+                                'error' => $eOwner->getMessage(),
+                            ]);
+                        }
+
+                        // Últimos fallbacks: redirección si es accesible, o 404 si no
                         $direct = !empty($meeting->transcript_download_url)
                             ? $this->normalizeDriveUrl($meeting->transcript_download_url)
                             : 'https://drive.google.com/uc?export=download&id=' . $meeting->transcript_drive_id;
@@ -1641,10 +1747,12 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
-            $sharedAccess = SharedMeeting::where('meeting_id', $id)
+            $sharedMeeting = SharedMeeting::with('sharedBy')
+                ->where('meeting_id', $id)
                 ->where('shared_with', $user->id)
                 ->where('status', 'accepted')
-                ->exists();
+                ->first();
+            $sharedAccess = (bool) $sharedMeeting;
 
             $meeting = TranscriptionLaravel::where('id', $id)
                 ->when(!$sharedAccess, function ($q) use ($user) {
@@ -1668,7 +1776,53 @@ class MeetingController extends Controller
                 }
             }
 
-            // 1) Preferir URL directa almacenada en DB
+            // Para reuniones compartidas, intentar servir con Service Account primero (más confiable para invitados)
+            if ($sharedAccess) {
+                if (empty($fileId) && !empty($meeting->audio_drive_id)) {
+                    $fileId = $meeting->audio_drive_id;
+                }
+                if (!empty($fileId)) {
+                    try {
+                        /** @var \App\Services\GoogleServiceAccount $sa */
+                        $sa = app(\App\Services\GoogleServiceAccount::class);
+                        // Intento directo con SA
+                        try {
+                            $content = $sa->downloadFile($fileId);
+                            $filename = 'meeting_' . $meeting->id . '_audio';
+                            return response($content)
+                                ->header('Content-Type', 'application/octet-stream')
+                                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+                        } catch (\Throwable $e) {
+                            // Intentar impersonar al dueño si está disponible
+                            if ($sharedMeeting?->sharedBy?->email) {
+                                try {
+                                    $sa->impersonate($sharedMeeting->sharedBy->email);
+                                    $content = $sa->downloadFile($fileId);
+                                    $filename = 'meeting_' . $meeting->id . '_audio';
+                                    return response($content)
+                                        ->header('Content-Type', 'application/octet-stream')
+                                        ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+                                } catch (\Throwable $e2) {
+                                    // Continuar con fallbacks
+                                }
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        // Continuar con fallbacks
+                    }
+                }
+                // Fallback de compartidas: redirigir a enlace directo si existe o uc?export por ID
+                if (!empty($meeting->audio_download_url)) {
+                    $direct = $this->normalizeDriveUrl($meeting->audio_download_url);
+                    return redirect()->away($direct);
+                }
+                if (!empty($fileId)) {
+                    $direct = 'https://drive.google.com/uc?export=download&id=' . $fileId;
+                    return redirect()->away($direct);
+                }
+            }
+
+            // 1) Preferir URL directa almacenada en DB (propietario)
             if (!empty($meeting->audio_download_url)) {
                 $direct = $this->normalizeDriveUrl($meeting->audio_download_url);
                 return redirect()->away($direct);
