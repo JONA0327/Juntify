@@ -1740,7 +1740,10 @@ class MeetingController extends Controller
                 }
 
                 $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
-                return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
+                if ($mimeType === 'video/mp4') {
+                    $mimeType = 'audio/mp4';
+                }
+                return response()->file($audioPath, ['Content-Type' => $mimeType]);
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
                 // Flujo moderno (Meeting en BD)
                 $modern = Meeting::where('id', $meeting)
@@ -1757,7 +1760,10 @@ class MeetingController extends Controller
                 if (!empty($existingFiles)) {
                     $audioPath = $existingFiles[0];
                     $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
-                    return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
+                    if ($mimeType === 'video/mp4') {
+                        $mimeType = 'audio/mp4';
+                    }
+                    return response()->file($audioPath, ['Content-Type' => $mimeType]);
                 }
 
                 $audioData = null;
@@ -1798,7 +1804,10 @@ class MeetingController extends Controller
                     return redirect()->away($audioPath);
                 }
                 $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
-                return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
+                if ($mimeType === 'video/mp4') {
+                    $mimeType = 'audio/mp4';
+                }
+                return response()->file($audioPath, ['Content-Type' => $mimeType]);
             }
         } catch (\Exception $e) {
             Log::error('Error streaming audio file', [ 'meeting_id' => $meeting, 'error' => $e->getMessage() ]);
