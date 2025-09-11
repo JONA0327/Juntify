@@ -622,24 +622,57 @@ class SharedMeetingController extends Controller
                 try { $sa->impersonate($sharer->email); } catch (\Throwable $e) { /* continue without impersonation */ }
             }
 
-            // Share .ju for legacy
+            // Share .ju for legacy, validating Drive ID first
             if ($legacy) {
-                if (!empty($legacy->transcript_drive_id)) {
-                    try { $sa->shareItem($legacy->transcript_drive_id, $recipientEmail, 'reader'); } catch (\Throwable $e) { Log::warning('grantDriveAccess: share .ju failed', ['error'=>$e->getMessage()]); }
+                if (!empty($legacy->transcript_drive_id) && $this->driveFileExists($sa, $legacy->transcript_drive_id)) {
+                    $this->shareDriveItem($sa, $legacy->transcript_drive_id, $recipientEmail, 'grantDriveAccess: share .ju failed');
                 }
                 // Share audio: could be file or folder id
                 if (!empty($legacy->audio_drive_id)) {
-                    try { $sa->shareItem($legacy->audio_drive_id, $recipientEmail, 'reader'); } catch (\Throwable $e) { Log::warning('grantDriveAccess: share audio failed', ['error'=>$e->getMessage()]); }
+                    $this->shareDriveItem($sa, $legacy->audio_drive_id, $recipientEmail, 'grantDriveAccess: share audio failed');
                 }
                 return;
             }
 
             // Modern meeting: share recordings folder if present
             if ($modern && !empty($modern->recordings_folder_id)) {
-                try { $sa->shareItem($modern->recordings_folder_id, $recipientEmail, 'reader'); } catch (\Throwable $e) { Log::warning('grantDriveAccess: share recordings folder failed', ['error'=>$e->getMessage()]); }
+                $this->shareDriveItem($sa, $modern->recordings_folder_id, $recipientEmail, 'grantDriveAccess: share recordings folder failed');
             }
         } catch (\Throwable $e) {
             Log::warning('grantDriveAccessForShare failed', [ 'error' => $e->getMessage() ]);
+            throw $e;
+        }
+    }
+
+    private function driveFileExists(GoogleServiceAccount $sa, string $fileId): bool
+    {
+        try {
+            $sa->getDrive()->files->get($fileId, ['fields' => 'id', 'supportsAllDrives' => true]);
+            return true;
+        } catch (\Throwable $e) {
+            Log::warning('grantDriveAccess: invalid drive id', ['file_id' => $fileId, 'error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    private function shareDriveItem(GoogleServiceAccount $sa, string $itemId, string $email, string $context): void
+    {
+        try {
+            $sa->shareItem($itemId, $email, 'reader');
+            $permissions = $sa->getDrive()->permissions->listPermissions($itemId, ['supportsAllDrives' => true]);
+            $granted = false;
+            foreach ($permissions->getPermissions() ?? [] as $perm) {
+                if (method_exists($perm, 'getEmailAddress') && $perm->getEmailAddress() === $email) {
+                    $granted = true;
+                    break;
+                }
+            }
+            if (!$granted) {
+                Log::error('grantDriveAccess: permission not granted', ['item_id' => $itemId, 'recipient' => $email]);
+            }
+        } catch (\Throwable $e) {
+            Log::error($context, ['item_id' => $itemId, 'recipient' => $email, 'error' => $e->getMessage()]);
+            throw $e;
         }
     }
 
