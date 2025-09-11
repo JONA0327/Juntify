@@ -59,7 +59,10 @@ return [
             'strict' => true,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
-                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                PDO::ATTR_PERSISTENT        => true,
+                PDO::ATTR_TIMEOUT           => 5,
+                PDO::MYSQL_ATTR_INIT_COMMAND=> 'SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci',
+                PDO::MYSQL_ATTR_SSL_CA      => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
         ],
 
