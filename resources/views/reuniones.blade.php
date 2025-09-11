@@ -13,12 +13,16 @@
     <!-- Vite Assets -->
     @vite([
         'resources/css/app.css',
-        'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css',
-        'resources/css/reuniones_v2.css', /* Nuevo archivo de estilos */
+        'resources/js/app.js',
+        'resources/css/new-meeting.css',
+        'resources/css/index.css',
+        'resources/css/reuniones_v2.css',
+        'resources/css/contacts/index.css',
         'resources/css/audio-processing.css',
         'resources/js/reuniones/globals.js',
         'resources/js/reuniones_v2.js',   /* Nuevo archivo de script */
         'resources/js/reuniones/init.js'
+
     ])
 </head>
 <body data-user-role="{{ $userRole }}" data-organization-id="{{ $organizationId }}" class="bg-slate-950 text-slate-200 font-sans antialiased">

@@ -17,6 +17,7 @@
         'resources/css/new-meeting.css',
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
+        'resources/css/contacts/index.css',
         'resources/css/audio-processing.css'
     ])
 
