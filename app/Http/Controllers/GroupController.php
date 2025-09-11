@@ -458,32 +458,81 @@ class GroupController extends Controller
     public function accept(Group $group)
     {
         $user = auth()->user();
+        if (!$user) {
+            return response()->json(['message' => 'No autenticado'], 401);
+        }
 
-    // Añadir al grupo y asegurar pertenencia en la organización
-    $group->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
-    $group->update(['miembros' => $group->users()->count()]);
-    $group->organization->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
-    $group->organization->refreshMemberCount();
+        try {
+            Log::info('Accepting group invitation', [
+                'group_id' => $group->id,
+                'user_id' => $user->id
+            ]);
 
-        // Actualizar current_organization_id del usuario
-        User::where('id', $user->id)->update(['current_organization_id' => $group->organization->id]);
+            // Evitar mezclar organizaciones: si ya pertenece a otra distinta bloquear
+            if ($user->current_organization_id && $user->current_organization_id !== $group->id_organizacion) {
+                return response()->json([
+                    'message' => 'Ya perteneces a otra organización'
+                ], 409);
+            }
 
-        Notification::where('emisor', $user->id)
-            ->where('type', 'group_invitation')
-            ->delete();
+            // Añadir al grupo y asegurar pertenencia en la organización
+            $group->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
+            $group->update(['miembros' => $group->users()->count()]);
+            if ($group->organization) {
+                $group->organization->users()->syncWithoutDetaching([$user->id => ['rol' => 'invitado']]);
+                $group->organization->refreshMemberCount();
+            }
 
-        OrganizationActivity::create([
-            'organization_id' => $group->id_organizacion,
-            'group_id' => $group->id,
-            'user_id' => $user->id,
-            'target_user_id' => $user->id,
-            'action' => 'join_group',
-            'description' => $user->full_name . ' se unió al grupo ' . $group->nombre_grupo,
-        ]);
+            // Actualizar current_organization_id del usuario
+            if ($group->organization) {
+                User::where('id', $user->id)->update(['current_organization_id' => $group->organization->id]);
+            }
 
-        $group->load('users');
+            // Borrar notificación asociada (soporta columnas legacy / nuevas)
+            $notificationsQuery = Notification::where('type', 'group_invitation')
+                ->where(function($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->orWhere('emisor', $user->id); // legacy destino
+                });
 
-        return response()->json(['joined' => true, 'group' => $group]);
+            // Filtrar por group_id dentro de data si existe (evita borrar otras invitaciones)
+            if (\Illuminate\Support\Facades\Schema::hasColumn('notifications', 'data')) {
+                $groupId = $group->id;
+                $notificationsQuery->where(function($q) use ($groupId) {
+                    $q->where('data', 'like', '%"group_id":'.$groupId.'%')
+                      ->orWhere('data', 'like', '%"group_id":"'.$groupId.'"%');
+                });
+            }
+            $deleted = $notificationsQuery->delete();
+
+            OrganizationActivity::create([
+                'organization_id' => $group->id_organizacion,
+                'group_id' => $group->id,
+                'user_id' => $user->id,
+                'target_user_id' => $user->id,
+                'action' => 'join_group',
+                'description' => $user->full_name . ' se unió al grupo ' . $group->nombre_grupo,
+            ]);
+
+            $group->load('users');
+            Log::info('Group invitation accepted', [
+                'group_id' => $group->id,
+                'user_id' => $user->id,
+                'deleted_notifications' => $deleted
+            ]);
+
+            return response()->json([
+                'joined' => true,
+                'group' => $group
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error accepting group invitation', [
+                'group_id' => $group->id,
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json(['message' => 'Error al aceptar la invitación'], 500);
+        }
     }
 
     public function members(Group $group)
