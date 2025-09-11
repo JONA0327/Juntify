@@ -436,27 +436,26 @@ async function startStandardTranscription(audioBlob, lang, progressBar, progress
 }
 
 async function startChunkedTranscription(audioBlob, lang, progressBar, progressText, progressPercent) {
-    const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB chunks
+    // Estrategia adaptativa: intentar con 8MB, luego 4MB, luego 2MB, luego 1MB si aparecen 413
+    const CANDIDATE_SIZES = [8, 4, 2, 1].map(m => m * 1024 * 1024);
     const MAX_RETRIES = 3;
-    const RETRY_DELAY = 2000; // 2 seconds
+    const RETRY_DELAY = 2000; // 2 segundos
 
-    try {
-        progressText.textContent = 'Preparando subida por fragmentos...';
-
-        // Paso 1: Inicializar transcripción por chunks
-        console.log('🔧 [startChunkedTranscription] Initializing chunked upload');
+    const tryWithSize = async (CHUNK_SIZE) => {
+        console.log(`🔧 [startChunkedTranscription] Intentando chunk size = ${Math.round(CHUNK_SIZE/1024/1024)}MB`);
+        progressText.textContent = `Preparando subida (${Math.round(CHUNK_SIZE/1024/1024)}MB)...`;
 
         const initResponse = await axios.post('/transcription/chunked/init', {
             filename: `recording.${getFileExtensionForMimeType(audioBlob.type)}`,
             size: audioBlob.size,
             language: lang,
             chunks: Math.ceil(audioBlob.size / CHUNK_SIZE)
-        }, { timeout: 30000 }); // 30 segundos para inicialización
+        }, { timeout: 30000 });
 
         const { upload_id, chunk_urls } = initResponse.data;
-        console.log(`✅ [startChunkedTranscription] Upload initialized with ${chunk_urls.length} chunks`);
+        console.log(`✅ [startChunkedTranscription] Upload initialized with ${chunk_urls.length} chunks (size ${Math.round(CHUNK_SIZE/1024/1024)}MB)`);
 
-        // Paso 2: Subir chunks en paralelo (máximo 3 a la vez)
+        // Construir lista de chunks
         const chunks = [];
         for (let i = 0; i < audioBlob.size; i += CHUNK_SIZE) {
             chunks.push({
@@ -467,24 +466,22 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
         }
 
         let completedChunks = 0;
-        const uploadPromises = [];
         const concurrentUploads = 3;
 
         const uploadChunk = async (chunk, retryCount = 0) => {
             try {
                 progressText.textContent = `Subiendo fragmento ${chunk.index + 1}/${chunks.length}...`;
-
                 const formData = new FormData();
                 formData.append('chunk', chunk.blob);
                 formData.append('chunk_index', chunk.index);
                 formData.append('upload_id', upload_id);
 
                 await axios.post('/transcription/chunked/upload', formData, {
-                    timeout: 180000, // 3 minutos por chunk
+                    timeout: 180000,
                     onUploadProgress: (e) => {
                         if (e.total) {
                             const chunkProgress = (e.loaded / e.total);
-                            const totalProgress = ((completedChunks + chunkProgress) / chunks.length) * 8; // 0-8% del total
+                            const totalProgress = ((completedChunks + chunkProgress) / chunks.length) * 8; // 0-8% global
                             progressBar.style.width = totalProgress + '%';
                             progressPercent.textContent = Math.round(totalProgress) + '%';
                         }
@@ -492,49 +489,59 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
                 });
 
                 completedChunks++;
-                console.log(`✅ [uploadChunk] Chunk ${chunk.index + 1}/${chunks.length} uploaded successfully`);
-
+                console.log(`✅ [uploadChunk] Chunk ${chunk.index + 1}/${chunks.length} ok (${Math.round(CHUNK_SIZE/1024/1024)}MB)`);
             } catch (error) {
+                // Si es 413 devolvemos señal para reintentar con chunk menor
+                if (error?.response?.status === 413) {
+                    console.warn(`🚫 [uploadChunk] 413 con tamaño ${Math.round(CHUNK_SIZE/1024/1024)}MB en chunk ${chunk.index + 1}`);
+                    throw { adaptive413: true };
+                }
                 if (retryCount < MAX_RETRIES) {
-                    console.warn(`⚠️ [uploadChunk] Chunk ${chunk.index + 1} failed, retrying (${retryCount + 1}/${MAX_RETRIES}):`, error.message);
-                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, retryCount))); // Exponential backoff
+                    console.warn(`⚠️ [uploadChunk] Retry ${retryCount + 1}/${MAX_RETRIES} chunk ${chunk.index + 1}:`, error.message);
+                    await new Promise(r => setTimeout(r, RETRY_DELAY * Math.pow(2, retryCount)));
                     return uploadChunk(chunk, retryCount + 1);
                 } else {
-                    console.error(`❌ [uploadChunk] Chunk ${chunk.index + 1} failed after ${MAX_RETRIES} retries:`, error);
+                    console.error(`❌ [uploadChunk] Falló chunk ${chunk.index + 1} tras ${MAX_RETRIES} intentos`, error);
                     throw error;
                 }
             }
         };
 
-        // Subir chunks en lotes concurrentes
         for (let i = 0; i < chunks.length; i += concurrentUploads) {
             const batch = chunks.slice(i, i + concurrentUploads);
-            const batchPromises = batch.map(chunk => uploadChunk(chunk));
-            await Promise.all(batchPromises);
+            await Promise.all(batch.map(c => uploadChunk(c)));
         }
 
-        // Paso 3: Finalizar la transcripción
+        // Finalizar
         progressBar.style.width = '9%';
         progressPercent.textContent = '9%';
         progressText.textContent = 'Finalizando subida...';
-
         console.log('🔧 [startChunkedTranscription] Finalizing upload');
-
-        const finalizeResponse = await axios.post('/transcription/chunked/finalize', {
-            upload_id: upload_id
-        }, { timeout: 300000 }); // Aumentado a 5 minutos para finalización
-
-        console.log("✅ [startChunkedTranscription] Transcripción iniciada:", finalizeResponse.data);
-
+        const finalizeResponse = await axios.post('/transcription/chunked/finalize', { upload_id }, { timeout: 300000 });
+        console.log('✅ [startChunkedTranscription] Transcripción iniciada:', finalizeResponse.data);
         progressBar.style.width = '10%';
         progressPercent.textContent = '10%';
         progressText.textContent = 'En cola...';
-
         pollTranscription(finalizeResponse.data.tracking_id);
+    };
 
-    } catch (e) {
-        await handleTranscriptionError(e);
+    for (const size of CANDIDATE_SIZES) {
+        try {
+            await tryWithSize(size);
+            return; // éxito
+        } catch (e) {
+            if (e && e.adaptive413) {
+                console.warn(`↩️ [startChunkedTranscription] Reducción de chunk: falló con ${Math.round(size/1024/1024)}MB, probando menor...`);
+                continue; // probar siguiente tamaño
+            } else {
+                // Otro error no relacionado con 413
+                return await handleTranscriptionError(e);
+            }
+        }
     }
+
+    // Si se agotaron tamaños
+    await handleTranscriptionError(new Error('No se pudo subir: todos los tamaños de fragmento fallaron (413). Verifica client_max_body_size en el servidor.'));
 }
 
 async function handleTranscriptionError(e) {
