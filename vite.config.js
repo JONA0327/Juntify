@@ -30,6 +30,8 @@ export default defineConfig({
                 'resources/css/new-meeting.css',
                 'resources/js/meetings/new-meeting-globals.js',
                 'resources/js/new-meeting.js',
+                'resources/css/meetings/new-meeting-nocors.css',
+                'resources/js/meetings/new-meeting-nocors.js',
                 'resources/css/audio-processing.css',
                 'resources/js/audio-processing.js',
                 'resources/js/notifications.js',
