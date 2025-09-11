@@ -33,6 +33,7 @@ export default defineConfig({
                 'resources/css/tasks.css',
                 'resources/css/organization.css',
                 'resources/js/organization.js',
+                'resources/js/admin/dashboard.js',
                 'resources/js/ffmpeg-test.js',
                 'resources/js/ffmpeg-test-simple.js',
             ],
