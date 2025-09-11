@@ -14,6 +14,7 @@
     @vite([
         'resources/css/app.css',
         'resources/js/app.js',
+        'resources/js/tasks/sidebar-details.js',
         'resources/js/tasks/tabs-tareas.js',
         'resources/css/new-meeting.css',
         'resources/css/index.css',
