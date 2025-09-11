@@ -185,6 +185,7 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
           Route::get('/chats', [ChatController::class, 'apiIndex'])->name('api.chats.index');
           Route::post('/chats/create-or-find', [ChatController::class, 'createOrFind'])->name('api.chats.create-or-find');
           Route::post('/chats/unread-count', [ChatController::class, 'getUnreadCount'])->name('api.chats.unread-count');
+          Route::post('/chats/unread-counts', [ChatController::class, 'getUnreadCounts'])->name('api.chats.unread-counts');
           Route::get('/chats/{chat}', [ChatController::class, 'show'])->name('api.chats.show');
           Route::post('/chats/{chat}/messages', [ChatController::class, 'store'])->name('api.chats.messages.store');
 
