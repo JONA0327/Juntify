@@ -17,7 +17,8 @@
         'resources/css/new-meeting.css',
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
-        'resources/css/audio-processing.css'
+        'resources/css/audio-processing.css',
+        'resources/js/tasks/task-details-modal.js'
     ])
 
     <!-- Styles específicos para tareas -->
