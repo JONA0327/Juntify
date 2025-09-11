@@ -128,13 +128,7 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
         Route::get('/groups/{group}/containers', [GroupController::class, 'getContainers'])->name('api.groups.containers');
     });
 
-    // Notificaciones
-    Route::middleware(['web', 'auth'])->group(function () {
-        Route::get('/notifications', [NotificationController::class, 'index'])->name('api.notifications.index');
-        Route::post('/notifications', [NotificationController::class, 'store'])->name('api.notifications.store');
-        Route::put('/notifications/{notification}', [NotificationController::class, 'update'])->name('api.notifications.update');
-        Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('api.notifications.destroy');
-    });
+    // (Eliminado grupo duplicado de notificaciones para permitir route:cache)
 
     // Rutas de Tareas (tabla tasks tradicional)
     Route::middleware(['auth:web'])->group(function () {
@@ -203,13 +197,16 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
           Route::post('/shared-meetings/resolve-drive-links', [SharedMeetingController::class, 'resolveDriveLinks'])->name('api.shared-meetings.resolve');
           Route::delete('/shared-meetings/{id}', [SharedMeetingController::class, 'unlink'])->name('api.shared-meetings.unlink');
 
-          // API para notificaciones
+          // API para notificaciones (unificado)
           Route::get('/notifications', [NotificationController::class, 'index'])->name('api.notifications.index');
+          Route::post('/notifications', [NotificationController::class, 'store'])->name('api.notifications.store');
+          Route::put('/notifications/{notification}', [NotificationController::class, 'update'])->name('api.notifications.update');
           Route::get('/notifications/unread', [NotificationController::class, 'unread'])->name('api.notifications.unread');
           Route::get('/notifications/count', [NotificationController::class, 'getUnreadCount'])->name('api.notifications.count');
           Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('api.notifications.read');
           Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('api.notifications.read-all');
-          Route::delete('/notifications/{id}', [NotificationController::class, 'destroy'])->name('api.notifications.destroy');
+          // Usar {notification} para binding automático
+          Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('api.notifications.destroy');
 
           // API para reuniones pendientes
           Route::get('/pending-meetings', [MeetingController::class, 'getPendingMeetings']);
