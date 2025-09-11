@@ -14,49 +14,25 @@
     @vite([
         'resources/css/app.css',
         'resources/js/app.js',
+        'resources/js/tasks/tabs-tareas.js',
         'resources/css/new-meeting.css',
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
         'resources/css/audio-processing.css',
         'resources/js/tasks/task-details-modal.js'
+        'resources/js/tasks/tabs-reuniones.js',
+        'resources/css/tasks/index.css',
+        'resources/js/tasks/index.js'
+        'resources/css/contacts/index.css',
+
     ])
 
-    <!-- Styles específicos para tareas -->
-    <style>
-        .task-card {
-            background: rgba(30, 41, 59, 0.6);
-            border: 1px solid rgba(100, 116, 139, 0.2);
-            border-radius: 12px;
-            padding: 1.5rem;
-            transition: all 0.3s ease;
-        }
-
-        .task-card:hover {
-            background: rgba(30, 41, 59, 0.8);
-            border-color: rgba(100, 116, 139, 0.4);
-        }
-
-        .priority-alta {
-            border-left: 4px solid #ef4444;
-        }
-
-        .priority-media {
-            border-left: 4px solid #f59e0b;
-        }
-
-        .priority-baja {
-            border-left: 4px solid #10b981;
-        }
-
-        .task-completed {
-            opacity: 0.6;
-        }
-
-        .task-overdue {
-            border-left-color: #ef4444;
-            background: rgba(239, 68, 68, 0.1);
-        }
-    </style>
+    <meta name="task-endpoints"
+        data-api-meetings="{{ route('api.tasks-laravel.meetings', [], false) }}"
+        data-api-import="/api/tasks-laravel/import/"
+        data-api-exists="{{ route('api.tasks-laravel.exists', [], false) }}"
+        data-api-tasks="{{ route('api.tasks-laravel.tasks', [], false) }}"
+        data-api-calendar="{{ route('api.tasks-laravel.calendar', [], false) }}">
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
 
@@ -115,33 +91,5 @@
     <!-- Modal de detalles de tareas -->
     @include('tasks.partials._task-details-modal')
 
-    <!-- Scripts -->
-    <script>
-        // Endpoints para tasks_laravel
-        window.taskLaravel = {
-            apiMeetings: '{{ route("api.tasks-laravel.meetings", [], false) }}',
-            apiImport: (id) => `/api/tasks-laravel/import/${id}`,
-            apiExists: '{{ route("api.tasks-laravel.exists", [], false) }}',
-            apiTasks: '{{ route("api.tasks-laravel.tasks", [], false) }}',
-            csrf: '{{ csrf_token() }}'
-        };
-        // Calendario: usar events de tasks_laravel
-        window.taskData = {
-            apiTasks: '{{ route("api.tasks-laravel.calendar", [], false) }}'
-        };
-
-        // Utilidad para mostrar/ocultar panel de tareas
-        window.showTasksPanel = function(show = true) {
-            const panel = document.getElementById('tasks-panel');
-            const empty = document.getElementById('tasks-empty');
-            if (show) {
-                panel.classList.remove('hidden');
-                empty.classList.add('hidden');
-            } else {
-                panel.classList.add('hidden');
-                empty.classList.remove('hidden');
-            }
-        }
-    </script>
 </body>
 </html>
