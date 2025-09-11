@@ -120,6 +120,7 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
         Route::patch('/groups/{group}', [GroupController::class, 'update'])->name('api.groups.update');
         Route::delete('/groups/{group}', [GroupController::class, 'destroy'])->name('api.groups.destroy');
         Route::post('/groups/{group}/invite', [GroupController::class, 'invite'])->name('api.groups.invite');
+    Route::get('/groups/{group}/invitable-contacts', [GroupController::class, 'invitableContacts'])->name('api.groups.invitable-contacts');
         Route::post('/groups/{group}/accept', [GroupController::class, 'accept'])->name('api.groups.accept');
         Route::post('/groups/join-code', [GroupController::class, 'joinByCode'])->name('api.groups.join-code');
         Route::get('/groups/{group}/members', [GroupController::class, 'members'])->name('groups.members');
@@ -185,7 +186,6 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
           Route::get('/chats', [ChatController::class, 'apiIndex'])->name('api.chats.index');
           Route::post('/chats/create-or-find', [ChatController::class, 'createOrFind'])->name('api.chats.create-or-find');
           Route::post('/chats/unread-count', [ChatController::class, 'getUnreadCount'])->name('api.chats.unread-count');
-          Route::post('/chats/unread-counts', [ChatController::class, 'getUnreadCounts'])->name('api.chats.unread-counts');
           Route::get('/chats/{chat}', [ChatController::class, 'show'])->name('api.chats.show');
           Route::post('/chats/{chat}/messages', [ChatController::class, 'store'])->name('api.chats.messages.store');
 

@@ -111,6 +111,52 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     alertType: 'success',
     alertTimeout: null,
 
+    // NUEVO: contactos invitables para el modal
+    invitableContacts: [],
+    isLoadingInvitableContacts: false,
+    invitableContactsError: null,
+    inviteContactSearch: '',
+
+    get filteredInvitableContacts() {
+        const term = (this.inviteContactSearch || '').toLowerCase();
+        if (!term) return this.invitableContacts;
+        return this.invitableContacts.filter(c =>
+            c.name.toLowerCase().includes(term) || c.email.toLowerCase().includes(term)
+        );
+    },
+
+    async loadInvitableContacts() {
+        if (!this.selectedGroup) return;
+        this.isLoadingInvitableContacts = true;
+        this.invitableContactsError = null;
+        try {
+            const res = await fetch(`/api/groups/${this.selectedGroup.id}/invitable-contacts`);
+            if (!res.ok) {
+                this.invitableContactsError = 'No se pudieron cargar tus contactos';
+                this.invitableContacts = [];
+                return;
+            }
+            const data = await res.json();
+            this.invitableContacts = (data.contacts || []).sort((a,b) => a.name.localeCompare(b.name));
+        } catch (e) {
+            console.error('Error loading invitable contacts', e);
+            this.invitableContactsError = 'Error de red al cargar contactos';
+            this.invitableContacts = [];
+        } finally {
+            this.isLoadingInvitableContacts = false;
+        }
+    },
+
+    selectInvitableContact(contact) {
+        if (contact.blocked) {
+            this.showError('Este contacto pertenece a otra organización');
+            return;
+        }
+        this.inviteEmail = contact.email;
+        this.userExists = true; // Es usuario existente
+        this.userExistsMessage = '✓ Este usuario existe en Juntify';
+    },
+
     canManageContainers() {
         // Backend may return current_user_role; also allow org owner
         const role = this.currentGroup?.user_role || this.currentGroup?.current_user_role;
@@ -1062,7 +1108,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.inviteRole = 'invitado';
         this.userExists = null;
         this.userExistsMessage = '';
+        this.invitableContacts = [];
+        this.inviteContactSearch = '';
         this.showInviteModal = true;
+        this.loadInvitableContacts();
     },
 
     async sendGroupInvitation() {

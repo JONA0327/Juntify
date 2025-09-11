@@ -288,22 +288,42 @@ class GroupController extends Controller
 
             if ($sendNotification && $targetUser) {
                 // Usuario existe en Juntify - enviar notificación interna
-                Notification::create([
-                    'remitente' => auth()->id(),
-                    'emisor' => $targetUser->id,
-                    'status' => 'pending',
-                    'message' => "Has sido invitado al grupo {$group->nombre_grupo}",
-                    'type' => 'group_invitation',
-                    'data' => json_encode([
-                        'group_id' => $group->id,
-                        'role' => $validated['role'] ?? 'invitado'
-                    ])
-                ]);
+                try {
+                    // Detectar columnas actuales (compatibilidad vieja/nueva estructura)
+                    $userIdColumn = \Illuminate\Support\Facades\Schema::hasColumn('notifications', 'user_id') ? 'user_id' : 'emisor';
+                    $fromColumn   = \Illuminate\Support\Facades\Schema::hasColumn('notifications', 'from_user_id') ? 'from_user_id' : 'remitente';
+                    $role = $validated['role'] ?? 'invitado';
 
-                Log::info('Group invitation notification sent', [
-                    'target_user_id' => $targetUser->id,
-                    'group_id' => $group->id
-                ]);
+                    $payload = [
+                        $userIdColumn => $targetUser->id,
+                        $fromColumn => $user->id,
+                        // Campos comunes
+                        'type' => 'group_invitation',
+                        'title' => 'Invitación a grupo', // title es NOT NULL en el nuevo esquema
+                        'message' => "Has sido invitado al grupo {$group->nombre_grupo}",
+                        'data' => json_encode([
+                            'group_id' => $group->id,
+                            'role' => $role
+                        ]),
+                        'status' => 'pending'
+                    ];
+
+                    Notification::create($payload);
+
+                    Log::info('Group invitation notification created', [
+                        'target_user_id' => $targetUser->id,
+                        'group_id' => $group->id,
+                        'payload_keys' => array_keys($payload)
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::error('Error creating group invitation notification', [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                    return response()->json([
+                        'message' => 'Error al crear la notificación de invitación'
+                    ], 500);
+                }
 
                 OrganizationActivity::create([
                     'organization_id' => $group->id_organizacion,
@@ -366,6 +386,73 @@ class GroupController extends Controller
                 'message' => 'Error interno del servidor'
             ], 500);
         }
+    }
+
+    /**
+     * Devuelve la lista de contactos del usuario actual que puede invitar al grupo.
+     * Incluye flags para indicar si ya pertenece a otra organización (blocked) o si ya está en el grupo.
+     */
+    public function invitableContacts(Request $request, Group $group)
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return response()->json(['message' => 'No autenticado'], 401);
+        }
+
+        // Reutilizar misma comprobación de permisos de invitación que en invite()
+        $membership = $group->users()->where('users.id', $user->id)->first();
+        $userRole = $membership?->pivot?->rol;
+        $isOrgOwner = optional($group->organization)->admin_id === $user->id;
+        if (!($isOrgOwner || in_array($userRole, ['colaborador', 'administrador']))) {
+            return response()->json(['message' => 'No tienes permisos para invitar en este grupo'], 403);
+        }
+
+        // Optimización: precargar ids de usuarios ya en el grupo
+        $groupUserIds = $group->users()->pluck('users.id')->all();
+
+        // Obtener contactos del usuario
+        $contacts = \App\Models\Contact::with('contact')
+            ->where('user_id', $user->id)
+            ->get();
+
+        $result = $contacts->map(function ($c) use ($group, $groupUserIds) {
+            $contactUser = $c->contact;
+            if (!$contactUser) {
+                return null; // contacto inconsistente
+            }
+
+            // Ya está en este grupo
+            $inGroup = in_array($contactUser->id, $groupUserIds, true);
+
+            // Pertenece a otra organización distinta (no podrá ser invitado)
+            $belongsToOtherOrg = false;
+            if ($contactUser->current_organization_id && $contactUser->current_organization_id !== $group->id_organizacion) {
+                $belongsToOtherOrg = true;
+            } else {
+                // Revisa grupos (por si su current_organization_id está null pero pertenece a grupos de otra org)
+                $belongsToOtherOrg = \Illuminate\Support\Facades\DB::table('groups')
+                    ->join('group_user', 'groups.id', '=', 'group_user.id_grupo')
+                    ->where('group_user.user_id', $contactUser->id)
+                    ->where('groups.id_organizacion', '<>', $group->id_organizacion)
+                    ->exists();
+            }
+
+            return [
+                'id' => $contactUser->id,
+                'name' => $contactUser->full_name ?? $contactUser->username ?? 'Usuario',
+                'email' => $contactUser->email,
+                'in_group' => $inGroup,
+                'blocked' => $belongsToOtherOrg,
+            ];
+        })->filter();
+
+        // Filtrar los que ya están en el grupo (no tiene sentido mostrarlos) pero conservar blocked para UX futura
+        $filtered = $result->reject(fn($row) => $row['in_group'])->values();
+
+        return response()->json([
+            'contacts' => $filtered,
+            'count' => $filtered->count(),
+        ]);
     }
 
     public function accept(Group $group)

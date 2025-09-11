@@ -556,44 +556,90 @@
 
                 <!-- Modal invitar a grupo específico -->
                 <div x-show="showInviteModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-cloak>
-                    <div class="organization-modal p-6 w-full max-w-md text-slate-200">
+                    <div class="organization-modal p-6 w-full max-w-2xl text-slate-200">
                         <h2 class="text-lg font-semibold mb-4">Invitar miembro</h2>
-                        <p class="text-sm text-slate-400 mb-4" x-text="'Invitar a: ' + (selectedGroup?.nombre_grupo || '')"></p>
+                        <p class="text-sm text-slate-400 mb-4" x-text="'Grupo: ' + (selectedGroup?.nombre_grupo || '')"></p>
 
-                        <input type="email"
-                               x-model="inviteEmail"
-                               @input="checkUserExists()"
-                               placeholder="Correo electrónico"
-                               class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 mb-3 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div class="space-y-4">
+                                <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Por correo</h3>
+                                <input type="email"
+                                       x-model="inviteEmail"
+                                       @input="checkUserExists()"
+                                       placeholder="Correo electrónico"
+                                       class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50">
 
-                        <!-- Mensaje de estado del usuario -->
-                        <div x-show="userExistsMessage" class="mb-3 p-2 rounded-lg text-sm font-medium"
-                             :class="userExists ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'">
-                            <div class="flex items-center">
-                                <!-- Icono para usuario existente -->
-                                <template x-if="userExists">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                                    </svg>
-                                </template>
-                                <!-- Icono para usuario no existente -->
-                                <template x-if="!userExists">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                                    </svg>
-                                </template>
-                                <span x-text="userExistsMessage"></span>
+                                <!-- Mensaje de estado del usuario -->
+                                <div x-show="userExistsMessage" class="mb-3 p-2 rounded-lg text-sm font-medium"
+                                     :class="userExists ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'">
+                                    <div class="flex items-center">
+                                        <template x-if="userExists">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                            </svg>
+                                        </template>
+                                        <template x-if="!userExists">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                            </svg>
+                                        </template>
+                                        <span x-text="userExistsMessage"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Selector de rol -->
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Rol en el grupo</label>
+                                    <select x-model="inviteRole" class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-yellow-400/50">
+                                        <option value="invitado">Invitado</option>
+                                        <option value="colaborador">Colaborador</option>
+                                        <option value="administrador">Administrador</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- Selector de rol -->
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-slate-300 mb-2">Rol en el grupo</label>
-                            <select x-model="inviteRole" class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-yellow-400/50">
-                                <option value="invitado">Invitado</option>
-                                <option value="colaborador">Colaborador</option>
-                                <option value="administrador">Administrador</option>
-                            </select>
+                            <!-- Columna contactos -->
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Tus contactos</h3>
+                                    <button @click="loadInvitableContacts()" class="text-xs px-2 py-1 rounded bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700/60">Recargar</button>
+                                </div>
+                                <input type="text" x-model="inviteContactSearch" placeholder="Buscar contacto..." class="w-full p-2 bg-slate-900/50 border border-slate-700/50 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/30 focus:border-yellow-400/30">
+
+                                <div class="h-48 overflow-y-auto rounded-lg border border-slate-700/50 bg-slate-900/30 divide-y divide-slate-700/40 text-sm">
+                                    <template x-if="isLoadingInvitableContacts">
+                                        <div class="p-3 text-slate-400 flex items-center space-x-2">
+                                            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle class="opacity-25" cx="12" cy="12" r="10" stroke-width="4"></circle><path class="opacity-75" stroke-width="4" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8z"/></svg>
+                                            <span>Cargando contactos...</span>
+                                        </div>
+                                    </template>
+                                    <template x-if="invitableContactsError">
+                                        <div class="p-3 text-red-400" x-text="invitableContactsError"></div>
+                                    </template>
+                                    <template x-if="!isLoadingInvitableContacts && !invitableContactsError && filteredInvitableContacts.length === 0">
+                                        <div class="p-3 text-slate-500">No hay contactos disponibles</div>
+                                    </template>
+                                    <template x-for="contact in filteredInvitableContacts" :key="contact.id">
+                                        <button type="button" @click="selectInvitableContact(contact)"
+                                                class="w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-700/40 focus:outline-none focus:bg-slate-700/50 transition"
+                                                :disabled="contact.blocked"
+                                                :class="{'opacity-50 cursor-not-allowed': contact.blocked}">
+                                            <div class="flex items-center space-x-2">
+                                                <div class="w-6 h-6 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-[11px] font-semibold text-slate-200" x-text="contact.name.substring(0,2).toUpperCase()"></div>
+                                                <div>
+                                                    <div class="font-medium text-slate-200" x-text="contact.name"></div>
+                                                    <div class="text-xs text-slate-400" x-text="contact.email"></div>
+                                                </div>
+                                            </div>
+                                            <div class="text-xs" :class="contact.blocked ? 'text-red-400' : 'text-yellow-400'">
+                                                <span x-show="contact.blocked">Bloqueado</span>
+                                                <span x-show="!contact.blocked">Invitar</span>
+                                            </div>
+                                        </button>
+                                    </template>
+                                </div>
+                                <p class="text-[11px] text-slate-500 leading-relaxed">Selecciona un contacto para autocompletar el correo. Los contactos marcados como bloqueados pertenecen a otra organización.</p>
+                            </div>
                         </div>
 
                         <div class="flex justify-end space-x-2">
