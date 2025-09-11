@@ -20,6 +20,9 @@
         'resources/css/audio-processing.css',
         'resources/css/tasks/index.css',
         'resources/js/tasks/index.js'
+        'resources/css/contacts/index.css',
+
+
     ])
 
     <meta name="task-endpoints"
