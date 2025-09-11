@@ -14,13 +14,29 @@
     @vite([
         'resources/css/app.css',
         'resources/js/app.js',
+        'resources/js/tasks/sidebar-details.js',
+        'resources/js/tasks/tabs-tareas.js',
         'resources/css/new-meeting.css',
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
         'resources/css/audio-processing.css',
         'resources/css/tasks/calendar-main.css',
         'resources/js/tasks/calendar-main.js'
+        'resources/js/tasks/task-details-modal.js'
+        'resources/js/tasks/tabs-reuniones.js',
+        'resources/css/tasks/index.css',
+        'resources/js/tasks/index.js'
+        'resources/css/contacts/index.css',
+
     ])
+
+    <meta name="task-endpoints"
+        data-api-meetings="{{ route('api.tasks-laravel.meetings', [], false) }}"
+        data-api-import="/api/tasks-laravel/import/"
+        data-api-exists="{{ route('api.tasks-laravel.exists', [], false) }}"
+        data-api-tasks="{{ route('api.tasks-laravel.tasks', [], false) }}"
+        data-api-calendar="{{ route('api.tasks-laravel.calendar', [], false) }}">
+
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
 
