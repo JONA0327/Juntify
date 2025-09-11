@@ -33,6 +33,7 @@ export default defineConfig({
                 'resources/js/audio-processing.js',
                 'resources/js/notifications.js',
                 'resources/css/tasks.css',
+                'resources/js/tasks/tabs-tareas.js',
                 'resources/css/organization.css',
                 'resources/js/organization.js',
                 'resources/js/ffmpeg-test.js',
