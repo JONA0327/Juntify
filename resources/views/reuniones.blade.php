@@ -10,22 +10,18 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
-    <!-- Global Variables -->
-    <script>
-        window.userRole = @json($userRole);
-        window.currentOrganizationId = @json($organizationId);
-    </script>
-
     <!-- Vite Assets -->
     @vite([
         'resources/css/app.css',
         'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css',
         'resources/css/reuniones_v2.css', /* Nuevo archivo de estilos */
         'resources/css/audio-processing.css',
-        'resources/js/reuniones_v2.js'   /* Nuevo archivo de script */
+        'resources/js/reuniones/globals.js',
+        'resources/js/reuniones_v2.js',   /* Nuevo archivo de script */
+        'resources/js/reuniones/init.js'
     ])
 </head>
-<body class="bg-slate-950 text-slate-200 font-sans antialiased">
+<body data-user-role="{{ $userRole }}" data-organization-id="{{ $organizationId }}" class="bg-slate-950 text-slate-200 font-sans antialiased">
 
     <div class="flex">
 
@@ -398,20 +394,6 @@
             </div>
         </div>
     </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const closeBtn = document.getElementById('closeFullPreview');
-            if (closeBtn) {
-                closeBtn.addEventListener('click', function() {
-                    const modal = document.getElementById('fullPreviewModal');
-                    const frame = document.getElementById('fullPreviewFrame');
-                    if (frame) frame.src = 'about:blank';
-                    if (modal) modal.classList.add('hidden');
-                });
-            }
-        });
-    </script>
 
     <!-- Modal para compartir reunión -->
     <x-share-modal />
