@@ -2422,10 +2422,15 @@ function showMeetingModal(meeting) {
                                 </svg>
                                 Audio de la Reunión
                             </h3>
-                            <div class="audio-player">
-                                <audio id="meeting-audio" preload="auto" controls style="width: 100%; accent-color: #fbbf24; background: rgba(30, 41, 59, 0.6); border: 1px solid #475569; border-radius: 8px;"></audio>
+                            <div class="audio-player" id="audio-player-wrapper">
+                                <div id="audio-loading" class="w-full flex flex-col items-center justify-center gap-2 p-4 rounded-md bg-slate-800/60 border border-slate-700 text-slate-300 text-xs" style="${audioSrc ? '' : 'display:none'}">
+                                    <div class="w-full h-1.5 bg-slate-700/70 rounded overflow-hidden relative">
+                                        <div class="h-full bg-yellow-500 animate-pulse w-1/3" id="audio-loading-bar"></div>
+                                    </div>
+                                    <p>Cargando audio...</p>
+                                </div>
+                                <audio id="meeting-audio" preload="metadata" controls style="display:none;width:100%;accent-color:#fbbf24;background:rgba(30,41,59,.6);border:1px solid #475569;border-radius:8px;"></audio>
                                 ${!audioSrc ? '<p class="text-slate-400 text-sm mt-2">Audio no disponible para esta reunión</p>' : ''}
-                                <audio id="meeting-full-audio" preload="auto" style="display:none"></audio>
                             </div>
                         </div>
                         <div class="modal-section">
@@ -2517,58 +2522,73 @@ function showMeetingModal(meeting) {
 
     // Configuración de reproductor de audio nativo (barra del sistema)
     meetingAudioPlayer = document.getElementById('meeting-audio');
-    const fullAudioPlayer = document.getElementById('meeting-full-audio');
+    if (meetingAudioPlayer && audioSrc) {
+        const loadingEl = document.getElementById('audio-loading');
+        const loadingBar = document.getElementById('audio-loading-bar');
+        let triedFallback = false;
 
-    if (meetingAudioPlayer) {
-        // Asignar fuente y preparar fallback
-        if (audioSrc) {
-            meetingAudioPlayer.src = audioSrc;
-            try { meetingAudioPlayer.load(); } catch (_) {}
-            if (fullAudioPlayer) {
-                fullAudioPlayer.src = audioSrc;
-                try { fullAudioPlayer.load(); } catch (_) {}
-            }
-        }
+        const finalizePlayer = () => {
+            if (loadingEl) loadingEl.remove();
+            meetingAudioPlayer.style.display = 'block';
+        };
 
-        let triedAudioFallback = false;
-        meetingAudioPlayer.addEventListener('error', (e) => {
-            console.error('Error cargando audio:', e);
+        const attachError = () => {
+            meetingAudioPlayer.addEventListener('error', () => {
+                if (!triedFallback && meeting?.id) {
+                    triedFallback = true;
+                    const fallbackUrl = `/api/meetings/${meeting.id}/audio`;
+                    console.warn('[audio] Fallback endpoint streaming:', fallbackUrl);
+                    meetingAudioPlayer.src = fallbackUrl;
+                    try { meetingAudioPlayer.load(); } catch (_) {}
+                } else {
+                    if (loadingEl) loadingEl.innerHTML = `<p class="text-red-400 text-sm">No se pudo cargar el audio. <a class='underline' href='${encodeURI(audioSrc)}'>Descargar</a></p>`;
+                }
+            });
+        };
 
-            // Intentar fallback a endpoint del backend una sola vez
-            if (!triedAudioFallback && meeting?.id) {
-                triedAudioFallback = true;
-                const fallbackUrl = `/api/meetings/${meeting.id}/audio`;
-                console.warn('Reintentando audio con fallback del servidor:', fallbackUrl);
-                meetingAudioPlayer.src = fallbackUrl;
-                if (fullAudioPlayer) fullAudioPlayer.src = fallbackUrl;
+        const bufferedDownload = async () => {
+            try {
+                const resp = await fetch(audioSrc, { redirect: 'follow' });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const total = parseInt(resp.headers.get('Content-Length') || '0', 10);
+                if (total > 0 && total > 150 * 1024 * 1024) {
+                    // Muy grande: usar streaming normal
+                    meetingAudioPlayer.src = audioSrc;
+                    attachError();
+                    meetingAudioPlayer.addEventListener('loadedmetadata', finalizePlayer, { once: true });
+                    meetingAudioPlayer.load();
+                    return;
+                }
+                const reader = resp.body.getReader();
+                const chunks = [];
+                let received = 0; let lastUpdate = 0;
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value); received += value.length;
+                    if (loadingBar && total > 0) {
+                        const pct = Math.min(100, Math.round((received / total) * 100));
+                        if (pct - lastUpdate >= 5) { // throttle paints
+                            loadingBar.style.width = pct + '%';
+                            lastUpdate = pct;
+                        }
+                    }
+                }
+                const blob = new Blob(chunks, { type: 'audio/mpeg' });
+                const objUrl = URL.createObjectURL(blob);
+                meetingAudioPlayer.src = objUrl;
+                attachError();
+                meetingAudioPlayer.addEventListener('loadedmetadata', finalizePlayer, { once: true });
+                meetingAudioPlayer.load();
+            } catch (e) {
+                console.error('[audio] Error descarga previa', e);
+                meetingAudioPlayer.src = audioSrc; // fallback directo
+                attachError();
+                meetingAudioPlayer.addEventListener('loadedmetadata', finalizePlayer, { once: true });
                 try { meetingAudioPlayer.load(); } catch (_) {}
-                return;
             }
-
-            // Mostrar mensaje de error y enlace de descarga
-            const audioPlayerContainer = document.querySelector('.audio-player');
-            if (audioPlayerContainer && !audioPlayerContainer.querySelector('.audio-error')) {
-                const errorMsg = document.createElement('p');
-                errorMsg.className = 'audio-error text-red-500 text-sm mt-2';
-                errorMsg.textContent = 'No se pudo cargar el audio. ';
-
-                const downloadLink = document.createElement('a');
-                const fallbackDownload = meeting?.id ? `/api/meetings/${meeting.id}/audio` : audioSrc;
-                downloadLink.href = encodeURI(fallbackDownload || '');
-                downloadLink.textContent = 'Descargar audio';
-                downloadLink.className = 'underline';
-                errorMsg.appendChild(downloadLink);
-
-                audioPlayerContainer.appendChild(errorMsg);
-            }
-        });
-
-        meetingAudioPlayer.addEventListener('loadedmetadata', () => {
-            // Quitar mensaje de error si se logró cargar
-            const audioPlayerContainer = document.querySelector('.audio-player');
-            const errorMsg = audioPlayerContainer?.querySelector('.audio-error');
-            if (errorMsg) errorMsg.remove();
-        });
+        };
+        bufferedDownload();
     }
 }
 
