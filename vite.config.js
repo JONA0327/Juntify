@@ -31,6 +31,8 @@ export default defineConfig({
                 'resources/js/audio-processing.js',
                 'resources/js/notifications.js',
                 'resources/css/tasks.css',
+                'resources/css/tasks/calendar-main.css',
+                'resources/js/tasks/calendar-main.js',
                 'resources/css/organization.css',
                 'resources/js/organization.js',
                 'resources/js/ffmpeg-test.js',
