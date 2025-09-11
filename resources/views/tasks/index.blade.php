@@ -14,6 +14,7 @@
     @vite([
         'resources/css/app.css',
         'resources/js/app.js',
+        'resources/js/tasks/sidebar-details.js',
         'resources/css/new-meeting.css',
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
@@ -114,33 +115,5 @@
     <!-- Modal de detalles de tareas -->
     @include('tasks.partials._task-details-modal')
 
-    <!-- Scripts -->
-    <script>
-        // Endpoints para tasks_laravel
-        window.taskLaravel = {
-            apiMeetings: '{{ route("api.tasks-laravel.meetings", [], false) }}',
-            apiImport: (id) => `/api/tasks-laravel/import/${id}`,
-            apiExists: '{{ route("api.tasks-laravel.exists", [], false) }}',
-            apiTasks: '{{ route("api.tasks-laravel.tasks", [], false) }}',
-            csrf: '{{ csrf_token() }}'
-        };
-        // Calendario: usar events de tasks_laravel
-        window.taskData = {
-            apiTasks: '{{ route("api.tasks-laravel.calendar", [], false) }}'
-        };
-
-        // Utilidad para mostrar/ocultar panel de tareas
-        window.showTasksPanel = function(show = true) {
-            const panel = document.getElementById('tasks-panel');
-            const empty = document.getElementById('tasks-empty');
-            if (show) {
-                panel.classList.remove('hidden');
-                empty.classList.add('hidden');
-            } else {
-                panel.classList.add('hidden');
-                empty.classList.remove('hidden');
-            }
-        }
-    </script>
 </body>
 </html>
