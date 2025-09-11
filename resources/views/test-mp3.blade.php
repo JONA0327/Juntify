@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Test MP3 Conversion</title>
     <script src="https://cdn.tailwindcss.com" crossorigin="anonymous"></script>
-    @vite(['resources/js/ffmpeg-test.js'])
+    @vite('resources/js/tests/ffmpeg-test.js')
 </head>
 <body class="bg-gray-900 text-white p-8">
     <div class="max-w-2xl mx-auto">
