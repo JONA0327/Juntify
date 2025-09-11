@@ -1,0 +1,32 @@
+.loading-spinner {
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.contact-card {
+    @apply bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 hover:bg-slate-800/70 transition-all;
+}
+
+.contact-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.request-card {
+    @apply bg-slate-800/40 border border-slate-700/50 rounded-lg p-4;
+}
+
+.user-search-item {
+    @apply flex items-center justify-between p-3 bg-slate-700/30 border border-slate-600/50 rounded-lg hover:bg-slate-700/50 transition-all cursor-pointer;
+}
+
+.user-search-item:hover {
+    transform: translateY(-1px);
+}
+
