@@ -2912,7 +2912,7 @@ function playSegmentAudio(segmentIndex) {
     // Verificar si el audio tiene una fuente válida
     if (!meetingAudioPlayer.src || meetingAudioPlayer.src === window.location.href) {
         console.warn('No hay fuente de audio válida para reproducir segmentos');
-        alert('Audio no disponible para esta reunión.');
+        showNotification('Audio no disponible. Actualiza la página cuando el compartidor conceda permisos.', 'info');
         return;
     }
 
@@ -4022,10 +4022,13 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
             // Intentar resolver enlaces directos si es compartida
             if (sharedMeetingId) {
                 const links = await tryResolveSharedDriveLinks(sharedMeetingId);
-                if (links) {
+                if (links?.ju_link && links?.audio_link) {
                     showDownloadFallbackModal(meetingId, 'No se pudo preparar la descarga automáticamente.', links);
-                    return;
+                } else {
+                    closeDownloadModal();
+                    showNotification('Aún no tienes acceso a los archivos. Actualiza la página cuando el compartidor conceda permisos.', 'info');
                 }
+                return;
             }
             showDownloadFallbackModal(meetingId, 'No se pudo conectar para preparar la descarga.');
             return;
@@ -4039,10 +4042,13 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
             console.error('Error HTTP al preparar descarga', response.status, serverMsg);
             if (sharedMeetingId) {
                 const links = await tryResolveSharedDriveLinks(sharedMeetingId);
-                if (links) {
+                if (links?.ju_link && links?.audio_link) {
                     showDownloadFallbackModal(meetingId, `Error ${response.status} al preparar la descarga.`, links);
-                    return;
+                } else {
+                    closeDownloadModal();
+                    showNotification('Aún no tienes acceso a los archivos. Actualiza la página cuando el compartidor conceda permisos.', 'info');
                 }
+                return;
             }
             showDownloadFallbackModal(meetingId, `Error ${response.status} al preparar la descarga.`);
             return;
@@ -4054,10 +4060,13 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
             console.error('Error parseando JSON de la reunión:', parseErr);
             if (sharedMeetingId) {
                 const links = await tryResolveSharedDriveLinks(sharedMeetingId);
-                if (links) {
+                if (links?.ju_link && links?.audio_link) {
                     showDownloadFallbackModal(meetingId, 'Respuesta inválida del servidor al preparar la descarga.', links);
-                    return;
+                } else {
+                    closeDownloadModal();
+                    showNotification('Aún no tienes acceso a los archivos. Actualiza la página cuando el compartidor conceda permisos.', 'info');
                 }
+                return;
             }
             showDownloadFallbackModal(meetingId, 'Respuesta inválida del servidor al preparar la descarga.');
             return;
@@ -4065,6 +4074,16 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
 
         if (!data.success) {
             throw new Error(data.message || 'Error al procesar el archivo de la reunión');
+        }
+
+        if (sharedMeetingId) {
+            const juLink = data.meeting?.ju_link || data.meeting?.transcript_download_url;
+            const audioLink = data.meeting?.audio_link || data.meeting?.audio_download_url;
+            if (!juLink || !audioLink) {
+                closeDownloadModal();
+                showNotification('Aún no tienes acceso a los archivos. Actualiza la página cuando el compartidor conceda permisos.', 'info');
+                return;
+            }
         }
 
         console.log('Archivo descargado y desencriptado exitosamente');
@@ -4111,8 +4130,10 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
     // Mostrar un modal de fallback con botones de descarga directa
     if (sharedMeetingId) {
         const links = await tryResolveSharedDriveLinks(sharedMeetingId);
-        if (links) {
+        if (links?.ju_link && links?.audio_link) {
             showDownloadFallbackModal(meetingId, errorMessage, links);
+        } else if (links) {
+            showNotification('Aún no tienes acceso a los archivos. Actualiza la página cuando el compartidor conceda permisos.', 'info');
         } else {
             showDownloadFallbackModal(meetingId, errorMessage);
         }
@@ -4170,7 +4191,7 @@ function showDownloadFallbackModal(meetingId, message, directLinks = null) {
 }
 
 // Resuelve enlaces directos a Drive para reuniones compartidas
-async function tryResolveSharedDriveLinks(sharedMeetingId) {
+async function tryResolveSharedDriveLinks(sharedMeetingId, attempt = 0) {
     try {
         const res = await fetch('/api/shared-meetings/resolve-drive-links', {
             method: 'POST',
@@ -4184,10 +4205,22 @@ async function tryResolveSharedDriveLinks(sharedMeetingId) {
         if (!res.ok) return null;
         const data = await res.json();
         if (!data?.success) return null;
-        return {
+
+        const links = {
             ju_link: data.ju_link || data.transcript_download_url || null,
             audio_link: data.audio_link || null
         };
+
+        if ((!links.audio_link || !links.ju_link) && attempt < 5) {
+            if (attempt === 0) {
+                showNotification('Solicitando permisos...', 'info');
+            }
+            await new Promise(r => setTimeout(r, 3000));
+            return await tryResolveSharedDriveLinks(sharedMeetingId, attempt + 1);
+        }
+
+        if (!links.audio_link && !links.ju_link) return null;
+        return links;
     } catch (e) {
         console.warn('tryResolveSharedDriveLinks failed', e);
         return null;
