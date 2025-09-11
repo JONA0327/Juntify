@@ -262,33 +262,77 @@ const Notifications = (() => {
         }
     }
 
+    let notifLastIso = null;
+    let notifInterval = 30000;
+    let notifFailures = 0;
+    let notifTimer = null;
+
+    function scheduleNotifFetch() {
+        if (notifTimer) clearTimeout(notifTimer);
+        notifTimer = setTimeout(fetchNotifications, notifInterval);
+    }
+
     async function fetchNotifications() {
         try {
-            const response = await fetch('/api/notifications');
+            const url = notifLastIso ? `/api/notifications?since=${encodeURIComponent(notifLastIso)}` : '/api/notifications';
+            const response = await fetch(url, { headers: { 'Accept':'application/json' }});
             if (response.status === 401) {
                 console.log('📧 [notifications] User not authenticated, skipping notifications');
+                scheduleNotifFetch();
                 return;
             }
-            if (response.status === 500) {
-                console.warn('📧 [notifications] Server error loading notifications, skipping');
-                return;
-            }
+            // Leer Retry-After si viene del backend
+            const retryAfterHeader = response.headers.get('Retry-After');
+            let retryAfterMs = retryAfterHeader ? parseInt(retryAfterHeader,10)*1000 : null;
+            let payload = null;
+            let isJson = false;
+            try { payload = await response.json(); isJson = true; } catch(_) { /* ignore */ }
+
             if (!response.ok) {
-                let message = 'Error al cargar notificaciones.';
-                try {
-                    const data = await response.json();
-                    if (data.message) message = data.message;
-                } catch (_) { /* ignore */ }
-                showError(message);
+                console.warn('📧 [notifications] HTTP '+response.status+' error');
+                notifFailures++;
+                if (payload?.rate_limited) {
+                    notifInterval = retryAfterMs || Math.min(60000, 15000 * notifFailures);
+                } else {
+                    notifInterval = Math.min(60000, 15000 * notifFailures);
+                }
+                scheduleNotifFetch();
                 return;
             }
-            notifications = await response.json();
-            render();
+
+            if (payload?.rate_limited) {
+                // Servicio degradado: no forzar render si ya tenemos datos y la respuesta viene vacía
+                console.warn('📧 [notifications] Servicio degradado (cache/backoff)');
+                if (payload.notifications && payload.notifications.length) {
+                    notifications = payload.notifications;
+                    render();
+                }
+                notifFailures++;
+                notifInterval = retryAfterMs || Math.min(60000, 15000 * notifFailures);
+                notifLastIso = payload.last_updated || notifLastIso;
+                scheduleNotifFetch();
+                return;
+            }
+
+            if (payload.no_changes) {
+                notifFailures = 0;
+                notifInterval = 30000;
+            } else {
+                const list = Array.isArray(payload) ? payload : (payload.notifications || []);
+                notifications = list;
+                render();
+                notifFailures = 0;
+                notifInterval = 30000; // reset
+            }
+            notifLastIso = payload.last_updated || notifLastIso;
+            scheduleNotifFetch();
         } catch (error) {
             if (import.meta.env.DEV) {
                 console.debug('Error loading notifications:', error);
             }
-            showError('Error de conexión al cargar notificaciones.');
+            notifFailures++;
+            notifInterval = Math.min(60000, 15000 * notifFailures);
+            scheduleNotifFetch();
         }
     }
 
@@ -309,8 +353,7 @@ const Notifications = (() => {
             }
         });
 
-        fetchNotifications();
-        setInterval(fetchNotifications, 30000);
+    fetchNotifications();
     }
 
     if (document.readyState === 'loading') {

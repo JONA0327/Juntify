@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class ChatController extends Controller
@@ -50,63 +51,147 @@ class ChatController extends Controller
     {
         try {
             $userId = Auth::id();
-
             if (!$userId) {
                 return response()->json(['error' => 'Usuario no autenticado'], 401);
             }
 
-            $chats = Chat::where('user_one_id', $userId)
-                ->orWhere('user_two_id', $userId)
-                ->with(['messages' => function($query) {
-                    $query->latest()->limit(1);
-                }])
-                ->with(['userOne:id,full_name,email', 'userTwo:id,full_name,email'])
-                ->orderByDesc('updated_at')
-                ->get();
+            // Soporte para ver si hay cambios desde un timestamp (ISO / Y-m-d H:i:s)
+            $since = request('since');
+            $sinceTs = $since ? strtotime($since) : null;
 
-            // Formatear los chats para incluir información del otro usuario
-            $formattedChats = $chats->map(function($chat) use ($userId) {
-                $otherUser = $chat->user_one_id === $userId ? $chat->userTwo : $chat->userOne;
+            // Cache muy corto (evita múltiples queries en pocos segundos)
+            $cacheKey = 'chat_list_user_' . $userId;
+            $debugAll = request('debug_all') == 1; // listar todos los chats para diagnóstico
+            $payload = Cache::remember($cacheKey . ($debugAll ? '_all' : ''), 8, function () use ($userId, $debugAll) {
+                // 1. Obtener chats (sin mensajes) + usuarios relacionados (2 queries)
+                $baseQuery = Chat::with(['userOne:id,full_name,email', 'userTwo:id,full_name,email'])
+                    ->orderByDesc('updated_at');
 
-                // Verificar que el otro usuario existe
-                if (!$otherUser) {
-                    return null;
+                if (!$debugAll) {
+                    $baseQuery->where(function($q) use ($userId) {
+                        $q->where('user_one_id', $userId)->orWhere('user_two_id', $userId);
+                    });
                 }
 
-                $lastMessage = $chat->messages->first();
+                $chats = $baseQuery->get();
 
-                // Contar mensajes no leídos (mensajes del otro usuario que no han sido leídos por el usuario actual)
-                $unreadCount = ChatMessage::where('chat_id', $chat->id)
-                    ->where('sender_id', '!=', $userId) // Mensajes del otro usuario
-                    ->whereNull('read_at') // No leídos
-                    ->count();
+                if ($chats->isEmpty()) {
+                    return [ 'list' => collect(), 'last_updated_unix' => null, 'last_updated_iso' => null ];
+                }
 
+                $chatIds = $chats->pluck('id');
+
+                // 2. Últimos mensajes por chat (usa subconsulta agregada) (1 query)
+                $lastMessageIds = ChatMessage::selectRaw('MAX(id) as id, chat_id')
+                    ->whereIn('chat_id', $chatIds)
+                    ->groupBy('chat_id');
+
+                $lastMessages = ChatMessage::select('id','chat_id','body','created_at','sender_id')
+                    ->whereIn('id', $lastMessageIds->pluck('id'))
+                    ->get()
+                    ->keyBy('chat_id');
+
+                // 3. Conteos de no leídos agregados (1 query)
+                $unreadCounts = ChatMessage::selectRaw('chat_id, COUNT(*) as unread')
+                    ->whereIn('chat_id', $chatIds)
+                    ->where('sender_id', '!=', $userId)
+                    ->whereNull('read_at')
+                    ->groupBy('chat_id')
+                    ->pluck('unread', 'chat_id');
+
+                $formatted = $chats->map(function($chat) use ($userId, $lastMessages, $unreadCounts) {
+                    $otherUser = $chat->user_one_id === $userId ? $chat->userTwo : $chat->userOne;
+                    if (!$otherUser) return null;
+                    $lastMessage = $lastMessages->get($chat->id);
+                    $unread = (int) ($unreadCounts[$chat->id] ?? 0);
+                    return [
+                        'id' => $chat->id,
+                        'other_user' => [
+                            'id' => $otherUser->id,
+                            'name' => $otherUser->full_name,
+                            'email' => $otherUser->email,
+                            'avatar' => strtoupper(substr($otherUser->full_name, 0, 1))
+                        ],
+                        'last_message' => $lastMessage ? [
+                            'body' => $lastMessage->body,
+                            'created_at' => $lastMessage->created_at,
+                            'is_mine' => $lastMessage->sender_id === $userId
+                        ] : null,
+                        'unread_count' => $unread,
+                        'has_unread' => $unread > 0,
+                        'updated_at' => $chat->updated_at,
+                        'updated_at_unix' => $chat->updated_at ? $chat->updated_at->getTimestamp() : null,
+                    ];
+                })->filter()->values();
+
+                $lastUpdated = $formatted->max('updated_at_unix');
                 return [
-                    'id' => $chat->id,
-                    'other_user' => [
-                        'id' => $otherUser->id,
-                        'name' => $otherUser->full_name,
-                        'email' => $otherUser->email,
-                        'avatar' => strtoupper(substr($otherUser->full_name, 0, 1))
-                    ],
-                    'last_message' => $lastMessage ? [
-                        'body' => $lastMessage->body,
-                        'created_at' => $lastMessage->created_at,
-                        'is_mine' => $lastMessage->sender_id === $userId
-                    ] : null,
-                    'unread_count' => $unreadCount,
-                    'has_unread' => $unreadCount > 0,
-                    'updated_at' => $chat->updated_at
+                    'list' => $formatted,
+                    'last_updated_unix' => $lastUpdated,
+                    'last_updated_iso' => $lastUpdated ? date('c', $lastUpdated) : null,
+                    'raw_total' => $chats->count(),
+                    'debug_all' => $debugAll,
                 ];
-            })->filter(); // Filtrar elementos null
+            });
 
-            return response()->json($formattedChats->values());
+            // Si el cliente envía ?since= y no hubo cambios posteriores devolver indicador rápido
+            if ($sinceTs && $payload['last_updated_unix'] && $sinceTs >= $payload['last_updated_unix']) {
+                return response()->json([
+                    'no_changes' => true,
+                    'last_updated' => $payload['last_updated_iso']
+                ]);
+            }
 
-        } catch (\Exception $e) {
-            Log::error('Error en apiIndex de Chat: ' . $e->getMessage());
-            return response()->json(['error' => 'Error interno del servidor'], 500);
+            $response = [
+                'no_changes' => false,
+                'last_updated' => $payload['last_updated_iso'],
+                'chats' => $payload['list']
+            ];
+        if (request('debug') == 1) {
+                $response['_debug'] = [
+                    'auth_user_id' => $userId,
+                    'raw_total' => $payload['raw_total'] ?? null,
+                    'list_count' => is_countable($payload['list']) ? count($payload['list']) : null,
+                    'first_chat_ids' => $payload['list'][0]['id'] ?? null,
+            'debug_all' => $payload['debug_all'] ?? false,
+                ];
+            }
+            return response()->json($response);
+        } catch (\Throwable $e) {
+            Log::error('Error en apiIndex de Chat', [
+                'user_id' => Auth::id(),
+                'message' => $e->getMessage(),
+                'trace' => substr($e->getTraceAsString(),0,1200)
+            ]);
+            // Intentar fallback desde caché previa
+            try {
+                $userId = Auth::id();
+                $cacheKey = 'chat_list_user_' . $userId;
+                $cached = Cache::get($cacheKey);
+                if ($cached && isset($cached['list'])) {
+                    return response()->json([
+                        'no_changes' => false,
+                        'last_updated' => $cached['last_updated_iso'] ?? null,
+                        'chats' => $cached['list'],
+                        'rate_limited' => true,
+                        'warning' => 'Servicio de chat degradado: usando datos en caché.'
+                    ], 200);
+                }
+            } catch (\Throwable $inner) {
+                // Ignorar
+            }
+            // Si no había caché previa devolver lista vacía degradada (mejor UX que 503 duro)
+            return response()->json([
+                'no_changes' => false,
+                'last_updated' => null,
+                'chats' => [],
+                'rate_limited' => true,
+                'warning' => 'Servicio de chat degradado: sin datos disponibles aún.'
+            ], 200);
         }
-    }    public function show(Chat $chat): JsonResponse
+    }
+
+    public function show(Chat $chat): JsonResponse
     {
         $userId = Auth::id();
         abort_unless($chat->user_one_id === $userId || $chat->user_two_id === $userId, 403);

@@ -238,7 +238,7 @@ async function loadContacts() {
     }
 
     try {
-        const response = await fetch('/api/contacts', {
+    const response = await fetch('/api/contacts?include_requests=1', {
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'Accept': 'application/json',
@@ -273,6 +273,13 @@ async function loadContacts() {
 
         // Después de cargar los contactos, verificar mensajes no leídos
         await checkUnreadMessagesForContacts();
+
+        // Si el backend ya incluyó solicitudes evitar llamada extra
+        if (data.requests) {
+            renderContactRequests(data.requests.received || [], data.requests.sent || []);
+        } else {
+            await loadContactRequests();
+        }
     } catch (error) {
         console.error('Error loading contacts:', error);
         if (list) list.innerHTML = '<div class="text-center py-8 text-red-400">Error al cargar contactos</div>';
@@ -281,7 +288,7 @@ async function loadContacts() {
             organizationSection.style.display = 'none';
         }
     }
-    await loadContactRequests();
+    // ya no llamar loadContactRequests aquí (lo maneja la lógica superior)
 }
 
 function renderContacts(contacts, users) {
@@ -782,8 +789,13 @@ async function startChat(contactId) {
 
         const data = await response.json();
 
-        // Redirigir a la vista de chat con el ID del chat para seleccionarlo automáticamente
-        window.location.href = `/chats?chat_id=${data.chat_id}`;
+        // Abrir modal de chat directamente sin redirigir
+        if (data.chat_id) {
+            await openChatModal(data.chat_id, contactId);
+            showNotification('Chat listo', 'success');
+        } else {
+            showNotification('No se obtuvo ID de chat', 'error');
+        }
 
     } catch (error) {
         console.error('Error starting chat:', error);

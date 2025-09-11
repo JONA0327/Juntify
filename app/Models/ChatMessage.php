@@ -41,6 +41,32 @@ class ChatMessage extends Model
 
     public function getBodyAttribute($value)
     {
-        return $value ? Crypt::decryptString($value) : null;
+        if (!$value) return null;
+        // Intentar desencriptar valor actual
+        try {
+            return Crypt::decryptString($value);
+        } catch (\Throwable $e) {
+            // Fallback: mensajes legacy almacenados como base64 (JSON o texto)
+            try {
+                if (preg_match('/^[A-Za-z0-9+\/]+=*$/', $value) && strlen($value) % 4 === 0) {
+                    $decoded = base64_decode($value, true);
+                    if ($decoded !== false && $decoded !== '') {
+                        // Si es JSON y contiene "body" devolver ese campo
+                        $json = json_decode($decoded, true);
+                        if (is_array($json) && isset($json['body']) && is_string($json['body'])) {
+                            return $json['body'];
+                        }
+                        // Si decodificado parece texto legible devolverlo
+                        if (preg_match('/[\x20-\x7E]/', $decoded)) {
+                            return $decoded;
+                        }
+                    }
+                }
+            } catch (\Throwable $inner) {
+                // Ignorar y devolver valor crudo
+            }
+            // Último recurso: devolver el valor original (evita 500)
+            return $value;
+        }
     }
 }

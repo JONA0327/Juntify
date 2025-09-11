@@ -3,9 +3,53 @@ let currentChatId = null;
 let currentContactId = null;
 let chatMessages = [];
 let isChatLoading = false;
-let lastConversationUpdate = null;
+let lastConversationUpdate = null; // Date object of last full update
+let lastConversationIso = null;    // ISO timestamp from server last_updated
+let chatPollBackoff = 3000;        // current interval (ms)
+let chatPollFailures = 0;          // consecutive failures
 let autoRefreshInterval = null;
 let lastMessageIds = new Set(); // Para trackear qué mensajes ya hemos visto
+let lastSuccessfulConversations = []; // Cache en memoria de la última lista válida
+let chatServiceDegraded = false; // Flag de modo degradado
+let chatDegradedUntil = null; // Timestamp hasta el que pausamos polling
+
+// Utilidad: mostrar banner de estado
+function showChatBanner(type = 'warning', message = '') {
+    let banner = document.getElementById('chat-status-banner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'chat-status-banner';
+        banner.className = 'mx-4 mb-3 rounded-lg px-4 py-3 text-sm flex items-center gap-2';
+        const container = document.querySelector('#conversations-list')?.parentElement || document.body;
+        container.prepend(banner);
+    }
+    const colors = type === 'error'
+        ? 'bg-red-500/15 text-red-300 border border-red-500/30'
+        : (type === 'success'
+           ? 'bg-green-500/15 text-green-300 border border-green-500/30'
+           : 'bg-yellow-500/15 text-yellow-300 border border-yellow-500/30');
+    banner.className = `mx-4 mb-3 rounded-lg px-4 py-3 text-sm flex items-center gap-2 ${colors}`;
+    banner.innerHTML = `
+        <span class="inline-flex w-2 h-2 rounded-full ${type==='error' ? 'bg-red-400' : type==='success' ? 'bg-green-400' : 'bg-yellow-400'} animate-pulse"></span>
+        <span>${message}</span>
+        <button type="button" onclick="this.parentElement.remove()" class="ml-auto text-xs opacity-70 hover:opacity-100">✕</button>
+    `;
+}
+
+function hideChatBanner() {
+    const banner = document.getElementById('chat-status-banner');
+    if (banner) banner.remove();
+}
+
+// Reinicia el intervalo de auto-refresh aplicando el backoff actual
+function restartAutoRefreshInterval() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+    autoRefreshInterval = setInterval(async () => {
+        await refreshConversationsIfNeeded();
+    }, chatPollBackoff);
+}
 
 // Función para inicializar auto-refresh de conversaciones
 function startAutoRefresh() {
@@ -14,10 +58,10 @@ function startAutoRefresh() {
         clearInterval(autoRefreshInterval);
     }
 
-    // Verificar nuevos mensajes cada 3 segundos
+    // Verificar nuevos mensajes usando intervalo dinámico (backoff)
     autoRefreshInterval = setInterval(async () => {
         await refreshConversationsIfNeeded();
-    }, 3000);
+    }, chatPollBackoff);
 }
 
 // Función para detener auto-refresh
@@ -31,10 +75,17 @@ function stopAutoRefresh() {
 // Función para refrescar conversaciones solo si hay cambios
 async function refreshConversationsIfNeeded() {
     try {
+        // Pausa manual durante degradación
+        if (chatDegradedUntil && Date.now() < chatDegradedUntil) {
+            return; // No hacer polling durante ventana de enfriamiento
+        }
+
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
         // Hacer una petición ligera para verificar si hay cambios
-        const response = await fetch('/api/chats', {
+        // Usar parámetro since para respuesta ligera si no hay cambios
+        const url = lastConversationIso ? `/api/chats?since=${encodeURIComponent(lastConversationIso)}` : '/api/chats';
+        const response = await fetch(url, {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
@@ -44,9 +95,65 @@ async function refreshConversationsIfNeeded() {
             }
         });
 
-        if (!response.ok) return;
+        if (!response.ok) {
+            chatPollFailures++;
+            // Intentar leer payload para detectar modo degradado server (503 + rate_limited)
+            let degradedServer = false;
+            try {
+                const txt = await response.text();
+                let json; try { json = JSON.parse(txt); } catch(_) {}
+                if (json?.rate_limited) degradedServer = true;
+            } catch (_) {}
 
-        const conversations = await response.json();
+            // Aumentar intervalo hasta 30s en fallos repetidos
+            chatPollBackoff = Math.min(3000 * Math.pow(2, chatPollFailures), 30000);
+            restartAutoRefreshInterval();
+
+            if (chatPollFailures >= 3 || degradedServer) {
+                chatServiceDegraded = true;
+                const waitMs = Math.min(chatPollBackoff * 2, 60000);
+                chatDegradedUntil = Date.now() + waitMs;
+                showChatBanner('warning', `Servicio de chat degradado. Reintentando en ${(waitMs/1000)}s...`);
+                // Mostrar lista en caché si existe
+                if (lastSuccessfulConversations.length > 0) {
+                    updateConversationsList(lastSuccessfulConversations);
+                }
+            }
+
+            if (chatPollFailures >= 5) {
+                // Pausa explícita polling y reanuda luego
+                stopAutoRefresh();
+                setTimeout(() => {
+                    chatServiceDegraded = false;
+                    hideChatBanner();
+                    chatPollFailures = 0;
+                    chatPollBackoff = 3000;
+                    startAutoRefresh();
+                }, 60000); // 60s
+            }
+            return;
+        }
+
+        const payload = await response.json();
+
+        if (payload.no_changes) {
+            chatPollFailures = 0;
+            chatPollBackoff = 3000; // reset
+            return; // nada que actualizar
+        }
+
+        const conversations = Array.isArray(payload) ? payload : payload.chats; // compatibilidad antigua
+        lastConversationIso = payload.last_updated || lastConversationIso;
+        chatPollFailures = 0;
+        chatPollBackoff = 3000; // reset en éxito
+        restartAutoRefreshInterval();
+        if (chatServiceDegraded) {
+            chatServiceDegraded = false;
+            hideChatBanner();
+            showChatBanner('success', 'Servicio de chat restaurado');
+            setTimeout(hideChatBanner, 4000);
+        }
+        lastSuccessfulConversations = conversations.slice();
 
         // Verificar si hay cambios comparando timestamps del último mensaje
         let hasNewMessages = false;
@@ -97,6 +204,14 @@ async function refreshConversationsIfNeeded() {
         }
     } catch (error) {
         console.error('❌ Error en auto-refresh:', error);
+        chatPollFailures++;
+        chatPollBackoff = Math.min(3000 * Math.pow(2, chatPollFailures), 30000);
+        if (chatPollFailures >= 3 && !chatServiceDegraded) {
+            chatServiceDegraded = true;
+            const waitMs = Math.min(chatPollBackoff * 2, 60000);
+            chatDegradedUntil = Date.now() + waitMs;
+            showChatBanner('warning', `Problemas de conexión en chat. Reintentando en ${(waitMs/1000)}s...`);
+        }
     }
 }
 
@@ -117,7 +232,7 @@ async function loadConversations() {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         console.log('📝 CSRF Token:', csrfToken ? 'Encontrado' : 'No encontrado');
 
-        const response = await fetch('/api/chats', {
+    const response = await fetch('/api/chats', {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
@@ -133,11 +248,35 @@ async function loadConversations() {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('❌ Error response:', errorText);
+            let json; try { json = JSON.parse(errorText); } catch(_) {}
+            if (json?.rate_limited) {
+                chatServiceDegraded = true;
+                showChatBanner('warning', 'Servicio de chat degradado. Datos limitados.');
+                // Si backend devolvió chats vacíos en degradado (200) no entraría aquí, pero con 503 sí.
+                // Mostrar placeholder si no hay caché previa
+                const conversationsList = document.getElementById('conversations-list');
+                if (lastSuccessfulConversations.length > 0) {
+                    updateConversationsList(lastSuccessfulConversations);
+                } else if (conversationsList) {
+                    conversationsList.innerHTML = `
+                        <div class="p-6 text-center text-slate-400 text-sm">
+                            <p class="mb-1">Modo degradado: no se pudieron cargar las conversaciones</p>
+                            <p class="opacity-60">Se reintentará automáticamente...</p>
+                        </div>`;
+                }
+                // No lanzar excepción para evitar pantalla de error
+                return;
+            }
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
 
-        const conversations = await response.json();
+    const payload = await response.json();
+    // Nuevo formato { no_changes, last_updated, chats: [] }
+    const conversations = Array.isArray(payload) ? payload : (payload.chats || []);
+    lastConversationIso = payload.last_updated || lastConversationIso;
+    lastConversationUpdate = new Date();
         console.log('💬 Conversaciones recibidas:', conversations);
+        lastSuccessfulConversations = conversations.slice();
 
         if (!Array.isArray(conversations)) {
             console.error('❌ La respuesta no es un array:', conversations);

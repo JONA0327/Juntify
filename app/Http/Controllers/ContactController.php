@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Illuminate\Support\Facades\Cache;
 
 class ContactController extends Controller
 {
@@ -26,196 +27,202 @@ class ContactController extends Controller
      * Devuelve la lista de contactos del usuario autenticado
      * junto con los usuarios de su organización actual.
      */
-    public function list(): JsonResponse
+    public function list(Request $request): JsonResponse
     {
         $user = Auth::user();
+        $includeRequests = $request->boolean('include_requests');
 
-        $contacts = Contact::with('contact')
-            ->where('user_id', $user->id)
-            ->get()
-            ->map(function ($c) {
-                return [
-                    'id' => $c->contact_id, // ID del usuario contacto, no del registro Contact
-                    'contact_record_id' => $c->id, // ID del registro Contact para operaciones de eliminación
-                    'name' => $c->contact->full_name,
-                    'email' => $c->contact->email,
-                ];
-            });
-
-        // Obtener IDs de usuarios que ya son contactos para excluirlos
-        $existingContactIds = Contact::where('user_id', $user->id)->pluck('contact_id')->toArray();
-
-        // Determinar la organización del usuario actual
-        $userOrgId = $user->current_organization_id;
-
-        // Obtener todos los usuarios de la misma organización con información de grupos
-        $organizationUsers = collect();
-
-        if (!empty($userOrgId)) {
-            // Si el usuario tiene organización válida, mostrar:
-            // 1. Usuarios de la misma organización
-            // 2. Usuarios que estén en los mismos grupos (aunque no tengan la misma organización)
-
-            // Obtener los grupos del usuario actual
-            $userGroups = DB::table('group_user')
+        $cacheKey = 'contacts_list_v2_' . $user->id;
+        try {
+        $payload = Cache::remember($cacheKey, 15, function () use ($user) {
+            $contacts = Contact::with('contact')
                 ->where('user_id', $user->id)
-                ->pluck('id_grupo');
-
-            $query = User::leftJoin('group_user', 'users.id', '=', 'group_user.user_id')
-                ->leftJoin('groups', 'group_user.id_grupo', '=', 'groups.id')
-                ->where('users.id', '!=', $user->id)
-                ->whereNotIn('users.id', $existingContactIds);
-
-            if ($userGroups->isNotEmpty()) {
-                // Mostrar usuarios de la misma organización O de los mismos grupos
-                $query->where(function($q) use ($userOrgId, $userGroups) {
-                    $q->where('users.current_organization_id', $userOrgId)
-                      ->orWhereIn('group_user.id_grupo', $userGroups);
-                });
-            } else {
-                // Si no tiene grupos, solo mostrar usuarios de la misma organización
-                $query->where('users.current_organization_id', $userOrgId);
-            }
-
-            $organizationUsers = $query
-                ->select(
-                    'users.id',
-                    'users.full_name as name',
-                    'users.email',
-                    'users.current_organization_id',
-                    'groups.nombre_grupo as group_name',
-                    'group_user.rol as group_role'
-                )
-                ->orderBy('groups.nombre_grupo', 'asc')
-                ->orderBy('users.full_name', 'asc')
                 ->get()
-                ->map(function ($u) {
+                ->map(function ($c) {
                     return [
-                        'id' => $u->id,
-                        'name' => $u->name,
-                        'email' => $u->email,
-                        'organization_id' => $u->current_organization_id,
-                        'group_name' => $u->group_name ?: 'Sin grupo',
-                        'group_role' => $u->group_role ?: null,
+                        'id' => $c->contact_id,
+                        'contact_record_id' => $c->id,
+                        'name' => $c->contact->full_name,
+                        'email' => $c->contact->email,
                     ];
                 });
-        } else {
-            // Si no tiene organización, buscar usuarios en los mismos grupos
-            $userGroups = DB::table('group_user')
-                ->where('user_id', $user->id)
-                ->pluck('id_grupo');
 
-            if ($userGroups->isNotEmpty()) {
-                // Mostrar usuarios que estén en los mismos grupos
-                $organizationUsers = User::leftJoin('group_user', 'users.id', '=', 'group_user.user_id')
+            $existingContactIds = Contact::where('user_id', $user->id)->pluck('contact_id')->toArray();
+            $userOrgId = $user->current_organization_id;
+            $organizationUsers = collect();
+
+            $buildUserRow = function($u){
+                return [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'organization_id' => $u->current_organization_id ?: 'Sin organización',
+                    'group_name' => $u->group_name ?: 'Sin grupo',
+                    'group_role' => $u->group_role ?: null,
+                ];
+            };
+
+            if (!empty($userOrgId)) {
+                $userGroups = DB::table('group_user')
+                    ->where('user_id', $user->id)
+                    ->pluck('id_grupo');
+
+                $query = User::leftJoin('group_user', 'users.id', '=', 'group_user.user_id')
                     ->leftJoin('groups', 'group_user.id_grupo', '=', 'groups.id')
                     ->where('users.id', '!=', $user->id)
-                    ->whereNotIn('users.id', $existingContactIds)
-                    ->whereIn('group_user.id_grupo', $userGroups)
-                    ->select(
-                        'users.id',
-                        'users.full_name as name',
-                        'users.email',
-                        'users.current_organization_id',
-                        'groups.nombre_grupo as group_name',
-                        'group_user.rol as group_role'
+                    ->whereNotIn('users.id', $existingContactIds);
+
+                if ($userGroups->isNotEmpty()) {
+                    $query->where(function($q) use ($userOrgId, $userGroups) {
+                        $q->where('users.current_organization_id', $userOrgId)
+                          ->orWhereIn('group_user.id_grupo', $userGroups);
+                    });
+                } else {
+                    $query->where('users.current_organization_id', $userOrgId);
+                }
+
+                $organizationUsers = $query->select(
+                        'users.id', 'users.full_name as name', 'users.email', 'users.current_organization_id',
+                        'groups.nombre_grupo as group_name', 'group_user.rol as group_role'
                     )
                     ->orderBy('groups.nombre_grupo', 'asc')
                     ->orderBy('users.full_name', 'asc')
+                    ->limit(60)
                     ->get()
-                    ->map(function ($u) {
-                        return [
-                            'id' => $u->id,
-                            'name' => $u->name,
-                            'email' => $u->email,
-                            'organization_id' => $u->current_organization_id ?: 'Sin organización',
-                            'group_name' => $u->group_name ?: 'Sin grupo',
-                            'group_role' => $u->group_role ?: null,
-                        ];
-                    });
+                    ->map($buildUserRow);
             } else {
-                // Si no pertenece a ningún grupo, usar la lógica anterior basada en dominio
-                $userDomain = substr(strrchr($user->email, "@"), 1);
-
-                if ($userDomain && !in_array($userDomain, ['gmail.com', 'hotmail.com', 'yahoo.com', 'yahoo.com.mx', 'outlook.com'])) {
-                    // Para dominios corporativos, mostrar usuarios del mismo dominio con grupos
+                $userGroups = DB::table('group_user')->where('user_id', $user->id)->pluck('id_grupo');
+                if ($userGroups->isNotEmpty()) {
                     $organizationUsers = User::leftJoin('group_user', 'users.id', '=', 'group_user.user_id')
                         ->leftJoin('groups', 'group_user.id_grupo', '=', 'groups.id')
-                        ->where('users.email', 'LIKE', "%@{$userDomain}")
                         ->where('users.id', '!=', $user->id)
                         ->whereNotIn('users.id', $existingContactIds)
-                        ->select(
-                            'users.id',
-                            'users.full_name as name',
-                            'users.email',
-                            'users.current_organization_id',
-                            'groups.nombre_grupo as group_name',
-                            'group_user.rol as group_role'
-                        )
+                        ->whereIn('group_user.id_grupo', $userGroups)
+                        ->select('users.id','users.full_name as name','users.email','users.current_organization_id','groups.nombre_grupo as group_name','group_user.rol as group_role')
                         ->orderBy('groups.nombre_grupo', 'asc')
                         ->orderBy('users.full_name', 'asc')
-                        ->limit(20)
+                        ->limit(60)
                         ->get()
-                        ->map(function ($u) {
-                            return [
-                                'id' => $u->id,
-                                'name' => $u->name,
-                                'email' => $u->email,
-                                'organization_id' => $u->current_organization_id,
-                                'group_name' => $u->group_name ?: 'Sin grupo',
-                                'group_role' => $u->group_role ?: null,
-                            ];
-                        });
+                        ->map($buildUserRow);
                 } else {
-                    // Para dominios genéricos, mostrar usuarios de la misma "organización" (sin organización) con grupos
-                    $organizationUsers = User::leftJoin('group_user', 'users.id', '=', 'group_user.user_id')
-                        ->leftJoin('groups', 'group_user.id_grupo', '=', 'groups.id')
-                        ->where('users.id', '!=', $user->id)
-                        ->whereNotIn('users.id', $existingContactIds)
-                        ->where(function($query) {
-                            $query->where('users.current_organization_id', '')
+                    $userDomain = substr(strrchr($user->email, '@'), 1);
+                    if ($userDomain && !in_array($userDomain, ['gmail.com','hotmail.com','yahoo.com','yahoo.com.mx','outlook.com'])) {
+                        $organizationUsers = User::leftJoin('group_user', 'users.id', '=', 'group_user.user_id')
+                            ->leftJoin('groups', 'group_user.id_grupo', '=', 'groups.id')
+                            ->where('users.email', 'LIKE', "%@{$userDomain}")
+                            ->where('users.id', '!=', $user->id)
+                            ->whereNotIn('users.id', $existingContactIds)
+                            ->select('users.id','users.full_name as name','users.email','users.current_organization_id','groups.nombre_grupo as group_name','group_user.rol as group_role')
+                            ->orderBy('groups.nombre_grupo', 'asc')
+                            ->orderBy('users.full_name', 'asc')
+                            ->limit(40)
+                            ->get()
+                            ->map($buildUserRow);
+                    } else {
+                        $organizationUsers = User::leftJoin('group_user', 'users.id', '=', 'group_user.user_id')
+                            ->leftJoin('groups', 'group_user.id_grupo', '=', 'groups.id')
+                            ->where('users.id', '!=', $user->id)
+                            ->whereNotIn('users.id', $existingContactIds)
+                            ->where(function($q){
+                                $q->where('users.current_organization_id','')
                                   ->orWhereNull('users.current_organization_id');
-                        })
-                        ->select(
-                            'users.id',
-                            'users.full_name as name',
-                            'users.email',
-                            'users.current_organization_id',
-                            'groups.nombre_grupo as group_name',
-                            'group_user.rol as group_role'
-                        )
-                        ->orderByRaw("CASE WHEN users.email LIKE '%@juntify.com' THEN 1 ELSE 2 END")
-                        ->orderBy('groups.nombre_grupo', 'asc')
-                        ->orderBy('users.full_name', 'asc')
-                        ->limit(15)
-                        ->get()
-                        ->map(function ($u) {
-                            return [
-                                'id' => $u->id,
-                                'name' => $u->name,
-                                'email' => $u->email,
-                                'organization_id' => $u->current_organization_id ?: 'Sin organización',
-                                'group_name' => $u->group_name ?: 'Sin grupo',
-                                'group_role' => $u->group_role ?: null,
-                            ];
-                        });
+                            })
+                            ->select('users.id','users.full_name as name','users.email','users.current_organization_id','groups.nombre_grupo as group_name','group_user.rol as group_role')
+                            ->orderByRaw("CASE WHEN users.email LIKE '%@juntify.com' THEN 1 ELSE 2 END")
+                            ->orderBy('groups.nombre_grupo', 'asc')
+                            ->orderBy('users.full_name', 'asc')
+                            ->limit(30)
+                            ->get()
+                            ->map($buildUserRow);
+                    }
                 }
             }
+
+            $hasOrganization = !empty($userOrgId);
+            $hasGroups = DB::table('group_user')->where('user_id', $user->id)->exists();
+            $showOrganizationSection = $hasOrganization || $hasGroups;
+
+            return compact('contacts','organizationUsers','hasOrganization','hasGroups','showOrganizationSection');
+        });
+
+        $response = [
+            'success' => true,
+            'contacts' => $payload['contacts'],
+            'users' => $payload['organizationUsers'],
+            'has_organization' => $payload['hasOrganization'],
+            'has_groups' => $payload['hasGroups'],
+            'show_organization_section' => $payload['showOrganizationSection'],
+        ];
+
+    if ($includeRequests) {
+            $requestsCache = Cache::remember('contact_requests_'.$user->id, 20, function() use ($user) {
+                $received = Notification::where('emisor', $user->id)
+                    ->where('type', 'contact_request')
+                    ->where('status', 'pending')
+                    ->with('sender')
+                    ->get()
+                    ->map(function ($notification) {
+                        return [
+                            'id' => $notification->id,
+                            'sender' => [
+                                'id' => $notification->sender->id,
+                                'name' => $notification->sender->full_name,
+                                'email' => $notification->sender->email,
+                            ],
+                            'message' => $notification->message,
+                            'created_at' => $notification->created_at,
+                        ];
+                    });
+
+                $sent = Notification::where('remitente', $user->id)
+                    ->where('type', 'contact_request')
+                    ->where('status', 'pending')
+                    ->with('receiver')
+                    ->get()
+                    ->map(function ($notification) {
+                        return [
+                            'id' => $notification->id,
+                            'receiver' => [
+                                'id' => $notification->receiver->id,
+                                'name' => $notification->receiver->full_name,
+                                'email' => $notification->receiver->email,
+                            ],
+                            'message' => $notification->message,
+                            'created_at' => $notification->created_at,
+                        ];
+                    });
+                return compact('received','sent');
+            });
+            $response['requests'] = $requestsCache;
         }
 
-        // Determinar si el usuario tiene organización o está en grupos
-        $hasOrganization = !empty($userOrgId);
-        $hasGroups = DB::table('group_user')->where('user_id', $user->id)->exists();
-        $showOrganizationSection = $hasOrganization || $hasGroups;
-
-        return response()->json([
-            'success' => true,
-            'contacts' => $contacts,
-            'users' => $organizationUsers,
-            'has_organization' => $hasOrganization,
-            'has_groups' => $hasGroups,
-            'show_organization_section' => $showOrganizationSection,
-        ]);
+        return response()->json($response);
+        } catch (\Throwable $e) {
+            // Fallback degradado: devolver datos cacheados previos
+            $fallback = Cache::get($cacheKey);
+            if ($fallback) {
+                return response()->json([
+                    'success' => true,
+                    'contacts' => $fallback['contacts'] ?? [],
+                    'users' => $fallback['organizationUsers'] ?? [],
+                    'has_organization' => $fallback['hasOrganization'] ?? false,
+                    'has_groups' => $fallback['hasGroups'] ?? false,
+                    'show_organization_section' => $fallback['showOrganizationSection'] ?? false,
+                    'rate_limited' => true,
+                    'warning' => 'Servicio degradado: datos cacheados.'
+                ], 200);
+            }
+            return response()->json([
+                'success' => true,
+                'contacts' => [],
+                'users' => [],
+                'has_organization' => false,
+                'has_groups' => false,
+                'show_organization_section' => false,
+                'rate_limited' => true,
+                'warning' => 'Servicio contactos degradado (sin datos)'
+            ], 200)->header('Retry-After', 60);
+        }
     }
 
     /**
@@ -224,48 +231,58 @@ class ContactController extends Controller
     public function requests(): JsonResponse
     {
         $user = Auth::user();
-
-        $received = Notification::where('emisor', $user->id)
-            ->where('type', 'contact_request')
-            ->where('status', 'pending')
-            ->with('sender')
-            ->get()
-            ->map(function ($notification) {
-                return [
-                    'id' => $notification->id,
-                    'sender' => [
-                        'id' => $notification->sender->id,
-                        'name' => $notification->sender->full_name,
-                        'email' => $notification->sender->email,
-                    ],
-                    'message' => $notification->message,
-                    'created_at' => $notification->created_at,
-                ];
-            });
-
-        $sent = Notification::where('remitente', $user->id)
-            ->where('type', 'contact_request')
-            ->where('status', 'pending')
-            ->with('receiver')
-            ->get()
-            ->map(function ($notification) {
-                return [
-                    'id' => $notification->id,
-                    'receiver' => [
-                        'id' => $notification->receiver->id,
-                        'name' => $notification->receiver->full_name,
-                        'email' => $notification->receiver->email,
-                    ],
-                    'message' => $notification->message,
-                    'created_at' => $notification->created_at,
-                ];
-            });
-
-        return response()->json([
-            'success' => true,
-            'received' => $received,
-            'sent' => $sent,
-        ]);
+        try {
+        $cache = Cache::remember('contact_requests_'.$user->id, 20, function() use ($user) {
+            $received = Notification::where('emisor', $user->id)
+                ->where('type', 'contact_request')
+                ->where('status', 'pending')
+                ->with('sender')
+                ->get()
+                ->map(function ($notification) {
+                    return [
+                        'id' => $notification->id,
+                        'sender' => [
+                            'id' => $notification->sender->id,
+                            'name' => $notification->sender->full_name,
+                            'email' => $notification->sender->email,
+                        ],
+                        'message' => $notification->message,
+                        'created_at' => $notification->created_at,
+                    ];
+                });
+            $sent = Notification::where('remitente', $user->id)
+                ->where('type', 'contact_request')
+                ->where('status', 'pending')
+                ->with('receiver')
+                ->get()
+                ->map(function ($notification) {
+                    return [
+                        'id' => $notification->id,
+                        'receiver' => [
+                            'id' => $notification->receiver->id,
+                            'name' => $notification->receiver->full_name,
+                            'email' => $notification->receiver->email,
+                        ],
+                        'message' => $notification->message,
+                        'created_at' => $notification->created_at,
+                    ];
+                });
+            return compact('received','sent');
+        });
+        return response()->json(array_merge(['success'=>true], $cache));
+        } catch (\Throwable $e) {
+            $fallback = Cache::get('contact_requests_'.$user->id);
+            if ($fallback) {
+                return response()->json(array_merge(['success'=>true,'rate_limited'=>true,'warning'=>'Servicio degradado: cache.'],$fallback));
+            }
+            return response()->json([
+                'success'=>true,
+                'received'=>[],
+                'sent'=>[],
+                'rate_limited'=>true,
+                'warning'=>'Servicio solicitudes degradado (sin datos)'
+            ],200)->header('Retry-After',60);
+        }
     }
 
     /**
@@ -305,13 +322,18 @@ class ContactController extends Controller
             ], 409);
         }
 
+        // Crear notificación usando tanto campos nuevos como legacy para máxima compatibilidad
         Notification::create([
-            'remitente' => $user->id,
-            'emisor' => $contactUser->id,
+            'remitente' => $user->id,          // legacy sender
+            'emisor' => $contactUser->id,      // legacy receiver
+            'user_id' => $contactUser->id,     // nuevo esquema (usuario que recibe)
+            'from_user_id' => $user->id,       // nuevo esquema (usuario que envía)
             'type' => 'contact_request',
+            'title' => 'Solicitud de contacto',
             'message' => 'Solicitud de contacto',
             'status' => 'pending',
             'data' => [],
+            'read' => false,
         ]);
 
         return response()->json([

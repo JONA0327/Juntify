@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class NotificationController extends Controller
 {
@@ -16,7 +17,7 @@ class NotificationController extends Controller
      */
     public function index(): JsonResponse
     {
-        try {
+    try {
             if (!auth()->check()) {
                 return response()->json([], 401);
             }
@@ -24,11 +25,17 @@ class NotificationController extends Controller
             // Verificar qué columnas usar basándose en el esquema actual
             $userIdColumn = Schema::hasColumn('notifications', 'user_id') ? 'user_id' : 'emisor';
 
-            $notifications = Notification::where($userIdColumn, Auth::id())
-                ->orderBy('created_at', 'desc')
-                ->with('fromUser')
-                ->get()
-                ->map(function ($notification) use ($userIdColumn) {
+            $userId = Auth::id();
+            $since = request('since');
+            $sinceTs = $since ? strtotime($since) : null;
+
+            $cacheKey = 'notifications_user_' . $userId;
+            $payload = Cache::remember($cacheKey, 10, function () use ($userIdColumn, $userId) {
+                $collection = Notification::where($userIdColumn, $userId)
+                    ->orderBy('created_at', 'desc')
+                    ->with('fromUser')
+                    ->get()
+                    ->map(function ($notification) use ($userIdColumn) {
                     $data = null;
                     if ($notification->data) {
                         try {
@@ -53,25 +60,67 @@ class NotificationController extends Controller
                         ];
                     }
 
-                    return [
-                        'id' => $notification->id,
-                        'type' => $notification->type ?? 'general',
-                        'title' => $notification->title ?? 'Notificación',
-                        'message' => $notification->message ?? '',
-                        'data' => $data,
-                        'read' => $notification->read ?? false,
-                        'read_at' => $notification->read_at ?? null,
-                        'created_at' => $notification->created_at,
-                        'from_user' => $fromUser
-                    ];
-                });
+                        return [
+                            'id' => $notification->id,
+                            'type' => $notification->type ?? 'general',
+                            'title' => $notification->title ?? 'Notificación',
+                            'message' => $notification->message ?? '',
+                            'data' => $data,
+                            'read' => $notification->read ?? false,
+                            'read_at' => $notification->read_at ?? null,
+                            'created_at' => $notification->created_at,
+                            'created_at_unix' => $notification->created_at ? $notification->created_at->getTimestamp() : null,
+                            'from_user' => $fromUser
+                        ];
+                    });
+                $lastUpdated = $collection->max('created_at_unix');
+                return [
+                    'list' => $collection->values(),
+                    'last_updated_unix' => $lastUpdated,
+                    'last_updated_iso' => $lastUpdated ? date('c', $lastUpdated) : null,
+                ];
+            });
 
-            return response()->json($notifications);
+            if ($sinceTs && $payload['last_updated_unix'] && $sinceTs >= $payload['last_updated_unix']) {
+                return response()->json([
+                    'no_changes' => true,
+                    'last_updated' => $payload['last_updated_iso']
+                ]);
+            }
 
-        } catch (\Exception $e) {
-            Log::error('Error en NotificationController::index: ' . $e->getMessage());
-            Log::error('Stack trace: ' . $e->getTraceAsString());
-            return response()->json(['error' => 'Error interno del servidor'], 500);
+            return response()->json([
+                'no_changes' => false,
+                'last_updated' => $payload['last_updated_iso'],
+                'notifications' => $payload['list']
+            ]);
+
+        } catch (\Throwable $e) {
+            // Intentar servir datos en caché si existen para degradación elegante
+            try {
+                $userId = Auth::id();
+                $fallback = Cache::get('notifications_user_' . $userId);
+                if ($fallback && is_array($fallback) && isset($fallback['list'])) {
+                    return response()->json([
+                        'no_changes' => false,
+                        'last_updated' => $fallback['last_updated_iso'] ?? null,
+                        'notifications' => $fallback['list'],
+                        'rate_limited' => true,
+                        'warning' => 'Servicio degradado: usando datos en caché.'
+                    ], 200)->header('Retry-After', 60);
+                }
+            } catch (\Throwable $inner) {
+                // Ignorar errores de fallback
+            }
+
+            Log::error('Error en NotificationController::index (sin fallback): ' . $e->getMessage());
+            // Respuesta degradada vacía para evitar loops de 500 en el frontend
+            return response()->json([
+                'no_changes' => false,
+                'last_updated' => null,
+                'notifications' => [],
+                'rate_limited' => true,
+                'warning' => 'Servicio temporalmente degradado (sin datos)'
+            ], 200)->header('Retry-After', 90);
         }
     }
 
