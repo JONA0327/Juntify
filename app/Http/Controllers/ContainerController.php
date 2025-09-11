@@ -10,6 +10,7 @@ use App\Models\Group;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -30,19 +31,31 @@ class ContainerController extends Controller
     private function userHasContainerPrivileges($user, $groupId = null): bool
     {
         if ($groupId) {
-            $role = DB::table('group_user')
-                ->where('user_id', $user->id)
-                ->where('id_grupo', $groupId)
-                ->value('rol');
+            $role = Cache::remember(
+                "group_role:{$user->id}:{$groupId}",
+                now()->addMinutes(30),
+                function () use ($user, $groupId) {
+                    return DB::table('group_user')
+                        ->where('user_id', $user->id)
+                        ->where('id_grupo', $groupId)
+                        ->value('rol');
+                }
+            );
             // Admite roles nuevos y legados
             return in_array($role, ['colaborador', 'administrador', 'full_meeting_access'], true);
         }
 
         // Acciones generales: permitir si tiene algún grupo con rol distinto a invitado
-        return DB::table('group_user')
-            ->where('user_id', $user->id)
-            ->whereIn('rol', ['colaborador', 'administrador', 'full_meeting_access'])
-            ->exists();
+        return Cache::remember(
+            "user_has_privileged_group:{$user->id}",
+            now()->addMinutes(30),
+            function () use ($user) {
+                return DB::table('group_user')
+                    ->where('user_id', $user->id)
+                    ->whereIn('rol', ['colaborador', 'administrador', 'full_meeting_access'])
+                    ->exists();
+            }
+        );
     }
     /**
      * Muestra la vista principal de contenedores
@@ -456,10 +469,16 @@ class ContainerController extends Controller
 
             $isCreator = $container->username === $user->username;
             $isMember = $container->group_id
-                ? DB::table('group_user')
-                    ->where('id_grupo', $container->group_id)
-                    ->where('user_id', $user->id)
-                    ->exists()
+                ? Cache::remember(
+                    "group_member:{$user->id}:{$container->group_id}",
+                    now()->addMinutes(30),
+                    function () use ($container, $user) {
+                        return DB::table('group_user')
+                            ->where('id_grupo', $container->group_id)
+                            ->where('user_id', $user->id)
+                            ->exists();
+                    }
+                )
                 : false;
             $isOrgOwner = $container->group && $container->group->organization
                 ? $container->group->organization->admin_id === $user->id
