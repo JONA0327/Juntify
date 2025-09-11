@@ -19,10 +19,12 @@
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
         'resources/css/audio-processing.css',
+        'resources/js/tasks/task-details-modal.js'
         'resources/js/tasks/tabs-reuniones.js',
         'resources/css/tasks/index.css',
         'resources/js/tasks/index.js'
         'resources/css/contacts/index.css',
+
     ])
 
     <meta name="task-endpoints"
