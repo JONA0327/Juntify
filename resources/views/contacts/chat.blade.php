@@ -84,36 +84,6 @@
     </div>
 </div>
 
+@vite('resources/css/contacts/chat.css')
 @vite('resources/js/contacts/chat.js')
-
-<style>
-.loading-spinner {
-    border-top-color: transparent;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-#messages-container::-webkit-scrollbar {
-    width: 6px;
-}
-
-#messages-container::-webkit-scrollbar-track {
-    background: rgba(30, 41, 59, 0.3);
-    border-radius: 3px;
-}
-
-#messages-container::-webkit-scrollbar-thumb {
-    background: rgba(100, 116, 139, 0.5);
-    border-radius: 3px;
-}
-
-#messages-container::-webkit-scrollbar-thumb:hover {
-    background: rgba(100, 116, 139, 0.7);
-}
-</style>
 @endsection

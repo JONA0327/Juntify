@@ -17,7 +17,9 @@
         'resources/css/index.css',
         'resources/js/index.js',
         'resources/css/profile.css',
-        'resources/js/profile.js'
+        'resources/js/profile.js',
+        'resources/css/profile/google-connection-monitor.css',
+        'resources/js/profile/google-connection-monitor-init.js',
     ])
 </head>
 <body>
@@ -85,68 +87,8 @@
     <!-- Modals -->
     @include('partials.profile._modals')
 
-    <!-- Google Connection Monitor Styles -->
-    <style>
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        .google-connection-indicator {
-            display: inline-flex;
-            align-items: center;
-            color: #3b82f6;
-        }
-
-        .google-refresh-spinner {
-            color: #3b82f6;
-        }
-
-        .google-notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 12px 20px;
-            border-radius: 8px;
-            color: white;
-            font-weight: 500;
-            z-index: 9999;
-            opacity: 0;
-            transform: translateX(100%);
-            transition: all 0.3s ease;
-        }
-
-        .google-notification.show {
-            opacity: 1;
-            transform: translateX(0);
-        }
-
-        .google-notification.success {
-            background-color: #10b981;
-            border: 1px solid #059669;
-        }
-
-        .google-notification.error {
-            background-color: #ef4444;
-            border: 1px solid #dc2626;
-        }
-
-        .google-notification.info {
-            background-color: #3b82f6;
-            border: 1px solid #2563eb;
-        }
-    </style>
-
     <!-- Google Connection Monitor Script -->
     <script src="{{ asset('js/google-connection-monitor.js') }}"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            if (typeof GoogleConnectionMonitor !== 'undefined') {
-                const monitor = new GoogleConnectionMonitor();
-                monitor.init();
-            }
-        });
-    </script>
 
 </body>
 </html>

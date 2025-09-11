@@ -118,11 +118,7 @@
   ])
 
   @if(session('registered'))
-  <script>
-    document.addEventListener('DOMContentLoaded', function(){
-      showSuccessModal();
-    });
-  </script>
+  @vite('resources/js/auth/register-inline.js')
   @endif
 </body>
 </html>
