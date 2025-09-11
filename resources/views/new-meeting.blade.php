@@ -11,7 +11,7 @@
     @corsFont('https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap')    <!-- Styles -->
     @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css'])
 </head>
-<body>
+<body data-user-role="{{ $userRole }}" data-organization-id="{{ $organizationId }}">
     <!-- Animated particles background -->
     <div class="particles" id="particles"></div>
 
@@ -140,10 +140,6 @@
     </div>
 
     <!-- JavaScript -->
-    <script>
-        window.userRole = @json($userRole);
-        window.currentOrganizationId = @json($organizationId);
-    </script>
-    @vite(['resources/js/new-meeting.js'])
+    @vite(['resources/js/meetings/new-meeting-globals.js', 'resources/js/new-meeting.js'])
 </body>
 </html>
