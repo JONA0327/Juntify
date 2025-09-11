@@ -1,16 +1,17 @@
 // ===============================================
 // VARIABLES Y CONFIGURACIÓN GLOBAL
 // ===============================================
-let currentMeetings = [];
-let isEditingTitle = false;
-let currentModalMeeting = null;
+// Nota: usar 'var' y fallbacks a window.* para evitar errores si el script se carga dos veces
+var currentMeetings = window.currentMeetings || [];
+var isEditingTitle = typeof window.isEditingTitle !== 'undefined' ? window.isEditingTitle : false;
+var currentModalMeeting = typeof window.currentModalMeeting !== 'undefined' ? window.currentModalMeeting : null;
 // Variables para manejo de audio segmentado en el modal
-let meetingSegments = [];
-let meetingAudioPlayer = null;
-let currentSegmentIndex = null;
-let segmentEndHandler = null;
-let selectedSegmentIndex = null;
-let segmentsModified = false;
+var meetingSegments = window.meetingSegments || [];
+var meetingAudioPlayer = typeof window.meetingAudioPlayer !== 'undefined' ? window.meetingAudioPlayer : null;
+var currentSegmentIndex = typeof window.currentSegmentIndex !== 'undefined' ? window.currentSegmentIndex : null;
+var segmentEndHandler = typeof window.segmentEndHandler !== 'undefined' ? window.segmentEndHandler : null;
+var selectedSegmentIndex = typeof window.selectedSegmentIndex !== 'undefined' ? window.selectedSegmentIndex : null;
+var segmentsModified = typeof window.segmentsModified !== 'undefined' ? window.segmentsModified : false;
 
 // Almacenamiento temporal para datos de reuniones descargadas
 window.downloadMeetingData = window.downloadMeetingData || {};

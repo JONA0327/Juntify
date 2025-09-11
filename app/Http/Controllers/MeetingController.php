@@ -1729,14 +1729,38 @@ class MeetingController extends Controller
 
                 if (!empty($existingFiles)) {
                     $audioPath = $existingFiles[0];
-                } else {
-                    $audioPath = $this->getAudioPath($meetingModel);
-                    if (!$audioPath) {
-                        return response()->json(['error' => 'Audio no disponible'], 404);
-                    }
-                    if (str_starts_with($audioPath, 'http')) {
+                    $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
+                    return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
+                }
+
+                $audioPath = $this->getAudioPath($meetingModel);
+                if (!$audioPath) {
+                    return response()->json(['error' => 'Audio no disponible'], 404);
+                }
+
+                // Si es URL (Drive), intentar descargar y servir bytes para evitar problemas de reproducción/CORS
+                if (str_starts_with($audioPath, 'http')) {
+                    try {
+                        $fileId = $meetingModel->audio_drive_id ?: $this->normalizeDriveId($audioPath);
+                        if ($fileId) {
+                            $info = $this->googleDriveService->getFileInfo($fileId);
+                            $content = $this->googleDriveService->downloadFileContent($fileId);
+                            $mime = $info->getMimeType() ?: 'audio/mpeg';
+                            return response($content, 200, [
+                                'Content-Type' => $mime,
+                                'Accept-Ranges' => 'bytes'
+                            ]);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('Fallo al descargar audio por URL, redirigiendo', [
+                            'meeting_id' => $meetingModel->id,
+                            'error' => $e->getMessage()
+                        ]);
+                        // fallback a redirección si no podemos descargar
                         return redirect()->away($audioPath);
                     }
+                    // Si no logramos obtener fileId, redirigir como último recurso
+                    return redirect()->away($audioPath);
                 }
 
                 $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
@@ -1795,6 +1819,24 @@ class MeetingController extends Controller
                     return response()->json(['error' => 'Audio no disponible'], 404);
                 }
                 if (str_starts_with($audioPath, 'http')) {
+                    try {
+                        $fileId = $tempMeeting->audio_drive_id ?: $this->normalizeDriveId($audioPath);
+                        if ($fileId) {
+                            $info = $this->googleDriveService->getFileInfo($fileId);
+                            $content = $this->googleDriveService->downloadFileContent($fileId);
+                            $mime = $info->getMimeType() ?: 'audio/mpeg';
+                            return response($content, 200, [
+                                'Content-Type' => $mime,
+                                'Accept-Ranges' => 'bytes'
+                            ]);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('Fallo al descargar audio moderno por URL, redirigiendo', [
+                            'meeting_id' => $modern->id,
+                            'error' => $e->getMessage()
+                        ]);
+                        return redirect()->away($audioPath);
+                    }
                     return redirect()->away($audioPath);
                 }
                 $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
