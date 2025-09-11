@@ -37,6 +37,7 @@ export default defineConfig({
                 'resources/js/organization.js',
                 'resources/js/ffmpeg-test.js',
                 'resources/js/ffmpeg-test-simple.js',
+                'resources/js/tasks/tabs-reuniones.js',
             ],
             refresh: true,
         }),
