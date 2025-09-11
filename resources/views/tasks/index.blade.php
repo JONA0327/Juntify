@@ -142,5 +142,6 @@
             }
         }
     </script>
+    @vite('resources/js/tasks/modal-task.js')
 </body>
 </html>
