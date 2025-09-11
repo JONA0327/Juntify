@@ -21,21 +21,9 @@
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
         'resources/css/audio-processing.css',
+        'resources/css/chat.css',
         'resources/js/reuniones_v2.js'
     ])
-
-    <style>
-        #active-chat-messages {
-            transition: transform 0.2s ease-out;
-        }
-        .message-fade-in {
-            animation: fadeInMessage 0.3s ease-out;
-        }
-        @keyframes fadeInMessage {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-    </style>
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
 
@@ -44,7 +32,7 @@
         @include('partials.navbar')
         @include('partials.mobile-nav')
 
-        <main class="w-full pl-24 pt-24" style="margin-top:130px;">
+        <main id="chat-main" class="w-full pl-24 pt-24">
             <!-- Contenedor Centrado -->
             <div class="container mx-auto px-4 py-6 h-screen flex flex-col">
         <!-- Header -->
@@ -134,8 +122,8 @@
                         <div class="flex items-center gap-2 text-slate-400 text-sm">
                             <div class="flex space-x-1">
                                 <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                                <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-                                <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                                <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce loading-dots-delay-1"></div>
+                                <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce loading-dots-delay-2"></div>
                             </div>
                             <span>Escribiendo...</span>
                         </div>
