@@ -22,6 +22,7 @@ use Google\Service\Exception as GoogleServiceException;
 
 class SharedMeetingController extends Controller
 {
+    private ?int $lastDriveErrorCode = null;
     public function resolveDriveLinks(Request $request): JsonResponse
     {
         $request->validate([
@@ -37,6 +38,7 @@ class SharedMeetingController extends Controller
 
         $meetingId = $shared->meeting_id;
         $sharerEmail = $shared->sharedBy?->email;
+        $permissionsGranted = true;
 
         // Prefer user token; if missing, use SA impersonating sharer
         $drive = app(GoogleDriveService::class);
@@ -124,12 +126,13 @@ class SharedMeetingController extends Controller
             }
 
             if ($audioId || !empty($legacy->transcript_drive_id)) {
-                try {
-                    $this->grantDriveAccessForShare($shared);
-                } catch (\Throwable $e) {
-                    Log::warning('resolveDriveLinks: grant access failed', [
+                if (!$this->grantDriveAccessForShare($shared)) {
+                    $permissionsGranted = false;
+                    Log::error('resolveDriveLinks: grant access failed', [
                         'shared_meeting_id' => $shared->id,
-                        'error' => $e->getMessage(),
+                        'file_id' => $audioId ?? $legacy->transcript_drive_id,
+                        'email' => $user->email,
+                        'code' => $this->lastDriveErrorCode,
                     ]);
                 }
             }
@@ -141,6 +144,7 @@ class SharedMeetingController extends Controller
                 'ju_link' => $juLink,
                 'audio_link' => $audioLink,
                 'audio_file_id' => $audioId,
+                'permissions_granted' => $permissionsGranted,
             ]);
         }
 
@@ -185,12 +189,13 @@ class SharedMeetingController extends Controller
         }
 
         if ($audioId) {
-            try {
-                $this->grantDriveAccessForShare($shared);
-            } catch (\Throwable $e) {
-                Log::warning('resolveDriveLinks: grant access failed', [
+            if (!$this->grantDriveAccessForShare($shared)) {
+                $permissionsGranted = false;
+                Log::error('resolveDriveLinks: grant access failed', [
                     'shared_meeting_id' => $shared->id,
-                    'error' => $e->getMessage(),
+                    'file_id' => $audioId,
+                    'email' => $user->email,
+                    'code' => $this->lastDriveErrorCode,
                 ]);
             }
         }
@@ -203,6 +208,7 @@ class SharedMeetingController extends Controller
             'ju_link' => null,
             'audio_link' => $audioLink,
             'audio_file_id' => $audioId,
+            'permissions_granted' => $permissionsGranted,
         ]);
     }
     /**
@@ -668,13 +674,15 @@ class SharedMeetingController extends Controller
      * Grants Drive access to the recipient user for the shared meeting assets (.ju and audio).
      * Uses Service Account impersonating the sharer if necessary.
      */
-    private function grantDriveAccessForShare(SharedMeeting $sharedMeeting): void
+    private function grantDriveAccessForShare(SharedMeeting $sharedMeeting): bool
     {
+        $this->lastDriveErrorCode = null;
+        $permissionsGranted = true;
         try {
             $recipient = User::find($sharedMeeting->shared_with);
             $sharer    = $sharedMeeting->sharedBy; // might be null in old data
             if (!$recipient || !$recipient->email) {
-                return;
+                return false;
             }
 
             $recipientEmail = $recipient->email;
@@ -699,8 +707,14 @@ class SharedMeetingController extends Controller
                     $token = $sharer->googleToken;
                     $drive->setAccessToken($token->access_token ? json_decode($token->access_token, true) ?: ['access_token' => $token->access_token] : []);
                 } catch (\Throwable $e) {
-                    Log::warning('grantDriveAccess: unable to set user token', ['error' => $e->getMessage()]);
+                    Log::error('grantDriveAccess: unable to set user token', [
+                        'error' => $e->getMessage(),
+                        'email' => $recipientEmail,
+                        'code' => $e->getCode(),
+                    ]);
                     $drive = null;
+                    $permissionsGranted = false;
+                    $this->lastDriveErrorCode = $e->getCode();
                 }
             }
 
@@ -724,7 +738,14 @@ class SharedMeetingController extends Controller
                             Log::warning('grantDriveAccess: unable to verify transcript file', ['error' => $metaE->getMessage()]);
                         }
                     } catch (\Throwable $e) {
-                        Log::warning('grantDriveAccess: share transcript failed', ['error' => $e->getMessage()]);
+                        $permissionsGranted = false;
+                        $this->lastDriveErrorCode = $e->getCode();
+                        Log::error('grantDriveAccess: share transcript failed', [
+                            'file_id' => $legacy->transcript_drive_id,
+                            'email' => $recipientEmail,
+                            'code' => $e->getCode(),
+                            'error' => $e->getMessage(),
+                        ]);
                     }
                 }
 
@@ -743,10 +764,17 @@ class SharedMeetingController extends Controller
                             $this->shareDriveItemWithFallback($sa, $drive, $legacy->audio_drive_id, $recipientEmail);
                         }
                     } catch (\Throwable $e) {
-                        Log::warning('grantDriveAccess: share audio failed', ['error' => $e->getMessage()]);
+                        $permissionsGranted = false;
+                        $this->lastDriveErrorCode = $e->getCode();
+                        Log::error('grantDriveAccess: share audio failed', [
+                            'file_id' => $legacy->audio_drive_id,
+                            'email' => $recipientEmail,
+                            'code' => $e->getCode(),
+                            'error' => $e->getMessage(),
+                        ]);
                     }
                 }
-                return;
+                return $permissionsGranted;
             }
 
             // Modern meeting: share recordings folder if present
@@ -754,12 +782,28 @@ class SharedMeetingController extends Controller
                 try {
                     $this->shareDriveItemWithFallback($sa, $drive, $modern->recordings_folder_id, $recipientEmail);
                 } catch (\Throwable $e) {
-                    Log::warning('grantDriveAccess: share recordings folder failed', ['error' => $e->getMessage()]);
+                    $permissionsGranted = false;
+                    $this->lastDriveErrorCode = $e->getCode();
+                    Log::error('grantDriveAccess: share recordings folder failed', [
+                        'file_id' => $modern->recordings_folder_id,
+                        'email' => $recipientEmail,
+                        'code' => $e->getCode(),
+                        'error' => $e->getMessage(),
+                    ]);
                 }
             }
         } catch (\Throwable $e) {
-            Log::warning('grantDriveAccessForShare failed', ['error' => $e->getMessage()]);
+            $permissionsGranted = false;
+            $this->lastDriveErrorCode = $e->getCode();
+            Log::error('grantDriveAccessForShare failed', [
+                'shared_meeting_id' => $sharedMeeting->id,
+                'email' => isset($recipientEmail) ? $recipientEmail : null,
+                'code' => $e->getCode(),
+                'error' => $e->getMessage(),
+            ]);
         }
+
+        return $permissionsGranted;
     }
 
     private function shareDriveItemWithFallback(GoogleServiceAccount $sa, ?GoogleDriveService $drive, string $itemId, string $email): void
