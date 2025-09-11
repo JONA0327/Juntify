@@ -2423,21 +2423,8 @@ function showMeetingModal(meeting) {
                                 Audio de la Reunión
                             </h3>
                             <div class="audio-player">
-                                <audio id="meeting-audio" preload="auto"></audio>
-                                <div class="audio-controls">
-                                    <button id="audio-play" class="audio-btn" aria-label="Reproducir">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M5 3.87v16.26L19.5 12 5 3.87z" />
-                                        </svg>
-                                    </button>
-                                    <button id="audio-pause" class="audio-btn hidden" aria-label="Pausar">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M6 4h4v16H6zm8 0h4v16h-4z" />
-                                        </svg>
-                                    </button>
-                                    <input type="range" id="audio-progress" value="0" min="0" step="0.1">
-                                    ${!audioSrc ? '<p class="text-slate-400 text-sm mt-2">Audio no disponible para esta reunión</p>' : ''}
-                                </div>
+                                <audio id="meeting-audio" preload="auto" controls style="width: 100%; accent-color: #fbbf24; background: rgba(30, 41, 59, 0.6); border: 1px solid #475569; border-radius: 8px;"></audio>
+                                ${!audioSrc ? '<p class="text-slate-400 text-sm mt-2">Audio no disponible para esta reunión</p>' : ''}
                                 <audio id="meeting-full-audio" preload="auto" style="display:none"></audio>
                             </div>
                         </div>
@@ -2528,59 +2515,35 @@ function showMeetingModal(meeting) {
         });
     });
 
-    // Configuración de reproductor de audio personalizado
+    // Configuración de reproductor de audio nativo (barra del sistema)
     meetingAudioPlayer = document.getElementById('meeting-audio');
     const fullAudioPlayer = document.getElementById('meeting-full-audio');
-    const playBtn = document.getElementById('audio-play');
-    const pauseBtn = document.getElementById('audio-pause');
-    const progress = document.getElementById('audio-progress');
 
-    if (meetingAudioPlayer && playBtn && pauseBtn && progress) {
+    if (meetingAudioPlayer) {
+        // Asignar fuente y preparar fallback
         if (audioSrc) {
             meetingAudioPlayer.src = audioSrc;
-            meetingAudioPlayer.load();
+            try { meetingAudioPlayer.load(); } catch (_) {}
             if (fullAudioPlayer) {
                 fullAudioPlayer.src = audioSrc;
-                fullAudioPlayer.load();
+                try { fullAudioPlayer.load(); } catch (_) {}
             }
-            playBtn.disabled = false;
-            playBtn.style.opacity = '';
-            playBtn.title = 'Reproducir';
-        } else {
-            console.warn('No hay fuente de audio válida para esta reunión');
-            playBtn.disabled = true;
-            playBtn.style.opacity = '0.5';
-            playBtn.title = 'Audio no disponible';
-            return;
         }
 
-        // Agregar manejo de errores para carga de audio
         let triedAudioFallback = false;
         meetingAudioPlayer.addEventListener('error', (e) => {
             console.error('Error cargando audio:', e);
 
-            // Intentar fallback a endpoint de streaming del backend si no lo hemos hecho aún
+            // Intentar fallback a endpoint del backend una sola vez
             if (!triedAudioFallback && meeting?.id) {
                 triedAudioFallback = true;
                 const fallbackUrl = `/api/meetings/${meeting.id}/audio`;
                 console.warn('Reintentando audio con fallback del servidor:', fallbackUrl);
                 meetingAudioPlayer.src = fallbackUrl;
                 if (fullAudioPlayer) fullAudioPlayer.src = fallbackUrl;
-                try {
-                    meetingAudioPlayer.load();
-                } catch (_) {}
-                return; // esperar siguiente evento (canplay o error)
+                try { meetingAudioPlayer.load(); } catch (_) {}
+                return;
             }
-
-            // Deshabilitar controles
-            playBtn.disabled = true;
-            pauseBtn.disabled = true;
-            progress.disabled = true;
-            playBtn.style.opacity = '0.5';
-            pauseBtn.style.opacity = '0.5';
-            progress.style.opacity = '0.5';
-            playBtn.title = 'Error cargando audio';
-            pauseBtn.title = 'Error cargando audio';
 
             // Mostrar mensaje de error y enlace de descarga
             const audioPlayerContainer = document.querySelector('.audio-player');
@@ -2600,99 +2563,11 @@ function showMeetingModal(meeting) {
             }
         });
 
-        // Inicializar el slider de forma segura hasta conocer la duración
-        progress.min = 0;
-        progress.value = 0;
-        progress.max = 1; // marcador temporal para evitar que la perilla llegue al final sin duración
-
-        // Helper para fijar el max cuando haya duración válida
-        const setProgressMaxFromDuration = () => {
-            const dur = meetingAudioPlayer?.duration;
-            if (typeof dur === 'number' && isFinite(dur) && dur > 0) {
-                // Solo actualizar si cambia significativamente para evitar jitter
-                if (!progress.max || Math.abs(progress.max - dur) > 0.05) {
-                    progress.max = dur;
-                }
-            }
-        };
-
-        // Establecer max al cargar metadatos y en otros eventos relevantes
         meetingAudioPlayer.addEventListener('loadedmetadata', () => {
-            setProgressMaxFromDuration();
-
-            // Rehabilitar controles
-            playBtn.disabled = false;
-            pauseBtn.disabled = false;
-            progress.disabled = false;
-            playBtn.style.opacity = '';
-            pauseBtn.style.opacity = '';
-            progress.style.opacity = '';
-            playBtn.title = 'Reproducir';
-            pauseBtn.title = 'Pausar';
-
-            // Eliminar mensaje de error si existe
+            // Quitar mensaje de error si se logró cargar
             const audioPlayerContainer = document.querySelector('.audio-player');
             const errorMsg = audioPlayerContainer?.querySelector('.audio-error');
-            if (errorMsg) {
-                errorMsg.remove();
-            }
-        });
-        ['durationchange','canplay','canplaythrough','progress'].forEach(evt => {
-            meetingAudioPlayer.addEventListener(evt, setProgressMaxFromDuration);
-        });
-
-        meetingAudioPlayer.addEventListener('timeupdate', () => {
-            // Asegurar que el max esté sincronizado y el valor no exceda los límites
-            setProgressMaxFromDuration();
-            const cur = meetingAudioPlayer.currentTime || 0;
-            const max = (typeof progress.max === 'number' ? progress.max : parseFloat(progress.max)) || 0;
-            if (max > 0) {
-                progress.value = Math.min(cur, max);
-            } else {
-                // Si aún no hay duración, usar un placeholder para que no se pegue al final
-                progress.max = Math.max(1, cur + 1);
-                progress.value = cur;
-            }
-        });
-
-        playBtn.addEventListener('click', () => {
-            if (meetingAudioPlayer.src && meetingAudioPlayer.src !== window.location.href) {
-                meetingAudioPlayer.play().catch(error => {
-                    console.warn('Error reproduciendo audio:', error);
-                    alert('No se pudo reproducir el audio. Puede que el archivo no exista o no sea válido.');
-                });
-            } else {
-                alert('No hay audio disponible para esta reunión.');
-            }
-        });
-
-        pauseBtn.addEventListener('click', () => {
-            meetingAudioPlayer.pause();
-        });
-
-        meetingAudioPlayer.addEventListener('play', () => {
-            playBtn.classList.add('hidden');
-            pauseBtn.classList.remove('hidden');
-            pauseBtn.classList.add('active');
-        });
-
-        meetingAudioPlayer.addEventListener('pause', () => {
-            pauseBtn.classList.add('hidden');
-            pauseBtn.classList.remove('active');
-            playBtn.classList.remove('hidden');
-
-            // Limpiar manejador de segmentos y restablecer botones cuando se pausa
-            if (segmentEndHandler) {
-                meetingAudioPlayer.removeEventListener('timeupdate', segmentEndHandler);
-                segmentEndHandler = null;
-            }
-            if (currentSegmentIndex !== null) {
-                updateSegmentButtons(null);
-            }
-        });
-
-        progress.addEventListener('input', () => {
-            meetingAudioPlayer.currentTime = progress.value;
+            if (errorMsg) errorMsg.remove();
         });
     }
 }

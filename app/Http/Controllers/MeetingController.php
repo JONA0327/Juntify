@@ -13,6 +13,7 @@ use App\Models\Container;
 use App\Models\TaskLaravel;
 use App\Models\Meeting;
 use App\Models\SharedMeeting;
+use App\Models\User;
 use App\Models\KeyPoint;
 use App\Models\Transcription;
 use App\Models\Task;
@@ -492,6 +493,10 @@ class MeetingController extends Controller
                             'created_at' => $legacyMeeting->created_at->format('d/m/Y H:i'),
                             'audio_path' => $audioPath,
                             'audio_drive_id' => $audioDriveId,
+                            // Campos para acceder a transcripción (.ju) cuando exista
+                            'transcript_drive_id' => $legacyMeeting->transcript_drive_id,
+                            'transcript_download_url' => $legacyMeeting->transcript_download_url,
+                            'transcript_path' => route('api.meetings.download-ju', ['id' => $legacyMeeting->id]),
                             'summary' => $summary ?? 'No hay resumen disponible',
                             'key_points' => $keyPoints,
                             'transcription' => $transcriptionText,
@@ -560,6 +565,43 @@ class MeetingController extends Controller
                 $processedData = $this->processTranscriptData($transcriptData);
                 unset($processedData['tasks']);
 
+                // Fallback: si no pudimos desencriptar o vienen textos por defecto, reconstruir desde DB
+                $looksEncrypted = false;
+                try {
+                    $summaryTxt = (string)($processedData['summary'] ?? '');
+                    $transTxt = (string)($processedData['transcription'] ?? '');
+                    if (stripos($summaryTxt, 'encriptad') !== false || stripos($transTxt, 'encriptad') !== false) {
+                        $looksEncrypted = true;
+                    }
+                } catch (\Throwable $e) { /* ignore */ }
+
+                if ($looksEncrypted || (empty($processedData['segments']) && empty($processedData['key_points']))) {
+                    $ownerUsernameForDb = $ownerUsername;
+                    $segmentsData = DB::table('transcriptions')
+                        ->join('transcriptions_laravel', 'transcriptions.meeting_id', '=', 'transcriptions_laravel.id')
+                        ->where('transcriptions.meeting_id', $legacyMeeting->id)
+                        ->where('transcriptions_laravel.username', $ownerUsernameForDb)
+                        ->orderBy('transcriptions.id')
+                        ->get(['transcriptions.time', 'transcriptions.speaker', 'transcriptions.text', 'transcriptions.display_speaker']);
+
+                    $rebuiltSegments = $this->buildLegacySegmentsFromDb($segmentsData);
+                    $rebuiltTranscription = $segmentsData->pluck('text')->implode(' ');
+                    $rebuiltSpeakers = collect($rebuiltSegments)
+                        ->map(function ($s) { return $s['display_speaker'] ?: $s['speaker']; })
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->toArray();
+
+                    // Sobrescribir datos procesados con fallback de DB
+                    $processedData['segments'] = $rebuiltSegments;
+                    $processedData['transcription'] = $rebuiltTranscription ?: ($processedData['transcription'] ?? '');
+                    if (empty($processedData['speakers'])) { $processedData['speakers'] = $rebuiltSpeakers; }
+                    if (empty($processedData['summary']) || stripos($processedData['summary'], 'encriptad') !== false) {
+                        $processedData['summary'] = 'Resumen reconstruido desde base de datos (segmentos históricos).';
+                    }
+                }
+
                 $segments = $processedData['segments'] ?? [];
                 $transcription = $processedData['transcription'] ?? '';
                 if (empty($segments)) {
@@ -584,6 +626,10 @@ class MeetingController extends Controller
                         'created_at' => $legacyMeeting->created_at->format('d/m/Y H:i'),
                         'audio_path' => $audioPath,
                         'audio_drive_id' => $audioDriveId,
+                        // Campos para acceder a transcripción (.ju) cuando exista
+                        'transcript_drive_id' => $legacyMeeting->transcript_drive_id,
+                        'transcript_download_url' => $legacyMeeting->transcript_download_url ?? null,
+                        'transcript_path' => route('api.meetings.download-ju', ['id' => $legacyMeeting->id]),
                         'summary' => $processedData['summary'],
                         'key_points' => $processedData['key_points'],
                         'transcription' => $transcription,
@@ -1473,11 +1519,48 @@ class MeetingController extends Controller
                 })
                 ->firstOrFail();
 
+            $isOwner = isset($user->username) && $meeting->username === $user->username;
+            $recipientShared = $sharedAccess && !$isOwner;
+
             if (empty($meeting->transcript_drive_id)) {
                 return response()->json(['error' => 'No se encontró archivo .ju para esta reunión'], 404);
             }
 
-            // 1) Preferir URL directa almacenada en DB
+            // Si es receptor de reunión compartida, descargar y servir desde el servidor usando Service Account
+            if ($recipientShared) {
+                try {
+                    /** @var \App\Services\GoogleServiceAccount $sa */
+                    $sa = app(\App\Services\GoogleServiceAccount::class);
+                    // Intentar impersonar al dueño para garantizar acceso
+                    try {
+                        $owner = $meeting->user()->first();
+                        if ($owner && !empty($owner->email)) {
+                            $sa->impersonate($owner->email);
+                        }
+                    } catch (\Throwable $e) {
+                        // Continuar sin impersonate si falla
+                    }
+                    $content = $sa->downloadFile($meeting->transcript_drive_id);
+                    $filename = 'meeting_' . $meeting->id . '.ju';
+                    return response($content)
+                        ->header('Content-Type', 'application/octet-stream')
+                        ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+                } catch (\Throwable $e) {
+                    Log::warning('downloadJuFile SA fallback failed for shared recipient, redirecting to Drive link if possible', [
+                        'meeting_id' => $id,
+                        'error' => $e->getMessage()
+                    ]);
+                    // Como último recurso, intentar redirigir a un enlace directo si existe
+                    if (!empty($meeting->transcript_download_url)) {
+                        $direct = $this->normalizeDriveUrl($meeting->transcript_download_url);
+                        return redirect()->away($direct);
+                    }
+                    $direct = 'https://drive.google.com/uc?export=download&id=' . $meeting->transcript_drive_id;
+                    return redirect()->away($direct);
+                }
+            }
+
+            // Propietario u otros casos: intentar con URL directa si existe
             if (!empty($meeting->transcript_download_url)) {
                 $direct = $this->normalizeDriveUrl($meeting->transcript_download_url);
                 return redirect()->away($direct);
@@ -1729,38 +1812,37 @@ class MeetingController extends Controller
 
                 if (!empty($existingFiles)) {
                     $audioPath = $existingFiles[0];
-                    $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
-                    return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
-                }
-
-                $audioPath = $this->getAudioPath($meetingModel);
-                if (!$audioPath) {
-                    return response()->json(['error' => 'Audio no disponible'], 404);
-                }
-
-                // Si es URL (Drive), intentar descargar y servir bytes para evitar problemas de reproducción/CORS
-                if (str_starts_with($audioPath, 'http')) {
-                    try {
-                        $fileId = $meetingModel->audio_drive_id ?: $this->normalizeDriveId($audioPath);
-                        if ($fileId) {
-                            $info = $this->googleDriveService->getFileInfo($fileId);
-                            $content = $this->googleDriveService->downloadFileContent($fileId);
-                            $mime = $info->getMimeType() ?: 'audio/mpeg';
-                            return response($content, 200, [
-                                'Content-Type' => $mime,
-                                'Accept-Ranges' => 'bytes'
-                            ]);
+                } else {
+                    $audioPath = $this->getAudioPath($meetingModel);
+                    if (!$audioPath) {
+                        return response()->json(['error' => 'Audio no disponible'], 404);
+                    }
+                    if (str_starts_with($audioPath, 'http')) {
+                        // Si tenemos fileId, descargar y guardar localmente para servir con soporte de rangos
+                        if (!empty($meetingModel->audio_drive_id)) {
+                            try {
+                                $info = $this->googleDriveService->getFileInfo($meetingModel->audio_drive_id);
+                                $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType());
+                                $sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meetingModel->meeting_name);
+                                $fileName = $sanitized . '_' . $meetingModel->id . '.' . $ext;
+                                $content = $this->downloadFromDrive($meetingModel->audio_drive_id);
+                                $localPath = $this->storeTemporaryFile($content, $fileName);
+                                $publicUrl = $this->publicUrlFromStoragePath($localPath);
+                                return redirect()->to($publicUrl, 302);
+                            } catch (\Throwable $e) {
+                                // Si falla, intentar redirigir al enlace externo como último recurso
+                                return redirect()->away($audioPath);
+                            }
                         }
-                    } catch (\Throwable $e) {
-                        Log::warning('Fallo al descargar audio por URL, redirigiendo', [
-                            'meeting_id' => $meetingModel->id,
-                            'error' => $e->getMessage()
-                        ]);
-                        // fallback a redirección si no podemos descargar
                         return redirect()->away($audioPath);
                     }
-                    // Si no logramos obtener fileId, redirigir como último recurso
-                    return redirect()->away($audioPath);
+                }
+
+                // Si es un archivo local en storage/app/public, redirigir a la URL pública
+                $publicRoot = storage_path('app/public/');
+                if (str_starts_with($audioPath, $publicRoot)) {
+                    $publicUrl = $this->publicUrlFromStoragePath($audioPath);
+                    return redirect()->to($publicUrl, 302);
                 }
 
                 $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
@@ -1780,6 +1862,12 @@ class MeetingController extends Controller
 
                 if (!empty($existingFiles)) {
                     $audioPath = $existingFiles[0];
+                    // Si es un archivo local en storage/app/public, redirigir a la URL pública
+                    $publicRoot = storage_path('app/public/');
+                    if (str_starts_with($audioPath, $publicRoot)) {
+                        $publicUrl = $this->publicUrlFromStoragePath($audioPath);
+                        return redirect()->to($publicUrl, 302);
+                    }
                     $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
                     return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
                 }
@@ -1819,25 +1907,29 @@ class MeetingController extends Controller
                     return response()->json(['error' => 'Audio no disponible'], 404);
                 }
                 if (str_starts_with($audioPath, 'http')) {
-                    try {
-                        $fileId = $tempMeeting->audio_drive_id ?: $this->normalizeDriveId($audioPath);
-                        if ($fileId) {
-                            $info = $this->googleDriveService->getFileInfo($fileId);
-                            $content = $this->googleDriveService->downloadFileContent($fileId);
-                            $mime = $info->getMimeType() ?: 'audio/mpeg';
-                            return response($content, 200, [
-                                'Content-Type' => $mime,
-                                'Accept-Ranges' => 'bytes'
-                            ]);
+                    // Descargar por fileId y redirigir a URL pública local si es posible
+                    if (!empty($tempMeeting->audio_drive_id)) {
+                        try {
+                            $info = $this->googleDriveService->getFileInfo($tempMeeting->audio_drive_id);
+                            $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType());
+                            $sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '_', $tempMeeting->meeting_name);
+                            $fileName = $sanitized . '_' . $tempMeeting->id . '.' . $ext;
+                            $content = $this->downloadFromDrive($tempMeeting->audio_drive_id);
+                            $localPath = $this->storeTemporaryFile($content, $fileName);
+                            $publicUrl = $this->publicUrlFromStoragePath($localPath);
+                            return redirect()->to($publicUrl, 302);
+                        } catch (\Throwable $e) {
+                            return redirect()->away($audioPath);
                         }
-                    } catch (\Throwable $e) {
-                        Log::warning('Fallo al descargar audio moderno por URL, redirigiendo', [
-                            'meeting_id' => $modern->id,
-                            'error' => $e->getMessage()
-                        ]);
-                        return redirect()->away($audioPath);
                     }
                     return redirect()->away($audioPath);
+                }
+
+                // Si es un archivo local en storage/app/public, redirigir a la URL pública
+                $publicRoot = storage_path('app/public/');
+                if (str_starts_with($audioPath, $publicRoot)) {
+                    $publicUrl = $this->publicUrlFromStoragePath($audioPath);
+                    return redirect()->to($publicUrl, 302);
                 }
                 $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
                 return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
