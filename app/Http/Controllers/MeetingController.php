@@ -1538,6 +1538,11 @@ class MeetingController extends Controller
                             $sa->impersonate($owner->email);
                         }
                     } catch (\Throwable $e) {
+                        Log::info('downloadJuFile impersonation failed', [
+                            'meeting_id' => $id,
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                        ]);
                         // Continuar sin impersonate si falla
                     }
                     $content = $sa->downloadFile($meeting->transcript_drive_id);
@@ -1546,17 +1551,46 @@ class MeetingController extends Controller
                         ->header('Content-Type', 'application/octet-stream')
                         ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
                 } catch (\Throwable $e) {
-                    Log::warning('downloadJuFile SA fallback failed for shared recipient, redirecting to Drive link if possible', [
+                    Log::warning('downloadJuFile SA impersonated download failed', [
                         'meeting_id' => $id,
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
                     ]);
-                    // Como último recurso, intentar redirigir a un enlace directo si existe
-                    if (!empty($meeting->transcript_download_url)) {
-                        $direct = $this->normalizeDriveUrl($meeting->transcript_download_url);
-                        return redirect()->away($direct);
+                    // Intentar descarga sin impersonar antes de redirigir
+                    try {
+                        Log::info('downloadJuFile retrying without impersonation', [
+                            'meeting_id' => $id,
+                        ]);
+                        /** @var \App\Services\GoogleServiceAccount $saNoImpersonate */
+                        $saNoImpersonate = app(\App\Services\GoogleServiceAccount::class);
+                        $content = $saNoImpersonate->downloadFile($meeting->transcript_drive_id);
+                        $filename = 'meeting_' . $meeting->id . '.ju';
+                        return response($content)
+                            ->header('Content-Type', 'application/octet-stream')
+                            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+                    } catch (\Throwable $e2) {
+                        Log::warning('downloadJuFile SA non-impersonated download failed', [
+                            'meeting_id' => $id,
+                            'error' => $e2->getMessage(),
+                            'trace' => $e2->getTraceAsString(),
+                        ]);
+                        $direct = !empty($meeting->transcript_download_url)
+                            ? $this->normalizeDriveUrl($meeting->transcript_download_url)
+                            : 'https://drive.google.com/uc?export=download&id=' . $meeting->transcript_drive_id;
+                        try {
+                            $response = Http::withOptions(['allow_redirects' => false])->head($direct);
+                            if ($response->successful()) {
+                                return redirect()->away($direct);
+                            }
+                        } catch (\Throwable $e3) {
+                            Log::warning('downloadJuFile redirect check failed', [
+                                'meeting_id' => $id,
+                                'error' => $e3->getMessage(),
+                                'trace' => $e3->getTraceAsString(),
+                            ]);
+                        }
+                        return response()->json(['error' => 'Archivo .ju no accesible'], 404);
                     }
-                    $direct = 'https://drive.google.com/uc?export=download&id=' . $meeting->transcript_drive_id;
-                    return redirect()->away($direct);
                 }
             }
 
