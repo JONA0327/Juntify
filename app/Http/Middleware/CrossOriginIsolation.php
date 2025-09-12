@@ -46,11 +46,7 @@ class CrossOriginIsolation
 
         // Only apply strict headers to specific routes that need FFmpeg
         $ffmpegRoutes = [
-            'new-meeting',
-            'test-mp3',
-            'test-upload',
-            'test-mp3-public',
-            'test-upload-public'
+            'new-meeting'
         ];
 
         foreach ($ffmpegRoutes as $route) {

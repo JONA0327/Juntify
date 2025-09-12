@@ -28,58 +28,6 @@ Route::get('/', function () {
     return view('index');
 });
 
-// Test route for notifications (remove in production)
-Route::get('/test-notifications', function () {
-    return view('test-notifications');
-})->middleware('auth');
-
-// Test route for audio upload (remove in production)
-Route::get('/test-upload', function () {
-    return view('test-upload');
-})->middleware('auth');
-
-// Test route for MP3 conversion (remove in production)
-Route::get('/test-mp3', function () {
-    return view('test-mp3');
-})->middleware('auth');
-
-// Public test routes for development (remove in production)
-// Simplified - remove condition for testing
-Route::get('/test-simple', function () {
-    return '<h1>Test route works!</h1>';
-});
-
-Route::get('/test-mp3-simple', function () {
-    return view('test-mp3-simple');
-});
-
-Route::get('/test-mp3-nocors', function () {
-    return view('test-mp3-nocors');
-});
-
-Route::get('/new-meeting-nocors', function () {
-    return view('new-meeting-nocors');
-});
-
-Route::get('/test-basic', function () {
-    return '<!DOCTYPE html>
-<html>
-<head><title>Basic Test</title></head>
-<body><h1>Basic test without any middleware</h1></body>
-</html>';
-});
-
-Route::get('/debug-headers', function (Request $request) {
-    return response()->json([
-        'path' => $request->path(),
-        'headers' => $request->headers->all(),
-        'cors_config' => [
-            'debug' => config('app.debug'),
-            'skip_coep' => env('SKIP_COEP_IN_DEV', true)
-        ]
-    ]);
-});
-
 // Rutas de Auth
 Route::get('/login',    [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login',   [LoginController::class, 'login']);
@@ -172,15 +120,7 @@ Route::get('/new-meeting', function () {
     ]);
 })->name('new-meeting')->middleware('cors.ffmpeg');
 
-// Test routes with FFmpeg middleware
-Route::get('/test-mp3-public', function () {
-    return view('test-mp3');
-})->middleware('cors.ffmpeg');
-
-Route::get('/test-upload-public', function () {
-    return view('test-upload');
-})->middleware('cors.ffmpeg');
-
+// Rutas para subida por chunks (archivos grandes)
 Route::post('/transcription', [TranscriptionController::class, 'store'])
     ->name('transcription.store')
     ->middleware(['auth', 'group.role']);
@@ -237,16 +177,6 @@ Route::middleware(['auth'])->group(function () {
         ]);
     });
 
-    // Vista de prueba para reuniones pendientes
-    Route::get('/test-pending', function() {
-        return view('test-pending');
-    });
-
-    // Vista de prueba para limpieza de memoria de audio
-    Route::get('/test-memory-cleanup', function() {
-        return view('test-memory-cleanup');
-    })->name('test.memory-cleanup');
-
     // Rutas de tasks-laravel (como API pero en web para mantener sesión)
     Route::prefix('api')->group(function () {
         Route::get('/tasks-laravel/meetings', [TaskLaravelController::class, 'meetings'])->name('api.tasks-laravel.meetings');
@@ -291,9 +221,4 @@ Route::middleware(['auth'])->group(function () {
 
     // Ruta principal del asistente IA
     Route::get('/ai-assistant', [AiAssistantController::class, 'index'])->name('ai-assistant');
-
-    // Ruta de prueba para el modal de contexto
-    Route::get('/test-modal-debug', function () {
-        return view('test_modal_debug');
-    })->name('test-modal-debug');
 });
