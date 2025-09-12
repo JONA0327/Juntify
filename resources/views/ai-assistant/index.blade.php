@@ -382,10 +382,108 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 </div>
-@endsection
 
-@section('modals')
+<!-- Modales -->
 @include('ai-assistant.modals.container-selector')
 @include('ai-assistant.modals.contact-chat-selector')
 @include('ai-assistant.modals.document-uploader')
+@endsection
+
+@section('scripts')
+<script>
+// Variables globales
+let currentChatId = null;
+let isTyping = false;
+
+// Función para manejar teclas presionadas
+function handleKeyPress(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+// Función para enviar mensaje
+function sendMessage() {
+    const input = document.getElementById('message-input');
+    const message = input.value.trim();
+
+    if (!message) return;
+
+    // Agregar mensaje del usuario al chat
+    addMessageToChat('user', message);
+
+    // Limpiar input
+    input.value = '';
+
+    // Simular respuesta del asistente (aquí iría la lógica real)
+    setTimeout(() => {
+        addMessageToChat('assistant', 'Esta es una respuesta simulada del asistente IA.');
+    }, 1000);
+}
+
+// Función para agregar mensaje al chat
+function addMessageToChat(sender, message) {
+    const chatMessages = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'flex items-start space-x-3 message-item';
+
+    const time = new Date().toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    if (sender === 'user') {
+        messageDiv.innerHTML = `
+            <div class="flex-1 flex justify-end">
+                <div class="bg-blue-600 rounded-lg p-4 max-w-2xl">
+                    <p class="text-white">${message}</p>
+                </div>
+            </div>
+            <div class="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-sm font-bold">U</span>
+            </div>
+        `;
+    } else {
+        messageDiv.innerHTML = `
+            <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-sm font-bold">A</span>
+            </div>
+            <div class="flex-1">
+                <div class="bg-slate-700 rounded-lg p-4 max-w-2xl">
+                    <p class="text-white">${message}</p>
+                </div>
+                <div class="text-xs text-gray-400 mt-1">${time}</div>
+            </div>
+        `;
+    }
+
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Función para toggle del panel de detalles
+function toggleMeetingPanel() {
+    const panel = document.getElementById('meeting-details-panel');
+    panel.classList.toggle('open');
+}
+
+// Funciones para abrir modales (estas se implementarán según sea necesario)
+function openContainerSelector() {
+    console.log('Abrir selector de contenedores');
+}
+
+function openContactChatSelector() {
+    console.log('Abrir selector de conversaciones');
+}
+
+function openDocumentUploader() {
+    console.log('Abrir subidor de documentos');
+}
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Asistente IA cargado');
+});
+</script>
 @endsection
