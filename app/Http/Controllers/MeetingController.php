@@ -42,7 +42,9 @@ class MeetingController extends Controller
 
     public function __construct(GoogleDriveService $googleDriveService)
     {
+        Log::info('MeetingController: Constructor iniciado');
         $this->googleDriveService = $googleDriveService;
+        Log::info('MeetingController: Constructor completado');
     }
 
     public function publicIndex()
@@ -1991,68 +1993,18 @@ class MeetingController extends Controller
             'meeting_param' => $meeting,
             'meeting_type' => gettype($meeting)
         ]);
+        
+        // Versión simplificada para debugging
+        return response()->json([
+            'debug' => true,
+            'meeting_id' => $meeting,
+            'message' => 'streamAudio method reached successfully'
+        ]);
+    }
 
-        try {
-            $user = Auth::user();
-
-            if (!$user) {
-                Log::error('streamAudio: Usuario no autenticado');
-                return response()->json(['error' => 'No autorizado'], 401);
-            }
-
-            Log::info('streamAudio: Iniciando para meeting_id', [
-                'meeting_id' => $meeting,
-                'username' => $user->username
-            ]);
-
-            // Determinar si el usuario tiene acceso compartido
-            $sharedMeeting = SharedMeeting::with('sharedBy')
-                ->where('meeting_id', $meeting)
-                ->where('shared_with', $user->id)
-                ->where('status', 'accepted')
-                ->first();
-            $sharedAccess = (bool) $sharedMeeting;
-
-            // Verificar acceso por contenedores
-            $containerAccess = DB::table('meeting_content_relations as mcr')
-                ->join('meeting_content_containers as mcc', 'mcr.container_id', '=', 'mcc.id')
-                ->join('groups as g', 'mcc.organization_group_id', '=', 'g.id')
-                ->where('mcr.meeting_id', $meeting)
-                ->where(function ($query) use ($user) {
-                    $query->where('g.creator', $user->username)
-                          ->orWhereExists(function ($subquery) use ($user) {
-                              $subquery->select(DB::raw(1))
-                                      ->from('group_members')
-                                      ->whereColumn('group_members.group_id', 'g.id')
-                                      ->where('group_members.username', $user->username);
-                          })
-                          ->orWhereExists(function ($subquery) use ($user) {
-                              $subquery->select(DB::raw(1))
-                                      ->from('organizations as o')
-                                      ->whereColumn('o.id', 'g.organization_id')
-                                      ->where('o.admin_user', $user->username);
-                          });
-                })
-                ->exists();
-
-            $useServiceAccount = $containerAccess;
-
-            Log::info('streamAudio: Tipos de acceso', [
-                'meeting_id' => $meeting,
-                'sharedAccess' => $sharedAccess,
-                'containerAccess' => $containerAccess,
-                'useServiceAccount' => $useServiceAccount
-            ]);
-
-            // Intentar configurar el token del usuario o usar Service Account
-            try {
-                if ($useServiceAccount) {
-                    Log::info('streamAudio: Configurando Service Account');
-                    /** @var \App\Services\GoogleServiceAccount $sa */
-                    $sa = app(\App\Services\GoogleServiceAccount::class);
-                    $token = $sa->getClient()->fetchAccessTokenWithAssertion();
-                    $this->googleDriveService->setAccessToken($token);
-                } else {
+    /**
+     * Método de prueba para diagnosticar problemas de audio
+     */
                     Log::info('streamAudio: Configurando token de usuario');
                     $this->setGoogleDriveToken($user);
                 }
@@ -2255,6 +2207,44 @@ class MeetingController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             return response()->json(['error' => 'Error al obtener audio'], 500);
+        }
+    }
+
+    /**
+     * Método de prueba para diagnosticar problemas de audio
+     */
+    public function testAudio($meeting)
+    {
+        Log::info('testAudio: INICIO METODO DE PRUEBA', [
+            'meeting_param' => $meeting,
+            'meeting_type' => gettype($meeting)
+        ]);
+        
+        try {
+            $user = Auth::user();
+            
+            if (!$user) {
+                Log::error('testAudio: Usuario no autenticado');
+                return response()->json(['error' => 'No autorizado'], 401);
+            }
+
+            Log::info('testAudio: Usuario autenticado', [
+                'username' => $user->username
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'meeting_id' => $meeting,
+                'username' => $user->username,
+                'message' => 'Método de prueba funcionando correctamente'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('testAudio: Error en método de prueba', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json(['error' => 'Error en prueba'], 500);
         }
     }
 
