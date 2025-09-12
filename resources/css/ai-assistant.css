@@ -1397,9 +1397,10 @@
 }
 
 .message.user .message-avatar {
-    background: linear-gradient(135deg, var(--ai-success) 0%, var(--ai-accent) 100%);
+    background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
+    color: var(--bg-slate-800);
     box-shadow:
-        0 4px 12px rgba(16, 185, 129, 0.3),
+        0 4px 12px rgba(59, 130, 246, 0.3),
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
@@ -1416,9 +1417,9 @@
 }
 
 .message.user .message-content {
-    background: linear-gradient(135deg, var(--ai-primary) 0%, var(--ai-primary-dark) 100%);
-    color: white;
-    border-color: var(--ai-primary);
+    background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
+    color: var(--bg-slate-800);
+    border-color: var(--primary-blue);
     box-shadow:
         0 4px 16px rgba(59, 130, 246, 0.3),
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
