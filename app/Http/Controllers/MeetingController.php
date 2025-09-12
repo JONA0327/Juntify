@@ -1990,6 +1990,11 @@ class MeetingController extends Controller
         try {
             $user = Auth::user();
 
+            Log::info('streamAudio: Iniciando para meeting_id', [
+                'meeting_id' => $meeting,
+                'username' => $user->username
+            ]);
+
             // Determinar si el usuario tiene acceso compartido
             $sharedMeeting = SharedMeeting::with('sharedBy')
                 ->where('meeting_id', $meeting)
@@ -1998,10 +2003,54 @@ class MeetingController extends Controller
                 ->first();
             $sharedAccess = (bool) $sharedMeeting;
 
-            // Intentar configurar el token del usuario
+            // Verificar acceso por contenedores
+            $containerAccess = DB::table('meeting_content_relations as mcr')
+                ->join('meeting_content_containers as mcc', 'mcr.container_id', '=', 'mcc.id')
+                ->join('groups as g', 'mcc.organization_group_id', '=', 'g.id')
+                ->where('mcr.meeting_id', $meeting)
+                ->where(function ($query) use ($user) {
+                    $query->where('g.creator', $user->username)
+                          ->orWhereExists(function ($subquery) use ($user) {
+                              $subquery->select(DB::raw(1))
+                                      ->from('group_members')
+                                      ->whereColumn('group_members.group_id', 'g.id')
+                                      ->where('group_members.username', $user->username);
+                          })
+                          ->orWhereExists(function ($subquery) use ($user) {
+                              $subquery->select(DB::raw(1))
+                                      ->from('organizations as o')
+                                      ->whereColumn('o.id', 'g.organization_id')
+                                      ->where('o.admin_user', $user->username);
+                          });
+                })
+                ->exists();
+
+            $useServiceAccount = $containerAccess;
+
+            Log::info('streamAudio: Tipos de acceso', [
+                'meeting_id' => $meeting,
+                'sharedAccess' => $sharedAccess,
+                'containerAccess' => $containerAccess,
+                'useServiceAccount' => $useServiceAccount
+            ]);
+
+            // Intentar configurar el token del usuario o usar Service Account
             try {
-                $this->setGoogleDriveToken($user);
+                if ($useServiceAccount) {
+                    Log::info('streamAudio: Configurando Service Account');
+                    /** @var \App\Services\GoogleServiceAccount $sa */
+                    $sa = app(\App\Services\GoogleServiceAccount::class);
+                    $token = $sa->getClient()->fetchAccessTokenWithAssertion();
+                    $this->googleDriveService->setAccessToken($token);
+                } else {
+                    Log::info('streamAudio: Configurando token de usuario');
+                    $this->setGoogleDriveToken($user);
+                }
             } catch (\Throwable $e) {
+                Log::warning('streamAudio: Error configurando token inicial', [
+                    'error' => $e->getMessage(),
+                    'sharedAccess' => $sharedAccess
+                ]);
                 if ($sharedAccess && $sharedMeeting?->sharedBy?->email) {
                     /** @var \App\Services\GoogleServiceAccount $sa */
                     $sa = app(\App\Services\GoogleServiceAccount::class);
@@ -2015,11 +2064,19 @@ class MeetingController extends Controller
 
             // Intentar flujo legacy primero
             try {
+                Log::info('streamAudio: Intentando flujo legacy');
                 $meetingModel = TranscriptionLaravel::where('id', $meeting)
-                    ->when(!$sharedAccess, function ($q) use ($user) {
+                    ->when(!$sharedAccess && !$containerAccess, function ($q) use ($user) {
                         $q->where('username', $user->username);
                     })
                     ->firstOrFail();
+
+                Log::info('streamAudio: Reunión legacy encontrada', [
+                    'meeting_id' => $meetingModel->id,
+                    'meeting_name' => $meetingModel->meeting_name,
+                    'audio_drive_id' => $meetingModel->audio_drive_id,
+                    'username' => $meetingModel->username
+                ]);
 
                 $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meetingModel->meeting_name);
                 $pattern = storage_path('app/public/temp/' . $sanitizedName . '_' . $meetingModel->id . '.*');
@@ -2065,7 +2122,7 @@ class MeetingController extends Controller
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
                 // Flujo moderno (Meeting en BD)
                 $modern = Meeting::where('id', $meeting)
-                    ->when(!$sharedAccess, function ($q) use ($user) {
+                    ->when(!$sharedAccess && !$containerAccess, function ($q) use ($user) {
                         $q->where('username', $user->username);
                     })
                     ->firstOrFail();
@@ -2150,7 +2207,11 @@ class MeetingController extends Controller
                 return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
             }
         } catch (\Exception $e) {
-            Log::error('Error streaming audio file', [ 'meeting_id' => $meeting, 'error' => $e->getMessage() ]);
+            Log::error('Error streaming audio file', [
+                'meeting_id' => $meeting,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json(['error' => 'Error al obtener audio'], 500);
         }
     }
