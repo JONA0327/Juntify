@@ -27,14 +27,30 @@ function initializeAiAssistant() {
  */
 function setupEventListeners() {
     // Formulario de chat
-    const chatForm = document.getElementById('chatForm');
+    const chatForm = document.getElementById('chat-form');
     if (chatForm) {
         chatForm.addEventListener('submit', handleSendMessage);
     }
 
     // Input de chat
-    const chatInput = document.getElementById('chatInput');
+    const chatInput = document.getElementById('message-input');
     if (chatInput) {
+        // Habilitar/deshabilitar botón según contenido
+        chatInput.addEventListener('input', function() {
+            const sendBtn = document.getElementById('send-btn');
+            const message = this.value.trim();
+            
+            if (sendBtn) {
+                sendBtn.disabled = !message || isLoading;
+            }
+            
+            // Actualizar contador de caracteres
+            const charCount = document.getElementById('char-count');
+            if (charCount) {
+                charCount.textContent = this.value.length;
+            }
+        });
+        
         chatInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -198,7 +214,7 @@ async function handleSendMessage(e) {
 
     if (isLoading) return;
 
-    const input = document.getElementById('chatInput');
+    const input = document.getElementById('message-input');
     const message = input.value.trim();
 
     if (!message) return;
@@ -252,6 +268,13 @@ async function handleSendMessage(e) {
         isLoading = false;
         updateSendButton(false);
         scrollToBottom();
+        
+        // Actualizar estado del botón basado en el input
+        const currentInput = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        if (sendBtn && currentInput) {
+            sendBtn.disabled = !currentInput.value.trim();
+        }
     }
 }
 
@@ -259,12 +282,12 @@ async function handleSendMessage(e) {
  * Agregar mensaje al chat
  */
 function addMessageToChat(role, content) {
-    const container = document.getElementById('chatMessages');
+    const container = document.getElementById('messages-container');
 
-    // Si hay estado vacío, removerlo
-    const emptyState = container.querySelector('.empty-state');
-    if (emptyState) {
-        emptyState.remove();
+    // Si hay mensaje de bienvenida, removerlo
+    const welcomeMessage = container.querySelector('.welcome-message');
+    if (welcomeMessage) {
+        welcomeMessage.remove();
     }
 
     const messageElement = document.createElement('div');
@@ -286,12 +309,12 @@ function addMessageToChat(role, content) {
  * Actualizar botón de envío
  */
 function updateSendButton(loading) {
-    const btn = document.getElementById('sendBtn');
+    const btn = document.getElementById('send-btn');
     if (btn) {
         btn.disabled = loading;
         btn.innerHTML = loading ?
             '<div class="spinner"></div>' :
-            '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>';
+            '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>';
     }
 }
 
@@ -299,7 +322,7 @@ function updateSendButton(loading) {
  * Scroll al final del chat
  */
 function scrollToBottom() {
-    const container = document.getElementById('chatMessages');
+    const container = document.getElementById('messages-container');
     if (container) {
         container.scrollTop = container.scrollHeight;
     }
