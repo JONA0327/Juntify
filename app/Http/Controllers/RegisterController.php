@@ -45,7 +45,7 @@ class RegisterController extends Controller
 
         // Redirigir al perfil después del registro exitoso
         return redirect()
-            ->route('profile')
+            ->route('profile.show')
             ->with('success', 'Te has registrado exitosamente en Juntify. ¡Bienvenido!');
     }
 }
