@@ -463,6 +463,41 @@ class AiAssistantController extends Controller
                     }
                 }
                 break;
+
+            case 'documents':
+                if (!empty($session->context_data)) {
+                    $documents = AiDocument::whereIn('id', $session->context_data)->get();
+
+                    foreach ($documents as $document) {
+                        $title = $document->name ?? $document->original_filename;
+                        $summary = $document->document_metadata['summary'] ?? (
+                            $document->extracted_text ? Str::limit($document->extracted_text, 200) : null
+                        );
+
+                        $context[] = "Documento: {$title}";
+                        if ($summary) {
+                            $context[] = "Resumen: {$summary}";
+                        }
+                    }
+                }
+                break;
+
+            case 'contact_chat':
+                if ($session->context_id) {
+                    $chat = Chat::with(['messages' => function ($query) {
+                        $query->latest()->with('sender')->limit(10);
+                    }])->find($session->context_id);
+
+                    if ($chat) {
+                        $messages = $chat->messages->sortBy('created_at');
+
+                        foreach ($messages as $message) {
+                            $sender = $message->sender?->full_name ?? 'Usuario';
+                            $context[] = $sender . ': ' . Str::limit($message->body, 200);
+                        }
+                    }
+                }
+                break;
         }
 
         return $context;
