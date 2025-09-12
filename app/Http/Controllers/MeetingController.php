@@ -373,6 +373,28 @@ class MeetingController extends Controller
                 ->where('shared_with', $user->id)
                 ->where('status', 'accepted')
                 ->exists();
+
+            // Verificar acceso a través de contenedores organizacionales
+            $containerAccess = false;
+            if (!$sharedAccess) {
+                $containerAccess = DB::table('meeting_content_relations')
+                    ->join('meeting_content_containers', 'meeting_content_relations.container_id', '=', 'meeting_content_containers.id')
+                    ->join('groups', 'meeting_content_containers.group_id', '=', 'groups.id')
+                    ->leftJoin('group_user', function($join) use ($user) {
+                        $join->on('groups.id', '=', 'group_user.id_grupo')
+                             ->where('group_user.user_id', '=', $user->id);
+                    })
+                    ->leftJoin('organizations', 'groups.id_organizacion', '=', 'organizations.id')
+                    ->where('meeting_content_relations.meeting_id', $id)
+                    ->where('meeting_content_containers.is_active', true)
+                    ->where(function($query) use ($user) {
+                        $query->where('meeting_content_containers.username', $user->username) // Es creador del contenedor
+                              ->orWhereNotNull('group_user.user_id') // Es miembro del grupo
+                              ->orWhere('organizations.admin_id', $user->id); // Es admin de la organización
+                    })
+                    ->exists();
+            }
+
             $useServiceAccount = false;
             $sharerEmail = null;
             if ($sharedAccess) {
@@ -384,23 +406,27 @@ class MeetingController extends Controller
             }
 
             // Intentar buscar una reunión legacy primero
-            $legacyMeeting = TranscriptionLaravel::where('id', $id)
-                ->when(!$sharedAccess, function ($q) use ($user) {
-                    $q->where('username', $user->username);
-                })
-                ->first();
+            $legacyMeeting = TranscriptionLaravel::where('id', $id)->first();
+
+            // Verificar si el usuario tiene acceso a esta reunión legacy
+            $hasLegacyAccess = false;
+            if ($legacyMeeting) {
+                $hasLegacyAccess = $sharedAccess ||
+                                  $containerAccess ||
+                                  $legacyMeeting->username === $user->username;
+            }
 
             try {
                 $this->setGoogleDriveToken($user);
             } catch (\Throwable $e) {
-                if ($sharedAccess) {
+                if ($sharedAccess || $containerAccess) {
                     $useServiceAccount = true;
                 } else {
                     throw $e;
                 }
             }
 
-            if ($legacyMeeting) {
+            if ($legacyMeeting && $hasLegacyAccess) {
                 $ownerUsername = $share?->sharedBy?->username ?? $legacyMeeting->username ?? $user->username;
                 if (empty($legacyMeeting->transcript_drive_id)) {
                     // Reconstruct meeting data from legacy database tables when .ju file is missing
@@ -484,39 +510,40 @@ class MeetingController extends Controller
                         }
                     }
 
-                    return response()->json([
-                        'success' => true,
-                        'meeting' => [
-                            'id' => $legacyMeeting->id,
-                            'meeting_name' => $legacyMeeting->meeting_name,
-                            'is_legacy' => true,
-                            'created_at' => $legacyMeeting->created_at->format('d/m/Y H:i'),
-                            'audio_path' => $audioPath,
-                            'audio_drive_id' => $audioDriveId,
-                            // Campos para acceder a transcripción (.ju) cuando exista
-                            'transcript_drive_id' => $legacyMeeting->transcript_drive_id,
-                            'transcript_download_url' => $legacyMeeting->transcript_download_url,
-                            'transcript_path' => route('api.meetings.download-ju', ['id' => $legacyMeeting->id]),
-                            'summary' => $summary ?? 'No hay resumen disponible',
-                            'key_points' => $keyPoints,
-                            'transcription' => $transcriptionText,
-                            'tasks' => $tasks,
-                            'speakers' => $speakers,
-                            // Incluir segmentos con start/end solo para el caso legacy sin .ju
-                            'segments' => $segments,
-                            'audio_folder' => $this->getFolderName($legacyMeeting->audio_drive_id),
-                            'transcript_folder' => 'Base de datos',
-                            'needs_encryption' => false,
-                        ]
-                    ]);
-                }
-
-                // Descargar contenido del .ju con tolerancia a fallos
-                // Secuencia si es compartida: SA (impersonate) -> SA (sin impersonate) -> token del dueño -> token del usuario
+                    Log::info("Returning legacy meeting from database reconstruction", ['meeting_id' => $legacyMeeting->id]);
+                return response()->json([
+                    'success' => true,
+                    'meeting' => [
+                        'id' => $legacyMeeting->id,
+                        'meeting_name' => $legacyMeeting->meeting_name,
+                        'is_legacy' => true,
+                        'created_at' => $legacyMeeting->created_at->format('d/m/Y H:i'),
+                        'audio_path' => $audioPath,
+                        'audio_drive_id' => $audioDriveId,
+                        // Campos para acceder a transcripción (.ju) cuando exista
+                        'transcript_drive_id' => $legacyMeeting->transcript_drive_id,
+                        'transcript_download_url' => $legacyMeeting->transcript_download_url,
+                        'transcript_path' => route('api.meetings.download-ju', ['id' => $legacyMeeting->id]),
+                        'summary' => $summary ?? 'No hay resumen disponible',
+                        'key_points' => $keyPoints,
+                        'transcription' => $transcriptionText,
+                        'tasks' => $tasks,
+                        'speakers' => $speakers,
+                        // Incluir segmentos con start/end solo para el caso legacy sin .ju
+                        'segments' => $segments,
+                        'audio_folder' => $this->getFolderName($legacyMeeting->audio_drive_id),
+                        'transcript_folder' => 'Base de datos',
+                        'needs_encryption' => false,
+                    ]
+                ]);
+            } else {
+                Log::info("Legacy meeting found, processing .ju file", ['meeting_id' => $legacyMeeting->id, 'transcript_drive_id' => $legacyMeeting->transcript_drive_id]);
+            }                // Descargar contenido del .ju con tolerancia a fallos
+                // Secuencia si es compartida o acceso por contenedor: SA (impersonate) -> SA (sin impersonate) -> token del dueño -> token del usuario
                 // Secuencia si no es compartida: token del usuario
                 $transcriptContent = null;
                 $normalizedJuId = $this->normalizeDriveId($legacyMeeting->transcript_drive_id);
-                if ($sharedAccess) {
+                if ($sharedAccess || $containerAccess) {
                     // 1) Service Account impersonando al propietario
                     try {
                         /** @var \App\Services\GoogleServiceAccount $sa */
@@ -731,16 +758,16 @@ class MeetingController extends Controller
 
             // Reunión moderna en base de datos
             $meetingQuery = Meeting::with([
-                'keyPoints' => function ($q) use ($user, $sharedAccess) {
-                    if (!$sharedAccess) {
+                'keyPoints' => function ($q) use ($user, $sharedAccess, $containerAccess) {
+                    if (!($sharedAccess || $containerAccess)) {
                         $q->whereHas('meeting', function ($mq) use ($user) {
                             $mq->where('username', $user->username);
                         });
                     }
                     $q->ordered();
                 },
-                'transcriptions' => function ($q) use ($user, $sharedAccess) {
-                    if (!$sharedAccess) {
+                'transcriptions' => function ($q) use ($user, $sharedAccess, $containerAccess) {
+                    if (!($sharedAccess || $containerAccess)) {
                         $q->whereHas('meeting', function ($mq) use ($user) {
                             $mq->where('username', $user->username);
                         });
@@ -748,7 +775,7 @@ class MeetingController extends Controller
                     $q->byTime();
                 },
             ])->where('id', $id);
-            if (!$sharedAccess) {
+            if (!($sharedAccess || $containerAccess)) {
                 $meetingQuery->where('username', $user->username);
             }
             $meeting = $meetingQuery->firstOrFail();

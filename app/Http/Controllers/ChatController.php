@@ -184,62 +184,6 @@ class ChatController extends Controller
     }
 
     /**
-     * Obtener el conteo de mensajes no leídos para múltiples contactos
-     */
-    public function getUnreadCounts(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'contact_ids' => 'required|array',
-            'contact_ids.*' => 'integer|exists:users,id',
-        ]);
-
-        $userId = Auth::id();
-        $contactIds = $data['contact_ids'];
-
-        // Obtener los chats existentes entre el usuario actual y los contactos
-        $chats = Chat::where(function ($query) use ($userId) {
-            $query->where('user_one_id', $userId)
-                  ->orWhere('user_two_id', $userId);
-        })->where(function ($query) use ($contactIds) {
-            $query->whereIn('user_one_id', $contactIds)
-                  ->orWhereIn('user_two_id', $contactIds);
-        })->get(['id', 'user_one_id', 'user_two_id']);
-
-        // Mapear contacto -> chat
-        $chatMap = [];
-        foreach ($chats as $chat) {
-            $otherId = $chat->user_one_id === $userId ? $chat->user_two_id : $chat->user_one_id;
-            $chatMap[$otherId] = $chat->id;
-        }
-
-        if (empty($chatMap)) {
-            return response()->json([]);
-        }
-
-        // Obtener conteo de mensajes no leídos por chat en una sola consulta
-        $chatIds = array_values($chatMap);
-        $counts = ChatMessage::select('chat_id', \DB::raw('COUNT(*) as unread_count'))
-            ->whereIn('chat_id', $chatIds)
-            ->where('sender_id', '!=', $userId)
-            ->whereNull('read_at')
-            ->groupBy('chat_id')
-            ->pluck('unread_count', 'chat_id');
-
-        $result = [];
-        foreach ($chatMap as $contactId => $chatId) {
-            $count = (int)($counts[$chatId] ?? 0);
-            $result[] = [
-                'contact_id' => $contactId,
-                'chat_id' => $chatId,
-                'unread_count' => $count,
-                'has_unread' => $count > 0,
-            ];
-        }
-
-        return response()->json($result);
-    }
-
-    /**
      * Crear o encontrar un chat entre dos usuarios
      */
     public function createOrFind(Request $request): JsonResponse

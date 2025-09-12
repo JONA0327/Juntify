@@ -16,11 +16,11 @@ const Notifications = (() => {
 
             notifications.forEach(n => {
                 const li = document.createElement('li');
-                if (n.type === 'group_invitation') {
+        if (n.type === 'group_invitation') {
                     li.className = 'invitation-item p-3 bg-slate-700/50 rounded-lg mb-2';
                     li.innerHTML = `
                         <div class="message text-sm text-slate-200">${n.message}</div>
-                        <div class="meta text-xs text-slate-400">De: ${n.remitente ? `${n.remitente.full_name} (@${n.remitente.username})` : 'Usuario'}</div>
+                        <div class="meta text-xs text-slate-400">De: ${n.sender_name || (n.from_user ? `${n.from_user.name} (${n.from_user.email})` : (n.remitente ? (n.remitente.full_name || n.remitente.username || 'Usuario') : 'Usuario'))}</div>
                         <div class="actions">
                             <button class="accept-btn" data-id="${n.id}">Aceptar</button>
                             <button class="reject-btn" data-id="${n.id}">Rechazar</button>
@@ -262,15 +262,30 @@ const Notifications = (() => {
         }
     }
 
+    let notifLastIso = null;
+    let notifInterval = 30000;
+    let notifFailures = 0;
+    let notifTimer = null;
+
+    function scheduleNotifFetch() {
+        if (notifTimer) clearTimeout(notifTimer);
+        notifTimer = setTimeout(fetchNotifications, notifInterval);
+    }
+
     async function fetchNotifications() {
         try {
-            const response = await fetch('/api/notifications');
+            const url = notifLastIso ? `/api/notifications?since=${encodeURIComponent(notifLastIso)}` : '/api/notifications';
+            const response = await fetch(url);
             if (response.status === 401) {
                 console.log('📧 [notifications] User not authenticated, skipping notifications');
+                scheduleNotifFetch();
                 return;
             }
             if (response.status === 500) {
                 console.warn('📧 [notifications] Server error loading notifications, skipping');
+                notifFailures++;
+                notifInterval = Math.min(30000, 30000 * notifFailures);
+                scheduleNotifFetch();
                 return;
             }
             if (!response.ok) {
@@ -280,15 +295,32 @@ const Notifications = (() => {
                     if (data.message) message = data.message;
                 } catch (_) { /* ignore */ }
                 showError(message);
+                notifFailures++;
+                notifInterval = Math.min(30000, 30000 * notifFailures);
+                scheduleNotifFetch();
                 return;
             }
-            notifications = await response.json();
-            render();
+            const payload = await response.json();
+            if (payload.no_changes) {
+                notifFailures = 0;
+                notifInterval = 30000; // mantener
+            } else {
+                const list = Array.isArray(payload) ? payload : (payload.notifications || []);
+                notifications = list;
+                render();
+                notifFailures = 0;
+                notifInterval = 30000; // reset
+            }
+            notifLastIso = payload.last_updated || notifLastIso;
+            scheduleNotifFetch();
         } catch (error) {
             if (import.meta.env.DEV) {
                 console.debug('Error loading notifications:', error);
             }
             showError('Error de conexión al cargar notificaciones.');
+            notifFailures++;
+            notifInterval = Math.min(60000, 30000 * notifFailures);
+            scheduleNotifFetch();
         }
     }
 
@@ -309,8 +341,7 @@ const Notifications = (() => {
             }
         });
 
-        fetchNotifications();
-        setInterval(fetchNotifications, 30000);
+    fetchNotifications();
     }
 
     if (document.readyState === 'loading') {

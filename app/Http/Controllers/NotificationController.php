@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class NotificationController extends Controller
 {
@@ -16,7 +17,7 @@ class NotificationController extends Controller
      */
     public function index(): JsonResponse
     {
-        try {
+    try {
             if (!auth()->check()) {
                 return response()->json([], 401);
             }
@@ -24,11 +25,17 @@ class NotificationController extends Controller
             // Verificar qué columnas usar basándose en el esquema actual
             $userIdColumn = Schema::hasColumn('notifications', 'user_id') ? 'user_id' : 'emisor';
 
-            $notifications = Notification::where($userIdColumn, Auth::id())
-                ->orderBy('created_at', 'desc')
-                ->with('fromUser')
-                ->get()
-                ->map(function ($notification) use ($userIdColumn) {
+            $userId = Auth::id();
+            $since = request('since');
+            $sinceTs = $since ? strtotime($since) : null;
+
+            $cacheKey = 'notifications_user_' . $userId;
+            $payload = Cache::remember($cacheKey, 10, function () use ($userIdColumn, $userId) {
+                $collection = Notification::where($userIdColumn, $userId)
+                    ->orderBy('created_at', 'desc')
+                    ->with('fromUser')
+                    ->get()
+                    ->map(function ($notification) use ($userIdColumn) {
                     $data = null;
                     if ($notification->data) {
                         try {
@@ -42,36 +49,100 @@ class NotificationController extends Controller
 
                     // Información del remitente usando la relación dinámica (from_user_id o remitente)
                     $fromUser = null;
+                    $legacyRemitente = null; // compatibilidad con frontend antiguo
+                    $u = null;
+                    // Intentar primero relación dinámica (from_user_id o remitente según schema)
                     if ($notification->fromUser) {
                         $u = $notification->fromUser;
-                        $name = $u->full_name ?? $u->username ?? 'Usuario';
+                    } else {
+                        // Fallback: si existe columna remitente con valor pero from_user_id es null
+                        try {
+                            if ($notification->getAttribute('remitente')) {
+                                $u = $notification->remitente()->first();
+                            }
+                        } catch (\Throwable $e) {
+                            // Ignorar errores de fallback
+                        }
+                    }
+                    if ($u) {
+                        $name = $u->full_name;
+                        if (!$name || trim($name) === '') {
+                            $name = $u->username ?: ($u->email ?: 'Usuario');
+                        }
                         $fromUser = [
                             'id' => $u->id,
                             'name' => $name,
                             'email' => $u->email ?? '',
                             'avatar' => strtoupper(substr($name, 0, 1))
                         ];
+                        $legacyRemitente = [
+                            'id' => $u->id,
+                            'full_name' => $u->full_name ?: $name,
+                            'username' => $u->username,
+                            'email' => $u->email ?? ''
+                        ];
                     }
 
-                    return [
-                        'id' => $notification->id,
-                        'type' => $notification->type ?? 'general',
-                        'title' => $notification->title ?? 'Notificación',
-                        'message' => $notification->message ?? '',
-                        'data' => $data,
-                        'read' => $notification->read ?? false,
-                        'read_at' => $notification->read_at ?? null,
-                        'created_at' => $notification->created_at,
-                        'from_user' => $fromUser
-                    ];
-                });
+                        return [
+                            'id' => $notification->id,
+                            'type' => $notification->type ?? 'general',
+                            'title' => $notification->title ?? 'Notificación',
+                            'message' => $notification->message ?? '',
+                            'data' => $data,
+                            'read' => $notification->read ?? false,
+                            'read_at' => $notification->read_at ?? null,
+                            'created_at' => $notification->created_at,
+                            'created_at_unix' => $notification->created_at ? $notification->created_at->getTimestamp() : null,
+                            'from_user' => $fromUser,
+                            // Campos de compatibilidad
+                            'remitente' => $legacyRemitente,
+                            'sender_name' => $fromUser['name'] ?? 'Usuario'
+                        ];
+                    });
+                $lastUpdated = $collection->max('created_at_unix');
+                return [
+                    'list' => $collection->values(),
+                    'last_updated_unix' => $lastUpdated,
+                    'last_updated_iso' => $lastUpdated ? date('c', $lastUpdated) : null,
+                ];
+            });
 
-            return response()->json($notifications);
+            if ($sinceTs && $payload['last_updated_unix'] && $sinceTs >= $payload['last_updated_unix']) {
+                return response()->json([
+                    'no_changes' => true,
+                    'last_updated' => $payload['last_updated_iso']
+                ]);
+            }
 
-        } catch (\Exception $e) {
-            Log::error('Error en NotificationController::index: ' . $e->getMessage());
-            Log::error('Stack trace: ' . $e->getTraceAsString());
-            return response()->json(['error' => 'Error interno del servidor'], 500);
+            return response()->json([
+                'no_changes' => false,
+                'last_updated' => $payload['last_updated_iso'],
+                'notifications' => $payload['list']
+            ]);
+
+        } catch (\Throwable $e) {
+            // Intentar servir datos en caché si existen para degradación elegante
+            try {
+                $userId = Auth::id();
+                $fallback = Cache::get('notifications_user_' . $userId);
+                if ($fallback && is_array($fallback) && isset($fallback['list'])) {
+                    return response()->json([
+                        'no_changes' => false,
+                        'last_updated' => $fallback['last_updated_iso'] ?? null,
+                        'notifications' => $fallback['list'],
+                        'rate_limited' => true,
+                        'warning' => 'Servicio degradado: usando datos en caché.'
+                    ], 200);
+                }
+            } catch (\Throwable $inner) {
+                // Ignorar errores de fallback
+            }
+
+            Log::error('Error en NotificationController::index (sin fallback): ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Servicio temporalmente no disponible',
+                'rate_limited' => true
+            ], 503);
         }
     }
 
@@ -102,9 +173,17 @@ class NotificationController extends Controller
                 }
 
                 $fromUser = null;
+                $u = null;
                 if ($notification->fromUser) {
                     $u = $notification->fromUser;
-                    $name = $u->full_name ?? $u->username ?? 'Usuario';
+                } else if ($notification->getAttribute('remitente')) {
+                    try { $u = $notification->remitente()->first(); } catch (\Throwable $e) { /* ignore */ }
+                }
+                if ($u) {
+                    $name = $u->full_name;
+                    if (!$name || trim($name) === '') {
+                        $name = $u->username ?: ($u->email ?: 'Usuario');
+                    }
                     $fromUser = [
                         'id' => $u->id,
                         'name' => $name,
