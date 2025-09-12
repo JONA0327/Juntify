@@ -98,6 +98,9 @@ function validateForm() {
 document.addEventListener('DOMContentLoaded', ()=>{
   createParticles();
 
+  // Variable para evitar múltiples envíos
+  let formSubmitting = false;
+
   document.getElementById('password').addEventListener('input', e=>{
     checkPasswordStrength(e.target.value);
   });
@@ -112,14 +115,29 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   document.getElementById('registerForm').addEventListener('submit', async function(e){
     e.preventDefault();
+    e.stopPropagation();
 
     console.log('Formulario enviado, validando...');
+
+    // Evitar múltiples envíos
+    if (formSubmitting) {
+      console.log('Formulario ya se está enviando, ignorando...');
+      return false;
+    }
+
     if(!validateForm()) {
       console.log('Validación fallida');
-      return;
+      return false;
     }
 
     console.log('Validación exitosa, procesando...');
+    formSubmitting = true;
+
+    const btn = document.getElementById('submitBtn');
+
+    btn.classList.add('loading');
+    btn.textContent = 'Creando cuenta...';
+    btn.disabled = true;
 
     // hash con bcryptjs (cost 10)
     const pwdEl  = document.getElementById('password'),
@@ -130,55 +148,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
     pwdEl.value  = hash;
     pcEl.value   = hash;
 
-    const btn = document.getElementById('submitBtn');
-    btn.classList.add('loading');
-    btn.textContent = 'Creando cuenta...';
-    btn.disabled = true;
+    console.log('Hash generado, enviando formulario tradicional...');
 
-    console.log('Enviando formulario...');
-
-    // Enviar formulario usando fetch para tener más control
-    try {
-      const formData = new FormData(this);
-      const response = await fetch(this.action, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'same-origin'
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Registro exitoso, redirigiendo...', data);
-        if (data.redirect_url) {
-          window.location.href = data.redirect_url;
-        } else {
-          window.location.href = '/profile';
-        }
-      } else {
-        console.error('Error en el registro:', response.status);
-        btn.classList.remove('loading');
-        btn.textContent = 'Crear Cuenta';
-        btn.disabled = false;
-
-        // Mostrar errores del servidor
-        const errorData = await response.json().catch(() => null);
-        if (errorData && errorData.errors) {
-          Object.keys(errorData.errors).forEach(field => {
-            showError(field, errorData.errors[field][0]);
-          });
-        } else {
-          alert('Error en el registro. Por favor intenta de nuevo.');
-        }
-      }
-    } catch (error) {
-      console.error('Error de red:', error);
-      btn.classList.remove('loading');
-      btn.textContent = 'Crear Cuenta';
-      btn.disabled = false;
-      alert('Error de conexión. Por favor intenta de nuevo.');
-    }
+    // Usar setTimeout para permitir que el DOM se actualice antes del envío
+    setTimeout(() => {
+      this.submit();
+    }, 100);
   });
 });

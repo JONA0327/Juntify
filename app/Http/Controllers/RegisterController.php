@@ -43,15 +43,6 @@ class RegisterController extends Controller
 
         auth()->login($user);
 
-        // Si es una solicitud AJAX, devolver JSON
-        if ($request->expectsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Te has registrado exitosamente en Juntify. ¡Bienvenido!',
-                'redirect_url' => route('profile')
-            ]);
-        }
-
         // Redirigir al perfil después del registro exitoso
         return redirect()
             ->route('profile')
