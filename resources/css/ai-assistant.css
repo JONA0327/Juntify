@@ -90,7 +90,7 @@
 
 .new-chat-btn {
     width: 100%;
-    background: linear-gradient(90deg, var(--primary-yellow), var(--primary-yellow-hover));
+    background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
     color: var(--bg-slate-800);
     border: none;
     padding: 0.75rem 1rem;
@@ -107,7 +107,7 @@
 }
 
 .new-chat-btn:hover {
-    background: linear-gradient(90deg, var(--primary-yellow-hover), var(--primary-yellow));
+    background: linear-gradient(135deg, var(--primary-blue-dark) 0%, var(--primary-blue) 100%);
     transform: scale(1.02);
 }
 
@@ -350,7 +350,7 @@
 }
 
 .message.user .message-avatar {
-    background: linear-gradient(135deg, var(--primary-yellow) 0%, var(--primary-yellow-hover) 100%);
+    background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
     color: var(--bg-slate-800);
 }
 
@@ -365,9 +365,9 @@
 }
 
 .message.user .message-content {
-    background: linear-gradient(135deg, var(--primary-yellow) 0%, var(--primary-yellow-hover) 100%);
+    background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
     color: var(--bg-slate-800);
-    border-color: var(--primary-yellow);
+    border-color: var(--primary-blue);
 }
 
 .message-text {
@@ -425,13 +425,13 @@
 
 .chat-input:focus {
     outline: none;
-    border-color: var(--primary-yellow);
+    border-color: var(--primary-blue);
     background: rgba(30, 41, 59, 0.7);
-    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .send-btn {
-    background: linear-gradient(90deg, var(--primary-yellow), var(--primary-yellow-hover));
+    background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
     color: var(--bg-slate-800);
     border: none;
     border-radius: 0.75rem;
@@ -447,7 +447,7 @@
 }
 
 .send-btn:hover {
-    background: linear-gradient(90deg, var(--primary-yellow-hover), var(--primary-yellow));
+    background: linear-gradient(135deg, var(--primary-blue-dark) 0%, var(--primary-blue) 100%);
     transform: scale(1.04);
 }
 
