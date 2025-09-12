@@ -27,7 +27,9 @@
     <div class="flex">
         @include('partials.navbar')
 
-        <main class="w-full" style="margin-left: 0; margin-top: 0; padding: 0;">
+        <main class="w-full pl-24 pt-24" style="margin-top:130px;">
+            <!-- Contenedor Centrado -->
+            <div class="container mx-auto px-4 py-6 h-screen flex flex-col">
 <div class="ai-assistant-container">
     <!-- Sidebar de sesiones -->
     <div class="sessions-sidebar">
@@ -132,6 +134,8 @@
     </div>
 </div>
 
+</div> <!-- cierre ai-assistant-container -->
+            </div> <!-- cierre container mx-auto -->
         </main>
     </div>
 
