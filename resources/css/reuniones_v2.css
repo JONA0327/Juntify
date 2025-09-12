@@ -78,8 +78,14 @@
 /* Grid container for server-rendered cards */
 .meetings-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    grid-template-columns: 1fr;
     gap: 1.25rem;
+}
+
+@media (min-width: 768px) {
+    .meetings-grid {
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    }
 }
 
 .fade-in {
@@ -143,9 +149,15 @@
    ========================================= */
 .meetings-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    grid-template-columns: 1fr;
     gap: 1.5rem;
     margin-top: 2rem;
+}
+
+@media (min-width: 768px) {
+    .meetings-grid {
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    }
 }
 
 /* =========================================
@@ -1798,7 +1810,13 @@ div[class*="transcript-segment"] {
 .pending-meetings-grid {
     display: grid;
     gap: 1rem;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+    .pending-meetings-grid {
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    }
 }
 
 .pending-meeting-card {
