@@ -1,8 +1,37 @@
-@extends('layouts.app')
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    @auth
+        <meta name="user-id" content="{{ auth()->id() }}">
+    @endauth
+    <title>Asistente IA - Juntify</title>
 
-@section('title', 'Asistente IA')
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.bunny.net">
+    <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
-@section('content')
+    <!-- Styles -->
+    @vite([
+        'resources/css/app.css',
+        'resources/js/app.js',
+        'resources/css/index.css',
+        'resources/js/index.js',
+        'resources/css/ai-assistant.css',
+        'resources/js/ai-assistant.js'
+    ])
+</head>
+<body>
+    <!-- Animated particles background -->
+    <div class="particles" id="particles"></div>
+
+    <!-- Navbar principal -->
+    @include('partials.navbar')
+
+    <!-- Barra de navegación móvil -->
+    @include('partials.mobile-nav')
 <div class="ai-assistant-container">
     <!-- Sidebar izquierdo - Historial de chats -->
     <div class="chat-sidebar">
@@ -180,12 +209,5 @@
 @include('ai-assistant.modals.contact-chat-selector')
 @include('ai-assistant.modals.document-uploader')
 
-@endsection
-
-@section('styles')
-<link rel="stylesheet" href="{{ asset('css/ai-assistant.css') }}">
-@endsection
-
-@section('scripts')
-<script src="{{ asset('js/ai-assistant.js') }}"></script>
-@endsection
+</body>
+</html>
