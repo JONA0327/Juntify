@@ -351,6 +351,7 @@
                             <h4 class="section-title">
                                 <x-icon name="pencil" class="section-icon" />
                                 Transcripción
+                                <button type="button" id="toggle-transcript-btn" class="transcript-toggle-btn" aria-expanded="false">Ver completa</button>
                             </h4>
                         <div id="analysis-transcript" class="transcription-preview"></div>
 

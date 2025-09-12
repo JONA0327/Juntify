@@ -861,12 +861,64 @@ body {
 
 /* Transcription Preview */
 .transcription-preview {
-    max-height: 300px;
-    overflow-y: auto;
+    /* Vista compacta por defecto */
+    max-height: 180px;
+    overflow: hidden;
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 1rem;
+    line-height: 1.6;
+}
+
+/* Al expandir, mostramos todo el contenido */
+.transcription-preview.expanded {
+    max-height: none;
+    overflow: auto;
+}
+
+/* Mejora de legibilidad y evita conflicto con el editor */
+.transcription-preview .transcript-line {
+    display: block;
+    margin-bottom: 0.75rem;
+}
+
+.transcription-preview .transcript-speaker {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-right: 0.5rem;
+    white-space: nowrap;
+}
+
+.transcription-preview .transcript-text {
+    /* Reset a estilos del textarea del editor que comparten la misma clase */
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    resize: none !important;
+    width: auto !important;
+    display: inline !important;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    white-space: pre-wrap; /* respeta saltos de línea */
+    word-break: break-word; /* evita desbordes */
+}
+
+/* Botón para expandir/colapsar la transcripción */
+.transcript-toggle-btn {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: var(--primary-color);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+}
+
+.transcript-toggle-btn:hover {
+    background: rgba(59, 130, 246, 0.12);
 }
 
 .transcript-segment {

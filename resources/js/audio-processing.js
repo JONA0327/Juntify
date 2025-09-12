@@ -1289,6 +1289,22 @@ function updateAnalysisPreview() {
         } else {
             transcriptEl.innerHTML = '<p>No hay transcripción disponible.</p>';
         }
+
+        // Inicializar toggle de expansión/colapso
+        const toggleBtn = document.getElementById('toggle-transcript-btn');
+        if (toggleBtn) {
+            let expanded = false;
+            const applyState = () => {
+                transcriptEl.classList.toggle('expanded', expanded);
+                toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                toggleBtn.textContent = expanded ? 'Colapsar' : 'Ver completa';
+            };
+            applyState();
+            toggleBtn.onclick = () => {
+                expanded = !expanded;
+                applyState();
+            };
+        }
     }
 
     // Mostrar reproductor de audio original completo y botón de descarga con tiempo real
