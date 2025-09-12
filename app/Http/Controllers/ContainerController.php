@@ -27,22 +27,38 @@ class ContainerController extends Controller
         $this->googleDriveService = $googleDriveService;
     }
 
-    private function userHasContainerPrivileges($user, $groupId = null): bool
+    private function userHasContainerPrivileges($user, $groupId = null, $containerUsername = null): bool
     {
+        Log::info("Checking container privileges for user {$user->username} (ID: {$user->id}), Group ID: {$groupId}, Container Owner: {$containerUsername}");
+
+        // Verificar si es el creador del contenedor
+        if ($containerUsername && $containerUsername === $user->username) {
+            Log::info("User is container owner - access granted");
+            return true;
+        }
+
         if ($groupId) {
             $role = DB::table('group_user')
                 ->where('user_id', $user->id)
                 ->where('id_grupo', $groupId)
                 ->value('rol');
+
+            Log::info("User role in group {$groupId}: " . ($role ?? 'null'));
+
             // Admite roles nuevos y legados
-            return in_array($role, ['colaborador', 'administrador', 'full_meeting_access'], true);
+            $hasPrivileges = in_array($role, ['colaborador', 'administrador', 'full_meeting_access'], true);
+            Log::info("User has group privileges: " . ($hasPrivileges ? 'true' : 'false'));
+            return $hasPrivileges;
         }
 
         // Acciones generales: permitir si tiene algún grupo con rol distinto a invitado
-        return DB::table('group_user')
+        $hasGeneralPrivileges = DB::table('group_user')
             ->where('user_id', $user->id)
             ->whereIn('rol', ['colaborador', 'administrador', 'full_meeting_access'])
             ->exists();
+
+        Log::info("User has general privileges: " . ($hasGeneralPrivileges ? 'true' : 'false'));
+        return $hasGeneralPrivileges;
     }
     /**
      * Muestra la vista principal de contenedores
@@ -136,10 +152,17 @@ class ContainerController extends Controller
             ]);
 
             $user = Auth::user();
+            Log::info("Store container request - User: {$user->username} (ID: {$user->id}), Group ID: " . ($validated['group_id'] ?? 'null'));
 
-            if (! $this->userHasContainerPrivileges($user, $validated['group_id'] ?? null)) {
+            // Para crear contenedores, permitir si:
+            // 1. No tiene group_id (contenedor personal) - cualquier usuario puede crear
+            // 2. Tiene group_id y el usuario tiene permisos en ese grupo
+            if ($validated['group_id'] && !$this->userHasContainerPrivileges($user, $validated['group_id'])) {
+                Log::warning("User {$user->username} denied container creation in group {$validated['group_id']} - insufficient privileges");
                 return response()->json(['success' => false, 'message' => 'No tienes permisos para crear contenedores en este grupo'], 403);
             }
+
+            Log::info("User {$user->username} authorized to create container");
 
             $container = MeetingContentContainer::create([
                 'name' => $validated['name'],
@@ -162,7 +185,7 @@ class ContainerController extends Controller
                 'container_id' => $container->id,
                 'user_id' => $user->id,
                 'action' => 'create',
-                'description' => $user->name . ' creó el contenedor ' . $container->name,
+                'description' => $user->full_name . ' creó el contenedor ' . $container->name,
             ]);
 
             return response()->json([
@@ -232,7 +255,7 @@ class ContainerController extends Controller
                 'container_id' => $container->id,
                 'user_id' => $user->id,
                 'action' => 'update',
-                'description' => $user->name . ' actualizó el contenedor ' . $container->name,
+                'description' => $user->full_name . ' actualizó el contenedor ' . $container->name,
             ]);
 
             return response()->json([
@@ -270,17 +293,36 @@ class ContainerController extends Controller
     public function addMeeting(Request $request, $id): JsonResponse
     {
         $user = Auth::user();
+        Log::info("AddMeeting request - User: {$user->username} (ID: {$user->id}), Container ID: {$id}");
 
         $data = $request->validate([
             'meeting_id' => ['required', 'exists:transcriptions_laravel,id'],
         ]);
 
-        $container = MeetingContentContainer::where('id', $id)
-            ->where('username', $user->username)
-            ->firstOrFail();
+        // Buscar el contenedor sin restricción de username, verificaremos permisos después
+        $container = MeetingContentContainer::findOrFail($id);
+        Log::info("Container found: {$container->name}, Owner: {$container->username}, Group ID: {$container->group_id}");
 
+        // Verificar permisos del usuario para este contenedor
+        if (!$this->userHasContainerPrivileges($user, $container->group_id, $container->username)) {
+            Log::warning("User {$user->username} denied access to container {$id} - insufficient privileges");
+            return response()->json(['error' => 'No tienes permisos para añadir reuniones a este contenedor'], 403);
+        }
+
+        Log::info("User {$user->username} has privileges for container {$id}");
+
+        // Buscar la reunión, permitiendo acceso si el usuario tiene permisos en el grupo de la reunión
         $meeting = TranscriptionLaravel::where('id', $data['meeting_id'])
-            ->where('username', $user->username)
+            ->where(function($query) use ($user) {
+                $query->where('username', $user->username)
+                      ->orWhereExists(function($subQuery) use ($user) {
+                          $subQuery->select(DB::raw(1))
+                                   ->from('group_user')
+                                   ->whereColumn('group_user.id_grupo', 'transcriptions_laravel.group_id')
+                                   ->where('group_user.user_id', $user->id)
+                                   ->whereIn('group_user.rol', ['colaborador', 'administrador', 'full_meeting_access']);
+                      });
+            })
             ->firstOrFail();
 
         MeetingContentRelation::firstOrCreate([
@@ -300,7 +342,7 @@ class ContainerController extends Controller
             'container_id' => $container->id,
             'user_id' => $user->id,
             'action' => 'add_meeting_to_container',
-            'description' => $user->name . ' agregó la reunión ' . $meeting->meeting_name . ' al contenedor ' . $container->name,
+            'description' => $user->full_name . ' agregó la reunión ' . $meeting->meeting_name . ' al contenedor ' . $container->name,
         ]);
 
         return response()->json(['success' => true]);
@@ -314,13 +356,15 @@ class ContainerController extends Controller
         try {
             $user = Auth::user();
 
-            $container = MeetingContentContainer::where('id', $containerId)
-                ->where('username', $user->username)
-                ->firstOrFail();
+            // Buscar el contenedor sin restricción de username, verificaremos permisos después
+            $container = MeetingContentContainer::findOrFail($containerId);
 
-            $meeting = TranscriptionLaravel::where('id', $meetingId)
-                ->where('username', $user->username)
-                ->firstOrFail();
+            // Verificar permisos del usuario para este contenedor
+            if (!$this->userHasContainerPrivileges($user, $container->group_id, $container->username)) {
+                return response()->json(['error' => 'No tienes permisos para modificar este contenedor'], 403);
+            }
+
+            $meeting = TranscriptionLaravel::findOrFail($meetingId);
 
             MeetingContentRelation::where('container_id', $container->id)
                 ->where('meeting_id', $meeting->id)
@@ -338,7 +382,7 @@ class ContainerController extends Controller
                 'container_id' => $container->id,
                 'user_id' => $user->id,
                 'action' => 'remove_meeting_from_container',
-                'description' => $user->name . ' eliminó la reunión ' . $meeting->meeting_name . ' del contenedor ' . $container->name,
+                'description' => $user->full_name . ' eliminó la reunión ' . $meeting->meeting_name . ' del contenedor ' . $container->name,
             ]);
 
             return response()->json([
@@ -570,7 +614,7 @@ class ContainerController extends Controller
                 'container_id' => $container->id,
                 'user_id' => $user->id,
                 'action' => 'delete',
-                'description' => $user->name . ' eliminó el contenedor ' . $container->name,
+                'description' => $user->full_name . ' eliminó el contenedor ' . $container->name,
             ]);
 
             return response()->json([
