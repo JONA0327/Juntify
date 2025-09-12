@@ -779,7 +779,7 @@
                     </div>
                 </div>
                 <!-- Modal ver reuniones del contenedor -->
-                <div x-show="showContainerMeetingsModal" id="container-meetings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-40" x-cloak>
+                <div x-show="showContainerMeetingsModal" id="container-meetings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-60" x-cloak>
                     <div class="bg-slate-950 rounded-xl border border-slate-700/50 shadow-2xl shadow-black/20 w-full max-w-6xl max-h-[90vh] overflow-hidden">
                         <!-- Header del modal -->
                         <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
@@ -936,6 +936,255 @@
         </div>
     </div>
 </x-modal>
+
+<!-- Modal para ver reunión -->
+<div id="meeting-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-70 hidden">
+    <div class="bg-slate-900 rounded-lg w-full max-w-4xl max-h-[80vh] overflow-hidden border border-slate-700">
+        <!-- Header del modal -->
+        <div class="flex items-center justify-between p-6 border-b border-slate-700">
+            <div>
+                <h2 id="meeting-modal-title" class="text-2xl font-bold text-white"></h2>
+                <p id="meeting-modal-date" class="text-slate-400 mt-1"></p>
+            </div>
+            <button onclick="closeMeetingModal()" class="text-slate-400 hover:text-white transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Contenido del modal -->
+        <div class="p-6 overflow-y-auto max-h-[calc(80vh-120px)]">
+            <!-- Loading state -->
+            <div id="meeting-modal-loading" class="flex justify-center items-center py-20">
+                <svg class="animate-spin h-8 w-8 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
+            </div>
+
+            <!-- Error state -->
+            <div id="meeting-modal-error" class="hidden text-center py-20">
+                <div class="mx-auto w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
+                    <svg class="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-semibold text-red-400 mb-2">Error al cargar la reunión</h3>
+                <p id="meeting-modal-error-text" class="text-slate-400"></p>
+            </div>
+
+            <!-- Contenido de la reunión -->
+            <div id="meeting-modal-content" class="hidden space-y-6">
+                <!-- Audio player -->
+                <div id="meeting-audio-section" class="bg-slate-800/50 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-white mb-3 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M6 10l6-6 6 6M6 14l6 6 6-6" />
+                        </svg>
+                        Audio de la reunión
+                    </h3>
+                    <audio id="meeting-audio-player" controls class="w-full">
+                        Tu navegador no soporta el elemento de audio.
+                    </audio>
+                </div>
+
+                <!-- Resumen -->
+                <div class="bg-slate-800/50 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-white mb-3 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Resumen
+                    </h3>
+                    <p id="meeting-summary" class="text-slate-300 leading-relaxed"></p>
+                </div>
+
+                <!-- Puntos claves -->
+                <div class="bg-slate-800/50 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-white mb-3 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                        Puntos Claves
+                    </h3>
+                    <ul id="meeting-keypoints" class="space-y-2 text-slate-300"></ul>
+                </div>
+
+                <!-- Transcripción -->
+                <div class="bg-slate-800/50 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-white mb-3 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        Transcripción
+                    </h3>
+                    <div id="meeting-transcription" class="space-y-3 max-h-64 overflow-y-auto"></div>
+                </div>
+
+                <!-- Tareas -->
+                <div id="meeting-tasks-section" class="bg-slate-800/50 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-white mb-3 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        Tareas
+                    </h3>
+                    <div id="meeting-tasks" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Función para cerrar modal de reunión
+function closeMeetingModal() {
+    const modal = document.getElementById('meeting-modal');
+    modal.classList.add('hidden');
+    const audioPlayer = document.getElementById('meeting-audio-player');
+    if (audioPlayer) {
+        audioPlayer.pause();
+    }
+}
+
+// Función para abrir modal de reunión
+function openMeetingModal(meetingId) {
+    if (!meetingId) {
+        console.error('ID de reunión no válido');
+        return;
+    }
+
+    const modal = document.getElementById('meeting-modal');
+    const loadingEl = document.getElementById('meeting-modal-loading');
+    const errorEl = document.getElementById('meeting-modal-error');
+    const contentEl = document.getElementById('meeting-modal-content');
+
+    // Mostrar modal y loading
+    modal.classList.remove('hidden');
+    loadingEl.classList.remove('hidden');
+    errorEl.classList.add('hidden');
+    contentEl.classList.add('hidden');
+
+    // Realizar petición para obtener datos de la reunión
+    fetch(`/api/meetings/${meetingId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            loadingEl.classList.add('hidden');
+
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            // Actualizar título y fecha
+            document.getElementById('meeting-modal-title').textContent = data.title || 'Reunión sin título';
+            document.getElementById('meeting-modal-date').textContent = data.date || '';
+
+            // Configurar audio
+            const audioSection = document.getElementById('meeting-audio-section');
+            const audioPlayer = document.getElementById('meeting-audio-player');
+            if (data.audio_path) {
+                audioPlayer.src = data.audio_path;
+                audioSection.classList.remove('hidden');
+            } else {
+                audioSection.classList.add('hidden');
+            }
+
+            // Mostrar resumen
+            const summaryEl = document.getElementById('meeting-summary');
+            summaryEl.textContent = data.summary || 'No hay resumen disponible';
+
+            // Mostrar puntos claves
+            const keypointsEl = document.getElementById('meeting-keypoints');
+            keypointsEl.innerHTML = '';
+            if (data.keypoints && data.keypoints.length > 0) {
+                data.keypoints.forEach(point => {
+                    const li = document.createElement('li');
+                    li.className = 'flex items-start';
+                    li.innerHTML = `
+                        <span class="text-yellow-400 mt-1 mr-2">•</span>
+                        <span>${point}</span>
+                    `;
+                    keypointsEl.appendChild(li);
+                });
+            } else {
+                keypointsEl.innerHTML = '<li class="text-slate-500">No hay puntos claves disponibles</li>';
+            }
+
+            // Mostrar transcripción
+            const transcriptionEl = document.getElementById('meeting-transcription');
+            transcriptionEl.innerHTML = '';
+            if (data.segments && data.segments.length > 0) {
+                data.segments.forEach(segment => {
+                    const div = document.createElement('div');
+                    div.className = 'bg-slate-700/30 rounded p-3 border-l-2 border-yellow-400';
+                    div.innerHTML = `
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-yellow-400 font-medium">${segment.speaker || 'Desconocido'}</span>
+                            <span class="text-xs text-slate-500">${segment.timestamp || ''}</span>
+                        </div>
+                        <p class="text-slate-300">${segment.text || ''}</p>
+                    `;
+                    transcriptionEl.appendChild(div);
+                });
+            } else {
+                transcriptionEl.innerHTML = '<div class="text-slate-500 p-3">No hay transcripción disponible</div>';
+            }
+
+            // Mostrar tareas
+            const tasksSection = document.getElementById('meeting-tasks-section');
+            const tasksEl = document.getElementById('meeting-tasks');
+            tasksEl.innerHTML = '';
+            if (data.tasks && data.tasks.length > 0) {
+                data.tasks.forEach(task => {
+                    const div = document.createElement('div');
+                    div.className = 'bg-slate-700/30 rounded p-3 flex items-start';
+                    div.innerHTML = `
+                        <svg class="w-4 h-4 text-yellow-400 mt-1 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                        <div class="flex-1">
+                            <p class="text-slate-300">${task.description || task}</p>
+                            ${task.assignee ? `<p class="text-xs text-slate-500 mt-1">Asignado a: ${task.assignee}</p>` : ''}
+                        </div>
+                    `;
+                    tasksEl.appendChild(div);
+                });
+                tasksSection.classList.remove('hidden');
+            } else {
+                tasksSection.classList.add('hidden');
+            }
+
+            // Mostrar contenido
+            contentEl.classList.remove('hidden');
+        })
+        .catch(error => {
+            console.error('Error al cargar reunión:', error);
+            loadingEl.classList.add('hidden');
+            errorEl.classList.remove('hidden');
+            document.getElementById('meeting-modal-error-text').textContent = error.message || 'Error desconocido';
+        });
+}
+
+// Event listener para cerrar modal con ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeMeetingModal();
+    }
+});
+
+// Event listener para cerrar modal haciendo click fuera
+document.getElementById('meeting-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeMeetingModal();
+    }
+});
+</script>
 
 </body>
 </html>
