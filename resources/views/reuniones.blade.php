@@ -32,7 +32,7 @@
         @include('partials.navbar')
         @include('partials.mobile-nav')
 
-        <main class="w-full pl-24 pt-24" style="margin-top:130px;">
+        <main class="w-full pt-4 md:pt-24 md:pl-24 md:mt-[130px]">
             <!-- Contenedor Centrado -->
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
