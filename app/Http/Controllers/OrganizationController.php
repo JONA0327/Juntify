@@ -254,30 +254,68 @@ class OrganizationController extends Controller
             abort(403);
         }
 
-        // Obtener todas las organizaciones del usuario
-        $organizations = Organization::whereHas('users', function($query) use ($user) {
-            $query->where('users.id', $user->id);
-        })->get();
+        // Permitir abandonar una organización específica si se envía organization_id
+        $targetOrgId = $request->input('organization_id');
 
+        $query = Organization::whereHas('users', function($q) use ($user) {
+            $q->where('users.id', $user->id);
+        });
+        if ($targetOrgId) {
+            $query->where('id', $targetOrgId);
+        }
+        $organizations = $query->get();
+
+        if ($organizations->isEmpty()) {
+            return response()->json([
+                'message' => 'No perteneces a la organización especificada'
+            ], 404);
+        }
+
+        $blocked = [];
         foreach ($organizations as $organization) {
-            // Si es el admin de la organización, no puede salirse
             if ($organization->admin_id === $user->id) {
-                return response()->json([
-                    'message' => 'No puedes salir de una organización que administras'
-                ], 403);
+                // No permitir salir si es administrador de esa organización
+                $blocked[] = $organization->id;
+                continue;
             }
 
-            // Remover de todos los grupos de la organización
+            // Detach de grupos
+            $organization->loadMissing('groups');
             foreach ($organization->groups as $group) {
                 $group->users()->detach($user->id);
                 $group->update(['miembros' => $group->users()->count()]);
             }
 
+            // Detach de la organización
             $organization->users()->detach($user->id);
             $organization->refreshMemberCount();
         }
 
-        return response()->json(['left' => true]);
+        // Recalcular current_organization_id: asignar otra si existe, si no nullear
+        $remainingOrg = Organization::whereHas('users', function($q) use ($user) {
+            $q->where('users.id', $user->id);
+        })->first();
+
+        if ($blocked && $organizations->count() === 1 && !$remainingOrg) {
+            // Intentó salir de su propia organización administrada
+            return response()->json([
+                'left' => false,
+                'blocked_admin_of' => $blocked,
+                'message' => 'No puedes salir porque administras esta organización'
+            ], 403);
+        }
+
+        if ($remainingOrg) {
+            User::where('id', $user->id)->update(['current_organization_id' => $remainingOrg->id]);
+        } else {
+            User::where('id', $user->id)->update(['current_organization_id' => null]);
+        }
+
+        return response()->json([
+            'left' => true,
+            'blocked_admin_of' => $blocked,
+            'current_organization_id' => $remainingOrg?->id,
+        ]);
     }
 
     public function update(Request $request, Organization $organization)

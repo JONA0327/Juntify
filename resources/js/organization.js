@@ -502,7 +502,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
     openConfirmDeleteGroup(org, group) {
-        this.orgOfGroupToDelete = org;
+        thisorgOfGroupToDelete = org;
         this.groupToDelete = group;
         this.showConfirmDeleteGroupModal = true;
     },
@@ -1062,24 +1062,41 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
     async leaveOrganization() {
+        if (this.isLeaving) return;
+        this.isLeaving = true;
         try {
+            const orgId = this.currentOrganizationId || (this.organizations[0]?.id);
             const response = await fetch('/api/organizations/leave', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                }
+                },
+                body: JSON.stringify({ organization_id: orgId })
             });
 
-            if (response.ok) {
-                window.location.reload();
-            } else {
-                const data = await response.json().catch(() => ({}));
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
                 this.showError(data.message || 'Error al salir de la organización');
+                return;
             }
+
+            if (data.blocked_admin_of && data.blocked_admin_of.length) {
+                this.showError('No puedes salir porque administras esa organización');
+                return;
+            }
+
+            // Actualizar lista local de organizaciones
+            if (orgId) {
+                this.organizations = this.organizations.filter(o => o.id !== orgId);
+            }
+            this.currentOrganizationId = data.current_organization_id || null;
+            window.location.href = this.currentOrganizationId ? '/organizacion' : '/';
         } catch (error) {
             console.error('Error leaving organization:', error);
             this.showError('Error al salir de la organización');
+        } finally {
+            this.isLeaving = false;
         }
     },
     async acceptInvitation() {
