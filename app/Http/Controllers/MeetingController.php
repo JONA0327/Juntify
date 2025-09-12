@@ -2085,14 +2085,36 @@ class MeetingController extends Controller
                 if (!empty($existingFiles)) {
                     $audioPath = $existingFiles[0];
                 } else {
+                    Log::info('streamAudio: Obteniendo ruta de audio');
+
+                    // Para acceso por contenedores, usar directamente la URL si está disponible
+                    if ($containerAccess && !empty($meetingModel->audio_download_url)) {
+                        Log::info('streamAudio: Usando URL directa para acceso por contenedores', [
+                            'meeting_id' => $meetingModel->id,
+                            'audio_download_url' => $meetingModel->audio_download_url
+                        ]);
+                        return redirect()->away($meetingModel->audio_download_url);
+                    }
+
                     $audioPath = $this->getAudioPath($meetingModel);
                     if (!$audioPath) {
+                        Log::warning('streamAudio: Audio no disponible para reunión legacy', [
+                            'meeting_id' => $meetingModel->id,
+                            'audio_drive_id' => $meetingModel->audio_drive_id,
+                            'audio_download_url' => $meetingModel->audio_download_url
+                        ]);
                         return response()->json(['error' => 'Audio no disponible'], 404);
                     }
+                    Log::info('streamAudio: Ruta de audio obtenida', [
+                        'meeting_id' => $meetingModel->id,
+                        'audio_path' => $audioPath,
+                        'is_http' => str_starts_with($audioPath, 'http')
+                    ]);
                     if (str_starts_with($audioPath, 'http')) {
                         // Si tenemos fileId, descargar y guardar localmente para servir con soporte de rangos
                         if (!empty($meetingModel->audio_drive_id)) {
                             try {
+                                Log::info('streamAudio: Descargando archivo de Drive');
                                 $info = $this->googleDriveService->getFileInfo($meetingModel->audio_drive_id);
                                 $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType());
                                 $sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meetingModel->meeting_name);
@@ -2100,12 +2122,22 @@ class MeetingController extends Controller
                                 $content = $this->downloadFromDrive($meetingModel->audio_drive_id);
                                 $localPath = $this->storeTemporaryFile($content, $fileName);
                                 $publicUrl = $this->publicUrlFromStoragePath($localPath);
+                                Log::info('streamAudio: Archivo descargado y guardado', [
+                                    'meeting_id' => $meetingModel->id,
+                                    'local_path' => $localPath,
+                                    'public_url' => $publicUrl
+                                ]);
                                 return redirect()->to($publicUrl, 302);
                             } catch (\Throwable $e) {
+                                Log::error('streamAudio: Error descargando de Drive, usando fallback', [
+                                    'meeting_id' => $meetingModel->id,
+                                    'error' => $e->getMessage()
+                                ]);
                                 // Si falla, intentar redirigir al enlace externo como último recurso
                                 return redirect()->away($audioPath);
                             }
                         }
+                        Log::info('streamAudio: Redirigiendo a URL externa');
                         return redirect()->away($audioPath);
                     }
                 }
