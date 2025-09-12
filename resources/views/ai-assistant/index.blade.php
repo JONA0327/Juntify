@@ -20,7 +20,7 @@
         'resources/js/app.js',
         'resources/css/index.css'
     ])
-    
+
     <link rel="stylesheet" href="{{ asset('css/ai-assistant.css') }}">
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
@@ -28,7 +28,7 @@
         @include('partials.navbar')
         @include('partials.mobile-nav')
 
-        <main class="w-full pl-24 pt-24" style="margin-top:130px;">
+        <main class="w-full" style="margin-left: 0; margin-top: 0; padding: 0;">
 <div class="ai-assistant-container">
     <!-- Sidebar de sesiones -->
     <div class="sessions-sidebar">
