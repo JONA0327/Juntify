@@ -21,25 +21,71 @@ function createParticles() {
 //  Comprobación de fuerza
 // ———————————————————
 function checkPasswordStrength(password) {
+  console.log('Checking password strength for:', password);
   let strength = 0;
-  const reqs = {
-    length: password.length>=8 && password.length<=16,
-    letter: /[a-zA-Z]/.test(password),
-    number: /\d/.test(password),
-    symbol: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
-  };
-  Object.entries(reqs).forEach(([k,v])=>{
-    document.getElementById(k+'Req').classList.toggle('met', v);
-    if (v) strength++;
+
+  // Test simple primero
+  const hasLength = password.length >= 8 && password.length <= 16;
+  const hasLetter = /[a-zA-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+
+  console.log('Tests:', {
+    hasLength,
+    hasLetter,
+    hasNumber,
+    hasSymbol
   });
+
+  const reqs = {
+    length: hasLength,
+    letter: hasLetter,
+    number: hasNumber,
+    symbol: hasSymbol,
+  };
+
+  console.log('Requirements:', reqs);
+
+  Object.entries(reqs).forEach(([k,v])=>{
+    const element = document.getElementById(k+'Req');
+    console.log(`Looking for element: ${k}Req`);
+    if (element) {
+      console.log(`Found element ${k}Req, setting class:`, v ? 'met' : 'not met');
+      element.classList.toggle('met', v);
+      if (v) strength++;
+    } else {
+      console.warn(`Element ${k}Req not found`);
+    }
+  });
+
   const fill = document.getElementById('strengthFill'),
         text = document.getElementById('strengthText'),
         pct  = (strength/4)*100;
-  fill.style.width = `${pct}%`;
-  if      (strength===0) { fill.className='strength-fill';             text.textContent='Ingresa una contraseña'; }
-  else if (strength<=2)   { fill.className='strength-fill strength-weak';   text.textContent='Contraseña débil'; }
-  else if (strength===3)  { fill.className='strength-fill strength-medium'; text.textContent='Contraseña media'; }
-  else                    { fill.className='strength-fill strength-strong'; text.textContent='Contraseña fuerte'; }
+
+  console.log('Strength:', strength, 'Percentage:', pct);
+
+  if (fill) {
+    fill.style.width = `${pct}%`;
+    fill.className = 'strength-fill';
+    if (strength <= 2) fill.classList.add('strength-weak');
+    else if (strength === 3) fill.classList.add('strength-medium');
+    else if (strength === 4) fill.classList.add('strength-strong');
+    console.log('Updated fill element');
+  } else {
+    console.warn('strengthFill element not found');
+  }
+
+  if (text) {
+    if      (strength===0) { text.textContent='Ingresa una contraseña'; }
+    else if (strength<=2)   { text.textContent='Contraseña débil'; }
+    else if (strength===3)  { text.textContent='Contraseña media'; }
+    else                    { text.textContent='Contraseña fuerte'; }
+    console.log('Updated text element to:', text.textContent);
+  } else {
+    console.warn('strengthText element not found');
+  }
+
+  console.log('Password strength:', strength);
   return strength===4;
 }
 
@@ -97,16 +143,114 @@ function validateForm() {
 //  Inicialización
 // ———————————————————
 document.addEventListener('DOMContentLoaded', ()=>{
+  console.log('DOM Content Loaded, initializing registration form...');
+
   createParticles();
 
   // Variable para evitar múltiples envíos
   let formSubmitting = false;
 
-  document.getElementById('password').addEventListener('input', e=>{
+  // Verificar que los elementos necesarios existan
+  const passwordField = document.getElementById('password');
+  const passwordConfirmationField = document.getElementById('passwordConfirmation');
+  const registerForm = document.getElementById('registerForm');
+
+  if (!passwordField) {
+    console.error('Password field not found');
+    return;
+  }
+
+  if (!passwordConfirmationField) {
+    console.error('Password confirmation field not found');
+    return;
+  }
+
+  if (!registerForm) {
+    console.error('Register form not found');
+    return;
+  }
+
+  console.log('All required elements found, setting up event listeners...');
+
+  // Test inicial de la función de strength
+  setTimeout(() => {
+    console.log('Testing password strength function...');
+
+    // Test básico: cambiar el color de los requirements manualmente
+    const lengthReq = document.getElementById('lengthReq');
+    const letterReq = document.getElementById('letterReq');
+    const numberReq = document.getElementById('numberReq');
+    const symbolReq = document.getElementById('symbolReq');
+
+    console.log('Elements found:', {
+      lengthReq: !!lengthReq,
+      letterReq: !!letterReq,
+      numberReq: !!numberReq,
+      symbolReq: !!symbolReq
+    });
+
+    // Test visual directo
+    if (lengthReq) {
+      lengthReq.classList.add('met');
+      console.log('Added met class to lengthReq');
+    }
+
+    checkPasswordStrength('');
+  }, 500);
+
+  passwordField.addEventListener('input', e=>{
+    console.log('Password input event triggered with value:', e.target.value);
+
+    // Test simple directo
+    const password = e.target.value;
+    const lengthReq = document.getElementById('lengthReq');
+    const letterReq = document.getElementById('letterReq');
+    const numberReq = document.getElementById('numberReq');
+    const symbolReq = document.getElementById('symbolReq');
+
+    // Test de longitud
+    if (lengthReq) {
+      if (password.length >= 8 && password.length <= 16) {
+        lengthReq.classList.add('met');
+      } else {
+        lengthReq.classList.remove('met');
+      }
+    }
+
+    // Test de letra
+    if (letterReq) {
+      if (/[a-zA-Z]/.test(password)) {
+        letterReq.classList.add('met');
+      } else {
+        letterReq.classList.remove('met');
+      }
+    }
+
+    // Test de número
+    if (numberReq) {
+      if (/\d/.test(password)) {
+        numberReq.classList.add('met');
+      } else {
+        numberReq.classList.remove('met');
+      }
+    }
+
+    // Test de símbolo
+    if (symbolReq) {
+      if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+        symbolReq.classList.add('met');
+      } else {
+        symbolReq.classList.remove('met');
+      }
+    }
+
+    // También ejecutar la función original
     checkPasswordStrength(e.target.value);
   });
-  document.getElementById('passwordConfirmation').addEventListener('input', e=>{
-    const p=document.getElementById('password').value;
+
+  passwordConfirmationField.addEventListener('input', e=>{
+    console.log('Password confirmation input event triggered');
+    const p = passwordField.value;
     if(e.target.value && p) {
       p===e.target.value
         ? showSuccess('passwordConfirmation','¡Coinciden!')
