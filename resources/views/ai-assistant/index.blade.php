@@ -19,6 +19,8 @@
         'resources/js/app.js',
         'resources/css/index.css',
         'resources/js/index.js',
+        'resources/css/profile.css',
+        'resources/js/profile.js',
         'resources/css/ai-assistant.css',
         'resources/js/ai-assistant.js'
     ])
@@ -32,6 +34,14 @@
 
     <!-- Barra de navegación móvil -->
     @include('partials.mobile-nav')
+
+    <!-- Botón para abrir sidebar en móvil -->
+    <button class="mobile-sidebar-btn mobile-menu-btn" onclick="toggleSidebar()" aria-label="Abrir menú">
+        <svg class="icon-open" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 01-1.414-1.414L10.586 10 5.879 5.707a1 1 0 011.414-1.414l4.001 4a1 1 0 010 1.414l-4.001 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+        </svg>
+    </button>
+
 <div class="ai-assistant-container">
     <!-- Sidebar izquierdo - Historial de chats -->
     <div class="chat-sidebar">
