@@ -97,32 +97,9 @@
     </div>
   </div>
 
-  <!-- Success Modal -->
-  <div class="modal" id="successModal">
-    <div class="modal-content">
-      <div class="modal-icon">🎉</div>
-      <h2 class="modal-title">¡Enhorabuena!</h2>
-      <p class="modal-message">
-        Te has registrado exitosamente en Juntify.<br>
-        Bienvenido a la revolución de las reuniones.
-      </p>
-      <button class="modal-btn" onclick="redirectToProfile()">
-        Continuar
-      </button>
-    </div>
-  </div>
-
   @vite([
     'resources/js/app.js',
     'resources/js/auth/register.js',
   ])
-
-  @if(session('registered'))
-  <script>
-    document.addEventListener('DOMContentLoaded', function(){
-      showSuccessModal();
-    });
-  </script>
-  @endif
 </body>
 </html>

@@ -19,7 +19,7 @@ class RegisterController extends Controller
     /**
      * Procesar el registro de un nuevo usuario.
      * Generamos el UUID, guardamos el hash recibido (bcryptjs)
-     * y redirigimos a la misma ruta con una flag en sesión.
+     * y redirigimos al perfil o devolvemos JSON según el tipo de solicitud.
      */
     public function register(Request $request)
     {
@@ -43,9 +43,18 @@ class RegisterController extends Controller
 
         auth()->login($user);
 
-        // Volvemos a la misma ruta para disparar el modal
+        // Si es una solicitud AJAX, devolver JSON
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Te has registrado exitosamente en Juntify. ¡Bienvenido!',
+                'redirect_url' => route('profile')
+            ]);
+        }
+
+        // Redirigir al perfil después del registro exitoso
         return redirect()
-            ->route('register')
-            ->with('registered', true);
+            ->route('profile')
+            ->with('success', 'Te has registrado exitosamente en Juntify. ¡Bienvenido!');
     }
 }
