@@ -802,6 +802,7 @@ class DriveController extends Controller
             'analysisResults'        => 'required',
             'audioData'              => 'required|string|max:' . (int) ceil($maxAudioBytes * 4 / 3),      // Base64 (~133MB)
             'audioMimeType'          => 'required|string',      // p.ej. "audio/webm"
+            'driveType'              => 'nullable|string|in:personal,organization', // Nuevo campo para tipo de drive
         ], [
             'audioData.max' => 'Archivo de audio demasiado grande (máx. 100 MB)',
         ]);
@@ -813,18 +814,41 @@ class DriveController extends Controller
             ->where('organization_id', $user->current_organization_id)
             ->first()?->pivot->rol;
 
+        // Determinar si usar Drive organizacional basado en driveType
+        $driveType = $v['driveType'] ?? 'personal'; // Default a personal si no se especifica
         $useOrgDrive = false;
-        if ($organizationFolder) {
-            if ($orgRole === 'colaborador') {
-                if ($v['rootFolder'] !== $organizationFolder->google_id) {
-                    return response()->json([
-                        'message' => 'Colaboradores solo pueden usar la carpeta de la organización'
-                    ], 403);
-                }
+
+        Log::info('saveResults: Drive type selection', [
+            'driveType' => $driveType,
+            'hasOrganizationFolder' => !!$organizationFolder,
+            'orgRole' => $orgRole,
+            'username' => $user->username,
+            'rootFolder' => $v['rootFolder']
+        ]);
+
+        if ($driveType === 'organization' && $organizationFolder) {
+            if ($orgRole === 'colaborador' || $orgRole === 'administrador') {
                 $useOrgDrive = true;
-            } elseif ($orgRole === 'administrador' && $v['rootFolder'] === $organizationFolder->google_id) {
-                $useOrgDrive = true;
+                Log::info('saveResults: Using organization drive', [
+                    'orgRole' => $orgRole,
+                    'orgFolderId' => $organizationFolder->google_id
+                ]);
+            } else {
+                Log::warning('saveResults: User has no valid role for organization', [
+                    'orgRole' => $orgRole,
+                    'username' => $user->username
+                ]);
+                return response()->json([
+                    'message' => 'No tienes permisos para usar Drive organizacional'
+                ], 403);
             }
+        } elseif ($driveType === 'organization' && !$organizationFolder) {
+            Log::warning('saveResults: Organization drive requested but no organization folder found', [
+                'username' => $user->username
+            ]);
+            return response()->json([
+                'message' => 'No tienes acceso a Drive organizacional o no está configurado'
+            ], 403);
         }
 
         if ($useOrgDrive) {
