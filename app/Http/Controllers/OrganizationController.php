@@ -272,6 +272,11 @@ class OrganizationController extends Controller
         }
 
         $blocked = [];
+        Log::info('Org leave attempt', [
+            'user_id' => $user->id,
+            'target_org_id' => $targetOrgId,
+            'org_count' => $organizations->count()
+        ]);
         foreach ($organizations as $organization) {
             if ($organization->admin_id === $user->id) {
                 // No permitir salir si es administrador de esa organización
@@ -296,12 +301,12 @@ class OrganizationController extends Controller
             $q->where('users.id', $user->id);
         })->first();
 
-        if ($blocked && $organizations->count() === 1 && !$remainingOrg) {
-            // Intentó salir de su propia organización administrada
+        // Si todas las organizaciones seleccionadas quedaron bloqueadas (es admin) y no se logró salir de ninguna
+        if ($blocked && count($blocked) === $organizations->count()) {
             return response()->json([
                 'left' => false,
                 'blocked_admin_of' => $blocked,
-                'message' => 'No puedes salir porque administras esta organización'
+                'message' => 'No puedes salir porque administras la organización'
             ], 403);
         }
 
@@ -315,6 +320,7 @@ class OrganizationController extends Controller
             'left' => true,
             'blocked_admin_of' => $blocked,
             'current_organization_id' => $remainingOrg?->id,
+            'remaining_org' => $remainingOrg?->id,
         ]);
     }
 
