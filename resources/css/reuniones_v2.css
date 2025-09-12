@@ -2585,3 +2585,13 @@ div[class*="transcript-segment"] {
 #contactsList::-webkit-scrollbar-thumb:hover {
     background: rgba(100, 116, 139, 0.7);
 }
+
+@media (max-width: 768px) {
+    .header {
+        display: none;
+    }
+
+    .mobile-bottom-nav {
+        display: grid;
+    }
+}

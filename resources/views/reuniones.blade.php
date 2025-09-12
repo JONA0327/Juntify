@@ -19,7 +19,7 @@
     <!-- Vite Assets -->
     @vite([
         'resources/css/app.css',
-        'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css',
+        'resources/js/app.js', 'resources/css/index.css',
         'resources/css/reuniones_v2.css', /* Nuevo archivo de estilos */
         'resources/css/audio-processing.css',
         'resources/js/reuniones_v2.js'   /* Nuevo archivo de script */
