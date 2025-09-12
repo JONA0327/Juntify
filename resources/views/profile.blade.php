@@ -73,6 +73,39 @@
                 </div>
             </div>
 
+            <!-- Notificaciones de sistema -->
+            @if(session('success'))
+                <div class="notification success" id="success-notification">
+                    <div class="notification-content">
+                        <svg class="notification-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span class="notification-message">{{ session('success') }}</span>
+                        <button class="notification-close" onclick="closeNotification('success-notification')">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            @endif
+
+            @if(session('error'))
+                <div class="notification error" id="error-notification">
+                    <div class="notification-content">
+                        <svg class="notification-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6m0 0l6-6m-6 6l-6-6m6 6v12" />
+                        </svg>
+                        <span class="notification-message">{{ session('error') }}</span>
+                        <button class="notification-close" onclick="closeNotification('error-notification')">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            @endif
+
             <!-- Content Sections -->
             @include('partials.profile._section-info')
             @include('partials.profile._section-connect', ['folder' => $folder, 'subfolders' => $subfolders, 'folderMessage' => $folderMessage])
@@ -87,6 +120,98 @@
 
     <!-- Google Connection Monitor Styles -->
     <style>
+        /* Estilos para notificaciones de sistema */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 20px;
+            border-radius: 12px;
+            color: white;
+            font-weight: 500;
+            z-index: 9999;
+            min-width: 300px;
+            max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: slideInRight 0.4s ease-out;
+        }
+
+        .notification.success {
+            background: linear-gradient(135deg, #10B981, #059669);
+        }
+
+        .notification.error {
+            background: linear-gradient(135deg, #EF4444, #DC2626);
+        }
+
+        .notification-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .notification-icon {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .notification-message {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .notification-close {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+
+        .notification-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .notification-close svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        .notification.closing {
+            animation: slideOutRight 0.3s ease-in forwards;
+        }
+
         @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
@@ -136,6 +261,31 @@
             border: 1px solid #2563eb;
         }
     </style>
+
+    <!-- Script para notificaciones -->
+    <script>
+        function closeNotification(notificationId) {
+            const notification = document.getElementById(notificationId);
+            if (notification) {
+                notification.classList.add('closing');
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }
+        }
+
+        // Auto-cerrar notificaciones después de 5 segundos
+        document.addEventListener('DOMContentLoaded', function() {
+            const notifications = document.querySelectorAll('.notification');
+            notifications.forEach(notification => {
+                setTimeout(() => {
+                    if (notification && notification.parentNode) {
+                        closeNotification(notification.id);
+                    }
+                }, 5000);
+            });
+        });
+    </script>
 
     <!-- Google Connection Monitor Script -->
     <script src="{{ asset('js/google-connection-monitor.js') }}"></script>

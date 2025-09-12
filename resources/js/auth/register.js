@@ -143,11 +143,33 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // hash con bcryptjs (cost 10)
     const pwdEl  = document.getElementById('password'),
           pcEl   = document.getElementById('passwordConfirmation'),
+          originalPwd = pwdEl.value,  // Guardar valor original
+          originalPc = pcEl.value,    // Guardar valor original
           salt   = bcrypt.genSaltSync(10),
-          hash   = bcrypt.hashSync(pwdEl.value, salt);
+          hash   = bcrypt.hashSync(originalPwd, salt);
 
-    pwdEl.value  = hash;
-    pcEl.value   = hash;
+    // Crear inputs hidden para enviar el hash
+    const hiddenPwd = document.createElement('input');
+    hiddenPwd.type = 'hidden';
+    hiddenPwd.name = 'password_hash';
+    hiddenPwd.value = hash;
+    this.appendChild(hiddenPwd);
+
+    const hiddenPc = document.createElement('input');
+    hiddenPc.type = 'hidden';
+    hiddenPc.name = 'password_confirmation_hash';
+    hiddenPc.value = hash;
+    this.appendChild(hiddenPc);
+
+    // Limpiar los campos visibles antes del envío
+    pwdEl.value = '';
+    pcEl.value = '';
+    pwdEl.placeholder = 'Contraseña enviada...';
+    pcEl.placeholder = 'Confirmación enviada...';
+
+    // Deshabilitar los campos originales para que no se envíen
+    pwdEl.disabled = true;
+    pcEl.disabled = true;
 
     console.log('Hash generado, enviando formulario tradicional...');
 

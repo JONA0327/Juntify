@@ -24,12 +24,12 @@ class RegisterController extends Controller
     public function register(Request $request)
     {
         $data = $request->validate([
-            'username'              => 'required|string|max:50|unique:users,username',
-            'full_name'             => 'required|string|max:255',
-            'email'                 => 'required|email|unique:users,email',
-            'password'              => 'required|string',
-            'password_confirmation' => 'required|string|same:password',
-            'role'                  => 'nullable|string|max:200',
+            'username'                    => 'required|string|max:50|unique:users,username',
+            'full_name'                   => 'required|string|max:255',
+            'email'                       => 'required|email|unique:users,email',
+            'password_hash'               => 'required|string',
+            'password_confirmation_hash'  => 'required|string|same:password_hash',
+            'role'                        => 'nullable|string|max:200',
         ]);
 
         $user = User::create([
@@ -37,8 +37,8 @@ class RegisterController extends Controller
             'username'   => $data['username'],
             'full_name'  => $data['full_name'],
             'email'      => $data['email'],
-            'password'   => $data['password'],           // hash de bcryptjs
-            'roles'      => $data['role'] ?? 'free',      // guardamos string
+            'password'   => $data['password_hash'],           // hash de bcryptjs
+            'roles'      => $data['role'] ?? 'free',          // guardamos string
         ]);
 
         auth()->login($user);
