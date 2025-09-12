@@ -157,8 +157,10 @@ class ContainerController extends Controller
             // Para crear contenedores, permitir si:
             // 1. No tiene group_id (contenedor personal) - cualquier usuario puede crear
             // 2. Tiene group_id y el usuario tiene permisos en ese grupo
-            if ($validated['group_id'] && !$this->userHasContainerPrivileges($user, $validated['group_id'])) {
-                Log::warning("User {$user->username} denied container creation in group {$validated['group_id']} - insufficient privileges");
+            $groupId = $validated['group_id'] ?? null;
+
+            if ($groupId && !$this->userHasContainerPrivileges($user, $groupId)) {
+                Log::warning("User {$user->username} denied container creation in group {$groupId} - insufficient privileges");
                 return response()->json(['success' => false, 'message' => 'No tienes permisos para crear contenedores en este grupo'], 403);
             }
 
@@ -168,7 +170,7 @@ class ContainerController extends Controller
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
                 'username' => $user->username,
-                'group_id' => $validated['group_id'] ?? null,
+                'group_id' => $groupId,
                 'is_active' => true,
             ]);
 
