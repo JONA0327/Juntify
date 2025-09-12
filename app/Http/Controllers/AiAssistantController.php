@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Services\AiChatService;
 
 class AiAssistantController extends Controller
 {
@@ -163,15 +164,7 @@ class AiAssistantController extends Controller
         ]);
 
         // Procesar con IA y generar respuesta
-        $aiResponse = $this->processAiResponse($session, $request->content, $request->attachments ?? []);
-
-        // Crear mensaje de respuesta de la IA
-        $assistantMessage = AiChatMessage::create([
-            'session_id' => $session->id,
-            'role' => 'assistant',
-            'content' => $aiResponse['content'],
-            'metadata' => $aiResponse['metadata'] ?? []
-        ]);
+        $assistantMessage = $this->processAiResponse($session, $request->content, $request->attachments ?? []);
 
         // Actualizar actividad de la sesión
         $session->updateActivity();
@@ -415,32 +408,21 @@ class AiAssistantController extends Controller
     /**
      * Procesar respuesta de la IA
      */
-    private function processAiResponse(AiChatSession $session, string $userMessage, array $attachments = []): array
+    private function processAiResponse(AiChatSession $session, string $userMessage, array $attachments = []): AiChatMessage
     {
-        // Aquí implementarías la lógica de IA
-        // Por ahora, una respuesta simulada
-
         $context = $this->gatherContext($session, $userMessage);
+        $systemMessage = $this->generateSystemMessage($session);
 
-        // Simular procesamiento de IA
-        $response = "He analizado tu consulta: '$userMessage'.\n\n";
+        /** @var AiChatService $service */
+        $service = app(AiChatService::class);
+        $reply = $service->generateReply($session, $systemMessage, $context);
 
-        if (!empty($context)) {
-            $response .= "Basándome en el contexto disponible:\n";
-            foreach ($context as $item) {
-                $response .= "- " . $item . "\n";
-            }
-        }
-
-        $response .= "\n¿En qué más puedo ayudarte?";
-
-        return [
-            'content' => $response,
-            'metadata' => [
-                'context_items_used' => count($context),
-                'processing_time' => now()->toISOString()
-            ]
-        ];
+        return AiChatMessage::create([
+            'session_id' => $session->id,
+            'role' => 'assistant',
+            'content' => $reply['content'],
+            'metadata' => $reply['metadata'] ?? []
+        ]);
     }
 
     /**
