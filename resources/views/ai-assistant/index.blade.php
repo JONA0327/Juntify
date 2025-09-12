@@ -21,7 +21,7 @@
         'resources/css/index.css'
     ])
 
-    <link rel="stylesheet" href="{{ asset('css/ai-assistant.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/ai-assistant.css') }}?v={{ time() }}">
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
     <div class="flex">
@@ -139,6 +139,6 @@
         </main>
     </div>
 
-    <script src="{{ asset('js/ai-assistant.js') }}"></script>
+    <script src="{{ asset('js/ai-assistant.js') }}?v={{ time() }}"></script>
 </body>
 </html>
