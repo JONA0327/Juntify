@@ -7,9 +7,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Container extends Model
 {
+    protected $table = 'meeting_content_containers';
+
     protected $fillable = [
         'username',
         'name',
+        'description',
+        'is_active',
     ];
 
     public function meetings(): BelongsToMany
