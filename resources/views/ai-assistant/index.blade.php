@@ -26,7 +26,6 @@
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
     <div class="flex">
         @include('partials.navbar')
-        @include('partials.mobile-nav')
 
         <main class="w-full" style="margin-left: 0; margin-top: 0; padding: 0;">
 <div class="ai-assistant-container">
