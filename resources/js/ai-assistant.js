@@ -39,18 +39,18 @@ function setupEventListeners() {
         chatInput.addEventListener('input', function() {
             const sendBtn = document.getElementById('send-btn');
             const message = this.value.trim();
-            
+
             if (sendBtn) {
                 sendBtn.disabled = !message || isLoading;
             }
-            
+
             // Actualizar contador de caracteres
             const charCount = document.getElementById('char-count');
             if (charCount) {
                 charCount.textContent = this.value.length;
             }
         });
-        
+
         chatInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -72,7 +72,16 @@ function setupEventListeners() {
 async function loadChatSessions() {
     try {
         const response = await fetch('/api/ai-assistant/sessions');
-        const sessions = await response.json();
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Error loading sessions:', errorData);
+            showError(`Error al cargar sesiones: ${errorData.message || response.status}`);
+            return;
+        }
+
+        const data = await response.json();
+        const sessions = data.sessions || data;
 
         displayChatSessions(sessions);
 
@@ -128,11 +137,17 @@ async function createNewChat() {
             })
         });
 
-        const session = await response.json();
+        const responseData = await response.json();
 
-        if (session.id) {
+        if (!response.ok) {
+            console.error('Error response:', responseData);
+            showError(`Error al crear sesión: ${responseData.message || 'Error desconocido'}`);
+            return;
+        }
+
+        if (responseData.session && responseData.session.id) {
             await loadChatSessions(); // Recargar lista
-            loadChatSession(session.id);
+            loadChatSession(responseData.session.id);
         }
     } catch (error) {
         console.error('Error al crear nueva sesión:', error);
@@ -268,7 +283,7 @@ async function handleSendMessage(e) {
         isLoading = false;
         updateSendButton(false);
         scrollToBottom();
-        
+
         // Actualizar estado del botón basado en el input
         const currentInput = document.getElementById('message-input');
         const sendBtn = document.getElementById('send-btn');

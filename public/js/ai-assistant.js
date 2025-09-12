@@ -817,7 +817,7 @@ async function loadSelectedContext() {
     try {
         // Configurar contexto con los elementos seleccionados
         currentContext = {
-            type: 'mixed',
+            type: 'general',
             id: 'custom',
             data: {
                 items: loadedContextItems
@@ -864,7 +864,7 @@ function filterContextItems(searchTerm) {
 async function selectContainer(containerId) {
     try {
         // Obtener datos del contenedor
-        const response = await fetch(`/api/containers/${containerId}/meetings`);
+        const response = await fetch(`/api/content-containers/${containerId}/meetings`);
         const data = await response.json();
 
         if (data.success) {

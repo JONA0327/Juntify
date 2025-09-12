@@ -73,7 +73,7 @@ class AiAssistantController extends Controller
 
         $request->validate([
             'title' => 'sometimes|string|max:255',
-            'context_type' => 'required|in:general,container,meeting,contact_chat,documents',
+            'context_type' => 'required|in:general,container,meeting,contact_chat,documents,mixed',
             'context_id' => 'nullable|string',
             'context_data' => 'nullable|array'
         ]);
