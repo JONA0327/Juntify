@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Services\AiChatService;
+use App\Services\EmbeddingSearch;
 
 class AiAssistantController extends Controller
 {
@@ -410,12 +411,12 @@ class AiAssistantController extends Controller
      */
     private function processAiResponse(AiChatSession $session, string $userMessage, array $attachments = []): AiChatMessage
     {
-        $context = $this->gatherContext($session, $userMessage);
+        $contextFragments = $this->gatherContext($session, $userMessage);
         $systemMessage = $this->generateSystemMessage($session);
 
         /** @var AiChatService $service */
         $service = app(AiChatService::class);
-        $reply = $service->generateReply($session, $systemMessage, $context);
+        $reply = $service->generateReply($session, $systemMessage, $contextFragments);
 
         return AiChatMessage::create([
             'session_id' => $session->id,
@@ -430,7 +431,9 @@ class AiAssistantController extends Controller
      */
     private function gatherContext(AiChatSession $session, string $query): array
     {
-        $context = [];
+        /** @var EmbeddingSearch $search */
+        $search = app(EmbeddingSearch::class);
+        $context = $search->search($session->username, $query);
 
         // Reunir contexto según el tipo de sesión
         switch ($session->context_type) {
