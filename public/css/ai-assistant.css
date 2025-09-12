@@ -767,3 +767,510 @@
     font-size: 0.9rem;
     color: #94a3b8;
 }
+
+/* ============================================
+   ESTILOS PARA SELECTOR DE CONTEXTO
+   ============================================ */
+
+/* Modal de selector de contexto */
+.context-selector-modal {
+    max-width: 1200px;
+    max-height: 85vh;
+}
+
+.context-selector-body {
+    display: grid;
+    grid-template-columns: 200px 1fr 250px;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    min-height: 500px;
+}
+
+/* Navegación lateral izquierda */
+.context-navigation h4 {
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.context-nav-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.context-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 0.5rem;
+    color: #94a3b8;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+    width: 100%;
+}
+
+.context-nav-item:hover {
+    background: rgba(30, 41, 59, 0.6);
+    color: #e2e8f0;
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.context-nav-item.active {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+.context-nav-item svg {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+
+/* Área central de contenido */
+.context-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.context-search {
+    margin-bottom: 1rem;
+}
+
+.context-view {
+    display: none;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.context-view.active {
+    display: block;
+}
+
+.context-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+/* Cards de reuniones */
+.meeting-card {
+    padding: 1rem;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 0.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.meeting-card:hover {
+    background: rgba(30, 41, 59, 0.7);
+    border-color: rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.meeting-card-header {
+    display: flex;
+    justify-content: between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.meeting-card-title {
+    flex: 1;
+    cursor: pointer;
+}
+
+.meeting-card h4 {
+    color: #e2e8f0;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+    font-size: 0.9rem;
+    line-height: 1.3;
+}
+
+.meeting-card-meta {
+    color: #94a3b8;
+    font-size: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.meeting-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.meeting-action-btn {
+    padding: 0.5rem;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 0.375rem;
+    color: #3b82f6;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+}
+
+.meeting-action-btn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.5);
+    transform: scale(1.05);
+}
+
+.meeting-action-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.meeting-action-btn.load-btn {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #22c55e;
+}
+
+.meeting-action-btn.load-btn:hover {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: rgba(34, 197, 94, 0.5);
+}
+
+/* Panel lateral derecho - Contexto cargado */
+.context-panel {
+    background: rgba(30, 41, 59, 0.3);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    height: fit-content;
+}
+
+.context-panel h4 {
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.loaded-context-items {
+    flex: 1;
+    margin-bottom: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.empty-context {
+    text-align: center;
+    color: #64748b;
+    font-size: 0.8rem;
+    padding: 2rem 1rem;
+}
+
+.context-item {
+    padding: 0.75rem;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.context-item-info {
+    flex: 1;
+}
+
+.context-item-title {
+    color: #e2e8f0;
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.context-item-type {
+    color: #3b82f6;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.context-item-remove {
+    width: 20px;
+    height: 20px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 0.25rem;
+    color: #ef4444;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.context-item-remove:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+.context-item-remove svg {
+    width: 12px;
+    height: 12px;
+}
+
+.context-actions {
+    border-top: 1px solid rgba(59, 130, 246, 0.1);
+    padding-top: 1rem;
+}
+
+#loadContextBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ============================================
+   ESTILOS PARA MODAL DE DETALLES DE REUNIÓN
+   ============================================ */
+
+.meeting-details-modal {
+    max-width: 900px;
+    max-height: 85vh;
+}
+
+.meeting-details-body {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+/* Pestañas de navegación */
+.details-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+    background: rgba(10, 14, 39, 0.5);
+    padding: 0 1.5rem;
+}
+
+.tab-button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-button:hover {
+    color: #e2e8f0;
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.tab-button.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.tab-button svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Contenido de las pestañas */
+.tab-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active {
+    display: block;
+}
+
+.tab-pane .loading-state {
+    padding: 2rem;
+}
+
+/* Contenido específico de pestañas */
+.summary-content, .keypoints-content, .tasks-content, .transcription-content {
+    line-height: 1.6;
+    color: #e2e8f0;
+}
+
+.summary-content {
+    font-size: 0.9rem;
+}
+
+.keypoints-content ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.keypoints-content li {
+    padding: 0.75rem;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+    position: relative;
+    padding-left: 2.5rem;
+}
+
+.keypoints-content li::before {
+    content: '•';
+    position: absolute;
+    left: 1rem;
+    color: #3b82f6;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.tasks-content .task-item {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+}
+
+.task-checkbox {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(59, 130, 246, 0.3);
+    border-radius: 0.25rem;
+    margin-top: 0.125rem;
+    flex-shrink: 0;
+}
+
+.task-checkbox.completed {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    position: relative;
+}
+
+.task-checkbox.completed::after {
+    content: '✓';
+    position: absolute;
+    top: -2px;
+    left: 1px;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.task-content h5 {
+    color: #e2e8f0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+}
+
+.task-content p {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    margin: 0;
+}
+
+.transcription-content {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    background: rgba(30, 41, 59, 0.3);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Responsive para modales */
+@media (max-width: 1024px) {
+    .context-selector-body {
+        grid-template-columns: 180px 1fr 220px;
+        gap: 1rem;
+    }
+
+    .context-grid {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .context-selector-modal, .meeting-details-modal {
+        max-width: 95vw;
+        max-height: 90vh;
+    }
+
+    .context-selector-body {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto 1fr;
+    }
+
+    .context-navigation {
+        order: 1;
+    }
+
+    .context-content {
+        order: 2;
+    }
+
+    .context-panel {
+        order: 3;
+    }
+
+    .context-nav-items {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .context-nav-item {
+        flex: 1;
+        min-width: 120px;
+    }
+
+    .details-tabs {
+        flex-wrap: wrap;
+        padding: 0 1rem;
+    }
+
+    .tab-button {
+        padding: 0.75rem 1rem;
+        font-size: 0.8rem;
+    }
+
+    .tab-content {
+        padding: 1rem;
+    }
+}

@@ -223,26 +223,38 @@ class AiAssistantController extends Controller
             ->map(function($meeting) {
                 return [
                     'id' => $meeting->id,
-                    'name' => $meeting->meeting_name,
+                    'meeting_name' => $meeting->meeting_name,
+                    'title' => $meeting->meeting_name, // Para compatibilidad
                     'type' => 'legacy',
                     'created_at' => $meeting->created_at,
+                    'duration' => $meeting->duration ?? 'No disponible',
+                    'participants' => $meeting->participants_list ?? [],
                     'has_summary' => !empty($meeting->summary),
-                    'has_transcription' => !empty($meeting->transcript_drive_id)
+                    'has_transcription' => !empty($meeting->transcript_drive_id),
+                    'has_audio' => !empty($meeting->audio_drive_id),
+                    'transcript_drive_id' => $meeting->transcript_drive_id,
+                    'audio_drive_id' => $meeting->audio_drive_id
                 ];
             });
 
         // Reuniones modernas
         $modernMeetings = Meeting::where('username', $user->username)
             ->orderBy('created_at', 'desc')
+            ->with('transcriptions')
             ->get()
             ->map(function($meeting) {
                 return [
                     'id' => $meeting->id,
-                    'name' => $meeting->title,
+                    'meeting_name' => $meeting->title,
+                    'title' => $meeting->title,
                     'type' => 'modern',
                     'created_at' => $meeting->created_at,
+                    'duration' => $meeting->duration ?? 'No disponible',
+                    'participants' => $meeting->participants ?? [],
                     'has_summary' => !empty($meeting->summary),
-                    'has_transcription' => $meeting->transcriptions()->exists()
+                    'has_transcription' => $meeting->transcriptions()->exists(),
+                    'has_audio' => !empty($meeting->recordings_folder_id),
+                    'recordings_folder_id' => $meeting->recordings_folder_id
                 ];
             });
 

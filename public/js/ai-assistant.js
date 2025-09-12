@@ -14,6 +14,10 @@ let currentContext = {
 let isLoading = false;
 let selectedFiles = [];
 let selectedDocuments = [];
+let loadedContextItems = [];
+let currentContextType = 'containers';
+let allMeetings = [];
+let allContainers = [];
 
 // Inicialización
 document.addEventListener('DOMContentLoaded', function() {
@@ -39,11 +43,29 @@ async function initializeAiAssistant() {
  */
 function setupEventListeners() {
     // Auto-resize del textarea
-    const messageInput = document.getElementById('messageInput');
+    const messageInput = document.getElementById('message-input');
     if (messageInput) {
         messageInput.addEventListener('input', function() {
             adjustTextareaHeight(this);
         });
+    }
+
+    // Botón para seleccionar contexto
+    const contextBtn = document.getElementById('context-selector-btn');
+    if (contextBtn) {
+        contextBtn.addEventListener('click', openContextSelector);
+    }
+
+    // Event listeners para el formulario de chat
+    const chatForm = document.getElementById('chat-form');
+    if (chatForm) {
+        chatForm.addEventListener('submit', handleMessageSubmit);
+    }
+
+    // Botón para nueva conversación
+    const newChatBtn = document.getElementById('new-chat-btn');
+    if (newChatBtn) {
+        newChatBtn.addEventListener('click', createNewChat);
     }
 
     // Drag and drop para documentos
@@ -263,11 +285,11 @@ function renderMessage(message) {
 /**
  * Enviar mensaje
  */
-async function sendMessage() {
+async function sendMessage(messageText = null) {
     if (!currentSessionId || isLoading) return;
 
-    const messageInput = document.getElementById('messageInput');
-    const message = messageInput.value.trim();
+    const messageInput = document.getElementById('message-input');
+    const message = messageText || messageInput?.value?.trim() || '';
 
     if (!message && selectedFiles.length === 0) return;
 
@@ -286,8 +308,10 @@ async function sendMessage() {
         }
 
         // Limpiar input
-        messageInput.value = '';
-        adjustTextareaHeight(messageInput);
+        if (messageInput) {
+            messageInput.value = '';
+            adjustTextareaHeight(messageInput);
+        }
         selectedFiles = [];
         updateAttachmentsDisplay();
 
@@ -358,31 +382,109 @@ function sendSuggestion(suggestion) {
  */
 
 /**
- * Abrir selector de contenedores
+ * Abrir selector de contexto
  */
-async function openContainerSelector() {
-    const modal = document.getElementById('containerSelectorModal');
+async function openContextSelector() {
+    const modal = document.getElementById('contextSelectorModal');
     modal.classList.add('active');
+
+    // Inicializar con contenedores por defecto
+    currentContextType = 'containers';
+    switchContextType('containers');
+
+    // Cargar datos iniciales
+    await loadContextData();
+    updateLoadedContextUI();
+}
+
+/**
+ * Cerrar selector de contexto
+ */
+function closeContextSelector() {
+    const modal = document.getElementById('contextSelectorModal');
+    modal.classList.remove('active');
+}
+
+/**
+ * Cambiar tipo de contexto
+ */
+function switchContextType(type) {
+    currentContextType = type;
+
+    // Actualizar navegación
+    document.querySelectorAll('.context-nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector(`[data-type="${type}"]`).classList.add('active');
+
+    // Actualizar vistas
+    document.querySelectorAll('.context-view').forEach(view => {
+        view.classList.remove('active');
+    });
+
+    if (type === 'containers') {
+        document.getElementById('containersView').classList.add('active');
+        document.getElementById('contextSearchInput').placeholder = 'Buscar contenedores...';
+    } else if (type === 'meetings') {
+        document.getElementById('meetingsView').classList.add('active');
+        document.getElementById('contextSearchInput').placeholder = 'Buscar reuniones...';
+    }
+
+    // Cargar datos del tipo seleccionado
+    loadContextData();
+}
+
+/**
+ * Cargar datos de contexto
+ */
+async function loadContextData() {
+    if (currentContextType === 'containers') {
+        await loadContainers();
+    } else if (currentContextType === 'meetings') {
+        await loadMeetings();
+    }
+}
+
+/**
+ * Cargar contenedores
+ */
+async function loadContainers() {
+    const grid = document.getElementById('containersGrid');
+    grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Cargando contenedores...</p></div>';
 
     try {
         const response = await fetch('/api/ai-assistant/containers');
         const data = await response.json();
 
         if (data.success) {
+            allContainers = data.containers;
             renderContainers(data.containers);
         }
     } catch (error) {
         console.error('Error loading containers:', error);
-        showNotification('Error al cargar contenedores', 'error');
+        grid.innerHTML = '<div class="empty-state"><p>Error al cargar contenedores</p></div>';
     }
 }
 
 /**
- * Cerrar selector de contenedores
+ * Cargar reuniones
  */
-function closeContainerSelector() {
-    const modal = document.getElementById('containerSelectorModal');
-    modal.classList.remove('active');
+async function loadMeetings() {
+    const grid = document.getElementById('meetingsGrid');
+    grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Cargando reuniones...</p></div>';
+
+    try {
+        const response = await fetch('/api/ai-assistant/meetings');
+        const data = await response.json();
+
+        if (data.success) {
+            allMeetings = data.meetings;
+            renderMeetings(data.meetings);
+        }
+    } catch (error) {
+        console.error('Error loading meetings:', error);
+        grid.innerHTML = '<div class="empty-state"><p>Error al cargar reuniones</p></div>';
+    }
 }
 
 /**
@@ -412,12 +514,339 @@ function renderContainers(containers) {
 }
 
 /**
- * Seleccionar contenedor
+ * Renderizar reuniones
+ */
+function renderMeetings(meetings) {
+    const grid = document.getElementById('meetingsGrid');
+    if (!grid) return;
+
+    if (meetings.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <p>No hay reuniones disponibles</p>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = meetings.map(meeting => `
+        <div class="meeting-card">
+            <div class="meeting-card-header">
+                <div class="meeting-card-title" onclick="openMeetingDetails(${meeting.id})">
+                    <h4>${escapeHtml(meeting.meeting_name || meeting.title)}</h4>
+                    <div class="meeting-card-meta">
+                        ${formatDate(meeting.created_at)} • ${meeting.duration || 'Duración no disponible'}
+                    </div>
+                </div>
+            </div>
+            <div class="meeting-card-actions">
+                <button class="meeting-action-btn load-btn" onclick="addMeetingToContext(${meeting.id})" title="Cargar al contexto">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+/**
+ * Abrir detalles de reunión
+ */
+async function openMeetingDetails(meetingId) {
+    const modal = document.getElementById('meetingDetailsModal');
+    modal.classList.add('active');
+
+    // Encontrar la reunión en la lista
+    const meeting = allMeetings.find(m => m.id === meetingId);
+    if (meeting) {
+        document.getElementById('meetingDetailsTitle').textContent = meeting.meeting_name || meeting.title;
+    }
+
+    // Mostrar estado de carga en todas las pestañas
+    showLoadingInTabs();
+
+    // Cargar datos de la reunión
+    await loadMeetingDetails(meetingId);
+}
+
+/**
+ * Cerrar modal de detalles de reunión
+ */
+function closeMeetingDetailsModal() {
+    const modal = document.getElementById('meetingDetailsModal');
+    modal.classList.remove('active');
+}
+
+/**
+ * Cambiar pestaña en el modal de detalles
+ */
+function switchTab(tabName) {
+    // Actualizar botones de pestañas
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+    // Actualizar contenido de pestañas
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+        pane.classList.remove('active');
+    });
+    document.getElementById(`${tabName}Tab`).classList.add('active');
+}
+
+/**
+ * Mostrar estado de carga en todas las pestañas
+ */
+function showLoadingInTabs() {
+    const tabs = ['summary', 'keypoints', 'tasks', 'transcription'];
+    tabs.forEach(tab => {
+        const tabElement = document.getElementById(`${tab}Tab`);
+        if (tabElement) {
+            tabElement.innerHTML = `
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Cargando ${tab === 'keypoints' ? 'puntos clave' :
+                        tab === 'tasks' ? 'tareas' :
+                        tab === 'transcription' ? 'transcripción' : 'resumen'}...</p>
+                </div>
+            `;
+        }
+    });
+}
+
+/**
+ * Cargar detalles completos de una reunión
+ */
+async function loadMeetingDetails(meetingId) {
+    try {
+        const response = await fetch(`/api/meetings/${meetingId}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const meeting = data.meeting;
+
+            // Procesar datos del archivo .ju si existe
+            if (meeting.segments || meeting.summary || meeting.key_points || meeting.tasks) {
+                renderMeetingDetails(meeting);
+            } else {
+                // Intentar obtener datos del archivo .ju
+                await loadJuFileData(meetingId);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading meeting details:', error);
+        showErrorInTabs('Error al cargar los detalles de la reunión');
+    }
+}
+
+/**
+ * Cargar datos del archivo .ju
+ */
+async function loadJuFileData(meetingId) {
+    try {
+        // Esta función intentaría descargar y parsear el archivo .ju
+        // Por ahora, mostraremos mensaje de no disponible
+        showErrorInTabs('Detalles no disponibles para esta reunión');
+    } catch (error) {
+        console.error('Error loading .ju file:', error);
+        showErrorInTabs('Error al cargar archivo .ju');
+    }
+}
+
+/**
+ * Renderizar detalles de la reunión en las pestañas
+ */
+function renderMeetingDetails(meeting) {
+    // Resumen
+    const summaryTab = document.getElementById('summaryTab');
+    summaryTab.innerHTML = `
+        <div class="summary-content">
+            ${meeting.summary || 'No hay resumen disponible para esta reunión.'}
+        </div>
+    `;
+
+    // Puntos clave
+    const keypointsTab = document.getElementById('keypointsTab');
+    if (meeting.key_points && meeting.key_points.length > 0) {
+        keypointsTab.innerHTML = `
+            <div class="keypoints-content">
+                <ul>
+                    ${meeting.key_points.map(point => `<li>${escapeHtml(point)}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    } else {
+        keypointsTab.innerHTML = '<div class="keypoints-content">No hay puntos clave disponibles.</div>';
+    }
+
+    // Tareas
+    const tasksTab = document.getElementById('tasksTab');
+    if (meeting.tasks && meeting.tasks.length > 0) {
+        tasksTab.innerHTML = `
+            <div class="tasks-content">
+                ${meeting.tasks.map(task => `
+                    <div class="task-item">
+                        <div class="task-checkbox ${task.completed ? 'completed' : ''}"></div>
+                        <div class="task-content">
+                            <h5>${escapeHtml(task.title || task.tarea)}</h5>
+                            ${task.description || task.descripcion ? `<p>${escapeHtml(task.description || task.descripcion)}</p>` : ''}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } else {
+        tasksTab.innerHTML = '<div class="tasks-content">No hay tareas disponibles.</div>';
+    }
+
+    // Transcripción
+    const transcriptionTab = document.getElementById('transcriptionTab');
+    if (meeting.segments && meeting.segments.length > 0) {
+        const transcriptionText = meeting.segments.map(segment =>
+            `${segment.speaker || 'Participante'}: ${segment.text}`
+        ).join('\n\n');
+
+        transcriptionTab.innerHTML = `
+            <div class="transcription-content">${escapeHtml(transcriptionText)}</div>
+        `;
+    } else {
+        transcriptionTab.innerHTML = '<div class="transcription-content">No hay transcripción disponible.</div>';
+    }
+}
+
+/**
+ * Mostrar error en todas las pestañas
+ */
+function showErrorInTabs(message) {
+    const tabs = ['summary', 'keypoints', 'tasks', 'transcription'];
+    tabs.forEach(tab => {
+        const tabElement = document.getElementById(`${tab}Tab`);
+        if (tabElement) {
+            tabElement.innerHTML = `<div class="error-state"><p>${message}</p></div>`;
+        }
+    });
+}
+
+/**
+ * Agregar reunión al contexto cargado
+ */
+function addMeetingToContext(meetingId) {
+    const meeting = allMeetings.find(m => m.id === meetingId);
+    if (!meeting) return;
+
+    // Verificar si ya está cargada
+    const existingItem = loadedContextItems.find(item => item.type === 'meeting' && item.id === meetingId);
+    if (existingItem) {
+        showNotification('Esta reunión ya está cargada en el contexto', 'warning');
+        return;
+    }
+
+    // Agregar al contexto
+    loadedContextItems.push({
+        type: 'meeting',
+        id: meetingId,
+        title: meeting.meeting_name || meeting.title,
+        data: meeting
+    });
+
+    updateLoadedContextUI();
+    showNotification('Reunión agregada al contexto', 'success');
+}
+
+/**
+ * Actualizar UI del contexto cargado
+ */
+function updateLoadedContextUI() {
+    const container = document.getElementById('loadedContextItems');
+    const loadBtn = document.getElementById('loadContextBtn');
+
+    if (loadedContextItems.length === 0) {
+        container.innerHTML = '<div class="empty-context"><p>No hay contexto cargado</p></div>';
+        loadBtn.disabled = true;
+    } else {
+        container.innerHTML = loadedContextItems.map((item, index) => `
+            <div class="context-item">
+                <div class="context-item-info">
+                    <div class="context-item-title">${escapeHtml(item.title)}</div>
+                    <div class="context-item-type">${item.type === 'meeting' ? 'Reunión' : 'Contenedor'}</div>
+                </div>
+                <button class="context-item-remove" onclick="removeContextItem(${index})">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        `).join('');
+        loadBtn.disabled = false;
+    }
+}
+
+/**
+ * Remover elemento del contexto
+ */
+function removeContextItem(index) {
+    loadedContextItems.splice(index, 1);
+    updateLoadedContextUI();
+}
+
+/**
+ * Cargar contexto seleccionado
+ */
+async function loadSelectedContext() {
+    if (loadedContextItems.length === 0) return;
+
+    try {
+        // Configurar contexto con los elementos seleccionados
+        currentContext = {
+            type: 'mixed',
+            id: 'custom',
+            data: {
+                items: loadedContextItems
+            }
+        };
+
+        await createNewChatSession();
+        closeContextSelector();
+        updateContextIndicator();
+
+        // Limpiar contexto cargado
+        loadedContextItems = [];
+        updateLoadedContextUI();
+
+        showNotification('Contexto cargado exitosamente', 'success');
+    } catch (error) {
+        console.error('Error loading context:', error);
+        showNotification('Error al cargar el contexto', 'error');
+    }
+}
+
+/**
+ * Filtrar elementos de contexto
+ */
+function filterContextItems(searchTerm) {
+    const term = searchTerm.toLowerCase();
+
+    if (currentContextType === 'containers') {
+        const filtered = allContainers.filter(container =>
+            container.name.toLowerCase().includes(term)
+        );
+        renderContainers(filtered);
+    } else if (currentContextType === 'meetings') {
+        const filtered = allMeetings.filter(meeting =>
+            (meeting.meeting_name || meeting.title).toLowerCase().includes(term)
+        );
+        renderMeetings(filtered);
+    }
+}
+
+/**
+ * Seleccionar contenedor (función legacy mantenida para compatibilidad)
  */
 async function selectContainer(containerId) {
     try {
         // Obtener datos del contenedor
-        const response = await fetch(`/api/ai-assistant/containers/${containerId}/meetings`);
+        const response = await fetch(`/api/containers/${containerId}/meetings`);
         const data = await response.json();
 
         if (data.success) {
@@ -431,9 +860,8 @@ async function selectContainer(containerId) {
             };
 
             await createNewChatSession();
-            closeContainerSelector();
+            closeContextSelector();
             updateContextIndicator();
-            loadDetailsForContainer(containerId);
         }
     } catch (error) {
         console.error('Error selecting container:', error);
@@ -459,9 +887,8 @@ async function selectAllMeetings() {
             };
 
             await createNewChatSession();
-            closeContainerSelector();
+            closeContextSelector();
             updateContextIndicator();
-            loadDetailsForAllMeetings();
         }
     } catch (error) {
         console.error('Error selecting all meetings:', error);
@@ -1161,4 +1588,185 @@ function showNotification(message, type = 'info') {
 
     // Aquí podrías integrar con el sistema de notificaciones existente
     // o crear uno nuevo
+}
+
+/**
+ * Formatear fecha
+ */
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+/**
+ * Obtener nombre de contexto para mostrar
+ */
+function getContextDisplayName(contextType) {
+    const types = {
+        'general': 'General',
+        'container': 'Contenedor',
+        'meeting': 'Reunión',
+        'mixed': 'Mixto',
+        'contact_chat': 'Chat'
+    };
+    return types[contextType] || 'Desconocido';
+}
+
+/**
+ * Manejar envío de mensaje
+ */
+async function handleMessageSubmit(e) {
+    e.preventDefault();
+
+    const messageInput = document.getElementById('message-input');
+    const message = messageInput.value.trim();
+
+    if (!message || isLoading) return;
+
+    try {
+        isLoading = true;
+        messageInput.value = '';
+        adjustTextareaHeight(messageInput);
+
+        await sendMessage(message);
+    } catch (error) {
+        console.error('Error sending message:', error);
+        showNotification('Error al enviar el mensaje', 'error');
+    } finally {
+        isLoading = false;
+    }
+}
+
+/**
+ * Ajustar altura del textarea
+ */
+function adjustTextareaHeight(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+}
+
+/**
+ * Actualizar indicador de contexto
+ */
+function updateContextIndicator() {
+    const indicator = document.getElementById('context-indicator');
+    if (!indicator) return;
+
+    let contextText = '';
+
+    if (currentContext.type === 'container') {
+        contextText = `Contenedor: ${currentContext.data.container_name || 'Seleccionado'}`;
+    } else if (currentContext.type === 'meeting') {
+        if (currentContext.id === 'all') {
+            contextText = 'Todas las reuniones';
+        } else {
+            contextText = `Reunión: ${currentContext.data.meeting_name || 'Seleccionada'}`;
+        }
+    } else if (currentContext.type === 'mixed') {
+        contextText = `Contexto mixto (${currentContext.data.items.length} elementos)`;
+    } else {
+        contextText = '';
+    }
+
+    indicator.textContent = contextText;
+    indicator.style.display = contextText ? 'inline-block' : 'none';
+}
+
+/**
+ * Configurar pestañas de detalles
+ */
+function setupDetailsTabs() {
+    // Ya implementado en las funciones de switchTab
+}
+
+/**
+ * Configurar zona de drop para archivos
+ */
+function setupFileDropZone() {
+    // Implementación básica para drag and drop de archivos
+    const dropZone = document.getElementById('messages-container');
+    const fileInput = document.getElementById('file-input');
+
+    if (!dropZone || !fileInput) return;
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            handleFileUpload(files);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length > 0) {
+            handleFileUpload(files);
+        }
+    });
+}
+
+/**
+ * Manejar subida de archivos
+ */
+async function handleFileUpload(files) {
+    for (const file of files) {
+        try {
+            // Aquí implementarías la lógica de subida de archivos
+            console.log('Uploading file:', file.name);
+            showNotification(`Archivo ${file.name} cargado`, 'success');
+        } catch (error) {
+            console.error('Error uploading file:', error);
+            showNotification(`Error al cargar ${file.name}`, 'error');
+        }
+    }
+}
+
+/**
+ * Actualizar display de adjuntos
+ */
+function updateAttachmentsDisplay() {
+    // Implementación básica para mostrar archivos adjuntos
+    const attachmentsContainer = document.getElementById('attachments-display');
+    if (!attachmentsContainer) return;
+
+    if (selectedFiles.length === 0) {
+        attachmentsContainer.style.display = 'none';
+        return;
+    }
+
+    attachmentsContainer.style.display = 'block';
+    attachmentsContainer.innerHTML = selectedFiles.map((file, index) => `
+        <div class="attachment-item">
+            <span class="attachment-name">${escapeHtml(file.name)}</span>
+            <button class="attachment-remove" onclick="removeAttachment(${index})">✕</button>
+        </div>
+    `).join('');
+}
+
+/**
+ * Remover adjunto
+ */
+function removeAttachment(index) {
+    selectedFiles.splice(index, 1);
+    updateAttachmentsDisplay();
 }
