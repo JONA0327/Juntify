@@ -313,18 +313,10 @@ class ContainerController extends Controller
 
         Log::info("User {$user->username} has privileges for container {$id}");
 
-        // Buscar la reunión, permitiendo acceso si el usuario tiene permisos en el grupo de la reunión
+        // Buscar la reunión - por ahora solo permitir reuniones del usuario
+        // TODO: En el futuro se podría implementar permisos de grupo para reuniones
         $meeting = TranscriptionLaravel::where('id', $data['meeting_id'])
-            ->where(function($query) use ($user) {
-                $query->where('username', $user->username)
-                      ->orWhereExists(function($subQuery) use ($user) {
-                          $subQuery->select(DB::raw(1))
-                                   ->from('group_user')
-                                   ->whereColumn('group_user.id_grupo', 'transcriptions_laravel.group_id')
-                                   ->where('group_user.user_id', $user->id)
-                                   ->whereIn('group_user.rol', ['colaborador', 'administrador', 'full_meeting_access']);
-                      });
-            })
+            ->where('username', $user->username)
             ->firstOrFail();
 
         MeetingContentRelation::firstOrCreate([
@@ -594,13 +586,19 @@ class ContainerController extends Controller
     {
         try {
             $user = Auth::user();
-            $container = MeetingContentContainer::where('id', $id)
-                ->where('username', $user->username)
-                ->firstOrFail();
+            Log::info("Delete container request - User: {$user->username} (ID: {$user->id}), Container ID: {$id}");
 
-            if (! $this->userHasContainerPrivileges($user, $container->group_id)) {
-                return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
+            // Buscar el contenedor sin restricción de username, verificaremos permisos después
+            $container = MeetingContentContainer::findOrFail($id);
+            Log::info("Container found: {$container->name}, Owner: {$container->username}, Group ID: {$container->group_id}");
+
+            // Verificar permisos del usuario para este contenedor
+            if (!$this->userHasContainerPrivileges($user, $container->group_id, $container->username)) {
+                Log::warning("User {$user->username} denied delete access to container {$id} - insufficient privileges");
+                return response()->json(['success' => false, 'message' => 'No tienes permisos para eliminar este contenedor'], 403);
             }
+
+            Log::info("User {$user->username} authorized to delete container {$id}");
 
             $container->update(['is_active' => false]);
 

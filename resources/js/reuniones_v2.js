@@ -426,41 +426,35 @@ function renderContacts(contacts, users) {
 // Función para verificar mensajes no leídos para todos los contactos
 async function checkUnreadMessagesForContacts() {
     const contactElements = document.querySelectorAll('[id^="chat-btn-"]');
-    const contactIds = Array.from(contactElements).map(el => el.id.replace('chat-btn-', ''));
 
-    if (!contactIds.length) return;
-
-    try {
-        const response = await fetch('/api/chats/unread-counts', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify({ contact_ids: contactIds })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            const countsMap = {};
-            data.forEach(item => {
-                countsMap[item.contact_id] = item.has_unread;
+    for (const element of contactElements) {
+        const contactId = element.id.replace('chat-btn-', '');
+        try {
+            const response = await fetch('/api/chats/unread-count', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ contact_id: contactId })
             });
 
-            contactIds.forEach(id => {
-                const indicator = document.getElementById(`unread-indicator-${id}`);
+            if (response.ok) {
+                const data = await response.json();
+                const indicator = document.getElementById(`unread-indicator-${contactId}`);
+
                 if (indicator) {
-                    if (countsMap[id]) {
+                    if (data.has_unread) {
                         indicator.classList.remove('hidden');
                     } else {
                         indicator.classList.add('hidden');
                     }
                 }
-            });
+            }
+        } catch (error) {
+            console.error(`Error checking unread messages for contact ${contactId}:`, error);
         }
-    } catch (error) {
-        console.error('Error checking unread messages for contacts:', error);
     }
 }
 
@@ -3862,10 +3856,97 @@ async function saveContainer() {
 }
 
 async function deleteContainer(containerId) {
-    if (!confirm('¿Estás seguro de que quieres eliminar este contenedor? Esta acción no se puede deshacer.')) {
-        return;
-    }
+    // Mostrar modal de confirmación personalizado
+    showDeleteContainerConfirmationModal(containerId);
+}
 
+function showDeleteContainerConfirmationModal(containerId) {
+    // Buscar el contenedor en los datos actuales
+    const container = containers.find(c => c.id == containerId);
+    const containerName = container ? container.name : 'contenedor';
+
+    const modalHTML = `
+        <div class="meeting-modal active" id="deleteContainerConfirmationModal">
+            <div class="modal-content delete-modal">
+                <div class="modal-header">
+                    <div class="modal-title-section">
+                        <h2 class="modal-title">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                            Confirmar Eliminación
+                        </h2>
+                        <p class="modal-subtitle">Esta acción no se puede deshacer</p>
+                    </div>
+
+                    <button class="close-btn" onclick="closeDeleteContainerConfirmationModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="delete-confirmation-content">
+                        <div class="warning-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </div>
+                        <h3 class="delete-title">¿Estás seguro?</h3>
+                        <p class="delete-message">
+                            Estás a punto de eliminar el contenedor <strong>"${escapeHtml(containerName)}"</strong>.
+                            Esta acción eliminará permanentemente:
+                        </p>
+                        <ul class="delete-items">
+                            <li>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                                El contenedor y su configuración
+                            </li>
+                            <li>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                </svg>
+                                Las asociaciones con reuniones
+                            </li>
+                        </ul>
+                        <p class="delete-warning">
+                            <strong>Nota:</strong> Las reuniones no se eliminarán, solo se desvinculan del contenedor.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <div class="modal-footer-buttons">
+                        <button class="modal-btn secondary" onclick="closeDeleteContainerConfirmationModal()">
+                            Cancelar
+                        </button>
+
+                        <button class="modal-btn danger" onclick="confirmDeleteContainer(${containerId})">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Eliminar Contenedor
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+function closeDeleteContainerConfirmationModal() {
+    const modal = document.getElementById('deleteContainerConfirmationModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+async function confirmDeleteContainer(containerId) {
     try {
         const response = await fetch(`/api/content-containers/${containerId}`, {
             method: 'DELETE',
@@ -3880,6 +3961,7 @@ async function deleteContainer(containerId) {
         if (data.success) {
             showNotification(data.message, 'success');
             loadContainers(); // Recargar lista
+            closeDeleteContainerConfirmationModal();
         } else {
             throw new Error(data.message);
         }
@@ -4968,6 +5050,9 @@ window.openEditContainerModal = openEditContainerModal;
 window.closeContainerModal = closeContainerModal;
 window.saveContainer = saveContainer;
 window.deleteContainer = deleteContainer;
+window.showDeleteContainerConfirmationModal = showDeleteContainerConfirmationModal;
+window.closeDeleteContainerConfirmationModal = closeDeleteContainerConfirmationModal;
+window.confirmDeleteContainer = confirmDeleteContainer;
 window.openContainerSelectModal = openContainerSelectModal;
 window.closeContainerSelectModal = closeContainerSelectModal;
 
