@@ -1987,8 +1987,18 @@ class MeetingController extends Controller
      */
     public function streamAudio($meeting)
     {
+        Log::info('streamAudio: INICIO DEL METODO - entrada', [
+            'meeting_param' => $meeting,
+            'meeting_type' => gettype($meeting)
+        ]);
+
         try {
             $user = Auth::user();
+
+            if (!$user) {
+                Log::error('streamAudio: Usuario no autenticado');
+                return response()->json(['error' => 'No autorizado'], 401);
+            }
 
             Log::info('streamAudio: Iniciando para meeting_id', [
                 'meeting_id' => $meeting,
