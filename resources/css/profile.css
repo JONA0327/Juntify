@@ -1,6 +1,5 @@
 :root {
-  /* tus colores principales (ajusta si los tienes en otro sitio) */
-  --primary-blue: #3b82f6;       /* blue-500 */
+  /* Colores específicos de perfil */
   --primary-blue-light: #60a5fa; /* blue-400 */
 }
 /* Base Reset & Body */
