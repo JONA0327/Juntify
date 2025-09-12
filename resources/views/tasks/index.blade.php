@@ -13,6 +13,7 @@
     @vite([
         'resources/css/app.css',
         'resources/js/app.js',
+        'resources/css/profile.css',
         'resources/css/new-meeting.css',
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
