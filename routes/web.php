@@ -291,4 +291,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Ruta principal del asistente IA
     Route::get('/ai-assistant', [AiAssistantController::class, 'index'])->name('ai-assistant');
+
+    // Ruta de prueba para el modal de contexto
+    Route::get('/test-modal-debug', function () {
+        return view('test_modal_debug');
+    })->name('test-modal-debug');
 });

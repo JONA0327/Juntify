@@ -214,6 +214,24 @@ async function loadMessages() {
 }
 
 /**
+ * Actualizar información de la sesión
+ */
+function updateSessionInfo(session) {
+    if (!session) return;
+
+    // Actualizar el título de la sesión si existe un elemento para ello
+    const sessionTitle = document.getElementById('sessionTitle');
+    if (sessionTitle && session.title) {
+        sessionTitle.textContent = session.title;
+    }
+
+    // Actualizar cualquier otra información de la sesión
+    if (session.context_info) {
+        updateContextIndicator(session.context_info);
+    }
+}
+
+/**
  * Renderizar mensajes en el chat
  */
 function renderMessages(messages) {
