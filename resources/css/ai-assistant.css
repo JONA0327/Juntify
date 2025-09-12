@@ -2,32 +2,21 @@
    Asistente IA - Diseño consistente con Juntify
    ========================================================================== */
 
-:root {
-    /* Colores principales del proyecto */
-    --primary-blue: #3b82f6;
+/* Container principal */
+.ai-assistant-container{
     --primary-blue-dark: #1d4ed8;
     --primary-yellow: #fbbf24;
     --primary-yellow-hover: #f59e0b;
-
-    /* Fondos */
     --bg-slate-950: #020617;
     --bg-slate-900: #0f172a;
     --bg-slate-800: #1e293b;
     --bg-slate-700: #334155;
-
-    /* Textos */
     --text-slate-200: #e2e8f0;
     --text-slate-400: #94a3b8;
     --text-white: #ffffff;
-
-    /* Glassmorphism */
     --glass-bg: rgba(30, 41, 59, 0.7);
     --glass-border: rgba(51, 65, 85, 0.5);
     --glass-hover: rgba(30, 41, 59, 0.9);
-}
-
-/* Container principal */
-.ai-assistant-container {
     display: flex;
     height: calc(100vh - 120px);
     margin-top: 80px;
@@ -43,7 +32,7 @@
 
 /* En móvil, ajustar para la navegación bottom */
 @media (max-width: 768px) {
-    .ai-assistant-container {
+    .ai-assistant-container{
         height: calc(100vh - 160px);
         margin-bottom: 80px;
         margin-left: 0.5rem;
@@ -55,7 +44,7 @@
 /* ==========================================================================
    Sidebar de chats - Estilo consistente
    ========================================================================== */
-.chat-sidebar {
+.ai-assistant-container .chat-sidebar{
     width: 320px;
     background: var(--glass-bg);
     backdrop-filter: blur(10px);
@@ -66,13 +55,13 @@
     position: relative;
 }
 
-.chat-sidebar-header {
+.ai-assistant-container .chat-sidebar-header{
     padding: 1.5rem;
     border-bottom: 1px solid var(--glass-border);
     background: rgba(30, 41, 59, 0.5);
 }
 
-.sidebar-title {
+.ai-assistant-container .sidebar-title{
     font-size: 1rem;
     font-weight: 600;
     color: var(--text-slate-200);
@@ -82,23 +71,23 @@
     gap: 0.5rem;
 }
 
-.sidebar-icon {
+.ai-assistant-container .sidebar-icon{
     width: 20px;
     height: 20px;
     color: var(--primary-blue);
 }
 
-.new-chat-btn {
+.ai-assistant-container .new-chat-btn{
     width: 100%;
     justify-content: center;
 }
 
-.new-chat-btn svg {
+.ai-assistant-container .new-chat-btn svg{
     width: 16px;
     height: 16px;
 }
 
-.chat-sessions-list {
+.ai-assistant-container .chat-sessions-list{
     flex: 1;
     overflow-y: auto;
     padding: 1rem;
@@ -106,20 +95,20 @@
     scrollbar-color: var(--glass-border) transparent;
 }
 
-.chat-sessions-list::-webkit-scrollbar {
+.ai-assistant-container .chat-sessions-list::-webkit-scrollbar{
     width: 4px;
 }
 
-.chat-sessions-list::-webkit-scrollbar-track {
+.ai-assistant-container .chat-sessions-list::-webkit-scrollbar-track{
     background: transparent;
 }
 
-.chat-sessions-list::-webkit-scrollbar-thumb {
+.ai-assistant-container .chat-sessions-list::-webkit-scrollbar-thumb{
     background: var(--glass-border);
     border-radius: 2px;
 }
 
-.chat-session-item {
+.ai-assistant-container .chat-session-item{
     padding: 1rem;
     margin-bottom: 0.5rem;
     border-radius: 0.75rem;
@@ -131,7 +120,7 @@
     overflow: hidden;
 }
 
-.chat-session-item::before {
+.ai-assistant-container .chat-session-item::before{
     content: '';
     position: absolute;
     top: 0;
@@ -143,28 +132,28 @@
     transition: transform 0.3s ease;
 }
 
-.chat-session-item:hover {
+.ai-assistant-container .chat-session-item:hover{
     background: var(--glass-hover);
     border-color: rgba(251, 191, 36, 0.3);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.chat-session-item:hover::before {
+.ai-assistant-container .chat-session-item:hover::before{
     transform: scaleX(1);
 }
 
-.chat-session-item.active {
+.ai-assistant-container .chat-session-item.active{
     background: var(--glass-hover);
     border-color: var(--primary-yellow);
     box-shadow: 0 4px 16px rgba(251, 191, 36, 0.2);
 }
 
-.chat-session-item.active::before {
+.ai-assistant-container .chat-session-item.active::before{
     transform: scaleX(1);
 }
 
-.session-title {
+.ai-assistant-container .session-title{
     font-weight: 600;
     color: var(--text-slate-200);
     margin-bottom: 0.25rem;
@@ -172,7 +161,7 @@
     line-height: 1.3;
 }
 
-.session-preview {
+.ai-assistant-container .session-preview{
     font-size: 0.75rem;
     color: var(--text-slate-400);
     line-height: 1.2;
@@ -185,7 +174,7 @@
 /* ==========================================================================
    Área central de chat - Estilo consistente
    ========================================================================== */
-.chat-area {
+.ai-assistant-container .chat-area{
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -193,7 +182,7 @@
     position: relative;
 }
 
-.chat-header {
+.ai-assistant-container .chat-header{
     padding: 1.5rem;
     border-bottom: 1px solid var(--glass-border);
     background: var(--glass-bg);
@@ -205,20 +194,20 @@
     gap: 1.5rem;
 }
 
-.chat-header-info h2 {
+.ai-assistant-container .chat-header-info h2{
     font-size: 1.5rem;
     font-weight: 700;
     color: var(--text-white);
     margin: 0 0 0.5rem 0;
 }
 
-.context-indicator {
+.ai-assistant-container .context-indicator{
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
 
-.context-type {
+.ai-assistant-container .context-type{
     background: linear-gradient(90deg, var(--primary-blue), var(--primary-blue-dark));
     color: var(--text-white);
     padding: 0.25rem 0.75rem;
@@ -227,20 +216,20 @@
     font-weight: 600;
 }
 
-.chat-controls {
+.ai-assistant-container .chat-controls{
     display: flex;
     gap: 0.75rem;
     align-items: center;
     flex-wrap: wrap;
 }
 
-.context-selector {
+.ai-assistant-container .context-selector{
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
 }
 
-.context-btn {
+.ai-assistant-container .context-btn{
     background: rgba(30, 41, 59, 0.5);
     border: 1px solid var(--glass-border);
     color: var(--text-slate-200);
@@ -255,18 +244,18 @@
     gap: 0.5rem;
 }
 
-.context-btn:hover {
+.ai-assistant-container .context-btn:hover{
     background: var(--glass-hover);
     border-color: var(--primary-yellow);
     color: var(--primary-yellow);
 }
 
-.context-btn svg {
+.ai-assistant-container .context-btn svg{
     width: 16px;
     height: 16px;
 }
 
-.chat-messages {
+.ai-assistant-container .chat-messages{
     flex: 1;
     padding: 1.5rem;
     overflow-y: auto;
@@ -277,20 +266,20 @@
     scrollbar-color: var(--glass-border) transparent;
 }
 
-.chat-messages::-webkit-scrollbar {
+.ai-assistant-container .chat-messages::-webkit-scrollbar{
     width: 6px;
 }
 
-.chat-messages::-webkit-scrollbar-track {
+.ai-assistant-container .chat-messages::-webkit-scrollbar-track{
     background: transparent;
 }
 
-.chat-messages::-webkit-scrollbar-thumb {
+.ai-assistant-container .chat-messages::-webkit-scrollbar-thumb{
     background: var(--glass-border);
     border-radius: 3px;
 }
 
-.message {
+.ai-assistant-container .message{
     display: flex;
     gap: 0.75rem;
     max-width: 80%;
@@ -308,16 +297,16 @@
     }
 }
 
-.message.user {
+.ai-assistant-container .message.user{
     align-self: flex-end;
     flex-direction: row-reverse;
 }
 
-.message.assistant {
+.ai-assistant-container .message.assistant{
     align-self: flex-start;
 }
 
-.message-avatar {
+.ai-assistant-container .message-avatar{
     width: 36px;
     height: 36px;
     border-radius: 0.75rem;
@@ -331,12 +320,12 @@
     flex-shrink: 0;
 }
 
-.message.user .message-avatar {
+.ai-assistant-container .message.user .message-avatar{
     background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
     color: var(--bg-slate-800);
 }
 
-.message-content {
+.ai-assistant-container .message-content{
     background: var(--glass-bg);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -346,31 +335,31 @@
     position: relative;
 }
 
-.message.user .message-content {
+.ai-assistant-container .message.user .message-content{
     background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
     color: var(--bg-slate-800);
     border-color: var(--primary-blue);
 }
 
-.message-text {
+.ai-assistant-container .message-text{
     margin: 0;
     line-height: 1.5;
     color: inherit;
     font-size: 0.9rem;
 }
 
-.message.assistant .message-text {
+.ai-assistant-container .message.assistant .message-text{
     color: var(--text-slate-200);
 }
 
-.message-time {
+.ai-assistant-container .message-time{
     font-size: 0.7rem;
     opacity: 0.7;
     margin-top: 0.25rem;
     font-weight: 500;
 }
 
-.chat-input-area {
+.ai-assistant-container .chat-input-area{
     padding: 1.5rem;
     border-top: 1px solid var(--glass-border);
     background: var(--glass-bg);
@@ -378,14 +367,14 @@
     -webkit-backdrop-filter: blur(10px);
 }
 
-.chat-input-form {
+.ai-assistant-container .chat-input-form{
     display: flex;
     gap: 0.75rem;
     align-items: flex-end;
     max-width: 100%;
 }
 
-.chat-input {
+.ai-assistant-container .chat-input{
     flex: 1;
     background: rgba(30, 41, 59, 0.5);
     border: 1px solid var(--glass-border);
@@ -401,18 +390,18 @@
     line-height: 1.4;
 }
 
-.chat-input::placeholder {
+.ai-assistant-container .chat-input::placeholder{
     color: var(--text-slate-400);
 }
 
-.chat-input:focus {
+.ai-assistant-container .chat-input:focus{
     outline: none;
     border-color: var(--primary-blue);
     background: rgba(30, 41, 59, 0.7);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
-.send-btn {
+.ai-assistant-container .send-btn{
     padding: 0.75rem;
     border-radius: 0.75rem;
     display: flex;
@@ -422,7 +411,7 @@
     height: 44px;
 }
 
-.send-btn svg {
+.ai-assistant-container .send-btn svg{
     width: 18px;
     height: 18px;
 }
@@ -430,7 +419,7 @@
 /* ==========================================================================
    Panel derecho de detalles - Estilo consistente
    ========================================================================== */
-.details-panel {
+.ai-assistant-container .details-panel{
     width: 380px;
     background: var(--glass-bg);
     backdrop-filter: blur(10px);
@@ -441,20 +430,20 @@
     position: relative;
 }
 
-.details-header {
+.ai-assistant-container .details-header{
     padding: 1.5rem;
     border-bottom: 1px solid var(--glass-border);
     background: rgba(30, 41, 59, 0.5);
 }
 
-.details-title {
+.ai-assistant-container .details-title{
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--text-slate-200);
     margin: 0;
 }
 
-.tab-nav {
+.ai-assistant-container .tab-nav{
     display: flex;
     border-bottom: 1px solid var(--glass-border);
     background: rgba(30, 41, 59, 0.3);
@@ -462,11 +451,11 @@
     scrollbar-width: none;
 }
 
-.tab-nav::-webkit-scrollbar {
+.ai-assistant-container .tab-nav::-webkit-scrollbar{
     display: none;
 }
 
-.tab-btn {
+.ai-assistant-container .tab-btn{
     flex: 1;
     min-width: 0;
     background: transparent;
@@ -484,18 +473,18 @@
     overflow: hidden;
 }
 
-.tab-btn:hover {
+.ai-assistant-container .tab-btn:hover{
     color: var(--primary-yellow);
     background: rgba(30, 41, 59, 0.5);
 }
 
-.tab-btn.active {
+.ai-assistant-container .tab-btn.active{
     color: var(--primary-yellow);
     background: rgba(30, 41, 59, 0.5);
     border-bottom-color: var(--primary-yellow);
 }
 
-.tab-content {
+.ai-assistant-container .tab-content{
     flex: 1;
     padding: 1.5rem;
     overflow-y: auto;
@@ -503,25 +492,25 @@
     scrollbar-color: var(--glass-border) transparent;
 }
 
-.tab-content::-webkit-scrollbar {
+.ai-assistant-container .tab-content::-webkit-scrollbar{
     width: 4px;
 }
 
-.tab-content::-webkit-scrollbar-track {
+.ai-assistant-container .tab-content::-webkit-scrollbar-track{
     background: transparent;
 }
 
-.tab-content::-webkit-scrollbar-thumb {
+.ai-assistant-container .tab-content::-webkit-scrollbar-thumb{
     background: var(--glass-border);
     border-radius: 2px;
 }
 
-.tab-pane {
+.ai-assistant-container .tab-pane{
     display: none;
     animation: fadeIn 0.2s ease-out;
 }
 
-.tab-pane.active {
+.ai-assistant-container .tab-pane.active{
     display: block;
 }
 
@@ -533,7 +522,7 @@
 /* ==========================================================================
    Modales - Estilo consistente
    ========================================================================== */
-.modal-overlay {
+.ai-assistant-container .modal-overlay{
     position: fixed;
     top: 0;
     left: 0;
@@ -549,7 +538,7 @@
     animation: fadeIn 0.2s ease-out;
 }
 
-.modal-content {
+.ai-assistant-container .modal-content{
     background: var(--glass-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
@@ -575,7 +564,7 @@
     }
 }
 
-.modal-header {
+.ai-assistant-container .modal-header{
     padding: 1.5rem;
     border-bottom: 1px solid var(--glass-border);
     display: flex;
@@ -584,14 +573,14 @@
     background: rgba(30, 41, 59, 0.5);
 }
 
-.modal-title {
+.ai-assistant-container .modal-title{
     font-size: 1.2rem;
     font-weight: 700;
     color: var(--text-slate-200);
     margin: 0;
 }
 
-.modal-close {
+.ai-assistant-container .modal-close{
     background: rgba(30, 41, 59, 0.5);
     border: 1px solid var(--glass-border);
     border-radius: 0.5rem;
@@ -605,18 +594,18 @@
     transition: all 0.2s ease;
 }
 
-.modal-close:hover {
+.ai-assistant-container .modal-close:hover{
     background: rgba(239, 68, 68, 0.2);
     border-color: #ef4444;
     color: #ef4444;
 }
 
-.modal-close svg {
+.ai-assistant-container .modal-close svg{
     width: 16px;
     height: 16px;
 }
 
-.modal-body {
+.ai-assistant-container .modal-body{
     padding: 1.5rem;
     overflow-y: auto;
     max-height: 50vh;
@@ -624,20 +613,20 @@
     scrollbar-color: var(--glass-border) transparent;
 }
 
-.modal-body::-webkit-scrollbar {
+.ai-assistant-container .modal-body::-webkit-scrollbar{
     width: 4px;
 }
 
-.modal-body::-webkit-scrollbar-track {
+.ai-assistant-container .modal-body::-webkit-scrollbar-track{
     background: transparent;
 }
 
-.modal-body::-webkit-scrollbar-thumb {
+.ai-assistant-container .modal-body::-webkit-scrollbar-thumb{
     background: var(--glass-border);
     border-radius: 2px;
 }
 
-.modal-footer {
+.ai-assistant-container .modal-footer{
     padding: 1rem 1.5rem;
     border-top: 1px solid var(--glass-border);
     display: flex;
@@ -650,7 +639,7 @@
 /* ==========================================================================
    Estados especiales
    ========================================================================== */
-.loading {
+.ai-assistant-container .loading{
     display: flex;
     align-items: center;
     justify-content: center;
@@ -659,7 +648,7 @@
     gap: 1rem;
 }
 
-.spinner {
+.ai-assistant-container .spinner{
     width: 32px;
     height: 32px;
     border: 2px solid var(--glass-border);
@@ -672,19 +661,19 @@
     to { transform: rotate(360deg); }
 }
 
-.loading-text {
+.ai-assistant-container .loading-text{
     color: var(--text-slate-400);
     font-size: 0.85rem;
     font-weight: 500;
 }
 
-.empty-state {
+.ai-assistant-container .empty-state{
     text-align: center;
     padding: 3rem 1.5rem;
     color: var(--text-slate-400);
 }
 
-.empty-state-icon {
+.ai-assistant-container .empty-state-icon{
     width: 64px;
     height: 64px;
     margin: 0 auto 1rem;
@@ -692,14 +681,14 @@
     color: var(--primary-blue);
 }
 
-.empty-state-title {
+.ai-assistant-container .empty-state-title{
     font-size: 1.2rem;
     font-weight: 600;
     margin-bottom: 0.5rem;
     color: var(--text-slate-200);
 }
 
-.empty-state-description {
+.ai-assistant-container .empty-state-description{
     font-size: 0.9rem;
     line-height: 1.4;
     color: var(--text-slate-400);
@@ -711,14 +700,14 @@
    Responsive - Adaptación móvil
    ========================================================================== */
 @media (max-width: 768px) {
-    .ai-assistant-container {
+    .ai-assistant-container{
         flex-direction: column;
         height: calc(100vh - 160px);
         margin: 80px 0.5rem 80px;
         border-radius: 0.75rem;
     }
 
-    .chat-sidebar {
+    .ai-assistant-container .chat-sidebar{
         width: 100%;
         height: 180px;
         border-right: none;
@@ -726,13 +715,13 @@
         order: 3;
     }
 
-    .chat-area {
+    .ai-assistant-container .chat-area{
         order: 1;
         flex: 1;
         min-height: 0;
     }
 
-    .details-panel {
+    .ai-assistant-container .details-panel{
         width: 100%;
         height: 140px;
         border-left: none;
@@ -740,90 +729,90 @@
         order: 2;
     }
 
-    .chat-header {
+    .ai-assistant-container .chat-header{
         padding: 1rem;
         flex-direction: column;
         align-items: flex-start;
         gap: 1rem;
     }
 
-    .chat-header-info h2 {
+    .ai-assistant-container .chat-header-info h2{
         font-size: 1.25rem;
         margin-bottom: 0.25rem;
     }
 
-    .chat-controls {
+    .ai-assistant-container .chat-controls{
         gap: 0.5rem;
     }
 
-    .context-btn {
+    .ai-assistant-container .context-btn{
         padding: 0.375rem 0.75rem;
         font-size: 0.75rem;
     }
 
-    .chat-messages {
+    .ai-assistant-container .chat-messages{
         padding: 1rem;
         gap: 0.75rem;
     }
 
-    .message {
+    .ai-assistant-container .message{
         max-width: 95%;
     }
 
-    .message-avatar {
+    .ai-assistant-container .message-avatar{
         width: 32px;
         height: 32px;
     }
 
-    .message-content {
+    .ai-assistant-container .message-content{
         padding: 0.75rem;
         border-radius: 0.75rem;
     }
 
-    .chat-input-area {
+    .ai-assistant-container .chat-input-area{
         padding: 1rem;
     }
 
-    .chat-input {
+    .ai-assistant-container .chat-input{
         padding: 0.625rem 0.875rem;
         border-radius: 0.625rem;
         min-height: 40px;
     }
 
-    .send-btn {
+    .ai-assistant-container .send-btn{
         width: 40px;
         height: 40px;
     }
 
-    .modal-content {
+    .ai-assistant-container .modal-content{
         margin: 1rem;
         width: calc(100% - 2rem);
         border-radius: 0.75rem;
     }
 
-    .modal-header {
+    .ai-assistant-container .modal-header{
         padding: 1.25rem;
     }
 
-    .modal-title {
+    .ai-assistant-container .modal-title{
         font-size: 1.1rem;
     }
 
-    .modal-body {
+    .ai-assistant-container .modal-body{
         padding: 1.25rem;
         max-height: 40vh;
     }
 
-    .modal-footer {
+    .ai-assistant-container .modal-footer{
         padding: 0.75rem 1.25rem;
         flex-direction: column;
     }
 
-    .tab-nav {
+    .ai-assistant-container .tab-nav{
         overflow-x: auto;
     }
 
-    .tab-btn {
+    .ai-assistant-container .tab-btn{
         padding: 0.75rem 0.5rem;
         font-size: 0.75rem;
         min-width: 70px;
@@ -832,36 +821,36 @@
 
 /* Pantallas muy pequeñas */
 @media (max-width: 480px) {
-    .ai-assistant-container {
+    .ai-assistant-container{
         height: calc(100vh - 140px);
         margin: 70px 0.25rem 70px;
     }
 
-    .chat-input {
+    .ai-assistant-container .chat-input{
         font-size: 16px; /* Prevenir zoom en iOS */
         padding: 0.5rem 0.75rem;
     }
 
-    .message {
+    .ai-assistant-container .message{
         gap: 0.5rem;
     }
 
-    .message-avatar {
+    .ai-assistant-container .message-avatar{
         width: 28px;
         height: 28px;
         font-size: 0.7rem;
     }
 
-    .message-content {
+    .ai-assistant-container .message-content{
         padding: 0.625rem 0.75rem;
         font-size: 0.85rem;
     }
 
-    .chat-header-info h2 {
+    .ai-assistant-container .chat-header-info h2{
         font-size: 1.1rem;
     }
 
-    .context-btn {
+    .ai-assistant-container .context-btn{
         padding: 0.25rem 0.5rem;
         font-size: 0.7rem;
     }
@@ -870,7 +859,7 @@
 /* ==========================================================================
    Utilidades y componentes reutilizables
    ========================================================================== */
-.btn {
+.ai-assistant-container .btn{
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;
     font-weight: 600;
@@ -885,63 +874,63 @@
     font-family: 'Inter', sans-serif;
 }
 
-.btn-primary {
+.ai-assistant-container .btn-primary{
     background: linear-gradient(90deg, var(--primary-yellow), var(--primary-yellow-hover));
     color: var(--bg-slate-800);
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
-.btn-primary:hover {
+.ai-assistant-container .btn-primary:hover{
     background: linear-gradient(90deg, var(--primary-yellow-hover), var(--primary-yellow));
     transform: scale(1.02);
 }
 
-.btn-secondary {
+.ai-assistant-container .btn-secondary{
     background: rgba(30, 41, 59, 0.5);
     color: var(--text-slate-200);
     border: 1px solid var(--glass-border);
 }
 
-.btn-secondary:hover {
+.ai-assistant-container .btn-secondary:hover{
     background: var(--glass-hover);
     border-color: var(--primary-yellow);
     color: var(--primary-yellow);
 }
 
-.btn-danger {
+.ai-assistant-container .btn-danger{
     background: linear-gradient(90deg, #ef4444, #dc2626);
     color: var(--text-white);
 }
 
-.btn-danger:hover {
+.ai-assistant-container .btn-danger:hover{
     background: linear-gradient(90deg, #dc2626, #ef4444);
     transform: scale(1.02);
 }
 
-.btn-icon {
+.ai-assistant-container .btn-icon{
     width: 16px;
     height: 16px;
 }
 
 /* Utilidades de texto y layout */
-.text-center { text-align: center; }
-.text-left { text-align: left; }
-.text-right { text-align: right; }
-.hidden { display: none !important; }
-.visible { display: block !important; }
-.flex { display: flex; }
-.flex-col { flex-direction: column; }
-.items-center { align-items: center; }
-.justify-center { justify-content: center; }
-.gap-2 { gap: 0.5rem; }
-.gap-4 { gap: 1rem; }
+.ai-assistant-container .text-center{ text-align: center; }
+.ai-assistant-container .text-left{ text-align: left; }
+.ai-assistant-container .text-right{ text-align: right; }
+.ai-assistant-container .hidden{ display: none !important; }
+.ai-assistant-container .visible{ display: block !important; }
+.ai-assistant-container .flex{ display: flex; }
+.ai-assistant-container .flex-col{ flex-direction: column; }
+.ai-assistant-container .items-center{ align-items: center; }
+.ai-assistant-container .justify-center{ justify-content: center; }
+.ai-assistant-container .gap-2{ gap: 0.5rem; }
+.ai-assistant-container .gap-4{ gap: 1rem; }
 
 /* ==========================================================================
    Ajustes finales para integración perfecta
    ========================================================================== */
 
 /* Asegurar que el botón de sidebar móvil use los colores correctos */
-.mobile-sidebar-btn {
+.ai-assistant-container .mobile-sidebar-btn{
     background: linear-gradient(90deg, var(--primary-yellow), var(--primary-yellow-hover));
     color: var(--bg-slate-800);
     backdrop-filter: blur(10px);
@@ -949,32 +938,32 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
-.mobile-sidebar-btn:hover {
+.ai-assistant-container .mobile-sidebar-btn:hover{
     background: linear-gradient(90deg, var(--primary-yellow-hover), var(--primary-yellow));
     transform: scale(1.04);
 }
 
 /* Efectos suaves para todos los scrollbars */
-.ai-assistant-container *::-webkit-scrollbar {
+.ai-assistant-container *::-webkit-scrollbar{
     width: 6px;
     height: 6px;
 }
 
-.ai-assistant-container *::-webkit-scrollbar-track {
+.ai-assistant-container *::-webkit-scrollbar-track{
     background: transparent;
 }
 
-.ai-assistant-container *::-webkit-scrollbar-thumb {
+.ai-assistant-container *::-webkit-scrollbar-thumb{
     background: var(--glass-border);
     border-radius: 3px;
 }
 
-.ai-assistant-container *::-webkit-scrollbar-thumb:hover {
+.ai-assistant-container *::-webkit-scrollbar-thumb:hover{
     background: var(--primary-yellow);
 }/* ==========================================================================
    Sidebar de chats - Diseño moderno
    ========================================================================== */
-.chat-sidebar {
+.ai-assistant-container .chat-sidebar{
     width: 320px;
     background: var(--ai-glass-light);
     backdrop-filter: blur(20px);
@@ -985,7 +974,7 @@
     overflow: hidden;
 }
 
-.chat-sidebar::before {
+.ai-assistant-container .chat-sidebar::before{
     content: '';
     position: absolute;
     top: 0;
@@ -996,14 +985,14 @@
     opacity: 0.6;
 }
 
-.chat-sidebar-header {
+.ai-assistant-container .chat-sidebar-header{
     padding: 2rem 1.5rem 1.5rem;
     border-bottom: 1px solid rgba(59, 130, 246, 0.15);
     background: var(--ai-glass-medium);
     position: relative;
 }
 
-.sidebar-title {
+.ai-assistant-container .sidebar-title{
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--ai-text-primary);
@@ -1014,7 +1003,7 @@
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.sidebar-icon {
+.ai-assistant-container .sidebar-icon{
     width: 22px;
     height: 22px;
     color: var(--ai-primary);
@@ -1022,7 +1011,7 @@
 }
 
 
-.chat-sessions-list {
+.ai-assistant-container .chat-sessions-list{
     flex: 1;
     overflow-y: auto;
     padding: 1rem;
@@ -1030,24 +1019,24 @@
     scrollbar-color: rgba(59, 130, 246, 0.3) transparent;
 }
 
-.chat-sessions-list::-webkit-scrollbar {
+.ai-assistant-container .chat-sessions-list::-webkit-scrollbar{
     width: 4px;
 }
 
-.chat-sessions-list::-webkit-scrollbar-track {
+.ai-assistant-container .chat-sessions-list::-webkit-scrollbar-track{
     background: transparent;
 }
 
-.chat-sessions-list::-webkit-scrollbar-thumb {
+.ai-assistant-container .chat-sessions-list::-webkit-scrollbar-thumb{
     background: rgba(59, 130, 246, 0.3);
     border-radius: 2px;
 }
 
-.chat-sessions-list::-webkit-scrollbar-thumb:hover {
+.ai-assistant-container .chat-sessions-list::-webkit-scrollbar-thumb:hover{
     background: rgba(59, 130, 246, 0.5);
 }
 
-.chat-session-item {
+.ai-assistant-container .chat-session-item{
     padding: 1rem;
     margin-bottom: 0.75rem;
     border-radius: 12px;
@@ -1059,7 +1048,7 @@
     overflow: hidden;
 }
 
-.chat-session-item::before {
+.ai-assistant-container .chat-session-item::before{
     content: '';
     position: absolute;
     top: 0;
@@ -1071,17 +1060,17 @@
     transition: transform 0.3s ease;
 }
 
-.chat-session-item:hover {
+.ai-assistant-container .chat-session-item:hover{
     background: var(--ai-glass-medium);
     border-color: rgba(59, 130, 246, 0.3);
     transform: translateX(4px);
 }
 
-.chat-session-item:hover::before {
+.ai-assistant-container .chat-session-item:hover::before{
     transform: scaleY(1);
 }
 
-.chat-session-item.active {
+.ai-assistant-container .chat-session-item.active{
     background: var(--ai-glass-heavy);
     border-color: var(--ai-primary);
     box-shadow:
@@ -1089,11 +1078,11 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.chat-session-item.active::before {
+.ai-assistant-container .chat-session-item.active::before{
     transform: scaleY(1);
 }
 
-.session-title {
+.ai-assistant-container .session-title{
     font-weight: 600;
     color: var(--ai-text-primary);
     margin-bottom: 0.5rem;
@@ -1101,7 +1090,7 @@
     line-height: 1.4;
 }
 
-.session-preview {
+.ai-assistant-container .session-preview{
     font-size: 0.8rem;
     color: var(--ai-text-muted);
     line-height: 1.3;
@@ -1114,7 +1103,7 @@
 /* ==========================================================================
    Área central de chat - Diseño moderno
    ========================================================================== */
-.chat-area {
+.ai-assistant-container .chat-area{
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -1123,7 +1112,7 @@
     position: relative;
 }
 
-.chat-area::before {
+.ai-assistant-container .chat-area::before{
     content: '';
     position: absolute;
     top: 0;
@@ -1134,7 +1123,7 @@
     opacity: 0.6;
 }
 
-.chat-header {
+.ai-assistant-container .chat-header{
     padding: 2rem 2rem 1.5rem;
     border-bottom: 1px solid rgba(59, 130, 246, 0.15);
     background: var(--ai-glass-medium);
@@ -1144,7 +1133,7 @@
     gap: 2rem;
 }
 
-.chat-header-info h2 {
+.ai-assistant-container .chat-header-info h2{
     font-size: 1.75rem;
     font-weight: 700;
     color: var(--ai-text-primary);
@@ -1156,13 +1145,13 @@
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.context-indicator {
+.ai-assistant-container .context-indicator{
     display: flex;
     align-items: center;
     gap: 0.75rem;
 }
 
-.context-type {
+.ai-assistant-container .context-type{
     background: linear-gradient(135deg, var(--ai-primary) 0%, var(--ai-secondary) 100%);
     color: white;
     padding: 0.5rem 1rem;
@@ -1175,20 +1164,20 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.chat-controls {
+.ai-assistant-container .chat-controls{
     display: flex;
     gap: 1rem;
     align-items: center;
     flex-wrap: wrap;
 }
 
-.context-selector {
+.ai-assistant-container .context-selector{
     display: flex;
     gap: 0.75rem;
     flex-wrap: wrap;
 }
 
-.context-btn {
+.ai-assistant-container .context-btn{
     background: var(--ai-glass-medium);
     border: 1px solid rgba(59, 130, 246, 0.3);
     color: var(--ai-text-secondary);
@@ -1205,7 +1194,7 @@
     overflow: hidden;
 }
 
-.context-btn::before {
+.ai-assistant-container .context-btn::before{
     content: '';
     position: absolute;
     top: 0;
@@ -1216,7 +1205,7 @@
     transition: left 0.5s ease;
 }
 
-.context-btn:hover {
+.ai-assistant-container .context-btn:hover{
     background: var(--ai-glass-heavy);
     border-color: var(--ai-primary);
     color: var(--ai-primary);
@@ -1224,16 +1213,16 @@
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
-.context-btn:hover::before {
+.ai-assistant-container .context-btn:hover::before{
     left: 100%;
 }
 
-.context-btn svg {
+.ai-assistant-container .context-btn svg{
     width: 18px;
     height: 18px;
 }
 
-.chat-messages {
+.ai-assistant-container .chat-messages{
     flex: 1;
     padding: 2rem;
     overflow-y: auto;
@@ -1244,24 +1233,24 @@
     scrollbar-color: rgba(59, 130, 246, 0.3) transparent;
 }
 
-.chat-messages::-webkit-scrollbar {
+.ai-assistant-container .chat-messages::-webkit-scrollbar{
     width: 6px;
 }
 
-.chat-messages::-webkit-scrollbar-track {
+.ai-assistant-container .chat-messages::-webkit-scrollbar-track{
     background: transparent;
 }
 
-.chat-messages::-webkit-scrollbar-thumb {
+.ai-assistant-container .chat-messages::-webkit-scrollbar-thumb{
     background: rgba(59, 130, 246, 0.3);
     border-radius: 3px;
 }
 
-.chat-messages::-webkit-scrollbar-thumb:hover {
+.ai-assistant-container .chat-messages::-webkit-scrollbar-thumb:hover{
     background: rgba(59, 130, 246, 0.5);
 }
 
-.message {
+.ai-assistant-container .message{
     display: flex;
     gap: 1rem;
     max-width: 85%;
@@ -1279,16 +1268,16 @@
     }
 }
 
-.message.user {
+.ai-assistant-container .message.user{
     align-self: flex-end;
     flex-direction: row-reverse;
 }
 
-.message.assistant {
+.ai-assistant-container .message.assistant{
     align-self: flex-start;
 }
 
-.message-avatar {
+.ai-assistant-container .message-avatar{
     width: 40px;
     height: 40px;
     border-radius: 12px;
@@ -1305,7 +1294,7 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.message.user .message-avatar {
+.ai-assistant-container .message.user .message-avatar{
     background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
     color: var(--bg-slate-800);
     box-shadow:
@@ -1313,7 +1302,7 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.message-content {
+.ai-assistant-container .message-content{
     background: var(--ai-glass-medium);
     padding: 1.25rem 1.5rem;
     border-radius: 16px;
@@ -1325,7 +1314,7 @@
     backdrop-filter: blur(10px);
 }
 
-.message.user .message-content {
+.ai-assistant-container .message.user .message-content{
     background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
     color: var(--bg-slate-800);
     border-color: var(--primary-blue);
@@ -1334,39 +1323,39 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.message-text {
+.ai-assistant-container .message-text{
     margin: 0;
     line-height: 1.6;
     color: inherit;
     font-size: 0.95rem;
 }
 
-.message.assistant .message-text {
+.ai-assistant-container .message.assistant .message-text{
     color: var(--ai-text-primary);
 }
 
-.message-time {
+.ai-assistant-container .message-time{
     font-size: 0.75rem;
     opacity: 0.7;
     margin-top: 0.5rem;
     font-weight: 500;
 }
 
-.chat-input-area {
+.ai-assistant-container .chat-input-area{
     padding: 2rem;
     border-top: 1px solid rgba(59, 130, 246, 0.15);
     background: var(--ai-glass-medium);
     backdrop-filter: blur(20px);
 }
 
-.chat-input-form {
+.ai-assistant-container .chat-input-form{
     display: flex;
     gap: 1rem;
     align-items: flex-end;
     max-width: 100%;
 }
 
-.chat-input {
+.ai-assistant-container .chat-input{
     flex: 1;
     background: var(--ai-glass-heavy);
     border: 1px solid rgba(59, 130, 246, 0.3);
@@ -1383,11 +1372,11 @@
     backdrop-filter: blur(10px);
 }
 
-.chat-input::placeholder {
+.ai-assistant-container .chat-input::placeholder{
     color: var(--ai-text-muted);
 }
 
-.chat-input:focus {
+.ai-assistant-container .chat-input:focus{
     outline: none;
     border-color: var(--ai-primary);
     background: rgba(255, 255, 255, 0.1);
@@ -1401,7 +1390,7 @@
 /* ==========================================================================
    Panel derecho de detalles - Diseño moderno
    ========================================================================== */
-.details-panel {
+.ai-assistant-container .details-panel{
     width: 380px;
     background: var(--ai-glass-light);
     backdrop-filter: blur(20px);
@@ -1412,7 +1401,7 @@
     overflow: hidden;
 }
 
-.details-panel::before {
+.ai-assistant-container .details-panel::before{
     content: '';
     position: absolute;
     top: 0;
@@ -1423,13 +1412,13 @@
     opacity: 0.6;
 }
 
-.details-header {
+.ai-assistant-container .details-header{
     padding: 2rem 2rem 1.5rem;
     border-bottom: 1px solid rgba(59, 130, 246, 0.15);
     background: var(--ai-glass-medium);
 }
 
-.details-title {
+.ai-assistant-container .details-title{
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--ai-text-primary);
@@ -1440,7 +1429,7 @@
     background-clip: text;
 }
 
-.tab-nav {
+.ai-assistant-container .tab-nav{
     display: flex;
     border-bottom: 1px solid rgba(59, 130, 246, 0.15);
     background: var(--ai-glass-light);
@@ -1448,11 +1437,11 @@
     scrollbar-width: none;
 }
 
-.tab-nav::-webkit-scrollbar {
+.ai-assistant-container .tab-nav::-webkit-scrollbar{
     display: none;
 }
 
-.tab-btn {
+.ai-assistant-container .tab-btn{
     flex: 1;
     min-width: 0;
     background: transparent;
@@ -1470,7 +1459,7 @@
     overflow: hidden;
 }
 
-.tab-btn::before {
+.ai-assistant-container .tab-btn::before{
     content: '';
     position: absolute;
     bottom: 0;
@@ -1482,25 +1471,25 @@
     transform: translateX(-50%);
 }
 
-.tab-btn:hover {
+.ai-assistant-container .tab-btn:hover{
     color: var(--ai-primary);
     background: var(--ai-glass-medium);
 }
 
-.tab-btn:hover::before {
+.ai-assistant-container .tab-btn:hover::before{
     width: 60%;
 }
 
-.tab-btn.active {
+.ai-assistant-container .tab-btn.active{
     color: var(--ai-primary);
     background: var(--ai-glass-medium);
 }
 
-.tab-btn.active::before {
+.ai-assistant-container .tab-btn.active::before{
     width: 100%;
 }
 
-.tab-content {
+.ai-assistant-container .tab-content{
     flex: 1;
     padding: 2rem;
     overflow-y: auto;
@@ -1508,32 +1497,32 @@
     scrollbar-color: rgba(59, 130, 246, 0.3) transparent;
 }
 
-.tab-content::-webkit-scrollbar {
+.ai-assistant-container .tab-content::-webkit-scrollbar{
     width: 4px;
 }
 
-.tab-content::-webkit-scrollbar-track {
+.ai-assistant-container .tab-content::-webkit-scrollbar-track{
     background: transparent;
 }
 
-.tab-content::-webkit-scrollbar-thumb {
+.ai-assistant-container .tab-content::-webkit-scrollbar-thumb{
     background: rgba(59, 130, 246, 0.3);
     border-radius: 2px;
 }
 
-.tab-pane {
+.ai-assistant-container .tab-pane{
     display: none;
     animation: fadeInUp 0.3s ease-out;
 }
 
-.tab-pane.active {
+.ai-assistant-container .tab-pane.active{
     display: block;
 }
 
 /* ==========================================================================
    Modales - Diseño moderno
    ========================================================================== */
-.modal-overlay {
+.ai-assistant-container .modal-overlay{
     position: fixed;
     top: 0;
     left: 0;
@@ -1553,7 +1542,7 @@
     to { opacity: 1; }
 }
 
-.modal-content {
+.ai-assistant-container .modal-content{
     background: var(--ai-glass-heavy);
     backdrop-filter: blur(20px);
     border-radius: 20px;
@@ -1580,7 +1569,7 @@
     }
 }
 
-.modal-content::before {
+.ai-assistant-container .modal-content::before{
     content: '';
     position: absolute;
     top: 0;
@@ -1591,7 +1580,7 @@
     opacity: 0.8;
 }
 
-.modal-header {
+.ai-assistant-container .modal-header{
     padding: 2rem 2rem 1rem;
     border-bottom: 1px solid rgba(59, 130, 246, 0.15);
     display: flex;
@@ -1600,7 +1589,7 @@
     background: var(--ai-glass-medium);
 }
 
-.modal-title {
+.ai-assistant-container .modal-title{
     font-size: 1.5rem;
     font-weight: 700;
     color: var(--ai-text-primary);
@@ -1611,7 +1600,7 @@
     background-clip: text;
 }
 
-.modal-close {
+.ai-assistant-container .modal-close{
     background: var(--ai-glass-medium);
     border: 1px solid rgba(59, 130, 246, 0.3);
     border-radius: 8px;
@@ -1625,19 +1614,19 @@
     transition: all 0.3s ease;
 }
 
-.modal-close:hover {
+.ai-assistant-container .modal-close:hover{
     background: var(--ai-glass-heavy);
     border-color: var(--ai-error);
     color: var(--ai-error);
     transform: scale(1.05);
 }
 
-.modal-close svg {
+.ai-assistant-container .modal-close svg{
     width: 18px;
     height: 18px;
 }
 
-.modal-body {
+.ai-assistant-container .modal-body{
     padding: 2rem;
     overflow-y: auto;
     max-height: 60vh;
@@ -1645,20 +1634,20 @@
     scrollbar-color: rgba(59, 130, 246, 0.3) transparent;
 }
 
-.modal-body::-webkit-scrollbar {
+.ai-assistant-container .modal-body::-webkit-scrollbar{
     width: 4px;
 }
 
-.modal-body::-webkit-scrollbar-track {
+.ai-assistant-container .modal-body::-webkit-scrollbar-track{
     background: transparent;
 }
 
-.modal-body::-webkit-scrollbar-thumb {
+.ai-assistant-container .modal-body::-webkit-scrollbar-thumb{
     background: rgba(59, 130, 246, 0.3);
     border-radius: 2px;
 }
 
-.modal-footer {
+.ai-assistant-container .modal-footer{
     padding: 1rem 2rem 2rem;
     border-top: 1px solid rgba(59, 130, 246, 0.15);
     display: flex;
@@ -1671,7 +1660,7 @@
 /* ==========================================================================
    Estados de carga - Diseño moderno
    ========================================================================== */
-.loading {
+.ai-assistant-container .loading{
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1680,7 +1669,7 @@
     gap: 1rem;
 }
 
-.spinner {
+.ai-assistant-container .spinner{
     width: 40px;
     height: 40px;
     border: 3px solid rgba(59, 130, 246, 0.2);
@@ -1693,7 +1682,7 @@
     to { transform: rotate(360deg); }
 }
 
-.loading-text {
+.ai-assistant-container .loading-text{
     color: var(--ai-text-muted);
     font-size: 0.9rem;
     font-weight: 500;
@@ -1702,13 +1691,13 @@
 /* ==========================================================================
    Estados vacíos - Diseño moderno
    ========================================================================== */
-.empty-state {
+.ai-assistant-container .empty-state{
     text-align: center;
     padding: 4rem 2rem;
     color: var(--ai-text-muted);
 }
 
-.empty-state-icon {
+.ai-assistant-container .empty-state-icon{
     width: 80px;
     height: 80px;
     margin: 0 auto 1.5rem;
@@ -1717,14 +1706,14 @@
     filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.3));
 }
 
-.empty-state-title {
+.ai-assistant-container .empty-state-title{
     font-size: 1.5rem;
     font-weight: 600;
     margin-bottom: 0.75rem;
     color: var(--ai-text-secondary);
 }
 
-.empty-state-description {
+.ai-assistant-container .empty-state-description{
     font-size: 1rem;
     line-height: 1.6;
     color: var(--ai-text-muted);
@@ -1736,14 +1725,14 @@
    Responsive - Diseño adaptativo moderno
    ========================================================================== */
 @media (max-width: 768px) {
-    .ai-assistant-container {
+    .ai-assistant-container{
         flex-direction: column;
         height: calc(100vh - 160px);
         margin: 80px 0.5rem 80px;
         border-radius: 15px 15px 0 0;
     }
 
-    .chat-sidebar {
+    .ai-assistant-container .chat-sidebar{
         width: 100%;
         height: 200px;
         border-right: none;
@@ -1751,13 +1740,13 @@
         order: 3;
     }
 
-    .chat-area {
+    .ai-assistant-container .chat-area{
         order: 1;
         flex: 1;
         min-height: 0;
     }
 
-    .details-panel {
+    .ai-assistant-container .details-panel{
         width: 100%;
         height: 150px;
         border-left: none;
@@ -1765,90 +1754,90 @@
         order: 2;
     }
 
-    .chat-header {
+    .ai-assistant-container .chat-header{
         padding: 1.5rem 1rem 1rem;
         flex-direction: column;
         align-items: flex-start;
         gap: 1rem;
     }
 
-    .chat-header-info h2 {
+    .ai-assistant-container .chat-header-info h2{
         font-size: 1.5rem;
         margin-bottom: 0.5rem;
     }
 
-    .chat-controls {
+    .ai-assistant-container .chat-controls{
         gap: 0.75rem;
     }
 
-    .context-btn {
+    .ai-assistant-container .context-btn{
         padding: 0.5rem 1rem;
         font-size: 0.8rem;
     }
 
-    .chat-messages {
+    .ai-assistant-container .chat-messages{
         padding: 1rem;
         gap: 1rem;
     }
 
-    .message {
+    .ai-assistant-container .message{
         max-width: 95%;
     }
 
-    .message-avatar {
+    .ai-assistant-container .message-avatar{
         width: 36px;
         height: 36px;
     }
 
-    .message-content {
+    .ai-assistant-container .message-content{
         padding: 1rem;
         border-radius: 12px;
     }
 
-    .chat-input-area {
+    .ai-assistant-container .chat-input-area{
         padding: 1rem;
     }
 
-    .chat-input {
+    .ai-assistant-container .chat-input{
         padding: 0.875rem 1.25rem;
         border-radius: 12px;
         min-height: 48px;
     }
 
-    .send-btn {
+    .ai-assistant-container .send-btn{
         width: 48px;
         height: 48px;
     }
 
-    .modal-content {
+    .ai-assistant-container .modal-content{
         margin: 1rem;
         width: calc(100% - 2rem);
         border-radius: 16px;
     }
 
-    .modal-header {
+    .ai-assistant-container .modal-header{
         padding: 1.5rem 1.5rem 0.75rem;
     }
 
-    .modal-title {
+    .ai-assistant-container .modal-title{
         font-size: 1.25rem;
     }
 
-    .modal-body {
+    .ai-assistant-container .modal-body{
         padding: 1.5rem;
         max-height: 50vh;
     }
 
-    .modal-footer {
+    .ai-assistant-container .modal-footer{
         padding: 0.75rem 1.5rem 1.5rem;
         flex-direction: column;
     }
 
-    .tab-nav {
+    .ai-assistant-container .tab-nav{
         overflow-x: auto;
     }
 
-    .tab-btn {
+    .ai-assistant-container .tab-btn{
         padding: 1rem 0.75rem;
         font-size: 0.8rem;
         min-width: 80px;
@@ -1857,59 +1846,59 @@
 
 /* Optimizaciones para tablets */
 @media (min-width: 769px) and (max-width: 1024px) {
-    .chat-sidebar {
+    .ai-assistant-container .chat-sidebar{
         width: 280px;
     }
 
-    .details-panel {
+    .ai-assistant-container .details-panel{
         width: 320px;
     }
 
-    .chat-header {
+    .ai-assistant-container .chat-header{
         padding: 1.75rem;
     }
 
-    .chat-messages {
+    .ai-assistant-container .chat-messages{
         padding: 1.5rem;
     }
 
-    .chat-input-area {
+    .ai-assistant-container .chat-input-area{
         padding: 1.5rem;
     }
 }
 
 /* Pantallas muy pequeñas */
 @media (max-width: 480px) {
-    .ai-assistant-container {
+    .ai-assistant-container{
         height: calc(100vh - 140px);
         margin: 70px 0.25rem 70px;
     }
 
-    .chat-input {
+    .ai-assistant-container .chat-input{
         font-size: 16px; /* Prevenir zoom en iOS */
         padding: 0.75rem 1rem;
     }
 
-    .message {
+    .ai-assistant-container .message{
         gap: 0.75rem;
     }
 
-    .message-avatar {
+    .ai-assistant-container .message-avatar{
         width: 32px;
         height: 32px;
         font-size: 0.8rem;
     }
 
-    .message-content {
+    .ai-assistant-container .message-content{
         padding: 0.875rem 1rem;
         font-size: 0.9rem;
     }
 
-    .chat-header-info h2 {
+    .ai-assistant-container .chat-header-info h2{
         font-size: 1.25rem;
     }
 
-    .context-btn {
+    .ai-assistant-container .context-btn{
         padding: 0.5rem 0.75rem;
         font-size: 0.75rem;
     }
@@ -1918,7 +1907,7 @@
 /* ==========================================================================
    Utilidades - Componentes reutilizables
    ========================================================================== */
-.btn {
+.ai-assistant-container .btn{
     padding: 0.75rem 1.5rem;
     border-radius: 10px;
     font-weight: 600;
@@ -1935,7 +1924,7 @@
     overflow: hidden;
 }
 
-.btn::before {
+.ai-assistant-container .btn::before{
     content: '';
     position: absolute;
     top: 0;
@@ -1946,11 +1935,11 @@
     transition: left 0.5s ease;
 }
 
-.btn:hover::before {
+.ai-assistant-container .btn:hover::before{
     left: 100%;
 }
 
-.btn-primary {
+.ai-assistant-container .btn-primary{
     background: linear-gradient(135deg, var(--ai-primary) 0%, var(--ai-primary-dark) 100%);
     color: white;
     box-shadow:
@@ -1958,14 +1947,14 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.btn-primary:hover {
+.ai-assistant-container .btn-primary:hover{
     transform: translateY(-2px);
     box-shadow:
         0 8px 25px rgba(59, 130, 246, 0.4),
         inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.btn-secondary {
+.ai-assistant-container .btn-secondary{
     background: var(--ai-glass-medium);
     color: var(--ai-text-secondary);
     border: 1px solid rgba(59, 130, 246, 0.3);
@@ -1974,7 +1963,7 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.btn-secondary:hover {
+.ai-assistant-container .btn-secondary:hover{
     background: var(--ai-glass-heavy);
     border-color: var(--ai-primary);
     color: var(--ai-primary);
@@ -1984,7 +1973,7 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.btn-danger {
+.ai-assistant-container .btn-danger{
     background: linear-gradient(135deg, var(--ai-error) 0%, #dc2626 100%);
     color: white;
     box-shadow:
@@ -1992,71 +1981,71 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.btn-danger:hover {
+.ai-assistant-container .btn-danger:hover{
     transform: translateY(-2px);
     box-shadow:
         0 8px 25px rgba(239, 68, 68, 0.4),
         inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.btn-icon {
+.ai-assistant-container .btn-icon{
     width: 18px;
     height: 18px;
 }
 
-.btn:disabled {
+.ai-assistant-container .btn:disabled{
     opacity: 0.5;
     cursor: not-allowed;
     transform: none !important;
     box-shadow: none !important;
 }
 
-.btn:disabled::before {
+.ai-assistant-container .btn:disabled::before{
     display: none;
 }
 
 /* Utilidades de texto y layout */
-.text-center {
+.ai-assistant-container .text-center{
     text-align: center;
 }
 
-.text-left {
+.ai-assistant-container .text-left{
     text-align: left;
 }
 
-.text-right {
+.ai-assistant-container .text-right{
     text-align: right;
 }
 
-.hidden {
+.ai-assistant-container .hidden{
     display: none !important;
 }
 
-.visible {
+.ai-assistant-container .visible{
     display: block !important;
 }
 
-.flex {
+.ai-assistant-container .flex{
     display: flex;
 }
 
-.flex-col {
+.ai-assistant-container .flex-col{
     flex-direction: column;
 }
 
-.items-center {
+.ai-assistant-container .items-center{
     align-items: center;
 }
 
-.justify-center {
+.ai-assistant-container .justify-center{
     justify-content: center;
 }
 
-.gap-2 {
+.ai-assistant-container .gap-2{
     gap: 0.5rem;
 }
 
-.gap-4 {
+.ai-assistant-container .gap-4{
     gap: 1rem;
 }
 
@@ -2064,13 +2053,8 @@
    Ajustes finales para integración perfecta
    ========================================================================== */
 
-/* Asegurar que el contenedor principal funcione con las partículas de fondo */
-body {
-    background: linear-gradient(135deg, var(--ai-dark-bg) 0%, var(--ai-dark-surface) 50%, var(--ai-dark-elevated) 100%);
-}
-
-/* Estilos para el botón de sidebar móvil en contexto del asistente IA */
-.mobile-sidebar-btn {
+/* Asegurar que el contenedor principal funcione con las partículas de fondo *//* Estilos para el botón de sidebar móvil en contexto del asistente IA */
+.ai-assistant-container .mobile-sidebar-btn{
     background: linear-gradient(135deg, var(--ai-primary) 0%, var(--ai-primary-dark) 100%);
     backdrop-filter: blur(10px);
     box-shadow:
@@ -2078,7 +2062,7 @@ body {
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.mobile-sidebar-btn:hover {
+.ai-assistant-container .mobile-sidebar-btn:hover{
     background: linear-gradient(135deg, var(--ai-primary-light) 0%, var(--ai-primary) 100%);
     transform: translateY(-1px);
     box-shadow:
@@ -2087,26 +2071,26 @@ body {
 }
 
 /* Efectos de glassmorphism mejorados */
-.ai-assistant-container *::-webkit-scrollbar {
+.ai-assistant-container *::-webkit-scrollbar{
     width: 6px;
     height: 6px;
 }
 
-.ai-assistant-container *::-webkit-scrollbar-track {
+.ai-assistant-container *::-webkit-scrollbar-track{
     background: transparent;
 }
 
-.ai-assistant-container *::-webkit-scrollbar-thumb {
+.ai-assistant-container *::-webkit-scrollbar-thumb{
     background: rgba(59, 130, 246, 0.3);
     border-radius: 3px;
 }
 
-.ai-assistant-container *::-webkit-scrollbar-thumb:hover {
+.ai-assistant-container *::-webkit-scrollbar-thumb:hover{
     background: rgba(59, 130, 246, 0.5);
 }
 
 /* Animaciones de entrada para elementos */
-.ai-assistant-container > * {
+.ai-assistant-container > *{
     animation: slideInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
