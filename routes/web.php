@@ -21,6 +21,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\AiAssistantController;
 
 
 Route::get('/', function () {
@@ -262,5 +263,26 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/tasks-laravel/tasks/{task}/files', [TaskAttachmentController::class, 'store'])->name('api.tasks-laravel.files.store');
         Route::get('/drive/folders', [TaskAttachmentController::class, 'folders'])->name('api.drive.folders');
         Route::get('/tasks-laravel/files/{file}/download', [TaskAttachmentController::class, 'download'])->name('api.tasks-laravel.files.download');
+
+        // Rutas del Asistente IA
+        Route::prefix('ai-assistant')->group(function () {
+            // Sesiones de chat
+            Route::get('/sessions', [AiAssistantController::class, 'getSessions'])->name('api.ai-assistant.sessions');
+            Route::post('/sessions', [AiAssistantController::class, 'createSession'])->name('api.ai-assistant.sessions.create');
+            Route::get('/sessions/{id}/messages', [AiAssistantController::class, 'getMessages'])->name('api.ai-assistant.sessions.messages');
+            Route::post('/sessions/{id}/messages', [AiAssistantController::class, 'sendMessage'])->name('api.ai-assistant.sessions.send-message');
+
+            // Datos para contexto
+            Route::get('/containers', [AiAssistantController::class, 'getContainers'])->name('api.ai-assistant.containers');
+            Route::get('/meetings', [AiAssistantController::class, 'getMeetings'])->name('api.ai-assistant.meetings');
+            Route::get('/contact-chats', [AiAssistantController::class, 'getContactChats'])->name('api.ai-assistant.contact-chats');
+
+            // Gestión de documentos
+            Route::get('/documents', [AiAssistantController::class, 'getDocuments'])->name('api.ai-assistant.documents');
+            Route::post('/documents/upload', [AiAssistantController::class, 'uploadDocument'])->name('api.ai-assistant.documents.upload');
+        });
     });
+
+    // Ruta principal del asistente IA
+    Route::get('/ai-assistant', [AiAssistantController::class, 'index'])->name('ai-assistant');
 });
