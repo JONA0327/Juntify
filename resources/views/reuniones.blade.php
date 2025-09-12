@@ -19,7 +19,7 @@
     <!-- Vite Assets -->
     @vite([
         'resources/css/app.css',
-        'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css',
+        'resources/js/app.js', 'resources/css/index.css',
         'resources/css/reuniones_v2.css', /* Nuevo archivo de estilos */
         'resources/css/audio-processing.css',
         'resources/js/reuniones_v2.js'   /* Nuevo archivo de script */
@@ -32,7 +32,7 @@
         @include('partials.navbar')
         @include('partials.mobile-nav')
 
-        <main class="w-full pl-24 pt-24" style="margin-top:130px;">
+        <main class="w-full pt-4 md:pt-24 md:pl-24 md:mt-[130px]">
             <!-- Contenedor Centrado -->
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
