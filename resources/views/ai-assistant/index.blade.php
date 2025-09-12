@@ -1,103 +1,305 @@
 @extends('layouts.app')
 
+@section('title', 'Asistente IA - Juntify')
+
 @section('head')
     @vite(['resources/css/ai-assistant.css', 'resources/js/ai-assistant.js'])
 @endsection
 
 @section('content')
-<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-    <div class="particles" id="particles"></div>
-
-    <div class="ai-assistant-container">
-        <!-- Sidebar izquierdo - Historial de chats -->
-        <div class="chat-sidebar">
-            <div class="chat-sidebar-header">
-                <h3 class="sidebar-title">
-                    <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.418 8-9.899 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.418-8 9.899-8s9.899 3.582 9.899 8z"></path>
+<div class="min-h-screen bg-slate-900 text-white">
+    <div class="flex h-screen">
+        <!-- Sidebar - Historial de Chats -->
+        <div class="w-80 bg-slate-800 border-r border-slate-700 flex flex-col">
+            <!-- Search -->
+            <div class="p-4 border-b border-slate-700">
+                <div class="relative">
+                    <input type="text"
+                           placeholder="Buscar"
+                           class="w-full bg-slate-700 text-white placeholder-gray-400 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
-                    Historial de Chats
-                </h3>
-                <button class="new-chat-btn btn btn-primary" onclick="createNewChat()">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                    </svg>
-                    Nuevo Chat
-                </button>
-            </div>
-
-            <div class="chat-sessions-list" id="chatSessionsList">
-                <!-- Las sesiones se cargarán dinámicamente -->
-            </div>
-        </div>
-
-        <!-- Área central - Chat -->
-        <div class="chat-area">
-            <div class="chat-header">
-                <div class="chat-header-info">
-                    <h2 id="chatTitle">Asistente IA - Juntify</h2>
-                    <div class="context-indicator" id="contextIndicator">
-                        <span class="context-type">General</span>
-                    </div>
-                </div>
-
-                <div class="chat-controls">
-                    <!-- Selector de contenedor -->
-                    <div class="context-selector">
-                        <button class="context-btn container-btn" onclick="openContainerSelector()">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                            </svg>
-                            Contenedores
-                        </button>
-                    </div>
-
-                    <!-- Selector de conversaciones con contactos -->
-                    <button class="context-btn contact-chat-btn" onclick="openContactChatSelector()">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-6a2 2 0 012-2h8z"></path>
-                        </svg>
-                        Conversaciones
-                    </button>
-
-                    <!-- Subir documentos -->
-                    <button class="context-btn document-btn" onclick="openDocumentUploader()">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                        </svg>
-                        Documentos
-                    </button>
                 </div>
             </div>
 
-            <div class="chat-messages" id="chatMessages">
-                <div class="welcome-message">
-                    <div class="ai-avatar">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-                        </svg>
-                    </div>
-                    <div class="welcome-content">
-                        <h3>¡Hola! Soy tu asistente IA</h3>
-                        <p>Puedo ayudarte con análisis de reuniones, búsqueda en documentos, y responder preguntas sobre tu contenido. ¿En qué puedo ayudarte hoy?</p>
-                        <div class="suggestions">
-                            <button class="suggestion-btn" onclick="sendSuggestion('Muéstrame un resumen de mis últimas reuniones')">
-                                📊 Resumen de reuniones recientes
-                            </button>
-                            <button class="suggestion-btn" onclick="sendSuggestion('¿Qué tareas pendientes tengo?')">
-                                ✅ Tareas pendientes
-                            </button>
-                            <button class="suggestion-btn" onclick="sendSuggestion('Buscar información en mis documentos')">
-                                🔍 Buscar en documentos
-                            </button>
+            <!-- Chat History -->
+            <div class="flex-1 overflow-y-auto">
+                <div class="p-4">
+                    <h3 class="text-sm font-semibold text-gray-400 mb-4">Historial de Chats</h3>
+                    <div class="space-y-2" id="chat-history">
+                        <!-- Chat history items will be populated by JavaScript -->
+                        <div class="p-3 rounded-lg bg-slate-700 hover:bg-slate-600 cursor-pointer transition-colors">
+                            <div class="text-sm font-medium text-gray-300">Nombre del chat</div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div class="chat-input-area">
-                <div class="input-attachments" id="inputAttachments">
-                    <!-- Archivos adjuntos aparecerán aquí -->
+        <!-- Main Chat Area -->
+        <div class="flex-1 flex flex-col">
+            <!-- Chat Header -->
+            <div class="bg-slate-800 px-6 py-4 border-b border-slate-700 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                            <span class="text-sm font-bold">A</span>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold">Asistente IA - Juntify</h2>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span class="text-xs text-gray-400">En línea</span>
+                    </div>
+                </div>
+                <button class="text-gray-400 hover:text-white">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Top Action Bar -->
+            <div class="bg-slate-800 px-6 py-3 border-b border-slate-700">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <input type="text"
+                               placeholder="Buscar"
+                               class="bg-slate-700 text-white placeholder-gray-400 rounded-lg px-4 py-2 w-96 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button class="bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-600 transition-colors flex items-center space-x-2" onclick="openContainerSelector()">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <span>Contenedores</span>
+                        </button>
+                        <button class="bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-600 transition-colors flex items-center space-x-2" onclick="openContactChatSelector()">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                            </svg>
+                            <span>Conversaciones</span>
+                        </button>
+                        <button class="bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-600 transition-colors flex items-center space-x-2" onclick="openDocumentUploader()">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <span>Documentos</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-4" id="chat-messages">
+                <!-- Welcome Message -->
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span class="text-sm font-bold">A</span>
+                    </div>
+                    <div class="flex-1">
+                        <div class="bg-slate-700 rounded-lg p-4 max-w-2xl">
+                            <p class="text-white">Hola 👋 ¿Cómo puedo ayudarte hoy?</p>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-1">05:50</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message Input -->
+            <div class="bg-slate-800 border-t border-slate-700 p-6">
+                <div class="flex items-center space-x-4">
+                    <div class="flex-1 bg-slate-700 rounded-lg flex items-center">
+                        <input type="text"
+                               id="message-input"
+                               placeholder="Escribe tu mensaje aquí..."
+                               class="flex-1 bg-transparent text-white placeholder-gray-400 px-4 py-3 focus:outline-none"
+                               onkeypress="handleKeyPress(event)">
+                        <div class="flex items-center space-x-2 pr-4">
+                            <button class="text-gray-400 hover:text-white p-1" title="Adjuntar archivo">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                </svg>
+                            </button>
+                            <button class="text-gray-400 hover:text-white p-1" title="Insertar código">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                                </svg>
+                            </button>
+                            <button class="text-gray-400 hover:text-white p-1" title="Insertar tabla">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0V4a1 1 0 011-1h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1z"></path>
+                                </svg>
+                            </button>
+                            <button class="text-gray-400 hover:text-white p-1" title="Grabación de voz">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                                </svg>
+                            </button>
+                            <button class="text-gray-400 hover:text-white p-1" title="Compartir">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button id="send-button"
+                            onclick="sendMessage()"
+                            class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                        <span>Hacer</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar - Meeting Details -->
+        <div class="w-96 bg-slate-800 border-l border-slate-700 flex flex-col" id="meeting-details-panel">
+            <div class="p-6 border-b border-slate-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold">Detalles de la Reunión</h3>
+                <button onclick="toggleMeetingPanel()" class="text-gray-400 hover:text-white">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="p-6 border-b border-slate-700">
+                <div class="flex space-x-2">
+                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium">Resumen</button>
+                    <button class="text-gray-400 hover:text-white px-4 py-2 rounded-lg text-sm font-medium">Puntos Clave</button>
+                    <button class="text-gray-400 hover:text-white px-4 py-2 rounded-lg text-sm font-medium">Tareas</button>
+                    <button class="text-gray-400 hover:text-white px-4 py-2 rounded-lg text-sm font-medium">T</button>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 p-6">
+                <div class="text-center text-gray-400 mt-8">
+                    <div class="w-16 h-16 bg-slate-700 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                    <h4 class="text-lg font-semibold mb-2">Detalles de la Reunión</h4>
+                    <p class="text-sm">Selecciona un contenido para ver los detalles.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modales -->
+@include('ai-assistant.modals.container-selector')
+@include('ai-assistant.modals.contact-chat-selector')
+@include('ai-assistant.modals.document-uploader')
+
+@endsection
+
+@section('scripts')
+<script>
+// Variables globales
+let currentChatId = null;
+let isTyping = false;
+
+// Función para manejar teclas presionadas
+function handleKeyPress(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+// Función para enviar mensaje
+function sendMessage() {
+    const input = document.getElementById('message-input');
+    const message = input.value.trim();
+
+    if (!message) return;
+
+    // Agregar mensaje del usuario al chat
+    addMessageToChat('user', message);
+
+    // Limpiar input
+    input.value = '';
+
+    // Simular respuesta del asistente (aquí iría la lógica real)
+    setTimeout(() => {
+        addMessageToChat('assistant', 'Esta es una respuesta simulada del asistente IA.');
+    }, 1000);
+}
+
+// Función para agregar mensaje al chat
+function addMessageToChat(sender, message) {
+    const chatMessages = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'flex items-start space-x-3 message-item';
+
+    const time = new Date().toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    if (sender === 'user') {
+        messageDiv.innerHTML = `
+            <div class="flex-1 flex justify-end">
+                <div class="bg-blue-600 rounded-lg p-4 max-w-2xl">
+                    <p class="text-white">${message}</p>
+                </div>
+            </div>
+            <div class="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-sm font-bold">U</span>
+            </div>
+        `;
+    } else {
+        messageDiv.innerHTML = `
+            <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-sm font-bold">A</span>
+            </div>
+            <div class="flex-1">
+                <div class="bg-slate-700 rounded-lg p-4 max-w-2xl">
+                    <p class="text-white">${message}</p>
+                </div>
+                <div class="text-xs text-gray-400 mt-1">${time}</div>
+            </div>
+        `;
+    }
+
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Función para toggle del panel de detalles
+function toggleMeetingPanel() {
+    const panel = document.getElementById('meeting-details-panel');
+    panel.classList.toggle('open');
+}
+
+// Funciones para abrir modales (estas se implementarán según sea necesario)
+function openContainerSelector() {
+    console.log('Abrir selector de contenedores');
+}
+
+function openContactChatSelector() {
+    console.log('Abrir selector de conversaciones');
+}
+
+function openDocumentUploader() {
+    console.log('Abrir subidor de documentos');
+}
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Asistente IA cargado');
+});
+</script>
+@endsection
                 </div>
 
                 <div class="chat-input-container">
