@@ -1297,7 +1297,8 @@ function updateAnalysisPreview() {
             const applyState = () => {
                 transcriptEl.classList.toggle('expanded', expanded);
                 toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-                toggleBtn.textContent = expanded ? 'Colapsar' : 'Ver completa';
+                toggleBtn.setAttribute('title', expanded ? 'Colapsar' : 'Ver completa');
+                toggleBtn.setAttribute('aria-label', expanded ? 'Colapsar' : 'Ver completa');
             };
             applyState();
             toggleBtn.onclick = () => {

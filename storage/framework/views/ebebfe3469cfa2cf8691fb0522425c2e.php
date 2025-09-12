@@ -1,133 +1,89 @@
 <?php
-  // URL base de tu home
-  $homeUrl = url('/');
-  // ¿estamos en la home sin ancla?
-  $isHome = request()->is('/');
-  // Mostrar botón central de "Nueva reunión" según rol en grupos
   $user = auth()->user();
   $belongsToAnyGroup = $user && $user->groups()->exists();
   $hasNonGuestRole   = $user && $user->groups()->wherePivot('rol','!=','invitado')->exists();
-  $canCreateMeeting  = (!$belongsToAnyGroup) || $hasNonGuestRole;
+  $canCreate = (!$belongsToAnyGroup) || $hasNonGuestRole;
 ?>
 
-<!-- Barra de navegación móvil exclusiva -->
-<div class="mobile-bottom-nav">
-    
-    <a href="<?php echo e(route('reuniones.index')); ?>" class="nav-item <?php echo e(request()->routeIs('reuniones.index') ? 'active' : ''); ?>">
-        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v1.5M17.25 3v1.5M3.75 7.5h16.5M21 6.75A2.25 2.25 0 0018.75 4.5H5.25A2.25 2.25 0 003 6.75v12A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V6.75z" />
-        </svg>
-        <span class="nav-label">Reuniones</span>
-    </a>
+<header id="mobile-header" class="lg:hidden fixed top-0 left-0 right-0 z-40 bg-slate-950/70 backdrop-blur-lg border-b border-slate-800">
+    <div class="flex items-center justify-between h-20 px-4 sm:px-6">
+        <a href="/" class="flex items-center gap-2">
+            <span class="text-xl font-bold text-white">Juntify</span>
+        </a>
 
-    
-    <a href="<?php echo e(route('ai-assistant')); ?>" class="nav-item <?php echo e(request()->routeIs('ai-assistant') ? 'active' : ''); ?>">
-        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <rect x="5" y="7" width="14" height="10" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="9" cy="12" r="1" fill="currentColor"/>
-            <circle cx="15" cy="12" r="1" fill="currentColor"/>
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 7V4m-6 6H4m16 0h-2" />
-        </svg>
-        <span class="nav-label">Asistente IA</span>
-    </a>
+        <button id="menu-toggle" class="p-2 rounded-md text-slate-300 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-yellow-400">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+            </svg>
+        </button>
+    </div>
+</header>
 
-    
-    <?php if(isset($canCreateMeeting) && $canCreateMeeting): ?>
-    <a href="<?php echo e(route('new-meeting')); ?>" class="nav-item nav-center <?php echo e(request()->routeIs('new-meeting') ? 'active' : ''); ?>">
-        <svg class="nav-icon-center" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-        </svg>
-    </a>
-    <?php endif; ?>
+<div id="mobile-menu" class="hidden lg:hidden fixed inset-0 z-30 bg-slate-950/95 backdrop-blur-lg pt-20">
+    <div class="flex flex-col items-center justify-center h-full space-y-6 text-lg">
+        <a href="<?php echo e(route('reuniones.index')); ?>" class="text-slate-200 hover:text-yellow-400 flex items-center gap-3">
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v1.5M17.25 3v1.5M3.75 7.5h16.5M21 6.75A2.25 2.25 0 0018.75 4.5H5.25A2.25 2.25 0 003 6.75v12A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V6.75z" />
+            </svg>
+            Reuniones
+        </a>
 
-    
-    <a href="<?php echo e($isHome ? '#tareas' : $homeUrl . '#tareas'); ?>" class="nav-item">
-        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2.25 2.25L15 10.5m6 1.5a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span class="nav-label">Tareas</span>
-    </a>
+        <?php if($canCreate): ?>
+        <a href="<?php echo e(route('new-meeting')); ?>" class="text-slate-200 hover:text-yellow-400 flex items-center gap-3">
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Nueva Reunión
+        </a>
+        <?php endif; ?>
 
-    
-    <div class="nav-item dropdown-trigger" onclick="toggleMobileDropdown()">
-        <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm7.5 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm7.5 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-        </svg>
-        <span class="nav-label">Más</span>
-        <div class="mobile-dropdown" id="mobile-dropdown">
-            <a href="<?php echo e(route('profile.show')); ?>" class="dropdown-item">
-                <?php if (isset($component)) { $__componentOriginalce262628e3a8d44dc38fd1f3965181bc = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginalce262628e3a8d44dc38fd1f3965181bc = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.icon','data' => ['name' => 'user','class' => 'dropdown-icon']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? (array) $attributes->getIterator() : [])); ?>
-<?php $component->withName('icon'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag && $constructor = (new ReflectionClass(Illuminate\View\AnonymousComponent::class))->getConstructor()): ?>
-<?php $attributes = $attributes->except(collect($constructor->getParameters())->map->getName()->all()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['name' => 'user','class' => 'dropdown-icon']); ?>
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginalce262628e3a8d44dc38fd1f3965181bc)): ?>
-<?php $attributes = $__attributesOriginalce262628e3a8d44dc38fd1f3965181bc; ?>
-<?php unset($__attributesOriginalce262628e3a8d44dc38fd1f3965181bc); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginalce262628e3a8d44dc38fd1f3965181bc)): ?>
-<?php $component = $__componentOriginalce262628e3a8d44dc38fd1f3965181bc; ?>
-<?php unset($__componentOriginalce262628e3a8d44dc38fd1f3965181bc); ?>
-<?php endif; ?>
-                <span class="dropdown-text">Perfil</span>
-            </a>
-            
-            <a href="<?php echo e($isHome ? '#exportar' : $homeUrl . '#exportar'); ?>" class="dropdown-item">
-                <?php if (isset($component)) { $__componentOriginalce262628e3a8d44dc38fd1f3965181bc = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginalce262628e3a8d44dc38fd1f3965181bc = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.icon','data' => ['name' => 'share','class' => 'dropdown-icon']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? (array) $attributes->getIterator() : [])); ?>
-<?php $component->withName('icon'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag && $constructor = (new ReflectionClass(Illuminate\View\AnonymousComponent::class))->getConstructor()): ?>
-<?php $attributes = $attributes->except(collect($constructor->getParameters())->map->getName()->all()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['name' => 'share','class' => 'dropdown-icon']); ?>
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginalce262628e3a8d44dc38fd1f3965181bc)): ?>
-<?php $attributes = $__attributesOriginalce262628e3a8d44dc38fd1f3965181bc; ?>
-<?php unset($__attributesOriginalce262628e3a8d44dc38fd1f3965181bc); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginalce262628e3a8d44dc38fd1f3965181bc)): ?>
-<?php $component = $__componentOriginalce262628e3a8d44dc38fd1f3965181bc; ?>
-<?php unset($__componentOriginalce262628e3a8d44dc38fd1f3965181bc); ?>
-<?php endif; ?>
-                <span class="dropdown-text">Exportar</span>
-            </a>
-            <div class="dropdown-item">
-                <?php if (isset($component)) { $__componentOriginale5bc9b34dd139a393f71cdc403b71855 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginale5bc9b34dd139a393f71cdc403b71855 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.notifications','data' => []] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? (array) $attributes->getIterator() : [])); ?>
-<?php $component->withName('notifications'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag && $constructor = (new ReflectionClass(Illuminate\View\AnonymousComponent::class))->getConstructor()): ?>
-<?php $attributes = $attributes->except(collect($constructor->getParameters())->map->getName()->all()); ?>
-<?php endif; ?>
-<?php $component->withAttributes([]); ?>
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginale5bc9b34dd139a393f71cdc403b71855)): ?>
-<?php $attributes = $__attributesOriginale5bc9b34dd139a393f71cdc403b71855; ?>
-<?php unset($__attributesOriginale5bc9b34dd139a393f71cdc403b71855); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginale5bc9b34dd139a393f71cdc403b71855)): ?>
-<?php $component = $__componentOriginale5bc9b34dd139a393f71cdc403b71855; ?>
-<?php unset($__componentOriginale5bc9b34dd139a393f71cdc403b71855); ?>
-<?php endif; ?>
-            </div>
-        </div>
+        <a href="<?php echo e(route('tareas.index')); ?>" class="text-slate-200 hover:text-yellow-400 flex items-center gap-3">
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2.25 2.25L15 10.5m6 1.5a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Tareas
+        </a>
+
+        <a href="<?php echo e(route('chats.index')); ?>" class="text-slate-200 hover:text-yellow-400 flex items-center gap-3">
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.418 8-9.899 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.418-8 9.899-8s9.899 3.582 9.899 8z" />
+            </svg>
+            Chat
+        </a>
+
+        <a href="<?php echo e(route('organization.index')); ?>" class="text-slate-200 hover:text-yellow-400 flex items-center gap-3">
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M9 13h6M12 21V3.75a.75.75 0 00-.75-.75h-6A.75.75 0 004.5 3.75V21M19.5 21V10.5a.75.75 0 00-.75-.75H15" />
+            </svg>
+            Organización
+        </a>
+
+        <a href="<?php echo e(route('ai-assistant')); ?>" class="text-slate-200 hover:text-yellow-400 flex items-center gap-3">
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <rect x="5" y="7" width="14" height="10" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="9" cy="12" r="1" fill="currentColor"/>
+                <circle cx="15" cy="12" r="1" fill="currentColor"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 7V4m-6 6H4m16 0h-2" />
+            </svg>
+            Asistente IA
+        </a>
+
+        <a href="/profile" class="text-slate-200 hover:text-yellow-400 flex items-center gap-3">
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9A3.75 3.75 0 1112 5.25 3.75 3.75 0 0115.75 9zM18 21H6a2.25 2.25 0 01-2.25-2.25v-1.5a2.25 2.25 0 012.25-2.25h12a2.25 2.25 0 012.25 2.25v1.5A2.25 2.25 0 0118 21z" />
+            </svg>
+            Perfil
+        </a>
+
+        <form method="POST" action="<?php echo e(route('logout')); ?>" class="mt-6">
+            <?php echo csrf_field(); ?>
+            <button type="submit" class="text-slate-400 hover:text-red-400 flex items-center gap-3">
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                </svg>
+                Cerrar Sesión
+            </button>
+        </form>
     </div>
 </div>
-
-<!-- Overlay para cerrar dropdown -->
-<div class="mobile-dropdown-overlay" id="mobile-dropdown-overlay" onclick="closeMobileDropdown()"></div>
 <?php /**PATH C:\Users\Admin\Desktop\Cerounocero\Juntify\resources\views/partials/mobile-nav.blade.php ENDPATH**/ ?>

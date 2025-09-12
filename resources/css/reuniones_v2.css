@@ -9,9 +9,10 @@
     text-align: center;
 }
 
-/* Utility classes */
-.hidden {
-    display: none !important;
+/* Utility: limitar el alcance del ocultamiento para no romper el navbar */
+/* Antes: .hidden { display:none !important; } causaba que header.hidden lg:block nunca apareciera. */
+#meetings-container .hidden {
+    display: none;
 }
 
 .error-state svg {

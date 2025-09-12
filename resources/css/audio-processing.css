@@ -908,17 +908,31 @@ body {
 /* Botón para expandir/colapsar la transcripción */
 .transcript-toggle-btn {
     margin-left: auto;
-    background: transparent;
-    border: none;
-    color: var(--primary-color);
-    font-weight: 600;
-    cursor: pointer;
-    padding: 0.25rem 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
     border-radius: 6px;
+    border: 1px solid var(--glass-border);
+    background: rgba(59, 130, 246, 0.08);
+    cursor: pointer;
 }
 
 .transcript-toggle-btn:hover {
-    background: rgba(59, 130, 246, 0.12);
+    background: rgba(59, 130, 246, 0.16);
+}
+
+.toggle-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--primary-color);
+    transition: transform 0.2s ease;
+}
+
+.transcript-toggle-btn[aria-expanded="true"] .toggle-icon {
+    transform: rotate(180deg);
 }
 
 .transcript-segment {
