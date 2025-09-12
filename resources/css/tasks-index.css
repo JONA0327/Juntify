@@ -1,0 +1,35 @@
+/* Estilos para la vista principal de tareas */
+
+.task-card {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(100, 116, 139, 0.2);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.task-card:hover {
+    background: rgba(30, 41, 59, 0.8);
+    border-color: rgba(100, 116, 139, 0.4);
+}
+
+.priority-alta {
+    border-left: 4px solid #ef4444;
+}
+
+.priority-media {
+    border-left: 4px solid #f59e0b;
+}
+
+.priority-baja {
+    border-left: 4px solid #10b981;
+}
+
+.task-completed {
+    opacity: 0.6;
+}
+
+.task-overdue {
+    border-left-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}

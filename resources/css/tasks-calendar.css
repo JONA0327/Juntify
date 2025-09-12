@@ -1,0 +1,156 @@
+/* Estilos para el calendario de tareas */
+
+/* Asegurar que las celdas del calendario tengan el mismo tamaño */
+#cal-cells {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+}
+
+/* Estilos para el overlay de barras extendidas */
+#task-bars-overlay {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: repeat(6, 120px); /* 6 filas de 120px cada una */
+    gap: 1px;
+    overflow: visible; /* Permitir que las barras se vean fuera del grid */
+}
+
+/* Estilos para las barras extendidas */
+.extended-task-bar {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(4px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.2s ease;
+}
+
+.extended-task-bar:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    z-index: 100 !important;
+}
+
+/* Estados de las tareas */
+.task-status-pending {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.9));
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.task-status-in_progress {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.8), rgba(217, 119, 6, 0.9));
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.task-status-completed {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.9));
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+.task-status-overdue {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.9));
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+#cal-cells > div {
+    min-height: 120px;
+    width: 100%;
+}
+
+/* Mejores bordes para el grid */
+#cal-cells > div:nth-child(7n) {
+    border-right: none;
+}
+
+/* Contenedor de barras de tareas */
+.task-bars-container {
+    position: relative;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+/* Barras de tareas - diferentes colores por estado */
+.task-status-completed {
+    background: #10b981 !important; /* Verde */
+}
+
+.task-status-overdue {
+    background: #ef4444 !important; /* Rojo */
+}
+
+.task-status-in_progress {
+    background: #3b82f6 !important; /* Azul */
+}
+
+.task-status-pending {
+    background: #f59e0b !important; /* Amarillo/Orange */
+}
+
+/* Efecto hover para las barras */
+.task-bars-container > div:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Asegurar que el texto se vea bien en las barras */
+.task-bars-container > div {
+    font-weight: 500;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    height: 18px;
+    line-height: 18px;
+    font-size: 11px;
+    padding: 0 6px;
+    border-radius: 4px;
+    margin-bottom: 1px;
+}
+
+/* Responsive para móviles */
+@media (max-width: 768px) {
+    #cal-cells > div {
+        min-height: 80px;
+    }
+
+    .task-bars-container > div {
+        height: 16px;
+        line-height: 16px;
+        font-size: 10px;
+        padding: 0 4px;
+    }
+
+    .day-number {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 640px) {
+    #cal-cells > div {
+        min-height: 60px;
+    }
+
+    .task-bars-container > div {
+        height: 14px;
+        line-height: 14px;
+        font-size: 9px;
+        padding: 0 3px;
+    }
+
+    .day-number {
+        font-size: 11px;
+    }
+
+    .today-badge {
+        font-size: 6px;
+        padding: 1px 4px;
+    }
+}
