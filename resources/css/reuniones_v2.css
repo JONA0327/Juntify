@@ -121,13 +121,6 @@
    VARIABLES Y CONFIGURACIÓN BASE REUNIONES
    ========================================= */
 :root {
-    --primary-yellow: #fbbf24;
-    --primary-yellow-hover: #f59e0b;
-    --bg-slate-950: #020617;
-    --bg-slate-900: #0f172a;
-    --bg-slate-800: #1e293b;
-    --text-slate-200: #e2e8f0;
-    --text-slate-400: #94a3b8;
     --border-slate-700: #334155;
     --shadow-black: rgba(0, 0, 0, 0.1);
 }

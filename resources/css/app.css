@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Global CSS variables */
+:root {
+    --primary-blue: #3b82f6;
+    --primary-blue-dark: #1d4ed8;
+    --primary-yellow: #fbbf24;
+    --primary-yellow-hover: #f59e0b;
+    --bg-slate-950: #020617;
+    --bg-slate-900: #0f172a;
+    --bg-slate-800: #1e293b;
+    --bg-slate-700: #334155;
+    --text-slate-200: #e2e8f0;
+    --text-slate-400: #94a3b8;
+    --text-white: #ffffff;
+}
+
 /* Tarjetas informativas para listas personalizadas */
 .card-list {
     display: flex;
