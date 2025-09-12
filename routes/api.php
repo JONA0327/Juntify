@@ -151,6 +151,7 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
     Route::middleware(['web', 'auth'])->group(function () {
         // Rutas de Contenedores - movidas fuera del middleware restrictivo
         Route::post('/content-containers', [ContainerController::class, 'store'])->name('api.content-containers.store');
+        Route::put('/content-containers/{id}', [ContainerController::class, 'update'])->name('api.content-containers.update');
         Route::delete('/content-containers/{id}', [ContainerController::class, 'destroy'])->name('api.content-containers.destroy');
         Route::post('/content-containers/{id}/meetings', [ContainerController::class, 'addMeeting'])->name('api.content-containers.addMeeting');
         Route::delete('/content-containers/{container}/meetings/{meeting}', [ContainerController::class, 'removeMeeting'])->name('api.content-containers.meetings.destroy');
