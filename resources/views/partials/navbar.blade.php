@@ -10,7 +10,7 @@
   $hasGroups = auth()->check() && auth()->user()->groups()->exists();
 @endphp
 
-  <header class="header">
+  <header class="header hidden lg:block">
     <nav class="nav">
       <a href="/" class="logo nav-brand">Juntify</a>
 

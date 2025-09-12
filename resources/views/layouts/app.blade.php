@@ -23,7 +23,7 @@
         @include('partials.navbar')
         @include('partials.mobile-nav')
 
-        <main class="w-full pl-24 pt-24" style="margin-top:130px;">
+        <main class="w-full lg:pl-24 pt-20 lg:pt-24">
             @yield('content')
         </main>
     </div>
