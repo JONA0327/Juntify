@@ -20,8 +20,8 @@
         <span class="nav-label">Reuniones</span>
     </a>
 
-    {{-- Enlace a la sección 'Asistente' en la página de inicio --}}
-    <a href="{{ $isHome ? '#asistente' : $homeUrl . '#asistente' }}" class="nav-item">
+    {{-- Enlace al Asistente IA --}}
+    <a href="{{ route('ai-assistant') }}" class="nav-item {{ request()->routeIs('ai-assistant') ? 'active' : '' }}">
         <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <rect x="5" y="7" width="14" height="10" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
             <circle cx="9" cy="12" r="1" fill="currentColor"/>
