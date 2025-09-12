@@ -98,7 +98,6 @@
   </div>
 
   <?php echo app('Illuminate\Foundation\Vite')([
-    'resources/js/app.js',
     'resources/js/auth/register.js',
   ]); ?>
 </body>

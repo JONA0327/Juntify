@@ -98,7 +98,6 @@
   </div>
 
   @vite([
-    'resources/js/app.js',
     'resources/js/auth/register.js',
   ])
 </body>
