@@ -35,6 +35,8 @@ export default defineConfig({
                 'resources/js/organization.js',
                 'resources/js/ffmpeg-test.js',
                 'resources/js/ffmpeg-test-simple.js',
+                'resources/css/ai-assistant.css',
+                'resources/js/ai-assistant.js',
             ],
             refresh: true,
         }),
