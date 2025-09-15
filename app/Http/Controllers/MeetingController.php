@@ -2015,27 +2015,44 @@ class MeetingController extends Controller
             $sharedAccess = (bool) $sharedMeeting;
             $dbg['sharedAccess'] = $sharedAccess;
 
-            // Verificar acceso por contenedores
-            $containerAccess = DB::table('meeting_content_relations as mcr')
-                ->join('meeting_content_containers as mcc', 'mcr.container_id', '=', 'mcc.id')
-                ->join('groups as g', 'mcc.organization_group_id', '=', 'g.id')
-                ->where('mcr.meeting_id', $meeting)
-                ->where(function ($query) use ($user) {
-                    $query->where('g.creator', $user->username)
-                          ->orWhereExists(function ($subquery) use ($user) {
-                              $subquery->select(DB::raw(1))
-                                      ->from('group_members')
-                                      ->whereColumn('group_members.group_id', 'g.id')
-                                      ->where('group_members.username', $user->username);
-                          })
-                          ->orWhereExists(function ($subquery) use ($user) {
-                              $subquery->select(DB::raw(1))
-                                      ->from('organizations as o')
-                                      ->whereColumn('o.id', 'g.organization_id')
-                                      ->where('o.admin_user', $user->username);
-                          });
-                })
-                ->exists();
+            // Verificar acceso por contenedores (protegido si faltan tablas en entornos legacy)
+            $containerAccess = false;
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('meeting_content_relations') &&
+                    \Illuminate\Support\Facades\Schema::hasTable('meeting_content_containers') &&
+                    \Illuminate\Support\Facades\Schema::hasTable('groups')) {
+                    $query = DB::table('meeting_content_relations as mcr')
+                        ->join('meeting_content_containers as mcc', 'mcr.container_id', '=', 'mcc.id')
+                        ->join('groups as g', 'mcc.organization_group_id', '=', 'g.id')
+                        ->where('mcr.meeting_id', $meeting)
+                        ->where(function ($q2) use ($user) {
+                            $q2->where('g.creator', $user->username)
+                               ->orWhereExists(function ($subquery) use ($user) {
+                                   if (\Illuminate\Support\Facades\Schema::hasTable('group_members')) {
+                                       $subquery->select(DB::raw(1))
+                                           ->from('group_members')
+                                           ->whereColumn('group_members.group_id', 'g.id')
+                                           ->where('group_members.username', $user->username);
+                                   } else {
+                                       $subquery->select(DB::raw(1))->whereRaw('1=0'); // fuerza falso si tabla no existe
+                                   }
+                               })
+                               ->orWhereExists(function ($subquery) use ($user) {
+                                   $subquery->select(DB::raw(1))
+                                       ->from('organizations as o')
+                                       ->whereColumn('o.id', 'g.organization_id')
+                                       ->where('o.admin_user', $user->username);
+                               });
+                        });
+                    $containerAccess = $query->exists();
+                }
+            } catch (\Illuminate\Database\QueryException $qe) {
+                Log::notice('streamAudio: ignorando error en verificación de contenedores (entorno parcial)', [
+                    'meeting_id' => $meeting,
+                    'error' => $qe->getMessage()
+                ]);
+                $containerAccess = false; // fallback a false
+            }
 
             $useServiceAccount = $containerAccess;
             $dbg['containerAccess'] = $containerAccess; $dbg['useServiceAccount'] = $useServiceAccount;
