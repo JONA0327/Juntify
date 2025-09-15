@@ -130,6 +130,7 @@ function setActiveTab(button) {
         loadMyMeetings();
     } else if (targetId === 'shared-meetings') {
         loadSharedMeetings();
+        loadOutgoingSharedMeetings();
     } else if (targetId === 'containers') {
         loadContainers();
     } else if (targetId === 'contacts') {
@@ -191,7 +192,7 @@ async function loadMyMeetings() {
 }
 
 async function loadSharedMeetings() {
-    const container = document.getElementById('shared-meetings');
+    const container = document.getElementById('incoming-shared-wrapper');
     try {
         showLoadingState(container);
 
@@ -209,8 +210,7 @@ async function loadSharedMeetings() {
         const data = await response.json();
 
         if (data.success) {
-            // Usar un cardCreator específico para reuniones compartidas
-            renderMeetings(data.meetings, '#shared-meetings', 'No hay reuniones compartidas', createSharedMeetingCard);
+            renderMeetings(data.meetings, '#incoming-shared-wrapper', 'No hay reuniones compartidas', createSharedMeetingCard);
         } else {
             showErrorState(container, data.message || 'Error al cargar reuniones compartidas', loadSharedMeetings);
         }
@@ -218,6 +218,103 @@ async function loadSharedMeetings() {
     } catch (error) {
         console.error('Error loading shared meetings:', error);
         showErrorState(container, 'Error de conexión al cargar reuniones compartidas', loadSharedMeetings);
+    }
+}
+
+// ==============================
+// OUTGOING (Shares I created)
+// ==============================
+async function loadOutgoingSharedMeetings() {
+    const container = document.getElementById('outgoing-shared-wrapper');
+    if (!container) return;
+    try {
+        showLoadingState(container);
+        const response = await fetch('/api/shared-meetings/outgoing', {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+        if (!response.ok) throw new Error('Error al cargar compartidas por mí');
+        const data = await response.json();
+        if (data.success) {
+            renderOutgoingShares(data.shares || [], container);
+        } else {
+            showErrorState(container, data.message || 'Error al cargar compartidas por mí', loadOutgoingSharedMeetings);
+        }
+    } catch (e) {
+        console.error('Error loadOutgoingSharedMeetings', e);
+        showErrorState(container, 'Error de conexión', loadOutgoingSharedMeetings);
+    }
+}
+
+function renderOutgoingShares(shares, container) {
+    if (!Array.isArray(shares) || shares.length === 0) {
+        container.innerHTML = '<div class="loading-card"><p>No has compartido reuniones</p></div>';
+        return;
+    }
+    const grid = document.createElement('div');
+    grid.className = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6';
+    shares.forEach(share => {
+        const card = document.createElement('div');
+        card.className = 'meeting-card';
+        card.innerHTML = `
+            <div class="meeting-card-header">
+                <div class="meeting-header-top">
+                    <div class="meeting-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <div class="meeting-actions">
+                        <button type="button" class="icon-btn delete-btn" data-share-id="${share.id}" title="Revocar acceso" aria-label="Revocar acceso">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="meeting-content">
+                <h3 class="meeting-title">${escapeHtml(share.title)}</h3>
+                <p class="meeting-date">Compartida con: ${escapeHtml(share.shared_with?.name || 'Usuario')}</p>
+                <p class="text-xs text-slate-400 mt-1">Estado: <span class="${share.status === 'accepted' ? 'text-green-400' : 'text-yellow-400'}">${share.status}</span></p>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+    container.innerHTML = '';
+    container.appendChild(grid);
+
+    // Attach listeners for revoke
+    container.querySelectorAll('button.delete-btn[data-share-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-share-id');
+            confirmRevokeShare(id);
+        });
+    });
+}
+
+async function confirmRevokeShare(id) {
+    if (!window.confirm('¿Revocar acceso a esta reunión? El usuario ya no la verá.')) return;
+    try {
+        const response = await fetch(`/api/shared-meetings/outgoing/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+        if (!response.ok) throw new Error('Error revocando');
+        const data = await response.json();
+        if (data.success) {
+            loadOutgoingSharedMeetings();
+        } else {
+            alert(data.message || 'No se pudo revocar');
+        }
+    } catch (e) {
+        console.error('Error revoke share', e);
+        alert('Error al revocar acceso');
     }
 }
 

@@ -22,6 +22,102 @@ use App\Services\GoogleServiceAccount;
 
 class SharedMeetingController extends Controller
 {
+    // ------------------------------------------------------------------
+    // NUEVAS FUNCIONALIDADES (Outgoing Shares)
+    // getOutgoingShares(): Lista reuniones que el usuario actual ha compartido
+    // revokeOutgoingShare(id): Revoca (elimina) el share, quitando acceso al receptor
+    // Estas funciones permiten al usuario gestionar y retirar accesos previamente otorgados.
+    // ------------------------------------------------------------------
+    /**
+     * List shares initiated by the authenticated user (outgoing shares).
+     * Includes pending and accepted so user can see invitations and revoke them.
+     */
+    public function getOutgoingShares(): JsonResponse
+    {
+        try {
+            if (!Schema::hasTable('shared_meetings')) {
+                return response()->json([
+                    'success' => true,
+                    'shares' => [],
+                    'message' => 'Funcionalidad no disponible todavía'
+                ]);
+            }
+
+            $sharesQuery = SharedMeeting::with(['meeting','sharedWithUser'])
+                ->where('shared_by', Auth::id())
+                ->orderByDesc('shared_at')
+                ->get();
+
+            // Preload legacy meetings to avoid collisions / N+1
+            $legacyMap = TranscriptionLaravel::whereIn('id', $sharesQuery->pluck('meeting_id'))
+                ->get()
+                ->keyBy('id');
+
+            $shares = $sharesQuery->map(function($share) use ($legacyMap) {
+                $legacy = $legacyMap->get($share->meeting_id);
+                $meeting = $legacy ? null : $share->meeting; // only when not legacy
+                $with = $share->sharedWithUser; // dynamic relation we will add via accessor if needed
+                $sharedWithName = $with?->full_name ?? $with?->username ?? $with?->name ?? 'Usuario';
+                return [
+                    'id' => $share->id,
+                    'meeting_id' => $share->meeting_id,
+                    'title' => $legacy?->meeting_name ?? $meeting?->title ?? 'Reunión',
+                    'status' => $share->status,
+                    'shared_with' => [
+                        'id' => $with?->id,
+                        'name' => $sharedWithName,
+                        'email' => $with?->email ?? ''
+                    ],
+                    'shared_at' => $share->shared_at,
+                    'responded_at' => $share->responded_at,
+                    'is_legacy' => (bool)$legacy,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'shares' => $shares,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error getOutgoingShares: '.$e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar reuniones compartidas por ti'
+            ], 500);
+        }
+    }
+
+    /**
+     * Revoke an outgoing share (only creator can revoke). Deletes the record so recipient loses access.
+     */
+    public function revokeOutgoingShare($id): JsonResponse
+    {
+        try {
+            $share = SharedMeeting::where('id', $id)
+                ->where('shared_by', Auth::id())
+                ->first();
+
+            if (!$share) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Compartido no encontrado'
+                ], 404);
+            }
+
+            $share->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Acceso revocado'
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error revokeOutgoingShare: '.$e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al revocar acceso'
+            ], 500);
+        }
+    }
     public function resolveDriveLinks(Request $request): JsonResponse
     {
         $request->validate([

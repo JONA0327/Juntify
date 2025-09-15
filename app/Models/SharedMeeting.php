@@ -37,6 +37,12 @@ class SharedMeeting extends Model
         return $this->belongsTo(User::class, 'shared_by');
     }
 
+    /** User who received the share */
+    public function sharedWithUser()
+    {
+        return $this->belongsTo(User::class, 'shared_with');
+    }
+
     public function sharedWith()
     {
         return $this->belongsTo(User::class, 'shared_with');

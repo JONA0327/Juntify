@@ -197,6 +197,9 @@ Route::get('/organization-activities', [OrganizationActivityController::class, '
           Route::post('/shared-meetings/respond', [SharedMeetingController::class, 'respondToInvitation'])->name('api.shared-meetings.respond');
           // Versioned endpoint to avoid clashing with legacy shared meetings list
           Route::get('/shared-meetings/v2', [SharedMeetingController::class, 'getSharedMeetings'])->name('api.shared-meetings.v2');
+          // Outgoing shares (those I have shared)
+          Route::get('/shared-meetings/outgoing', [SharedMeetingController::class, 'getOutgoingShares'])->name('api.shared-meetings.outgoing');
+          Route::delete('/shared-meetings/outgoing/{id}', [SharedMeetingController::class, 'revokeOutgoingShare'])->name('api.shared-meetings.outgoing.revoke');
           Route::post('/shared-meetings/resolve-drive-links', [SharedMeetingController::class, 'resolveDriveLinks'])->name('api.shared-meetings.resolve');
           Route::delete('/shared-meetings/{id}', [SharedMeetingController::class, 'unlink'])->name('api.shared-meetings.unlink');
 
