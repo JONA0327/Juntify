@@ -27,6 +27,14 @@ let microphoneAnalyser = null;
 let systemDataArray = null;
 let microphoneDataArray = null;
 let meetingAnimationId = null;
+let systemGainNode = null;
+let microphoneGainNode = null;
+let meetingDestination = null;
+let systemSpectrogramCanvas = null;
+let microphoneSpectrogramCanvas = null;
+let systemSpectrogramCtx = null;
+let microphoneSpectrogramCtx = null;
+let lastRecordingContext = null; // 'recording' | 'meeting' | 'upload'
 let discardRequested = false;
 let uploadedFile = null;
 let fileUploadInitialized = false;
@@ -427,6 +435,7 @@ async function startRecording() {
         startTime = Date.now();
         limitWarningShown = false;
         isRecording = true;
+        lastRecordingContext = 'recording';
 
         updateRecordingUI(true);
 
@@ -633,10 +642,19 @@ async function finalizeRecording() {
     const now = new Date();
     const name = `grabacion-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
 
+    // Determinar contexto y descargar copia local en MP3 cuando es reunión
+    const context = lastRecordingContext || (selectedMode === 'meeting' ? 'meeting' : 'recording');
+    if (context === 'meeting') {
+        try {
+            await downloadAudioAsMP3(finalBlob, name);
+        } catch (_) {
+            downloadAudioWithCorrectFormat(finalBlob, name);
+        }
+    }
     if (sizeMB > 100) {
         showError('La grabación supera el límite de 100 MB.');
         const upload = confirm('¿Deseas subirla en segundo plano? Cancelar para descargarla.');
-        pendingSaveContext = 'recording';
+        pendingSaveContext = context;
         if (upload) {
             uploadInBackground(finalBlob, name)
                 .then(response => {
@@ -661,7 +679,7 @@ async function finalizeRecording() {
     }
 
     if (postponeMode) {
-        pendingSaveContext = 'recording';
+        pendingSaveContext = context;
         let key;
         try {
             key = await saveAudioBlob(finalBlob);
@@ -697,7 +715,7 @@ async function finalizeRecording() {
     } else {
         console.log('🎯 [finalizeRecording] Preparando audio para análisis inmediato...');
         pendingAudioBlob = finalBlob;
-        pendingSaveContext = 'recording';
+        pendingSaveContext = context;
         console.log('🎯 [finalizeRecording] Llamando a analyzeNow()...');
         analyzeNow();
     }
@@ -1275,7 +1293,15 @@ async function fetchRemuxedBlob() {
         throw new Error('Remux failed');
     }
     const buffer = await response.arrayBuffer();
-    return new Blob([buffer], { type: 'audio/webm;codecs=opus' });
+    // Convertir a MP3 para descargas/compatibilidad si se usa este flujo
+    const webmBlob = new Blob([buffer], { type: 'audio/webm;codecs=opus' });
+    try {
+        const mp3Blob = await convertToMp3(webmBlob);
+        return mp3Blob;
+    } catch (_) {
+        // Fallback: devolver blob original pero marcando mpeg para evitar descargas .webm
+        return new Blob([buffer], { type: 'audio/mpeg' });
+    }
 }
 
 function blobToBase64(blob) {
@@ -1361,6 +1387,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Configurar subida de archivos una sola vez
     setupFileUpload();
+
+    // Reajustar espectrogramas al redimensionar
+    window.addEventListener('resize', () => {
+        const meetingEl = document.getElementById('meeting-recorder');
+        if (meetingEl && meetingEl.style.display !== 'none') {
+            setupMeetingRecorder();
+        }
+    });
 
     // Inicializar con modo de audio por defecto
     showRecordingInterface('audio');
@@ -1563,6 +1597,67 @@ function formatFileSize(bytes) {
 
 // ===== FUNCIONES PARA REUNIÓN =====
 
+// Inicializa elementos y canvas del grabador de reunión
+function setupMeetingRecorder() {
+    // Espectrogramas
+    systemSpectrogramCanvas = document.getElementById('system-spectrogram');
+    microphoneSpectrogramCanvas = document.getElementById('microphone-spectrogram');
+
+    // Ajustar dimensiones al ancho del contenedor
+    [systemSpectrogramCanvas, microphoneSpectrogramCanvas].forEach(canvas => {
+        if (!canvas) return;
+        const parent = canvas.parentElement;
+        const width = Math.max(300, parent ? parent.clientWidth : 600);
+        const height = 80; // consistente con CSS
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#0b1020';
+        ctx.fillRect(0, 0, width, height);
+        if (canvas.id === 'system-spectrogram') systemSpectrogramCtx = ctx;
+        if (canvas.id === 'microphone-spectrogram') microphoneSpectrogramCtx = ctx;
+    });
+
+    // Reset de analizadores/gains (se crearán al iniciar la grabación)
+    systemGainNode = null;
+    microphoneGainNode = null;
+}
+
+// Dibuja la última columna del espectrograma desplazando la imagen 1px a la izquierda
+function drawSpectrogram(ctx, frequencyData) {
+    if (!ctx || !frequencyData || frequencyData.length === 0) return;
+    const { canvas } = ctx;
+    // Desplazar imagen 1px a la izquierda
+    const imageData = ctx.getImageData(1, 0, canvas.width - 1, canvas.height);
+    ctx.putImageData(imageData, 0, 0);
+
+    // Dibujar nueva columna en el borde derecho
+    const x = canvas.width - 1;
+    const bins = frequencyData.length;
+    for (let y = 0; y < canvas.height; y++) {
+        // Mapear y (alto->bajos) a índice de frecuencia (lineal)
+        const bin = Math.floor((1 - y / canvas.height) * (bins - 1));
+        const v = frequencyData[bin] || 0;
+
+        // Mapear magnitud a color (esquema plasma simple)
+        const r = Math.min(255, Math.floor(v * 1.2));
+        const g = Math.min(255, Math.floor(v * 0.7));
+        const b = Math.min(255, 50 + Math.floor(v * 0.3));
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(x, y, 1, 1);
+    }
+}
+
+// Aplica estados de mute/enable a las fuentes durante la reunión
+function applyMuteStates() {
+    if (systemGainNode) {
+        systemGainNode.gain.value = (systemAudioEnabled && !systemAudioMuted) ? 1 : 0;
+    }
+    if (microphoneGainNode) {
+        microphoneGainNode.gain.value = (microphoneAudioEnabled && !microphoneAudioMuted) ? 1 : 0;
+    }
+}
+
 // Alternar audio del sistema
 function toggleSystemAudio() {
     systemAudioEnabled = !systemAudioEnabled;
@@ -1576,6 +1671,8 @@ function toggleSystemAudio() {
         btn.classList.remove('active');
         text.textContent = 'Sistema desactivado';
     }
+    // Aplicar inmediatamente si estamos grabando reunión
+    if (meetingRecording) applyMuteStates();
 }
 
 // Alternar audio del micrófono
@@ -1591,6 +1688,8 @@ function toggleMicrophoneAudio() {
         btn.classList.remove('active');
         text.textContent = 'Micrófono desactivado';
     }
+    // Aplicar inmediatamente si estamos grabando reunión
+    if (meetingRecording) applyMuteStates();
 }
 
 // Mutear audio del sistema
@@ -1606,6 +1705,7 @@ function muteSystemAudio() {
         btn.classList.remove('muted');
         icon.textContent = '🔊';
     }
+    applyMuteStates();
 }
 
 // Mutear audio del micrófono
@@ -1621,6 +1721,7 @@ function muteMicrophoneAudio() {
         btn.classList.remove('muted');
         icon.textContent = '🔊';
     }
+    applyMuteStates();
 }
 
 // Alternar grabación de reunión
@@ -1663,19 +1764,44 @@ async function startMeetingRecording() {
         }
 
         if (systemAudioEnabled) {
-            // Solicitar captura de pantalla para obtener audio del sistema
+            // Captura de pantalla + audio del sistema (usar constraints simples para evitar NotSupportedError)
             systemAudioStream = await navigator.mediaDevices.getDisplayMedia({
-                video: false,
-                audio: {
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    sampleRate: 44100
-                }
+                video: true,
+                audio: true
             });
         }
 
-        // Configurar análisis de audio
-        setupMeetingAudioAnalysis();
+        // Crear contexto y destino mezclado
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        meetingDestination = audioContext.createMediaStreamDestination();
+
+        // Configurar análisis de audio y mezcla con gains individuales
+        if (systemAudioStream) {
+            systemAnalyser = audioContext.createAnalyser();
+            const systemSource = audioContext.createMediaStreamSource(systemAudioStream);
+            systemGainNode = audioContext.createGain();
+            systemSource.connect(systemAnalyser);
+            systemSource.connect(systemGainNode);
+            systemGainNode.connect(meetingDestination);
+            systemAnalyser.fftSize = 256;
+            systemAnalyser.smoothingTimeConstant = 0.8;
+            systemDataArray = new Uint8Array(systemAnalyser.frequencyBinCount);
+        }
+
+        if (microphoneAudioStream) {
+            microphoneAnalyser = audioContext.createAnalyser();
+            const microphoneSource = audioContext.createMediaStreamSource(microphoneAudioStream);
+            microphoneGainNode = audioContext.createGain();
+            microphoneSource.connect(microphoneAnalyser);
+            microphoneSource.connect(microphoneGainNode);
+            microphoneGainNode.connect(meetingDestination);
+            microphoneAnalyser.fftSize = 256;
+            microphoneAnalyser.smoothingTimeConstant = 0.8;
+            microphoneDataArray = new Uint8Array(microphoneAnalyser.frequencyBinCount);
+        }
+
+        // Aplicar estados iniciales de mute/enable
+        applyMuteStates();
 
         meetingRecording = true;
         meetingStartTime = Date.now();
@@ -1687,6 +1813,47 @@ async function startMeetingRecording() {
         // Iniciar timer y análisis
         meetingTimer = setInterval(updateMeetingTimer, 100);
         startMeetingAudioAnalysis();
+
+        // Preparar MediaRecorder para el audio mezclado
+        recordedChunks = [];
+        currentRecordingId = crypto.randomUUID();
+        chunkIndex = 0;
+        lastRecordingContext = 'meeting';
+
+        const optimalFormat = getOptimalAudioFormat();
+        currentRecordingFormat = optimalFormat;
+
+        recordingStream = meetingDestination.stream;
+        mediaRecorder = new MediaRecorder(recordingStream, {
+            mimeType: optimalFormat,
+            audioBitsPerSecond: 128000
+        });
+
+        mediaRecorder.ondataavailable = event => {
+            if (event.data && event.data.size > 0) {
+                recordedChunks.push(event.data);
+                sendChunkToServer(event.data, chunkIndex++);
+            }
+        };
+
+        mediaRecorder.onstop = () => {
+            // Dar tiempo a que llegue el último dataavailable antes de finalizar
+            setTimeout(() => finalizeRecording(), 50);
+        };
+
+        mediaRecorder.start(SEGMENT_MS);
+
+        // Mostrar controles de pausa/descartar para modo reunión
+        const mp = document.getElementById('meeting-pause');
+        const md = document.getElementById('meeting-discard');
+        const mr = document.getElementById('meeting-resume');
+        if (mp) mp.style.display = 'inline-block';
+        if (md) md.style.display = 'inline-block';
+        if (mr) mr.style.display = 'none';
+        const postponeContainer = document.getElementById('postpone-switch');
+        const postponeToggle = document.getElementById('postpone-toggle');
+        if (postponeContainer) postponeContainer.style.display = 'none';
+        if (postponeToggle) postponeToggle.disabled = true;
 
         showSuccess('¡Grabación de reunión iniciada!');
 
@@ -1760,12 +1927,14 @@ function startMeetingAudioAnalysis() {
     if (systemAnalyser && systemDataArray && !systemAudioMuted) {
         systemAnalyser.getByteFrequencyData(systemDataArray);
         updateMeetingAudioBars('system-audio-visualizer', systemDataArray);
+        if (systemSpectrogramCtx) drawSpectrogram(systemSpectrogramCtx, systemDataArray);
     }
 
     // Analizar audio del micrófono
     if (microphoneAnalyser && microphoneDataArray && !microphoneAudioMuted) {
         microphoneAnalyser.getByteFrequencyData(microphoneDataArray);
         updateMeetingAudioBars('microphone-audio-visualizer', microphoneDataArray);
+        if (microphoneSpectrogramCtx) drawSpectrogram(microphoneSpectrogramCtx, microphoneDataArray);
     }
 
     meetingAnimationId = requestAnimationFrame(startMeetingAudioAnalysis);
@@ -1888,6 +2057,7 @@ window.toggleMicrophoneAudio = toggleMicrophoneAudio;
 window.muteSystemAudio = muteSystemAudio;
 window.muteMicrophoneAudio = muteMicrophoneAudio;
 window.toggleMeetingRecording = toggleMeetingRecording;
+window.setupMeetingRecorder = setupMeetingRecorder;
 
 // Funciones para navbar móvil
 window.toggleMobileDropdown = function() {

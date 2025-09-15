@@ -36,6 +36,9 @@
                         @endfor
                     </div>
                 </div>
+                <div class="spectrogram-wrap">
+                    <canvas id="system-spectrogram" class="spectrogram-canvas"></canvas>
+                </div>
             </div>
 
             <!-- Audio del micrófono -->
@@ -53,6 +56,9 @@
                             <div class="meeting-audio-bar"></div>
                         @endfor
                     </div>
+                </div>
+                <div class="spectrogram-wrap">
+                    <canvas id="microphone-spectrogram" class="spectrogram-canvas"></canvas>
                 </div>
             </div>
         </div>
