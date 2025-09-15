@@ -2559,6 +2559,75 @@ div[class*="transcript-segment"] {
 }
 
 /* Share modal specific styles */
+#shareModal.modal { /* ensure layout if base .modal not loaded */
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    background: rgba(20, 20, 25, 0.85);
+    backdrop-filter: blur(10px);
+    display: none; /* toggled by .show */
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 80px;
+    padding-bottom: 1rem;
+    overflow-y: auto;
+}
+
+#shareModal.modal.show {
+    display: flex;
+}
+
+#shareModal .modal-content {
+    background: rgba(30, 41, 59, 0.95);
+    border: 1px solid rgba(100, 116, 139, 0.3);
+    border-radius: 16px;
+    padding: 0;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+    overflow: hidden;
+    max-height: calc(100vh - 140px);
+    display: flex;
+    flex-direction: column;
+}
+
+#shareModal .modal-header, #shareModal .modal-footer {
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(51,65,85,0.35);
+    backdrop-filter: blur(4px);
+}
+
+#shareModal .modal-body { /* body already adds padding-top later; consolidate */
+    padding: 1rem 1.25rem 1.25rem 1.25rem;
+    overflow-y: auto;
+}
+
+#shareModal .modal-close-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 8px;
+    transition: background .2s, color .2s;
+}
+
+#shareModal .modal-close-btn:hover {
+    background: rgba(148,163,184,0.15);
+    color: #f1f5f9;
+}
+
+#shareModal .modal-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+#shareModal .modal-icon { width: 22px; height: 22px; }
+
 #shareModal .modal-content {
     max-width: 720px;
     width: 92vw;
