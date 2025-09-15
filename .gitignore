@@ -18,4 +18,11 @@ yarn-error.log
 /.idea
 /.vscode
 
+# Certificados SSL
+/cert
+/certs
+*.pem
+*.crt
+*.key
+
 
