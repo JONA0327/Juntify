@@ -2331,6 +2331,21 @@ class MeetingController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
+            // Fallback final: intentar flujo directo de descarga/redirect sin temp si todavía no se intentó
+            try {
+                $legacyModel = TranscriptionLaravel::find($meeting);
+                if ($legacyModel) {
+                    $fallback = $this->resolveLegacyAudio($legacyModel, false, null, request()->query('debug') !== null, $dbg = [], true);
+                    if ($fallback instanceof \Illuminate\Http\JsonResponse || $fallback instanceof \Illuminate\Http\RedirectResponse || $fallback instanceof \Symfony\Component\HttpFoundation\Response) {
+                        return $fallback;
+                    }
+                }
+            } catch (\Throwable $ef) {
+                Log::warning('streamAudio: fallback resolveLegacyAudio también falló', [
+                    'meeting_id' => $meeting,
+                    'error' => $ef->getMessage()
+                ]);
+            }
             if (isset($debug) && $debug) {
                 $dbg['exception'] = $e->getMessage();
                 return response()->json(array_merge($dbg, ['error' => 'Error interno streaming']), 500);
