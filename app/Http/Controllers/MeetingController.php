@@ -2121,6 +2121,11 @@ class MeetingController extends Controller
                             'error' => $eGet->getMessage()
                         ]);
                         $dbg['getAudioPath_exception'] = $eGet->getMessage();
+                        // Fallback inmediato: reutilizar la lógica de descarga directa estilo downloadAudioFile
+                        $fallback = $this->resolveLegacyAudio($meetingModel, $sharedAccess, null, $debug, $dbg);
+                        if ($fallback instanceof \Illuminate\Http\JsonResponse || $fallback instanceof \Illuminate\Http\RedirectResponse || $fallback instanceof \Symfony\Component\HttpFoundation\Response) {
+                            return $fallback;
+                        }
                         $audioPath = null;
                     }
                     if (!$audioPath) {
@@ -2129,7 +2134,12 @@ class MeetingController extends Controller
                             'audio_drive_id' => $meetingModel->audio_drive_id,
                             'audio_download_url' => $meetingModel->audio_download_url
                         ]);
-                        if ($debug) { return response()->json(array_merge($dbg, ['error' => 'Audio no disponible (legacy)']), 404); }
+                        // Fallback final: intentar flujo directo sin crear archivo temporal
+                        $fallback = $this->resolveLegacyAudio($meetingModel, $sharedAccess, null, $debug, $dbg);
+                        if ($fallback instanceof \Illuminate\Http\JsonResponse || $fallback instanceof \Illuminate\Http\RedirectResponse || $fallback instanceof \Symfony\Component\HttpFoundation\Response) {
+                            return $fallback;
+                        }
+                        if ($debug) { return response()->json(array_merge($dbg, ['error' => 'Audio no disponible (legacy-fallback)']), 404); }
                         return response()->json(['error' => 'Audio no disponible'], 404);
                     }
                     Log::info('streamAudio: Ruta de audio obtenida', [
@@ -2326,6 +2336,109 @@ class MeetingController extends Controller
                 return response()->json(array_merge($dbg, ['error' => 'Error interno streaming']), 500);
             }
             return $this->audioError(500, 'Error al obtener audio', $meeting, $e);
+        }
+    }
+
+    /**
+     * Fallback unificado para servir audio legacy sin crear archivo temporal.
+     * Intenta el mismo conjunto de pasos que downloadAudioFile:
+     * - Para compartidas: Service Account (impersonate dueño) -> SA sin impersonar -> token dueño -> redirect.
+     * - Propietario: redirect a audio_download_url -> webContentLink -> descarga directa -> redirect uc?export.
+     * Devuelve Response / RedirectResponse / JsonResponse.
+     * Si $debug=true añade info adicional en JSON de error.
+     */
+    private function resolveLegacyAudio($meetingModel, bool $sharedAccess, $sharedMeeting = null, bool $debug = false, array &$dbg = [])
+    {
+        try {
+            $user = Auth::user();
+            $fileId = $meetingModel->audio_drive_id;
+            $dbg['resolve_fileId_initial'] = $fileId;
+
+            if ($sharedAccess) {
+                // Intentar Service Account (directo, luego impersonate)
+                if (!empty($fileId)) {
+                    try {
+                        /** @var \App\Services\GoogleServiceAccount $sa */
+                        $sa = app(\App\Services\GoogleServiceAccount::class);
+                        try {
+                            $content = $sa->downloadFile($fileId);
+                            return response($content)
+                                ->header('Content-Type', 'application/octet-stream')
+                                ->header('Content-Disposition', 'attachment; filename="meeting_{$meetingModel->id}_audio"');
+                        } catch (\Throwable $e1) {
+                            if ($sharedMeeting?->sharedBy?->email) {
+                                try {
+                                    $sa->impersonate($sharedMeeting->sharedBy->email);
+                                    $content = $sa->downloadFile($fileId);
+                                    return response($content)
+                                        ->header('Content-Type', 'application/octet-stream')
+                                        ->header('Content-Disposition', 'attachment; filename="meeting_{$meetingModel->id}_audio"');
+                                } catch (\Throwable $e2) {
+                                    $dbg['sa_impersonate_error'] = $e2->getMessage();
+                                }
+                            }
+                        }
+                    } catch (\Throwable $eSa) {
+                        $dbg['sa_error'] = $eSa->getMessage();
+                    }
+                }
+                // Redirects compartidas
+                if (!empty($meetingModel->audio_download_url)) {
+                    $direct = $this->normalizeDriveUrl($meetingModel->audio_download_url);
+                    return redirect()->away($direct);
+                }
+                if (!empty($fileId)) {
+                    $direct = 'https://drive.google.com/uc?export=download&id=' . $fileId;
+                    return redirect()->away($direct);
+                }
+                if ($debug) { return response()->json(array_merge($dbg, ['error' => 'Audio compartido no accesible']), 404); }
+                return response()->json(['error' => 'Audio no disponible'], 404);
+            }
+
+            // Propietario / no compartido
+            if (!empty($meetingModel->audio_download_url)) {
+                $direct = $this->normalizeDriveUrl($meetingModel->audio_download_url);
+                return redirect()->away($direct);
+            }
+
+            if (empty($fileId)) {
+                if ($debug) { return response()->json(array_merge($dbg, ['error' => 'Sin fileId de audio']), 404); }
+                return response()->json(['error' => 'Audio no disponible'], 404);
+            }
+
+            // Intentar link directo vía token usuario
+            try {
+                $this->setGoogleDriveToken($user);
+                try {
+                    $direct = app(\App\Services\GoogleDriveService::class)->getWebContentLink($fileId);
+                    if ($direct) {
+                        return redirect()->away($direct);
+                    }
+                } catch (\Throwable $eW) {
+                    $dbg['webContentLink_error'] = $eW->getMessage();
+                }
+            } catch (\Throwable $eToken) {
+                $dbg['user_token_error'] = $eToken->getMessage();
+            }
+
+            // Intentar descarga directa (token usuario) si tenemos token configurado
+            try {
+                if (!isset($dbg['user_token_error'])) {
+                    $content = $this->googleDriveService->downloadFileContent($fileId);
+                    return response($content)
+                        ->header('Content-Type', 'application/octet-stream')
+                        ->header('Content-Disposition', 'attachment; filename="meeting_{$meetingModel->id}_audio"');
+                }
+            } catch (\Throwable $eDl) {
+                $dbg['direct_download_error'] = $eDl->getMessage();
+            }
+
+            // Último fallback: redirigir uc?export
+            $direct = 'https://drive.google.com/uc?export=download&id=' . $fileId;
+            return redirect()->away($direct);
+        } catch (\Throwable $e) {
+            if ($debug) { return response()->json(array_merge($dbg, ['error' => 'resolveLegacyAudio exception', 'exception' => $e->getMessage()]), 500); }
+            return response()->json(['error' => 'Audio no disponible'], 500);
         }
     }
 
