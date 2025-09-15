@@ -2158,7 +2158,23 @@ class MeetingController extends Controller
                     return redirect()->to($publicUrl, 302);
                 }
 
-                $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
+                if (!file_exists($audioPath)) {
+                    Log::warning('streamAudio: Archivo calculado pero no existe en disco', [
+                        'meeting_id' => $meetingModel->id,
+                        'audio_path' => $audioPath
+                    ]);
+                    return $this->audioError(404, 'Archivo de audio no disponible (temp)', $meetingModel->id);
+                }
+                try {
+                    $mimeType = @mime_content_type($audioPath) ?: 'audio/mpeg';
+                } catch (\Throwable $e) {
+                    Log::warning('streamAudio: mime_content_type fallo, usando audio/mpeg', [
+                        'meeting_id' => $meetingModel->id,
+                        'audio_path' => $audioPath,
+                        'error' => $e->getMessage()
+                    ]);
+                    $mimeType = 'audio/mpeg';
+                }
                 return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
                 // Flujo moderno (Meeting en BD)
@@ -2244,7 +2260,23 @@ class MeetingController extends Controller
                     $publicUrl = $this->publicUrlFromStoragePath($audioPath);
                     return redirect()->to($publicUrl, 302);
                 }
-                $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
+                if (!file_exists($audioPath)) {
+                    Log::warning('streamAudio: Archivo moderno calculado pero no existe', [
+                        'meeting_id' => $modern->id,
+                        'audio_path' => $audioPath
+                    ]);
+                    return $this->audioError(404, 'Archivo de audio no disponible', $modern->id);
+                }
+                try {
+                    $mimeType = @mime_content_type($audioPath) ?: 'audio/mpeg';
+                } catch (\Throwable $e2) {
+                    Log::warning('streamAudio: mime_content_type fallo (moderno)', [
+                        'meeting_id' => $modern->id,
+                        'audio_path' => $audioPath,
+                        'error' => $e2->getMessage()
+                    ]);
+                    $mimeType = 'audio/mpeg';
+                }
                 return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
             }
         } catch (\Exception $e) {
@@ -2253,8 +2285,27 @@ class MeetingController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            return response()->json(['error' => 'Error al obtener audio'], 500);
+            return $this->audioError(500, 'Error al obtener audio', $meeting, $e);
         }
+    }
+
+    /**
+     * Devuelve respuesta JSON de error para endpoint de audio con detalle opcional cuando APP_DEBUG=true
+     */
+    private function audioError(int $status, string $message, $meetingId = null, \Throwable $e = null)
+    {
+        $payload = [
+            'error' => $message,
+            'status' => $status,
+        ];
+        if ($meetingId !== null) {
+            $payload['meeting_id'] = $meetingId;
+        }
+        if ($e && config('app.debug')) {
+            $payload['exception'] = get_class($e);
+            $payload['exception_message'] = $e->getMessage();
+        }
+        return response()->json($payload, $status);
     }
 
     /**
