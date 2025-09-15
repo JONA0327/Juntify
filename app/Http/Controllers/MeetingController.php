@@ -2347,7 +2347,7 @@ class MeetingController extends Controller
      * Devuelve Response / RedirectResponse / JsonResponse.
      * Si $debug=true añade info adicional en JSON de error.
      */
-    private function resolveLegacyAudio($meetingModel, bool $sharedAccess, $sharedMeeting = null, bool $debug = false, array &$dbg = [])
+    private function resolveLegacyAudio($meetingModel, bool $sharedAccess, $sharedMeeting = null, bool $debug = false, array &$dbg = [], bool $storeTemp = true)
     {
         try {
             $user = Auth::user();
@@ -2362,17 +2362,30 @@ class MeetingController extends Controller
                         $sa = app(\App\Services\GoogleServiceAccount::class);
                         try {
                             $content = $sa->downloadFile($fileId);
-                            return response($content)
-                                ->header('Content-Type', 'application/octet-stream')
-                                ->header('Content-Disposition', 'attachment; filename="meeting_{$meetingModel->id}_audio"');
+                            if ($storeTemp) {
+                                try {
+                                    $info = $sa->getFileInfo($fileId);
+                                    $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType());
+                                } catch (\Throwable $eInfo) { $ext = 'mp3'; }
+                                $san = preg_replace('/[^a-zA-Z0-9_-]/','_', $meetingModel->meeting_name);
+                                $fileName = $san . '_' . $meetingModel->id . '.' . $ext;
+                                $local = $this->storeTemporaryFile($content, $fileName);
+                                return redirect()->to($this->publicUrlFromStoragePath($local), 302);
+                            }
+                            return response($content)->header('Content-Type','audio/mpeg');
                         } catch (\Throwable $e1) {
                             if ($sharedMeeting?->sharedBy?->email) {
                                 try {
                                     $sa->impersonate($sharedMeeting->sharedBy->email);
                                     $content = $sa->downloadFile($fileId);
-                                    return response($content)
-                                        ->header('Content-Type', 'application/octet-stream')
-                                        ->header('Content-Disposition', 'attachment; filename="meeting_{$meetingModel->id}_audio"');
+                                    if ($storeTemp) {
+                                        try { $info = $sa->getFileInfo($fileId); $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType()); } catch (\Throwable $eInfo2) { $ext='mp3'; }
+                                        $san = preg_replace('/[^a-zA-Z0-9_-]/','_', $meetingModel->meeting_name);
+                                        $fileName = $san . '_' . $meetingModel->id . '.' . $ext;
+                                        $local = $this->storeTemporaryFile($content, $fileName);
+                                        return redirect()->to($this->publicUrlFromStoragePath($local), 302);
+                                    }
+                                    return response($content)->header('Content-Type','audio/mpeg');
                                 } catch (\Throwable $e2) {
                                     $dbg['sa_impersonate_error'] = $e2->getMessage();
                                 }
@@ -2425,9 +2438,14 @@ class MeetingController extends Controller
             try {
                 if (!isset($dbg['user_token_error'])) {
                     $content = $this->googleDriveService->downloadFileContent($fileId);
-                    return response($content)
-                        ->header('Content-Type', 'application/octet-stream')
-                        ->header('Content-Disposition', 'attachment; filename="meeting_{$meetingModel->id}_audio"');
+                    if ($storeTemp) {
+                        try { $info = $this->googleDriveService->getFileInfo($fileId); $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType()); } catch (\Throwable $eI) { $ext='mp3'; }
+                        $san = preg_replace('/[^a-zA-Z0-9_-]/','_', $meetingModel->meeting_name);
+                        $fileName = $san . '_' . $meetingModel->id . '.' . $ext;
+                        $local = $this->storeTemporaryFile($content, $fileName);
+                        return redirect()->to($this->publicUrlFromStoragePath($local), 302);
+                    }
+                    return response($content)->header('Content-Type','audio/mpeg');
                 }
             } catch (\Throwable $eDl) {
                 $dbg['direct_download_error'] = $eDl->getMessage();
