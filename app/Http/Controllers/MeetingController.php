@@ -1988,6 +1988,8 @@ class MeetingController extends Controller
     public function streamAudio($meeting)
     {
         try {
+            $debug = request()->query('debug') !== null; // ?debug=1 activa salida JSON detallada
+            $dbg = [ 'phase' => 'start', 'meeting_param' => $meeting ];
             Log::info('streamAudio: INICIO DEL METODO - entrada', [
                 'meeting_param' => $meeting,
                 'meeting_type' => gettype($meeting)
@@ -2011,6 +2013,7 @@ class MeetingController extends Controller
                 ->where('status', 'accepted')
                 ->first();
             $sharedAccess = (bool) $sharedMeeting;
+            $dbg['sharedAccess'] = $sharedAccess;
 
             // Verificar acceso por contenedores
             $containerAccess = DB::table('meeting_content_relations as mcr')
@@ -2035,6 +2038,7 @@ class MeetingController extends Controller
                 ->exists();
 
             $useServiceAccount = $containerAccess;
+            $dbg['containerAccess'] = $containerAccess; $dbg['useServiceAccount'] = $useServiceAccount;
 
             Log::info('streamAudio: Tipos de acceso', [
                 'meeting_id' => $meeting,
@@ -2066,6 +2070,7 @@ class MeetingController extends Controller
                     $sa->impersonate($sharedMeeting->sharedBy->email);
                     $token = $sa->getClient()->fetchAccessTokenWithAssertion();
                     $this->googleDriveService->setAccessToken($token);
+                    $dbg['impersonated'] = $sharedMeeting->sharedBy->email;
                 } else {
                     throw $e;
                 }
@@ -2079,6 +2084,9 @@ class MeetingController extends Controller
                         $q->where('username', $user->username);
                     })
                     ->firstOrFail();
+                $dbg['legacy'] = true;
+                $dbg['audio_drive_id'] = $meetingModel->audio_drive_id;
+                $dbg['audio_download_url'] = $meetingModel->audio_download_url;
 
                 Log::info('streamAudio: Reunión legacy encontrada', [
                     'meeting_id' => $meetingModel->id,
@@ -2105,13 +2113,23 @@ class MeetingController extends Controller
                         return redirect()->away($meetingModel->audio_download_url);
                     }
 
-                    $audioPath = $this->getAudioPath($meetingModel);
+                    try {
+                        $audioPath = $this->getAudioPath($meetingModel);
+                    } catch (\Throwable $eGet) {
+                        Log::error('streamAudio: getAudioPath lanzó excepción', [
+                            'meeting_id' => $meetingModel->id,
+                            'error' => $eGet->getMessage()
+                        ]);
+                        $dbg['getAudioPath_exception'] = $eGet->getMessage();
+                        $audioPath = null;
+                    }
                     if (!$audioPath) {
                         Log::warning('streamAudio: Audio no disponible para reunión legacy', [
                             'meeting_id' => $meetingModel->id,
                             'audio_drive_id' => $meetingModel->audio_drive_id,
                             'audio_download_url' => $meetingModel->audio_download_url
                         ]);
+                        if ($debug) { return response()->json(array_merge($dbg, ['error' => 'Audio no disponible (legacy)']), 404); }
                         return response()->json(['error' => 'Audio no disponible'], 404);
                     }
                     Log::info('streamAudio: Ruta de audio obtenida', [
@@ -2119,6 +2137,7 @@ class MeetingController extends Controller
                         'audio_path' => $audioPath,
                         'is_http' => str_starts_with($audioPath, 'http')
                     ]);
+                    $dbg['audio_path'] = $audioPath;
                     if (str_starts_with($audioPath, 'http')) {
                         // Si tenemos fileId, descargar y guardar localmente para servir con soporte de rangos
                         if (!empty($meetingModel->audio_drive_id)) {
@@ -2143,6 +2162,19 @@ class MeetingController extends Controller
                                     'error' => $e->getMessage()
                                 ]);
                                 // Si falla, intentar redirigir al enlace externo como último recurso
+                                // Fallback adicional: intentar link directo Drive si existe
+                                try {
+                                    if (!empty($meetingModel->audio_drive_id)) {
+                                        $direct = $this->googleDriveService->getFileLink($meetingModel->audio_drive_id);
+                                        $dbg['fallback_direct_link'] = $direct;
+                                        return redirect()->away($direct);
+                                    }
+                                } catch (\Throwable $eLink) {
+                                    Log::error('streamAudio: Error generando link directo fallback', [
+                                        'meeting_id' => $meetingModel->id,
+                                        'error' => $eLink->getMessage()
+                                    ]);
+                                }
                                 return redirect()->away($audioPath);
                             }
                         }
@@ -2163,6 +2195,7 @@ class MeetingController extends Controller
                         'meeting_id' => $meetingModel->id,
                         'audio_path' => $audioPath
                     ]);
+                    if ($debug) { $dbg['missing_file'] = $audioPath; return response()->json(array_merge($dbg, ['error' => 'Archivo no existe']), 404); }
                     return $this->audioError(404, 'Archivo de audio no disponible (temp)', $meetingModel->id);
                 }
                 try {
@@ -2222,6 +2255,7 @@ class MeetingController extends Controller
                 }
 
                 if (!$audioData) {
+                    if ($debug) { $dbg['modern_search'] = 'not_found'; return response()->json(array_merge($dbg, ['error' => 'Audio no disponible (modern)']), 404); }
                     return response()->json(['error' => 'Audio no disponible'], 404);
                 }
 
@@ -2233,6 +2267,7 @@ class MeetingController extends Controller
                 ];
                 $audioPath = $this->getAudioPath($tempMeeting);
                 if (!$audioPath) {
+                    if ($debug) { $dbg['audio_path_null'] = true; return response()->json(array_merge($dbg, ['error' => 'Audio no disponible (modern path)']), 404); }
                     return response()->json(['error' => 'Audio no disponible'], 404);
                 }
                 if (str_starts_with($audioPath, 'http')) {
@@ -2265,6 +2300,7 @@ class MeetingController extends Controller
                         'meeting_id' => $modern->id,
                         'audio_path' => $audioPath
                     ]);
+                    if ($debug) { $dbg['missing_file'] = $audioPath; return response()->json(array_merge($dbg, ['error' => 'Archivo moderno no existe']), 404); }
                     return $this->audioError(404, 'Archivo de audio no disponible', $modern->id);
                 }
                 try {
@@ -2285,6 +2321,10 @@ class MeetingController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
+            if (isset($debug) && $debug) {
+                $dbg['exception'] = $e->getMessage();
+                return response()->json(array_merge($dbg, ['error' => 'Error interno streaming']), 500);
+            }
             return $this->audioError(500, 'Error al obtener audio', $meeting, $e);
         }
     }
