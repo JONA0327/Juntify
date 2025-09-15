@@ -27,3 +27,9 @@ yarn-error.log
 *.key
 
 
+# Dumps y assets generados en producción (evitar que ensucien la rama)
+database/*.sql
+public/db/
+public/db/**
+
+
