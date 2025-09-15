@@ -5173,6 +5173,7 @@ window.openShareModal = openShareModal;
 window.closeShareModal = closeShareModal;
 window.confirmShare = confirmShare;
 window.toggleContact = toggleContact;
+window.forceOpenShareModal = function(id){ console.log('[shareModal] forceOpenShareModal'); openShareModal(id||0); };
 
 // ===============================================
 // FUNCIONALIDAD DE COMPARTIR REUNIONES
@@ -5184,11 +5185,12 @@ let allContacts = [];
 
 // Abrir modal de compartir
 function openShareModal(meetingId) {
+    try { console.log('[shareModal] openShareModal called', { meetingId }); } catch(e){}
     currentShareMeetingId = meetingId;
     selectedContacts.clear();
 
     const modal = document.getElementById('shareModal');
-    if (!modal) return;
+    if (!modal) { console.warn('[shareModal] #shareModal not found'); return; }
 
     const selectedContactsContainer = document.getElementById('selectedContactsContainer');
     const confirmBtn = document.getElementById('confirmShare');
@@ -5196,6 +5198,7 @@ function openShareModal(meetingId) {
     // by adding the `.show` class and removing Tailwind's `hidden`.
     modal.classList.remove('hidden');
     modal.classList.add('show');
+    try { console.log('[shareModal] modal classes after show:', modal.className); } catch(e){}
 
     // Resetear estado
     const searchInput = document.getElementById('shareModal-contactSearch');
@@ -5210,6 +5213,7 @@ function openShareModal(meetingId) {
 
     // Setup búsqueda de contactos
     setupContactSearch();
+    window.__lastShareModalOpen = { id: meetingId, ts: Date.now() };
 }
 
 // Cerrar modal de compartir
