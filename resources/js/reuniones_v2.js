@@ -2117,7 +2117,12 @@ function attachMeetingEventListeners() {
         if (downloadBtn) {
             downloadBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                openDownloadModal(card.dataset.meetingId);
+                const sharedId = card.dataset.sharedId;
+                if (sharedId) {
+                    openDownloadModal(card.dataset.meetingId, sharedId);
+                } else {
+                    openDownloadModal(card.dataset.meetingId);
+                }
             });
         }
         const shareBtn = card.querySelector('.share-btn');
@@ -2137,7 +2142,8 @@ function attachMeetingEventListeners() {
             if (containerModal && !containerModal.classList.contains('hidden')) {
                 openMeetingModalFromContainer(meetingId);
             } else {
-                openMeetingModal(meetingId);
+                const sharedId = this.dataset.sharedId || null;
+                openMeetingModal(meetingId, sharedId);
             }
         });
     });
@@ -2386,7 +2392,7 @@ function closeContainerSelectModal() {
 // ===============================================
 // MODAL DE REUNIÓN
 // ===============================================
-async function openMeetingModal(meetingId) {
+async function openMeetingModal(meetingId, sharedMeetingId = null) {
     try {
         // Mostrar modal de loading inmediatamente
         showModalLoadingState();
@@ -2442,6 +2448,14 @@ async function openMeetingModal(meetingId) {
 
             // Esperar un poco para mostrar el progreso completo
             await new Promise(resolve => setTimeout(resolve, 500));
+
+            if (sharedMeetingId) {
+                const resolvedLinks = await tryResolveSharedDriveLinks(sharedMeetingId);
+                if (resolvedLinks && resolvedLinks.audio_link) {
+                    meeting.audio_path = resolvedLinks.audio_link;
+                }
+                meeting.shared_meeting_id = sharedMeetingId;
+            }
 
             currentModalMeeting = meeting;
             // Guardar bandera de encriptación
