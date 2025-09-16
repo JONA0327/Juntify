@@ -68,6 +68,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/chats/{chat}', [ChatController::class, 'showView'])->name('chats.show');
 
     Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
+    // Ruta web alternativa para crear organización (fallback a /api/organizations)
+    Route::post('/organizations', [OrganizationController::class, 'store'])->name('organizations.store.web');
     // Vista de configuración de Drive por organización (sin afectar perfil)
     Route::get('/organizations/{organization}/drive', [OrganizationController::class, 'driveSettings'])
         ->name('organizations.drive');

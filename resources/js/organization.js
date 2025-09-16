@@ -551,10 +551,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     },
     async createOrganization() {
         if (this.isCreatingOrg) return; // Evitar múltiples clicks
-
         this.isCreatingOrg = true;
-        try {
-            const response = await fetch('/api/organizations', {
+        let triedWebFallback = false;
+        const attempt = async (url) => {
+            return fetch(url, {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {
@@ -569,23 +569,30 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     imagen: this.preview
                 })
             });
-
+        };
+        try {
+            let response = await attempt('/api/organizations');
+            if (response.status === 401 && !triedWebFallback) {
+                console.warn('[organization.js] 401 en /api/organizations, intentando fallback /organizations (web)');
+                triedWebFallback = true;
+                response = await attempt('/organizations');
+            }
             if (response.status === 401) {
-                console.warn('[organization.js] 401 unauthorized creating organization. Intentando diagnosticar sesión...');
+                console.warn('[organization.js] 401 aún después de fallback. Diagnosticando sesión...');
                 await this.debugAuth();
-                const data401 = await response.json().catch(()=>({}));
+                const data401 = await response.json().catch(() => ({}));
                 alert(data401.message || 'No autenticado');
                 return;
             }
-
             if (response.status === 403) {
-                const data = await response.json().catch(()=>({}));
-                const reason = data.message || (window.userRole && ['free','basic'].includes(window.userRole) ? 'Tu plan actual no permite crear organizaciones' : 'Ya perteneces a una organización (solo se permite una)');
-                console.warn('[organization.js] 403 creating organization', {userRole: window.userRole, organizationsCount: this.organizations.length, response: data});
+                const data = await response.json().catch(() => ({}));
+                const reason = data.message || (window.userRole && ['free','basic'].includes(window.userRole)
+                    ? 'Tu plan actual no permite crear organizaciones'
+                    : 'Ya perteneces a una organización (solo se permite una)');
+                console.warn('[organization.js] 403 creating organization', { userRole: window.userRole, organizationsCount: this.organizations.length, response: data });
                 alert(reason);
                 return;
             }
-
             if (response.ok) {
                 const org = await response.json();
                 org.imagen = this.preview;
@@ -594,13 +601,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 this.showOrgModal = false;
                 this.newOrg = { nombre_organizacion: '', descripcion: '' };
                 this.preview = null;
-
-                // Mostrar mensaje de éxito
                 this.showStatus('Organización creada exitosamente');
-            } else {
-                const errorData = await response.json();
-                alert(errorData.message || 'Error al crear la organización');
+                return;
             }
+            const errorData = await response.json().catch(() => ({}));
+            alert(errorData.message || 'Error al crear la organización');
         } catch (error) {
             console.error('Error creating organization:', error);
             alert('Error al crear la organización');
@@ -1420,19 +1425,12 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             if (this.isSavingOrganization) {
                 return;
             }
+            debugLog('Guardando organización:', this.selectedOrganization.id);
+            debugLog('Datos del formulario:', this.editForm);
 
+            this.isSavingOrganization = true;
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             try {
-                this.isSavingOrganization = true; // Activar loading
-
-                // Verificar token CSRF
-                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-                if (!csrfToken) {
-                    this.showError('Error: Token de seguridad no encontrado. Recarga la página.');
-                    return;
-                }
-
-                debugLog('Guardando organización:', this.selectedOrganization.id);
-                debugLog('Datos del formulario:', this.editForm);
 
                 // Preparar datos para enviar
                 let dataToSend = {
@@ -1533,7 +1531,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             } finally {
                 this.isSavingOrganization = false; // Desactivar loading
             }
-        },
+    },
 
         // Método para editar grupo
         editGroupMethod(group) {

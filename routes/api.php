@@ -74,6 +74,25 @@ Route::middleware(['web'])->get('/debug/session-info', function(Request $request
     ]);
 });
 
+Route::middleware(['web'])->post('/debug/request-dump', function(Request $request) {
+    return response()->json([
+        'method' => $request->method(),
+        'cookies_sent' => array_keys($_COOKIE ?? []),
+        'raw_cookie_header' => $request->header('cookie'),
+        'session_id_server' => session()->getId(),
+        'has_session_cookie' => array_key_exists(config('session.cookie'), $_COOKIE ?? []),
+        'is_authenticated' => auth()->check(),
+        'user_id' => optional(auth()->user())->id,
+        'headers_subset' => [
+            'origin' => $request->header('origin'),
+            'referer' => $request->header('referer'),
+            'user-agent' => $request->header('user-agent'),
+            'x-requested-with' => $request->header('x-requested-with'),
+        ],
+        'csrf_meta' => optional($request->session())->token(),
+    ]);
+});
+
 // Endpoint de prueba para verificar que API devuelve JSON
 Route::get('/test', function () {
     return response()->json([
