@@ -14,11 +14,10 @@ use App\Models\Contact;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Services\AiChatService;
+use App\Jobs\ProcessAiDocumentJob;
 use App\Services\EmbeddingSearch;
 
 class AiAssistantController extends Controller
@@ -546,13 +545,11 @@ class AiAssistantController extends Controller
      */
     private function processDocumentInBackground(AiDocument $document): void
     {
-        // Aquí implementarías el procesamiento en background
-        // OCR, extracción de texto, generación de embeddings, etc.
-
-        // Por ahora, marcar como completado
         $document->update([
-            'processing_status' => 'completed',
-            'extracted_text' => 'Texto extraído simulado del documento: ' . $document->original_filename
+            'processing_status' => 'processing',
+            'processing_error' => null,
         ]);
+
+        ProcessAiDocumentJob::dispatch($document->id);
     }
 }
