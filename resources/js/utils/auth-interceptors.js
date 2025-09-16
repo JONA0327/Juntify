@@ -46,9 +46,11 @@
   const opts = { ...init };
   const method = (opts.method || 'GET').toUpperCase();
 
-  // Ensure cookies are sent for same-origin requests so sessions work
+  // Ensure cookies are sent for session-authenticated APIs. On cross-origin
+  // calls we still include credentials so that applications running on
+  // whitelisted hosts (e.g. staging/admin portals) maintain the session.
   if (!opts.credentials) {
-    opts.credentials = isSameOrigin ? 'same-origin' : (opts.credentials || 'omit');
+    opts.credentials = isSameOrigin ? 'same-origin' : 'include';
   }
 
   // Normalize headers to a plain object
