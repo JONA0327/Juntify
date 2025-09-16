@@ -230,28 +230,27 @@ class AiAssistantController extends Controller
     {
         $user = Auth::user();
 
-        // Reuniones legacy
-        $legacyMeetings = TranscriptionLaravel::where('username', $user->username)
-            ->orderBy('created_at', 'desc')
+        $meetings = TranscriptionLaravel::where('username', $user->username)
+            ->orderByDesc('created_at')
             ->get()
-            ->map(function($meeting) {
+            ->map(function (TranscriptionLaravel $meeting) {
                 return [
                     'id' => $meeting->id,
                     'meeting_name' => $meeting->meeting_name,
-                    'title' => $meeting->meeting_name, // Para compatibilidad
-                    'type' => 'legacy',
-                    'created_at' => $meeting->created_at,
-                    'duration' => $meeting->duration ?? 'No disponible',
-                    'participants' => $meeting->participants_list ?? [],
-                    'has_summary' => !empty($meeting->summary),
-                    'has_transcription' => !empty($meeting->transcript_drive_id),
-                    'has_audio' => !empty($meeting->audio_drive_id),
+                    'title' => $meeting->meeting_name,
+                    'source' => 'transcriptions_laravel',
+                    'is_legacy' => true,
+                    'created_at' => optional($meeting->created_at)->toIso8601String(),
+                    'updated_at' => optional($meeting->updated_at)->toIso8601String(),
+                    'has_transcription' => ! empty($meeting->transcript_drive_id),
+                    'has_audio' => ! empty($meeting->audio_drive_id),
                     'transcript_drive_id' => $meeting->transcript_drive_id,
-                    'audio_drive_id' => $meeting->audio_drive_id
+                    'transcript_download_url' => $meeting->transcript_download_url,
+                    'audio_drive_id' => $meeting->audio_drive_id,
+                    'audio_download_url' => $meeting->audio_download_url,
                 ];
-            });
-
-        $meetings = $legacyMeetings->sortByDesc('created_at')->values();
+            })
+            ->values();
 
         return response()->json([
             'success' => true,
@@ -471,18 +470,27 @@ class AiAssistantController extends Controller
         $fragments = [];
 
         if ($session->context_id) {
-            $container = Container::withCount('meetings')
-                ->with(['meetings' => function ($query) {
-                    $query->latest('created_at')->limit(5);
+            $container = Container::withCount(['meetings' => function ($query) use ($session) {
+                    $query->where('username', $session->username);
                 }])
-                ->find($session->context_id);
+                ->with(['meetings' => function ($query) use ($session) {
+                    $query->where('username', $session->username)
+                        ->latest('created_at')
+                        ->limit(5);
+                }])
+                ->where('id', $session->context_id)
+                ->where('username', $session->username)
+                ->first();
 
             if ($container) {
                 $fragments[] = [
                     'text' => sprintf(
                         'Contenedor "%s" con %d reuniones registradas.',
                         $container->name,
-                        $container->meetings_count ?? $container->meetings()->count()
+                        $container->meetings_count
+                            ?? $container->meetings()
+                                ->where('username', $session->username)
+                                ->count()
                     ),
                     'source_id' => 'container:' . $container->id,
                     'content_type' => 'container_overview',
@@ -507,18 +515,10 @@ class AiAssistantController extends Controller
                         ),
                         'source_id' => 'meeting:' . $meeting->id,
                         'content_type' => 'container_meeting',
-                        'location' => array_filter([
-                            'type' => 'meeting',
-                            'meeting_id' => $meeting->id,
-                            'title' => $meeting->meeting_name,
-                            'transcript_drive_id' => $meeting->transcript_drive_id,
-                            'audio_drive_id' => $meeting->audio_drive_id,
-                            'transcript_url' => $meeting->transcript_download_url,
-                            'audio_url' => $meeting->audio_download_url,
-                        ]),
+                        'location' => $this->buildLegacyMeetingLocation($meeting),
                         'similarity' => null,
                         'citation' => 'meeting:' . $meeting->id . ' recursos',
-                        'metadata' => [],
+                        'metadata' => $this->buildLegacyMeetingMetadata($meeting),
                     ];
                 }
             }
@@ -526,7 +526,8 @@ class AiAssistantController extends Controller
 
         $relatedMeetings = Arr::wrap($session->context_data ?? []);
         if (empty($fragments) && ! empty($relatedMeetings)) {
-            $meetings = TranscriptionLaravel::whereIn('id', $relatedMeetings)
+            $meetings = TranscriptionLaravel::where('username', $session->username)
+                ->whereIn('id', $relatedMeetings)
                 ->orderByDesc('created_at')
                 ->limit(5)
                 ->get();
@@ -540,14 +541,10 @@ class AiAssistantController extends Controller
                     ),
                     'source_id' => 'meeting:' . $meeting->id,
                     'content_type' => 'container_meeting',
-                    'location' => array_filter([
-                        'type' => 'meeting',
-                        'meeting_id' => $meeting->id,
-                        'title' => $meeting->meeting_name,
-                    ]),
+                    'location' => $this->buildLegacyMeetingLocation($meeting),
                     'similarity' => null,
                     'citation' => 'meeting:' . $meeting->id,
-                    'metadata' => [],
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting),
                 ];
             }
         }
@@ -577,7 +574,10 @@ class AiAssistantController extends Controller
 
                 $relation->limit(5);
             },
-        ])->find($session->context_id);
+        ])
+            ->where('username', $session->username)
+            ->where('id', $session->context_id)
+            ->first();
 
         $fragments = [];
 
@@ -587,14 +587,10 @@ class AiAssistantController extends Controller
                     'text' => Str::limit($meeting->summary, 800),
                     'source_id' => 'meeting:' . $meeting->id . ':summary',
                     'content_type' => 'meeting_summary',
-                    'location' => array_filter([
-                        'type' => 'meeting',
-                        'meeting_id' => $meeting->id,
-                        'title' => $meeting->meeting_name,
-                    ]),
+                    'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'summary']),
                     'similarity' => null,
                     'citation' => 'meeting:' . $meeting->id . ' resumen',
-                    'metadata' => ['summary' => true],
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['summary' => true]),
                 ];
             }
 
@@ -603,15 +599,18 @@ class AiAssistantController extends Controller
                     'text' => $point->point_text,
                     'source_id' => 'meeting:' . $meeting->id . ':keypoint:' . $point->id,
                     'content_type' => 'meeting_key_point',
-                    'location' => array_filter([
-                        'type' => 'meeting',
-                        'meeting_id' => $meeting->id,
-                        'title' => $meeting->meeting_name,
+                    'location' => $this->buildLegacyMeetingLocation($meeting, [
+                        'section' => 'key_point',
                         'order' => $point->order_num,
+                        'point_id' => $point->id,
                     ]),
                     'similarity' => null,
                     'citation' => 'meeting:' . $meeting->id . ' punto ' . ($index + 1),
-                    'metadata' => ['key_point' => true],
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                        'key_point' => true,
+                        'order' => $point->order_num,
+                        'point_id' => $point->id,
+                    ]),
                 ];
             }
 
@@ -621,59 +620,60 @@ class AiAssistantController extends Controller
             }
 
             foreach ($segments as $segment) {
+                if (trim((string) $segment->text) === '') {
+                    continue;
+                }
+
+                $speaker = $segment->display_speaker ?? $segment->speaker;
                 $fragments[] = [
-                    'text' => trim(($segment->display_speaker ?? $segment->speaker ?? 'Participante') . ': ' . $segment->text),
+                    'text' => trim(($speaker ?? 'Participante') . ': ' . $segment->text),
                     'source_id' => 'meeting:' . $meeting->id . ':segment:' . ($segment->id ?? $segment->time),
                     'content_type' => 'meeting_transcription_segment',
-                    'location' => array_filter([
-                        'type' => 'meeting',
-                        'meeting_id' => $meeting->id,
-                        'title' => $meeting->meeting_name,
-                        'speaker' => $segment->display_speaker ?? $segment->speaker,
+                    'location' => $this->buildLegacyMeetingLocation($meeting, [
+                        'section' => 'transcription',
+                        'speaker' => $speaker,
                         'timestamp' => $segment->time,
+                        'segment_id' => $segment->id,
                     ]),
                     'similarity' => null,
                     'citation' => 'meeting:' . $meeting->id . ' t.' . $this->formatTimeForCitation($segment->time),
-                    'metadata' => ['transcription_segment' => true],
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                        'transcription_segment' => true,
+                        'segment_id' => $segment->id,
+                        'timestamp' => $segment->time,
+                        'speaker' => $speaker,
+                    ]),
                 ];
             }
 
             return $fragments;
         }
 
-        $legacy = TranscriptionLaravel::find($session->context_id);
+        $legacy = TranscriptionLaravel::where('username', $session->username)
+            ->where('id', $session->context_id)
+            ->first();
         if ($legacy) {
-            $fragments[] = [
-                'text' => sprintf('Transcripción disponible en: %s', $legacy->transcript_download_url),
-                'source_id' => 'meeting:' . $legacy->id . ':transcript',
-                'content_type' => 'meeting_transcript_link',
-                'location' => array_filter([
-                    'type' => 'meeting',
-                    'meeting_id' => $legacy->id,
-                    'title' => $legacy->meeting_name,
-                    'transcript_drive_id' => $legacy->transcript_drive_id,
-                    'transcript_url' => $legacy->transcript_download_url,
-                ]),
-                'similarity' => null,
-                'citation' => 'meeting:' . $legacy->id . ' transcript',
-                'metadata' => [],
-            ];
+            if (! empty($legacy->transcript_download_url)) {
+                $fragments[] = [
+                    'text' => sprintf('Transcripción disponible en: %s', $legacy->transcript_download_url),
+                    'source_id' => 'meeting:' . $legacy->id . ':transcript',
+                    'content_type' => 'meeting_transcript_link',
+                    'location' => $this->buildLegacyMeetingLocation($legacy, ['section' => 'transcript_link']),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $legacy->id . ' transcript',
+                    'metadata' => $this->buildLegacyMeetingMetadata($legacy, ['resource' => 'transcript']),
+                ];
+            }
 
-            if ($legacy->audio_download_url) {
+            if (! empty($legacy->audio_download_url)) {
                 $fragments[] = [
                     'text' => sprintf('Audio disponible en: %s', $legacy->audio_download_url),
                     'source_id' => 'meeting:' . $legacy->id . ':audio',
                     'content_type' => 'meeting_audio_link',
-                    'location' => array_filter([
-                        'type' => 'meeting',
-                        'meeting_id' => $legacy->id,
-                        'title' => $legacy->meeting_name,
-                        'audio_drive_id' => $legacy->audio_drive_id,
-                        'audio_url' => $legacy->audio_download_url,
-                    ]),
+                    'location' => $this->buildLegacyMeetingLocation($legacy, ['section' => 'audio_link']),
                     'similarity' => null,
                     'citation' => 'meeting:' . $legacy->id . ' audio',
-                    'metadata' => [],
+                    'metadata' => $this->buildLegacyMeetingMetadata($legacy, ['resource' => 'audio']),
                 ];
             }
         }
@@ -765,6 +765,53 @@ class AiAssistantController extends Controller
         }
 
         return $fragments;
+    }
+
+    private function buildLegacyMeetingLocation(TranscriptionLaravel $meeting, array $extra = []): array
+    {
+        $base = [
+            'type' => 'meeting',
+            'meeting_id' => $meeting->id,
+            'title' => $meeting->meeting_name,
+            'source' => 'transcriptions_laravel',
+            'created_at' => optional($meeting->created_at)->toIso8601String(),
+            'updated_at' => optional($meeting->updated_at)->toIso8601String(),
+            'transcript_drive_id' => $meeting->transcript_drive_id,
+            'transcript_url' => $meeting->transcript_download_url,
+            'audio_drive_id' => $meeting->audio_drive_id,
+            'audio_url' => $meeting->audio_download_url,
+        ];
+
+        return $this->filterArray(array_merge($base, $extra));
+    }
+
+    private function buildLegacyMeetingMetadata(TranscriptionLaravel $meeting, array $extra = []): array
+    {
+        $base = [
+            'source' => 'transcriptions_laravel',
+            'legacy_meeting_id' => $meeting->id,
+            'created_at' => optional($meeting->created_at)->toIso8601String(),
+            'updated_at' => optional($meeting->updated_at)->toIso8601String(),
+            'has_transcription' => ! empty($meeting->transcript_drive_id),
+            'has_audio' => ! empty($meeting->audio_drive_id),
+            'transcript_drive_id' => $meeting->transcript_drive_id,
+            'transcript_download_url' => $meeting->transcript_download_url,
+            'audio_drive_id' => $meeting->audio_drive_id,
+            'audio_download_url' => $meeting->audio_download_url,
+        ];
+
+        return $this->filterArray(array_merge($base, $extra));
+    }
+
+    private function filterArray(array $data): array
+    {
+        return array_filter($data, function ($value) {
+            if (is_string($value)) {
+                return $value !== '';
+            }
+
+            return $value !== null;
+        });
     }
 
     private function extractQueryKeywords(string $query, int $limit = 5): array
