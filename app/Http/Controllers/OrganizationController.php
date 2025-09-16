@@ -165,20 +165,49 @@ class OrganizationController extends Controller
     public function store(Request $request)
     {
         $user = auth()->user();
-        if (!$user || in_array($user->roles, ['free', 'basic'])) {
-            abort(403);
+        if (!$user) {
+            return response()->json(['message' => 'No autenticado'], 401);
         }
 
-        // Verificar si el usuario ya pertenece a una organización
+        // Log inicial de intento de creación
+        Log::info('[OrganizationController@store] Intento de crear organización', [
+            'user_id' => $user->id,
+            'user_role_string' => $user->roles,
+            'current_organization_id' => $user->current_organization_id,
+        ]);
+
+        if (in_array($user->roles, ['free', 'basic'])) {
+            Log::warning('[OrganizationController@store] Bloqueado por plan', ['user_id' => $user->id, 'role' => $user->roles]);
+            return response()->json(['message' => 'Tu plan actual no permite crear organizaciones'], 403);
+        }
+
+        // Verificar si el usuario ya pertenece (pivot) a alguna organización
         $hasOrganization = Organization::whereHas('users', function($query) use ($user) {
             $query->where('users.id', $user->id);
         })->exists();
 
         if ($hasOrganization) {
-            return response()->json([
-                'message' => 'Ya perteneces a una organización'],
-                403
-            );
+            Log::info('[OrganizationController@store] Usuario ya pertenece a una organización (pivot encontrado)', ['user_id' => $user->id]);
+            return response()->json(['message' => 'Ya perteneces a una organización'], 403);
+        }
+
+        // Edge case: pivot fue borrado pero current_organization_id sigue apuntando a una organización inexistente
+        if ($user->current_organization_id) {
+            $orgExists = Organization::where('id', $user->current_organization_id)->exists();
+            if (!$orgExists) {
+                Log::warning('[OrganizationController@store] current_organization_id huérfano detectado, reseteando', [
+                    'user_id' => $user->id,
+                    'stale_org_id' => $user->current_organization_id
+                ]);
+                $user->current_organization_id = null;
+                $user->save();
+            } else {
+                Log::info('[OrganizationController@store] Usuario mantiene current_organization_id válido', [
+                    'user_id' => $user->id,
+                    'org_id' => $user->current_organization_id
+                ]);
+                return response()->json(['message' => 'Ya perteneces a una organización (current_organization_id asignado)'], 403);
+            }
         }
 
         $validated = $request->validate([
@@ -192,11 +221,20 @@ class OrganizationController extends Controller
             'admin_id' => $user->id
         ]);
 
+        Log::info('[OrganizationController@store] Organización creada', [
+            'org_id' => $organization->id,
+            'user_id' => $user->id
+        ]);
+
         $organization->users()->attach($user->id, ['rol' => 'administrador']);
         $organization->refreshMemberCount();
 
         // Actualizar current_organization_id del usuario
         User::where('id', $user->id)->update(['current_organization_id' => $organization->id]);
+        Log::info('[OrganizationController@store] current_organization_id actualizado', [
+            'user_id' => $user->id,
+            'org_id' => $organization->id
+        ]);
 
         return response()->json($organization, 201);
     }
@@ -416,12 +454,20 @@ class OrganizationController extends Controller
             abort(403);
         }
 
+        // Detach usuarios de grupos y organizacion
         foreach ($organization->groups as $group) {
             $group->users()->detach();
         }
+        $organization->users()->detach();
 
+        // Reset current_organization_id de usuarios que apuntan a esta organización
+        \App\Models\User::where('current_organization_id', $organization->id)
+            ->update(['current_organization_id' => null]);
+
+        $orgId = $organization->id;
         $organization->delete();
+        Log::info('[OrganizationController@destroy] Organización eliminada', ['org_id' => $orgId, 'by_user' => $user->id]);
 
-        return response()->json(['deleted' => true]);
+        return response()->json(['deleted' => true, 'organization_id' => $orgId]);
     }
 }
