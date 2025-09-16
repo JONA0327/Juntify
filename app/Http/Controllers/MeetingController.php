@@ -33,6 +33,11 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use App\Traits\GoogleDriveHelpers;
 use App\Traits\MeetingContentParsing;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use GuzzleHttp\Psr7\Utils;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\StreamInterface;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MeetingController extends Controller
 {
@@ -1382,6 +1387,235 @@ class MeetingController extends Controller
         return $fullPath;
     }
 
+    private function streamLocalAudioFile(string $audioPath, ?string $mimeType = null): BinaryFileResponse
+    {
+        $headers = [
+            'Content-Type' => $mimeType ?? 'audio/mpeg',
+            'Accept-Ranges' => 'bytes',
+            'Access-Control-Allow-Origin' => '*',
+        ];
+
+        return response()->file($audioPath, $headers);
+    }
+
+    private function streamRemoteAudio(string $url, string $downloadBaseName, ?string $fileId = null): ?StreamedResponse
+    {
+        $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $downloadBaseName) ?: 'audio';
+        $effectiveFileId = $fileId;
+
+        if (empty($effectiveFileId)) {
+            if (!str_starts_with($url, 'http')) {
+                $effectiveFileId = $url;
+            } else {
+                $maybeId = $this->normalizeDriveId($url);
+                if ($maybeId !== $url) {
+                    $effectiveFileId = $maybeId;
+                }
+            }
+        }
+
+        $mimeType = null;
+        $fileSize = null;
+        $downloadName = $sanitizedName;
+
+        if (!empty($effectiveFileId)) {
+            try {
+                $info = $this->googleDriveService->getFileInfo($effectiveFileId);
+                $mimeType = $info->getMimeType() ?: null;
+                $fileSize = $info->getSize() ? (int) $info->getSize() : null;
+                $extension = $this->detectAudioExtension($info->getName(), $mimeType ?? 'audio/mpeg');
+                $downloadName = $sanitizedName . '.' . $extension;
+            } catch (\Throwable $e) {
+                Log::warning('streamAudio: No se pudo obtener metadata de Drive para streaming', [
+                    'file_id' => $effectiveFileId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            $driveStream = $this->streamDriveMedia($effectiveFileId, $downloadName, $mimeType, $fileSize);
+            if ($driveStream) {
+                return $driveStream;
+            }
+        }
+
+        if (!str_contains($downloadName, '.')) {
+            $downloadName .= '.mp3';
+        }
+
+        return $this->proxyStreamFromUrl($url, $mimeType, $fileSize, $downloadName);
+    }
+
+    private function streamDriveMedia(string $fileId, string $downloadName, ?string $mimeType = null, ?int $fileSize = null): ?StreamedResponse
+    {
+        $accessToken = $this->getActiveDriveAccessToken();
+
+        if (!$accessToken) {
+            Log::warning('streamAudio: No hay token activo para streaming de Drive', [
+                'file_id' => $fileId,
+            ]);
+            return null;
+        }
+
+        try {
+            $headers = [
+                'Accept' => '*/*',
+                'Authorization' => 'Bearer ' . $accessToken,
+            ];
+
+            if ($range = request()->header('Range')) {
+                $headers['Range'] = $range;
+            }
+
+            $response = Http::withHeaders($headers)
+                ->withOptions(['stream' => true])
+                ->get('https://www.googleapis.com/drive/v3/files/' . $fileId, [
+                    'alt' => 'media',
+                    'supportsAllDrives' => 'true',
+                ]);
+
+            if ($response->failed()) {
+                Log::warning('streamAudio: Solicitud de streaming a Drive falló', [
+                    'file_id' => $fileId,
+                    'status' => $response->status(),
+                ]);
+                return null;
+            }
+
+            $psr = $response->toPsrResponse();
+            $streamHeaders = $this->prepareStreamHeaders($psr, $mimeType, $fileSize);
+            if ($downloadName) {
+                $streamHeaders['Content-Disposition'] = 'inline; filename="' . addslashes($downloadName) . '"';
+            }
+
+            return $this->streamPsrBody($psr->getBody(), $psr->getStatusCode(), $streamHeaders);
+        } catch (\Throwable $e) {
+            Log::error('streamAudio: Excepción transmitiendo archivo de Drive', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    private function proxyStreamFromUrl(string $url, ?string $mimeType = null, ?int $fileSize = null, ?string $downloadName = null): ?StreamedResponse
+    {
+        try {
+            $headers = ['Accept' => '*/*'];
+            if ($range = request()->header('Range')) {
+                $headers['Range'] = $range;
+            }
+
+            $response = Http::withHeaders($headers)
+                ->withOptions(['stream' => true])
+                ->get($url);
+
+            if ($response->failed()) {
+                Log::warning('streamAudio: proxyStreamFromUrl falló', [
+                    'url' => $url,
+                    'status' => $response->status(),
+                ]);
+                return null;
+            }
+
+            $psr = $response->toPsrResponse();
+            $streamHeaders = $this->prepareStreamHeaders($psr, $mimeType, $fileSize);
+            if ($downloadName) {
+                $streamHeaders['Content-Disposition'] = 'inline; filename="' . addslashes($downloadName) . '"';
+            }
+
+            return $this->streamPsrBody($psr->getBody(), $psr->getStatusCode(), $streamHeaders);
+        } catch (\Throwable $e) {
+            Log::error('streamAudio: proxyStreamFromUrl exception', [
+                'url' => $url,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    private function prepareStreamHeaders(ResponseInterface $psrResponse, ?string $mimeType, ?int $fileSize): array
+    {
+        $headers = [];
+
+        foreach (['Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges'] as $header) {
+            $value = $psrResponse->getHeaderLine($header);
+            if ($value !== '') {
+                $headers[$header] = $value;
+            }
+        }
+
+        if (!isset($headers['Content-Type']) && $mimeType) {
+            $headers['Content-Type'] = $mimeType;
+        }
+
+        if (!isset($headers['Content-Length'])) {
+            if (isset($headers['Content-Range']) && preg_match('/bytes\s+(\d+)-(\d+)\//', $headers['Content-Range'], $rangeMatch)) {
+                $start = (int) $rangeMatch[1];
+                $end = (int) $rangeMatch[2];
+                if ($end >= $start) {
+                    $headers['Content-Length'] = (string) ($end - $start + 1);
+                }
+            } elseif ($fileSize !== null && !isset($headers['Content-Range'])) {
+                $headers['Content-Length'] = (string) $fileSize;
+            }
+        }
+
+        if (!isset($headers['Accept-Ranges'])) {
+            $headers['Accept-Ranges'] = 'bytes';
+        }
+
+        $headers['Access-Control-Allow-Origin'] = '*';
+
+        return $headers;
+    }
+
+    private function streamPsrBody($body, int $status, array $headers): StreamedResponse
+    {
+        if (!$body instanceof StreamInterface) {
+            $body = Utils::streamFor($body);
+        }
+
+        return response()->stream(function () use ($body) {
+            while (!$body->eof()) {
+                echo $body->read(1024 * 1024);
+                if (function_exists('ob_get_level') && ob_get_level() > 0) {
+                    ob_flush();
+                }
+                if (function_exists('flush')) {
+                    flush();
+                }
+            }
+
+            if (method_exists($body, 'close')) {
+                $body->close();
+            }
+        }, $status, $headers);
+    }
+
+    private function getActiveDriveAccessToken(): ?string
+    {
+        $token = $this->googleDriveService->getClient()->getAccessToken();
+
+        if (empty($token)) {
+            return null;
+        }
+
+        if (is_string($token)) {
+            $decoded = json_decode($token, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $decoded['access_token'] ?? null;
+            }
+
+            return $token;
+        }
+
+        if (is_array($token)) {
+            return $token['access_token'] ?? null;
+        }
+
+        return null;
+    }
+
     /**
      * Obtiene la ruta del audio para una reunión
      * Prioriza la URL directa de descarga si está disponible,
@@ -2127,7 +2361,18 @@ class MeetingController extends Controller
                             'meeting_id' => $meetingModel->id,
                             'audio_download_url' => $meetingModel->audio_download_url
                         ]);
-                        return redirect()->away($meetingModel->audio_download_url);
+                        $streamed = $this->streamRemoteAudio(
+                            $meetingModel->audio_download_url,
+                            $meetingModel->meeting_name . '_' . $meetingModel->id,
+                            $meetingModel->audio_drive_id
+                        );
+                        if ($streamed) {
+                            return $streamed;
+                        }
+                        Log::warning('streamAudio: No se pudo retransmitir audio directo para contenedor, continuando con fallback', [
+                            'meeting_id' => $meetingModel->id,
+                            'audio_download_url' => $meetingModel->audio_download_url
+                        ]);
                     }
 
                     try {
@@ -2165,49 +2410,32 @@ class MeetingController extends Controller
                         'is_http' => str_starts_with($audioPath, 'http')
                     ]);
                     $dbg['audio_path'] = $audioPath;
-                    if (str_starts_with($audioPath, 'http')) {
-                        // Si tenemos fileId, descargar y guardar localmente para servir con soporte de rangos
-                        if (!empty($meetingModel->audio_drive_id)) {
-                            try {
-                                Log::info('streamAudio: Descargando archivo de Drive');
-                                $info = $this->googleDriveService->getFileInfo($meetingModel->audio_drive_id);
-                                $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType());
-                                $sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meetingModel->meeting_name);
-                                $fileName = $sanitized . '_' . $meetingModel->id . '.' . $ext;
-                                $content = $this->downloadFromDrive($meetingModel->audio_drive_id);
-                                $localPath = $this->storeTemporaryFile($content, $fileName);
-                                $publicUrl = $this->publicUrlFromStoragePath($localPath);
-                                Log::info('streamAudio: Archivo descargado y guardado', [
-                                    'meeting_id' => $meetingModel->id,
-                                    'local_path' => $localPath,
-                                    'public_url' => $publicUrl
-                                ]);
-                                return redirect()->to($publicUrl, 302);
-                            } catch (\Throwable $e) {
-                                Log::error('streamAudio: Error descargando de Drive, usando fallback', [
-                                    'meeting_id' => $meetingModel->id,
-                                    'error' => $e->getMessage()
-                                ]);
-                                // Si falla, intentar redirigir al enlace externo como último recurso
-                                // Fallback adicional: intentar link directo Drive si existe
-                                try {
-                                    if (!empty($meetingModel->audio_drive_id)) {
-                                        $direct = $this->googleDriveService->getFileLink($meetingModel->audio_drive_id);
-                                        $dbg['fallback_direct_link'] = $direct;
-                                        return redirect()->away($direct);
-                                    }
-                                } catch (\Throwable $eLink) {
-                                    Log::error('streamAudio: Error generando link directo fallback', [
-                                        'meeting_id' => $meetingModel->id,
-                                        'error' => $eLink->getMessage()
-                                    ]);
-                                }
-                                return redirect()->away($audioPath);
-                            }
-                        }
-                        Log::info('streamAudio: Redirigiendo a URL externa');
-                        return redirect()->away($audioPath);
+                if (str_starts_with($audioPath, 'http')) {
+                    $streamed = $this->streamRemoteAudio(
+                        $audioPath,
+                        $meetingModel->meeting_name . '_' . $meetingModel->id,
+                        $meetingModel->audio_drive_id
+                    );
+                    if ($streamed) {
+                        return $streamed;
                     }
+
+                    Log::warning('streamAudio: No se pudo retransmitir audio remoto (legacy)', [
+                        'meeting_id' => $meetingModel->id,
+                        'audio_path' => $audioPath,
+                    ]);
+
+                    $fallback = $this->resolveLegacyAudio($meetingModel, $sharedAccess, null, $debug, $dbg);
+                    if ($fallback instanceof \Illuminate\Http\JsonResponse || $fallback instanceof \Illuminate\Http\RedirectResponse || $fallback instanceof \Symfony\Component\HttpFoundation\Response) {
+                        return $fallback;
+                    }
+
+                    if ($debug) {
+                        return response()->json(array_merge($dbg, ['error' => 'Audio remoto no accesible (legacy)']), 404);
+                    }
+
+                    return $this->audioError(404, 'Archivo de audio no disponible', $meetingModel->id);
+                }
                 }
 
                 // Si es un archivo local en storage/app/public, redirigir a la URL pública
@@ -2235,7 +2463,7 @@ class MeetingController extends Controller
                     ]);
                     $mimeType = 'audio/mpeg';
                 }
-                return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
+                return $this->streamLocalAudioFile($audioPath, $mimeType);
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
                 // Flujo moderno (Meeting en BD)
                 $modern = Meeting::where('id', $meeting)
@@ -2258,7 +2486,7 @@ class MeetingController extends Controller
                         return redirect()->to($publicUrl, 302);
                     }
                     $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
-                    return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
+                    return $this->streamLocalAudioFile($audioPath, $mimeType);
                 }
 
                 $audioData = null;
@@ -2298,22 +2526,25 @@ class MeetingController extends Controller
                     return response()->json(['error' => 'Audio no disponible'], 404);
                 }
                 if (str_starts_with($audioPath, 'http')) {
-                    // Descargar por fileId y redirigir a URL pública local si es posible
-                    if (!empty($tempMeeting->audio_drive_id)) {
-                        try {
-                            $info = $this->googleDriveService->getFileInfo($tempMeeting->audio_drive_id);
-                            $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType());
-                            $sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '_', $tempMeeting->meeting_name);
-                            $fileName = $sanitized . '_' . $tempMeeting->id . '.' . $ext;
-                            $content = $this->downloadFromDrive($tempMeeting->audio_drive_id);
-                            $localPath = $this->storeTemporaryFile($content, $fileName);
-                            $publicUrl = $this->publicUrlFromStoragePath($localPath);
-                            return redirect()->to($publicUrl, 302);
-                        } catch (\Throwable $e) {
-                            return redirect()->away($audioPath);
-                        }
+                    $streamed = $this->streamRemoteAudio(
+                        $audioPath,
+                        $tempMeeting->meeting_name . '_' . $tempMeeting->id,
+                        $tempMeeting->audio_drive_id
+                    );
+                    if ($streamed) {
+                        return $streamed;
                     }
-                    return redirect()->away($audioPath);
+
+                    Log::warning('streamAudio: No se pudo retransmitir audio remoto (modern)', [
+                        'meeting_id' => $modern->id,
+                        'audio_path' => $audioPath,
+                    ]);
+
+                    if ($debug) {
+                        return response()->json(array_merge($dbg, ['error' => 'Audio remoto no accesible (modern)']), 404);
+                    }
+
+                    return $this->audioError(404, 'Archivo de audio no disponible', $modern->id);
                 }
 
                 // Si es un archivo local en storage/app/public, redirigir a la URL pública
@@ -2340,7 +2571,7 @@ class MeetingController extends Controller
                     ]);
                     $mimeType = 'audio/mpeg';
                 }
-                return response()->file($audioPath, [ 'Content-Type' => $mimeType ]);
+                return $this->streamLocalAudioFile($audioPath, $mimeType);
             }
         } catch (\Exception $e) {
             Log::error('Error streaming audio file', [
