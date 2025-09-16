@@ -23,6 +23,7 @@
         'resources/css/audio-processing.css',
         'resources/js/reuniones_v2.js'
     ])
+    @include('partials.global-vars')
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
 

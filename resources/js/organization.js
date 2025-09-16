@@ -570,8 +570,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             });
 
             if (response.status === 403) {
-                const data = await response.json();
-                alert(data.message || 'No puedes crear otra organización');
+                const data = await response.json().catch(()=>({}));
+                const reason = data.message || (window.userRole && ['free','basic'].includes(window.userRole) ? 'Tu plan actual no permite crear organizaciones' : 'Ya perteneces a una organización (solo se permite una)');
+                console.warn('[organization.js] 403 creating organization', {userRole: window.userRole, organizationsCount: this.organizations.length, response: data});
+                alert(reason);
                 return;
             }
 

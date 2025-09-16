@@ -5131,6 +5131,22 @@ async function loadDriveFolders() {
 
 document.addEventListener('DOMContentLoaded', () => {
     // Debug inicial para reuniones
+    // Fallback assignment of global vars if missing
+    try {
+        if ((typeof window.userRole === 'undefined' || window.userRole === null) && document.body.dataset.userRole) {
+            window.userRole = document.body.dataset.userRole;
+        }
+        if ((typeof window.currentOrganizationId === 'undefined' || window.currentOrganizationId === null) && document.body.dataset.organizationId) {
+            window.currentOrganizationId = document.body.dataset.organizationId;
+        }
+        // Attempt meta tag based extraction if still undefined
+        if ((typeof window.userRole === 'undefined' || window.userRole === null)) {
+            const metaUser = document.querySelector('meta[name="user-role"]');
+            if (metaUser) window.userRole = metaUser.getAttribute('content');
+        }
+    } catch(e) {
+        console.error('[reuniones_v2] Error applying fallback globals', e);
+    }
     console.log('🚀 [reuniones_v2] Iniciando aplicación...');
     console.log('🔍 [reuniones_v2] Variables globales:', {
         userRole: window.userRole || document.body.dataset.userRole,
