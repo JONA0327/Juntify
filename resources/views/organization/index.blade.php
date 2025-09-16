@@ -1075,83 +1075,135 @@ function openMeetingModal(meetingId) {
         .then(data => {
             loadingEl.classList.add('hidden');
 
-            if (data.error) {
-                throw new Error(data.error);
+            if (!data.success || !data.meeting) {
+                throw new Error(data.message || data.error || 'Error al cargar reunión');
             }
 
+            const meeting = data.meeting;
+
             // Actualizar título y fecha
-            document.getElementById('meeting-modal-title').textContent = data.title || 'Reunión sin título';
-            document.getElementById('meeting-modal-date').textContent = data.date || '';
+            document.getElementById('meeting-modal-title').textContent = meeting.meeting_name || 'Reunión sin título';
+            document.getElementById('meeting-modal-date').textContent = meeting.created_at || '';
 
             // Configurar audio
             const audioSection = document.getElementById('meeting-audio-section');
             const audioPlayer = document.getElementById('meeting-audio-player');
-            if (data.audio_path) {
-                audioPlayer.src = data.audio_path;
+            if (meeting.audio_path) {
+                audioPlayer.src = meeting.audio_path;
+                audioPlayer.load();
                 audioSection.classList.remove('hidden');
             } else {
+                audioPlayer.removeAttribute('src');
+                audioPlayer.load();
                 audioSection.classList.add('hidden');
             }
 
             // Mostrar resumen
             const summaryEl = document.getElementById('meeting-summary');
-            summaryEl.textContent = data.summary || 'No hay resumen disponible';
+            summaryEl.textContent = meeting.summary || 'No hay resumen disponible';
 
             // Mostrar puntos claves
             const keypointsEl = document.getElementById('meeting-keypoints');
             keypointsEl.innerHTML = '';
-            if (data.keypoints && data.keypoints.length > 0) {
-                data.keypoints.forEach(point => {
+            if (Array.isArray(meeting.key_points) && meeting.key_points.length > 0) {
+                meeting.key_points.forEach(point => {
                     const li = document.createElement('li');
                     li.className = 'flex items-start';
-                    li.innerHTML = `
-                        <span class="text-yellow-400 mt-1 mr-2">•</span>
-                        <span>${point}</span>
-                    `;
+
+                    const bullet = document.createElement('span');
+                    bullet.className = 'text-yellow-400 mt-1 mr-2';
+                    bullet.textContent = '•';
+
+                    const text = document.createElement('span');
+                    text.textContent = point;
+
+                    li.appendChild(bullet);
+                    li.appendChild(text);
                     keypointsEl.appendChild(li);
                 });
             } else {
-                keypointsEl.innerHTML = '<li class="text-slate-500">No hay puntos claves disponibles</li>';
+                const emptyItem = document.createElement('li');
+                emptyItem.className = 'text-slate-500';
+                emptyItem.textContent = 'No hay puntos claves disponibles';
+                keypointsEl.appendChild(emptyItem);
             }
 
             // Mostrar transcripción
             const transcriptionEl = document.getElementById('meeting-transcription');
             transcriptionEl.innerHTML = '';
-            if (data.segments && data.segments.length > 0) {
-                data.segments.forEach(segment => {
-                    const div = document.createElement('div');
-                    div.className = 'bg-slate-700/30 rounded p-3 border-l-2 border-yellow-400';
-                    div.innerHTML = `
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-yellow-400 font-medium">${segment.speaker || 'Desconocido'}</span>
-                            <span class="text-xs text-slate-500">${segment.timestamp || ''}</span>
-                        </div>
-                        <p class="text-slate-300">${segment.text || ''}</p>
-                    `;
-                    transcriptionEl.appendChild(div);
+            const segments = Array.isArray(meeting.segments) ? meeting.segments : [];
+            if (segments.length > 0) {
+                segments.forEach(segment => {
+                    const containerDiv = document.createElement('div');
+                    containerDiv.className = 'bg-slate-700/30 rounded p-3 border-l-2 border-yellow-400';
+
+                    const header = document.createElement('div');
+                    header.className = 'flex items-center justify-between mb-2';
+
+                    const speakerSpan = document.createElement('span');
+                    speakerSpan.className = 'text-yellow-400 font-medium';
+                    speakerSpan.textContent = segment.speaker || 'Desconocido';
+
+                    const timeSpan = document.createElement('span');
+                    timeSpan.className = 'text-xs text-slate-500';
+                    timeSpan.textContent = segment.time || segment.timestamp || '';
+
+                    header.appendChild(speakerSpan);
+                    header.appendChild(timeSpan);
+
+                    const textParagraph = document.createElement('p');
+                    textParagraph.className = 'text-slate-300';
+                    textParagraph.textContent = segment.text || '';
+
+                    containerDiv.appendChild(header);
+                    containerDiv.appendChild(textParagraph);
+                    transcriptionEl.appendChild(containerDiv);
                 });
             } else {
-                transcriptionEl.innerHTML = '<div class="text-slate-500 p-3">No hay transcripción disponible</div>';
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'text-slate-500 p-3';
+                emptyDiv.textContent = 'No hay transcripción disponible';
+                transcriptionEl.appendChild(emptyDiv);
             }
 
             // Mostrar tareas
             const tasksSection = document.getElementById('meeting-tasks-section');
             const tasksEl = document.getElementById('meeting-tasks');
             tasksEl.innerHTML = '';
-            if (data.tasks && data.tasks.length > 0) {
-                data.tasks.forEach(task => {
-                    const div = document.createElement('div');
-                    div.className = 'bg-slate-700/30 rounded p-3 flex items-start';
-                    div.innerHTML = `
-                        <svg class="w-4 h-4 text-yellow-400 mt-1 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                        </svg>
-                        <div class="flex-1">
-                            <p class="text-slate-300">${task.description || task}</p>
-                            ${task.assignee ? `<p class="text-xs text-slate-500 mt-1">Asignado a: ${task.assignee}</p>` : ''}
-                        </div>
-                    `;
-                    tasksEl.appendChild(div);
+            const tasks = Array.isArray(meeting.tasks) ? meeting.tasks : [];
+            if (tasks.length > 0) {
+                tasks.forEach(task => {
+                    const taskDiv = document.createElement('div');
+                    taskDiv.className = 'bg-slate-700/30 rounded p-3 flex items-start';
+
+                    const icon = document.createElement('svg');
+                    icon.className = 'w-4 h-4 text-yellow-400 mt-1 mr-3 flex-shrink-0';
+                    icon.setAttribute('fill', 'none');
+                    icon.setAttribute('stroke', 'currentColor');
+                    icon.setAttribute('viewBox', '0 0 24 24');
+                    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />';
+
+                    const content = document.createElement('div');
+                    content.className = 'flex-1';
+
+                    const description = document.createElement('p');
+                    description.className = 'text-slate-300';
+                    const taskDescription = task.description || task.descripcion || task.title || task.tarea || (typeof task === 'string' ? task : '');
+                    description.textContent = taskDescription;
+
+                    content.appendChild(description);
+
+                    const assignee = task.assignee || task.asignado;
+                    if (assignee) {
+                        const assigneeText = document.createElement('p');
+                        assigneeText.className = 'text-xs text-slate-500 mt-1';
+                        assigneeText.textContent = `Asignado a: ${assignee}`;
+                        content.appendChild(assigneeText);
+                    }
+
+                    taskDiv.appendChild(icon);
+                    taskDiv.appendChild(content);
+                    tasksEl.appendChild(taskDiv);
                 });
                 tasksSection.classList.remove('hidden');
             } else {

@@ -405,12 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
       }
 
-      let meetingFolderId = null;
-      try{
-        const mRes = await fetch(`/api/meetings/${t.meeting_id}`);
-        const mData = await mRes.json();
-        meetingFolderId = mData.meeting?.recordings_folder_id || null;
-      }catch(_){}
+      const meetingFolderId = null;
 
       await loadFolders(meetingFolderId); await loadFiles();
       async function loadFolders(rootId){ const sel = modal.querySelector('#drive-folder'); const url = rootId ? `/api/drive/folders?parents=${encodeURIComponent(rootId)}` : '/api/drive/folders'; const res = await fetch(url); const data = await res.json(); sel.innerHTML=''; (data.folders||[]).forEach(f=>{ const opt=document.createElement('option'); opt.value=f.id; opt.textContent=f.name; sel.appendChild(opt); }); }
