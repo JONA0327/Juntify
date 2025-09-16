@@ -143,6 +143,7 @@
     <script>
         window.userRole = @json($userRole);
         window.currentOrganizationId = @json($organizationId);
+        window.currentOrganizationName = @json($organizationName);
     </script>
     @vite(['resources/js/new-meeting.js'])
 </body>

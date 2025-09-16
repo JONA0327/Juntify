@@ -358,7 +358,55 @@ function togglePostponeMode() {
     setPostponeMode(next);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+async function rebuildDriveSelectOptions() {
+    const driveSelect = document.getElementById('drive-select');
+
+    if (!driveSelect) {
+        console.warn('🔍 [new-meeting] Drive select element not found');
+        return;
+    }
+
+    const organizationId = window.currentOrganizationId;
+    const organizationName = window.currentOrganizationName;
+
+    driveSelect.innerHTML = '';
+
+    const personalOption = document.createElement('option');
+    personalOption.value = 'personal';
+    personalOption.textContent = 'Personal';
+
+    try {
+        const response = await fetch('/drive/sync-subfolders');
+        console.log('🔍 [new-meeting] Personal drive response status:', response.status);
+
+        if (response.ok) {
+            const data = await response.json();
+            const personalName = data?.root_folder?.name;
+
+            if (personalName) {
+                personalOption.textContent = `🏠 ${personalName}`;
+                console.log('✅ [new-meeting] Added personal option:', personalName);
+            }
+        } else {
+            console.warn('⚠️ [new-meeting] Failed to fetch personal drive label:', await response.text());
+        }
+    } catch (error) {
+        console.warn('⚠️ [new-meeting] Error fetching personal drive label:', error);
+    }
+
+    driveSelect.appendChild(personalOption);
+
+    if (organizationId) {
+        const organizationOption = document.createElement('option');
+        organizationOption.value = 'organization';
+        const label = organizationName ? `🏢 ${organizationName}` : 'Organization';
+        organizationOption.textContent = label;
+        driveSelect.appendChild(organizationOption);
+        console.log('✅ [new-meeting] Added organization option:', label);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
     // Limpiar estado de descarte de audio al llegar a nueva reunión
     try {
         sessionStorage.removeItem('audioDiscarded');
@@ -376,10 +424,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const driveSelect = document.getElementById('drive-select');
     if (driveSelect) {
-        const saved = sessionStorage.getItem('selectedDrive');
-        if (saved) driveSelect.value = saved;
+        await rebuildDriveSelectOptions();
+
+        let saved = null;
+        try {
+            saved = sessionStorage.getItem('selectedDrive');
+        } catch (error) {
+            console.warn('⚠️ [new-meeting] Could not read saved drive selection:', error);
+        }
+
+        if (saved && driveSelect.querySelector(`option[value="${saved}"]`)) {
+            driveSelect.value = saved;
+        }
+
         driveSelect.addEventListener('change', () => {
-            sessionStorage.setItem('selectedDrive', driveSelect.value);
+            try {
+                sessionStorage.setItem('selectedDrive', driveSelect.value);
+            } catch (error) {
+                console.warn('⚠️ [new-meeting] Could not persist drive selection:', error);
+            }
         });
     }
 });
