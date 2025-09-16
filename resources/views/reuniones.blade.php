@@ -137,6 +137,9 @@
         </main>
     </div>
 
+    {{-- Modal global para compartir reuniones --}}
+    <x-share-modal />
+
     {{-- El resto de tus modales no necesita cambios para esta tarea --}}
     </body>
 </html>
