@@ -1,4 +1,4 @@
-<div id="shareModal" class="modal hidden" style="z-index: 9999;">
+<div id="shareModal" class="modal hidden" style="z-index: 9500;">
     <div class="modal-content max-w-md">
         <div class="modal-header">
             <h3 class="modal-title">
