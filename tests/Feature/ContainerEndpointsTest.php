@@ -2,7 +2,6 @@
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Models\User;
-use App\Models\TranscriptionLaravel;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 
@@ -38,11 +37,8 @@ test('user can add meeting to container and list meetings', function () {
         'is_active' => true,
     ]);
 
-    $meeting = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meeting = createLegacyMeeting($user, [
         'meeting_name' => 'Weekly',
-        'audio_drive_id' => null,
-        'transcript_drive_id' => null,
     ]);
 
     $addResponse = $this->actingAs($user, 'sanctum')->postJson("/api/content-containers/{$container->id}/meetings", [
@@ -79,11 +75,8 @@ test('user can remove meeting from container', function () {
         'is_active' => true,
     ]);
 
-    $meeting = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meeting = createLegacyMeeting($user, [
         'meeting_name' => 'Weekly',
-        'audio_drive_id' => null,
-        'transcript_drive_id' => null,
     ]);
 
     MeetingContentRelation::create([

@@ -3,7 +3,6 @@
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Models\User;
 use App\Models\SharedMeeting;
-use App\Models\TranscriptionLaravel;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 use App\Models\Container;
@@ -17,11 +16,8 @@ test('shared meetings v2 endpoint returns meetings for authenticated user', func
     $owner = User::factory()->create();
     $recipient = User::factory()->create();
 
-    $meeting = TranscriptionLaravel::factory()->create([
-        'username' => $owner->username,
+    $meeting = createLegacyMeeting($owner, [
         'meeting_name' => 'Shared Meeting',
-        'audio_drive_id' => null,
-        'transcript_drive_id' => null,
     ]);
 
     SharedMeeting::create([
@@ -55,11 +51,8 @@ test('containers endpoint returns containers with meeting count', function () {
         'is_active' => true,
     ]);
 
-    $meeting = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meeting = createLegacyMeeting($user, [
         'meeting_name' => 'Meeting in Container',
-        'audio_drive_id' => null,
-        'transcript_drive_id' => null,
     ]);
 
     MeetingContentRelation::create([
@@ -85,18 +78,12 @@ test('containers endpoint returns containers with meeting count', function () {
 test('index view only lists meetings without containers', function () {
     $user = User::factory()->create(['username' => 'user']);
 
-    $meetingWithout = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meetingWithout = createLegacyMeeting($user, [
         'meeting_name' => 'Free Meeting',
-        'audio_drive_id' => null,
-        'transcript_drive_id' => null,
     ]);
 
-    $meetingWith = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meetingWith = createLegacyMeeting($user, [
         'meeting_name' => 'Contained Meeting',
-        'audio_drive_id' => null,
-        'transcript_drive_id' => null,
     ]);
 
     $container = Container::create([
@@ -115,18 +102,12 @@ test('index view only lists meetings without containers', function () {
 test('/api/meetings excludes meetings inside containers', function () {
     $user = User::factory()->create(['username' => 'user']);
 
-    $meetingWithout = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meetingWithout = createLegacyMeeting($user, [
         'meeting_name' => 'Free Meeting',
-        'audio_drive_id' => null,
-        'transcript_drive_id' => null,
     ]);
 
-    $meetingWith = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meetingWith = createLegacyMeeting($user, [
         'meeting_name' => 'Contained Meeting',
-        'audio_drive_id' => null,
-        'transcript_drive_id' => null,
     ]);
 
     $container = Container::create([
@@ -170,11 +151,8 @@ test('/api/meetings returns is_legacy flag', function () {
         public function downloadFileContent($fileId) { return ''; }
     });
 
-    $legacy = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $legacy = createLegacyMeeting($user, [
         'meeting_name' => 'Legacy',
-        'audio_drive_id' => null,
-        'transcript_drive_id' => null,
     ]);
 
     $response = $this->actingAs($user, 'sanctum')->getJson('/api/meetings');
@@ -205,11 +183,8 @@ test('show meeting returns is_legacy flag', function () {
         public function downloadFileContent($fileId) { return ''; }
     });
 
-    $meeting = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meeting = createLegacyMeeting($user, [
         'meeting_name' => 'Legacy Meeting',
-        'audio_drive_id' => null,
-        'transcript_drive_id' => null,
     ]);
 
     $response = $this->actingAs($user, 'sanctum')->getJson('/api/meetings/' . $meeting->id);
@@ -228,10 +203,10 @@ test('show legacy meeting returns audio data', function () {
         'expiry_date' => now()->addDay(),
     ]);
 
-    $meeting = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meeting = createLegacyMeeting($user, [
         'meeting_name' => 'My Meeting',
         'audio_drive_id' => 'folder123',
+        'audio_download_url' => '',
         'transcript_drive_id' => 'trans123',
     ]);
 
@@ -264,8 +239,7 @@ test('destroy meeting returns 500 when Google Drive deletion fails', function ()
         'expiry_date' => now()->addDay(),
     ]);
 
-    $meeting = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meeting = createLegacyMeeting($user, [
         'transcript_drive_id' => 'drive-file',
     ]);
 
@@ -294,8 +268,7 @@ test('destroy meeting removes record on successful Google Drive deletion', funct
         'expiry_date' => now()->addDay(),
     ]);
 
-    $meeting = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meeting = createLegacyMeeting($user, [
         'transcript_drive_id' => 'drive-file',
     ]);
 

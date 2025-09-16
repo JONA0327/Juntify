@@ -1,15 +1,13 @@
 <?php
 
 use App\Http\Controllers\MeetingController;
-use App\Models\TranscriptionLaravel;
 use App\Models\User;
 use function Pest\Laravel\actingAs;
 use Illuminate\Support\Str;
 
 it('downloads PDF with Spanish keys', function () {
     $user = User::factory()->create();
-    $meeting = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meeting = createLegacyMeeting($user, [
         'meeting_name' => 'Reunión Prueba',
     ]);
 
@@ -47,8 +45,7 @@ it('downloads PDF with Spanish keys', function () {
 
 it('previews PDF when sections are missing', function () {
     $user = User::factory()->create();
-    $meeting = TranscriptionLaravel::factory()->create([
-        'username' => $user->username,
+    $meeting = createLegacyMeeting($user, [
         'meeting_name' => 'Reunión Prueba',
     ]);
 
