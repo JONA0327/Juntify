@@ -576,12 +576,23 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 console.warn('[organization.js] 401 en /api/organizations, intentando fallback /organizations (web)');
                 triedWebFallback = true;
                 response = await attempt('/organizations');
+                console.log('[organization.js] Fallback /organizations status:', response.status, 'content-type:', response.headers.get('content-type'));
             }
             if (response.status === 401) {
                 console.warn('[organization.js] 401 aún después de fallback. Diagnosticando sesión...');
                 await this.debugAuth();
                 const data401 = await response.json().catch(() => ({}));
                 alert(data401.message || 'No autenticado');
+                return;
+            }
+            // Detectar caso de redirección HTML (login) u otra respuesta no JSON
+            const contentType = response.headers.get('content-type') || '';
+            if (response.ok && !contentType.includes('application/json')) {
+                console.warn('[organization.js] Respuesta OK pero no JSON (posible HTML de login). content-type:', contentType);
+                const textSample = await response.text().catch(()=> '');
+                console.debug('[organization.js] Primeros 120 chars de la respuesta:', textSample.substring(0,120));
+                await this.debugAuth();
+                alert('La sesión no fue reconocida (respuesta no JSON). Reintenta después de refrescar la página o volver a iniciar sesión.');
                 return;
             }
             if (response.status === 403) {
@@ -611,6 +622,24 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             alert('Error al crear la organización');
         } finally {
             this.isCreatingOrg = false;
+        }
+    },
+    async quickSessionDiagnostics() {
+        try {
+            const headers = { 'Accept':'application/json','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') };
+            const [whoami, sessionInfo, requestDump] = await Promise.all([
+                fetch('/api/whoami', { credentials:'same-origin', headers }).then(r=>r.json().catch(()=>({parse:false}))).catch(()=>({error:true})),
+                fetch('/api/debug/session-info', { credentials:'same-origin' }).then(r=>r.json().catch(()=>({parse:false}))).catch(()=>({error:true})),
+                fetch('/api/debug/request-dump', { method:'POST', credentials:'same-origin', headers }).then(r=>r.json().catch(()=>({parse:false}))).catch(()=>({error:true}))
+            ]);
+            console.group('[organization.js] quickSessionDiagnostics');
+            console.log('whoami ->', whoami);
+            console.log('session-info ->', sessionInfo);
+            console.log('request-dump ->', requestDump);
+            console.groupEnd();
+            return { whoami, sessionInfo, requestDump };
+        } catch(e) {
+            console.error('[organization.js] quickSessionDiagnostics error', e);
         }
     },
     async debugAuth() {
