@@ -552,13 +552,18 @@ function renderMeetings(meetings) {
         return;
     }
 
-    grid.innerHTML = meetings.map(meeting => `
+    grid.innerHTML = meetings.map(meeting => {
+        const title = meeting.meeting_name || 'Reunión sin título';
+        const createdAt = formatDate(meeting.created_at);
+        const duration = meeting.duration ? String(meeting.duration) : 'Duración no disponible';
+
+        return `
         <div class="meeting-card">
             <div class="meeting-card-header">
                 <div class="meeting-card-title" onclick="openMeetingDetails(${meeting.id})">
-                    <h4>${escapeHtml(meeting.meeting_name || meeting.title)}</h4>
+                    <h4>${escapeHtml(title)}</h4>
                     <div class="meeting-card-meta">
-                        ${formatDate(meeting.created_at)} • ${meeting.duration || 'Duración no disponible'}
+                        ${escapeHtml(createdAt)} • ${escapeHtml(duration)}
                     </div>
                 </div>
             </div>
@@ -570,7 +575,8 @@ function renderMeetings(meetings) {
                 </button>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 /**
@@ -583,7 +589,7 @@ async function openMeetingDetails(meetingId) {
     // Encontrar la reunión en la lista
     const meeting = allMeetings.find(m => m.id === meetingId);
     if (meeting) {
-        document.getElementById('meetingDetailsTitle').textContent = meeting.meeting_name || meeting.title;
+        document.getElementById('meetingDetailsTitle').textContent = meeting.meeting_name || 'Reunión sin título';
     }
 
     // Mostrar estado de carga en todas las pestañas
@@ -769,7 +775,7 @@ function addMeetingToContext(meetingId) {
     loadedContextItems.push({
         type: 'meeting',
         id: meetingId,
-        title: meeting.meeting_name || meeting.title,
+        title: meeting.meeting_name || 'Reunión sin título',
         data: meeting
     });
 
@@ -857,7 +863,7 @@ function filterContextItems(searchTerm) {
         renderContainers(filtered);
     } else if (currentContextType === 'meetings') {
         const filtered = allMeetings.filter(meeting =>
-            (meeting.meeting_name || meeting.title).toLowerCase().includes(term)
+            (meeting.meeting_name || '').toLowerCase().includes(term)
         );
         renderMeetings(filtered);
     }
@@ -1797,7 +1803,15 @@ function showNotification(message, type = 'info') {
  * Formatear fecha
  */
 function formatDate(dateString) {
+    if (!dateString) {
+        return 'Fecha no disponible';
+    }
+
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) {
+        return dateString;
+    }
+
     return date.toLocaleDateString('es-ES', {
         year: 'numeric',
         month: 'short',

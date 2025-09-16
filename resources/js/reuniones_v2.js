@@ -173,10 +173,7 @@ async function loadMyMeetings() {
         const data = await response.json();
 
         if (data.success) {
-            const meetings = [
-                ...(Array.isArray(data.meetings) ? data.meetings : []),
-                ...(Array.isArray(data.legacy_meetings) ? data.legacy_meetings : []),
-            ];
+            const meetings = Array.isArray(data.meetings) ? data.meetings : [];
             currentMeetings = meetings;
             renderMeetings(currentMeetings, '#my-meetings', 'No tienes reuniones');
         } else {
@@ -2438,13 +2435,11 @@ async function openMeetingModal(meetingId, sharedMeetingId = null) {
                 meeting.transcription = meeting.segments.map(s => s.text).join(' ');
             }
 
-            if (meeting.is_legacy) {
-                updateLoadingStep(4); // Omitir pasos de descarga/desencriptado
-            } else {
-                updateLoadingStep(2); // Paso 2: Descifrando archivo
-                updateLoadingStep(3); // Paso 3: Descargando audio
-                updateLoadingStep(4); // Paso 4: Procesando contenido
-            }
+            updateLoadingStep(2); // Paso 2
+            await new Promise(resolve => setTimeout(resolve, 150));
+            updateLoadingStep(3); // Paso 3
+            await new Promise(resolve => setTimeout(resolve, 150));
+            updateLoadingStep(4); // Paso 4
 
             // Esperar un poco para mostrar el progreso completo
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -3259,19 +3254,19 @@ function showModalLoadingState() {
                         <div class="loading-steps">
                             <div class="loading-step active" id="step-1">
                                 <div class="step-icon">📥</div>
-                                <span>Descargando transcripción</span>
+                                <span>Recuperando datos</span>
                             </div>
                             <div class="loading-step" id="step-2">
-                                <div class="step-icon">🔓</div>
-                                <span>Descifrando archivo</span>
+                                <div class="step-icon">📝</div>
+                                <span>Preparando transcripción</span>
                             </div>
                             <div class="loading-step" id="step-3">
                                 <div class="step-icon">🎵</div>
-                                <span>Descargando audio</span>
+                                <span>Cargando audio</span>
                             </div>
                             <div class="loading-step" id="step-4">
                                 <div class="step-icon">⚡</div>
-                                <span>Procesando contenido</span>
+                                <span>Finalizando análisis</span>
                             </div>
                         </div>
                     </div>
