@@ -913,7 +913,7 @@ function showNotification(message, type = 'info') {
         container.style.display = 'flex';
         container.style.flexDirection = 'column';
         container.style.gap = '10px';
-        container.style.zIndex = '9999';
+        container.style.zIndex = '9500';
         container.style.pointerEvents = 'none';
         document.body.appendChild(container);
     }
@@ -4259,7 +4259,7 @@ function showDownloadFallbackModal(meetingId, message, directLinks = null) {
     }
 
     const html = `
-        <div class="fixed inset-0 z-[9999] overflow-hidden" id="downloadFallbackModal">
+        <div class="fixed inset-0 z-[9500] overflow-hidden" id="downloadFallbackModal">
             <div class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm"></div>
             <div class="fixed inset-0 flex items-center justify-center">
                 <div class="relative bg-slate-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-slate-700 p-6">
@@ -4308,7 +4308,7 @@ async function tryResolveSharedDriveLinks(sharedMeetingId) {
 function showDownloadModalLoading(meetingId) {
     // Crear y mostrar modal de loading centrado perfectamente
     const loadingModal = `
-        <div class="fixed inset-0 z-[9999] overflow-hidden" id="downloadLoadingModal">
+        <div class="fixed inset-0 z-[9500] overflow-hidden" id="downloadLoadingModal">
             <!-- Overlay -->
             <div class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm"></div>
 
@@ -4388,7 +4388,7 @@ function createDownloadModal() {
              x-on:close.stop="show = false"
              x-on:keydown.escape.window="show = false"
              name="download-meeting"
-             class="fixed inset-0 z-[9999] overflow-hidden download-modal"
+             class="fixed inset-0 z-[9500] overflow-hidden download-modal"
              style="display: none;">
 
             <!-- Overlay con fondo semi-transparente -->

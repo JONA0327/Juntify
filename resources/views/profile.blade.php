@@ -129,7 +129,7 @@
             border-radius: 12px;
             color: white;
             font-weight: 500;
-            z-index: 9999;
+            z-index: 9500;
             min-width: 300px;
             max-width: 500px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
@@ -235,7 +235,7 @@
             border-radius: 8px;
             color: white;
             font-weight: 500;
-            z-index: 9999;
+            z-index: 9500;
             opacity: 0;
             transform: translateX(100%);
             transition: all 0.3s ease;

@@ -11,7 +11,7 @@ function ensureToastContainer() {
         container.style.display = 'flex';
         container.style.flexDirection = 'column';
         container.style.gap = '10px';
-        container.style.zIndex = '9999';
+        container.style.zIndex = '9500';
         container.style.pointerEvents = 'none';
         document.body.appendChild(container);
     }

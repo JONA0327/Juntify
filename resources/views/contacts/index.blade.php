@@ -138,7 +138,7 @@
 </div>
 
 <!-- Modal de Chat -->
-<div id="chat-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-black/30 backdrop-blur-sm opacity-0 transition-all duration-300 p-6">
+<div id="chat-modal" class="fixed inset-0 z-[9500] hidden items-center justify-center bg-black/30 backdrop-blur-sm opacity-0 transition-all duration-300 p-6">
     <div class="bg-slate-900/85 backdrop-blur-xl border border-slate-700/40 rounded-xl w-full max-w-4xl h-auto max-h-[80vh] shadow-2xl flex flex-col transform scale-95 transition-all duration-300 my-auto">
         <!-- Header del Modal -->
         <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
