@@ -284,6 +284,10 @@ function renderMessage(message) {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
         </svg>`;
 
+    const metadata = message.metadata || {};
+    const attachments = message.attachments && message.attachments.length > 0 ? renderAttachments(message.attachments) : '';
+    const citations = !isUser ? renderMessageCitations(metadata) : '';
+
     return `
         <div class="message ${isUser ? 'user' : 'assistant'}">
             <div class="message-avatar ${isUser ? 'user' : 'assistant'}">
@@ -292,7 +296,8 @@ function renderMessage(message) {
             <div class="message-content">
                 <div class="message-bubble">
                     ${formatMessageContent(message.content)}
-                    ${message.attachments && message.attachments.length > 0 ? renderAttachments(message.attachments) : ''}
+                    ${attachments}
+                    ${citations}
                 </div>
                 <div class="message-time">${formatTime(message.created_at)}</div>
             </div>
@@ -1473,6 +1478,7 @@ function loadDetailsForAllMeetings() {
  * Formatear contenido del mensaje
  */
 function formatMessageContent(content) {
+    content = content || '';
     // Convertir URLs a enlaces
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     content = content.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener">$1</a>');
@@ -1498,6 +1504,87 @@ function renderAttachments(attachments) {
             `).join('')}
         </div>
     `;
+}
+
+function renderMessageCitations(metadata) {
+    if (!metadata || !Array.isArray(metadata.citations) || metadata.citations.length === 0) {
+        return '';
+    }
+
+    return `
+        <div class="message-citations">
+            <div class="citations-title">Fuentes</div>
+            <ul class="citations-list">
+                ${metadata.citations.map((citation, index) => renderCitationItem(citation, index)).join('')}
+            </ul>
+        </div>
+    `;
+}
+
+function renderCitationItem(citation, index) {
+    const marker = citation.marker || `Fuente ${index + 1}`;
+    const fragment = citation.fragment || {};
+    const locationLabel = formatCitationLocation(fragment.location);
+    const preview = getCitationPreview(fragment.text);
+
+    let encodedCitation = '';
+    try {
+        encodedCitation = encodeURIComponent(JSON.stringify(citation));
+    } catch (error) {
+        console.error('No se pudo codificar la cita:', error);
+    }
+
+    return `
+        <li class="citation-item">
+            <button class="citation-link" data-citation="${encodedCitation}" onclick="handleCitationClick(event)">
+                [${escapeHtml(marker)}]
+            </button>
+            ${locationLabel ? `<span class="citation-location">${escapeHtml(locationLabel)}</span>` : ''}
+            ${preview ? `<div class="citation-preview">${escapeHtml(preview)}</div>` : ''}
+        </li>
+    `;
+}
+
+function getCitationPreview(text) {
+    if (!text) {
+        return '';
+    }
+
+    const normalized = text.trim();
+    if (normalized.length <= 180) {
+        return normalized;
+    }
+
+    return normalized.slice(0, 177) + '…';
+}
+
+function formatCitationLocation(location) {
+    if (!location || typeof location !== 'object') {
+        return '';
+    }
+
+    switch (location.type) {
+        case 'document': {
+            const title = location.title || `Documento ${location.document_id ?? ''}`.trim();
+            const page = location.page ? `, página ${location.page}` : '';
+            return `${title}${page}`;
+        }
+        case 'meeting': {
+            const title = location.title || `Reunión ${location.meeting_id ?? ''}`.trim();
+            const timestamp = location.timestamp ? `, minuto ${location.timestamp}` : '';
+            return `${title}${timestamp}`;
+        }
+        case 'chat': {
+            const sender = location.sender || 'Contacto';
+            const sentAt = formatDateTime(location.sent_at);
+            return sentAt ? `${sender} · ${sentAt}` : sender;
+        }
+        case 'container': {
+            return location.name ? `Contenedor ${location.name}` : 'Contenedor seleccionado';
+        }
+        default:
+            return '';
+    }
 }
 
 /**
@@ -1595,6 +1682,104 @@ function escapeHtml(text) {
         "'": '&#039;'
     };
     return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+function handleCitationClick(event) {
+    event.preventDefault();
+    const target = event.currentTarget;
+
+    if (!target || !target.dataset || !target.dataset.citation) {
+        return;
+    }
+
+    try {
+        const citation = JSON.parse(decodeURIComponent(target.dataset.citation));
+        const fragment = citation.fragment || {};
+        const marker = citation.marker || target.textContent || 'Referencia';
+        openCitationModal(fragment, marker);
+    } catch (error) {
+        console.error('No se pudo interpretar la cita seleccionada:', error);
+    }
+}
+
+function openCitationModal(fragment, marker) {
+    let modal = document.getElementById('citationModal');
+
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'citationModal';
+        modal.className = 'citation-modal';
+        modal.innerHTML = `
+            <div class="citation-modal-backdrop" onclick="closeCitationModal()"></div>
+            <div class="citation-modal-content">
+                <button type="button" class="citation-modal-close" onclick="closeCitationModal()">&times;</button>
+                <h4 class="citation-modal-title"></h4>
+                <div class="citation-modal-body">
+                    <p class="citation-modal-text"></p>
+                    <p class="citation-modal-location"></p>
+                </div>
+                <div class="citation-modal-actions">
+                    <a class="citation-modal-open" target="_blank" rel="noopener"></a>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const titleElement = modal.querySelector('.citation-modal-title');
+    const textElement = modal.querySelector('.citation-modal-text');
+    const locationElement = modal.querySelector('.citation-modal-location');
+    const linkElement = modal.querySelector('.citation-modal-open');
+
+    if (titleElement) {
+        titleElement.textContent = marker;
+    }
+
+    if (textElement) {
+        textElement.textContent = fragment.text || 'Sin fragmento disponible.';
+    }
+
+    if (locationElement) {
+        const locationText = formatCitationLocation(fragment.location);
+        locationElement.textContent = locationText ? `Ubicación: ${locationText}` : '';
+    }
+
+    if (linkElement) {
+        if (fragment.location && fragment.location.url) {
+            linkElement.textContent = 'Abrir fuente original';
+            linkElement.href = fragment.location.url;
+            linkElement.style.display = 'inline-flex';
+        } else {
+            linkElement.textContent = '';
+            linkElement.removeAttribute('href');
+            linkElement.style.display = 'none';
+        }
+    }
+
+    modal.classList.add('active');
+}
+
+function closeCitationModal() {
+    const modal = document.getElementById('citationModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+function formatDateTime(dateString) {
+    if (!dateString) {
+        return '';
+    }
+
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    return date.toLocaleString([], {
+        dateStyle: 'short',
+        timeStyle: 'short'
+    });
 }
 
 /**

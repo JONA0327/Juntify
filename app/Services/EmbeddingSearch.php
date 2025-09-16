@@ -2,15 +2,24 @@
 
 namespace App\Services;
 
+use App\Models\AiChatSession;
 use App\Models\AiContextEmbedding;
+use App\Models\AiDocument;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use OpenAI\Laravel\Facades\OpenAI;
 
 class EmbeddingSearch
 {
     /**
      * Search stored context embeddings for a user and return the most relevant snippets.
+     *
+     * @param  array{limit?:int,session?:AiChatSession,content_types?:array<int,string>,content_ids?:array<string,array<int|string>>}  $options
+     * @return array<int, array<string, mixed>>
      */
-    public function search(string $username, string $query, int $limit = 5): array
+    public function search(string $username, string $query, array $options = []): array
     {
         try {
             $client = OpenAI::client(config('services.openai.api_key'));
@@ -27,20 +36,50 @@ class EmbeddingSearch
             return [];
         }
 
-        $embeddings = AiContextEmbedding::byUser($username)->get();
+        $limit = max(1, (int) ($options['limit'] ?? 5));
 
-        $results = $embeddings->map(function (AiContextEmbedding $item) use ($queryVector) {
+        $embeddingsQuery = AiContextEmbedding::byUser($username);
+
+        if (! empty($options['content_types']) && is_array($options['content_types'])) {
+            $embeddingsQuery->whereIn('content_type', $options['content_types']);
+        }
+
+        if (! empty($options['content_ids']) && is_array($options['content_ids'])) {
+            $this->applyContentIdFilters($embeddingsQuery, $options['content_ids']);
+        }
+
+        if (isset($options['session']) && $options['session'] instanceof AiChatSession) {
+            $this->applySessionFilters($embeddingsQuery, $options['session']);
+        }
+
+        /** @var Collection<int, AiContextEmbedding> $embeddings */
+        $embeddings = $embeddingsQuery->get();
+
+        if ($embeddings->isEmpty()) {
+            return [];
+        }
+
+        $documents = $this->loadDocumentsForEmbeddings($embeddings);
+
+        $results = $embeddings->map(function (AiContextEmbedding $item) use ($queryVector, $documents) {
             $similarity = $this->cosineSimilarity($queryVector, $item->embedding_vector ?? []);
-            return [
-                'snippet' => $item->content_snippet,
-                'similarity' => $similarity,
-            ];
-        })->sortByDesc('similarity')
-            ->take($limit)
-            ->pluck('snippet')
-            ->toArray();
+            $location = $this->resolveLocation($item, $documents);
 
-        return $results;
+            return [
+                'text' => $item->content_snippet,
+                'source_id' => (string) $item->content_id,
+                'content_type' => $item->content_type,
+                'location' => $location,
+                'similarity' => $similarity,
+                'metadata' => $item->metadata ?? [],
+                'citation' => $this->buildCitation($item, $location),
+            ];
+        })->filter(fn (array $result) => $result['text'] !== '')->values();
+
+        return $results->sortByDesc('similarity')
+            ->take($limit)
+            ->values()
+            ->toArray();
     }
 
     private function cosineSimilarity(array $a, array $b): float
@@ -65,5 +104,168 @@ class EmbeddingSearch
         }
 
         return $dot / (sqrt($magA) * sqrt($magB));
+    }
+
+    /**
+     * @param  Collection<int, AiContextEmbedding>  $embeddings
+     * @return Collection<int, AiDocument>
+     */
+    private function loadDocumentsForEmbeddings(Collection $embeddings): Collection
+    {
+        $documentIds = $embeddings->where('content_type', 'document_text')
+            ->pluck('content_id')
+            ->filter()
+            ->unique()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if (empty($documentIds)) {
+            return collect();
+        }
+
+        return AiDocument::whereIn('id', $documentIds)->get()->keyBy('id');
+    }
+
+    /**
+     * @param  array<string, array<int|string>>  $contentIds
+     */
+    private function applyContentIdFilters(Builder $query, array $contentIds): void
+    {
+        $filters = [];
+        foreach ($contentIds as $type => $ids) {
+            $normalized = array_filter(array_map(fn ($id) => (string) $id, Arr::wrap($ids)));
+            if (! empty($normalized)) {
+                $filters[$type] = $normalized;
+            }
+        }
+
+        if (empty($filters)) {
+            return;
+        }
+
+        $query->where(function (Builder $builder) use ($filters) {
+            foreach ($filters as $type => $ids) {
+                $builder->orWhere(function (Builder $subQuery) use ($type, $ids) {
+                    $subQuery->where('content_type', $type)
+                        ->whereIn('content_id', $ids);
+                });
+            }
+        });
+    }
+
+    private function applySessionFilters(Builder $query, AiChatSession $session): void
+    {
+        $filters = [];
+
+        switch ($session->context_type) {
+            case 'documents':
+                $documentIds = Arr::wrap($session->context_data ?? []);
+                if (! empty($documentIds)) {
+                    $filters['document_text'] = array_map(fn ($id) => (string) $id, $documentIds);
+                }
+                break;
+
+            case 'meeting':
+                if ($session->context_id) {
+                    $filters['meeting_transcript'] = [(string) $session->context_id];
+                    $filters['meeting_summary'] = [(string) $session->context_id];
+                }
+                break;
+
+            case 'contact_chat':
+                if ($session->context_id) {
+                    $filters['chat_message'] = [(string) $session->context_id];
+                }
+                break;
+
+            case 'container':
+                $relatedIds = Arr::wrap($session->context_data ?? []);
+                if (! empty($relatedIds)) {
+                    $normalized = array_map(fn ($id) => (string) $id, $relatedIds);
+                    $filters['meeting_transcript'] = $normalized;
+                    $filters['meeting_summary'] = $normalized;
+                }
+                break;
+        }
+
+        if (! empty($filters)) {
+            $this->applyContentIdFilters($query, $filters);
+        }
+    }
+
+    /**
+     * @param  Collection<int, AiDocument>  $documents
+     * @return array<string, mixed>
+     */
+    private function resolveLocation(AiContextEmbedding $embedding, Collection $documents): array
+    {
+        if ($embedding->content_type === 'document_text') {
+            $document = $documents->get((int) $embedding->content_id);
+
+            $metadata = $embedding->metadata ?? [];
+            $chunkIndex = isset($metadata['chunk_index']) ? (int) $metadata['chunk_index'] : null;
+            $startOffset = isset($metadata['start_offset']) ? (int) $metadata['start_offset'] : null;
+            $page = null;
+            $url = null;
+            $title = null;
+
+            if ($document) {
+                $title = $document->name ?: $document->original_filename;
+                $url = $document->drive_file_id ? sprintf('https://drive.google.com/file/d/%s/view', $document->drive_file_id) : null;
+                $pageCount = $document->ocr_metadata['pages']
+                    ?? $document->document_metadata['pages']
+                    ?? null;
+                $totalLength = $document->extracted_text ? mb_strlen($document->extracted_text) : null;
+                $page = $this->estimateDocumentPage($startOffset, $totalLength, $pageCount);
+            }
+
+            return array_filter([
+                'type' => 'document',
+                'document_id' => (int) $embedding->content_id,
+                'title' => $title,
+                'chunk_index' => $chunkIndex,
+                'page' => $page,
+                'start_offset' => $startOffset,
+                'url' => $url,
+            ], fn ($value) => $value !== null);
+        }
+
+        return [
+            'type' => $embedding->content_type,
+            'content_id' => (string) $embedding->content_id,
+        ];
+    }
+
+    private function estimateDocumentPage(?int $startOffset, ?int $totalLength, ?int $pageCount): ?int
+    {
+        if ($startOffset === null || $totalLength === null || $totalLength <= 0 || $pageCount === null || $pageCount <= 0) {
+            return null;
+        }
+
+        $ratio = $startOffset / max(1, $totalLength);
+        $page = (int) floor($ratio * $pageCount) + 1;
+
+        return max(1, min($pageCount, $page));
+    }
+
+    private function buildCitation(AiContextEmbedding $embedding, array $location): string
+    {
+        if ($embedding->content_type === 'document_text') {
+            $pageSuffix = isset($location['page']) ? ' p.' . $location['page'] : null;
+            $chunkSuffix = isset($location['chunk_index']) ? ' sec.' . ((int) $location['chunk_index'] + 1) : null;
+            $suffix = $pageSuffix ?? $chunkSuffix;
+
+            return 'doc:' . $embedding->content_id . ($suffix ? ' ' . $suffix : '');
+        }
+
+        if (Str::startsWith($embedding->content_type, 'meeting')) {
+            return 'meeting:' . $embedding->content_id;
+        }
+
+        if ($embedding->content_type === 'chat_message') {
+            return 'chat:' . $embedding->content_id;
+        }
+
+        return $embedding->content_type . ':' . $embedding->content_id;
     }
 }
