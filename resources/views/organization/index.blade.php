@@ -935,7 +935,7 @@
 </x-modal>
 
 <!-- Modal para ver reunión -->
-<div id="meeting-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-70 hidden">
+<div id="meeting-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[80] hidden">
     <div class="bg-slate-900 rounded-lg w-full max-w-4xl max-h-[80vh] overflow-hidden border border-slate-700">
         <!-- Header del modal -->
         <div class="flex items-center justify-between p-6 border-b border-slate-700">
