@@ -15,7 +15,9 @@ return new class extends Migration
         if (!Schema::hasTable('shared_meetings')) {
             Schema::create('shared_meetings', function (Blueprint $table) {
                 $table->id();
-                $table->unsignedInteger('meeting_id'); // coincide con meetings.id (increments)
+                // meeting_id puede apuntar a registros legacy (transcriptions_laravel)
+                // o a otro identificador genérico, por eso lo almacenamos como string.
+                $table->string('meeting_id', 191);
                 // Users.id es UUID, definir columnas como uuid
                 $table->uuid('shared_by'); // Usuario que comparte
                 $table->uuid('shared_with'); // Usuario receptor
@@ -26,7 +28,6 @@ return new class extends Migration
                 $table->timestamps();
 
                 // FKs
-                $table->foreign('meeting_id')->references('id')->on('meetings')->onDelete('cascade');
                 $table->foreign('shared_by')->references('id')->on('users')->onDelete('cascade');
                 $table->foreign('shared_with')->references('id')->on('users')->onDelete('cascade');
 
