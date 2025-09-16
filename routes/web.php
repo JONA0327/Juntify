@@ -116,7 +116,8 @@ Route::get('/new-meeting', function () {
     $user = auth()->user();
     return view('new-meeting', [
         'userRole' => $user->roles ?? 'free',
-        'organizationId' => $user->current_organization_id ?? null
+        'organizationId' => $user->current_organization_id ?? null,
+        'organizationName' => optional($user?->organization)->nombre_organizacion,
     ]);
 })->name('new-meeting')->middleware('cors.ffmpeg');
 
