@@ -152,7 +152,7 @@
 
     <div id="fullPreviewModal"
         class="fixed inset-0 z-[9999] hidden flex items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4 py-8">
-        <div class="relative w-full max-w-5xl h-full max-h-[90vh] bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl overflow-hidden">
+        <div class="relative w-full max-w-screen-xl h-full max-h-[95vh] bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl overflow-hidden">
             <button id="closeFullPreview" type="button"
                 class="absolute top-4 right-4 inline-flex items-center justify-center w-10 h-10 rounded-full bg-slate-800/70 border border-slate-700/70 text-slate-300 hover:bg-slate-700/70 hover:text-white transition">
                 <span class="sr-only">Cerrar vista previa</span>
