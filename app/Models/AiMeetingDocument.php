@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\TranscriptionLaravel;
 
 class AiMeetingDocument extends Model
 {
@@ -28,14 +29,10 @@ class AiMeetingDocument extends Model
         return $this->belongsTo(User::class, 'assigned_by_username', 'username');
     }
 
-    // Relación polimórfica para reuniones legacy y modernas
-    public function meeting()
+    // Relación simplificada: todas las reuniones apuntan al esquema legacy
+    public function meeting(): BelongsTo
     {
-        if ($this->meeting_type === 'legacy') {
-            return $this->belongsTo(TranscriptionLaravel::class, 'meeting_id');
-        } else {
-            return $this->belongsTo(Meeting::class, 'meeting_id');
-        }
+        return $this->belongsTo(TranscriptionLaravel::class, 'meeting_id');
     }
 
     public function scopeByMeeting($query, $meetingId, $meetingType = 'legacy')

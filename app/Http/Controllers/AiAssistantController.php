@@ -7,7 +7,6 @@ use App\Models\AiChatMessage;
 use App\Models\AiDocument;
 use App\Models\Container;
 use App\Models\TranscriptionLaravel;
-use App\Models\Meeting;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\Contact;
@@ -252,28 +251,7 @@ class AiAssistantController extends Controller
                 ];
             });
 
-        // Reuniones modernas
-        $modernMeetings = Meeting::where('username', $user->username)
-            ->orderBy('created_at', 'desc')
-            ->with('transcriptions')
-            ->get()
-            ->map(function($meeting) {
-                return [
-                    'id' => $meeting->id,
-                    'meeting_name' => $meeting->title,
-                    'title' => $meeting->title,
-                    'type' => 'modern',
-                    'created_at' => $meeting->created_at,
-                    'duration' => $meeting->duration ?? 'No disponible',
-                    'participants' => $meeting->participants ?? [],
-                    'has_summary' => !empty($meeting->summary),
-                    'has_transcription' => $meeting->transcriptions()->exists(),
-                    'has_audio' => !empty($meeting->recordings_folder_id),
-                    'recordings_folder_id' => $meeting->recordings_folder_id
-                ];
-            });
-
-        $meetings = $legacyMeetings->concat($modernMeetings)->sortByDesc('created_at')->values();
+        $meetings = $legacyMeetings->sortByDesc('created_at')->values();
 
         return response()->json([
             'success' => true,
@@ -548,25 +526,24 @@ class AiAssistantController extends Controller
 
         $relatedMeetings = Arr::wrap($session->context_data ?? []);
         if (empty($fragments) && ! empty($relatedMeetings)) {
-            $meetings = Meeting::whereIn('id', $relatedMeetings)
-                ->orderByDesc('date')
+            $meetings = TranscriptionLaravel::whereIn('id', $relatedMeetings)
+                ->orderByDesc('created_at')
                 ->limit(5)
                 ->get();
 
             foreach ($meetings as $meeting) {
                 $fragments[] = [
                     'text' => sprintf(
-                        'Reunión "%s" celebrada el %s. Participantes: %s',
-                        $meeting->title,
-                        optional($meeting->date)->toDateString() ?? 'sin fecha',
-                        $this->formatParticipants($meeting->participants)
+                        'Reunión "%s" registrada el %s.',
+                        $meeting->meeting_name,
+                        optional($meeting->created_at)->toDateString() ?? 'sin fecha'
                     ),
                     'source_id' => 'meeting:' . $meeting->id,
                     'content_type' => 'container_meeting',
                     'location' => array_filter([
                         'type' => 'meeting',
                         'meeting_id' => $meeting->id,
-                        'title' => $meeting->title,
+                        'title' => $meeting->meeting_name,
                     ]),
                     'similarity' => null,
                     'citation' => 'meeting:' . $meeting->id,
@@ -584,7 +561,7 @@ class AiAssistantController extends Controller
             return [];
         }
 
-        $meeting = Meeting::with([
+        $meeting = TranscriptionLaravel::with([
             'keyPoints' => fn ($relation) => $relation->ordered()->limit(5),
             'transcriptions' => function ($relation) use ($query) {
                 $relation->orderBy('time');
@@ -613,7 +590,7 @@ class AiAssistantController extends Controller
                     'location' => array_filter([
                         'type' => 'meeting',
                         'meeting_id' => $meeting->id,
-                        'title' => $meeting->title,
+                        'title' => $meeting->meeting_name,
                     ]),
                     'similarity' => null,
                     'citation' => 'meeting:' . $meeting->id . ' resumen',
@@ -629,7 +606,7 @@ class AiAssistantController extends Controller
                     'location' => array_filter([
                         'type' => 'meeting',
                         'meeting_id' => $meeting->id,
-                        'title' => $meeting->title,
+                        'title' => $meeting->meeting_name,
                         'order' => $point->order_num,
                     ]),
                     'similarity' => null,
@@ -651,7 +628,7 @@ class AiAssistantController extends Controller
                     'location' => array_filter([
                         'type' => 'meeting',
                         'meeting_id' => $meeting->id,
-                        'title' => $meeting->title,
+                        'title' => $meeting->meeting_name,
                         'speaker' => $segment->display_speaker ?? $segment->speaker,
                         'timestamp' => $segment->time,
                     ]),
