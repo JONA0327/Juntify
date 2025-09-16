@@ -2655,6 +2655,10 @@ function showMeetingModal(meeting) {
     if (meetingAudioPlayer && audioSrc) {
         const loadingEl = document.getElementById('audio-loading');
         const loadingBar = document.getElementById('audio-loading-bar');
+        const origin = typeof location !== 'undefined' ? location.origin : '';
+        const fallbackUrl = meeting?.id ? `/api/meetings/${meeting.id}/audio` : null;
+        const resolvedFallbackUrl = fallbackUrl && origin ? new URL(fallbackUrl, origin).href : null;
+        const isExternalAudio = !!(audioSrc && origin && !audioSrc.startsWith(origin));
         let triedFallback = false;
 
         const finalizePlayer = () => {
@@ -2664,9 +2668,8 @@ function showMeetingModal(meeting) {
 
         const attachError = () => {
             meetingAudioPlayer.addEventListener('error', () => {
-                if (!triedFallback && meeting?.id) {
+                if (!triedFallback && fallbackUrl && (!resolvedFallbackUrl || meetingAudioPlayer.src !== resolvedFallbackUrl)) {
                     triedFallback = true;
-                    const fallbackUrl = `/api/meetings/${meeting.id}/audio`;
                     console.warn('[audio] Fallback endpoint streaming:', fallbackUrl);
                     meetingAudioPlayer.src = fallbackUrl;
                     try { meetingAudioPlayer.load(); } catch (_) {}
@@ -2718,7 +2721,15 @@ function showMeetingModal(meeting) {
                 try { meetingAudioPlayer.load(); } catch (_) {}
             }
         };
-        bufferedDownload();
+        if (isExternalAudio && fallbackUrl) {
+            triedFallback = true;
+            attachError();
+            meetingAudioPlayer.src = fallbackUrl;
+            meetingAudioPlayer.addEventListener('loadedmetadata', finalizePlayer, { once: true });
+            try { meetingAudioPlayer.load(); } catch (_) {}
+        } else {
+            bufferedDownload();
+        }
     }
 }
 
