@@ -16,8 +16,12 @@ class TranscriptionLaravelFactory extends Factory
     public function definition(): array
     {
         return [
-            'username'  => User::factory()->create()->username,
-            'transcript' => $this->faker->paragraph,
+            'username' => User::factory()->create()->username,
+            'meeting_name' => $this->faker->sentence(3),
+            'audio_drive_id' => 'audio-' . $this->faker->uuid(),
+            'audio_download_url' => $this->faker->url(),
+            'transcript_drive_id' => 'transcript-' . $this->faker->uuid(),
+            'transcript_download_url' => $this->faker->url(),
         ];
     }
 }

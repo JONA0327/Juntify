@@ -2,7 +2,6 @@
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Models\User;
-use App\Models\TranscriptionLaravel;
 use App\Models\Contact;
 use App\Services\GoogleServiceAccount;
 
@@ -79,9 +78,8 @@ test('sharing meeting grants drive access when transcript id is valid', function
 
     Contact::create(['user_id' => $owner->id, 'contact_id' => $recipient->id]);
 
-    $meeting = TranscriptionLaravel::factory()->create([
+    $meeting = createLegacyMeeting($owner, [
         'meeting_name' => 'Legacy',
-        'username' => $owner->username,
         'transcript_drive_id' => 'file123',
     ]);
 
@@ -103,9 +101,8 @@ test('sharing meeting skips drive access when transcript id is invalid', functio
 
     Contact::create(['user_id' => $owner->id, 'contact_id' => $recipient->id]);
 
-    $meeting = TranscriptionLaravel::factory()->create([
+    $meeting = createLegacyMeeting($owner, [
         'meeting_name' => 'Legacy',
-        'username' => $owner->username,
         'transcript_drive_id' => 'invalid',
     ]);
 

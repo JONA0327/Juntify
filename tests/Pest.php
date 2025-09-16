@@ -1,6 +1,9 @@
 <?php
 
+use App\Models\TranscriptionLaravel;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /*
@@ -42,7 +45,16 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+function createLegacyMeeting(User $user, array $attributes = []): TranscriptionLaravel
 {
-    // ..
+    $defaults = [
+        'username' => $user->username,
+        'meeting_name' => 'Legacy Meeting ' . Str::random(6),
+        'audio_drive_id' => 'audio-' . Str::uuid(),
+        'audio_download_url' => 'https://example.test/audio.mp3',
+        'transcript_drive_id' => 'transcript-' . Str::uuid(),
+        'transcript_download_url' => 'https://example.test/transcript.json',
+    ];
+
+    return TranscriptionLaravel::query()->create(array_merge($defaults, $attributes));
 }
