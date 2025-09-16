@@ -11,6 +11,8 @@ class AiMeetingDocument extends Model
 {
     use HasFactory;
 
+    public const MEETING_TYPE_LEGACY = 'legacy';
+
     protected $fillable = [
         'document_id',
         'meeting_id',
@@ -18,6 +20,21 @@ class AiMeetingDocument extends Model
         'assigned_by_username',
         'assignment_note',
     ];
+
+    protected $attributes = [
+        'meeting_type' => self::MEETING_TYPE_LEGACY,
+    ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (AiMeetingDocument $assignment) {
+            $assignment->meeting_type = self::MEETING_TYPE_LEGACY;
+        });
+
+        static::updating(function (AiMeetingDocument $assignment) {
+            $assignment->meeting_type = self::MEETING_TYPE_LEGACY;
+        });
+    }
 
     public function document(): BelongsTo
     {
@@ -35,8 +52,14 @@ class AiMeetingDocument extends Model
         return $this->belongsTo(TranscriptionLaravel::class, 'meeting_id');
     }
 
-    public function scopeByMeeting($query, $meetingId, $meetingType = 'legacy')
+    public function setMeetingTypeAttribute($value): void
     {
-        return $query->where('meeting_id', $meetingId)->where('meeting_type', $meetingType);
+        $this->attributes['meeting_type'] = self::MEETING_TYPE_LEGACY;
+    }
+
+    public function scopeByMeeting($query, $meetingId, $meetingType = self::MEETING_TYPE_LEGACY)
+    {
+        return $query->where('meeting_id', $meetingId)
+            ->where('meeting_type', self::MEETING_TYPE_LEGACY);
     }
 }
