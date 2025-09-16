@@ -16,7 +16,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
-use App\Services\GoogleDriveService;
 use App\Services\GoogleServiceAccount;
 
 class SharedMeetingController extends Controller
@@ -44,16 +43,12 @@ class SharedMeetingController extends Controller
 
             $sharesQuery = SharedMeeting::with(['meeting','sharedWithUser'])
                 ->where('shared_by', Auth::id())
+                ->whereHas('meeting')
                 ->orderByDesc('shared_at')
                 ->get();
 
-            // Preload legacy meetings to avoid collisions / N+1
-            $legacyMap = TranscriptionLaravel::whereIn('id', $sharesQuery->pluck('meeting_id'))
-                ->get()
-                ->keyBy('id');
-
-            $shares = $sharesQuery->map(function($share) use ($legacyMap) {
-                $legacy = $legacyMap->get($share->meeting_id);
+            $shares = $sharesQuery->map(function($share) {
+                $legacy = $share->meeting;
                 $with = $share->sharedWithUser; // dynamic relation we will add via accessor if needed
                 $sharedWithName = $with?->full_name ?? $with?->username ?? $with?->name ?? 'Usuario';
                 return [
@@ -127,101 +122,35 @@ class SharedMeetingController extends Controller
             ->where('id', $request->shared_meeting_id)
             ->where('shared_with', $user->id)
             ->where('status', 'accepted')
+            ->whereHas('meeting')
             ->firstOrFail();
 
         $meetingId = $shared->meeting_id;
-        $sharerEmail = $shared->sharedBy?->email;
+        $legacy = $shared->meeting;
 
-        // Prefer user token; if missing, use SA impersonating sharer
-        $drive = app(GoogleDriveService::class);
-        $useServiceAccount = false;
-        try {
-            // We only need Drive API for link discovery if we must search; direct IDs can be normalized without token
-            if (Auth::user()->googleToken) {
-                $token = $user->googleToken;
-                $drive->setAccessToken($token->access_token ? json_decode($token->access_token, true) ?: ['access_token'=>$token->access_token] : []);
-            } else {
-                throw new \RuntimeException('no_user_token');
-            }
-        } catch (\Throwable $e) {
-            $useServiceAccount = true;
-        }
-
-        $juLink = null; $audioLink = null; $audioId = null;
-
-        // Legacy
-        $legacy = TranscriptionLaravel::find($meetingId);
-        if ($legacy) {
-            // .ju: if we have transcript_drive_id, convert to direct link
-            if (!empty($legacy->transcript_drive_id)) {
-                $fileId = $legacy->transcript_drive_id;
-                $juLink = 'https://drive.google.com/uc?export=download&id=' . $fileId;
-            }
-
-            // Audio: prefer stored file id; else search inside folder id
-            if (!empty($legacy->audio_drive_id)) {
-                // If it's a folder id, we need to search for the matching audio file
-                if ($useServiceAccount) {
-                    /** @var GoogleServiceAccount $sa */
-                    $sa = app(GoogleServiceAccount::class);
-                    if ($sharerEmail) { $sa->impersonate($sharerEmail); }
-                    try {
-                        // Try to treat audio_drive_id as file id first
-                        $audioId = $legacy->audio_drive_id;
-                        $audioLink = $sa->getFileLink($audioId);
-                    } catch (\Throwable $e) {
-                        // Fallback: not a file-id, try to find inside folder using SA
-                        try {
-                            $resp = $sa->getDrive()->files->listFiles([
-                                'q' => sprintf("'%s' in parents and trashed=false", $legacy->audio_drive_id),
-                                'fields' => 'files(id,name,webContentLink)',
-                                'supportsAllDrives' => true,
-                            ]);
-                            $files = $resp->getFiles();
-                            foreach ($files as $file) {
-                                $name = $file->getName();
-                                if (preg_match('/^' . preg_quote($legacy->meeting_name, '/') . '/i', $name) || preg_match('/^' . preg_quote((string)$legacy->id, '/') . '/i', $name)) {
-                                    $audioId = $file->getId();
-                                    $audioLink = $file->getWebContentLink();
-                                    break;
-                                }
-                            }
-                        } catch (\Throwable $e2) { /* ignore */ }
-                    }
-                } else {
-                    try {
-                        // Try direct file id first
-                        $audioId = $legacy->audio_drive_id;
-                        $audioLink = $drive->getWebContentLink($audioId);
-                        if (!$audioLink) {
-                            // Search in folder by name/id
-                            $found = $drive->findAudioInFolder(
-                                $legacy->audio_drive_id,
-                                $legacy->meeting_name,
-                                (string)$legacy->id
-                            );
-                            if ($found) {
-                                $audioId = $found['fileId'];
-                                $audioLink = $found['downloadUrl'] ?? $drive->getWebContentLink($audioId) ?: $drive->getFileLink($audioId);
-                            }
-                        }
-                    } catch (\Throwable $e) { /* ignore */ }
-                }
-            }
-
+        if (!$legacy) {
             return response()->json([
-                'success' => true,
-                'meeting_id' => $meetingId,
-                'is_legacy' => true,
-                'ju_link' => $juLink,
-                'audio_link' => $audioLink,
-                'audio_file_id' => $audioId,
-            ]);
+                'success' => false,
+                'message' => 'Reunión no encontrada',
+            ], 404);
         }
+
+        $juLink = null;
+        if (!empty($legacy->transcript_drive_id)) {
+            $juLink = 'https://drive.google.com/uc?export=download&id=' . $legacy->transcript_drive_id;
+        }
+
+        $audioId = !empty($legacy->audio_drive_id) ? $legacy->audio_drive_id : null;
+        $audioLink = $audioId ? 'https://drive.google.com/uc?export=download&id=' . $audioId : null;
+
         return response()->json([
-            'success' => false,
-            'message' => 'Reunión no encontrada',
-        ], 404);
+            'success' => true,
+            'meeting_id' => $meetingId,
+            'is_legacy' => true,
+            'ju_link' => $juLink,
+            'audio_link' => $audioLink,
+            'audio_file_id' => $audioId,
+        ]);
     }
     /**
      * Obtener contactos del usuario para compartir reunión
@@ -277,7 +206,6 @@ class SharedMeetingController extends Controller
             'contact_ids' => 'required|array|min:1',
             'contact_ids.*' => 'exists:users,id',
             'message' => 'nullable|string|max:500',
-            'meeting_title' => 'nullable|string|max:255', // título enviado por el front para validar colisiones
         ]);
 
         try {
@@ -403,6 +331,7 @@ class SharedMeetingController extends Controller
             $sharedMeeting = SharedMeeting::with(['meeting', 'sharedBy'])
                 ->where('id', $request->shared_meeting_id)
                 ->where('shared_with', Auth::id())
+                ->whereHas('meeting')
                 ->first();
 
             if (!$sharedMeeting) {
@@ -469,13 +398,8 @@ class SharedMeetingController extends Controller
                 }
             }
 
-            // Obtener título priorizando siempre legacy para evitar colisión de IDs con meetings
-            try {
-                $legacy = TranscriptionLaravel::find($sharedMeeting->meeting_id);
-            } catch (\Throwable $e) { $legacy = null; }
-            $meetingTitle = $legacy?->meeting_name
-                ?? $sharedMeeting->meeting?->title
-                ?? 'Reunión';
+            $legacy = $sharedMeeting->meeting;
+            $meetingTitle = $legacy?->meeting_name ?? 'Reunión';
 
             // Eliminar la notificación de invitación al responder (aceptar/rechazar)
             $this->deleteInviteNotification($request->notification_id, $sharedMeeting);
@@ -592,16 +516,12 @@ class SharedMeetingController extends Controller
             $sharedMeetingsQuery = SharedMeeting::with(['meeting', 'sharedBy'])
                 ->where('shared_with', Auth::id())
                 ->where('status', 'accepted')
+                ->whereHas('meeting')
                 ->orderBy('shared_at', 'desc')
                 ->get();
 
-            // Pre-cargar transcripciones legacy para evitar N+1
-            $legacyMap = TranscriptionLaravel::whereIn('id', $sharedMeetingsQuery->pluck('meeting_id'))
-                ->get()
-                ->keyBy('id');
-
-            $sharedMeetings = $sharedMeetingsQuery->map(function ($shared) use ($legacyMap) {
-                $legacy = $legacyMap->get($shared->meeting_id);
+            $sharedMeetings = $sharedMeetingsQuery->map(function ($shared) {
+                $legacy = $shared->meeting;
 
                 $sharedBy = $shared->sharedBy;
                 $sharedByName = $sharedBy?->full_name
@@ -623,7 +543,8 @@ class SharedMeetingController extends Controller
                     ],
                     'shared_at' => $shared->shared_at,
                     'message' => $shared->message,
-                    'recordings_folder_id' => $legacy?->audio_drive_id,
+                    'audio_drive_id' => $legacy?->audio_drive_id,
+                    'transcript_drive_id' => $legacy?->transcript_drive_id,
                 ];
             });
 
