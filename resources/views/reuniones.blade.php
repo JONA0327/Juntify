@@ -149,5 +149,20 @@
     <x-share-modal />
 
     {{-- El resto de tus modales no necesita cambios para esta tarea --}}
+
+    <div id="fullPreviewModal"
+        class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4 py-8">
+        <div class="relative w-full max-w-5xl h-full max-h-[90vh] bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl overflow-hidden">
+            <button id="closeFullPreview" type="button"
+                class="absolute top-4 right-4 inline-flex items-center justify-center w-10 h-10 rounded-full bg-slate-800/70 border border-slate-700/70 text-slate-300 hover:bg-slate-700/70 hover:text-white transition">
+                <span class="sr-only">Cerrar vista previa</span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                    class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
+                </svg>
+            </button>
+            <iframe id="fullPreviewFrame" class="w-full h-full" title="Vista previa de la reunión" frameborder="0"></iframe>
+        </div>
+    </div>
     </body>
 </html>
