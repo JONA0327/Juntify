@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\TranscriptionLaravel;
+use App\Models\User;
 
 class SharedMeeting extends Model
 {
@@ -27,23 +30,23 @@ class SharedMeeting extends Model
     ];
 
     // Relaciones
-    public function meeting()
+    public function meeting(): BelongsTo
     {
-        return $this->belongsTo(Meeting::class);
+        return $this->belongsTo(TranscriptionLaravel::class, 'meeting_id');
     }
 
-    public function sharedBy()
+    public function sharedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'shared_by');
     }
 
     /** User who received the share */
-    public function sharedWithUser()
+    public function sharedWithUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'shared_with');
     }
 
-    public function sharedWith()
+    public function sharedWith(): BelongsTo
     {
         return $this->belongsTo(User::class, 'shared_with');
     }

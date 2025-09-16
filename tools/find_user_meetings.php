@@ -5,7 +5,6 @@ $app->make('Illuminate\Contracts\Console\Kernel')->bootstrap();
 
 use App\Models\User;
 use App\Models\TranscriptionLaravel;
-use App\Models\Meeting;
 
 echo "=== Finding Meetings Owned by Test Users ===\n";
 
@@ -29,9 +28,6 @@ foreach ($users as $user) {
         echo "    Transcript: {$meeting->transcript_drive_id}\n";
         echo "    Audio: {$meeting->audio_drive_id}\n";
     }
-
-    // Check modern meetings (skip for now due to missing user_id column)
-    echo "Modern meetings: Skipped (table structure issue)\n";
 
     echo "Has Google token: " . ($user->googleToken ? 'YES' : 'NO') . "\n";
 }

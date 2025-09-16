@@ -11,7 +11,6 @@ use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 use App\Models\Container;
 use App\Models\TaskLaravel;
-use App\Models\Meeting;
 use App\Models\SharedMeeting;
 use App\Models\User;
 use App\Models\KeyPoint;
@@ -52,22 +51,36 @@ class MeetingController extends Controller
 
     public function publicIndex()
     {
-        $meetings = Meeting::query()
-            ->select('id', 'title', 'date', 'duration')
+        $meetings = TranscriptionLaravel::query()
+            ->select('id', 'meeting_name', 'created_at')
+            ->orderByDesc('created_at')
             ->get()
-            ->makeHidden(['created_at', 'updated_at']);
+            ->map(function ($meeting) {
+                return [
+                    'id' => $meeting->id,
+                    'title' => $meeting->meeting_name,
+                    'date' => $meeting->created_at,
+                    'duration' => null,
+                ];
+            });
 
         return response()->json($meetings);
     }
 
     public function publicShow($meeting)
     {
-        $meeting = Meeting::query()
-            ->select('id', 'title', 'date', 'duration')
-            ->findOrFail($meeting)
-            ->makeHidden(['created_at', 'updated_at']);
+        $meeting = TranscriptionLaravel::query()
+            ->select('id', 'meeting_name', 'created_at')
+            ->findOrFail($meeting);
 
-        return response()->json($meeting);
+        $transformed = [
+            'id' => $meeting->id,
+            'title' => $meeting->meeting_name,
+            'date' => $meeting->created_at,
+            'duration' => null,
+        ];
+
+        return response()->json($transformed);
     }
 
     /**
@@ -205,40 +218,7 @@ class MeetingController extends Controller
                     ];
                 });
 
-            $modernMeetings = Meeting::where('username', $user->username)
-                ->orderBy('created_at', 'desc')
-                ->get()
-                ->map(function ($meeting) use ($hasGoogleToken) {
-                    $audioFolder = 'Base de datos';
-
-                    if ($hasGoogleToken && $meeting->recordings_folder_id) {
-                        try {
-                            $audioFolder = $this->getFolderName($meeting->recordings_folder_id);
-                        } catch (\Exception $e) {
-                            $audioFolder = 'Error al cargar carpeta';
-                            Log::warning('getMeetings: Error getting recordings folder name', [
-                                'meeting_id' => $meeting->id,
-                                'recordings_folder_id' => $meeting->recordings_folder_id,
-                                'error' => $e->getMessage()
-                            ]);
-                        }
-                    } elseif (!$hasGoogleToken && $meeting->recordings_folder_id) {
-                        $audioFolder = 'Google Drive no conectado';
-                    }
-
-                    return [
-                        'id' => $meeting->id,
-                        'meeting_name' => $meeting->title,
-                        'created_at' => $meeting->created_at ?? $meeting->date,
-                        'audio_folder' => $audioFolder,
-                        'transcript_folder' => 'Base de datos',
-                        'is_legacy' => false,
-                        'source' => 'meetings',
-                    ];
-                });
-
             $meetings = $legacyMeetings
-                ->concat($modernMeetings)
                 ->sortByDesc('created_at')
                 ->map(function ($meeting) {
                     $meeting['created_at'] = $meeting['created_at'] instanceof Carbon
@@ -761,129 +741,10 @@ class MeetingController extends Controller
                 ]);
             }
 
-            // Reunión moderna en base de datos
-            $meetingQuery = Meeting::with([
-                'keyPoints' => function ($q) use ($user, $sharedAccess, $containerAccess) {
-                    if (!($sharedAccess || $containerAccess)) {
-                        $q->whereHas('meeting', function ($mq) use ($user) {
-                            $mq->where('username', $user->username);
-                        });
-                    }
-                    $q->ordered();
-                },
-                'transcriptions' => function ($q) use ($user, $sharedAccess, $containerAccess) {
-                    if (!($sharedAccess || $containerAccess)) {
-                        $q->whereHas('meeting', function ($mq) use ($user) {
-                            $mq->where('username', $user->username);
-                        });
-                    }
-                    $q->byTime();
-                },
-            ])->where('id', $id);
-            if (!($sharedAccess || $containerAccess)) {
-                $meetingQuery->where('username', $user->username);
-            }
-            $meeting = $meetingQuery->firstOrFail();
-            $ownerUsername = $share?->sharedBy?->username ?? $meeting->username ?? $user->username;
-
-            // Buscar audio (evitar llamadas con token de usuario si estamos usando SA)
-            $audioPath = null;
-            $audioDriveId = null;
-            if ($useServiceAccount) {
-                // Evitar consultas a Drive con token de usuario; usar streaming con fallback SA
-                $audioPath = route('api.meetings.audio', ['meeting' => $meeting->id]);
-            } else {
-                if (!empty($meeting->recordings_folder_id)) {
-                    $audioData = $this->googleDriveService->findAudioInFolder(
-                        $meeting->recordings_folder_id,
-                        $meeting->title,
-                        (string) $meeting->id
-                    );
-
-                    if ($audioData) {
-                        $tempMeeting = (object) [
-                            'id' => $meeting->id,
-                            'meeting_name' => $meeting->title,
-                            'audio_drive_id' => $audioData['fileId'] ?? null,
-                            // Pasar la URL directa si existe para evitar descargas innecesarias
-                            'audio_download_url' => $audioData['downloadUrl'] ?? null,
-                        ];
-                        $audioDriveId = $audioData['fileId'] ?? null;
-                        $audioPath = $this->getAudioPath($tempMeeting);
-                        // Si es una ruta local del storage público, convertirla a URL pública
-                        if ($audioPath && !str_starts_with($audioPath, 'http')) {
-                            $audioPath = $this->publicUrlFromStoragePath($audioPath);
-                        }
-                    }
-                }
-            }
-
-            // Fallback: buscar por título en la carpeta y luego globalmente si no se encontró por ID
-            if ($audioPath === null) {
-                $audioFile = null;
-                if (!$useServiceAccount) {
-                    if (!empty($meeting->recordings_folder_id)) {
-                        $files = $this->googleDriveService->searchFiles($meeting->title, $meeting->recordings_folder_id);
-                        $audioFile = $files[0] ?? null;
-                    }
-                    if (!$audioFile) {
-                        $files = $this->googleDriveService->searchFiles($meeting->title, null);
-                        $audioFile = $files[0] ?? null;
-                    }
-                }
-
-                if ($audioFile) {
-                    $tempMeeting = (object) [
-                        'id' => $meeting->id,
-                        'meeting_name' => $meeting->title,
-                        'audio_drive_id' => $audioFile->getId(),
-                        'audio_download_url' => null,
-                    ];
-                    $audioDriveId = $audioFile->getId();
-                    // En lugar de exponer una ruta local/Drive directa, usar nuestro stream endpoint
-                    $audioPath = route('api.meetings.audio', ['meeting' => $meeting->id]);
-                } elseif ($useServiceAccount) {
-                    // Sin búsquedas de Drive: devolver streaming para que resuelva internamente con SA
-                    $audioPath = route('api.meetings.audio', ['meeting' => $meeting->id]);
-                }
-            }
-
-            $segments = $meeting->transcriptions->map(function ($t) {
-                return [
-                    'time' => $t->time,
-                    'speaker' => $t->speaker,
-                    'text' => $t->text,
-                    'display_speaker' => $t->display_speaker,
-                ];
-            });
-
-            $transcriptionText = $segments->pluck('text')->implode(' ');
-
-            // Obtener las tareas de la tabla TaskLaravel
-            $tasks = TaskLaravel::where('meeting_id', $meeting->id)
-                ->where('username', $ownerUsername)
-                ->get();
-
             return response()->json([
-                'success' => true,
-                'meeting' => [
-                    'id' => $meeting->id,
-                    'meeting_name' => $meeting->title,
-                    'is_legacy' => false,
-                    'created_at' => ($meeting->date ?? $meeting->created_at)->format('d/m/Y H:i'),
-                    'audio_path' => $audioPath ?? route('api.meetings.audio', ['meeting' => $meeting->id]),
-                    // 'audio_drive_id' opcionalmente podría incluirse si el frontend lo requiere
-                    'summary' => $meeting->summary,
-                    'key_points' => $meeting->keyPoints->pluck('point_text'),
-                    'transcription' => $transcriptionText,
-                    'tasks' => $tasks,
-                    'speakers' => $meeting->speaker_map ?? [],
-                    'segments' => $segments,
-                    'audio_folder' => $this->getFolderName($meeting->recordings_folder_id),
-                    'transcript_folder' => 'Base de datos',
-                    'needs_encryption' => false,
-                ]
-            ]);
+                'success' => false,
+                'message' => 'Reunión no encontrada o sin acceso',
+            ], 404);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -1191,74 +1052,7 @@ class MeetingController extends Controller
                 ]);
             }
 
-            // 2) Flujo moderno (BD): Meeting (solo borrar audio en Drive)
-            $modern = Meeting::where('id', $id)
-                ->where('username', $user->username)
-                ->first();
-
-            if ($modern) {
-                Log::info('Eliminación de reunión moderna (audio en Drive + limpieza en BD)', [
-                    'meeting_id' => $id,
-                    'title' => $modern->title,
-                    'user' => $user->username
-                ]);
-
-                $deletedAudio = false;
-                try {
-                    if (!empty($modern->recordings_folder_id)) {
-                        $found = $this->googleDriveService->findAudioInFolder(
-                            $modern->recordings_folder_id,
-                            $modern->title,
-                            (string)$modern->id
-                        );
-                        if ($found && !empty($found['fileId'])) {
-                            if ($this->deleteDriveFileResilient($found['fileId'], $user->email)) {
-                                $deletedAudio = true;
-                                Log::info('Audio de reunión moderna eliminado en Drive', ['file_id' => $found['fileId']]);
-                            } else {
-                                Log::warning('No se pudo eliminar audio de reunión moderna en Drive', ['file_id' => $found['fileId']]);
-                            }
-                        }
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Error al eliminar audio de reunión moderna en Drive', [
-                        'meeting_id' => $modern->id,
-                        'error' => $e->getMessage()
-                    ]);
-                    // Continuar y reportar como advertencia
-                }
-
-                // Eliminar tareas asociadas en tasks_laravel (si hay alguna enlazada por meeting_id)
-                try {
-                    $deletedTasks = TaskLaravel::where('meeting_id', $modern->id)->delete();
-                    Log::info('Tareas asociadas (moderna) eliminadas', ['meeting_id' => $modern->id, 'count' => $deletedTasks]);
-                } catch (\Exception $e) {
-                    Log::warning('No se pudieron eliminar tareas asociadas (moderna)', ['meeting_id' => $modern->id, 'error' => $e->getMessage()]);
-                }
-
-                // Remover asociaciones de contenedores
-                try {
-                    $deletedRelations = MeetingContentRelation::where('meeting_id', $modern->id)->delete();
-                    Log::info('Relaciones en contenedores (moderna) eliminadas', ['meeting_id' => $modern->id, 'count' => $deletedRelations]);
-                } catch (\Exception $e) {
-                    Log::warning('No se pudieron eliminar relaciones en contenedores (moderna)', ['meeting_id' => $modern->id, 'error' => $e->getMessage()]);
-                }
-
-                // Eliminar registro de Meeting
-                try {
-                    $modern->delete();
-                    Log::info('Registro de Meeting eliminado', ['meeting_id' => $id]);
-                } catch (\Exception $e) {
-                    Log::warning('No se pudo eliminar el registro de Meeting', ['meeting_id' => $id, 'error' => $e->getMessage()]);
-                }
-
-                return response()->json([
-                    'success' => true,
-                    'message' => $deletedAudio ? 'Reunión y audio eliminados' : 'Reunión eliminada (no se encontró audio en Drive)'
-                ]);
-            }
-
-            // 3) Si no es legacy ni moderno
+            // 3) Si no es legacy
             return response()->json([
                 'success' => false,
                 'message' => 'Reunión no encontrada'
@@ -2465,113 +2259,7 @@ class MeetingController extends Controller
                 }
                 return $this->streamLocalAudioFile($audioPath, $mimeType);
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-                // Flujo moderno (Meeting en BD)
-                $modern = Meeting::where('id', $meeting)
-                    ->when(!$sharedAccess && !$containerAccess, function ($q) use ($user) {
-                        $q->where('username', $user->username);
-                    })
-                    ->firstOrFail();
-
-                // Reutilizar si ya existe archivo temporal
-                $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $modern->title);
-                $pattern = storage_path('app/public/temp/' . $sanitizedName . '_' . $modern->id . '.*');
-                $existingFiles = glob($pattern);
-
-                if (!empty($existingFiles)) {
-                    $audioPath = $existingFiles[0];
-                    // Si es un archivo local en storage/app/public, redirigir a la URL pública
-                    $publicRoot = storage_path('app/public/');
-                    if (str_starts_with($audioPath, $publicRoot)) {
-                        $publicUrl = $this->publicUrlFromStoragePath($audioPath);
-                        return redirect()->to($publicUrl, 302);
-                    }
-                    $mimeType = mime_content_type($audioPath) ?: 'audio/mpeg';
-                    return $this->streamLocalAudioFile($audioPath, $mimeType);
-                }
-
-                $audioData = null;
-                if (!empty($modern->recordings_folder_id)) {
-                    $audioData = $this->googleDriveService->findAudioInFolder(
-                        $modern->recordings_folder_id,
-                        $modern->title,
-                        (string) $modern->id
-                    );
-                }
-                if (!$audioData) {
-                    $files = $this->googleDriveService->searchFiles($modern->title, $modern->recordings_folder_id);
-                    $file = $files[0] ?? null;
-                    if (!$file) {
-                        $files = $this->googleDriveService->searchFiles($modern->title, null);
-                        $file = $files[0] ?? null;
-                    }
-                    if ($file) {
-                        $audioData = [ 'fileId' => $file->getId(), 'downloadUrl' => null ];
-                    }
-                }
-
-                if (!$audioData) {
-                    if ($debug) { $dbg['modern_search'] = 'not_found'; return response()->json(array_merge($dbg, ['error' => 'Audio no disponible (modern)']), 404); }
-                    return response()->json(['error' => 'Audio no disponible'], 404);
-                }
-
-                $tempMeeting = (object) [
-                    'id' => $modern->id,
-                    'meeting_name' => $modern->title,
-                    'audio_drive_id' => $audioData['fileId'] ?? null,
-                    'audio_download_url' => $audioData['downloadUrl'] ?? null,
-                ];
-                $audioPath = $this->getAudioPath($tempMeeting);
-                if (!$audioPath) {
-                    if ($debug) { $dbg['audio_path_null'] = true; return response()->json(array_merge($dbg, ['error' => 'Audio no disponible (modern path)']), 404); }
-                    return response()->json(['error' => 'Audio no disponible'], 404);
-                }
-                if (str_starts_with($audioPath, 'http')) {
-                    $streamed = $this->streamRemoteAudio(
-                        $audioPath,
-                        $tempMeeting->meeting_name . '_' . $tempMeeting->id,
-                        $tempMeeting->audio_drive_id
-                    );
-                    if ($streamed) {
-                        return $streamed;
-                    }
-
-                    Log::warning('streamAudio: No se pudo retransmitir audio remoto (modern)', [
-                        'meeting_id' => $modern->id,
-                        'audio_path' => $audioPath,
-                    ]);
-
-                    if ($debug) {
-                        return response()->json(array_merge($dbg, ['error' => 'Audio remoto no accesible (modern)']), 404);
-                    }
-
-                    return $this->audioError(404, 'Archivo de audio no disponible', $modern->id);
-                }
-
-                // Si es un archivo local en storage/app/public, redirigir a la URL pública
-                $publicRoot = storage_path('app/public/');
-                if (str_starts_with($audioPath, $publicRoot)) {
-                    $publicUrl = $this->publicUrlFromStoragePath($audioPath);
-                    return redirect()->to($publicUrl, 302);
-                }
-                if (!file_exists($audioPath)) {
-                    Log::warning('streamAudio: Archivo moderno calculado pero no existe', [
-                        'meeting_id' => $modern->id,
-                        'audio_path' => $audioPath
-                    ]);
-                    if ($debug) { $dbg['missing_file'] = $audioPath; return response()->json(array_merge($dbg, ['error' => 'Archivo moderno no existe']), 404); }
-                    return $this->audioError(404, 'Archivo de audio no disponible', $modern->id);
-                }
-                try {
-                    $mimeType = @mime_content_type($audioPath) ?: 'audio/mpeg';
-                } catch (\Throwable $e2) {
-                    Log::warning('streamAudio: mime_content_type fallo (moderno)', [
-                        'meeting_id' => $modern->id,
-                        'audio_path' => $audioPath,
-                        'error' => $e2->getMessage()
-                    ]);
-                    $mimeType = 'audio/mpeg';
-                }
-                return $this->streamLocalAudioFile($audioPath, $mimeType);
+                return $this->audioError(404, 'Archivo de audio no disponible', $meeting);
             }
         } catch (\Exception $e) {
             Log::error('Error streaming audio file', [
@@ -3479,26 +3167,12 @@ class MeetingController extends Controller
                 ->where('status', 'accepted')
                 ->exists();
 
-            // Intentar buscar primero en transcriptions_laravel
             $meeting = TranscriptionLaravel::where('id', $id)
                 ->when(!$sharedAccess, function ($q) use ($user) {
                     $q->where('username', $user->username);
                 })
-                ->first();
+                ->firstOrFail();
 
-            $isLegacy = true;
-
-            // Si no existe, buscar en meetings (reuniones modernas)
-            if (!$meeting) {
-                $meeting = Meeting::where('id', $id)
-                    ->when(!$sharedAccess, function ($q) use ($user) {
-                        $q->where('username', $user->username);
-                    })
-                    ->firstOrFail();
-                $isLegacy = false;
-            }
-
-            // Validar request
             $request->validate([
                 'sections' => 'required|array',
                 'data' => 'required|array',
@@ -3507,36 +3181,14 @@ class MeetingController extends Controller
             $data = $request->input('data');
             $sections = $request->input('sections');
 
-            // Datos base de la reunión
-            if ($isLegacy) {
-                $meetingName = $meeting->meeting_name;
-                $realCreatedAt = $meeting->created_at;
+            $meetingName = $meeting->meeting_name;
+            $realCreatedAt = $meeting->created_at;
 
-                $hasOrganization = $meeting->containers()->exists();
-                $organizationName = null;
-                $organizationLogo = null;
-                if ($hasOrganization) {
-                    $container = $meeting->containers()->with('group.organization')->first();
-                    if ($container && $container->group && $container->group->organization) {
-                        $organizationName = $container->group->organization->name
-                            ?? $container->group->organization->nombre_organizacion
-                            ?? 'Organización';
-                        $organizationLogo = $container->group->organization->imagen ?? null;
-                    }
-                }
-            } else {
-                $meetingName = $meeting->title;
-                $realCreatedAt = $meeting->created_at ?? $meeting->date;
-
-                $container = MeetingContentContainer::whereHas('meetingRelations', function ($q) use ($meeting) {
-                        $q->where('meeting_id', $meeting->id);
-                    })
-                    ->with('group.organization')
-                    ->first();
-
-                $hasOrganization = $container !== null;
-                $organizationName = null;
-                $organizationLogo = null;
+            $hasOrganization = $meeting->containers()->exists();
+            $organizationName = null;
+            $organizationLogo = null;
+            if ($hasOrganization) {
+                $container = $meeting->containers()->with('group.organization')->first();
                 if ($container && $container->group && $container->group->organization) {
                     $organizationName = $container->group->organization->name
                         ?? $container->group->organization->nombre_organizacion

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\SharedMeeting;
-use App\Models\Meeting;
 use App\Models\TranscriptionLaravel;
 use App\Models\Contact;
 use App\Models\Notification;
@@ -55,13 +54,12 @@ class SharedMeetingController extends Controller
 
             $shares = $sharesQuery->map(function($share) use ($legacyMap) {
                 $legacy = $legacyMap->get($share->meeting_id);
-                $meeting = $legacy ? null : $share->meeting; // only when not legacy
                 $with = $share->sharedWithUser; // dynamic relation we will add via accessor if needed
                 $sharedWithName = $with?->full_name ?? $with?->username ?? $with?->name ?? 'Usuario';
                 return [
                     'id' => $share->id,
                     'meeting_id' => $share->meeting_id,
-                    'title' => $legacy?->meeting_name ?? $meeting?->title ?? 'Reunión',
+                    'title' => $legacy?->meeting_name ?? 'Reunión',
                     'status' => $share->status,
                     'shared_with' => [
                         'id' => $with?->id,
@@ -70,7 +68,7 @@ class SharedMeetingController extends Controller
                     ],
                     'shared_at' => $share->shared_at,
                     'responded_at' => $share->responded_at,
-                    'is_legacy' => (bool)$legacy,
+                    'is_legacy' => true,
                 ];
             });
 
@@ -220,56 +218,10 @@ class SharedMeetingController extends Controller
                 'audio_file_id' => $audioId,
             ]);
         }
-
-        // Modern meeting
-        $modern = Meeting::findOrFail($meetingId);
-        $folderId = $modern->recordings_folder_id;
-        if ($folderId) {
-            if ($useServiceAccount) {
-                /** @var GoogleServiceAccount $sa */
-                $sa = app(GoogleServiceAccount::class);
-                if ($sharerEmail) { $sa->impersonate($sharerEmail); }
-                try {
-                    $resp = $sa->getDrive()->files->listFiles([
-                        'q' => sprintf("'%s' in parents and trashed=false", $folderId),
-                        'fields' => 'files(id,name,webContentLink)',
-                        'supportsAllDrives' => true,
-                    ]);
-                    $files = $resp->getFiles();
-                    foreach ($files as $file) {
-                        $name = $file->getName();
-                        if (preg_match('/^' . preg_quote($modern->title, '/') . '/i', $name) || preg_match('/^' . preg_quote((string)$modern->id, '/') . '/i', $name)) {
-                            $audioId = $file->getId();
-                            $audioLink = $file->getWebContentLink();
-                            break;
-                        }
-                    }
-                } catch (\Throwable $e) { /* ignore */ }
-            } else {
-                $found = $drive->findAudioInFolder($folderId, $modern->title, (string)$modern->id);
-                if ($found) {
-                    $audioId = $found['fileId'];
-                    $audioLink = $found['downloadUrl'] ?? $drive->getWebContentLink($audioId) ?: $drive->getFileLink($audioId);
-                } else {
-                    $files = $drive->searchFiles($modern->title, $folderId);
-                    $first = $files[0] ?? null;
-                    if ($first) {
-                        $audioId = $first->getId();
-                        $audioLink = $drive->getWebContentLink($audioId) ?: $drive->getFileLink($audioId);
-                    }
-                }
-            }
-        }
-
-        // No .ju in modern DB; summary/segments live in DB
         return response()->json([
-            'success' => true,
-            'meeting_id' => $meetingId,
-            'is_legacy' => false,
-            'ju_link' => null,
-            'audio_link' => $audioLink,
-            'audio_file_id' => $audioId,
-        ]);
+            'success' => false,
+            'message' => 'Reunión no encontrada',
+        ], 404);
     }
     /**
      * Obtener contactos del usuario para compartir reunión
@@ -337,58 +289,18 @@ class SharedMeetingController extends Controller
                 ->pluck('contact_id')
                 ->toArray();
 
-            // Cargar potencialmente ambos (puede haber colisión de IDs)
             $legacyMeeting = TranscriptionLaravel::find($request->meeting_id);
-            $meeting = Meeting::find($request->meeting_id);
 
-            if (!$legacyMeeting && !$meeting) {
+            if (!$legacyMeeting) {
                 throw new \RuntimeException('Meeting not found');
             }
 
-            $providedTitle = $request->meeting_title;
-            $usingLegacy = false;
-
-            if ($legacyMeeting && $meeting) {
-                // Si hay colisión de ID, usamos heurística basada en el título proporcionado.
-                if ($providedTitle) {
-                    $p = mb_strtolower(trim($providedTitle));
-                    $legacyName = mb_strtolower(trim($legacyMeeting->meeting_name ?? ''));
-                    $modernName = mb_strtolower(trim($meeting->title ?? ''));
-
-                    $matchesLegacy = $legacyName !== '' && $p === $legacyName;
-                    $matchesModern = $modernName !== '' && $p === $modernName;
-
-                    if ($matchesLegacy && !$matchesModern) {
-                        $usingLegacy = true; // coincide sólo con legacy
-                    } elseif (!$matchesLegacy && $matchesModern) {
-                        $usingLegacy = false; // coincide sólo con modern
-                    } elseif ($matchesLegacy && $matchesModern) {
-                        // Coincide con ambos, preferimos legacy (mantener compatibilidad histórica)
-                        $usingLegacy = true;
-                    } else {
-                        // No coincide con ninguno: fallback a modern para evitar devolver contenido legacy incorrecto
-                        $usingLegacy = false;
-                    }
-                } else {
-                    // Sin título proporcionado, mantenemos preferencia legacy para compatibilidad
-                    $usingLegacy = true;
-                }
-            } else {
-                // Sólo uno existe
-                $usingLegacy = (bool)$legacyMeeting;
-            }
-
-            if ($usingLegacy) {
-                $meetingTitle = $legacyMeeting->meeting_name ?? 'Reunión';
-                $meeting = null; // aseguramos que el resto del flujo use legacyTitle
-            } else {
-                $meetingTitle = $meeting?->title ?? $legacyMeeting?->meeting_name ?? 'Reunión';
-            }
+            $meetingTitle = $legacyMeeting->meeting_name ?? 'Reunión';
             $sharedWith = [];
 
             foreach ($validContactIds as $contactId) {
                 // Verificar si ya se compartió con este contacto
-                $existingShare = SharedMeeting::where('meeting_id', $request->meeting_id)
+                $existingShare = SharedMeeting::where('meeting_id', $legacyMeeting->id)
                     ->where('shared_with', $contactId)
                     ->first();
 
@@ -404,7 +316,7 @@ class SharedMeetingController extends Controller
 
                 // Crear el registro de reunión compartida
                 $sharedMeeting = SharedMeeting::create([
-                    'meeting_id' => $request->meeting_id,
+                    'meeting_id' => $legacyMeeting->id,
                     'shared_by' => Auth::id(),
                     'shared_with' => $contactId,
                     'message' => $request->message,
@@ -426,7 +338,7 @@ class SharedMeetingController extends Controller
                     'title' => 'Nueva reunión compartida',
                     'message' => $currentUserName . ' ha compartido la reunión "' . $meetingTitle . '" contigo.',
                     'data' => json_encode([
-                        'meeting_id' => $meeting?->id ?? $legacyMeeting?->id,
+                        'meeting_id' => $legacyMeeting->id,
                         'shared_meeting_id' => $sharedMeeting->id,
                         'meeting_title' => $meetingTitle,
                         'shared_by_name' => $currentUserName,
@@ -689,9 +601,7 @@ class SharedMeetingController extends Controller
                 ->keyBy('id');
 
             $sharedMeetings = $sharedMeetingsQuery->map(function ($shared) use ($legacyMap) {
-                // Intentar primero legacy
                 $legacy = $legacyMap->get($shared->meeting_id);
-                $meeting = $legacy ? null : $shared->meeting; // sólo usar relación Meeting si no hay legacy
 
                 $sharedBy = $shared->sharedBy;
                 $sharedByName = $sharedBy?->full_name
@@ -702,10 +612,10 @@ class SharedMeetingController extends Controller
                 return [
                     'id' => $shared->id,
                     'meeting_id' => $shared->meeting_id,
-                    'title' => $legacy?->meeting_name ?? $meeting?->title ?? 'Reunión compartida',
-                    'date' => $legacy?->created_at ?? $meeting?->date,
-                    'duration' => $meeting?->duration ?? null,
-                    'summary' => $meeting?->summary ?? null,
+                    'title' => $legacy?->meeting_name ?? 'Reunión compartida',
+                    'date' => $legacy?->created_at,
+                    'duration' => null,
+                    'summary' => null,
                     'shared_by' => [
                         'id' => $sharedBy?->id,
                         'name' => $sharedByName,
@@ -713,8 +623,7 @@ class SharedMeetingController extends Controller
                     ],
                     'shared_at' => $shared->shared_at,
                     'message' => $shared->message,
-                    // Para legacy exponemos audio_drive_id en el mismo campo usado por el front
-                    'recordings_folder_id' => $legacy?->audio_drive_id ?? $meeting?->recordings_folder_id,
+                    'recordings_folder_id' => $legacy?->audio_drive_id,
                 ];
             });
 
@@ -772,11 +681,12 @@ class SharedMeetingController extends Controller
                 return;
             }
 
-            $recipientEmail = $recipient->email;
-
-            // Determine legacy vs modern
             $legacy = TranscriptionLaravel::find($sharedMeeting->meeting_id);
-            $modern = $legacy ? null : Meeting::find($sharedMeeting->meeting_id);
+            if (!$legacy) {
+                return;
+            }
+
+            $recipientEmail = $recipient->email;
 
             /** @var GoogleServiceAccount $sa */
             $sa = app(GoogleServiceAccount::class);
@@ -785,21 +695,12 @@ class SharedMeetingController extends Controller
                 try { $sa->impersonate($sharer->email); } catch (\Throwable $e) { /* continue without impersonation */ }
             }
 
-            // Share .ju for legacy, validating Drive ID first
-            if ($legacy) {
-                if (!empty($legacy->transcript_drive_id) && $this->driveFileExists($sa, $legacy->transcript_drive_id)) {
-                    $this->shareDriveItem($sa, $legacy->transcript_drive_id, $recipientEmail, 'grantDriveAccess: share .ju failed');
-                }
-                // Share audio: could be file or folder id
-                if (!empty($legacy->audio_drive_id)) {
-                    $this->shareDriveItem($sa, $legacy->audio_drive_id, $recipientEmail, 'grantDriveAccess: share audio failed');
-                }
-                return;
+            if (!empty($legacy->transcript_drive_id) && $this->driveFileExists($sa, $legacy->transcript_drive_id)) {
+                $this->shareDriveItem($sa, $legacy->transcript_drive_id, $recipientEmail, 'grantDriveAccess: share .ju failed');
             }
 
-            // Modern meeting: share recordings folder if present
-            if ($modern && !empty($modern->recordings_folder_id)) {
-                $this->shareDriveItem($sa, $modern->recordings_folder_id, $recipientEmail, 'grantDriveAccess: share recordings folder failed');
+            if (!empty($legacy->audio_drive_id)) {
+                $this->shareDriveItem($sa, $legacy->audio_drive_id, $recipientEmail, 'grantDriveAccess: share audio failed');
             }
         } catch (\Throwable $e) {
             Log::warning('grantDriveAccessForShare failed', [ 'error' => $e->getMessage() ]);

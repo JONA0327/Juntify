@@ -7,7 +7,6 @@ use App\Models\TranscriptionLaravel;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 use App\Models\Container;
-use App\Models\Meeting;
 use App\Models\GoogleToken;
 use App\Services\GoogleDriveService;
 use Mockery;
@@ -18,9 +17,11 @@ test('shared meetings v2 endpoint returns meetings for authenticated user', func
     $owner = User::factory()->create();
     $recipient = User::factory()->create();
 
-    $meeting = Meeting::factory()->create([
+    $meeting = TranscriptionLaravel::factory()->create([
         'username' => $owner->username,
-        'title' => 'Shared Meeting',
+        'meeting_name' => 'Shared Meeting',
+        'audio_drive_id' => null,
+        'transcript_drive_id' => null,
     ]);
 
     SharedMeeting::create([
@@ -176,16 +177,11 @@ test('/api/meetings returns is_legacy flag', function () {
         'transcript_drive_id' => null,
     ]);
 
-    $modern = Meeting::factory()->create([
-        'username' => $user->username,
-        'recordings_folder_id' => null,
-    ]);
-
     $response = $this->actingAs($user, 'sanctum')->getJson('/api/meetings');
 
     $response->assertOk()
         ->assertJsonFragment(['id' => $legacy->id, 'is_legacy' => true])
-        ->assertJsonFragment(['id' => $modern->id, 'is_legacy' => false]);
+        ->assertJsonMissing(['is_legacy' => false]);
 });
 
 test('show meeting returns is_legacy flag', function () {
@@ -209,15 +205,17 @@ test('show meeting returns is_legacy flag', function () {
         public function downloadFileContent($fileId) { return ''; }
     });
 
-    $meeting = Meeting::factory()->create([
+    $meeting = TranscriptionLaravel::factory()->create([
         'username' => $user->username,
-        'recordings_folder_id' => null,
+        'meeting_name' => 'Legacy Meeting',
+        'audio_drive_id' => null,
+        'transcript_drive_id' => null,
     ]);
 
     $response = $this->actingAs($user, 'sanctum')->getJson('/api/meetings/' . $meeting->id);
 
     $response->assertOk()
-        ->assertJsonFragment(['id' => $meeting->id, 'is_legacy' => false]);
+        ->assertJsonFragment(['id' => $meeting->id, 'is_legacy' => true]);
 });
 
 test('show legacy meeting returns audio data', function () {

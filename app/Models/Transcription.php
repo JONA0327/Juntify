@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\TranscriptionLaravel;
 
 class Transcription extends Model
 {
@@ -32,7 +33,7 @@ class Transcription extends Model
 
     public function meeting(): BelongsTo
     {
-        return $this->belongsTo(Meeting::class);
+        return $this->belongsTo(TranscriptionLaravel::class, 'meeting_id');
     }
 
     public function scopeByTime($query)
