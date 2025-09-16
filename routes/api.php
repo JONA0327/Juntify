@@ -59,6 +59,21 @@ Route::middleware(['web','auth'])->get('/whoami', function(Request $request) {
     ]);
 });
 
+// Endpoint de depuración de sesión (sin auth para ver si la cookie llega aunque no haya login)
+Route::middleware(['web'])->get('/debug/session-info', function(Request $request) {
+    return response()->json([
+        'session_id' => session()->getId(),
+        'has_session_cookie' => array_key_exists(config('session.cookie'), $_COOKIE ?? []),
+        'cookie_names' => array_keys($_COOKIE ?? []),
+        'user_id' => optional(auth()->user())->id,
+        'is_authenticated' => auth()->check(),
+        'expected_cookie' => config('session.cookie'),
+        'same_site' => config('session.same_site'),
+        'secure' => config('session.secure'),
+        'domain_env' => env('SESSION_DOMAIN'),
+    ]);
+});
+
 // Endpoint de prueba para verificar que API devuelve JSON
 Route::get('/test', function () {
     return response()->json([
