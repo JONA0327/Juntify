@@ -4671,6 +4671,14 @@ function initializeDownloadModal() {
                     return;
                 }
 
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta?.getAttribute('content');
+
+                if (!csrfToken) {
+                    alert('Error: No se encontró el token CSRF.');
+                    return;
+                }
+
                 // Mostrar loading en el botón con mejor UI
                 confirm.disabled = true;
                 originalContent = confirm.innerHTML;
@@ -4705,8 +4713,8 @@ function initializeDownloadModal() {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                            'Accept': 'application/pdf',
                         },
                         body: JSON.stringify(downloadData)
                     });
