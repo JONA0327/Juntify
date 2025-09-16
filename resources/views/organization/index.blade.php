@@ -861,7 +861,7 @@
                             <!-- Lista de contenedores -->
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <template x-for="container in currentGroup?.containers || []" :key="container.id">
-                                    <div class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 hover:bg-slate-700/50 transition-colors">
+                                    <div @click="viewContainerMeetings(container)" role="button" class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 hover:bg-slate-700/50 transition-colors cursor-pointer">
                                         <h4 class="font-semibold text-yellow-400 mb-2">
                                             <span x-text="container.name"></span>
                                             <span class="company-badge ml-2" x-show="container.group_name" x-text="container.group_name"></span>
@@ -872,13 +872,10 @@
                                             <span x-text="new Date(container.created_at).toLocaleDateString()"></span>
                                         </div>
                                         <div class="flex space-x-2">
-                                            <button @click="viewContainerMeetings(container)" class="flex-1 px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors">
-                                                Ver Reuniones
-                                            </button>
-                                            <button @click="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition-colors">
+                                            <button @click.stop="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition-colors">
                                                 Editar
                                             </button>
-                                            <button x-show="canManageContainers()" @click="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors">
+                                            <button x-show="canManageContainers()" @click.stop="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors">
                                                 Eliminar
                                             </button>
                                         </div>
