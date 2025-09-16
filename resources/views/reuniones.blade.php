@@ -121,8 +121,16 @@
                         @endisset
                     </div>
 
-                    <div id="shared-meetings" class="hidden">
-                        <div class="loading-card"><p>No hay reuniones compartidas</p></div>
+                    <div id="shared-meetings" class="hidden space-y-6">
+                        <div id="incoming-shared-wrapper" class="loading-card">
+                            <div class="loading-spinner"></div>
+                            <p>Cargando reuniones compartidas contigo...</p>
+                        </div>
+
+                        <div id="outgoing-shared-wrapper" class="loading-card">
+                            <div class="loading-spinner"></div>
+                            <p>Cargando reuniones que has compartido...</p>
+                        </div>
                     </div>
 
                     <div id="containers" class="hidden">
