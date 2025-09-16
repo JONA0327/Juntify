@@ -11,17 +11,35 @@ use App\Models\Meeting;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\Contact;
+use App\Models\GoogleToken;
+use App\Models\OrganizationGoogleToken;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Services\AiChatService;
+use App\Services\GoogleDriveService;
+use App\Services\GoogleTokenRefreshService;
 use App\Jobs\ProcessAiDocumentJob;
 use App\Services\EmbeddingSearch;
+use Google\Service\Exception as GoogleServiceException;
+use RuntimeException;
 
 class AiAssistantController extends Controller
 {
+    private const DEFAULT_AI_FOLDER_NAME = 'Juntify AI Documents';
+
+    private GoogleDriveService $googleDriveService;
+    private GoogleTokenRefreshService $googleTokenRefreshService;
+
+    public function __construct(
+        GoogleDriveService $googleDriveService,
+        GoogleTokenRefreshService $googleTokenRefreshService
+    ) {
+        $this->googleDriveService = $googleDriveService;
+        $this->googleTokenRefreshService = $googleTokenRefreshService;
+    }
     public function index()
     {
         return view('ai-assistant.index');
@@ -332,7 +350,8 @@ class AiAssistantController extends Controller
                 'drive_file_id' => $driveResult['file_id'],
                 'drive_folder_id' => $driveResult['folder_id'],
                 'drive_type' => $request->drive_type,
-                'processing_status' => 'pending'
+                'processing_status' => 'pending',
+                'document_metadata' => $driveResult['metadata'] ?? null,
             ]);
 
             // Procesar documento en background (OCR, extracción de texto)
@@ -344,8 +363,13 @@ class AiAssistantController extends Controller
                 'message' => 'Documento subido correctamente. Se está procesando...'
             ]);
 
-        } catch (\Exception $e) {
-            Log::error('Error uploading document: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error('Error uploading AI document', [
+                'username' => $user->username,
+                'drive_type' => $request->drive_type,
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Error al subir el documento: ' . $e->getMessage()
@@ -532,12 +556,300 @@ class AiAssistantController extends Controller
      */
     private function uploadToGoogleDrive($file, $folderId, $driveType, $user): array
     {
-        // Aquí implementarías la lógica de subida a Google Drive
-        // Por ahora, simular la respuesta
+        $context = $this->resolveDriveContext($driveType, $user);
+
+        $attempt = 0;
+        $maxAttempts = 2;
+
+        while ($attempt < $maxAttempts) {
+            try {
+                $this->ensureValidAccessToken($driveType, $context);
+
+                $destinationFolderId = $folderId ?: $this->ensureDestinationFolder($driveType, $context);
+
+                $fileContents = @file_get_contents($file->getRealPath());
+                if ($fileContents === false) {
+                    throw new RuntimeException('No se pudo leer el archivo a subir.');
+                }
+
+                $fileId = $this->googleDriveService->uploadFile(
+                    $file->getClientOriginalName(),
+                    $file->getMimeType() ?? 'application/octet-stream',
+                    $destinationFolderId,
+                    $fileContents
+                );
+
+                $metadata = $this->buildDocumentMetadata($fileId, $destinationFolderId, $driveType);
+
+                return [
+                    'file_id' => $fileId,
+                    'folder_id' => $destinationFolderId,
+                    'metadata' => $metadata,
+                ];
+            } catch (GoogleServiceException $exception) {
+                $attempt++;
+
+                Log::error('Google Drive API error while uploading AI assistant document', [
+                    'attempt' => $attempt,
+                    'drive_type' => $driveType,
+                    'username' => $user->username,
+                    'code' => $exception->getCode(),
+                    'error' => $exception->getMessage(),
+                ]);
+
+                $refreshed = $this->refreshAccessToken($driveType, $context);
+                if ($attempt >= $maxAttempts || ! $refreshed) {
+                    throw $exception;
+                }
+
+                continue;
+            } catch (\Throwable $exception) {
+                Log::error('Unexpected error while uploading AI assistant document to Drive', [
+                    'drive_type' => $driveType,
+                    'username' => $user->username,
+                    'error' => $exception->getMessage(),
+                ]);
+
+                throw $exception;
+            }
+        }
+
+        throw new RuntimeException('No se pudo subir el archivo a Google Drive después de reintentos.');
+    }
+
+    private function resolveDriveContext(string $driveType, $user): array
+    {
+        if ($driveType === 'organization') {
+            $organization = $user->organization;
+
+            if (! $organization) {
+                throw new RuntimeException('El usuario no pertenece a ninguna organización activa.');
+            }
+
+            $token = $organization->googleToken;
+            if (! $token) {
+                throw new RuntimeException('La organización no tiene configurado Google Drive.');
+            }
+
+            $tokenData = $this->normalizeOrganizationToken($token);
+
+            return [
+                'token' => $tokenData,
+                'token_model' => $token,
+                'organization' => $organization,
+                'root_folder_id' => $organization->folder?->google_id,
+                'username' => $user->username,
+            ];
+        }
+
+        $token = $user->googleToken;
+        if (! $token || ! $token->hasValidAccessToken()) {
+            throw new RuntimeException('El usuario no tiene un token de Google Drive válido.');
+        }
+
         return [
-            'file_id' => 'dummy_file_id_' . Str::random(10),
-            'folder_id' => $folderId ?? 'default_folder_id'
+            'token' => $token->getTokenArray(),
+            'token_model' => $token,
+            'root_folder_id' => $token->recordings_folder_id ?? null,
+            'username' => $user->username,
         ];
+    }
+
+    private function normalizeOrganizationToken(OrganizationGoogleToken $token): array
+    {
+        $rawAccessToken = $token->access_token;
+        $accessToken = null;
+
+        if (is_array($rawAccessToken)) {
+            $accessToken = $rawAccessToken['access_token'] ?? null;
+        } elseif (is_string($rawAccessToken)) {
+            $accessToken = $rawAccessToken;
+        }
+
+        if (! is_string($accessToken) || $accessToken === '') {
+            throw new RuntimeException('El token de acceso de la organización no es válido.');
+        }
+
+        $tokenData = [
+            'access_token' => $accessToken,
+        ];
+
+        if (! empty($token->refresh_token)) {
+            $tokenData['refresh_token'] = $token->refresh_token;
+        }
+
+        if ($token->expiry_date) {
+            $tokenData['expiry_date'] = $token->expiry_date->timestamp;
+        }
+
+        return $tokenData;
+    }
+
+    private function ensureValidAccessToken(string $driveType, array &$context): array
+    {
+        $tokenData = $context['token'];
+
+        $this->googleDriveService->setAccessToken($tokenData);
+
+        $client = $this->googleDriveService->getClient();
+        if ($client->isAccessTokenExpired()) {
+            $refreshed = $this->refreshAccessToken($driveType, $context);
+            if (! $refreshed) {
+                throw new RuntimeException('Token de Google Drive expirado y no se pudo renovar.');
+            }
+
+            $tokenData = $refreshed;
+            $this->googleDriveService->setAccessToken($tokenData);
+        }
+
+        $context['token'] = $tokenData;
+
+        return is_array($tokenData) ? $tokenData : ['access_token' => $tokenData];
+    }
+
+    private function refreshAccessToken(string $driveType, array &$context): ?array
+    {
+        try {
+            $tokenModel = $context['token_model'] ?? null;
+
+            if ($driveType === 'personal' && $tokenModel instanceof GoogleToken) {
+                if (empty($tokenModel->refresh_token)) {
+                    Log::warning('User Google token cannot be refreshed: missing refresh_token', [
+                        'username' => $context['username'] ?? null,
+                    ]);
+                    return null;
+                }
+
+                if (! $this->googleTokenRefreshService->refreshToken($tokenModel)) {
+                    Log::error('Failed to refresh Google token for user', [
+                        'username' => $context['username'] ?? null,
+                    ]);
+                    return null;
+                }
+
+                $tokenModel->refresh();
+                $context['token_model'] = $tokenModel;
+                $context['token'] = $tokenModel->getTokenArray();
+
+                return $context['token'];
+            }
+
+            if ($driveType === 'organization' && $tokenModel instanceof OrganizationGoogleToken) {
+                if (empty($tokenModel->refresh_token)) {
+                    Log::warning('Organization Google token cannot be refreshed: missing refresh_token', [
+                        'organization_id' => $tokenModel->organization_id,
+                    ]);
+                    return null;
+                }
+
+                $newToken = $this->googleDriveService->refreshToken($tokenModel->refresh_token);
+
+                if (empty($newToken['access_token'])) {
+                    Log::error('Failed to refresh organization Google token: missing access_token', [
+                        'organization_id' => $tokenModel->organization_id,
+                    ]);
+                    return null;
+                }
+
+                $tokenModel->update([
+                    'access_token' => $newToken,
+                    'expiry_date' => now()->addSeconds($newToken['expires_in'] ?? 3600),
+                ]);
+                $tokenModel->refresh();
+
+                $newToken['refresh_token'] = $tokenModel->refresh_token;
+                $context['token_model'] = $tokenModel;
+                $context['token'] = $newToken;
+
+                return $newToken;
+            }
+        } catch (\Throwable $exception) {
+            Log::error('Failed to refresh Google access token for AI assistant upload', [
+                'drive_type' => $driveType,
+                'username' => $context['username'] ?? null,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
+        return null;
+    }
+
+    private function ensureDestinationFolder(string $driveType, array $context): string
+    {
+        $parentId = $context['root_folder_id'] ?? null;
+
+        if ($driveType === 'organization' && ! $parentId) {
+            throw new RuntimeException('La organización no tiene una carpeta raíz configurada en Google Drive.');
+        }
+
+        $folderName = self::DEFAULT_AI_FOLDER_NAME;
+
+        $existingFolder = $this->findExistingFolder($folderName, $parentId);
+        if ($existingFolder) {
+            return $existingFolder;
+        }
+
+        $createdId = $this->googleDriveService->createFolder($folderName, $parentId);
+
+        Log::info('Created AI assistant folder in Google Drive', [
+            'drive_type' => $driveType,
+            'folder_id' => $createdId,
+            'parent_id' => $parentId,
+        ]);
+
+        return $createdId;
+    }
+
+    private function findExistingFolder(string $folderName, ?string $parentId = null): ?string
+    {
+        $escapedName = str_replace("'", "\\'", $folderName);
+        $query = "mimeType='application/vnd.google-apps.folder' and trashed=false and name='{$escapedName}'";
+
+        if ($parentId) {
+            $query .= " and '{$parentId}' in parents";
+        }
+
+        $folders = $this->googleDriveService->listFolders($query);
+
+        foreach ($folders as $folder) {
+            if (strcasecmp($folder->getName(), $folderName) === 0) {
+                return $folder->getId();
+            }
+        }
+
+        return null;
+    }
+
+    private function buildDocumentMetadata(string $fileId, string $folderId, string $driveType): array
+    {
+        $metadata = [
+            'file_id' => $fileId,
+            'folder_id' => $folderId,
+            'drive_type' => $driveType,
+        ];
+
+        try {
+            $metadata['web_view_link'] = $this->googleDriveService->getFileLink($fileId);
+        } catch (\Throwable $exception) {
+            Log::warning('Unable to obtain Drive webViewLink for AI document', [
+                'file_id' => $fileId,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
+        try {
+            $downloadLink = $this->googleDriveService->getWebContentLink($fileId);
+            if ($downloadLink) {
+                $metadata['web_content_link'] = $downloadLink;
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('Unable to obtain Drive download link for AI document', [
+                'file_id' => $fileId,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
+        return $metadata;
     }
 
     /**
