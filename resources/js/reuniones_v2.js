@@ -4217,23 +4217,23 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
         console.log('Archivo descargado y desencriptado exitosamente');
 
         // Paso 2: Crear y mostrar el modal de selección
-        createDownloadModal();
+        const modalElement = createDownloadModal();
 
-    // Paso 3: Guardar los datos y mostrar opciones
-    window.downloadMeetingData[meetingId] = data.meeting;
-    window.lastOpenedDownloadMeetingId = meetingId;
-    const modals = document.querySelectorAll('[name="download-meeting"]');
+        // Paso 3: Guardar los datos y mostrar opciones
+        window.downloadMeetingData[meetingId] = data.meeting;
+        window.lastOpenedDownloadMeetingId = meetingId;
+        const modals = modalElement ? [modalElement] : document.querySelectorAll('[name="download-meeting"]');
         if (modals && modals.length) {
             modals.forEach(m => {
                 m.dataset.meetingId = meetingId;
-        const inner = m.querySelector('.download-modal');
-        if (inner) inner.dataset.meetingId = meetingId;
+                const inner = m.querySelector('.download-modal');
+                if (inner) inner.dataset.meetingId = meetingId;
             });
 
             // Inicializar los event listeners del modal
             initializeDownloadModal();
 
-            // Mostrar el modal con las opciones
+            // Mostrar el modal con las opciones (tras inicializar Alpine)
             showDownloadModalOptions(data.meeting);
 
             console.log('Modal de selección mostrado para reunión:', meetingId);
@@ -4491,7 +4491,14 @@ function createDownloadModal() {
         </div>`;
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
-}function closeDownloadModal() {
+    const modal = document.querySelector('[name="download-meeting"]');
+    if (modal && window.Alpine && typeof window.Alpine.initTree === 'function') {
+        window.Alpine.initTree(modal);
+    }
+    return modal;
+}
+
+function closeDownloadModal() {
     // Liberar el lock de procesamiento
     window.downloadModalProcessing = false;
 
