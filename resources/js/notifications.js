@@ -211,14 +211,9 @@ const Notifications = (() => {
                 const actionText = action === 'accept' ? 'aceptado' : 'rechazado';
                 showSuccess(`Has ${actionText} la invitación exitosamente.`);
 
-                // Si se aceptó, refrescar las reuniones compartidas si estamos en esa pestaña
-                if (action === 'accept' && window.location.pathname.includes('reuniones')) {
-                    const activeTab = document.querySelector('.tab-transition.bg-slate-700\\/50');
-                    if (activeTab && activeTab.dataset.target === 'shared-meetings') {
-                        if (typeof loadSharedMeetings === 'function') {
-                            loadSharedMeetings();
-                        }
-                    }
+                // Si se aceptó, refrescar las reuniones compartidas
+                if (action === 'accept' && typeof loadSharedMeetings === 'function') {
+                    loadSharedMeetings();
                 }
             } else {
                 showError(data.message || 'Error al responder la invitación.');
