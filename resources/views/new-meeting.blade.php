@@ -12,6 +12,12 @@
     @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css'])
 </head>
 <body>
+@php
+    // Fallback defensivo: si la ruta que renderiza esta vista no pasó variables explícitas
+    $userRole = $userRole ?? (auth()->user()->roles ?? 'free');
+    $organizationId = $organizationId ?? (auth()->user()->current_organization_id ?? null);
+    $organizationName = $organizationName ?? optional(auth()->user()?->organization)->nombre_organizacion;
+@endphp
     <!-- Animated particles background -->
     <div class="particles" id="particles"></div>
 
@@ -141,9 +147,9 @@
 
     <!-- JavaScript -->
     <script>
-        window.userRole = @json($userRole);
-        window.currentOrganizationId = @json($organizationId);
-        window.currentOrganizationName = @json($organizationName);
+        window.userRole = @json($userRole ?? null);
+        window.currentOrganizationId = @json($organizationId ?? null);
+        window.currentOrganizationName = @json($organizationName ?? null);
     </script>
     @vite(['resources/js/new-meeting.js'])
 </body>

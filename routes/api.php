@@ -46,6 +46,19 @@ Route::middleware('auth')->get('/user', function (Request $request) {
     return $request->user();
 });
 
+// Endpoint de diagnóstico rápido de sesión
+Route::middleware(['web','auth'])->get('/whoami', function(Request $request) {
+    $u = $request->user();
+    return response()->json([
+        'ok' => (bool)$u,
+        'id' => $u?->id,
+        'role' => $u?->roles,
+        'current_organization_id' => $u?->current_organization_id,
+        'guard' => config('auth.defaults.guard'),
+        'session_cookie_name' => config('session.cookie'),
+    ]);
+});
+
 // Endpoint de prueba para verificar que API devuelve JSON
 Route::get('/test', function () {
     return response()->json([

@@ -556,6 +556,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         try {
             const response = await fetch('/api/organizations', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
@@ -568,6 +569,14 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     imagen: this.preview
                 })
             });
+
+            if (response.status === 401) {
+                console.warn('[organization.js] 401 unauthorized creating organization. Intentando diagnosticar sesión...');
+                await this.debugAuth();
+                const data401 = await response.json().catch(()=>({}));
+                alert(data401.message || 'No autenticado');
+                return;
+            }
 
             if (response.status === 403) {
                 const data = await response.json().catch(()=>({}));
@@ -597,6 +606,18 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             alert('Error al crear la organización');
         } finally {
             this.isCreatingOrg = false;
+        }
+    },
+    async debugAuth() {
+        try {
+            // Ver cookies visibles (solo nombres por seguridad)
+            const cookieNames = document.cookie.split(';').map(c=>c.split('=')[0].trim());
+            console.log('[organization.js][debugAuth] Cookies presentes:', cookieNames);
+            const userResp = await fetch('/api/user', {credentials:'same-origin', headers:{'Accept':'application/json'}});
+            const userData = await userResp.json().catch(()=>({}));
+            console.log('[organization.js][debugAuth] /api/user status', userResp.status, userData);
+        } catch(e) {
+            console.error('[organization.js][debugAuth] Error diagnosticando auth', e);
         }
     },
     openGroupModal(org) {
