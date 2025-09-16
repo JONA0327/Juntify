@@ -4543,7 +4543,7 @@ function openFullPreviewModal(url) {
     ensurePreviewModal();
     const modal = document.getElementById('fullPreviewModal');
     const frame = document.getElementById('fullPreviewFrame');
-    frame.src = url;
+    frame.src = url + '#navpanes=0&zoom=page-width';
     modal.classList.remove('hidden');
 }
 
