@@ -15,6 +15,7 @@ use App\Models\GoogleToken;
 use App\Models\OrganizationGoogleToken;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -187,10 +188,13 @@ class AiAssistantController extends Controller
         // Actualizar actividad de la sesión
         $session->updateActivity();
 
+        $assistantArray = $assistantMessage->toArray();
+
         return response()->json([
             'success' => true,
-            'user_message' => $userMessage,
-            'assistant_message' => $assistantMessage
+            'user_message' => $userMessage->toArray(),
+            'assistant_message' => $assistantArray,
+            'citations' => $assistantArray['metadata']['citations'] ?? [],
         ]);
     }
 
@@ -456,77 +460,379 @@ class AiAssistantController extends Controller
     {
         /** @var EmbeddingSearch $search */
         $search = app(EmbeddingSearch::class);
-        $context = $search->search($session->username, $query);
+        $contextFragments = $search->search($session->username, $query, [
+            'session' => $session,
+            'limit' => 8,
+        ]);
 
-        // Reunir contexto según el tipo de sesión
+        $additional = [];
+
         switch ($session->context_type) {
             case 'container':
-                if ($session->context_id) {
-                    $container = Container::find($session->context_id);
-                    if ($container) {
-                        $context[] = "Contenedor: {$container->name}";
-                        $context[] = "Número de reuniones: " . $container->meetings()->count();
-                    }
-                }
+                $additional = $this->buildContainerContextFragments($session);
                 break;
 
             case 'meeting':
-                if ($session->context_id) {
-                    // Buscar en reuniones legacy y modernas
-                    $legacy = TranscriptionLaravel::find($session->context_id);
-                    $modern = Meeting::find($session->context_id);
-
-                    if ($legacy) {
-                        $context[] = "Reunión: {$legacy->meeting_name}";
-                        if ($legacy->summary) {
-                            $context[] = "Resumen disponible";
-                        }
-                    } elseif ($modern) {
-                        $context[] = "Reunión: {$modern->title}";
-                        if ($modern->summary) {
-                            $context[] = "Resumen disponible";
-                        }
-                    }
-                }
+                $additional = $this->buildMeetingContextFragments($session, $query);
                 break;
 
             case 'documents':
-                if (!empty($session->context_data)) {
-                    $documents = AiDocument::whereIn('id', $session->context_data)->get();
-
-                    foreach ($documents as $document) {
-                        $title = $document->name ?? $document->original_filename;
-                        $summary = $document->document_metadata['summary'] ?? (
-                            $document->extracted_text ? Str::limit($document->extracted_text, 200) : null
-                        );
-
-                        $context[] = "Documento: {$title}";
-                        if ($summary) {
-                            $context[] = "Resumen: {$summary}";
-                        }
-                    }
-                }
+                $additional = $this->buildDocumentContextFragments($session);
                 break;
 
             case 'contact_chat':
-                if ($session->context_id) {
-                    $chat = Chat::with(['messages' => function ($query) {
-                        $query->latest()->with('sender')->limit(10);
-                    }])->find($session->context_id);
-
-                    if ($chat) {
-                        $messages = $chat->messages->sortBy('created_at');
-
-                        foreach ($messages as $message) {
-                            $sender = $message->sender?->full_name ?? 'Usuario';
-                            $context[] = $sender . ': ' . Str::limit($message->body, 200);
-                        }
-                    }
-                }
+                $additional = $this->buildChatContextFragments($session);
                 break;
         }
 
-        return $context;
+        return array_values(array_merge($contextFragments, $additional));
+    }
+
+    private function buildContainerContextFragments(AiChatSession $session): array
+    {
+        $fragments = [];
+
+        if ($session->context_id) {
+            $container = Container::withCount('meetings')
+                ->with(['meetings' => function ($query) {
+                    $query->latest('created_at')->limit(5);
+                }])
+                ->find($session->context_id);
+
+            if ($container) {
+                $fragments[] = [
+                    'text' => sprintf(
+                        'Contenedor "%s" con %d reuniones registradas.',
+                        $container->name,
+                        $container->meetings_count ?? $container->meetings()->count()
+                    ),
+                    'source_id' => 'container:' . $container->id,
+                    'content_type' => 'container_overview',
+                    'location' => array_filter([
+                        'type' => 'container',
+                        'container_id' => $container->id,
+                        'name' => $container->name,
+                        'description' => $container->description,
+                    ]),
+                    'similarity' => null,
+                    'citation' => 'container:' . $container->id,
+                    'metadata' => [],
+                ];
+
+                foreach ($container->meetings as $meeting) {
+                    $fragments[] = [
+                        'text' => sprintf(
+                            'Reunión "%s" con transcripción %s y audio %s disponible.',
+                            $meeting->meeting_name,
+                            $meeting->transcript_drive_id ? 'en' : 'no',
+                            $meeting->audio_drive_id ? 'sí' : 'no'
+                        ),
+                        'source_id' => 'meeting:' . $meeting->id,
+                        'content_type' => 'container_meeting',
+                        'location' => array_filter([
+                            'type' => 'meeting',
+                            'meeting_id' => $meeting->id,
+                            'title' => $meeting->meeting_name,
+                            'transcript_drive_id' => $meeting->transcript_drive_id,
+                            'audio_drive_id' => $meeting->audio_drive_id,
+                            'transcript_url' => $meeting->transcript_download_url,
+                            'audio_url' => $meeting->audio_download_url,
+                        ]),
+                        'similarity' => null,
+                        'citation' => 'meeting:' . $meeting->id . ' recursos',
+                        'metadata' => [],
+                    ];
+                }
+            }
+        }
+
+        $relatedMeetings = Arr::wrap($session->context_data ?? []);
+        if (empty($fragments) && ! empty($relatedMeetings)) {
+            $meetings = Meeting::whereIn('id', $relatedMeetings)
+                ->orderByDesc('date')
+                ->limit(5)
+                ->get();
+
+            foreach ($meetings as $meeting) {
+                $fragments[] = [
+                    'text' => sprintf(
+                        'Reunión "%s" celebrada el %s. Participantes: %s',
+                        $meeting->title,
+                        optional($meeting->date)->toDateString() ?? 'sin fecha',
+                        $this->formatParticipants($meeting->participants)
+                    ),
+                    'source_id' => 'meeting:' . $meeting->id,
+                    'content_type' => 'container_meeting',
+                    'location' => array_filter([
+                        'type' => 'meeting',
+                        'meeting_id' => $meeting->id,
+                        'title' => $meeting->title,
+                    ]),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id,
+                    'metadata' => [],
+                ];
+            }
+        }
+
+        return $fragments;
+    }
+
+    private function buildMeetingContextFragments(AiChatSession $session, string $query): array
+    {
+        if (! $session->context_id) {
+            return [];
+        }
+
+        $meeting = Meeting::with([
+            'keyPoints' => fn ($relation) => $relation->ordered()->limit(5),
+            'transcriptions' => function ($relation) use ($query) {
+                $relation->orderBy('time');
+
+                $keywords = $this->extractQueryKeywords($query);
+                if (! empty($keywords)) {
+                    $relation->where(function ($builder) use ($keywords) {
+                        foreach ($keywords as $keyword) {
+                            $builder->orWhere('text', 'like', '%' . $keyword . '%');
+                        }
+                    });
+                }
+
+                $relation->limit(5);
+            },
+        ])->find($session->context_id);
+
+        $fragments = [];
+
+        if ($meeting) {
+            if (! empty($meeting->summary)) {
+                $fragments[] = [
+                    'text' => Str::limit($meeting->summary, 800),
+                    'source_id' => 'meeting:' . $meeting->id . ':summary',
+                    'content_type' => 'meeting_summary',
+                    'location' => array_filter([
+                        'type' => 'meeting',
+                        'meeting_id' => $meeting->id,
+                        'title' => $meeting->title,
+                    ]),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' resumen',
+                    'metadata' => ['summary' => true],
+                ];
+            }
+
+            foreach ($meeting->keyPoints as $index => $point) {
+                $fragments[] = [
+                    'text' => $point->point_text,
+                    'source_id' => 'meeting:' . $meeting->id . ':keypoint:' . $point->id,
+                    'content_type' => 'meeting_key_point',
+                    'location' => array_filter([
+                        'type' => 'meeting',
+                        'meeting_id' => $meeting->id,
+                        'title' => $meeting->title,
+                        'order' => $point->order_num,
+                    ]),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' punto ' . ($index + 1),
+                    'metadata' => ['key_point' => true],
+                ];
+            }
+
+            $segments = $meeting->transcriptions;
+            if ($segments->isEmpty()) {
+                $segments = $meeting->transcriptions()->orderBy('time')->limit(3)->get();
+            }
+
+            foreach ($segments as $segment) {
+                $fragments[] = [
+                    'text' => trim(($segment->display_speaker ?? $segment->speaker ?? 'Participante') . ': ' . $segment->text),
+                    'source_id' => 'meeting:' . $meeting->id . ':segment:' . ($segment->id ?? $segment->time),
+                    'content_type' => 'meeting_transcription_segment',
+                    'location' => array_filter([
+                        'type' => 'meeting',
+                        'meeting_id' => $meeting->id,
+                        'title' => $meeting->title,
+                        'speaker' => $segment->display_speaker ?? $segment->speaker,
+                        'timestamp' => $segment->time,
+                    ]),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' t.' . $this->formatTimeForCitation($segment->time),
+                    'metadata' => ['transcription_segment' => true],
+                ];
+            }
+
+            return $fragments;
+        }
+
+        $legacy = TranscriptionLaravel::find($session->context_id);
+        if ($legacy) {
+            $fragments[] = [
+                'text' => sprintf('Transcripción disponible en: %s', $legacy->transcript_download_url),
+                'source_id' => 'meeting:' . $legacy->id . ':transcript',
+                'content_type' => 'meeting_transcript_link',
+                'location' => array_filter([
+                    'type' => 'meeting',
+                    'meeting_id' => $legacy->id,
+                    'title' => $legacy->meeting_name,
+                    'transcript_drive_id' => $legacy->transcript_drive_id,
+                    'transcript_url' => $legacy->transcript_download_url,
+                ]),
+                'similarity' => null,
+                'citation' => 'meeting:' . $legacy->id . ' transcript',
+                'metadata' => [],
+            ];
+
+            if ($legacy->audio_download_url) {
+                $fragments[] = [
+                    'text' => sprintf('Audio disponible en: %s', $legacy->audio_download_url),
+                    'source_id' => 'meeting:' . $legacy->id . ':audio',
+                    'content_type' => 'meeting_audio_link',
+                    'location' => array_filter([
+                        'type' => 'meeting',
+                        'meeting_id' => $legacy->id,
+                        'title' => $legacy->meeting_name,
+                        'audio_drive_id' => $legacy->audio_drive_id,
+                        'audio_url' => $legacy->audio_download_url,
+                    ]),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $legacy->id . ' audio',
+                    'metadata' => [],
+                ];
+            }
+        }
+
+        return $fragments;
+    }
+
+    private function buildDocumentContextFragments(AiChatSession $session): array
+    {
+        $documentIds = Arr::wrap($session->context_data ?? []);
+        if (empty($documentIds)) {
+            return [];
+        }
+
+        $documents = AiDocument::whereIn('id', $documentIds)->limit(8)->get();
+        $fragments = [];
+
+        foreach ($documents as $document) {
+            $title = $document->name ?? $document->original_filename ?? ('Documento ' . $document->id);
+            $summary = $document->document_metadata['summary'] ?? null;
+            $fallback = $document->extracted_text ? Str::limit($document->extracted_text, 800) : null;
+            $text = $summary ?? $fallback;
+
+            if (! $text) {
+                continue;
+            }
+
+            $fragments[] = [
+                'text' => $text,
+                'source_id' => 'document:' . $document->id . ':overview',
+                'content_type' => 'document_overview',
+                'location' => array_filter([
+                    'type' => 'document',
+                    'document_id' => $document->id,
+                    'title' => $title,
+                    'url' => $document->drive_file_id ? sprintf('https://drive.google.com/file/d/%s/view', $document->drive_file_id) : null,
+                ]),
+                'similarity' => null,
+                'citation' => 'doc:' . $document->id . ' resumen',
+                'metadata' => ['summary' => (bool) $summary],
+            ];
+        }
+
+        return $fragments;
+    }
+
+    private function buildChatContextFragments(AiChatSession $session): array
+    {
+        if (! $session->context_id) {
+            return [];
+        }
+
+        $chat = Chat::with(['messages' => function ($query) {
+            $query->with('sender')->orderByDesc('created_at')->limit(10);
+        }])->find($session->context_id);
+
+        if (! $chat) {
+            return [];
+        }
+
+        $fragments = [];
+        $messages = $chat->messages->sortBy('created_at');
+
+        foreach ($messages as $message) {
+            $body = $message->body ?? '';
+            if (trim($body) === '') {
+                continue;
+            }
+
+            $sender = $message->sender?->full_name
+                ?? $message->sender?->username
+                ?? 'Contacto';
+
+            $fragments[] = [
+                'text' => $sender . ': ' . Str::limit($body, 300),
+                'source_id' => 'chat:' . $chat->id . ':message:' . $message->id,
+                'content_type' => 'chat_message',
+                'location' => array_filter([
+                    'type' => 'chat',
+                    'chat_id' => $chat->id,
+                    'message_id' => $message->id,
+                    'sender' => $sender,
+                    'sent_at' => optional($message->created_at)->toIso8601String(),
+                ]),
+                'similarity' => null,
+                'citation' => 'chat:' . $message->id,
+                'metadata' => [],
+            ];
+        }
+
+        return $fragments;
+    }
+
+    private function extractQueryKeywords(string $query, int $limit = 5): array
+    {
+        $tokens = preg_split('/\s+/u', Str::lower($query));
+        if (! is_array($tokens)) {
+            return [];
+        }
+
+        $keywords = array_values(array_unique(array_filter($tokens, function ($token) {
+            return mb_strlen($token) >= 3;
+        })));
+
+        return array_slice($keywords, 0, $limit);
+    }
+
+    private function formatTimeForCitation($time): string
+    {
+        if (is_numeric($time)) {
+            $seconds = (int) $time;
+            $hours = floor($seconds / 3600);
+            $minutes = floor(($seconds % 3600) / 60);
+            $remainingSeconds = $seconds % 60;
+
+            return sprintf('%02d:%02d:%02d', $hours, $minutes, $remainingSeconds);
+        }
+
+        if (is_string($time) && preg_match('/^\d{2}:\d{2}:\d{2}$/', $time)) {
+            return $time;
+        }
+
+        return (string) $time;
+    }
+
+    private function formatParticipants($participants): string
+    {
+        if (is_array($participants)) {
+            return implode(', ', array_slice($participants, 0, 5));
+        }
+
+        if (is_string($participants)) {
+            return $participants;
+        }
+
+        return 'sin participantes registrados';
     }
 
     /**
