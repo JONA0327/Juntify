@@ -323,7 +323,11 @@ const Notifications = (() => {
         document.querySelectorAll('.notifications-toggle').forEach(toggle => {
             toggle.addEventListener('click', () => {
                 document.querySelectorAll('.notifications-panel').forEach(panel => {
+                    const willShow = panel.classList.contains('hidden');
                     panel.classList.toggle('hidden');
+                    if (willShow) {
+                        positionNotificationsPanel(panel, toggle);
+                    }
                 });
             });
         });
@@ -334,6 +338,17 @@ const Notifications = (() => {
             if (!inside) {
                 document.querySelectorAll('.notifications-panel').forEach(panel => panel.classList.add('hidden'));
             }
+        });
+
+        // Reposicionar en resize si está visible
+        window.addEventListener('resize', () => {
+            const toggle = document.querySelector('.notifications-toggle');
+            if (!toggle) return;
+            document.querySelectorAll('.notifications-panel').forEach(panel => {
+                if (!panel.classList.contains('hidden')) {
+                    positionNotificationsPanel(panel, toggle);
+                }
+            });
         });
 
     fetchNotifications();
@@ -349,5 +364,47 @@ const Notifications = (() => {
         refresh: fetchNotifications
     };
 })();
+
+// Posicionamiento dinámico del panel para alinearlo con el botón y evitar que quede demasiado lejos en páginas (ej. perfil)
+function positionNotificationsPanel(panel, toggle) {
+    try {
+        // Asegurar estilos base
+        panel.style.position = 'fixed';
+        panel.style.zIndex = panel.style.zIndex || '5000';
+        panel.style.maxWidth = '360px';
+
+        // Calcular ancho disponible
+        const viewportWidth = window.innerWidth;
+        const desiredWidth = Math.min(360, viewportWidth - 16); // 8px margen lateral
+        panel.style.width = desiredWidth + 'px';
+
+        // Para medir la altura real si estaba hidden antes
+        const prevVisibility = panel.style.visibility;
+        panel.style.visibility = 'hidden';
+        panel.style.display = 'block';
+
+        const rect = toggle.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect(); // altura tras forzar display
+
+        // Preferimos debajo del botón
+        let top = rect.bottom + 8;
+        if (top + panelRect.height > window.innerHeight - 8) {
+            // Colocarlo arriba si no cabe
+            top = Math.max(8, rect.top - panelRect.height - 8);
+        }
+
+        // Alinear borde derecho del panel con el borde derecho del botón
+        let left = rect.right - desiredWidth;
+        if (left < 8) left = 8; // no salir por la izquierda
+        if (left + desiredWidth > viewportWidth - 8) left = viewportWidth - desiredWidth - 8; // no salir por la derecha
+
+        panel.style.top = `${Math.round(top)}px`;
+        panel.style.left = `${Math.round(left)}px`;
+        panel.style.right = 'auto'; // neutralizar right del CSS
+        panel.style.visibility = prevVisibility || '';
+    } catch (err) {
+        if (import.meta.env?.DEV) console.debug('positionNotificationsPanel error', err);
+    }
+}
 
 window.notifications = Notifications;
