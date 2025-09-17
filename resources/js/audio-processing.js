@@ -1339,17 +1339,13 @@ function updateAnalysisPreview() {
         const downloadBtn = document.getElementById('download-audio-btn');
         if (downloadBtn) {
             downloadBtn.onclick = function() {
-                let blob = (typeof audioData === 'string') ? base64ToBlob(audioData) : audioData;
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'audio_reunion.webm';
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }, 100);
+                const blob = getDownloadableAudioBlob();
+                if (!(blob instanceof Blob)) {
+                    showNotification('No se pudo preparar el audio para descargar', 'error');
+                    return;
+                }
+
+                triggerAudioBlobDownload(blob);
             };
         }
     }
@@ -1666,27 +1662,49 @@ function updateAudioProgress() {
     }
 }
 
+function getDownloadableAudioBlob() {
+    if (!audioData) return null;
+    if (audioData instanceof Blob) return audioData;
+    if (typeof audioData === 'string') return base64ToBlob(audioData);
+    return null;
+}
+
+function getDownloadFileNameFromBlob(blob) {
+    const mimeType = blob?.type || '';
+    const extension = mimeType.includes('audio/mpeg')
+        ? 'mp3'
+        : getFileExtensionForMimeType(mimeType);
+    return `audio_reunion.${extension || 'm4a'}`;
+}
+
+function triggerAudioBlobDownload(blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = getDownloadFileNameFromBlob(blob);
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        if (a.parentNode) {
+            a.parentNode.removeChild(a);
+        }
+        URL.revokeObjectURL(url);
+    }, 100);
+}
+
 function downloadAudio() {
     if (!audioData) {
         showNotification('No hay audio para descargar', 'error');
         return;
     }
 
-    // Convertir a Blob si es una cadena base64
-    const blob = (typeof audioData === 'string') ? base64ToBlob(audioData) : audioData;
-    const url = URL.createObjectURL(blob);
+    const blob = getDownloadableAudioBlob();
+    if (!(blob instanceof Blob)) {
+        showNotification('No se pudo preparar el audio para descargar', 'error');
+        return;
+    }
 
-    // Crear un enlace temporal para iniciar la descarga
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'audio_reunion.webm';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    // Revocar el ObjectURL después de la descarga
-    URL.revokeObjectURL(url);
-
+    triggerAudioBlobDownload(blob);
     showNotification('Descarga iniciada', 'success');
 }
 
