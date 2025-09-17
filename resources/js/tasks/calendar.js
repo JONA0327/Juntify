@@ -277,8 +277,8 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="tab-panel hidden" id="tab-files">
               <div class="mb-3">
-                <label class="text-slate-300 text-sm">Carpeta de Drive</label>
-                <select id="drive-folder" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-slate-200"></select>
+                <div class="text-slate-300 text-sm">Destino en Google Drive</div>
+                <p id="drive-destination" class="text-xs text-slate-400 mt-1">Los archivos se guardarán en la carpeta "Documentos".</p>
               </div>
               <div class="flex items-center gap-2 mb-4">
                 <input type="file" id="file-input" class="text-slate-300 text-sm" />
@@ -405,12 +405,9 @@ document.addEventListener('DOMContentLoaded', () => {
         };
       }
 
-      const meetingFolderId = null;
-
-      await loadFolders(meetingFolderId); await loadFiles();
-      async function loadFolders(rootId){ const sel = modal.querySelector('#drive-folder'); const url = rootId ? `/api/drive/folders?parents=${encodeURIComponent(rootId)}` : '/api/drive/folders'; const res = await fetch(url); const data = await res.json(); sel.innerHTML=''; (data.folders||[]).forEach(f=>{ const opt=document.createElement('option'); opt.value=f.id; opt.textContent=f.name; sel.appendChild(opt); }); }
+      await loadFiles();
         async function loadFiles(){ const list = modal.querySelector('#files-list'); const res = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/files`, window.location.origin), { credentials: 'same-origin' }); const data = await res.json(); list.innerHTML=''; (data.files||[]).forEach(f=>{ const row=document.createElement('div'); row.className='flex items-center justify-between bg-slate-800/60 border border-slate-700 rounded px-3 py-2'; const nameLink=document.createElement('a'); nameLink.href=`/api/tasks-laravel/files/${f.id}/download`; nameLink.target='_blank'; nameLink.textContent=f.name; nameLink.className='text-slate-200 hover:underline flex-1'; const preview=document.createElement('a'); preview.href=f.drive_web_link; preview.target='_blank'; preview.textContent='Vista previa'; preview.className='text-xs text-blue-400 hover:underline ml-4'; row.appendChild(nameLink); row.appendChild(preview); list.appendChild(row); }); }
-        modal.querySelector('#upload-btn').addEventListener('click', async ()=>{ const fileInput = modal.querySelector('#file-input'); const folder = modal.querySelector('#drive-folder').value; if(!fileInput.files.length){ alert('Selecciona un archivo'); return; } const fd = new FormData(); fd.append('folder_id', folder); fd.append('file', fileInput.files[0]); const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/files`, window.location.origin), { method:'POST', headers:{ 'X-CSRF-TOKEN': csrf }, body: fd, credentials: 'same-origin' }); const resp = await r.json(); if(resp.success){ fileInput.value=''; await loadFiles(); } else { alert('No se pudo subir el archivo'); } });
+        modal.querySelector('#upload-btn').addEventListener('click', async ()=>{ const fileInput = modal.querySelector('#file-input'); if(!fileInput.files.length){ alert('Selecciona un archivo'); return; } const fd = new FormData(); fd.append('file', fileInput.files[0]); const r = await fetch(new URL(`/api/tasks-laravel/tasks/${t.id}/files`, window.location.origin), { method:'POST', headers:{ 'X-CSRF-TOKEN': csrf }, body: fd, credentials: 'same-origin' }); const resp = await r.json(); if(resp.success){ fileInput.value=''; await loadFiles(); } else { alert('No se pudo subir el archivo'); } });
     } catch(e){ console.error(e); alert('Error al abrir detalles de la tarea'); }
   }
 });
