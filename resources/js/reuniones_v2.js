@@ -5172,6 +5172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (driveSelect) {
         driveSelect.addEventListener('change', () => {
             console.log('🔄 [reuniones_v2] Drive selection changed to:', driveSelect.value);
+            sessionStorage.setItem('selectedDrive', driveSelect.value);
             loadDriveFolders();
         });
     }
