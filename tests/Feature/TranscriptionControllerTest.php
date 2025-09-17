@@ -91,6 +91,39 @@ class TranscriptionControllerTest extends TestCase
         $fakeService->cleanup();
     }
 
+    public function test_transcription_request_uses_requested_language(): void
+    {
+        $fakeService = $this->createFakeConversionService();
+
+        $this->app->instance(AudioConversionService::class, $fakeService);
+
+        Http::fake([
+            'https://api.assemblyai.com/v2/upload' => Http::response(['upload_url' => 'https://example.com/uploaded'], 200),
+            'https://api.assemblyai.com/v2/transcript' => Http::response(['id' => 'transcript-id'], 200),
+        ]);
+
+        $mp3File = UploadedFile::fake()->createWithContent('sample.mp3', 'mp3 audio', 'audio/mpeg');
+
+        $response = $this->postJson('/transcription', [
+            'audio' => $mp3File,
+            'language' => 'en',
+        ]);
+
+        $response->assertOk()->assertJson(['id' => 'transcript-id']);
+
+        Http::assertSent(function ($request) {
+            if ($request->url() !== 'https://api.assemblyai.com/v2/transcript') {
+                return true;
+            }
+
+            $payload = $request->data();
+
+            return isset($payload['language_code']) && $payload['language_code'] === 'en';
+        });
+
+        $fakeService->cleanup();
+    }
+
     private function createFakeConversionService(): object
     {
         return new class extends AudioConversionService {
