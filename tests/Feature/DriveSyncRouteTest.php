@@ -2,18 +2,14 @@
 
 use App\Models\User;
 
-// Ensure the sync subfolders route requires authentication
-it('requires authentication to sync subfolders', function () {
-    $response = $this->get('/drive/sync-subfolders');
-
-    $response->assertRedirect('/login');
+it('returns 404 for removed sync route when unauthenticated', function () {
+    $this->get('/drive/sync-subfolders')->assertNotFound();
 });
 
-// Authenticated users should reach the controller (will fail with 404 when no token exists)
-it('authenticated users can access the sync route', function () {
+it('returns 404 for removed sync route when authenticated', function () {
     $user = User::factory()->create();
 
-    $response = $this->actingAs($user)->get('/drive/sync-subfolders');
-
-    $response->assertStatus(404);
+    $this->actingAs($user)
+        ->get('/drive/sync-subfolders')
+        ->assertNotFound();
 });

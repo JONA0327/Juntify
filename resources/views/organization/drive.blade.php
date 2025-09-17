@@ -43,25 +43,21 @@
             </div>
         </div>
 
-        <div class="border rounded p-4" x-show="rootFolder">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="font-medium">Subcarpetas</h2>
-                <div class="flex items-center gap-2">
-                    <input type="text" x-model="newSubfolder" placeholder="Nombre de la subcarpeta" class="border rounded px-2 py-1 text-sm" />
-                    <button @click="createSubfolder()" class="px-3 py-1.5 bg-gray-900 text-white rounded text-sm">Crear</button>
-                </div>
-            </div>
-            <template x-if="subfolders.length === 0">
-                <p class="text-sm text-gray-600">No hay subcarpetas.</p>
+        <div class="border rounded p-4 space-y-3" x-show="rootFolder">
+            <h2 class="font-medium">Organización automática de archivos</h2>
+            <p class="text-sm text-gray-600">
+                Crearemos automáticamente las carpetas necesarias para audios y transcripciones dentro de tu carpeta principal. No es necesario administrar subcarpetas manualmente.
+            </p>
+            <template x-if="standardFolders.length">
+                <ul class="divide-y">
+                    <template x-for="folder in standardFolders" :key="folder.google_id">
+                        <li class="py-2 flex items-center justify-between">
+                            <span class="font-medium" x-text="folder.name"></span>
+                            <span class="text-xs text-gray-500 font-mono" x-text="folder.google_id"></span>
+                        </li>
+                    </template>
+                </ul>
             </template>
-            <ul class="divide-y">
-                <template x-for="sf in subfolders" :key="sf.id">
-                    <li class="py-2 flex items-center justify-between">
-                        <span class="font-medium" x-text="sf.name"></span>
-                        <span class="text-xs text-gray-500 font-mono" x-text="sf.google_id"></span>
-                    </li>
-                </template>
-            </ul>
         </div>
     </div>
 </div>
@@ -74,9 +70,8 @@ function orgDrivePage({ orgId }) {
         orgId,
         connected: false,
         rootFolder: null,
-        subfolders: [],
-        newSubfolder: '',
-    connectUrl: '/auth/google/redirect?from=organization&return=' + encodeURIComponent(window.location.pathname),
+        standardFolders: [],
+        connectUrl: '/auth/google/redirect?from=organization&return=' + encodeURIComponent(window.location.pathname),
         async init() {
             await this.refresh();
         },
@@ -86,7 +81,7 @@ function orgDrivePage({ orgId }) {
                 const data = await res.json();
                 this.connected = !!data.connected;
                 this.rootFolder = data.root_folder || null;
-                this.subfolders = data.subfolders || [];
+                this.standardFolders = data.standard_subfolders || [];
             } catch (e) { console.error(e); }
         },
         async createRoot() {
@@ -97,24 +92,6 @@ function orgDrivePage({ orgId }) {
                     credentials: 'include'
                 });
                 if (res.ok) { await this.refresh(); }
-            } catch (e) { console.error(e); }
-        },
-        async createSubfolder() {
-            if (!this.newSubfolder.trim()) return;
-            try {
-                const res = await fetch(`/api/organizations/${this.orgId}/drive/subfolders`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    },
-                    body: JSON.stringify({ name: this.newSubfolder }),
-                    credentials: 'include'
-                });
-                if (res.ok) {
-                    this.newSubfolder = '';
-                    await this.refresh();
-                }
             } catch (e) { console.error(e); }
         }
     };

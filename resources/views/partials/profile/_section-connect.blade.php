@@ -139,37 +139,12 @@
                         </button>
                     </div>
                 </div>
-            </div>
-
-            <!-- Subcarpetas -->
-            @if($folder)
-            <div class="info-card" id="subfolder-card">
-                <h3 class="card-title">
-                    <span class="card-icon">📂</span>
-                    Subcarpetas
-                </h3>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <div class="action-buttons" style="margin-bottom: 1rem;">
-                        <button class="btn btn-primary" onclick="showCreateSubfolderModal()">
-                            ➕ Crear Subcarpeta
-                        </button>
-                    </div>
-
-                    <div id="subfolders-list">
-                        @foreach($subfolders as $subfolder)
-                        <div data-id="{{ $subfolder->google_id }}" style="margin: 0.5rem 0; padding: 0.75rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(59, 130, 246, 0.2);">
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="color: #ffffff; font-weight: 600; word-break: break-all;">{{ $subfolder->name }}</div>
-                                <div style="color: #94a3b8; font-size: 0.8rem; font-family: monospace; word-break: break-all;">{{ $subfolder->google_id }}</div>
-                            </div>
-                            <button type="button" class="btn-remove-subfolder" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 0.5rem; border-radius: 8px; cursor: pointer; margin-left: 1rem; flex-shrink: 0;">🗑️</button>
-                        </div>
-                        @endforeach
-                    </div>
+                <div class="info-item" style="margin-top: 1rem;">
+                    <span class="info-value" style="color: #94a3b8;">
+                        Las subcarpetas para audios y transcripciones se crean automáticamente. Solo necesitas definir tu carpeta principal.
+                    </span>
                 </div>
             </div>
-            @endif
         @endif
     </div>
 </div>

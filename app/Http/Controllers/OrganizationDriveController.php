@@ -5,9 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Organization;
 use App\Models\OrganizationFolder;
 use App\Models\OrganizationGoogleToken;
-use App\Models\OrganizationSubfolder;
 use App\Services\GoogleDriveService;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class OrganizationDriveController extends Controller
@@ -105,130 +103,17 @@ class OrganizationDriveController extends Controller
             config('services.google.service_account_email')
         );
 
+        // Asegurar la creación de las carpetas estándar automatizadas
+        try {
+            DriveController::ensureStandardMeetingFolders($folder);
+        } catch (\Throwable $e) {
+            Log::warning('No se pudieron crear las carpetas estándar para la organización', [
+                'organization' => $organization->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return response()->json(['id' => $folderId, 'folder' => $folder], 201);
-    }
-
-    public function createSubfolder(Request $request, Organization $organization)
-    {
-        if (!$this->userCanManage($organization)) {
-            abort(403, 'No autorizado');
-        }
-        $request->validate(['name' => 'required|string']);
-
-        $root = $organization->folder;
-        if (!$root) {
-            return response()->json(['message' => 'Root folder not found'], 404);
-        }
-
-        $this->initDrive($organization);
-
-        $folderId = $this->drive->createFolder($request->input('name'), $root->google_id);
-
-        OrganizationSubfolder::create([
-            'organization_folder_id' => $root->id,
-            'google_id'              => $folderId,
-            'name'                   => $request->input('name'),
-        ]);
-
-        $this->drive->shareFolder(
-            $folderId,
-            config('services.google.service_account_email')
-        );
-
-        return response()->json(['id' => $folderId], 201);
-    }
-
-    public function listSubfolders(Organization $organization)
-    {
-        if (!$this->userIsMember($organization)) {
-            abort(403, 'No autorizado');
-        }
-        $root = $organization->folder;
-        if (!$root) {
-            return response()->json(['message' => 'Root folder not found'], 404);
-        }
-
-        $this->initDrive($organization);
-
-        $files = $this->drive->listSubfolders($root->google_id);
-        $subfolders = [];
-        foreach ($files as $file) {
-            $subfolders[] = OrganizationSubfolder::updateOrCreate(
-                [
-                    'organization_folder_id' => $root->id,
-                    'google_id'              => $file->getId(),
-                ],
-                ['name' => $file->getName()]
-            );
-        }
-
-        $standardFolders = DriveController::ensureStandardMeetingFolders($root, null, $subfolders);
-        $subfolderCollection = collect($subfolders);
-        if (! $subfolderCollection->contains(fn ($item) => $item->id === $standardFolders['audio']['model']->id)) {
-            $subfolders[] = $standardFolders['audio']['model'];
-        }
-        if (! $subfolderCollection->contains(fn ($item) => $item->id === $standardFolders['transcriptions']['model']->id)) {
-            $subfolders[] = $standardFolders['transcriptions']['model'];
-        }
-
-        return response()->json([
-            'root_folder'         => $root->fresh(),
-            'subfolders'          => $subfolders,
-            'standard_subfolders' => [
-                'audio'          => [
-                    'id'        => $standardFolders['audio']['model']->id,
-                    'google_id' => $standardFolders['audio']['google_id'],
-                    'name'      => $standardFolders['audio']['name'],
-                    'path'      => $standardFolders['audio']['path'],
-                ],
-                'transcriptions' => [
-                    'id'        => $standardFolders['transcriptions']['model']->id,
-                    'google_id' => $standardFolders['transcriptions']['google_id'],
-                    'name'      => $standardFolders['transcriptions']['name'],
-                    'path'      => $standardFolders['transcriptions']['path'],
-                ],
-            ],
-        ]);
-    }
-
-    public function renameSubfolder(Request $request, Organization $organization, OrganizationSubfolder $subfolder)
-    {
-        if (!$this->userCanManage($organization)) {
-            abort(403, 'No autorizado');
-        }
-        // Validar pertenencia
-        if ($subfolder->folder->organization_id !== $organization->id) {
-            abort(404);
-        }
-
-        $validated = $request->validate([
-            'name' => 'required|string|max:255'
-        ]);
-
-        $this->initDrive($organization);
-        $this->drive->renameFile($subfolder->google_id, $validated['name']);
-
-        $subfolder->update(['name' => $validated['name']]);
-
-        return response()->json($subfolder->fresh());
-    }
-
-    public function deleteSubfolder(Organization $organization, OrganizationSubfolder $subfolder)
-    {
-        if (!$this->userCanManage($organization)) {
-            abort(403, 'No autorizado');
-        }
-        // Validar pertenencia
-        if ($subfolder->folder->organization_id !== $organization->id) {
-            abort(404);
-        }
-
-        $this->initDrive($organization);
-        // Eliminar primero en Drive, luego en BD
-        $this->drive->deleteFile($subfolder->google_id);
-        $subfolder->delete();
-
-        return response()->json(['deleted' => true]);
     }
 
     /**
@@ -246,33 +131,29 @@ class OrganizationDriveController extends Controller
         $connected = $token && $token->isConnected();
 
         $root = $organization->folder;
-        $subfolders = [];
+        $standardFolders = [];
 
         if ($connected && $root) {
             try {
-                // Initialize drive client and list subfolders
                 $this->initDrive($organization);
-                $files = $this->drive->listSubfolders($root->google_id);
-                foreach ($files as $file) {
-                    $subfolders[] = OrganizationSubfolder::updateOrCreate(
-                        [
-                            'organization_folder_id' => $root->id,
-                            'google_id'              => $file->getId(),
-                        ],
-                        ['name' => $file->getName()]
-                    );
-                }
-            } catch (\Exception $e) {
-                // Si hay problemas con Drive, marcar como desconectado
-                Log::warning("Error accessing Drive for organization {$organization->id}: " . $e->getMessage());
-                $connected = false;
+                $folders = DriveController::ensureStandardMeetingFolders($root);
+                $standardFolders = collect([
+                    $folders['audio'] ?? null,
+                    $folders['transcriptions'] ?? null,
+                ])->filter()->map(fn ($item) => [
+                    'name'      => $item['name'],
+                    'google_id' => $item['google_id'],
+                    'path'      => $item['path'],
+                ])->values();
+            } catch (\Throwable $e) {
+                Log::warning("No se pudo verificar las carpetas estándar de la organización {$organization->id}: " . $e->getMessage());
             }
         }
 
         return response()->json([
-            'connected'   => $connected,
-            'root_folder' => $root,
-            'subfolders'  => $subfolders,
+            'connected'          => $connected,
+            'root_folder'        => $root,
+            'standard_subfolders'=> $standardFolders,
         ]);
     }
 }

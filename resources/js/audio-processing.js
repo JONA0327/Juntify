@@ -1353,6 +1353,36 @@ function updateAnalysisPreview() {
     }
 }
 
+const driveStatusCache = {
+    personal: null,
+    organization: null,
+};
+
+function normalizeStandardFolders(list) {
+    if (!list) {
+        return { audio: null, transcriptions: null };
+    }
+
+    if (!Array.isArray(list)) {
+        return {
+            audio: list.audio ?? null,
+            transcriptions: list.transcriptions ?? null,
+        };
+    }
+
+    const map = { audio: null, transcriptions: null };
+    list.forEach(item => {
+        if (!item || !item.name) return;
+        const name = item.name.toLowerCase();
+        if (name.includes('trans')) {
+            map.transcriptions = item;
+        } else if (name.includes('audio')) {
+            map.audio = item;
+        }
+    });
+    return map;
+}
+
 async function loadDriveOptions() {
     const role = window.userRole || document.body.dataset.userRole;
     const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
@@ -1379,12 +1409,13 @@ async function loadDriveOptions() {
         // Load personal drive name
         console.log('🔍 [loadDriveOptions] Fetching personal drive data...');
         try {
-            const personalRes = await fetch('/drive/sync-subfolders');
+            const personalRes = await fetch('/drive/status');
             console.log('🔍 [loadDriveOptions] Personal drive response status:', personalRes.status);
 
             if (personalRes.ok) {
                 const personalData = await personalRes.json();
                 console.log('🔍 [loadDriveOptions] Personal drive data:', personalData);
+                driveStatusCache.personal = personalData;
 
                 if (personalData.root_folder) {
                     const personalOpt = document.createElement('option');
@@ -1395,6 +1426,7 @@ async function loadDriveOptions() {
                 }
             } else {
                 console.warn('⚠️ [loadDriveOptions] Personal drive request failed:', await personalRes.text());
+                driveStatusCache.personal = null;
             }
         } catch (e) {
             console.warn('⚠️ [loadDriveOptions] Could not load personal drive name:', e);
@@ -1404,18 +1436,20 @@ async function loadDriveOptions() {
             personalOpt.textContent = 'Personal';
             driveSelect.appendChild(personalOpt);
             console.log('📝 [loadDriveOptions] Added fallback personal option');
+            driveStatusCache.personal = null;
         }
 
         // Load organization drive name (for both admin and colaborador)
         if (organizationId) {
             console.log('🔍 [loadDriveOptions] Fetching organization drive data...');
             try {
-                const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
+                const orgRes = await fetch(`/api/organizations/${organizationId}/drive/status`);
                 console.log('🔍 [loadDriveOptions] Organization drive response status:', orgRes.status);
 
                 if (orgRes.ok) {
                     const orgData = await orgRes.json();
                     console.log('🔍 [loadDriveOptions] Organization drive data:', orgData);
+                    driveStatusCache.organization = orgData;
 
                     if (orgData.root_folder) {
                         const orgOpt = document.createElement('option');
@@ -1426,6 +1460,7 @@ async function loadDriveOptions() {
                     }
                 } else {
                     console.warn('⚠️ [loadDriveOptions] Organization drive request failed:', await orgRes.text());
+                    driveStatusCache.organization = null;
                 }
             } catch (e) {
                 console.warn('⚠️ [loadDriveOptions] Could not load organization drive name:', e);
@@ -1435,6 +1470,7 @@ async function loadDriveOptions() {
                 orgOpt.textContent = 'Organization';
                 driveSelect.appendChild(orgOpt);
                 console.log('📝 [loadDriveOptions] Added fallback organization option');
+                driveStatusCache.organization = null;
             }
         }
 
@@ -1506,37 +1542,14 @@ async function loadDriveFolders() {
         reasoning: role === 'colaborador' ? 'colaborador can choose' : 'administrator choice'
     });
 
-    const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';
-
-    console.log('🔍 [loadDriveFolders] Using endpoint:', endpoint);
-
     try {
-        const res = await fetch(endpoint);
-        console.log('🔍 [loadDriveFolders] Fetch response status:', res.status);
+        const data = useOrg ? driveStatusCache.organization : driveStatusCache.personal;
+        console.log('🔍 [loadDriveFolders] Using cached drive data:', data);
 
-        if (res.status === 401 || res.status === 403) {
-            console.warn('🔍 [loadDriveFolders] Authentication error, redirecting to login');
-            window.location.href = '/login';
+        if (!data) {
+            showNotification('Conecta tu cuenta de Drive para ver las rutas automáticas', 'warning');
             return;
         }
-
-        if (!res.ok) {
-            console.error('🔍 [loadDriveFolders] Request failed with status:', res.status);
-            showNotification('No se pudieron cargar las carpetas de Drive', 'error');
-            return;
-        }
-
-        const contentType = res.headers.get('content-type') || '';
-        console.log('🔍 [loadDriveFolders] Response content type:', contentType);
-
-        if (!contentType.includes('application/json')) {
-            console.error('🔍 [loadDriveFolders] Unexpected response content type');
-            showNotification('Respuesta inesperada del servidor', 'error');
-            return;
-        }
-
-        const data = await res.json();
-        console.log('🔍 [loadDriveFolders] Received data:', data);
 
         // Don't hide drive select for colaboradores anymore - they can choose
         console.log('🔍 [loadDriveFolders] Drive select visibility:', {
@@ -1563,9 +1576,10 @@ async function loadDriveFolders() {
 
         standardDrivePaths = null;
         if (data.standard_subfolders) {
+            const standard = normalizeStandardFolders(data.standard_subfolders);
             standardDrivePaths = {
-                transcriptions: data.standard_subfolders.transcriptions?.path || '',
-                audio: data.standard_subfolders.audio?.path || ''
+                transcriptions: standard.transcriptions?.path || '',
+                audio: standard.audio?.path || ''
             };
         }
 

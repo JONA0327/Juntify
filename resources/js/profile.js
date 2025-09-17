@@ -145,12 +145,6 @@ function confirmCreateFolder() {
 
       // Mostrar mensaje de éxito
       showSuccessMessage(`Carpeta "${name}" creada exitosamente`);
-
-      // Mostrar la sección de subcarpetas sin auto-completar
-      const subfolderCard = document.getElementById('subfolder-card');
-      if (subfolderCard) {
-        subfolderCard.style.display = 'block';
-      }
     })
     .catch(err => {
       console.error('Error creando carpeta principal:', err.response?.data || err.message);
@@ -170,7 +164,6 @@ function setMainFolder() {
   const input         = document.getElementById('main-folder-input');
   const mainFolderId  = input.value.trim();
   const currentId     = input.dataset.id;
-  const subfolderCard = document.getElementById('subfolder-card');
   const mainFolderName= document.getElementById('main-folder-name');
   const btn           = document.getElementById('set-main-folder-btn');
 
@@ -190,7 +183,6 @@ function setMainFolder() {
   axios.post('/drive/set-main-folder', { id: mainFolderId })
     .then(() => {
       mainFolderName.textContent  = mainFolderId;
-      subfolderCard.style.display = 'block';
       alert('Carpeta principal establecida: ' + mainFolderId);
       input.dataset.id = mainFolderId;
     })
@@ -201,112 +193,6 @@ function setMainFolder() {
     .finally(() => {
       btn.disabled = false;
     });
-}
-
-/**
- * Muestra el modal para crear subcarpeta
- */
-function showCreateSubfolderModal() {
-  const modal = document.getElementById('create-subfolder-modal');
-  const input = document.getElementById('subfolder-name-input');
-  const mainFolderId = document.getElementById('main-folder-input').value.trim();
-
-  if (!mainFolderId) {
-    showErrorMessage('Primero debes establecer la carpeta principal');
-    return;
-  }
-
-  // Generar nombre sugerido
-  const currentDate = new Date();
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  const suggestedName = `Reuniones-${monthNames[currentDate.getMonth()]}-${currentDate.getFullYear()}`;
-  input.value = suggestedName;
-
-  modal.classList.add('show');
-
-  // Focus en el input después de la animación
-  setTimeout(() => {
-    input.focus();
-    input.select();
-  }, 300);
-}
-
-/**
- * Cierra el modal de crear subcarpeta
- */
-function closeCreateSubfolderModal() {
-  const modal = document.getElementById('create-subfolder-modal');
-  const input = document.getElementById('subfolder-name-input');
-
-  modal.classList.remove('show');
-  input.value = '';
-}
-
-/**
- * Confirma la creación de la subcarpeta
- */
-function confirmCreateSubfolder() {
-  const input = document.getElementById('subfolder-name-input');
-  const name = input.value.trim();
-  const mainFolderId = document.getElementById('main-folder-input').value.trim();
-  const btn = document.getElementById('confirm-create-sub-btn');
-
-  if (!name) {
-    alert('Por favor ingresa un nombre para la subcarpeta');
-    input.focus();
-    return;
-  }
-
-  if (!mainFolderId) {
-    showErrorMessage('Primero debes establecer la carpeta principal');
-    closeCreateSubfolderModal();
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Creando...';
-
-  axios.post('/drive/subfolder', { name, parentId: mainFolderId })
-    .then(res => {
-      addSubfolderToList(name, res.data.id);
-
-      closeCreateSubfolderModal();
-      showSuccessMessage(`Subcarpeta "${name}" creada exitosamente`);
-    })
-    .catch(err => {
-      console.error('Error creando subcarpeta:', err.response?.data || err.message);
-      showErrorMessage('No se pudo crear la subcarpeta. Inténtalo de nuevo.');
-    })
-    .finally(() => {
-      btn.disabled = false;
-      btn.textContent = '✅ Crear Subcarpeta';
-    });
-}
-
-function addSubfolderToList(name, id) {
-  const list = document.getElementById('subfolders-list');
-  if (!list) return;
-  const div = document.createElement('div');
-  div.dataset.id = id;
-  div.style.cssText = `
-    margin: 0.5rem 0;
-    padding: 0.75rem;
-    background: rgba(59, 130, 246, 0.1);
-    border-radius: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border: 1px solid rgba(59, 130, 246, 0.2);
-  `;
-  div.innerHTML = `
-    <div>
-      <div style="color: #ffffff; font-weight: 600;">${name}</div>
-      <div style="color: #94a3b8; font-size: 0.8rem;">${id}</div>
-    </div>
-    <button type="button" class="btn-remove-subfolder" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 0.5rem; border-radius: 8px; cursor: pointer;">🗑️</button>
-  `;
-  list.appendChild(div);
 }
 
 /**
@@ -396,32 +282,10 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Delegación para eliminar subcarpeta
-document.addEventListener('click', e => {
-  if (e.target.matches('.btn-remove-subfolder')) {
-    const folderDiv = e.target.closest('div');
-    const folderName = folderDiv.querySelector('div > div').textContent;
-    const id = folderDiv.dataset.id;
-
-
-    if (confirm(`¿Estás seguro de que quieres eliminar la subcarpeta "${folderName}"?`)) {
-            axios.delete('/drive/subfolder/' + id)
-        .then(() => {
-          folderDiv.remove();
-          showSuccessMessage(`Subcarpeta "${folderName}" eliminada`);
-        })
-        .catch(() => {
-          showErrorMessage('No se pudo eliminar la subcarpeta');
-        });
-    }
-  }
-});
-
 // Cerrar modales con ESC
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closeCreateFolderModal();
-    closeCreateSubfolderModal();
   }
 });
 
@@ -429,7 +293,6 @@ document.addEventListener('keydown', e => {
 document.addEventListener('click', e => {
   if (e.target.classList.contains('modal')) {
     closeCreateFolderModal();
-    closeCreateSubfolderModal();
   }
 });
 
@@ -534,8 +397,4 @@ window.connectDrive        = connectDrive;
 window.showCreateFolderModal = showCreateFolderModal;
 window.closeCreateFolderModal = closeCreateFolderModal;
 window.confirmCreateFolder = confirmCreateFolder;
-window.showCreateSubfolderModal = showCreateSubfolderModal;
-window.closeCreateSubfolderModal = closeCreateSubfolderModal;
-window.confirmCreateSubfolder = confirmCreateSubfolder;
 window.setMainFolder       = setMainFolder;
-window.addSubfolderToList = addSubfolderToList;

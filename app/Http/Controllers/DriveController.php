@@ -17,9 +17,7 @@ use App\Models\Notification;
 use App\Models\TaskLaravel;
 use App\Traits\MeetingContentParsing;
 use Illuminate\Support\Facades\Log;
-use Google\Service\Drive as DriveService;
 use Google\Service\Exception as GoogleServiceException;
-use App\Http\Controllers\Auth\GoogleAuthController;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -318,235 +316,47 @@ class DriveController extends Controller
         ]);
     }
 
-    public function createSubfolder(Request $request)
-    {
-        $token  = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
-        $parentId = $token->recordings_folder_id;
 
-        $client = $this->drive->getClient();
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expiry_date'   => $token->expiry_date,
-        ]);
-        if ($client->isAccessTokenExpired()) {
-            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
-            if (! isset($new['error'])) {
-                $token->update([
-                    'access_token' => $new['access_token'],
-                    'expiry_date'  => now()->addSeconds($new['expires_in']),
-                ]);
-                $client->setAccessToken($new);
-            }
-        }
-
-        $folderId = $this->drive->createFolder($request->input('name'), $parentId);
-
-        if ($folder = Folder::where('google_id', $parentId)->first()) {
-            Subfolder::create([
-                'folder_id' => $folder->id,
-                'google_id' => $folderId,
-                'name'      => $request->input('name'),
-            ]);
-        }
-
-        $this->drive->shareFolder(
-            $folderId,
-            config('services.google.service_account_email')
-        );
-
-        return response()->json(['id' => $folderId]);
-    }
-
-    public function syncDriveSubfolders(Request $request)
-    {
-        // 1. Obtener el GoogleToken del usuario autenticado
-        $username = Auth::user()->username;
-        $token    = GoogleToken::where('username', $username)->firstOrFail();
-
-        if (empty($token->recordings_folder_id)) {
-            return response()->json([
-                'message' => 'El usuario no tiene configurada la carpeta principal'
-            ], 400);
-        }
-
-        // 2. Crear cliente de Drive usando el método protegido createClient()
-        $authController = app(GoogleAuthController::class);
-        $refMethod      = new \ReflectionMethod($authController, 'createClient');
-        $refMethod->setAccessible(true);
-        /** @var \Google\Client $client */
-        $client = $refMethod->invoke($authController);
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expiry_date'   => $token->expiry_date,
-        ]);
-        // Auto-refrescar si ya expiró
-        if ($client->isAccessTokenExpired()) {
-            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
-            if (! isset($new['error'])) {
-                $token->update([
-                    'access_token' => $new['access_token'],
-                    'expiry_date'  => now()->addSeconds($new['expires_in']),
-                ]);
-                $client->setAccessToken($new);
-            }
-        }
-
-        $drive = new DriveService($client);
-
-        try {
-            // 3. Listar subcarpetas con la query correcta (comillas simples)
-            $query = sprintf(
-                "mimeType='application/vnd.google-apps.folder' and '%s' in parents and trashed=false",
-                $token->recordings_folder_id
-            );
-
-            $response = $drive->files->listFiles([
-                'q'      => $query,
-                'fields' => 'files(id,name)',
-            ]);
-
-            $files = $response->getFiles();
-
-            // 4. Obtener nombre real de la carpeta raíz
-            $rootName = null;
-            try {
-                $rootData = $drive->files->get(
-                    $token->recordings_folder_id,
-                    ['fields' => 'name']
-                );
-                $rootName = $rootData->getName();
-            } catch (\Throwable $e) {
-                Log::warning('syncDriveSubfolders root name fetch failed', [
-                    'username'  => $username,
-                    'folder_id' => $token->recordings_folder_id,
-                    'error'     => $e->getMessage(),
-                ]);
-            }
-
-            // 5. Crear o actualizar la carpeta raíz en BD con el nombre obtenido
-            $rootFolder = Folder::updateOrCreate(
-                [
-                    'google_token_id' => $token->id,
-                    'google_id'       => $token->recordings_folder_id,
-                ],
-                [
-                    'name'      => $rootName ?? "recordings_{$username}",
-                    'parent_id' => null,
-                ]
-            );
-
-            // 6. Sincronizar subcarpetas en BD
-            $subfolders = [];
-            foreach ($files as $file) {
-                $subfolders[] = Subfolder::updateOrCreate(
-                    [
-                        'folder_id' => $rootFolder->id,
-                        'google_id' => $file->getId(),
-                    ],
-                    [
-                        'name' => $file->getName(),
-                    ]
-                );
-            }
-
-            $standardFolders = self::ensureStandardMeetingFolders($rootFolder, null, $subfolders);
-
-            $subfolderCollection = collect($subfolders);
-            if (! $subfolderCollection->contains(fn ($item) => $item->id === $standardFolders['audio']['model']->id)) {
-                $subfolders[] = $standardFolders['audio']['model'];
-            }
-            if (! $subfolderCollection->contains(fn ($item) => $item->id === $standardFolders['transcriptions']['model']->id)) {
-                $subfolders[] = $standardFolders['transcriptions']['model'];
-            }
-
-            // 7. Devolver JSON con el resultado
-            return response()->json([
-                'root_folder'         => $rootFolder->fresh(),
-                'subfolders'          => $subfolders,
-                'standard_subfolders' => [
-                    'audio'          => [
-                        'id'        => $standardFolders['audio']['model']->id,
-                        'google_id' => $standardFolders['audio']['google_id'],
-                        'name'      => $standardFolders['audio']['name'],
-                        'path'      => $standardFolders['audio']['path'],
-                    ],
-                    'transcriptions' => [
-                        'id'        => $standardFolders['transcriptions']['model']->id,
-                        'google_id' => $standardFolders['transcriptions']['google_id'],
-                        'name'      => $standardFolders['transcriptions']['name'],
-                        'path'      => $standardFolders['transcriptions']['path'],
-                    ],
-                ],
-            ], 200);
-
-        } catch (GoogleServiceException $e) {
-            if (str_contains($e->getMessage(), 'invalid_grant')) {
-                Log::warning('syncDriveSubfolders invalid_grant', [
-                    'username' => $username,
-                ]);
-                GoogleToken::where('username', $username)->update([
-                    'access_token'  => null,
-                    'refresh_token' => null,
-                    'expiry_date'   => null,
-                    // recordings_folder_id se mantiene para reconexión
-                ]);
-                return response()->json([
-                    'message' => 'Autenticación de Google expirada. Reconecta tu Google Drive.',
-                ], 401);
-            }
-
-            Log::error('syncDriveSubfolders Google error', [
-                'username' => $username,
-                'error'    => $e->getMessage(),
-            ]);
-            return response()->json([
-                'message' => 'Error de Drive: ' . $e->getMessage(),
-            ], 502);
-        } catch (\Throwable $e) {
-            Log::error('syncDriveSubfolders failed', [
-                'username' => $username,
-                'error'    => $e->getMessage(),
-            ]);
-            return response()->json([
-                'message' => 'Error interno al obtener subcarpetas'
-            ], 500);
-        }
-    }
     public function status()
     {
-        $connected = GoogleToken::where('username', Auth::user()->username)->exists();
+        $user = Auth::user();
+        $token = GoogleToken::where('username', $user->username)->first();
 
-        return response()->json(['connected' => $connected]);
-    }
+        $connected = false;
+        $rootFolder = null;
+        $standardFolders = collect();
 
-    public function deleteSubfolder(string $id)
-    {
-        $token  = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
-        $client = $this->drive->getClient();
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expiry_date'   => $token->expiry_date,
-        ]);
-        if ($client->isAccessTokenExpired()) {
-            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
-            if (! isset($new['error'])) {
-                $token->update([
-                    'access_token' => $new['access_token'],
-                    'expiry_date'  => now()->addSeconds($new['expires_in']),
-                ]);
-                $client->setAccessToken($new);
+        if ($token) {
+            $connected = $token->hasValidAccessToken() && ! empty($token->refresh_token);
+            $rootFolder = Folder::where('google_token_id', $token->id)->first();
+
+            if ($connected && $rootFolder) {
+                try {
+                    $results = self::ensureStandardMeetingFolders($rootFolder);
+                    $standardFolders = collect([
+                        $results['audio'] ?? null,
+                        $results['transcriptions'] ?? null,
+                    ])->filter()->map(fn ($item) => [
+                        'name'      => $item['name'],
+                        'google_id' => $item['google_id'],
+                        'path'      => $item['path'],
+                    ])->values();
+                } catch (\Throwable $e) {
+                    Log::warning('drive.status ensureStandardMeetingFolders failed', [
+                        'user'  => $user->username,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
         }
 
-        $this->drive->deleteFile($id);
-
-        Subfolder::where('google_id', $id)->delete();
-
-        return response()->json(['deleted' => true]);
+        return response()->json([
+            'connected'          => $connected,
+            'root_folder'        => $rootFolder,
+            'standard_subfolders'=> $standardFolders,
+        ]);
     }
+
 
     public function uploadPendingAudio(Request $request)
     {

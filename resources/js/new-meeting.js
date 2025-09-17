@@ -358,6 +358,36 @@ function togglePostponeMode() {
     setPostponeMode(next);
 }
 
+const driveStatusCache = {
+    personal: null,
+    organization: null,
+};
+
+function normalizeStandardFolders(list) {
+    if (!list) {
+        return { audio: null, transcriptions: null };
+    }
+
+    if (!Array.isArray(list)) {
+        return {
+            audio: list.audio ?? null,
+            transcriptions: list.transcriptions ?? null,
+        };
+    }
+
+    const map = { audio: null, transcriptions: null };
+    list.forEach(item => {
+        if (!item || !item.name) return;
+        const lower = item.name.toLowerCase();
+        if (lower.includes('trans')) {
+            map.transcriptions = item;
+        } else if (lower.includes('audio')) {
+            map.audio = item;
+        }
+    });
+    return map;
+}
+
 async function rebuildDriveSelectOptions() {
     const driveSelect = document.getElementById('drive-select');
 
@@ -376,11 +406,12 @@ async function rebuildDriveSelectOptions() {
     personalOption.textContent = 'Personal';
 
     try {
-        const response = await fetch('/drive/sync-subfolders');
+        const response = await fetch('/drive/status');
         console.log('🔍 [new-meeting] Personal drive response status:', response.status);
 
         if (response.ok) {
             const data = await response.json();
+            driveStatusCache.personal = data;
             const personalName = data?.root_folder?.name;
 
             if (personalName) {
@@ -403,6 +434,16 @@ async function rebuildDriveSelectOptions() {
         organizationOption.textContent = label;
         driveSelect.appendChild(organizationOption);
         console.log('✅ [new-meeting] Added organization option:', label);
+
+        try {
+            const orgRes = await fetch(`/api/organizations/${organizationId}/drive/status`);
+            if (orgRes.ok) {
+                driveStatusCache.organization = await orgRes.json();
+            }
+        } catch (error) {
+            console.warn('⚠️ [new-meeting] Error fetching organization drive status:', error);
+            driveStatusCache.organization = null;
+        }
     }
 }
 
@@ -416,20 +457,32 @@ async function updateStandardFolderInfo(selectedDrive) {
         return;
     }
 
-    const endpoint = selectedDrive === 'organization'
-        ? `/api/organizations/${organizationId}/drive/subfolders`
-        : '/drive/sync-subfolders';
-
     try {
-        const response = await fetch(endpoint);
-        if (!response.ok) {
-            throw new Error(`Failed to load folder info (${response.status})`);
+        let data;
+        if (selectedDrive === 'organization') {
+            data = driveStatusCache.organization;
+            if (!data && organizationId) {
+                const res = await fetch(`/api/organizations/${organizationId}/drive/status`);
+                if (res.ok) {
+                    data = await res.json();
+                    driveStatusCache.organization = data;
+                }
+            }
+        } else {
+            data = driveStatusCache.personal;
+            if (!data) {
+                const res = await fetch('/drive/status');
+                if (res.ok) {
+                    data = await res.json();
+                    driveStatusCache.personal = data;
+                }
+            }
         }
 
-        const data = await response.json();
-        if (data.standard_subfolders) {
-            const transcriptionPath = data.standard_subfolders.transcriptions?.path || '—';
-            const audioPath = data.standard_subfolders.audio?.path || '—';
+        if (data?.standard_subfolders) {
+            const standard = normalizeStandardFolders(data.standard_subfolders);
+            const transcriptionPath = standard.transcriptions?.path || '—';
+            const audioPath = standard.audio?.path || '—';
             standardInfo.innerHTML = `
                 <p><strong>Transcripciones:</strong> ${transcriptionPath}</p>
                 <p><strong>Audio:</strong> ${audioPath}</p>
