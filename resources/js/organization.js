@@ -270,7 +270,13 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 const status = await statusRes.json();
                 state.connected = !!status.connected;
                 state.rootFolder = status.root_folder || null;
-                state.standardFolders = status.standard_subfolders || [];
+                // Accept legacy key 'subfolders' just in case, or new 'standard_subfolders'
+                state.standardFolders = status.standard_subfolders || status.subfolders || [];
+            } else {
+                // Non-200: reset but keep connected false
+                state.connected = false;
+                state.rootFolder = null;
+                state.standardFolders = [];
             }
         } catch (e) {
             console.error('Error loading drive status:', e);

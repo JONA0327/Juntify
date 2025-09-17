@@ -180,7 +180,7 @@
                                 </div>
 
                                 <!-- Gestión de Google Drive -->
-                                <div class="mt-8 p-6 bg-slate-700/30 rounded-lg" x-init="loadDriveSubfolders(org)">
+                                <div class="mt-8 p-6 bg-slate-700/30 rounded-lg" x-init="loadDriveStatus(org)">
                                     <!-- Conectar / Desconectar - solo visible cuando no está conectado -->
                                     <div x-show="!getDriveState(org.id).connected" class="mb-4">
                                         <button @click="connectDrive(org)"
