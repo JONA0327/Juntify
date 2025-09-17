@@ -556,6 +556,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         const attempt = async (url) => {
             return fetch(url, {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
@@ -592,6 +593,12 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 console.debug('[organization.js] Primeros 120 chars de la respuesta:', textSample.substring(0,120));
                 await this.debugAuth();
                 alert('La sesión no fue reconocida (respuesta no JSON). Reintenta después de refrescar la página o volver a iniciar sesión.');
+                return;
+            }
+            if (response.status === 419) { // CSRF / sesión expirada
+                console.warn('[organization.js] 419 (CSRF/session) creando organización');
+                await this.debugAuth();
+                alert('La sesión expiró. Refresca la página e inténtalo de nuevo.');
                 return;
             }
             if (response.status === 403) {
@@ -679,8 +686,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         try {
             const response = await fetch(`/api/organizations/${this.editOrg.id}`, {
                 method: 'PATCH',
+                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 },
                 body: JSON.stringify({
@@ -689,6 +699,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     imagen: this.editPreview
                 })
             });
+            if (response.status === 419) {
+                alert('Sesión expirada. Refresca la página.');
+                return;
+            }
             if (response.ok) {
                 const updated = await response.json();
 
@@ -708,10 +722,17 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         try {
             const response = await fetch(`/api/organizations/${org.id}`, {
                 method: 'DELETE',
+                credentials: 'same-origin',
                 headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
             });
+            if (response.status === 419) {
+                alert('Sesión expirada. Refresca la página.');
+                return;
+            }
             if (!response.ok) {
                 try {
                     const errorData = await response.json();
@@ -743,8 +764,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         try {
             const response = await fetch(`/api/groups/${this.editGroup.id}`, {
                 method: 'PATCH',
+                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 },
                 body: JSON.stringify({
@@ -752,6 +776,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     descripcion: this.editGroup.descripcion
                 })
             });
+            if (response.status === 419) {
+                alert('Sesión expirada. Refresca la página.');
+                return;
+            }
             if (response.ok) {
                 const updated = await response.json();
 
@@ -773,12 +801,17 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         try {
             const response = await fetch(`/api/groups/${group.id}`, {
                 method: 'DELETE',
+                credentials: 'same-origin',
                 headers: {
                     'Accept': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
             });
+            if (response.status === 419) {
+                this.showStatus('Sesión expirada. Refresca la página.', 'error');
+                return;
+            }
             if (!response.ok) {
                 let message = 'No se pudo eliminar el grupo';
                 try { const data = await response.json(); message = data.message || message; } catch {}
