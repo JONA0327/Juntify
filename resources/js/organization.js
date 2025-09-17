@@ -25,11 +25,6 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     groupToDelete: null,
     orgOfGroupToDelete: null,
     isDeletingGroup: false,
-    // Confirmación de borrado de subcarpeta (Drive)
-    showConfirmDeleteSubfolderModal: false,
-    subfolderToDelete: null,
-    orgOfSubfolderToDelete: null,
-    isDeletingSubfolder: false,
     // Confirmación de expulsión de miembro
     showConfirmRemoveMemberModal: false,
     memberToRemove: null,
@@ -183,12 +178,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         if (!this.driveData[orgId]) {
             this.driveData[orgId] = {
                 rootFolder: null,
-                subfolders: [],
+                standardFolders: [],
                 connected: false,
                 isLoading: false,
                 isCreatingRoot: false,
-                isCreatingSubfolder: false,
-                newSubfolderName: '',
             };
         }
         return this.driveData[orgId];
@@ -224,7 +217,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
             if (res.ok) {
                 // Refresh drive status for this specific org
-                await this.loadDriveSubfolders(org);
+                await this.loadDriveStatus(org);
                 this.showStatus('Google Drive organizacional desconectado');
             } else {
                 this.showStatus('No se pudo desconectar', 'error');
@@ -251,7 +244,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 const data = await response.json();
                 state.rootFolder = data.folder;
                 this.showStatus('Carpeta de organización creada correctamente');
-                await this.loadDriveSubfolders(org);
+                await this.loadDriveStatus(org);
             } else {
                 let msg = 'Error al crear la carpeta de organización';
                 try {
@@ -268,158 +261,23 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
 
-    async loadDriveSubfolders(org) {
+    async loadDriveStatus(org) {
         const state = this.getDriveState(org.id);
         state.isLoading = true;
         try {
-            // First, get status to know if connected and if root exists
             const statusRes = await fetch(`/api/organizations/${org.id}/drive/status`);
             if (statusRes.ok) {
                 const status = await statusRes.json();
                 state.connected = !!status.connected;
                 state.rootFolder = status.root_folder || null;
-                state.subfolders = status.subfolders || [];
-                // If connected and root exists but no subfolders were returned (some backends may skip), fetch explicitly
-                if (state.connected && state.rootFolder && (!Array.isArray(state.subfolders) || !state.subfolders.length)) {
-                    const response = await fetch(`/api/organizations/${org.id}/drive/subfolders`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        state.rootFolder = data.root_folder;
-                        state.subfolders = data.subfolders || [];
-                    }
-                }
+                state.standardFolders = status.standard_subfolders || [];
             }
         } catch (e) {
-            console.error('Error loading subfolders:', e);
+            console.error('Error loading drive status:', e);
             state.rootFolder = null;
-            state.subfolders = [];
+            state.standardFolders = [];
         } finally {
             state.isLoading = false;
-        }
-    },
-
-    async createSubfolder(org) {
-        const state = this.getDriveState(org.id);
-        if (state.isCreatingSubfolder) return;
-        const name = state.newSubfolderName?.trim();
-        if (!name) {
-            alert('El nombre de la subcarpeta es requerido');
-            return;
-        }
-        state.isCreatingSubfolder = true;
-        try {
-            const response = await fetch(`/api/organizations/${org.id}/drive/subfolders`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                },
-                body: JSON.stringify({ name }),
-            });
-            if (response.ok) {
-                state.newSubfolderName = '';
-                this.showStatus('Subcarpeta creada correctamente');
-                await this.loadDriveSubfolders(org);
-            } else {
-                let msg = 'Error al crear la subcarpeta';
-                try {
-                    const err = await response.json();
-                    msg = err.message || msg;
-                } catch {}
-                this.showStatus(msg, 'error');
-            }
-        } catch (e) {
-            console.error('Error creating subfolder:', e);
-            this.showStatus('Error al crear la subcarpeta', 'error');
-        } finally {
-            state.isCreatingSubfolder = false;
-        }
-    },
-
-    // New: start editing a subfolder
-    startEditSubfolder(sf) {
-        sf._isEditing = true;
-        sf._editingName = sf.name;
-    },
-
-    // New: save rename in Drive then DB
-    async saveSubfolderName(org, sf) {
-        const newName = (sf._editingName || '').trim();
-        if (!newName) {
-            this.showStatus('El nombre no puede estar vacío', 'error');
-            return;
-        }
-        try {
-            const res = await fetch(`/api/organizations/${org.id}/drive/subfolders/${sf.id}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                },
-                body: JSON.stringify({ name: newName })
-            });
-            if (res.ok) {
-                const updated = await res.json();
-                sf.name = updated.name;
-                sf._isEditing = false;
-                this.showStatus('Subcarpeta renombrada');
-            } else {
-                let msg = 'No se pudo renombrar';
-                try { const err = await res.json(); msg = err.message || msg; } catch {}
-                this.showStatus(msg, 'error');
-            }
-        } catch (e) {
-            console.error('rename subfolder error', e);
-            this.showStatus('Error al renombrar', 'error');
-        }
-    },
-
-    // New: delete subfolder (Drive first, then DB) - called by modal confirm
-    async deleteSubfolder(org, sf) {
-        try {
-            const res = await fetch(`/api/organizations/${org.id}/drive/subfolders/${sf.id}`, {
-                method: 'DELETE',
-                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') }
-            });
-            if (res.ok) {
-                // Optimistic removal
-                const state = this.getDriveState(org.id);
-                state.subfolders = (state.subfolders || []).filter(x => String(x.id) !== String(sf.id));
-                this.showStatus('Subcarpeta eliminada');
-                return true;
-            } else {
-                let msg = 'No se pudo eliminar';
-                try { const err = await res.json(); msg = err.message || msg; } catch {}
-                this.showStatus(msg, 'error');
-                return false;
-            }
-        } catch (e) {
-            console.error('delete subfolder error', e);
-            this.showStatus('Error al eliminar', 'error');
-            return false;
-        }
-    },
-
-    // Modal handlers for subfolder deletion
-    openConfirmDeleteSubfolder(org, sf) {
-        this.orgOfSubfolderToDelete = org;
-        this.subfolderToDelete = sf;
-        this.showConfirmDeleteSubfolderModal = true;
-    },
-    closeConfirmDeleteSubfolder() {
-        this.showConfirmDeleteSubfolderModal = false;
-        this.subfolderToDelete = null;
-        this.orgOfSubfolderToDelete = null;
-        this.isDeletingSubfolder = false;
-    },
-    async confirmDeleteSubfolder() {
-        if (!this.orgOfSubfolderToDelete || !this.subfolderToDelete) return;
-        if (this.isDeletingSubfolder) return;
-        this.isDeletingSubfolder = true;
-        const ok = await this.deleteSubfolder(this.orgOfSubfolderToDelete, this.subfolderToDelete);
-        this.isDeletingSubfolder = false;
-        if (ok) {
-            this.closeConfirmDeleteSubfolder();
         }
     },
 

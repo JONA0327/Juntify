@@ -4899,6 +4899,35 @@ function retryLoadContainerMeetings() {
 // =========================================================
 // Drive folder selector with organization support
 // =========================================================
+const driveStatusCache = {
+    personal: null,
+    organization: null,
+};
+
+function normalizeStandardFolders(list) {
+    if (!list) {
+        return { audio: null, transcriptions: null };
+    }
+
+    if (!Array.isArray(list)) {
+        return {
+            audio: list.audio ?? null,
+            transcriptions: list.transcriptions ?? null,
+        };
+    }
+
+    const map = { audio: null, transcriptions: null };
+    list.forEach(item => {
+        if (!item || !item.name) return;
+        const name = item.name.toLowerCase();
+        if (name.includes('trans')) {
+            map.transcriptions = item;
+        } else if (name.includes('audio')) {
+            map.audio = item;
+        }
+    });
+    return map;
+}
 async function loadDriveOptions() {
     const role = window.userRole || document.body.dataset.userRole;
     const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
@@ -4919,12 +4948,13 @@ async function loadDriveOptions() {
         // Load personal drive name
         console.log('🔍 [reuniones_v2 - loadDriveOptions] Fetching personal drive data...');
         try {
-            const personalRes = await fetch('/drive/sync-subfolders');
+            const personalRes = await fetch('/drive/status');
             console.log('🔍 [reuniones_v2 - loadDriveOptions] Personal drive response status:', personalRes.status);
 
             if (personalRes.ok) {
                 const personalData = await personalRes.json();
                 console.log('🔍 [reuniones_v2 - loadDriveOptions] Personal drive data:', personalData);
+                driveStatusCache.personal = personalData;
 
                 if (personalData.root_folder) {
                     const personalOpt = document.createElement('option');
@@ -4935,6 +4965,7 @@ async function loadDriveOptions() {
                 }
             } else {
                 console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Personal drive request failed:', await personalRes.text());
+                driveStatusCache.personal = null;
             }
         } catch (e) {
             console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Could not load personal drive name:', e);
@@ -4944,18 +4975,20 @@ async function loadDriveOptions() {
             personalOpt.textContent = 'Personal';
             driveSelect.appendChild(personalOpt);
             console.log('📝 [reuniones_v2 - loadDriveOptions] Added fallback personal option');
+            driveStatusCache.personal = null;
         }
 
         // Load organization drive name (for both admin and colaborador)
         if (organizationId) {
             console.log('🔍 [reuniones_v2 - loadDriveOptions] Fetching organization drive data...');
             try {
-                const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
+                const orgRes = await fetch(`/api/organizations/${organizationId}/drive/status`);
                 console.log('🔍 [reuniones_v2 - loadDriveOptions] Organization drive response status:', orgRes.status);
 
                 if (orgRes.ok) {
                     const orgData = await orgRes.json();
                     console.log('🔍 [reuniones_v2 - loadDriveOptions] Organization drive data:', orgData);
+                    driveStatusCache.organization = orgData;
 
                     if (orgData.root_folder) {
                         const orgOpt = document.createElement('option');
@@ -4966,6 +4999,7 @@ async function loadDriveOptions() {
                     }
                 } else {
                     console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Organization drive request failed:', await orgRes.text());
+                    driveStatusCache.organization = null;
                 }
             } catch (e) {
                 console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Could not load organization drive name:', e);
@@ -4975,6 +5009,7 @@ async function loadDriveOptions() {
                 orgOpt.textContent = 'Organization';
                 driveSelect.appendChild(orgOpt);
                 console.log('📝 [reuniones_v2 - loadDriveOptions] Added fallback organization option');
+                driveStatusCache.organization = null;
             }
         }
 
@@ -5046,19 +5081,17 @@ async function loadDriveFolders() {
         reasoning: role === 'colaborador' ? 'colaborador can choose' : 'administrator choice'
     });
 
-    const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';
-    console.log('🔍 [reuniones_v2 - loadDriveFolders] Using endpoint:', endpoint);
     try {
-        const res = await fetch(endpoint);
-        console.log('🔍 [reuniones_v2 - loadDriveFolders] Fetch response status:', res.status);
+        const data = useOrg ? driveStatusCache.organization : driveStatusCache.personal;
+        console.log('🔍 [reuniones_v2 - loadDriveFolders] Using cached data:', data);
 
-        if (!res.ok) {
-            console.error('🔍 [reuniones_v2 - loadDriveFolders] Request failed with status:', res.status);
+        if (!data) {
+            console.warn('⚠️ [reuniones_v2 - loadDriveFolders] No drive data available for selection');
+            if (standardInfo) {
+                standardInfo.textContent = 'Conecta tu cuenta para ver las rutas automáticas.';
+            }
             return;
         }
-
-        const data = await res.json();
-        console.log('🔍 [reuniones_v2 - loadDriveFolders] Received data:', data);
 
         // Don't hide drive select for colaboradores anymore - they can choose
         console.log('🔍 [reuniones_v2 - loadDriveFolders] Drive select visibility:', {
@@ -5085,8 +5118,9 @@ async function loadDriveFolders() {
 
         if (standardInfo) {
             if (data.standard_subfolders) {
-                const transcriptionPath = data.standard_subfolders.transcriptions?.path || '—';
-                const audioPath = data.standard_subfolders.audio?.path || '—';
+                const standard = normalizeStandardFolders(data.standard_subfolders);
+                const transcriptionPath = standard.transcriptions?.path || '—';
+                const audioPath = standard.audio?.path || '—';
                 standardInfo.innerHTML = `
                     <p><strong>Transcripciones:</strong> ${transcriptionPath}</p>
                     <p><strong>Audio:</strong> ${audioPath}</p>
