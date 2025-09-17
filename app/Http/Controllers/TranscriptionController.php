@@ -10,9 +10,17 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use App\Jobs\ProcessChunkedTranscription;
+use App\Services\AudioConversionService;
 
 class TranscriptionController extends Controller
 {
+    private AudioConversionService $audioConversionService;
+
+    public function __construct(AudioConversionService $audioConversionService)
+    {
+        $this->audioConversionService = $audioConversionService;
+    }
+
     /**
      * Optimiza la configuración de transcripción para mejor detección automática de hablantes
      * Permite que AssemblyAI detecte automáticamente sin ser demasiado sensible
@@ -69,34 +77,22 @@ class TranscriptionController extends Controller
 
     public function store(Request $request)
     {
+        $acceptedFormats = ['mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'webm'];
+
         $request->validate([
-            'audio'    => 'required|file|max:102400', // Máximo 100MB
+            'audio'    => 'required|file|max:102400|mimes:' . implode(',', array_merge($acceptedFormats, ['mp4'])), // Máximo 100MB
             'language' => 'nullable|in:es,en,fr,de',
+        ], [
+            'audio.mimes' => 'Este sistema solo acepta archivos de audio en formato MP3, WAV, M4A (incluye MP4), FLAC, OGG, AAC o WebM.',
         ]);
 
         $file = $request->file('audio');
 
-        // Solo permitir formatos MP4/MP3 - NO WebM
         $mimeType = $file->getMimeType();
         $fileName = $file->getClientOriginalName();
+        $extension = strtolower($file->getClientOriginalExtension());
 
-        $isWebM = strpos($mimeType, 'webm') !== false ||
-                  strpos($fileName, '.webm') !== false;
-
-        // Rechazar archivos WebM
-        if ($isWebM) {
-            Log::warning('Archivo WebM rechazado', [
-                'tipo' => $mimeType,
-                'nombre' => $fileName,
-                'tamaño' => $file->getSize()
-            ]);
-
-            return response()->json([
-                'error' => 'Formato WebM no permitido',
-                'message' => 'Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3) para asegurar la calidad de transcripción.',
-                'accepted_formats' => ['audio/mp4', 'audio/mpeg']
-            ], 422);
-        }
+        $isWebM = $extension === 'webm' || ($mimeType && strpos($mimeType, 'webm') !== false);
 
         $isMP4 = strpos($mimeType, 'mp4') !== false ||
                  strpos($fileName, '.m4a') !== false;
@@ -104,7 +100,7 @@ class TranscriptionController extends Controller
         $isMP3 = strpos($mimeType, 'mpeg') !== false ||
                  strpos($fileName, '.mp3') !== false;
 
-        $isLargeAudio = $isMP4 || $isMP3;
+        $isLargeAudio = $isMP4 || $isMP3 || in_array($extension, $acceptedFormats, true);
 
         if ($isLargeAudio) {
             Log::info('Archivo de audio aceptado', [
@@ -112,7 +108,9 @@ class TranscriptionController extends Controller
                 'nombre' => $fileName,
                 'es_mp4' => $isMP4,
                 'es_mp3' => $isMP3,
-                'tamaño' => $file->getSize()
+                'tamaño' => $file->getSize(),
+                'formato_original' => strtoupper($extension ?: 'DESCONOCIDO'),
+                'formatos_aceptados' => ['MP3', 'WAV', 'M4A', 'FLAC', 'OGG', 'AAC', 'WebM'],
             ]);
             set_time_limit(7200); // 2 horas para archivos grandes
         } else {
@@ -132,6 +130,8 @@ class TranscriptionController extends Controller
             'language' => $language,
             'is_webm' => $isWebM,
             'is_mp3' => $isMP3,
+            'formato_original' => strtoupper($extension ?: 'DESCONOCIDO'),
+            'formatos_aceptados' => ['MP3', 'WAV', 'M4A', 'FLAC', 'OGG', 'AAC', 'WebM'],
         ]);
 
         // Log específico para archivos grandes
@@ -140,9 +140,38 @@ class TranscriptionController extends Controller
                 'file_size_mb' => round($file->getSize() / 1024 / 1024, 2),
                 'original_name' => $fileName,
                 'timeout_seconds' => 7200,
-                'formato' => $isMP3 ? 'MP3' : ($isMP4 ? 'MP4' : 'Otro'),
+                'formato' => strtoupper($extension ?: 'DESCONOCIDO'),
                 'expected_processing_time' => '1+ hours for long files',
             ]);
+        }
+
+        try {
+            $conversionResult = $this->audioConversionService->convertToMp3($filePath, $mimeType, $extension);
+        } catch (\Throwable $e) {
+            Log::error('Audio conversion to MP3 failed', [
+                'error' => $e->getMessage(),
+                'mime_type' => $mimeType,
+                'extension' => $extension,
+            ]);
+
+            return response()->json([
+                'error' => 'No se pudo convertir el audio a MP3.',
+                'details' => $e->getMessage(),
+            ], 500);
+        }
+
+        $filePath = $conversionResult['path'];
+        $mimeType = $conversionResult['mime_type'] ?? 'audio/mpeg';
+        $isMP3 = true;
+        $isMP4 = false;
+        $isLargeAudio = true;
+
+        if (($conversionResult['was_converted'] ?? false) === true) {
+            register_shutdown_function(static function () use ($filePath) {
+                if (is_string($filePath) && file_exists($filePath)) {
+                    @unlink($filePath);
+                }
+            });
         }
 
         if (empty($apiKey)) {
@@ -163,7 +192,10 @@ class TranscriptionController extends Controller
             ], 500);
         }
 
-        Log::info('Audio file loaded', ['size_bytes' => strlen($audioData)]);
+        Log::info('Audio file loaded', [
+            'size_bytes' => strlen($audioData),
+            'was_converted_to_mp3' => $conversionResult['was_converted'] ?? false,
+        ]);
 
         try {
             // Ajustar timeouts específicamente para archivos de audio grandes
