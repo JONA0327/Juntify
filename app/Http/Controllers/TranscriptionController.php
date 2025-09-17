@@ -455,44 +455,35 @@ class TranscriptionController extends Controller
         $uploadId = Str::uuid();
         $language = $request->input('language', 'es');
         $filename = $request->input('filename');
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        $acceptedFormats = [
+            'mp3'  => 'audio/mpeg',
+            'wav'  => 'audio/wav',
+            'm4a'  => 'audio/mp4',
+            'flac' => 'audio/flac',
+            'ogg'  => 'audio/ogg',
+            'aac'  => 'audio/aac',
+            'webm' => 'audio/webm',
+        ];
 
-        // Rechazar archivos WebM
-        $isWebM = strpos(strtolower($filename), '.webm') !== false;
-        if ($isWebM) {
-            Log::warning('WebM chunked upload rejected', [
-                'filename' => $filename,
-                'size_mb' => round($request->input('size') / 1024 / 1024, 2),
-                'chunks' => $request->input('chunks'),
-            ]);
-
-            return response()->json([
-                'error' => 'Formato WebM no permitido',
-                'message' => 'Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3) para asegurar la calidad de transcripción.',
-                'accepted_formats' => ['audio/mp4', 'audio/mpeg']
-            ], 422);
-        }
-
-        // Validar que sea MP4 o MP3
-        $isMP4 = strpos(strtolower($filename), '.m4a') !== false;
-        $isMP3 = strpos(strtolower($filename), '.mp3') !== false;
-
-        if (!$isMP4 && !$isMP3) {
+        if (!array_key_exists($extension, $acceptedFormats)) {
             Log::warning('Invalid audio format in chunked upload', [
                 'filename' => $filename,
-                'accepted_formats' => ['mp4', 'mp3']
+                'extension' => $extension,
+                'accepted_extensions' => array_keys($acceptedFormats),
             ]);
 
             return response()->json([
                 'error' => 'Formato de audio no soportado',
-                'message' => 'Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3).',
-                'accepted_formats' => ['audio/mp4', 'audio/mpeg']
+                'message' => 'Este sistema acepta archivos MP3, WAV, M4A, FLAC, OGG, AAC o WebM.',
+                'accepted_formats' => array_keys($acceptedFormats),
             ], 422);
         }
 
         Log::info('Valid audio format detected for chunked upload', [
             'filename' => $filename,
-            'is_mp4' => $isMP4,
-            'is_mp3' => $isMP3,
+            'extension' => $extension,
+            'mime_type' => $acceptedFormats[$extension],
             'size_mb' => round($request->input('size') / 1024 / 1024, 2),
             'chunks' => $request->input('chunks'),
         ]);
@@ -508,6 +499,10 @@ class TranscriptionController extends Controller
         $metadata = [
             'upload_id' => $uploadId,
             'filename' => $request->input('filename'),
+            'original_extension' => $extension,
+            'original_mime_type' => $acceptedFormats[$extension] ?? null,
+            'conversion_target' => 'mp3',
+            'conversion_required' => $extension !== 'mp3',
             'total_size' => $request->input('size'),
             'language' => $language,
             'chunks_expected' => $chunks,
@@ -517,7 +512,7 @@ class TranscriptionController extends Controller
 
         file_put_contents(
             storage_path("app/temp-uploads/{$uploadId}/metadata.json"),
-            json_encode($metadata)
+            json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
         );
 
         // Crear URLs para cada chunk (en este caso, solo necesitamos el endpoint)
