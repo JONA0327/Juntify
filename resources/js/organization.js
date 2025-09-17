@@ -556,7 +556,6 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         const attempt = async (url) => {
             return fetch(url, {
                 method: 'POST',
-                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
