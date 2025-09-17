@@ -612,6 +612,7 @@ class GroupController extends Controller
                 })->exists();
             if (!$stillInAnyGroup) {
                 $org->users()->detach($user->id);
+                $user->update(['current_organization_id' => null]);
             }
             $org->refreshMemberCount();
 
