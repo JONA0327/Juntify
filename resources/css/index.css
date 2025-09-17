@@ -126,15 +126,19 @@
         }
 
         .notifications-panel {
-            position: absolute;
-            right: 0;
-            top: 120%;
+            /* Cambiado a fixed para que no quede oculto bajo la navbar en páginas con overflow/transform */
+            position: fixed;
+            /* Se alinea con el botón (contenedor .notifications) usando un offset horizontal dinámico via JS si se necesita.
+               De momento se pega al lado derecho para asegurar visibilidad en perfil. */
+            right: 1rem;
+            /* Altura navbar estimada ~64px; dejamos margen para que no tape la barra */
+            top: 70px;
             background: rgba(10, 14, 39, 0.98);
             border: 1px solid rgba(59, 130, 246, 0.1);
             border-radius: 8px;
             padding: 0.75rem 0.75rem 0.75rem 0.75rem;
             width: 360px;
-            z-index: 1000;
+            z-index: 5000; /* Mayor que toasts (9500) si se necesita se puede subir, pero suficiente para superar navbar */
             backdrop-filter: blur(10px);
             max-height: 400px;
             overflow-y: auto;
