@@ -2603,8 +2603,8 @@ class MeetingController extends Controller
                 'pending_id' => 'required|integer',
                 'meeting_name' => 'required|string',
                 'root_folder' => 'required|string',
-                'transcription_subfolder' => 'nullable|string',
-                'audio_subfolder' => 'nullable|string',
+                'transcription_subfolder' => 'prohibited',
+                'audio_subfolder' => 'prohibited',
                 'transcription_data' => 'required',
                 'analysis_results' => 'required'
             ]);
@@ -2643,9 +2643,7 @@ class MeetingController extends Controller
 
             Log::info('Datos recibidos para completePendingMeeting', [
                 'root_folder' => $request->input('root_folder'),
-                'transcription_subfolder' => $request->input('transcription_subfolder'),
-                'audio_subfolder' => $request->input('audio_subfolder'),
-                'all_inputs' => $request->all()
+                'all_inputs' => $request->except(['transcription_subfolder', 'audio_subfolder'])
             ]);
 
             // Determinar carpetas de destino y token
@@ -2705,47 +2703,13 @@ class MeetingController extends Controller
                 $this->setGoogleDriveToken($user);
             }
 
-            $transcriptionFolderId = $rootFolder->google_id;
-            if ($request->input('transcription_subfolder')) {
-                if ($usingOrgDrive) {
-                    $sub = OrganizationSubfolder::where('google_id', $request->input('transcription_subfolder'))
-                        ->where('organization_folder_id', $rootFolder->id)
-                        ->first();
-                } else {
-                    $sub = \App\Models\Subfolder::where('google_id', $request->input('transcription_subfolder'))
-                        ->where('folder_id', $rootFolder->id)
-                        ->first();
-                }
-                if ($sub) {
-                    $transcriptionFolderId = $sub->google_id;
-                } else {
-                    Log::warning('Subcarpeta de transcripción no encontrada', [
-                        'transcription_subfolder' => $request->input('transcription_subfolder'),
-                        'root_folder_id' => $rootFolder->id,
-                    ]);
-                }
-            }
-
-            $audioFolderId = $rootFolder->google_id;
-            if ($request->input('audio_subfolder')) {
-                if ($usingOrgDrive) {
-                    $sub = OrganizationSubfolder::where('google_id', $request->input('audio_subfolder'))
-                        ->where('organization_folder_id', $rootFolder->id)
-                        ->first();
-                } else {
-                    $sub = \App\Models\Subfolder::where('google_id', $request->input('audio_subfolder'))
-                        ->where('folder_id', $rootFolder->id)
-                        ->first();
-                }
-                if ($sub) {
-                    $audioFolderId = $sub->google_id;
-                } else {
-                    Log::warning('Subcarpeta de audio no encontrada', [
-                        'audio_subfolder' => $request->input('audio_subfolder'),
-                        'root_folder_id' => $rootFolder->id,
-                    ]);
-                }
-            }
+            $standardFolders = DriveController::ensureStandardMeetingFolders($rootFolder);
+            $transcriptionFolderId = $standardFolders['transcriptions']['google_id'];
+            $audioFolderId = $standardFolders['audio']['google_id'];
+            $drivePaths = [
+                'transcriptions' => $standardFolders['transcriptions']['path'],
+                'audio'          => $standardFolders['audio']['path'],
+            ];
             // 1. Mover y renombrar el audio en Google Drive
             $oldFileId = $processInfo['drive_file_id'];
             $audioExtension = pathinfo($processInfo['original_name'], PATHINFO_EXTENSION);
@@ -2889,11 +2853,17 @@ class MeetingController extends Controller
                 $speakerCount = count($speakers);
             }
 
+            $drivePathSummary = implode(' | ', [
+                'Transcripciones: ' . $drivePaths['transcriptions'],
+                'Audio: ' . $drivePaths['audio'],
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Reunión procesada y guardada exitosamente',
                 'transcription_id' => $transcription->id,
-                'drive_path' => $newMeetingName,
+                'drive_path' => $drivePathSummary,
+                'drive_paths' => $drivePaths,
                 'audio_duration' => $audioDuration,
                 'speaker_count' => $speakerCount,
                 'tasks' => $tasks,

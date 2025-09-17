@@ -162,9 +162,32 @@ class OrganizationDriveController extends Controller
             );
         }
 
+        $standardFolders = DriveController::ensureStandardMeetingFolders($root, null, $subfolders);
+        $subfolderCollection = collect($subfolders);
+        if (! $subfolderCollection->contains(fn ($item) => $item->id === $standardFolders['audio']['model']->id)) {
+            $subfolders[] = $standardFolders['audio']['model'];
+        }
+        if (! $subfolderCollection->contains(fn ($item) => $item->id === $standardFolders['transcriptions']['model']->id)) {
+            $subfolders[] = $standardFolders['transcriptions']['model'];
+        }
+
         return response()->json([
-            'root_folder' => $root,
-            'subfolders'  => $subfolders,
+            'root_folder'         => $root->fresh(),
+            'subfolders'          => $subfolders,
+            'standard_subfolders' => [
+                'audio'          => [
+                    'id'        => $standardFolders['audio']['model']->id,
+                    'google_id' => $standardFolders['audio']['google_id'],
+                    'name'      => $standardFolders['audio']['name'],
+                    'path'      => $standardFolders['audio']['path'],
+                ],
+                'transcriptions' => [
+                    'id'        => $standardFolders['transcriptions']['model']->id,
+                    'google_id' => $standardFolders['transcriptions']['google_id'],
+                    'name'      => $standardFolders['transcriptions']['name'],
+                    'path'      => $standardFolders['transcriptions']['path'],
+                ],
+            ],
         ]);
     }
 

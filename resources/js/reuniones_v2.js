@@ -5016,8 +5016,7 @@ async function loadDriveFolders() {
     const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
     const driveSelect = document.getElementById('drive-select');
     const rootSelect = document.getElementById('root-folder-select');
-    const transcriptionSelect = document.getElementById('transcription-subfolder-select');
-    const audioSelect = document.getElementById('audio-subfolder-select');
+    const standardInfo = document.getElementById('standard-folder-info');
 
     console.log('🔍 [reuniones_v2 - loadDriveFolders] Starting with debug info:', {
         role,
@@ -5084,43 +5083,26 @@ async function loadDriveFolders() {
             }
         }
 
-        const populate = (select, selectName) => {
-            if (!select) {
-                console.warn(`⚠️ [reuniones_v2 - loadDriveFolders] ${selectName} select not found`);
-                return;
-            }
-            select.innerHTML = '';
-            const list = data.subfolders || [];
-            console.log(`🔍 [reuniones_v2 - loadDriveFolders] Populating ${selectName} with ${list.length} subfolders:`, list);
-
-            if (list.length) {
-                const none = document.createElement('option');
-                none.value = '';
-                none.textContent = 'Sin subcarpeta';
-                select.appendChild(none);
-                list.forEach(f => {
-                    const opt = document.createElement('option');
-                    opt.value = f.google_id;
-                    opt.textContent = `📂 ${f.name}`;
-                    select.appendChild(opt);
-                    console.log(`✅ [reuniones_v2 - loadDriveFolders] Added ${selectName} subfolder:`, f.name);
-                });
+        if (standardInfo) {
+            if (data.standard_subfolders) {
+                const transcriptionPath = data.standard_subfolders.transcriptions?.path || '—';
+                const audioPath = data.standard_subfolders.audio?.path || '—';
+                standardInfo.innerHTML = `
+                    <p><strong>Transcripciones:</strong> ${transcriptionPath}</p>
+                    <p><strong>Audio:</strong> ${audioPath}</p>
+                `;
             } else {
-                const opt = document.createElement('option');
-                opt.value = '';
-                opt.textContent = 'No se encontraron subcarpetas';
-                select.appendChild(opt);
-                console.log(`📝 [reuniones_v2 - loadDriveFolders] No subfolders found for ${selectName}`);
+                standardInfo.textContent = 'Selecciona una carpeta principal para ver las rutas estándar.';
             }
-        };
-
-        populate(transcriptionSelect, 'transcription');
-        populate(audioSelect, 'audio');
+        }
 
         console.log('✅ [reuniones_v2 - loadDriveFolders] Successfully loaded drive folders');
 
     } catch (e) {
         console.error('❌ [reuniones_v2 - loadDriveFolders] Error loading drive folders:', e);
+        if (standardInfo) {
+            standardInfo.textContent = 'No se pudieron cargar las carpetas estándar.';
+        }
     }
 }
 

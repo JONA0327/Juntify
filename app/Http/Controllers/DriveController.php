@@ -35,6 +35,119 @@ class DriveController extends Controller
         Log::info('DriveController constructor called', ['user' => Auth::user() ? Auth::user()->username : null]);
     }
 
+    /**
+     * Ensure standard meeting subfolders (Audio/Transcripciones) exist for the provided root folder.
+     *
+     * @param  Folder|OrganizationFolder  $rootFolder
+     * @param  GoogleServiceAccount|null  $serviceAccount
+     * @param  iterable|null  $knownSubfolders
+     * @return array{
+     *     audio: array{name:string,google_id:string,model:mixed,path:string},
+     *     transcriptions: array{name:string,google_id:string,model:mixed,path:string},
+     *     root: Folder|OrganizationFolder
+     * }
+     */
+    public static function ensureStandardMeetingFolders(
+        Folder|OrganizationFolder $rootFolder,
+        ?GoogleServiceAccount $serviceAccount = null,
+        ?iterable $knownSubfolders = null
+    ): array {
+        $serviceAccount ??= app(GoogleServiceAccount::class);
+        $serviceEmail = config('services.google.service_account_email');
+        $isOrg = $rootFolder instanceof OrganizationFolder;
+        $modelClass = $isOrg ? OrganizationSubfolder::class : Subfolder::class;
+        $foreignKey = $isOrg ? 'organization_folder_id' : 'folder_id';
+
+        if ($knownSubfolders === null) {
+            $knownSubfolders = $modelClass::where($foreignKey, $rootFolder->id)->get();
+        }
+
+        $existing = [];
+        foreach ($knownSubfolders as $subfolder) {
+            $name = is_array($subfolder) ? ($subfolder['name'] ?? null) : ($subfolder->name ?? null);
+            if (! $name) {
+                continue;
+            }
+            $key = mb_strtolower($name);
+            $existing[$key] = [
+                'id'    => is_array($subfolder) ? ($subfolder['google_id'] ?? null) : ($subfolder->google_id ?? null),
+                'model' => $subfolder instanceof \Illuminate\Database\Eloquent\Model ? $subfolder : null,
+            ];
+        }
+
+        try {
+            $serviceAccount->shareFolder($rootFolder->google_id, $serviceEmail);
+        } catch (\Throwable $e) {
+            if (! str_contains(strtolower($e->getMessage()), 'already')) {
+                Log::debug('ensureStandardMeetingFolders root share failed', [
+                    'root'  => $rootFolder->google_id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $results = [
+            'root' => $rootFolder,
+        ];
+        $standardMap = [
+            'transcriptions' => 'Transcripciones',
+            'audio'          => 'Audio',
+        ];
+
+        foreach ($standardMap as $key => $label) {
+            $lookup = mb_strtolower($label);
+            $record = $existing[$lookup]['model'] ?? null;
+            $folderId = $existing[$lookup]['id'] ?? null;
+
+            if ($record instanceof \Illuminate\Database\Eloquent\Model && $record->google_id) {
+                $folderId = $record->google_id;
+            }
+
+            if (! $folderId) {
+                try {
+                    $folderId = $serviceAccount->createFolder($label, $rootFolder->google_id);
+                } catch (\Throwable $e) {
+                    Log::error('ensureStandardMeetingFolders create failed', [
+                        'root'  => $rootFolder->google_id,
+                        'name'  => $label,
+                        'error' => $e->getMessage(),
+                    ]);
+                    throw $e;
+                }
+            }
+
+            $record = $modelClass::updateOrCreate(
+                [
+                    $foreignKey => $rootFolder->id,
+                    'name'      => $label,
+                ],
+                [
+                    'google_id' => $folderId,
+                ]
+            );
+
+            try {
+                $serviceAccount->shareFolder($folderId, $serviceEmail);
+            } catch (\Throwable $e) {
+                if (! str_contains(strtolower($e->getMessage()), 'already')) {
+                    Log::debug('ensureStandardMeetingFolders share failed', [
+                        'folder' => $folderId,
+                        'error'  => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            $results[$key] = [
+                'name'      => $label,
+                'google_id' => $folderId,
+                'model'     => $record,
+                'path'      => trim(($rootFolder->name ? $rootFolder->name . '/' : '') . $label, '/'),
+            ];
+        }
+
+        return $results;
+    }
+
     public function createMainFolder(Request $request)
     {
         $request->validate([
@@ -163,6 +276,15 @@ class DriveController extends Controller
             );
         }
 
+        $standardFolders = self::ensureStandardMeetingFolders($folder, null, $subfolders);
+        $subfolderCollection = collect($subfolders);
+        if (! $subfolderCollection->contains(fn ($item) => $item->id === $standardFolders['audio']['model']->id)) {
+            $subfolders[] = $standardFolders['audio']['model'];
+        }
+        if (! $subfolderCollection->contains(fn ($item) => $item->id === $standardFolders['transcriptions']['model']->id)) {
+            $subfolders[] = $standardFolders['transcriptions']['model'];
+        }
+
         try {
             $this->drive->shareFolder(
                 $request->input('id'),
@@ -176,9 +298,23 @@ class DriveController extends Controller
         }
 
         return response()->json([
-            'id'         => $request->input('id'),
-            'name'       => $folderName,
-            'subfolders' => $subfolders,
+            'id'                  => $request->input('id'),
+            'name'                => $folderName,
+            'subfolders'          => $subfolders,
+            'standard_subfolders' => [
+                'audio'          => [
+                    'id'        => $standardFolders['audio']['model']->id,
+                    'google_id' => $standardFolders['audio']['google_id'],
+                    'name'      => $standardFolders['audio']['name'],
+                    'path'      => $standardFolders['audio']['path'],
+                ],
+                'transcriptions' => [
+                    'id'        => $standardFolders['transcriptions']['model']->id,
+                    'google_id' => $standardFolders['transcriptions']['google_id'],
+                    'name'      => $standardFolders['transcriptions']['name'],
+                    'path'      => $standardFolders['transcriptions']['path'],
+                ],
+            ],
         ]);
     }
 
@@ -315,10 +451,34 @@ class DriveController extends Controller
                 );
             }
 
+            $standardFolders = self::ensureStandardMeetingFolders($rootFolder, null, $subfolders);
+
+            $subfolderCollection = collect($subfolders);
+            if (! $subfolderCollection->contains(fn ($item) => $item->id === $standardFolders['audio']['model']->id)) {
+                $subfolders[] = $standardFolders['audio']['model'];
+            }
+            if (! $subfolderCollection->contains(fn ($item) => $item->id === $standardFolders['transcriptions']['model']->id)) {
+                $subfolders[] = $standardFolders['transcriptions']['model'];
+            }
+
             // 7. Devolver JSON con el resultado
             return response()->json([
-                'root_folder' => $rootFolder,
-                'subfolders'  => $subfolders,
+                'root_folder'         => $rootFolder->fresh(),
+                'subfolders'          => $subfolders,
+                'standard_subfolders' => [
+                    'audio'          => [
+                        'id'        => $standardFolders['audio']['model']->id,
+                        'google_id' => $standardFolders['audio']['google_id'],
+                        'name'      => $standardFolders['audio']['name'],
+                        'path'      => $standardFolders['audio']['path'],
+                    ],
+                    'transcriptions' => [
+                        'id'        => $standardFolders['transcriptions']['model']->id,
+                        'google_id' => $standardFolders['transcriptions']['google_id'],
+                        'name'      => $standardFolders['transcriptions']['name'],
+                        'path'      => $standardFolders['transcriptions']['path'],
+                    ],
+                ],
             ], 200);
 
         } catch (GoogleServiceException $e) {
@@ -796,8 +956,8 @@ class DriveController extends Controller
         $v = $request->validate([
             'meetingName'            => 'required|string',
             'rootFolder'             => 'required|string',
-            'transcriptionSubfolder' => 'nullable|string',
-            'audioSubfolder'         => 'nullable|string',
+            'transcriptionSubfolder' => 'prohibited',
+            'audioSubfolder'         => 'prohibited',
             'transcriptionData'      => 'required',
             'analysisResults'        => 'required',
             'audioData'              => 'required|string|max:' . (int) ceil($maxAudioBytes * 4 / 3),      // Base64 (~133MB)
@@ -853,30 +1013,6 @@ class DriveController extends Controller
 
         if ($useOrgDrive) {
             $rootFolder = $organizationFolder;
-            $transcriptionFolderId = $rootFolder->google_id;
-            if ($v['transcriptionSubfolder']) {
-                $sub = OrganizationSubfolder::where(function($q) use ($v) {
-                    $q->where('google_id', $v['transcriptionSubfolder'])
-                      ->orWhere('id', $v['transcriptionSubfolder']);
-                })->first();
-                if ($sub) {
-                    $transcriptionFolderId = $sub->google_id;
-                } else {
-                    return response()->json(['message' => 'ID de carpeta o subcarpeta inválido'], 400);
-                }
-            }
-            $audioFolderId = $rootFolder->google_id;
-            if ($v['audioSubfolder']) {
-                $sub = OrganizationSubfolder::where(function($q) use ($v) {
-                    $q->where('google_id', $v['audioSubfolder'])
-                      ->orWhere('id', $v['audioSubfolder']);
-                })->first();
-                if ($sub) {
-                    $audioFolderId = $sub->google_id;
-                } else {
-                    return response()->json(['message' => 'ID de carpeta o subcarpeta inválido'], 400);
-                }
-            }
         } else {
             // Personal drive
             $token = GoogleToken::where('username', $user->username)->first();
@@ -893,69 +1029,18 @@ class DriveController extends Controller
             if (!$rootFolder) {
                 return response()->json(['message' => 'Carpeta principal no encontrada en la base de datos'], 400);
             }
-
-            $transcriptionFolderId = $rootFolder->google_id;
-            if ($v['transcriptionSubfolder']) {
-                $sub = Subfolder::where(function($q) use ($v) {
-                    $q->where('google_id', $v['transcriptionSubfolder'])
-                      ->orWhere('id', $v['transcriptionSubfolder']);
-                })->first();
-                if ($sub) {
-                    $transcriptionFolderId = $sub->google_id;
-                } else {
-                    return response()->json(['message' => 'ID de carpeta o subcarpeta inválido'], 400);
-                }
-            }
-            $audioFolderId = $rootFolder->google_id;
-            if ($v['audioSubfolder']) {
-                $sub = Subfolder::where(function($q) use ($v) {
-                    $q->where('google_id', $v['audioSubfolder'])
-                      ->orWhere('id', $v['audioSubfolder']);
-                })->first();
-                if ($sub) {
-                    $audioFolderId = $sub->google_id;
-                } else {
-                    return response()->json(['message' => 'ID de carpeta o subcarpeta inválido'], 400);
-                }
-            }
         }
+
+        $standardFolders = self::ensureStandardMeetingFolders($rootFolder);
+        $transcriptionFolderId = $standardFolders['transcriptions']['google_id'];
+        $audioFolderId = $standardFolders['audio']['google_id'];
+        $drivePaths = [
+            'transcriptions' => $standardFolders['transcriptions']['path'],
+            'audio'          => $standardFolders['audio']['path'],
+        ];
 
         $accountEmail = config('services.google.service_account_email');
         $serviceAccount = app(GoogleServiceAccount::class);
-
-        try {
-            $serviceAccount->shareFolder($transcriptionFolderId, $accountEmail);
-        } catch (GoogleServiceException $e) {
-            if (! str_contains(strtolower($e->getMessage()), 'already')) {
-                Log::error('saveResults share failure', [
-                    'error'                 => $e->getMessage(),
-                    'transcription_folder'  => $transcriptionFolderId,
-                    'audio_folder'          => $audioFolderId,
-                    'service_account_email' => $accountEmail,
-                ]);
-
-                return response()->json([
-                    'message' => 'Error de Drive: ' . $e->getMessage(),
-                ], 502);
-            }
-        }
-
-        try {
-            $serviceAccount->shareFolder($audioFolderId, $accountEmail);
-        } catch (GoogleServiceException $e) {
-            if (! str_contains(strtolower($e->getMessage()), 'already')) {
-                Log::error('saveResults share failure', [
-                    'error'                 => $e->getMessage(),
-                    'transcription_folder'  => $transcriptionFolderId,
-                    'audio_folder'          => $audioFolderId,
-                    'service_account_email' => $accountEmail,
-                ]);
-
-                return response()->json([
-                    'message' => 'Error de Drive: ' . $e->getMessage(),
-                ], 502);
-            }
-        }
 
         try {
             // 2. Carpetas en Drive
@@ -1046,18 +1131,10 @@ class DriveController extends Controller
             $audioUrl      = $serviceAccount->getFileLink($audioFileId);
 
             // 7. Calcula información adicional
-            $rootName = $rootFolder->name ?? '';
-            $drivePath = $rootName;
-
-            $subfolderId = $v['transcriptionSubfolder'] ?: $v['audioSubfolder'];
-            if ($subfolderId) {
-                $subName = $useOrgDrive
-                    ? OrganizationSubfolder::where('google_id', $subfolderId)->value('name')
-                    : Subfolder::where('google_id', $subfolderId)->value('name');
-                if ($subName) {
-                    $drivePath .= "/{$subName}";
-                }
-            }
+            $drivePath = implode(' | ', [
+                'Transcripciones: ' . $drivePaths['transcriptions'],
+                'Audio: ' . $drivePaths['audio'],
+            ]);
 
             $duration = 0;
             $speakers = [];
@@ -1145,6 +1222,7 @@ class DriveController extends Controller
                 'transcript_drive_id'     => $transcriptFileId,
                 'transcript_download_url' => $transcriptUrl,
                 'drive_path'              => $drivePath,
+                'drive_paths'             => $drivePaths,
                 'audio_duration'          => $duration,
                 'speaker_count'           => $speakerCount,
                 'tasks'                   => $savedTasks ?? [],

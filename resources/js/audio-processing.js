@@ -150,9 +150,11 @@ let currentSegmentIndex = null;
 let segmentEndHandler = null;
 let analysisResults = null;
 let finalDrivePath = '';
+let finalDrivePaths = null;
 let finalAudioDuration = 0;
 let finalSpeakerCount = 0;
 let finalTasks = [];
+let standardDrivePaths = null;
 
 // Mensajes que se mostrarán mientras se genera la transcripción
 const typingMessages = [
@@ -1474,8 +1476,7 @@ async function loadDriveFolders() {
     const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
     const driveSelect = document.getElementById('drive-select');
     const rootSelect = document.getElementById('root-folder-select');
-    const transcriptionSelect = document.getElementById('transcription-subfolder-select');
-    const audioSelect = document.getElementById('audio-subfolder-select');
+    const standardInfo = document.getElementById('standard-folder-info');
 
     console.log('🔍 [loadDriveFolders] Starting with debug info:', {
         role,
@@ -1560,43 +1561,33 @@ async function loadDriveFolders() {
             }
         }
 
-        const populateSubSelect = (select, selectName) => {
-            if (!select) {
-                console.warn(`⚠️ [loadDriveFolders] ${selectName} select not found`);
-                return;
-            }
-            select.innerHTML = '';
-            const list = data.subfolders || [];
-            console.log(`🔍 [loadDriveFolders] Populating ${selectName} with ${list.length} subfolders:`, list);
+        standardDrivePaths = null;
+        if (data.standard_subfolders) {
+            standardDrivePaths = {
+                transcriptions: data.standard_subfolders.transcriptions?.path || '',
+                audio: data.standard_subfolders.audio?.path || ''
+            };
+        }
 
-            if (list.length) {
-                const noneOpt = document.createElement('option');
-                noneOpt.value = '';
-                noneOpt.textContent = 'Sin subcarpeta';
-                select.appendChild(noneOpt);
-                list.forEach(f => {
-                    const opt = document.createElement('option');
-                    opt.value = f.google_id;
-                    opt.textContent = `📂 ${f.name}`;
-                    select.appendChild(opt);
-                    console.log(`✅ [loadDriveFolders] Added ${selectName} subfolder:`, f.name);
-                });
+        if (standardInfo) {
+            if (standardDrivePaths) {
+                standardInfo.innerHTML = `
+                    <p><strong>Transcripciones:</strong> ${standardDrivePaths.transcriptions || '—'}</p>
+                    <p><strong>Audio:</strong> ${standardDrivePaths.audio || '—'}</p>
+                `;
             } else {
-                const opt = document.createElement('option');
-                opt.value = '';
-                opt.textContent = 'No se encontraron subcarpetas';
-                select.appendChild(opt);
-                console.log(`📝 [loadDriveFolders] No subfolders found for ${selectName}`);
+                standardInfo.textContent = 'Selecciona una carpeta principal para ver las rutas estándar.';
             }
-        };
-
-        populateSubSelect(transcriptionSelect, 'transcription');
-        populateSubSelect(audioSelect, 'audio');
+        }
 
         console.log('✅ [loadDriveFolders] Successfully loaded drive folders');
 
     } catch (e) {
         console.error('❌ [loadDriveFolders] Error syncing subfolders:', e);
+        standardDrivePaths = null;
+        if (standardInfo) {
+            standardInfo.textContent = 'No se pudieron cargar las carpetas estándar.';
+        }
         showNotification('No se pudo conectar con el servidor', 'error');
     }
 }
@@ -1711,8 +1702,6 @@ function downloadAudio() {
 async function saveToDatabase() {
     const meetingName = document.getElementById('meeting-name').value.trim();
     const rootFolder = document.getElementById('root-folder-select').value;
-    const transcriptionSubfolder = document.getElementById('transcription-subfolder-select').value;
-    const audioSubfolder = document.getElementById('audio-subfolder-select').value;
 
     if (!meetingName) {
         showNotification('Por favor ingresa un nombre para la reunión', 'error');
@@ -1720,7 +1709,7 @@ async function saveToDatabase() {
     }
 
     showStep(7);
-    const result = await processDatabaseSave(meetingName, rootFolder, transcriptionSubfolder, audioSubfolder);
+    const result = await processDatabaseSave(meetingName, rootFolder);
     if (!result.success) {
         const errorEl = document.getElementById('analysis-error-message');
         if (errorEl) {
@@ -1733,7 +1722,7 @@ async function saveToDatabase() {
 
 // ===== PASO 7: GUARDANDO EN BD =====
 
-async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfolder, audioSubfolder) {
+async function processDatabaseSave(meetingName, rootFolder) {
     const progressBar = document.getElementById('save-progress');
     const progressText = document.getElementById('save-progress-text');
     const progressPercent = document.getElementById('save-progress-percent');
@@ -1775,6 +1764,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
         if (log) log.innerHTML = '';
     };
 
+    finalDrivePaths = null;
     resetUI();
     addMessage('Iniciando guardado de resultados');
 
@@ -1828,8 +1818,6 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                 pending_id: window.pendingAudioInfo.pendingId,
                 meeting_name: meetingName,
                 root_folder: rootFolder,
-                transcription_subfolder: transcriptionSubfolder,
-                audio_subfolder: audioSubfolder,
                 transcription_data: transcription,
                 analysis_results: analysis
             });
@@ -1841,8 +1829,6 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                     pending_id: window.pendingAudioInfo.pendingId,
                     meeting_name: meetingName,
                     root_folder: rootFolder,
-                    transcription_subfolder: transcriptionSubfolder,
-                    audio_subfolder: audioSubfolder,
                     transcription_data: transcription,
                     analysis_results: analysis
                 })
@@ -1897,6 +1883,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
             }
 
             finalDrivePath = result.drive_path || '';
+            finalDrivePaths = result.drive_paths || null;
             finalAudioDuration = result.audio_duration || 0;
             finalSpeakerCount = result.speaker_count || 0;
             finalTasks = result.tasks || [];
@@ -1938,8 +1925,6 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                 body: JSON.stringify({
                     meetingName,
                     rootFolder,
-                    transcriptionSubfolder,
-                    audioSubfolder,
                     transcriptionData: transcription,
                     analysisResults: analysis,
                     audioData: audio,
@@ -1974,6 +1959,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
 
             const result = await response.json();
             finalDrivePath = result.drive_path || '';
+            finalDrivePaths = result.drive_paths || null;
             finalAudioDuration = result.audio_duration || 0;
             finalSpeakerCount = result.speaker_count || 0;
             finalTasks = result.tasks || [];
@@ -2059,9 +2045,16 @@ function showCompletion({ drivePath, audioDuration, speakerCount, tasks, driveTy
 
     const pathEl = document.getElementById('completion-drive-path');
     if (pathEl) {
-        // Mejorar el mensaje para mostrar el tipo de drive
         const driveTypeText = driveType === 'organization' ? 'Drive Organizacional' : 'Drive Personal';
-        pathEl.textContent = `${driveTypeText}: ${drivePath || ''}`;
+        if (finalDrivePaths) {
+            pathEl.innerHTML = `
+                <strong>${driveTypeText}</strong><br>
+                <span>Transcripciones: ${finalDrivePaths.transcriptions || '—'}</span><br>
+                <span>Audio: ${finalDrivePaths.audio || '—'}</span>
+            `;
+        } else {
+            pathEl.textContent = `${driveTypeText}: ${drivePath || ''}`;
+        }
     }
 
     const durationEl = document.getElementById('completion-audio-duration');
@@ -2287,14 +2280,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         audioPlayer.addEventListener('timeupdate', updateAudioProgress);
         audioPlayer.addEventListener('loadedmetadata', updateAudioProgress);
         audioPlayer.addEventListener('ended', stopAudioPlayback);
-    }
-
-    const toggleSubfolders = document.getElementById('toggle-subfolders');
-    const subfolderFields = document.getElementById('subfolder-fields');
-    if (toggleSubfolders && subfolderFields) {
-        toggleSubfolders.addEventListener('change', (e) => {
-            subfolderFields.style.display = e.target.checked ? 'block' : 'none';
-        });
     }
 
     // Verificar si es un audio pendiente

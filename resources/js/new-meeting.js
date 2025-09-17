@@ -406,6 +406,43 @@ async function rebuildDriveSelectOptions() {
     }
 }
 
+async function updateStandardFolderInfo(selectedDrive) {
+    const standardInfo = document.getElementById('standard-folder-info');
+    if (!standardInfo) return;
+
+    const organizationId = window.currentOrganizationId;
+    if (selectedDrive === 'organization' && !organizationId) {
+        standardInfo.textContent = 'Conecta una organización para ver las rutas estándar.';
+        return;
+    }
+
+    const endpoint = selectedDrive === 'organization'
+        ? `/api/organizations/${organizationId}/drive/subfolders`
+        : '/drive/sync-subfolders';
+
+    try {
+        const response = await fetch(endpoint);
+        if (!response.ok) {
+            throw new Error(`Failed to load folder info (${response.status})`);
+        }
+
+        const data = await response.json();
+        if (data.standard_subfolders) {
+            const transcriptionPath = data.standard_subfolders.transcriptions?.path || '—';
+            const audioPath = data.standard_subfolders.audio?.path || '—';
+            standardInfo.innerHTML = `
+                <p><strong>Transcripciones:</strong> ${transcriptionPath}</p>
+                <p><strong>Audio:</strong> ${audioPath}</p>
+            `;
+        } else {
+            standardInfo.textContent = 'Selecciona una carpeta principal para ver las rutas estándar.';
+        }
+    } catch (error) {
+        console.warn('⚠️ [new-meeting] Error loading standard folder info:', error);
+        standardInfo.textContent = 'No se pudieron cargar las carpetas estándar.';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // Limpiar estado de descarte de audio al llegar a nueva reunión
     try {
@@ -437,12 +474,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             driveSelect.value = saved;
         }
 
+        await updateStandardFolderInfo(driveSelect.value);
+
         driveSelect.addEventListener('change', () => {
             try {
                 sessionStorage.setItem('selectedDrive', driveSelect.value);
             } catch (error) {
                 console.warn('⚠️ [new-meeting] Could not persist drive selection:', error);
             }
+            updateStandardFolderInfo(driveSelect.value);
         });
     }
 });
