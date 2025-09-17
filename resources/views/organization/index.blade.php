@@ -32,7 +32,7 @@
         @include('partials.navbar')
         @include('partials.mobile-nav')
 
-        <main class="w-full pl-24 pt-24" style="margin-top:130px;">
+        <main class="w-full pt-24 mt-20 sm:mt-24 lg:mt-32 pl-4 pr-4 sm:px-6 lg:pl-24 lg:pr-10">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" x-data="organizationPage(@js($organizations))">
                 <div x-show="showAlert" :class="`status-alert ${alertType}`" x-text="alertMessage"></div>
                 <!-- Modal de Éxito (dentro del scope de Alpine) -->
