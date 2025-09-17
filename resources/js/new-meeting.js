@@ -1605,19 +1605,35 @@ function setupFileUpload() {
 
 // Manejar la selección de archivo
 function handleFileSelection(file) {
-    // Validar que NO sea WebM
-    const isWebM = file.type.includes('webm') || file.name.toLowerCase().includes('.webm');
-    if (isWebM) {
-        showError('❌ Archivos WebM no están permitidos. Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3) para asegurar la calidad de transcripción.');
-        return;
-    }
+    const normalizedType = (file.type || '').toLowerCase();
+    const normalizedName = file.name.toLowerCase();
 
-    // Solo permitir formatos MP4/MP3
-    const validTypes = ['audio/mp3', 'audio/m4a', 'audio/mpeg', 'audio/mp4'];
-    const validExtensions = /\.(mp3|m4a)$/i;
+    const validMimeTypes = [
+        'audio/mpeg',
+        'audio/mp3',
+        'audio/mp4',
+        'video/mp4',
+        'audio/m4a',
+        'audio/x-m4a',
+        'audio/aac',
+        'audio/x-aac',
+        'audio/wav',
+        'audio/x-wav',
+        'audio/wave',
+        'audio/ogg',
+        'audio/webm',
+        'video/webm',
+        'audio/flac',
+        'audio/x-flac'
+    ];
 
-    if (!validTypes.includes(file.type) && !file.name.match(validExtensions)) {
-        showError('❌ Tipo de archivo no soportado. Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3).');
+    const validExtensions = /\.(mp3|m4a|mp4|aac|wav|wave|ogg|webm|flac)$/i;
+
+    const hasValidMime = normalizedType && validMimeTypes.some((type) => normalizedType === type || normalizedType.startsWith(`${type};`));
+    const hasValidExtension = validExtensions.test(normalizedName);
+
+    if (!hasValidMime && !hasValidExtension) {
+        showError('❌ Tipo de archivo no soportado. Este sistema acepta archivos MP3 (.mp3), MP4/M4A (.mp4/.m4a), WAV (.wav), OGG (.ogg), WebM (.webm), FLAC (.flac) o AAC (.aac).');
         return;
     }
 
