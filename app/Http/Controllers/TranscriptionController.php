@@ -287,7 +287,7 @@ class TranscriptionController extends Controller
 
             $baseConfig = [
                 'audio_url'                => $uploadUrl,
-                'language_code'           => 'es',
+                'language_code'           => $language,
                 'punctuate'               => true,
                 'format_text'             => false,  // Desactivado para mejor speaker detection
                 'dual_channel'            => false,
