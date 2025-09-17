@@ -122,6 +122,10 @@
                             <option value="organization">Organization</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">Carpetas estándar</label>
+                        <div id="standard-folder-info" class="standard-folder-info"></div>
+                    </div>
                 </div>
 
                 <!-- Contenedor para las interfaces de grabación -->
