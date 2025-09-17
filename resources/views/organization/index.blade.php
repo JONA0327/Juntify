@@ -130,7 +130,7 @@
 
                             <!-- Pestaña Organización -->
                             <div x-show="mainTab === 'organization'" x-transition>
-                                <div class="flex items-center justify-between mb-6">
+                                <div class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between mb-6">
                                     <div class="flex items-center">
                                         <div class="organization-avatar mr-6">
                                             <div class="w-20 h-20 rounded-full border-2 border-slate-600 overflow-hidden bg-slate-700 flex items-center justify-center">
@@ -147,7 +147,7 @@
                                         </div>
                                     </div>
                                                                                                             <!-- Acciones y rol (columna derecha unificada) -->
-                                                                                                            <div class="flex flex-col items-end text-right">
+                                            <div class="flex flex-col items-center text-center md:items-end md:text-right">
                                                                                                                 <!-- Botones de administración (owner o admin) -->
                                                                                                                 <div class="flex space-x-3 items-center" x-show="org.is_owner || org.user_role === 'administrador'">
                                                                                                                     <button @click="openEditOrgModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Editar Organización</button>
