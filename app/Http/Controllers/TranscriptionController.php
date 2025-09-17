@@ -564,11 +564,102 @@ class TranscriptionController extends Controller
         $chunkPath = "{$uploadDir}/chunk_{$chunkIndex}";
         $chunk->move($uploadDir, "chunk_{$chunkIndex}");
 
-        // Actualizar metadatos
-        $metadata = json_decode(file_get_contents($metadataPath), true);
-        $metadata['chunks_received']++;
+        $metadataHandle = fopen($metadataPath, 'c+');
+        if ($metadataHandle === false) {
+            Log::error('Failed to open upload metadata for writing', [
+                'upload_id' => $uploadId,
+                'metadata_path' => $metadataPath,
+            ]);
 
-        file_put_contents($metadataPath, json_encode($metadata));
+            return response()->json([
+                'error' => 'Failed to update upload metadata',
+            ], 500);
+        }
+
+        try {
+            if (!flock($metadataHandle, LOCK_EX)) {
+                Log::error('Failed to acquire lock for upload metadata', [
+                    'upload_id' => $uploadId,
+                    'metadata_path' => $metadataPath,
+                ]);
+
+                return response()->json([
+                    'error' => 'Failed to update upload metadata',
+                ], 500);
+            }
+
+            rewind($metadataHandle);
+            $metadataContents = stream_get_contents($metadataHandle);
+
+            if ($metadataContents === false) {
+                Log::error('Failed to read upload metadata before update', [
+                    'upload_id' => $uploadId,
+                    'metadata_path' => $metadataPath,
+                ]);
+
+                return response()->json([
+                    'error' => 'Failed to update upload metadata',
+                ], 500);
+            }
+
+            try {
+                $metadata = json_decode($metadataContents, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $e) {
+                Log::error('Upload metadata contains invalid JSON', [
+                    'upload_id' => $uploadId,
+                    'metadata_path' => $metadataPath,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return response()->json([
+                    'error' => 'Failed to update upload metadata',
+                ], 500);
+            }
+
+            $metadata['chunks_received']++;
+
+            try {
+                $encodedMetadata = json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            } catch (\JsonException $e) {
+                Log::error('Failed to encode upload metadata as JSON', [
+                    'upload_id' => $uploadId,
+                    'metadata_path' => $metadataPath,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return response()->json([
+                    'error' => 'Failed to update upload metadata',
+                ], 500);
+            }
+
+            rewind($metadataHandle);
+            if (!ftruncate($metadataHandle, 0)) {
+                Log::error('Failed to truncate upload metadata file before writing', [
+                    'upload_id' => $uploadId,
+                    'metadata_path' => $metadataPath,
+                ]);
+
+                return response()->json([
+                    'error' => 'Failed to update upload metadata',
+                ], 500);
+            }
+
+            if (fwrite($metadataHandle, $encodedMetadata) === false) {
+                Log::error('Failed to write upload metadata to disk', [
+                    'upload_id' => $uploadId,
+                    'metadata_path' => $metadataPath,
+                ]);
+
+                return response()->json([
+                    'error' => 'Failed to update upload metadata',
+                ], 500);
+            }
+
+            fflush($metadataHandle);
+        } finally {
+            flock($metadataHandle, LOCK_UN);
+            fclose($metadataHandle);
+        }
 
         Log::info('Chunk uploaded', [
             'upload_id' => $uploadId,
