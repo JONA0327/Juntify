@@ -3,13 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\ArchivoReunion;
+use App\Models\GoogleToken;
 use App\Models\TaskLaravel;
 use App\Services\GoogleDriveService;
 use App\Traits\GoogleDriveHelpers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class TaskAttachmentController extends Controller
 {
@@ -32,19 +33,6 @@ class TaskAttachmentController extends Controller
         return response()->json(['success' => true, 'files' => $files]);
     }
 
-    public function folders(Request $request): JsonResponse
-    {
-        $this->setGoogleDriveToken($request);
-        $parentId = $request->query('parents');
-        if ($parentId) {
-            $folders = $this->googleDriveService->listSubfolders($parentId);
-        } else {
-            $folders = $this->googleDriveService->listFolders("mimeType='application/vnd.google-apps.folder' and trashed=false");
-        }
-        $out = array_map(fn($f) => ['id' => $f->getId(), 'name' => $f->getName()], $folders);
-        return response()->json(['success' => true, 'folders' => $out]);
-    }
-
     public function store(Request $request, int $taskId): JsonResponse
     {
         $user = Auth::user();
@@ -52,16 +40,24 @@ class TaskAttachmentController extends Controller
         $this->setGoogleDriveToken($request);
 
         $data = $request->validate([
-            'folder_id' => 'required|string',
             'file' => 'required|file|max:51200', // 50MB
         ]);
+
+        $googleToken = $user->googleToken;
+        if (!$googleToken) {
+            throw ValidationException::withMessages([
+                'google_drive' => 'El usuario no tiene configurada la integración con Google Drive.',
+            ]);
+        }
+
+        $documentsFolderId = $this->ensureDocumentsFolder($googleToken);
 
         $uploadedFile = $data['file'];
         $name = $uploadedFile->getClientOriginalName();
         $mime = $uploadedFile->getMimeType();
         $bytes = file_get_contents($uploadedFile->getRealPath());
 
-        $fileId = $this->googleDriveService->uploadFile($name, $mime, $data['folder_id'], $bytes);
+        $fileId = $this->googleDriveService->uploadFile($name, $mime, $documentsFolderId, $bytes);
         $webLink = $this->googleDriveService->getFileLink($fileId);
 
         $rec = ArchivoReunion::create([
@@ -71,11 +67,49 @@ class TaskAttachmentController extends Controller
             'mime_type' => $mime,
             'size' => $uploadedFile->getSize(),
             'drive_file_id' => $fileId,
-            'drive_folder_id' => $data['folder_id'],
+            'drive_folder_id' => $documentsFolderId,
             'drive_web_link' => $webLink,
         ]);
 
         return response()->json(['success' => true, 'file' => $rec]);
+    }
+
+    private function ensureDocumentsFolder(GoogleToken $googleToken): string
+    {
+        if (!$googleToken->recordings_folder_id) {
+            throw ValidationException::withMessages([
+                'google_drive' => 'No se encontró la carpeta raíz personal en Google Drive.',
+            ]);
+        }
+
+        $folderName = 'Documentos';
+        $existingId = $this->findFolderByName($folderName, $googleToken->recordings_folder_id);
+
+        if ($existingId) {
+            return $existingId;
+        }
+
+        return $this->googleDriveService->createFolder($folderName, $googleToken->recordings_folder_id);
+    }
+
+    private function findFolderByName(string $folderName, ?string $parentId = null): ?string
+    {
+        $escapedName = str_replace("'", "\\'", $folderName);
+        $query = "mimeType='application/vnd.google-apps.folder' and trashed=false and name='{$escapedName}'";
+
+        if ($parentId) {
+            $query .= " and '{$parentId}' in parents";
+        }
+
+        $folders = $this->googleDriveService->listFolders($query);
+
+        foreach ($folders as $folder) {
+            if (strcasecmp($folder->getName(), $folderName) === 0) {
+                return $folder->getId();
+            }
+        }
+
+        return null;
     }
 
     public function download(Request $request, int $fileId)

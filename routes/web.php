@@ -194,7 +194,6 @@ Route::middleware(['auth'])->group(function () {
         // Archivos asociados a tareas
         Route::get('/tasks-laravel/tasks/{task}/files', [TaskAttachmentController::class, 'index'])->name('api.tasks-laravel.files.index');
         Route::post('/tasks-laravel/tasks/{task}/files', [TaskAttachmentController::class, 'store'])->name('api.tasks-laravel.files.store');
-        Route::get('/drive/folders', [TaskAttachmentController::class, 'folders'])->name('api.drive.folders');
         Route::get('/tasks-laravel/files/{file}/download', [TaskAttachmentController::class, 'download'])->name('api.tasks-laravel.files.download');
 
         // Rutas del Asistente IA
