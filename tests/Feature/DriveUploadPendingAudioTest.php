@@ -121,3 +121,47 @@ it('accepts pending audio uploads up to 500MB on personal drive', function () {
         'google_id' => 'pending123',
     ]);
 });
+
+it('accepts pending audio uploads in m4a format on personal drive', function () {
+    Config::set('services.google.service_account_email', 'svc@test');
+
+    $user = User::factory()->create();
+
+    $token = GoogleToken::create([
+        'username' => $user->username,
+        'access_token' => 'access',
+        'refresh_token' => 'refresh',
+        'expiry_date' => now()->addHour(),
+    ]);
+
+    Folder::create([
+        'google_token_id' => $token->id,
+        'google_id' => 'root123',
+        'name' => 'Grabaciones',
+        'parent_id' => null,
+    ]);
+
+    $service = Mockery::mock(GoogleServiceAccount::class);
+    $service->shouldReceive('shareFolder')->once()->with('root123', 'svc@test');
+    $service->shouldReceive('createFolder')->once()->with('Audios Pospuestos', 'root123')->andReturn('pending123');
+    $service->shouldReceive('uploadFile')
+        ->once()
+        ->with('Meeting.m4a', 'audio/x-m4a', 'pending123', Mockery::type('string'))
+        ->andReturn('file456');
+    $service->shouldReceive('getFileLink')->once()->with('file456')->andReturn('https://drive.test/file456');
+
+    app()->instance(GoogleServiceAccount::class, $service);
+
+    $audioFile = UploadedFile::fake()->create('Meeting.m4a', 1, 'audio/x-m4a');
+
+    $response = $this
+        ->actingAs($user)
+        ->post('/api/drive/upload-pending-audio', [
+            'meetingName' => 'Meeting',
+            'audioFile' => $audioFile,
+        ], ['HTTP_ACCEPT' => 'application/json']);
+
+    $response->assertOk()
+        ->assertJsonPath('audio_drive_id', 'file456')
+        ->assertJsonPath('saved', true);
+});
