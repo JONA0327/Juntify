@@ -251,10 +251,27 @@ class DriveController extends Controller
 
     public function syncDriveSubfolders(Request $request)
     {
+        // Compatibilidad: algunos frontends antiguos aún llaman a este endpoint.
+        // Devolvemos la carpeta raíz y un array vacío de subcarpetas para evitar errores 410.
+        $username = Auth::user()->username;
+        $token = GoogleToken::where('username', $username)->first();
+        if (!$token) {
+            return response()->json([
+                'root_folder' => null,
+                'subfolders' => [],
+                'message' => 'Token no encontrado',
+                'deprecated' => true,
+            ], 200);
+        }
+        $rootFolder = Folder::where('google_token_id', $token->id)
+            ->whereNull('parent_id')
+            ->first();
         return response()->json([
+            'root_folder' => $rootFolder,
+            'subfolders' => [],
             'deprecated' => true,
-            'message' => 'La sincronización manual de subcarpetas fue reemplazada. Usa las carpetas fijas: Audios, Transcripciones, Audios Pospuestos.',
-        ], 410);
+            'message' => 'Estructura automática activa. No se requieren subcarpetas manuales.'
+        ], 200);
     }
     public function status()
     {
