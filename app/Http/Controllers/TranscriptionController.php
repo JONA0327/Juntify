@@ -461,22 +461,32 @@ class TranscriptionController extends Controller
         // Obtener el tamaño ANTES de mover el archivo
         $chunkSize = $chunk->getSize();
 
-        // Guardar el chunk
+        // Guardar el chunk (sobre-escribe si se reintenta el mismo índice)
         $chunkPath = "{$uploadDir}/chunk_{$chunkIndex}";
         $chunk->move($uploadDir, "chunk_{$chunkIndex}");
 
-        // Actualizar metadatos
-        $metadata = json_decode(file_get_contents($metadataPath), true);
-        $metadata['chunks_received']++;
+        // Actualizar metadatos de forma atómica para evitar condiciones de carrera
+        $this->safelyUpdateChunkMetadata($metadataPath, function (&$metadata) use ($chunkIndex) {
+            if (!isset($metadata['received_indices']) || !is_array($metadata['received_indices'])) {
+                $metadata['received_indices'] = [];
+            }
+            if (!in_array($chunkIndex, $metadata['received_indices'])) {
+                $metadata['received_indices'][] = $chunkIndex;
+            }
+            // Normalizar: chunks_received = número único de índices recibidos
+            $metadata['chunks_received'] = count($metadata['received_indices']);
+        });
 
-        file_put_contents($metadataPath, json_encode($metadata));
+        // Leer nuevamente para logging
+        $metadata = json_decode(file_get_contents($metadataPath), true);
 
         Log::info('Chunk uploaded', [
             'upload_id' => $uploadId,
             'chunk_index' => $chunkIndex,
             'chunk_size' => $chunkSize,
             'chunks_received' => $metadata['chunks_received'],
-            'chunks_expected' => $metadata['chunks_expected']
+            'chunks_expected' => $metadata['chunks_expected'],
+            'received_indices' => $metadata['received_indices'] ?? []
         ]);
 
         return response()->json(['success' => true]);
@@ -501,13 +511,57 @@ class TranscriptionController extends Controller
 
         $metadata = json_decode(file_get_contents($metadataPath), true);
 
-        // Verificar que todos los chunks están presentes
-        if ($metadata['chunks_received'] !== $metadata['chunks_expected']) {
+        // Recontar realmente los archivos presentes para robustez
+        $files = glob("{$uploadDir}/chunk_*");
+        $presentCount = is_array($files) ? count($files) : 0;
+        $expected = (int) ($metadata['chunks_expected'] ?? 0);
+
+        // Calcular índices presentes y faltantes
+        $presentIndices = [];
+        foreach ($files as $f) {
+            $base = basename($f);
+            $parts = explode('_', $base);
+            $idx = (int) end($parts);
+            $presentIndices[] = $idx;
+        }
+        sort($presentIndices);
+        $missingIndices = [];
+        for ($i = 0; $i < $expected; $i++) {
+            if (!in_array($i, $presentIndices, true)) {
+                $missingIndices[] = $i;
+            }
+        }
+
+        // Si faltan realmente archivos, devolver detalle para reintento selectivo
+        if (!empty($missingIndices)) {
+            Log::warning('Finalize chunked upload - missing chunk files', [
+                'upload_id' => $uploadId,
+                'expected' => $expected,
+                'present_count' => $presentCount,
+                'missing_indices' => $missingIndices,
+                'reported_chunks_received' => $metadata['chunks_received'] ?? null,
+            ]);
             return response()->json([
-                'error' => 'Missing chunks',
-                'received' => $metadata['chunks_received'],
-                'expected' => $metadata['chunks_expected']
+                'error' => 'missing_chunks',
+                'message' => 'Algunos fragmentos no fueron recibidos correctamente',
+                'expected' => $expected,
+                'present_count' => $presentCount,
+                'missing_indices' => $missingIndices,
             ], 400);
+        }
+
+        // Si todos los archivos están presentes pero metadata quedó desincronizado (por condición de carrera) lo corregimos
+        if (($metadata['chunks_received'] ?? 0) !== $expected) {
+            $this->safelyUpdateChunkMetadata($metadataPath, function (&$metadataInner) use ($expected, $presentIndices) {
+                $metadataInner['chunks_received'] = $expected;
+                $metadataInner['received_indices'] = $presentIndices;
+            });
+            $metadata = json_decode(file_get_contents($metadataPath), true);
+            Log::info('Finalize chunked upload - metadata reconciled', [
+                'upload_id' => $uploadId,
+                'expected' => $expected,
+                'reconciled_chunks_received' => $metadata['chunks_received']
+            ]);
         }
 
         $trackingId = (string) Str::uuid();
@@ -520,6 +574,49 @@ class TranscriptionController extends Controller
         return response()->json([
             'tracking_id' => $trackingId,
         ], 202);
+    }
+
+    /**
+     * Actualiza metadata.json con bloqueo para evitar condiciones de carrera entre subidas concurrentes.
+     */
+    private function safelyUpdateChunkMetadata(string $metadataPath, callable $updater): void
+    {
+        $dir = dirname($metadataPath);
+        if (!is_dir($dir)) {
+            return; // sesión inválida
+        }
+        $fp = fopen($metadataPath, 'c+');
+        if (!$fp) {
+            return; // no se pudo abrir
+        }
+        try {
+            if (!flock($fp, LOCK_EX)) {
+                fclose($fp);
+                return;
+            }
+            // Leer contenido actual
+            $raw = stream_get_contents($fp);
+            if ($raw === false || $raw === '') {
+                $metadata = [];
+            } else {
+                $metadata = json_decode($raw, true);
+                if (!is_array($metadata)) {
+                    $metadata = [];
+                }
+            }
+
+            // Aplicar actualización
+            $updater($metadata);
+
+            // Rewind & truncate & write
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($metadata));
+            fflush($fp);
+            flock($fp, LOCK_UN);
+        } finally {
+            fclose($fp);
+        }
     }
 
     private function processLargeAudioFile($filePath, $language, $mimeType = '')

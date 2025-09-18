@@ -513,17 +513,45 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
             await Promise.all(batch.map(c => uploadChunk(c)));
         }
 
-        // Finalizar
-        progressBar.style.width = '9%';
-        progressPercent.textContent = '9%';
-        progressText.textContent = 'Finalizando subida...';
-        console.log('🔧 [startChunkedTranscription] Finalizing upload');
-        const finalizeResponse = await axios.post('/transcription/chunked/finalize', { upload_id }, { timeout: 300000 });
-        console.log('✅ [startChunkedTranscription] Transcripción iniciada:', finalizeResponse.data);
-        progressBar.style.width = '10%';
-        progressPercent.textContent = '10%';
-        progressText.textContent = 'En cola...';
-        pollTranscription(finalizeResponse.data.tracking_id);
+        // Función para finalizar con reintentos selectivos de chunks faltantes
+        const finalizeWithRecovery = async () => {
+            progressBar.style.width = '9%';
+            progressPercent.textContent = '9%';
+            progressText.textContent = 'Finalizando subida...';
+            console.log('🔧 [startChunkedTranscription] Finalizing upload');
+            try {
+                const finalizeResponse = await axios.post('/transcription/chunked/finalize', { upload_id }, { timeout: 300000 });
+                console.log('✅ [startChunkedTranscription] Transcripción iniciada:', finalizeResponse.data);
+                progressBar.style.width = '10%';
+                progressPercent.textContent = '10%';
+                progressText.textContent = 'En cola...';
+                pollTranscription(finalizeResponse.data.tracking_id);
+            } catch (err) {
+                // Intento de recuperación si faltan chunks específicos
+                const status = err?.response?.status;
+                const data = err?.response?.data;
+                if (status === 400 && data?.error === 'missing_chunks' && Array.isArray(data.missing_indices) && data.missing_indices.length > 0) {
+                    console.warn('♻️ [startChunkedTranscription] Re-subiendo chunks faltantes', data.missing_indices);
+                    progressText.textContent = `Recuperando ${data.missing_indices.length} fragmentos...`;
+                    // Re subir secuencialmente para simplicidad
+                    for (const idx of data.missing_indices) {
+                        const target = chunks.find(c => c.index === idx);
+                        if (!target) continue;
+                        try {
+                            await uploadChunk(target); // usa misma lógica y contadores ya no importan
+                        } catch (e) {
+                            console.error('❌ [startChunkedTranscription] Falló re-subida de chunk', idx, e);
+                            throw e; // aborta
+                        }
+                    }
+                    // Reintentar finalizar una sola vez después de recuperación
+                    return finalizeWithRecovery();
+                }
+                throw err; // Propagar otros errores
+            }
+        };
+
+        await finalizeWithRecovery();
     };
 
     for (const size of CANDIDATE_SIZES) {
