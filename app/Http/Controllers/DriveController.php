@@ -375,7 +375,7 @@ class DriveController extends Controller
         try {
             $v = $request->validate([
                 'meetingName' => 'required|string',
-                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4,video/mp4',
+                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4,video/mp4,audio/x-m4a,audio/m4a',
                 'rootFolder'  => 'nullable|string', // Cambiar a nullable
                 'driveType'   => 'nullable|string|in:personal,organization', // Nuevo campo para tipo de drive
             ]);
