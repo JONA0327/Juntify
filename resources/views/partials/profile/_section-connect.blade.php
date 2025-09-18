@@ -146,27 +146,16 @@
             <div class="info-card" id="subfolder-card">
                 <h3 class="card-title">
                     <span class="card-icon">📂</span>
-                    Subcarpetas
+                    Estructura de Carpetas
                 </h3>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <div class="action-buttons" style="margin-bottom: 1rem;">
-                        <button class="btn btn-primary" onclick="showCreateSubfolderModal()">
-                            ➕ Crear Subcarpeta
-                        </button>
-                    </div>
-
-                    <div id="subfolders-list">
-                        @foreach($subfolders as $subfolder)
-                        <div data-id="{{ $subfolder->google_id }}" style="margin: 0.5rem 0; padding: 0.75rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(59, 130, 246, 0.2);">
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="color: #ffffff; font-weight: 600; word-break: break-all;">{{ $subfolder->name }}</div>
-                                <div style="color: #94a3b8; font-size: 0.8rem; font-family: monospace; word-break: break-all;">{{ $subfolder->google_id }}</div>
-                            </div>
-                            <button type="button" class="btn-remove-subfolder" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 0.5rem; border-radius: 8px; cursor: pointer; margin-left: 1rem; flex-shrink: 0;">🗑️</button>
-                        </div>
-                        @endforeach
-                    </div>
+                <div style="margin-bottom: 1.5rem; line-height:1.5; color:#cbd5e1; font-size:0.9rem;">
+                    Ahora la organización es automática. Al trabajar con tus reuniones se crearán (si no existen) estas carpetas dentro de tu carpeta principal:
+                    <ul style="margin:0.75rem 0 0 1.2rem; list-style:disc;">
+                        <li><strong>Audios</strong>: Archivos de audio finales</li>
+                        <li><strong>Transcripciones</strong>: Archivos .ju encriptados con la transcripción y resumen</li>
+                        <li><strong>Audios Pospuestos</strong>: Audios subidos pendientes de completar</li>
+                    </ul>
+                    No necesitas crear subcarpetas manualmente. Esta sección reemplaza la antigua gestión de subcarpetas.
                 </div>
             </div>
             @endif

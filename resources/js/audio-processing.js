@@ -1479,8 +1479,9 @@ async function loadDriveFolders() {
     const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
     const driveSelect = document.getElementById('drive-select');
     const rootSelect = document.getElementById('root-folder-select');
-    const transcriptionSelect = document.getElementById('transcription-subfolder-select');
-    const audioSelect = document.getElementById('audio-subfolder-select');
+    // Subcarpetas manuales eliminadas: selects ya no existen
+    const transcriptionSelect = null;
+    const audioSelect = null;
 
     console.log('🔍 [loadDriveFolders] Starting with debug info:', {
         role,
@@ -1565,38 +1566,7 @@ async function loadDriveFolders() {
             }
         }
 
-        const populateSubSelect = (select, selectName) => {
-            if (!select) {
-                console.warn(`⚠️ [loadDriveFolders] ${selectName} select not found`);
-                return;
-            }
-            select.innerHTML = '';
-            const list = data.subfolders || [];
-            console.log(`🔍 [loadDriveFolders] Populating ${selectName} with ${list.length} subfolders:`, list);
-
-            if (list.length) {
-                const noneOpt = document.createElement('option');
-                noneOpt.value = '';
-                noneOpt.textContent = 'Sin subcarpeta';
-                select.appendChild(noneOpt);
-                list.forEach(f => {
-                    const opt = document.createElement('option');
-                    opt.value = f.google_id;
-                    opt.textContent = `📂 ${f.name}`;
-                    select.appendChild(opt);
-                    console.log(`✅ [loadDriveFolders] Added ${selectName} subfolder:`, f.name);
-                });
-            } else {
-                const opt = document.createElement('option');
-                opt.value = '';
-                opt.textContent = 'No se encontraron subcarpetas';
-                select.appendChild(opt);
-                console.log(`📝 [loadDriveFolders] No subfolders found for ${selectName}`);
-            }
-        };
-
-        populateSubSelect(transcriptionSelect, 'transcription');
-        populateSubSelect(audioSelect, 'audio');
+        // Ya no se poblaban subcarpetas; estructura fija manejada en backend
 
         console.log('✅ [loadDriveFolders] Successfully loaded drive folders');
 
@@ -1694,8 +1664,9 @@ function downloadAudio() {
 async function saveToDatabase() {
     const meetingName = document.getElementById('meeting-name').value.trim();
     const rootFolder = document.getElementById('root-folder-select').value;
-    const transcriptionSubfolder = document.getElementById('transcription-subfolder-select').value;
-    const audioSubfolder = document.getElementById('audio-subfolder-select').value;
+    // Subcarpetas manuales eliminadas: se envían como cadena vacía para compatibilidad
+    const transcriptionSubfolder = '';
+    const audioSubfolder = '';
 
     if (!meetingName) {
         showNotification('Por favor ingresa un nombre para la reunión', 'error');
@@ -1716,7 +1687,7 @@ async function saveToDatabase() {
 
 // ===== PASO 7: GUARDANDO EN BD =====
 
-async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfolder, audioSubfolder) {
+async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfolder, audioSubfolder) { // params retained for backward compatibility
     const progressBar = document.getElementById('save-progress');
     const progressText = document.getElementById('save-progress-text');
     const progressPercent = document.getElementById('save-progress-percent');

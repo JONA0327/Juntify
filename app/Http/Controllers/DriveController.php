@@ -35,6 +35,65 @@ class DriveController extends Controller
         Log::info('DriveController constructor called', ['user' => Auth::user() ? Auth::user()->username : null]);
     }
 
+    /**
+     * Ensure the three standard subfolders exist under the provided root folder:
+     *  - Audios
+     *  - Transcripciones
+     *  - Audios Pospuestos
+     * Works for both personal and organization drives, creating missing folders in Google Drive
+     * and persisting them in the corresponding DB tables. Returns an associative array with the
+     * Subfolder / OrganizationSubfolder models: ['audio' => ..., 'transcription' => ..., 'pending' => ...]
+     */
+    private function ensureStandardSubfolders($rootFolder, bool $useOrgDrive, GoogleServiceAccount $serviceAccount): array
+    {
+        $names = [
+            'audio'         => 'Audios',
+            'transcription' => 'Transcripciones',
+            'pending'       => 'Audios Pospuestos',
+        ];
+
+        $result = [];
+        $serviceEmail = config('services.google.service_account_email');
+        foreach ($names as $key => $folderName) {
+            try {
+                if ($useOrgDrive) {
+                    $model = OrganizationSubfolder::where('organization_folder_id', $rootFolder->id)
+                        ->where('name', $folderName)
+                        ->first();
+                    if (!$model) {
+                        $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                        $model = OrganizationSubfolder::create([
+                            'organization_folder_id' => $rootFolder->id,
+                            'google_id'              => $googleId,
+                            'name'                   => $folderName,
+                        ]);
+                        try { $serviceAccount->shareFolder($googleId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
+                    }
+                } else {
+                    $model = Subfolder::where('folder_id', $rootFolder->id)
+                        ->where('name', $folderName)
+                        ->first();
+                    if (!$model) {
+                        $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                        $model = Subfolder::create([
+                            'folder_id' => $rootFolder->id,
+                            'google_id' => $googleId,
+                            'name'      => $folderName,
+                        ]);
+                        try { $serviceAccount->shareFolder($googleId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
+                    }
+                }
+                $result[$key] = $model;
+            } catch (\Throwable $e) {
+                Log::warning('ensureStandardSubfolders failure', [
+                    'folder' => $folderName,
+                    'error'  => $e->getMessage(),
+                ]);
+            }
+        }
+        return $result;
+    }
+
     public function createMainFolder(Request $request)
     {
         $request->validate([
@@ -184,175 +243,18 @@ class DriveController extends Controller
 
     public function createSubfolder(Request $request)
     {
-        $token  = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
-        $parentId = $token->recordings_folder_id;
-
-        $client = $this->drive->getClient();
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expiry_date'   => $token->expiry_date,
-        ]);
-        if ($client->isAccessTokenExpired()) {
-            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
-            if (! isset($new['error'])) {
-                $token->update([
-                    'access_token' => $new['access_token'],
-                    'expiry_date'  => now()->addSeconds($new['expires_in']),
-                ]);
-                $client->setAccessToken($new);
-            }
-        }
-
-        $folderId = $this->drive->createFolder($request->input('name'), $parentId);
-
-        if ($folder = Folder::where('google_id', $parentId)->first()) {
-            Subfolder::create([
-                'folder_id' => $folder->id,
-                'google_id' => $folderId,
-                'name'      => $request->input('name'),
-            ]);
-        }
-
-        $this->drive->shareFolder(
-            $folderId,
-            config('services.google.service_account_email')
-        );
-
-        return response()->json(['id' => $folderId]);
+        return response()->json([
+            'deprecated' => true,
+            'message' => 'La creación manual de subcarpetas fue deshabilitada. Ahora se crean automáticamente (Audios, Transcripciones, Audios Pospuestos).'
+        ], 410);
     }
 
     public function syncDriveSubfolders(Request $request)
     {
-        // 1. Obtener el GoogleToken del usuario autenticado
-        $username = Auth::user()->username;
-        $token    = GoogleToken::where('username', $username)->firstOrFail();
-
-        if (empty($token->recordings_folder_id)) {
-            return response()->json([
-                'message' => 'El usuario no tiene configurada la carpeta principal'
-            ], 400);
-        }
-
-        // 2. Crear cliente de Drive usando el método protegido createClient()
-        $authController = app(GoogleAuthController::class);
-        $refMethod      = new \ReflectionMethod($authController, 'createClient');
-        $refMethod->setAccessible(true);
-        /** @var \Google\Client $client */
-        $client = $refMethod->invoke($authController);
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expiry_date'   => $token->expiry_date,
-        ]);
-        // Auto-refrescar si ya expiró
-        if ($client->isAccessTokenExpired()) {
-            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
-            if (! isset($new['error'])) {
-                $token->update([
-                    'access_token' => $new['access_token'],
-                    'expiry_date'  => now()->addSeconds($new['expires_in']),
-                ]);
-                $client->setAccessToken($new);
-            }
-        }
-
-        $drive = new DriveService($client);
-
-        try {
-            // 3. Listar subcarpetas con la query correcta (comillas simples)
-            $query = sprintf(
-                "mimeType='application/vnd.google-apps.folder' and '%s' in parents and trashed=false",
-                $token->recordings_folder_id
-            );
-
-            $response = $drive->files->listFiles([
-                'q'      => $query,
-                'fields' => 'files(id,name)',
-            ]);
-
-            $files = $response->getFiles();
-
-            // 4. Obtener nombre real de la carpeta raíz
-            $rootName = null;
-            try {
-                $rootData = $drive->files->get(
-                    $token->recordings_folder_id,
-                    ['fields' => 'name']
-                );
-                $rootName = $rootData->getName();
-            } catch (\Throwable $e) {
-                Log::warning('syncDriveSubfolders root name fetch failed', [
-                    'username'  => $username,
-                    'folder_id' => $token->recordings_folder_id,
-                    'error'     => $e->getMessage(),
-                ]);
-            }
-
-            // 5. Crear o actualizar la carpeta raíz en BD con el nombre obtenido
-            $rootFolder = Folder::updateOrCreate(
-                [
-                    'google_token_id' => $token->id,
-                    'google_id'       => $token->recordings_folder_id,
-                ],
-                [
-                    'name'      => $rootName ?? "recordings_{$username}",
-                    'parent_id' => null,
-                ]
-            );
-
-            // 6. Sincronizar subcarpetas en BD
-            $subfolders = [];
-            foreach ($files as $file) {
-                $subfolders[] = Subfolder::updateOrCreate(
-                    [
-                        'folder_id' => $rootFolder->id,
-                        'google_id' => $file->getId(),
-                    ],
-                    [
-                        'name' => $file->getName(),
-                    ]
-                );
-            }
-
-            // 7. Devolver JSON con el resultado
-            return response()->json([
-                'root_folder' => $rootFolder,
-                'subfolders'  => $subfolders,
-            ], 200);
-
-        } catch (GoogleServiceException $e) {
-            if (str_contains($e->getMessage(), 'invalid_grant')) {
-                Log::warning('syncDriveSubfolders invalid_grant', [
-                    'username' => $username,
-                ]);
-                GoogleToken::where('username', $username)->update([
-                    'access_token'  => null,
-                    'refresh_token' => null,
-                    'expiry_date'   => null,
-                    // recordings_folder_id se mantiene para reconexión
-                ]);
-                return response()->json([
-                    'message' => 'Autenticación de Google expirada. Reconecta tu Google Drive.',
-                ], 401);
-            }
-
-            Log::error('syncDriveSubfolders Google error', [
-                'username' => $username,
-                'error'    => $e->getMessage(),
-            ]);
-            return response()->json([
-                'message' => 'Error de Drive: ' . $e->getMessage(),
-            ], 502);
-        } catch (\Throwable $e) {
-            Log::error('syncDriveSubfolders failed', [
-                'username' => $username,
-                'error'    => $e->getMessage(),
-            ]);
-            return response()->json([
-                'message' => 'Error interno al obtener subcarpetas'
-            ], 500);
-        }
+        return response()->json([
+            'deprecated' => true,
+            'message' => 'La sincronización manual de subcarpetas fue reemplazada. Usa las carpetas fijas: Audios, Transcripciones, Audios Pospuestos.',
+        ], 410);
     }
     public function status()
     {
@@ -363,29 +265,10 @@ class DriveController extends Controller
 
     public function deleteSubfolder(string $id)
     {
-        $token  = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
-        $client = $this->drive->getClient();
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expiry_date'   => $token->expiry_date,
-        ]);
-        if ($client->isAccessTokenExpired()) {
-            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
-            if (! isset($new['error'])) {
-                $token->update([
-                    'access_token' => $new['access_token'],
-                    'expiry_date'  => now()->addSeconds($new['expires_in']),
-                ]);
-                $client->setAccessToken($new);
-            }
-        }
-
-        $this->drive->deleteFile($id);
-
-        Subfolder::where('google_id', $id)->delete();
-
-        return response()->json(['deleted' => true]);
+        return response()->json([
+            'deprecated' => true,
+            'message' => 'El borrado manual de subcarpetas ha sido deshabilitado.'
+        ], 410);
     }
 
     public function uploadPendingAudio(Request $request)
@@ -414,9 +297,8 @@ class DriveController extends Controller
             $serviceAccount = app(GoogleServiceAccount::class);
 
             $organizationFolder = $user->organizationFolder;
-            $orgRole = $user->organizations()
-                ->where('organization_id', $user->current_organization_id)
-                ->first()?->pivot->rol;
+            // Simplificación: asumimos acceso si existe carpeta organizacional
+            $orgRole = $organizationFolder ? 'miembro' : null;
 
             // Determinar si usar Drive organizacional basado en driveType
             $driveType = $v['driveType'] ?? 'personal'; // Default a personal si no se especifica
@@ -551,38 +433,15 @@ class DriveController extends Controller
                 }
             }
 
-            // 3. Buscar o crear subcarpeta 'Audios Pospuestos' en la raíz
+            // Usar helper para garantizar subcarpetas estándar
+            $standard = $this->ensureStandardSubfolders($rootFolder, $useOrgDrive, $serviceAccount);
+            $subfolder = $standard['pending'] ?? null; // Audios Pospuestos
+            if (!$subfolder) {
+                return response()->json(['message' => 'No se pudo preparar la subcarpeta de audios pospuestos'], 500);
+            }
+            $pendingFolderId = $subfolder->google_id;
             $pendingSubfolderName = 'Audios Pospuestos';
-            if ($useOrgDrive) {
-                $subfolder = OrganizationSubfolder::where('organization_folder_id', $rootFolder->id)
-                    ->where('name', $pendingSubfolderName)
-                    ->first();
-            } else {
-                $subfolder = Subfolder::where('folder_id', $rootFolder->id)
-                    ->where('name', $pendingSubfolderName)
-                    ->first();
-            }
-            if ($subfolder) {
-                $pendingFolderId = $subfolder->google_id;
-                $subfolderCreated = false;
-            } else {
-                Log::info('uploadPendingAudio: creating Audios Pospuestos subfolder', ['name' => $pendingSubfolderName, 'rootFolderId' => $rootFolderId]);
-                $pendingFolderId = $serviceAccount->createFolder($pendingSubfolderName, $rootFolderId);
-                if ($useOrgDrive) {
-                    $subfolder = OrganizationSubfolder::create([
-                        'organization_folder_id' => $rootFolder->id,
-                        'google_id'              => $pendingFolderId,
-                        'name'                   => $pendingSubfolderName,
-                    ]);
-                } else {
-                    $subfolder = Subfolder::create([
-                        'folder_id' => $rootFolder->id,
-                        'google_id' => $pendingFolderId,
-                        'name'      => $pendingSubfolderName,
-                    ]);
-                }
-                $subfolderCreated = true;
-            }
+            $subfolderCreated = false; // creación ya manejada dentro del helper
 
             // Nota: Si la cuenta de servicio no tiene acceso de escritura al folder raíz,
             // la creación/subida fallará con 403/404. Pediremos que compartan con la SA.
@@ -696,14 +555,13 @@ class DriveController extends Controller
                     'drive_type'  => $useOrgDrive ? 'organization' : 'personal'
                 ],
             ];
-            if ($subfolderCreated) {
-                \App\Models\PendingFolder::firstOrCreate([
-                    'username' => $user->username,
-                    'google_id' => $subfolder->google_id,
-                ], [
-                    'name' => $subfolder->name,
-                ]);
-            }
+            // Registrar carpeta pendiente en tabla auxiliar (idempotente)
+            \App\Models\PendingFolder::firstOrCreate([
+                'username' => $user->username,
+                'google_id' => $subfolder->google_id,
+            ], [
+                'name' => $subfolder->name,
+            ]);
             return response()->json($response);
         } catch (ValidationException $e) {
             return response()->json([
@@ -854,9 +712,7 @@ class DriveController extends Controller
 
         $user = Auth::user();
         $organizationFolder = $user->organizationFolder;
-        $orgRole = $user->organizations()
-            ->where('organization_id', $user->current_organization_id)
-            ->first()?->pivot->rol;
+        $orgRole = $organizationFolder ? 'miembro' : null;
 
         // Determinar si usar Drive organizacional basado en driveType
         $driveType = $v['driveType'] ?? 'personal'; // Default a personal si no se especifica
@@ -896,38 +752,12 @@ class DriveController extends Controller
         }
 
         if ($useOrgDrive) {
-            $rootFolder = $organizationFolder;
-            $transcriptionFolderId = $rootFolder->google_id;
-            if ($v['transcriptionSubfolder']) {
-                $sub = OrganizationSubfolder::where(function($q) use ($v) {
-                    $q->where('google_id', $v['transcriptionSubfolder'])
-                      ->orWhere('id', $v['transcriptionSubfolder']);
-                })->first();
-                if ($sub) {
-                    $transcriptionFolderId = $sub->google_id;
-                } else {
-                    return response()->json(['message' => 'ID de carpeta o subcarpeta inválido'], 400);
-                }
-            }
-            $audioFolderId = $rootFolder->google_id;
-            if ($v['audioSubfolder']) {
-                $sub = OrganizationSubfolder::where(function($q) use ($v) {
-                    $q->where('google_id', $v['audioSubfolder'])
-                      ->orWhere('id', $v['audioSubfolder']);
-                })->first();
-                if ($sub) {
-                    $audioFolderId = $sub->google_id;
-                } else {
-                    return response()->json(['message' => 'ID de carpeta o subcarpeta inválido'], 400);
-                }
-            }
+            $rootFolder = $organizationFolder; // OrganizationFolder model
         } else {
-            // Personal drive
             $token = GoogleToken::where('username', $user->username)->first();
-            if (! $token) {
+            if (!$token) {
                 return response()->json(['message' => 'Token de Google no encontrado'], 400);
             }
-
             $rootFolder = Folder::where('google_token_id', $token->id)
                 ->where(function($q) use ($v) {
                     $q->where('google_id', $v['rootFolder'])
@@ -937,32 +767,12 @@ class DriveController extends Controller
             if (!$rootFolder) {
                 return response()->json(['message' => 'Carpeta principal no encontrada en la base de datos'], 400);
             }
-
-            $transcriptionFolderId = $rootFolder->google_id;
-            if ($v['transcriptionSubfolder']) {
-                $sub = Subfolder::where(function($q) use ($v) {
-                    $q->where('google_id', $v['transcriptionSubfolder'])
-                      ->orWhere('id', $v['transcriptionSubfolder']);
-                })->first();
-                if ($sub) {
-                    $transcriptionFolderId = $sub->google_id;
-                } else {
-                    return response()->json(['message' => 'ID de carpeta o subcarpeta inválido'], 400);
-                }
-            }
-            $audioFolderId = $rootFolder->google_id;
-            if ($v['audioSubfolder']) {
-                $sub = Subfolder::where(function($q) use ($v) {
-                    $q->where('google_id', $v['audioSubfolder'])
-                      ->orWhere('id', $v['audioSubfolder']);
-                })->first();
-                if ($sub) {
-                    $audioFolderId = $sub->google_id;
-                } else {
-                    return response()->json(['message' => 'ID de carpeta o subcarpeta inválido'], 400);
-                }
-            }
         }
+
+        // Garantizar subcarpetas estándar
+        $standard = $this->ensureStandardSubfolders($rootFolder, $useOrgDrive, app(GoogleServiceAccount::class));
+        $audioFolderId = $standard['audio']->google_id ?? $rootFolder->google_id;
+        $transcriptionFolderId = $standard['transcription']->google_id ?? $rootFolder->google_id;
 
         $accountEmail = config('services.google.service_account_email');
         $serviceAccount = app(GoogleServiceAccount::class);
@@ -1117,15 +927,8 @@ class DriveController extends Controller
             $rootName = $rootFolder->name ?? '';
             $drivePath = $rootName;
 
-            $subfolderId = $v['transcriptionSubfolder'] ?: $v['audioSubfolder'];
-            if ($subfolderId) {
-                $subName = $useOrgDrive
-                    ? OrganizationSubfolder::where('google_id', $subfolderId)->value('name')
-                    : Subfolder::where('google_id', $subfolderId)->value('name');
-                if ($subName) {
-                    $drivePath .= "/{$subName}";
-                }
-            }
+            // Con estructura fija ya no se usa subfolderId dinámico para path detallado.
+            $drivePath .= '/Transcripciones';
 
             $duration = 0;
             $speakers = [];

@@ -206,83 +206,18 @@ function setMainFolder() {
 /**
  * Muestra el modal para crear subcarpeta
  */
-function showCreateSubfolderModal() {
-  const modal = document.getElementById('create-subfolder-modal');
-  const input = document.getElementById('subfolder-name-input');
-  const mainFolderId = document.getElementById('main-folder-input').value.trim();
-
-  if (!mainFolderId) {
-    showErrorMessage('Primero debes establecer la carpeta principal');
-    return;
-  }
-
-  // Generar nombre sugerido
-  const currentDate = new Date();
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  const suggestedName = `Reuniones-${monthNames[currentDate.getMonth()]}-${currentDate.getFullYear()}`;
-  input.value = suggestedName;
-
-  modal.classList.add('show');
-
-  // Focus en el input después de la animación
-  setTimeout(() => {
-    input.focus();
-    input.select();
-  }, 300);
-}
+// Subcarpetas manuales deshabilitadas: funciones convertidas en no-op
+function showCreateSubfolderModal() { console.warn('Creación manual de subcarpetas deshabilitada'); }
 
 /**
  * Cierra el modal de crear subcarpeta
  */
-function closeCreateSubfolderModal() {
-  const modal = document.getElementById('create-subfolder-modal');
-  const input = document.getElementById('subfolder-name-input');
-
-  modal.classList.remove('show');
-  input.value = '';
-}
+function closeCreateSubfolderModal() { /* noop */ }
 
 /**
  * Confirma la creación de la subcarpeta
  */
-function confirmCreateSubfolder() {
-  const input = document.getElementById('subfolder-name-input');
-  const name = input.value.trim();
-  const mainFolderId = document.getElementById('main-folder-input').value.trim();
-  const btn = document.getElementById('confirm-create-sub-btn');
-
-  if (!name) {
-    alert('Por favor ingresa un nombre para la subcarpeta');
-    input.focus();
-    return;
-  }
-
-  if (!mainFolderId) {
-    showErrorMessage('Primero debes establecer la carpeta principal');
-    closeCreateSubfolderModal();
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Creando...';
-
-  axios.post('/drive/subfolder', { name, parentId: mainFolderId })
-    .then(res => {
-      addSubfolderToList(name, res.data.id);
-
-      closeCreateSubfolderModal();
-      showSuccessMessage(`Subcarpeta "${name}" creada exitosamente`);
-    })
-    .catch(err => {
-      console.error('Error creando subcarpeta:', err.response?.data || err.message);
-      showErrorMessage('No se pudo crear la subcarpeta. Inténtalo de nuevo.');
-    })
-    .finally(() => {
-      btn.disabled = false;
-      btn.textContent = '✅ Crear Subcarpeta';
-    });
-}
+function confirmCreateSubfolder() { console.warn('Creación manual de subcarpetas deshabilitada'); }
 
 function addSubfolderToList(name, id) {
   const list = document.getElementById('subfolders-list');

@@ -24,31 +24,7 @@
     </div>
 </div>
 
-<!-- Modal para crear subcarpeta -->
-<div class="modal" id="create-subfolder-modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3 class="modal-title">
-                <span class="modal-icon">📂</span>
-                Crear Subcarpeta
-            </h3>
-        </div>
-        <div class="modal-body">
-            <p class="modal-description">
-                Las subcarpetas te ayudan a organizar tus reuniones por proyecto, fecha o tema.
-            </p>
-            <div class="form-group">
-                <label class="form-label">Nombre de la subcarpeta</label>
-                <input type="text" class="modal-input" id="subfolder-name-input" placeholder="Ej: Reuniones-Enero-2025">
-                <div class="input-hint">Se creará dentro de tu carpeta principal de grabaciones.</div>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeCreateSubfolderModal()">Cancelar</button>
-            <button class="btn btn-primary" id="confirm-create-sub-btn" onclick="confirmCreateSubfolder()">✅ Crear Subcarpeta</button>
-        </div>
-    </div>
-</div>
+<!-- Modal de subcarpetas eliminado: ahora la estructura es automática (Audios, Transcripciones, Audios Pospuestos) -->
 
 <!-- Modal de carga -->
 <div class="modal" id="drive-loading-modal">

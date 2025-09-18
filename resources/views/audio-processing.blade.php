@@ -303,27 +303,16 @@
                                 <select class="form-select" id="root-folder-select"></select>
                             </div>
 
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <input type="checkbox" id="toggle-subfolders">
-                                    ¿Deseas Guardar en una subcarpeta?
-                                </label>
-                            </div>
-
-                            <div id="subfolder-fields" style="display: none;">
-                                <div class="form-group">
-                                    <label class="form-label">Subcarpeta para transcripción</label>
-                                    <select class="form-select" id="transcription-subfolder-select"></select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Subcarpeta para audio</label>
-                                    <select class="form-select" id="audio-subfolder-select"></select>
-                                </div>
-                            </div>
+                            <!-- Subcarpetas manuales eliminadas: ahora se usan carpetas fijas (Audios, Transcripciones, Audios Pospuestos) -->
 
                             <div class="form-group">
                                 <label class="form-label">Nombre de la reunión</label>
                                 <input type="text" class="form-input" id="meeting-name" placeholder="Ej: Reunión de planificación Q1 2025" value="Reunión del {{ date('d/m/Y H:i') }}">
+                            </div>
+
+                            <div class="form-group" style="font-size:0.85rem; line-height:1.4; color:#94a3b8;">
+                                <strong>Estructura automática:</strong> Los resultados se guardarán en carpetas fijas dentro de tu carpeta principal:
+                                <em>Audios</em>, <em>Transcripciones</em> y <em>Audios Pospuestos</em>. Ya no es necesario elegir subcarpetas manualmente.
                             </div>
                         </div>
                     </div>
