@@ -70,7 +70,7 @@ class TranscriptionController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'audio'    => 'required|file|max:102400', // Máximo 100MB
+            'audio'    => 'required|file|max:204800', // Máximo 200MB
             'language' => 'nullable|in:es,en,fr,de',
         ]);
 

@@ -401,7 +401,7 @@ class DriveController extends Controller
             ] : null,
         ]);
         set_time_limit(300);
-        $maxAudioBytes = 100 * 1024 * 1024; // 100 MB
+    $maxAudioBytes = 200 * 1024 * 1024; // 200 MB
         try {
             $v = $request->validate([
                 'meetingName' => 'required|string',
@@ -590,7 +590,7 @@ class DriveController extends Controller
             // 3. Subir el audio a la subcarpeta
             $file = $request->file('audioFile');
             if ($file->getSize() > $maxAudioBytes) {
-                return response()->json(['message' => 'Archivo de audio demasiado grande (máx. 100 MB)'], 413);
+                return response()->json(['message' => 'Archivo de audio demasiado grande (máx. 200 MB)'], 413);
             }
             $filePath = $file->getRealPath();
             $mime = $file->getMimeType();
@@ -791,7 +791,7 @@ class DriveController extends Controller
         // Permitir hasta 5 minutos de ejecución para cargas grandes
         set_time_limit(300);
         // 1. Validación: ahora esperamos también el mime type del audio
-        $maxAudioBytes = 100 * 1024 * 1024; // 100 MB
+    $maxAudioBytes = 200 * 1024 * 1024; // 200 MB
 
         $v = $request->validate([
             'meetingName'            => 'required|string',
@@ -800,11 +800,11 @@ class DriveController extends Controller
             'audioSubfolder'         => 'nullable|string',
             'transcriptionData'      => 'required',
             'analysisResults'        => 'required',
-            'audioData'              => 'required|string|max:' . (int) ceil($maxAudioBytes * 4 / 3),      // Base64 (~133MB)
+            'audioData'              => 'required|string|max:' . (int) ceil($maxAudioBytes * 4 / 3),      // Base64 (~266MB bruto)
             'audioMimeType'          => 'required|string',      // p.ej. "audio/webm"
             'driveType'              => 'nullable|string|in:personal,organization', // Nuevo campo para tipo de drive
         ], [
-            'audioData.max' => 'Archivo de audio demasiado grande (máx. 100 MB)',
+            'audioData.max' => 'Archivo de audio demasiado grande (máx. 200 MB)',
         ]);
 
 
