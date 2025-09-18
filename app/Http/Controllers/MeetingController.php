@@ -140,9 +140,7 @@ class MeetingController extends Controller
                 'organizationId' => $user->current_organization_id,
             ]);
         } catch (\Throwable $e) {
-            // If anything fails, return view without meetings (JS will fetch)
-            Log::warning('Meetings SSR failed: ' . $e->getMessage());
-
+            Log::warning('Meetings index failed', ['error' => $e->getMessage()]);
             return view('reuniones', [
                 'userRole' => $user->roles ?? 'free',
                 'organizationId' => $user->current_organization_id,
@@ -2814,6 +2812,27 @@ class MeetingController extends Controller
                 'transcript_drive_id' => $transcriptFileId,
                 'transcript_download_url' => $transcriptUrl,
             ]);
+
+            // Registrar actividad de organización si aplica
+            try {
+                $orgId = $user->current_organization_id;
+                if ($orgId) {
+                    $planService = app(\App\Services\PlanLimitService::class);
+                    $limits = $planService->getLimitsForUser($user);
+                    $remaining = $limits['remaining'];
+                    \App\Models\OrganizationActivity::create([
+                        'organization_id' => $orgId,
+                        'group_id' => null,
+                        'container_id' => null,
+                        'user_id' => $user->id,
+                        'target_user_id' => null,
+                        'action' => 'meeting_recorded',
+                        'description' => sprintf('%s grabó una reunión. Reuniones restantes este mes: %s', $user->full_name ?? $user->username, is_null($remaining) ? '∞' : $remaining),
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Organization activity log failed (MeetingController)', ['error' => $e->getMessage()]);
+            }
 
             // 4b. Procesar y guardar tareas en la BD (con parseo robusto y upsert)
             if (!empty($analysisResults['tasks']) && is_array($analysisResults['tasks'])) {

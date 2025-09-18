@@ -22,6 +22,8 @@ use Google\Service\Exception as GoogleServiceException;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use Illuminate\Validation\ValidationException;
 use Throwable;
+use App\Models\OrganizationActivity;
+use App\Services\PlanLimitService;
 
 class DriveController extends Controller
 {
@@ -1008,6 +1010,29 @@ class DriveController extends Controller
                     'transcript_drive_id'    => $transcriptFileId,
                     'transcript_download_url' => $transcriptUrl,
                 ]);
+
+                // Registrar actividad de organización si aplica
+                try {
+                    $actor = Auth::user();
+                    $orgId = $actor->current_organization_id;
+                    if ($orgId) {
+                        // Calcular restantes según límites compartidos
+                        $planService = app(PlanLimitService::class);
+                        $limits = $planService->getLimitsForUser($actor);
+                        $remaining = $limits['remaining'];
+                        OrganizationActivity::create([
+                            'organization_id' => $orgId,
+                            'group_id' => null,
+                            'container_id' => null,
+                            'user_id' => $actor->id,
+                            'target_user_id' => null,
+                            'action' => 'meeting_recorded',
+                            'description' => sprintf('%s grabó una reunión. Reuniones restantes este mes: %s', $actor->full_name ?? $actor->username, is_null($remaining) ? '∞' : $remaining),
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Organization activity log failed (DriveController)', ['error' => $e->getMessage()]);
+                }
 
                 $savedTasks = [];
                 foreach ($analysis['tasks'] ?? [] as $rawTask) {

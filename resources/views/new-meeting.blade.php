@@ -45,13 +45,13 @@
                 </div>
             </div>
 
-            <!-- Análisis mensual -->
+            <!-- Reuniones mensuales -->
             <div class="analysis-banner">
                 <div class="analysis-content">
                     <x-icon name="chart" class="analysis-icon" />
                     <div class="analysis-text">
-                        <span class="analysis-title">Análisis mensuales</span>
-                        <span class="analysis-subtitle">Has alcanzado el límite de análisis para este mes.</span>
+                        <span class="analysis-title">Reuniones mensuales</span>
+                        <span class="analysis-subtitle">Has alcanzado el límite de reuniones para este mes.</span>
                     </div>
                 </div>
                 <div class="analysis-info">

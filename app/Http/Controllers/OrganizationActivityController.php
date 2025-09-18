@@ -21,9 +21,13 @@ class OrganizationActivityController extends Controller
         }
 
         $activities = $query->orderByDesc('created_at')->get()->map(function ($activity) {
+            $actor = null;
+            if ($activity->user) {
+                $actor = $activity->user->full_name ?: ($activity->user->username ?? null);
+            }
             return [
                 'id' => $activity->id,
-                'actor' => optional($activity->user)->name,
+                'actor' => $actor,
                 'action' => $activity->action,
                 'description' => $activity->description,
                 'created_at' => $activity->created_at->toDateTimeString(),

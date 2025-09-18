@@ -25,11 +25,49 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeFadeAnimations();
     initializeContainers(); // Inicializar funcionalidad de contenedores
     initializeDownloadModal();
+    // Cargar límites de plan para mostrar reuniones mensuales/Restantes
+    updatePlanLimitsBanner().catch(() => {/* no-op */});
     const defaultTab = document.querySelector('button[data-target="my-meetings"]');
     if (defaultTab) {
         setActiveTab(defaultTab);
     }
 });
+
+// ===============================================
+// PLAN LIMITS BANNER (Reuniones mensuales)
+// ===============================================
+async function updatePlanLimitsBanner() {
+    try {
+        const resp = await fetch('/api/plan/limits', { credentials: 'include' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const limits = await resp.json();
+
+        const used = Number(limits.used_this_month || 0);
+        const max = limits.max_meetings_per_month; // puede ser null (ilimitado)
+        const remaining = max === null ? null : Math.max(0, max - used);
+
+        const countEl = document.getElementById('plan-meetings-count');
+        const remainingEl = document.getElementById('plan-remaining-text');
+        const progressBar = document.getElementById('plan-progress-bar');
+
+        if (countEl) {
+            countEl.textContent = `${used}/${max ?? '∞'}`;
+        }
+        if (remainingEl) {
+            if (max === null) {
+                remainingEl.textContent = 'Reuniones ilimitadas este mes';
+            } else {
+                remainingEl.textContent = `${remaining} reuniones restantes este mes`;
+            }
+        }
+        if (progressBar) {
+            const pct = max === null || max === 0 ? 0 : Math.min(100, Math.round((used / max) * 100));
+            progressBar.style.width = `${pct}%`;
+        }
+    } catch (e) {
+        console.warn('No se pudieron cargar los límites del plan en Reuniones:', e);
+    }
+}
 
 // ===============================================
 // CONFIGURACIÓN DE EVENT LISTENERS
