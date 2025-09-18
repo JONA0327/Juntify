@@ -80,13 +80,17 @@ function getCorrectFileExtension(blob) {
     // Primero, intentar detectar por el tipo del blob convertido
     if (blob && blob.type) {
         if (blob.type.includes('mpeg')) return 'mp3';
-        if (blob.type.includes('mp4')) return 'mp4';
+        if (blob.type.includes('mp4')) {
+            return blob.type.includes('video') ? 'mp4' : 'm4a';
+        }
     }
 
     // Si no, usar el formato almacenado de la grabación original
     if (currentRecordingFormat) {
         if (currentRecordingFormat.includes('mpeg')) return 'mp3';
-        if (currentRecordingFormat.includes('mp4')) return 'mp4';
+        if (currentRecordingFormat.includes('mp4')) {
+            return currentRecordingFormat.includes('video') ? 'mp4' : 'm4a';
+        }
     }
 
     // Fallback: usar MP4 como default (el formato preferido)
@@ -105,94 +109,196 @@ function downloadAudioWithCorrectFormat(blob, baseName) {
 // Función específica para descargar siempre en MP3 cuando hay errores
 async function downloadAudioAsMP3(blob, baseName) {
     try {
-        let mp3Blob = blob;
+        let workingBlob = blob;
+        let extension = 'mp3';
 
-        // Si no es MP3, intentar convertir
-        if (!blob.type.includes('mpeg') && !blob.type.includes('mp3')) {
+        if (!blob.type.includes('mpeg') && !blob.type.includes('mp3') && !blob.type.includes('mp4')) {
             console.log('🎵 [Download] Convirtiendo a MP3 para descarga...');
-            mp3Blob = await convertToMp3(blob);
+            const { blob: convertedBlob, extension: convertedExtension } = await convertToMp3(blob);
+            workingBlob = convertedBlob;
+            extension = convertedExtension;
+        } else if (blob.type.includes('mp4')) {
+            extension = blob.type.includes('audio') && !blob.type.includes('video') ? 'm4a' : 'mp4';
         }
 
-        const fileName = `${baseName}.mp3`;
-        downloadBlob(mp3Blob, fileName);
-        console.log(`💾 [Download] Audio descargado como MP3: ${fileName}`);
+        const fileName = `${baseName}.${extension}`;
+        downloadBlob(workingBlob, fileName);
+        console.log(`💾 [Download] Audio descargado como ${extension.toUpperCase()}: ${fileName}`);
         return fileName;
     } catch (error) {
-        console.error('❌ [Download] Error al convertir a MP3:', error);
+        console.error('❌ [Download] Error al transcodificar audio para descarga:', error);
         // Fallback: usar la función normal si la conversión falla
         return downloadAudioWithCorrectFormat(blob, baseName);
     }
 }
 
-// Helper para convertir blobs WebM/Opus a MP3 usando ffmpeg.wasm
-// Función mejorada para conversión a MP3 sin FFmpeg (compatible con CORS)
+let ffmpegLoaderPromise = null;
+
+async function loadFfmpeg() {
+    if (!ffmpegLoaderPromise) {
+        ffmpegLoaderPromise = (async () => {
+            const ffmpegModule = await import('@ffmpeg/ffmpeg');
+            const { createFFmpeg, fetchFile } = ffmpegModule;
+            const ffmpeg = createFFmpeg({ log: false });
+            await ffmpeg.load();
+            return { ffmpeg, fetchFile };
+        })().catch((error) => {
+            ffmpegLoaderPromise = null;
+            throw error;
+        });
+    }
+
+    return ffmpegLoaderPromise;
+}
+
+function guessInputExtension(mimeType) {
+    if (!mimeType) {
+        return 'dat';
+    }
+
+    const normalized = mimeType.toLowerCase();
+
+    if (normalized.includes('webm')) {
+        return 'webm';
+    }
+
+    if (normalized.includes('ogg')) {
+        return 'ogg';
+    }
+
+    if (normalized.includes('wav')) {
+        return 'wav';
+    }
+
+    if (normalized.includes('3gpp') || normalized.includes('3gp')) {
+        return '3gp';
+    }
+
+    if (normalized.includes('mp4')) {
+        return 'mp4';
+    }
+
+    if (normalized.includes('aac')) {
+        return 'aac';
+    }
+
+    if (normalized.includes('flac')) {
+        return 'flac';
+    }
+
+    return 'dat';
+}
+
+// Helper para transcodificar audio a MP3 (con fallback AAC/MP4) usando ffmpeg.wasm
 async function convertToMp3(blob) {
+    if (!(blob instanceof Blob)) {
+        throw new Error('Se necesita un Blob válido para convertir.');
+    }
+
+    const originalMime = blob.type || '';
+    const normalizedMime = originalMime.toLowerCase();
+    const logSize = `${(blob.size / 1024).toFixed(1)} KB`;
+    console.log('🎵 [Convert] Iniciando conversión', { mime: originalMime, size: logSize });
+
+    // Evitar reconvertir cuando ya es MP3
+    if (normalizedMime.includes('mpeg') || normalizedMime.includes('mp3')) {
+        console.log('✅ [Convert] Archivo ya está en MP3, omitiendo transcodificación.');
+        return {
+            blob,
+            mimeType: originalMime || 'audio/mpeg',
+            extension: 'mp3',
+            wasConverted: false,
+        };
+    }
+
+    // Evitar reconvertir MP4/M4A, se mantienen para compatibilidad
+    if (normalizedMime.includes('mp4')) {
+        console.log('✅ [Convert] Archivo ya está en MP4/M4A, omitiendo transcodificación.');
+        const extension = normalizedMime.includes('audio') && !normalizedMime.includes('video') ? 'm4a' : 'mp4';
+        return {
+            blob,
+            mimeType: originalMime || 'audio/mp4',
+            extension,
+            wasConverted: false,
+        };
+    }
+
+    const { ffmpeg, fetchFile } = await loadFfmpeg();
+
+    const jobId = Math.random().toString(36).slice(2, 10);
+    const inputExtension = guessInputExtension(normalizedMime);
+    const inputName = `input-${jobId}.${inputExtension}`;
+    const mp3OutputName = `output-${jobId}.mp3`;
+    const aacOutputName = `output-${jobId}.m4a`;
+
+    const fileData = await fetchFile(blob);
+    ffmpeg.FS('writeFile', inputName, fileData);
+
+    const cleanupFiles = () => {
+        try {
+            ffmpeg.FS('unlink', inputName);
+        } catch (_) { /* noop */ }
+        try {
+            ffmpeg.FS('unlink', mp3OutputName);
+        } catch (_) { /* noop */ }
+        try {
+            ffmpeg.FS('unlink', aacOutputName);
+        } catch (_) { /* noop */ }
+    };
+
     try {
-        console.log(`🎵 [Convert] Iniciando conversión a MP3...`);
-        console.log(`🎵 [Convert] Blob original: ${blob.type}, Tamaño: ${(blob.size / 1024).toFixed(1)} KB`);
+        console.log('🎵 [Convert] Ejecutando transcodificación a MP3 con ffmpeg.wasm...');
+        await ffmpeg.run(
+            '-i',
+            inputName,
+            '-vn',
+            '-acodec',
+            'libmp3lame',
+            '-b:a',
+            '192k',
+            mp3OutputName
+        );
 
-        // Si ya es MP3/MPEG, devolver tal como está
-        if (blob.type.includes('mpeg') || blob.type.includes('mp3')) {
-            console.log(`✅ [Convert] Ya es MP3, no se requiere conversión`);
-            return blob;
+        const mp3Data = ffmpeg.FS('readFile', mp3OutputName);
+        const convertedBlob = new Blob([mp3Data], { type: 'audio/mpeg' });
+        console.log('✅ [Convert] Conversión a MP3 completada.');
+        return {
+            blob: convertedBlob,
+            mimeType: 'audio/mpeg',
+            extension: 'mp3',
+            wasConverted: true,
+        };
+    } catch (mp3Error) {
+        console.warn('⚠️ [Convert] No se pudo transcodificar a MP3, intentando AAC/MP4...', mp3Error);
+
+        try {
+            await ffmpeg.run(
+                '-i',
+                inputName,
+                '-vn',
+                '-c:a',
+                'aac',
+                '-b:a',
+                '160k',
+                aacOutputName
+            );
+
+            const aacData = ffmpeg.FS('readFile', aacOutputName);
+            const convertedBlob = new Blob([aacData], { type: 'audio/mp4' });
+            console.log('✅ [Convert] Conversión a AAC/MP4 completada.');
+            return {
+                blob: convertedBlob,
+                mimeType: 'audio/mp4',
+                extension: 'm4a',
+                wasConverted: true,
+            };
+        } catch (aacError) {
+            console.error('❌ [Convert] Falló la conversión a AAC tras error en MP3.', aacError);
+            const errorMessage = aacError?.message || (typeof aacError === 'string' ? aacError : 'Error desconocido');
+            throw new Error(`No se pudo transcodificar el archivo a MP3 ni a AAC. Detalles: ${errorMessage}`);
         }
-
-        // Para MP4, podemos reempaquetar como MP3 cambiando el MIME type
-        if (blob.type.includes('mp4')) {
-            console.log(`🔄 [Convert] Reempaquetando MP4 como MP3...`);
-            const mp3Blob = new Blob([blob], { type: 'audio/mpeg' });
-            console.log(`✅ [Convert] MP4 reempaquetado como MP3: ${(mp3Blob.size / 1024).toFixed(1)} KB`);
-            return mp3Blob;
-        }
-
-        // Para WebM/Opus, intentar conversión usando Web Audio API
-        if (blob.type.includes('webm') || blob.type.includes('opus')) {
-            console.log(`🔄 [Convert] Convirtiendo WebM/Opus usando Web Audio API...`);
-
-            try {
-                // Crear AudioContext si no existe
-                if (!audioContext || audioContext.state === 'closed') {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                }
-
-                // Decodificar audio
-                const arrayBuffer = await blob.arrayBuffer();
-                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-                console.log(`🎵 [Convert] Audio decodificado: ${audioBuffer.duration.toFixed(2)}s, ${audioBuffer.sampleRate}Hz`);
-
-                // Crear MediaRecorder con formato MP3/MP4 para re-grabar
-                const stream = new MediaStream();
-                const source = audioContext.createMediaStreamSource(stream);
-
-                // Como alternativa simple, crear un blob con MIME type MP3
-                // Esto funcionará para la mayoría de reproductores aunque no sea conversión real
-                const mp3Blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
-                console.log(`✅ [Convert] WebM convertido a MP3: ${(mp3Blob.size / 1024).toFixed(1)} KB`);
-                return mp3Blob;
-
-            } catch (webAudioError) {
-                console.warn(`⚠️ [Convert] Web Audio API falló, usando conversión de MIME type:`, webAudioError);
-                // Fallback: cambiar solo el MIME type
-                const mp3Blob = new Blob([blob], { type: 'audio/mpeg' });
-                return mp3Blob;
-            }
-        }
-
-        // Fallback para cualquier otro formato
-        console.log(`🔄 [Convert] Formato desconocido, aplicando MIME type MP3...`);
-        const mp3Blob = new Blob([blob], { type: 'audio/mpeg' });
-        console.log(`✅ [Convert] Conversión fallback completada: ${(mp3Blob.size / 1024).toFixed(1)} KB`);
-        return mp3Blob;
-
-    } catch (error) {
-        console.error('❌ [Convert] Error en conversión:', error);
-
-        // Último recurso: devolver blob original con MIME type MP3
-        console.log(`🔄 [Convert] Aplicando MIME type MP3 como último recurso...`);
-        const fallbackBlob = new Blob([blob], { type: 'audio/mpeg' });
-        console.log(`✅ [Convert] Conversión de emergencia completada`);
-        return fallbackBlob;
+    } finally {
+        cleanupFiles();
     }
 }
 
@@ -763,24 +869,25 @@ async function finalizeRecording() {
     // Determinar MIME real del primer chunk y convertir si es WebM/Opus
     const realMime = recordedChunks[0]?.type || blobType;
 
-    // SIEMPRE convertir a MP3 para máxima compatibilidad (especialmente móvil)
+    // SIEMPRE convertir a un formato compatible para máxima compatibilidad (especialmente móvil)
     try {
-        console.log('🎵 [finalizeRecording] Convirtiendo automáticamente a MP3 desde', realMime);
+        console.log('🎵 [finalizeRecording] Convirtiendo automáticamente desde', realMime);
         console.log('🎵 [finalizeRecording] Tamaño original:', (finalBlob.size / 1024).toFixed(1), 'KB');
 
-        const convertedBlob = await convertToMp3(finalBlob);
-        finalBlob = convertedBlob;
-        currentRecordingFormat = 'audio/mpeg';
+        const conversionResult = await convertToMp3(finalBlob);
+        finalBlob = conversionResult.blob;
+        currentRecordingFormat = conversionResult.mimeType;
 
-        console.log('✅ [finalizeRecording] Conversión automática a MP3 exitosa');
-        console.log('🎵 [finalizeRecording] Tamaño MP3:', (finalBlob.size / 1024).toFixed(1), 'KB');
+        console.log('✅ [finalizeRecording] Conversión automática exitosa');
+        console.log('🎵 [finalizeRecording] Tamaño final:', (finalBlob.size / 1024).toFixed(1), 'KB');
         console.log('🎵 [finalizeRecording] Tipo final:', finalBlob.type);
 
         // Mostrar notificación de conversión al usuario
-        showSuccess('✅ Audio convertido a MP3 exitosamente. Continuando con el procesamiento...');
+        const extensionLabel = conversionResult.extension.toUpperCase();
+        showSuccess(`✅ Audio convertido a ${extensionLabel} exitosamente. Continuando con el procesamiento...`);
 
     } catch (e) {
-        console.error('🎵 [finalizeRecording] Error al convertir a MP3:', e);
+        console.error('🎵 [finalizeRecording] Error al convertir el audio:', e);
         console.log('⚠️ [finalizeRecording] Usando formato original:', realMime);
 
         // Si la conversión falla, alertar al usuario sobre posibles problemas de compatibilidad
@@ -1202,30 +1309,32 @@ async function storeFailedUploadData(blob, name) {
         name: name
     });
 
-    // Intentar convertir a MP3 para mejorar compatibilidad en reintento
+    // Intentar convertir a un formato compatible para mejorar compatibilidad en reintento
     try {
-        if (!blob.type.includes('mpeg') && !blob.type.includes('mp3')) {
-            console.log('🎵 [Failed Upload] Convirtiendo a MP3 para mejorar compatibilidad...');
-            const mp3Blob = await convertToMp3(blob);
+        if (!blob.type.includes('mpeg') && !blob.type.includes('mp3') && !blob.type.includes('mp4')) {
+            console.log('🎵 [Failed Upload] Convirtiendo audio para mejorar compatibilidad...');
+            const conversionResult = await convertToMp3(blob);
 
-            failedAudioBlob = mp3Blob;
-            failedAudioName = name.replace(/\.(mp4|webm|wav)$/i, '.mp3'); // Cambiar extensión a MP3
+            failedAudioBlob = conversionResult.blob;
+            const baseName = name.replace(/\.[^/.]+$/i, '');
+            failedAudioName = `${baseName}.${conversionResult.extension}`;
 
-            console.log('✅ [Failed Upload] Audio convertido a MP3 para reintento:', {
+            console.log('✅ [Failed Upload] Audio convertido para reintento:', {
                 originalSize: (blob.size / (1024 * 1024)).toFixed(2) + ' MB',
-                mp3Size: (mp3Blob.size / (1024 * 1024)).toFixed(2) + ' MB',
-                newName: failedAudioName
+                convertedSize: (conversionResult.blob.size / (1024 * 1024)).toFixed(2) + ' MB',
+                newName: failedAudioName,
+                targetMime: conversionResult.mimeType
             });
 
-            showSuccess('Audio convertido a MP3 para mejorar compatibilidad en próximo intento');
+            showSuccess(`Audio convertido a ${conversionResult.extension.toUpperCase()} para mejorar compatibilidad en el próximo intento`);
         } else {
-            // Ya es MP3, usar tal como está
+            // Ya es MP3/MP4, usar tal como está
             failedAudioBlob = blob;
             failedAudioName = name;
-            console.log('✅ [Failed Upload] Audio ya está en formato MP3');
+            console.log('✅ [Failed Upload] Audio ya está en un formato compatible (MP3/MP4)');
         }
     } catch (conversionError) {
-        console.warn('⚠️ [Failed Upload] Error al convertir a MP3, usando audio original:', conversionError);
+        console.warn('⚠️ [Failed Upload] Error al convertir audio, usando original:', conversionError);
         failedAudioBlob = blob;
         failedAudioName = name;
     }
@@ -1475,11 +1584,11 @@ async function fetchRemuxedBlob() {
         throw new Error('Remux failed');
     }
     const buffer = await response.arrayBuffer();
-    // Convertir a MP3 para descargas/compatibilidad si se usa este flujo
+    // Convertir a un formato compatible para descargas/compatibilidad si se usa este flujo
     const webmBlob = new Blob([buffer], { type: 'audio/webm;codecs=opus' });
     try {
-        const mp3Blob = await convertToMp3(webmBlob);
-        return mp3Blob;
+        const conversionResult = await convertToMp3(webmBlob);
+        return conversionResult.blob;
     } catch (_) {
         // Fallback: devolver blob original pero marcando mpeg para evitar descargas .webm
         return new Blob([buffer], { type: 'audio/mpeg' });
@@ -1686,7 +1795,15 @@ async function handleFileSelection(file) {
     if (fileNameElement) fileNameElement.textContent = file.name;
     if (fileSizeElement) fileSizeElement.textContent = formatFileSize(file.size);
 
-    const requiresConversion = !normalizedType.includes('mpeg') && !normalizedType.includes('mp3') && !normalizedName.endsWith('.mp3');
+    const requiresConversion = !(
+        normalizedType.includes('mpeg') ||
+        normalizedType.includes('mp3') ||
+        normalizedType.includes('mp4') ||
+        normalizedType.includes('m4a') ||
+        normalizedName.endsWith('.mp3') ||
+        normalizedName.endsWith('.mp4') ||
+        normalizedName.endsWith('.m4a')
+    );
 
     if (requiresConversion && processButton) {
         processButton.disabled = true;
@@ -1697,7 +1814,7 @@ async function handleFileSelection(file) {
     if (requiresConversion && progressContainer && progressFill && progressText) {
         progressContainer.style.display = 'block';
         progressFill.style.width = '5%';
-        progressText.textContent = 'Convirtiendo archivo a MP3...';
+        progressText.textContent = 'Preparando conversión de audio...';
     } else if (progressContainer) {
         progressContainer.style.display = 'none';
     }
@@ -1705,6 +1822,8 @@ async function handleFileSelection(file) {
     try {
         let workingBlob = file;
         let finalName = file.name;
+        let targetMime = file.type;
+        let conversionResult = null;
 
         if (requiresConversion) {
             if (progressFill && progressText) {
@@ -1712,7 +1831,7 @@ async function handleFileSelection(file) {
                 progressText.textContent = 'Preparando conversión...';
             }
 
-            const mp3Blob = await convertToMp3(file);
+            conversionResult = await convertToMp3(file);
 
             if (progressFill && progressText) {
                 progressFill.style.width = '65%';
@@ -1720,14 +1839,15 @@ async function handleFileSelection(file) {
             }
 
             const baseName = file.name.includes('.') ? file.name.replace(/\.[^/.]+$/, '') : file.name;
-            finalName = `${baseName}.mp3`;
-            workingBlob = mp3Blob;
+            finalName = `${baseName}.${conversionResult.extension}`;
+            workingBlob = conversionResult.blob;
+            targetMime = conversionResult.mimeType;
         }
 
         const finalFile = (workingBlob instanceof File && workingBlob.name === finalName)
             ? workingBlob
             : new File([workingBlob], finalName, {
-                type: 'audio/mpeg',
+                type: targetMime || 'audio/mpeg',
                 lastModified: Date.now()
             });
 
@@ -1738,7 +1858,8 @@ async function handleFileSelection(file) {
 
         if (progressFill && progressText && requiresConversion) {
             progressFill.style.width = '100%';
-            progressText.textContent = 'MP3 listo para procesar';
+            const label = conversionResult ? conversionResult.extension.toUpperCase() : 'MP3';
+            progressText.textContent = `${label} listo para procesar`;
             setTimeout(() => {
                 if (progressContainer) {
                     progressContainer.style.display = 'none';
@@ -1752,10 +1873,14 @@ async function handleFileSelection(file) {
             processButton.style.visibility = 'visible';
         }
 
-        showSuccess('Archivo listo para procesar');
+        if (conversionResult) {
+            showSuccess(`Archivo convertido a ${conversionResult.extension.toUpperCase()} listo para procesar`);
+        } else {
+            showSuccess('Archivo listo para procesar');
+        }
     } catch (conversionError) {
-        console.error('Error al convertir archivo a MP3:', conversionError);
-        showError('No se pudo convertir el archivo a MP3. Intenta nuevamente con otro archivo.');
+        console.error('Error al convertir archivo de audio:', conversionError);
+        showError('No se pudo transcodificar el archivo. Intenta nuevamente con otro archivo.');
 
         uploadedFile = null;
 
