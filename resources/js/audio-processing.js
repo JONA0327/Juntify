@@ -1508,53 +1508,44 @@ async function loadDriveOptions() {
 }
 
 async function loadDriveFolders() {
-    const role = window.userRole || document.body.dataset.userRole;
-    const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
     const driveSelect = document.getElementById('drive-select');
     const rootSelect = document.getElementById('root-folder-select');
     const standardInfo = document.getElementById('standard-folder-info');
 
     console.log('🔍 [loadDriveFolders] Starting with debug info:', {
-        role,
-        organizationId,
         driveSelectValue: driveSelect?.value,
-        driveSelectExists: !!driveSelect
+        driveSelectExists: !!driveSelect,
+        hasOrganizationData: !!driveStatusCache.organization
     });
 
     // First, load drive options with real folder names
     await loadDriveOptions();
 
-    // Updated logic to allow colaboradores to choose between personal and organization
-    let useOrg;
-    if (role === 'colaborador') {
-        // For colaboradores, check the drive select value if it exists
-        useOrg = driveSelect ? driveSelect.value === 'organization' : true; // default to org if no selector
-    } else if (role === 'administrador' && driveSelect) {
-        useOrg = driveSelect.value === 'organization';
-    } else {
-        useOrg = false; // default to personal
-    }
+    const selectedDrive = driveSelect?.value || (driveStatusCache.organization ? 'organization' : 'personal');
+    const useOrg = selectedDrive === 'organization' && !!driveStatusCache.organization;
 
     console.log('🔍 [loadDriveFolders] Drive selection logic:', {
-        role,
+        selectedDrive,
         useOrg,
-        driveSelectValue: driveSelect?.value,
-        reasoning: role === 'colaborador' ? 'colaborador can choose' : 'administrator choice'
+        hasOrganizationData: !!driveStatusCache.organization
     });
 
     try {
-        const data = useOrg ? driveStatusCache.organization : driveStatusCache.personal;
-        console.log('🔍 [loadDriveFolders] Using cached drive data:', data);
+        const dataKey = useOrg ? 'organization' : 'personal';
+        const data = driveStatusCache[dataKey];
+        console.log('🔍 [loadDriveFolders] Using cached drive data:', { dataKey, data });
+
+        if (selectedDrive === 'organization' && !driveStatusCache.organization) {
+            console.warn('⚠️ [loadDriveFolders] Organization selected but no data available, falling back to personal data');
+        }
 
         if (!data) {
             showNotification('Conecta tu cuenta de Drive para ver las rutas automáticas', 'warning');
             return;
         }
 
-        // Don't hide drive select for colaboradores anymore - they can choose
-        console.log('🔍 [loadDriveFolders] Drive select visibility:', {
-            role,
-            willHide: false, // Changed: don't hide for colaboradores
+        console.log('🔍 [loadDriveFolders] Applying folder data to UI:', {
+            targetDrive: dataKey,
             driveSelectExists: !!driveSelect
         });
 
