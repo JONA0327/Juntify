@@ -1780,6 +1780,16 @@ async function processDatabaseSave(meetingName, rootFolder) {
     const transcription = transcriptionData;
     const analysis = analysisResults;
 
+    const csrfToken = document.querySelector('meta[name="csrf-token"]');
+    const csrfTokenValue = csrfToken?.getAttribute('content');
+    if (!csrfToken || !csrfTokenValue) {
+        console.error('❌ CSRF token no encontrado');
+        showNotification('Error de configuración: Token de seguridad no encontrado', 'error');
+        resetUI();
+        showStep(4);
+        return { success: false, message: 'Token de seguridad no encontrado' };
+    }
+
     let audio = audioData;
     // Configurar el tipo MIME preferido: MP3 si está disponible, sino WebM como fallback
     let audioMimeType = getPreferredAudioFormat();
@@ -1806,7 +1816,7 @@ async function processDatabaseSave(meetingName, rootFolder) {
             uploadResponse = await fetch('/api/drive/upload-pending-audio', {
                 method: 'POST',
                 headers: {
-                    'X-CSRF-TOKEN': csrfToken.getAttribute('content')
+                    'X-CSRF-TOKEN': csrfTokenValue
                 },
                 body: formData
             });
@@ -1907,18 +1917,9 @@ async function processDatabaseSave(meetingName, rootFolder) {
         }
     }
 
-    const csrfToken = document.querySelector('meta[name="csrf-token"]');
-    if (!csrfToken) {
-        console.error('❌ CSRF token no encontrado');
-        showNotification('Error de configuración: Token de seguridad no encontrado', 'error');
-        resetUI();
-        showStep(4);
-        return { success: false, message: 'Token de seguridad no encontrado' };
-    }
-
     const headers = {
         'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': csrfToken.getAttribute('content')
+        'X-CSRF-TOKEN': csrfTokenValue
     };
 
     try {
