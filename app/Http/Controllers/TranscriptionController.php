@@ -77,13 +77,13 @@ class TranscriptionController extends Controller
 
     public function store(Request $request)
     {
-        $acceptedFormats = ['mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'webm'];
+        $acceptedFormats = ['mp3', 'm4a', 'mp4'];
 
         $request->validate([
-            'audio'    => 'required|file|max:102400|mimes:' . implode(',', array_merge($acceptedFormats, ['mp4'])), // Máximo 100MB
+            'audio'    => 'required|file|max:102400|mimes:' . implode(',', $acceptedFormats), // Máximo 100MB
             'language' => 'nullable|in:es,en,fr,de',
         ], [
-            'audio.mimes' => 'Este sistema solo acepta archivos de audio en formato MP3, WAV, M4A (incluye MP4), FLAC, OGG, AAC o WebM.',
+            'audio.mimes' => 'Este sistema solo acepta archivos de audio en formato MP3 (.mp3) y MP4/M4A (.mp4/.m4a). Convierte otros formatos (por ejemplo, WebM, AAC, WAV) antes de subirlos.',
         ]);
 
         $file = $request->file('audio');
@@ -110,7 +110,7 @@ class TranscriptionController extends Controller
                 'es_mp3' => $isMP3,
                 'tamaño' => $file->getSize(),
                 'formato_original' => strtoupper($extension ?: 'DESCONOCIDO'),
-                'formatos_aceptados' => ['MP3', 'WAV', 'M4A', 'FLAC', 'OGG', 'AAC', 'WebM'],
+                'formatos_aceptados' => ['MP3', 'MP4/M4A'],
             ]);
             set_time_limit(7200); // 2 horas para archivos grandes
         } else {
@@ -131,7 +131,7 @@ class TranscriptionController extends Controller
             'is_webm' => $isWebM,
             'is_mp3' => $isMP3,
             'formato_original' => strtoupper($extension ?: 'DESCONOCIDO'),
-            'formatos_aceptados' => ['MP3', 'WAV', 'M4A', 'FLAC', 'OGG', 'AAC', 'WebM'],
+            'formatos_aceptados' => ['MP3', 'MP4/M4A'],
         ]);
 
         // Log específico para archivos grandes

@@ -1753,32 +1753,16 @@ async function handleFileSelection(file) {
         'audio/mp4',
         'video/mp4',
         'audio/m4a',
-        'audio/x-m4a',
-        'audio/aac',
-        'audio/x-aac',
-        'audio/adts',
-        'audio/aacp',
-        'audio/vnd.dlna.adts',
-        'audio/vnd.dlna.mpeg-tts',
-        'audio/3gpp',
-        'video/3gpp',
-        'audio/wav',
-        'audio/x-wav',
-        'audio/wave',
-        'audio/ogg',
-        'audio/webm',
-        'video/webm',
-        'audio/flac',
-        'audio/x-flac'
+        'audio/x-m4a'
     ];
 
-    const validExtensions = /\.(mp3|m4a|mp4|aac|adts|wav|wave|ogg|webm|flac|3gp|3gpp)$/i;
+    const validExtensions = /\.(mp3|m4a|mp4)$/i;
 
     const hasValidMime = normalizedType && validMimeTypes.some((type) => normalizedType === type || normalizedType.startsWith(`${type};`));
     const hasValidExtension = validExtensions.test(normalizedName);
 
     if (!hasValidMime && !hasValidExtension) {
-        showError('❌ Tipo de archivo no soportado. Este sistema acepta archivos MP3 (.mp3), MP4/M4A (.mp4/.m4a), WAV (.wav), OGG (.ogg), WebM (.webm), FLAC (.flac), AAC (.aac) o 3GPP (.3gp/.3gpp).');
+        showError('❌ Tipo de archivo no soportado. Este sistema acepta únicamente archivos MP3 (.mp3) y MP4/M4A (.mp4/.m4a). Convierte otros formatos (por ejemplo, WebM, AAC, WAV) antes de subirlos.');
         return;
     }
 

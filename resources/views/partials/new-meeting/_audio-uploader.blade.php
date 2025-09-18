@@ -4,8 +4,9 @@
         <x-icon name="folder" class="upload-icon" />
         <h3 class="upload-title">Arrastra y suelta tu archivo de audio aquí</h3>
         <p class="upload-subtitle">O haz clic para seleccionar un archivo de audio</p>
-        <p class="upload-formats">Formatos soportados: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM</p>
-        <input type="file" id="audio-file-input" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,.webm,audio/*" style="display: none;">
+        <p class="upload-formats">Formatos soportados: MP3, MP4/M4A</p>
+        <p class="upload-legend">Otros formatos (por ejemplo, WebM, AAC, WAV) deben convertirse a MP3 o MP4/M4A antes de subirlos.</p>
+        <input type="file" id="audio-file-input" accept=".mp3,.m4a,.mp4" style="display: none;">
         <button class="btn btn-primary upload-btn">
             <x-icon name="folder" class="btn-icon" />
             Seleccionar archivo
