@@ -501,6 +501,7 @@ class TranscriptionController extends Controller
             'filename' => $request->input('filename'),
             'original_extension' => $extension,
             'original_mime_type' => $acceptedFormats[$extension] ?? null,
+            'supported_extensions' => array_keys($acceptedFormats),
             'conversion_target' => 'mp3',
             'conversion_required' => $extension !== 'mp3',
             'total_size' => $request->input('size'),

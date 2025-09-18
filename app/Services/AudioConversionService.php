@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\FfmpegUnavailableException;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Symfony\Component\Process\Process;
@@ -61,7 +62,21 @@ class AudioConversionService
 
         if (!$process->isSuccessful()) {
             @unlink($targetPath);
-            throw new RuntimeException('FFmpeg conversion failed: ' . $process->getErrorOutput());
+
+            $exitCode = $process->getExitCode();
+            $errorOutput = $process->getErrorOutput();
+            $normalizedError = strtolower($errorOutput);
+
+            if ($exitCode === 126 || $exitCode === 127 || str_contains($normalizedError, 'not found')) {
+                Log::warning('FFmpeg executable appears to be unavailable', [
+                    'exit_code' => $exitCode,
+                    'error_output' => $errorOutput,
+                ]);
+
+                throw new FfmpegUnavailableException('FFmpeg executable not available for audio conversion.', $exitCode ?? 0);
+            }
+
+            throw new RuntimeException('FFmpeg conversion failed: ' . $errorOutput);
         }
 
         Log::info('Audio converted to MP3 using ffmpeg', [
