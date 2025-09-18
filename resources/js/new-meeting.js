@@ -178,6 +178,10 @@ function guessInputExtension(mimeType) {
         return 'mp4';
     }
 
+    if (normalized.includes('adts')) {
+        return 'aac';
+    }
+
     if (normalized.includes('aac')) {
         return 'aac';
     }
@@ -1752,6 +1756,10 @@ async function handleFileSelection(file) {
         'audio/x-m4a',
         'audio/aac',
         'audio/x-aac',
+        'audio/adts',
+        'audio/aacp',
+        'audio/vnd.dlna.adts',
+        'audio/vnd.dlna.mpeg-tts',
         'audio/3gpp',
         'video/3gpp',
         'audio/wav',
@@ -1764,7 +1772,7 @@ async function handleFileSelection(file) {
         'audio/x-flac'
     ];
 
-    const validExtensions = /\.(mp3|m4a|mp4|aac|wav|wave|ogg|webm|flac|3gp|3gpp)$/i;
+    const validExtensions = /\.(mp3|m4a|mp4|aac|adts|wav|wave|ogg|webm|flac|3gp|3gpp)$/i;
 
     const hasValidMime = normalizedType && validMimeTypes.some((type) => normalizedType === type || normalizedType.startsWith(`${type};`));
     const hasValidExtension = validExtensions.test(normalizedName);
