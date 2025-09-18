@@ -405,7 +405,7 @@ class DriveController extends Controller
         try {
             $v = $request->validate([
                 'meetingName' => 'required|string',
-                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4,video/mp4',
+                'audioFile'   => 'required|file|mimetypes:audio/*',
                 'rootFolder'  => 'nullable|string', // Cambiar a nullable
                 'driveType'   => 'nullable|string|in:personal,organization', // Nuevo campo para tipo de drive
             ]);
@@ -594,19 +594,35 @@ class DriveController extends Controller
             }
             $filePath = $file->getRealPath();
             $mime = $file->getMimeType();
+            $baseMime = explode(';', strtolower($mime))[0];
             $mimeToExt = [
-                'audio/mpeg' => 'mp3',
-                'audio/mp3'  => 'mp3',
-                'audio/webm' => 'webm',
-                'video/webm' => 'webm',
-                'audio/ogg'  => 'ogg',
-                'audio/wav'  => 'wav',
-                'audio/x-wav' => 'wav',
-                'audio/wave' => 'wav',
-                'audio/mp4'  => 'mp4',
+                'audio/mpeg'       => 'mp3',
+                'audio/mp3'        => 'mp3',
+                'audio/aac'        => 'aac',
+                'audio/x-aac'      => 'aac',
+                'audio/mp4'        => 'm4a',
+                'audio/x-m4a'      => 'm4a',
+                'audio/m4a'        => 'm4a',
+                'audio/webm'       => 'webm',
+                'video/webm'       => 'webm',
+                'audio/ogg'        => 'ogg',
+                'application/ogg'  => 'ogg',
+                'audio/opus'       => 'opus',
+                'audio/ogg;codecs=opus' => 'ogg',
+                'audio/x-opus+ogg' => 'ogg',
+                'audio/wav'        => 'wav',
+                'audio/x-wav'      => 'wav',
+                'audio/wave'       => 'wav',
+                'audio/flac'       => 'flac',
+                'audio/x-flac'     => 'flac',
+                'audio/amr'        => 'amr',
+                'audio/3gpp'       => '3gp',
+                'audio/3gpp2'      => '3g2',
             ];
-            $baseMime = explode(';', $mime)[0];
-            $ext = $mimeToExt[$baseMime] ?? preg_replace('/[^\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
+            $ext = $mimeToExt[$baseMime] ?? null;
+            if (empty($ext)) {
+                $ext = 'ogg';
+            }
             $fileName = $v['meetingName'] . '.' . $ext;
 
             Log::debug('uploadPendingAudio uploading to Drive', [
@@ -756,18 +772,35 @@ class DriveController extends Controller
 
         // Determine a suitable extension from the mime type
         $mime = strtolower($v['audioMimeType']);
-        $mimeToExt = [
-            'audio/mpeg' => 'mp3',
-            'audio/mp3'  => 'mp3',
-            'audio/webm' => 'webm',
-            'audio/ogg'  => 'ogg',
-            'audio/wav'  => 'wav',
-            'audio/x-wav' => 'wav',
-            'audio/wave' => 'wav',
-            'audio/mp4'  => 'mp4',
-        ];
         $baseMime = explode(';', $mime)[0];
-        $ext = $mimeToExt[$baseMime] ?? preg_replace('/[^\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
+        $mimeToExt = [
+            'audio/mpeg'       => 'mp3',
+            'audio/mp3'        => 'mp3',
+            'audio/aac'        => 'aac',
+            'audio/x-aac'      => 'aac',
+            'audio/mp4'        => 'm4a',
+            'audio/x-m4a'      => 'm4a',
+            'audio/m4a'        => 'm4a',
+            'audio/webm'       => 'webm',
+            'audio/ogg'        => 'ogg',
+            'application/ogg'  => 'ogg',
+            'audio/x-opus+ogg' => 'ogg',
+            'audio/opus'       => 'opus',
+            'video/webm'       => 'webm',
+            'video/mp4'        => 'mp4',
+            'audio/wav'        => 'wav',
+            'audio/x-wav'      => 'wav',
+            'audio/wave'       => 'wav',
+            'audio/flac'       => 'flac',
+            'audio/x-flac'     => 'flac',
+            'audio/amr'        => 'amr',
+            'audio/3gpp'       => '3gp',
+            'audio/3gpp2'      => '3g2',
+        ];
+        $ext = $mimeToExt[$baseMime] ?? null;
+        if (empty($ext)) {
+            $ext = 'ogg';
+        }
 
         // Upload the audio file to Drive using the pending folder as parent
         $fileId = $serviceAccount->uploadFile(
@@ -989,19 +1022,35 @@ class DriveController extends Controller
 
                 // extrae la extensión a partir del mimeType usando un mapa conocido
                 $mime = strtolower($v['audioMimeType']);
-                $mimeToExt = [
-                    'audio/mpeg' => 'mp3',
-                    'audio/mp3'  => 'mp3',
-                    'audio/webm' => 'webm',
-                    'audio/ogg'  => 'ogg',
-                    'audio/wav'  => 'wav',
-                    'audio/x-wav' => 'wav',
-                    'audio/wave' => 'wav',
-                    'audio/mp4'  => 'mp4',
-                ];
                 $baseMime = explode(';', $mime)[0];
-                $ext      = $mimeToExt[$baseMime]
-                    ?? preg_replace('/[^\\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
+                $mimeToExt = [
+                    'audio/mpeg'       => 'mp3',
+                    'audio/mp3'        => 'mp3',
+                    'audio/aac'        => 'aac',
+                    'audio/x-aac'      => 'aac',
+                    'audio/mp4'        => 'm4a',
+                    'audio/x-m4a'      => 'm4a',
+                    'audio/m4a'        => 'm4a',
+                    'audio/webm'       => 'webm',
+                    'audio/ogg'        => 'ogg',
+                    'application/ogg'  => 'ogg',
+                    'audio/x-opus+ogg' => 'ogg',
+                    'audio/opus'       => 'opus',
+                    'audio/wav'        => 'wav',
+                    'audio/x-wav'      => 'wav',
+                    'audio/wave'       => 'wav',
+                    'audio/flac'       => 'flac',
+                    'audio/x-flac'     => 'flac',
+                    'audio/amr'        => 'amr',
+                    'audio/3gpp'       => '3gp',
+                    'audio/3gpp2'      => '3g2',
+                    'video/webm'       => 'webm',
+                    'video/mp4'        => 'mp4',
+                ];
+                $ext      = $mimeToExt[$baseMime] ?? null;
+                if (empty($ext)) {
+                    $ext = 'ogg';
+                }
 
                 $audioFileId = $serviceAccount
                     ->uploadFile("{$meetingName}.{$ext}", $v['audioMimeType'], $audioFolderId, $tmp);
