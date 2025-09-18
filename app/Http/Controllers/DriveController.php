@@ -374,15 +374,59 @@ class DriveController extends Controller
         $maxAudioBytes = 500 * 1024 * 1024; // 500 MB
         try {
             // Validación relajada para aceptar más variaciones de MIME (algunos navegadores envían application/octet-stream)
-            $v = $request->validate([
-                'meetingName' => 'required|string',
-                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4,video/mp4,audio/x-m4a,audio/m4a,application/octet-stream',
-                'rootFolder'  => 'nullable|string',
-                'driveType'   => 'nullable|string|in:personal,organization',
-                'pendingMode' => 'nullable|boolean', // cuando true usar subcarpeta Audios Pospuestos
-            ], [
-                'audioFile.mimetypes' => 'El archivo de audio no tiene un tipo MIME permitido. Tipos aceptados: mp3, webm, ogg, wav, mp4, m4a.',
-            ]);
+            // Log pre-validación para diagnosticar 422
+            if ($request->hasFile('audioFile')) {
+                $f = $request->file('audioFile');
+                Log::debug('uploadPendingAudio pre-validation mime details', [
+                    'client_mime' => $f->getClientMimeType(),
+                    'guessed_extension' => $f->guessExtension(),
+                    'mime_type' => $f->getMimeType(),
+                    'original_name' => $f->getClientOriginalName(),
+                ]);
+            }
+
+            try {
+                $v = $request->validate([
+                    'meetingName' => 'required|string',
+                    // Ampliamos: aceptamos cualquier audio/*, video/mp4 y application/octet-stream.
+                    // Usamos mimes además de mimetypes para capturar extensión si Laravel detecta diferente.
+                    'audioFile'   => 'required|file',
+                    'rootFolder'  => 'nullable|string',
+                    'driveType'   => 'nullable|string|in:personal,organization',
+                    'pendingMode' => 'nullable|boolean',
+                ]);
+            } catch (ValidationException $e) {
+                // Si falló la validación genérica, devolver mensaje específico si falta el archivo.
+                if (! $request->hasFile('audioFile')) {
+                    throw $e; // seguirá flujo normal
+                }
+            }
+
+            // Validación MIME manual flexible
+            $allowedExact = [
+                'audio/mpeg','audio/mp3','audio/webm','video/webm','audio/ogg','audio/wav','audio/x-wav','audio/wave',
+                'audio/mp4','video/mp4','audio/x-m4a','audio/m4a','application/octet-stream'
+            ];
+            $fileObj = $request->file('audioFile');
+            if (! $fileObj) {
+                return response()->json(['message' => 'Archivo de audio faltante'], 422);
+            }
+            $detected = $fileObj->getMimeType();
+            $clientReported = $fileObj->getClientMimeType();
+            $baseDetected = explode(';', strtolower($detected))[0];
+            $isAudioWildcard = str_starts_with($baseDetected, 'audio/');
+            if (! $isAudioWildcard && ! in_array($baseDetected, $allowedExact, true)) {
+                Log::warning('uploadPendingAudio MIME rejected', [
+                    'detected' => $detected,
+                    'client_reported' => $clientReported,
+                    'original_name' => $fileObj->getClientOriginalName(),
+                ]);
+                return response()->json([
+                    'message' => 'El archivo de audio no tiene un tipo MIME permitido (detectado: ' . $detected . '). Tipos aceptados generales: audio/* y mp4.',
+                    'detected_mime' => $detected,
+                    'client_mime' => $clientReported,
+                ], 422);
+            }
 
             $user = Auth::user();
             $serviceAccount = app(GoogleServiceAccount::class);
