@@ -1657,10 +1657,7 @@ function downloadAudio() {
 
 async function saveToDatabase() {
     const meetingName = document.getElementById('meeting-name').value.trim();
-    const rootFolder = document.getElementById('root-folder-select').value;
-    // Subcarpetas manuales eliminadas: se envían como cadena vacía para compatibilidad
-    const transcriptionSubfolder = '';
-    const audioSubfolder = '';
+    // rootFolder y subcarpetas ya no existen; estructura automática
 
     if (!meetingName) {
         showNotification('Por favor ingresa un nombre para la reunión', 'error');
@@ -1668,7 +1665,6 @@ async function saveToDatabase() {
     }
 
     showStep(7);
-    // rootFolder / subfolders ya no se usan; backend resuelve según driveType
     const result = await processDatabaseSave(meetingName);
     if (!result.success) {
         const errorEl = document.getElementById('analysis-error-message');
