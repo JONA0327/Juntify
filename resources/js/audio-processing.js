@@ -1795,14 +1795,9 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
         if (window.pendingAudioInfo) {
             addMessage('Completando procesamiento de audio pendiente...');
 
-            console.log('📦 Datos a enviar:', {
+            console.log('📦 Datos a enviar (pendiente):', {
                 pending_id: window.pendingAudioInfo.pendingId,
                 meeting_name: meetingName,
-                root_folder: rootFolder,
-                transcription_subfolder: transcriptionSubfolder,
-                audio_subfolder: audioSubfolder,
-                    // root folder y subcarpetas ya no son necesarios: estructura automática
-                    // root folder / subcarpetas omitidos
                 transcription_data: transcription,
                 analysis_results: analysis
             });
@@ -1813,9 +1808,6 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                 body: JSON.stringify({
                     pending_id: window.pendingAudioInfo.pendingId,
                     meeting_name: meetingName,
-                    root_folder: rootFolder,
-                    transcription_subfolder: transcriptionSubfolder,
-                    audio_subfolder: audioSubfolder,
                     transcription_data: transcription,
                     analysis_results: analysis
                 })
@@ -1910,16 +1902,11 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                 headers,
                 body: JSON.stringify({
                     meetingName,
-                    rootFolder,
-                    transcriptionSubfolder,
-                    audioSubfolder,
-                    meetingName,
-                    // rootFolder y subcarpetas omitidos
                     transcriptionData: transcription,
                     analysisResults: analysis,
                     audioData: audio,
                     audioMimeType,
-                    driveType // Agregar el tipo de drive seleccionado
+                    driveType
                 })
             });
 
