@@ -870,8 +870,19 @@ class TranscriptionController extends Controller
         try {
             Log::info('Checking transcription details for debugging', ['transcription_id' => $id]);
 
+            $apiKey = config('services.assemblyai.api_key');
+            if (empty($apiKey)) {
+                Log::error('AssemblyAI API key is missing when checking transcription', [
+                    'transcription_id' => $id,
+                ]);
+
+                return response()->json([
+                    'error' => 'AssemblyAI API key is not configured.',
+                ], 500);
+            }
+
             $response = Http::withHeaders([
-                'authorization' => config('app.assemblyai_api_key'),
+                'authorization' => $apiKey,
                 'content-type' => 'application/json',
             ])->get("https://api.assemblyai.com/v2/transcript/{$id}");
 
