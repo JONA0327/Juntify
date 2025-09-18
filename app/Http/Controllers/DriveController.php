@@ -373,11 +373,15 @@ class DriveController extends Controller
         set_time_limit(300);
         $maxAudioBytes = 500 * 1024 * 1024; // 500 MB
         try {
+            // Validación relajada para aceptar más variaciones de MIME (algunos navegadores envían application/octet-stream)
             $v = $request->validate([
                 'meetingName' => 'required|string',
-                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4,video/mp4,audio/x-m4a,audio/m4a',
-                'rootFolder'  => 'nullable|string', // Cambiar a nullable
-                'driveType'   => 'nullable|string|in:personal,organization', // Nuevo campo para tipo de drive
+                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4,video/mp4,audio/x-m4a,audio/m4a,application/octet-stream',
+                'rootFolder'  => 'nullable|string',
+                'driveType'   => 'nullable|string|in:personal,organization',
+                'pendingMode' => 'nullable|boolean', // cuando true usar subcarpeta Audios Pospuestos
+            ], [
+                'audioFile.mimetypes' => 'El archivo de audio no tiene un tipo MIME permitido. Tipos aceptados: mp3, webm, ogg, wav, mp4, m4a.',
             ]);
 
             $user = Auth::user();
@@ -524,37 +528,55 @@ class DriveController extends Controller
                 }
             }
 
-            // 3. Buscar o crear subcarpeta 'Audios Pospuestos' en la raíz
-            $pendingSubfolderName = 'Audios Pospuestos';
-            if ($useOrgDrive) {
-                $subfolder = OrganizationSubfolder::where('organization_folder_id', $rootFolder->id)
-                    ->where('name', $pendingSubfolderName)
-                    ->first();
-            } else {
-                $subfolder = Subfolder::where('folder_id', $rootFolder->id)
-                    ->where('name', $pendingSubfolderName)
-                    ->first();
-            }
-            if ($subfolder) {
-                $pendingFolderId = $subfolder->google_id;
-                $subfolderCreated = false;
-            } else {
-                Log::info('uploadPendingAudio: creating Audios Pospuestos subfolder', ['name' => $pendingSubfolderName, 'rootFolderId' => $rootFolderId]);
-                $pendingFolderId = $serviceAccount->createFolder($pendingSubfolderName, $rootFolderId);
+            $pendingMode = (bool)($v['pendingMode'] ?? false);
+            $standardFolders = self::ensureStandardMeetingFolders($rootFolder);
+            $audioStandard   = $standardFolders['audio'];
+            $pendingSubfolderName = $pendingMode ? 'Audios Pospuestos' : $audioStandard['name'];
+
+            if ($pendingMode) {
+                // Buscar o crear subcarpeta específica de pendientes
                 if ($useOrgDrive) {
-                    $subfolder = OrganizationSubfolder::create([
-                        'organization_folder_id' => $rootFolder->id,
-                        'google_id'              => $pendingFolderId,
-                        'name'                   => $pendingSubfolderName,
-                    ]);
+                    $subfolder = OrganizationSubfolder::where('organization_folder_id', $rootFolder->id)
+                        ->where('name', $pendingSubfolderName)
+                        ->first();
                 } else {
-                    $subfolder = Subfolder::create([
-                        'folder_id' => $rootFolder->id,
-                        'google_id' => $pendingFolderId,
-                        'name'      => $pendingSubfolderName,
-                    ]);
+                    $subfolder = Subfolder::where('folder_id', $rootFolder->id)
+                        ->where('name', $pendingSubfolderName)
+                        ->first();
                 }
-                $subfolderCreated = true;
+                if ($subfolder) {
+                    $pendingFolderId = $subfolder->google_id;
+                    $subfolderCreated = false;
+                } else {
+                    Log::info('uploadPendingAudio: creating pending audios subfolder (pendingMode)', [
+                        'name' => $pendingSubfolderName,
+                        'rootFolderId' => $rootFolderId
+                    ]);
+                    $pendingFolderId = $serviceAccount->createFolder($pendingSubfolderName, $rootFolderId);
+                    if ($useOrgDrive) {
+                        $subfolder = OrganizationSubfolder::create([
+                            'organization_folder_id' => $rootFolder->id,
+                            'google_id'              => $pendingFolderId,
+                            'name'                   => $pendingSubfolderName,
+                        ]);
+                    } else {
+                        $subfolder = Subfolder::create([
+                            'folder_id' => $rootFolder->id,
+                            'google_id' => $pendingFolderId,
+                            'name'      => $pendingSubfolderName,
+                        ]);
+                    }
+                    $subfolderCreated = true;
+                }
+            } else {
+                // Usar carpeta estándar Audio
+                $pendingFolderId = $audioStandard['google_id'];
+                $subfolder       = $audioStandard['model'];
+                $subfolderCreated = false;
+                Log::info('uploadPendingAudio: using standard audio folder', [
+                    'audio_folder_id' => $pendingFolderId,
+                    'audio_folder_path' => $audioStandard['path'] ?? null,
+                ]);
             }
 
             // Nota: Si la cuenta de servicio no tiene acceso de escritura al folder raíz,
@@ -568,18 +590,30 @@ class DriveController extends Controller
             $filePath = $file->getRealPath();
             $mime = $file->getMimeType();
             $mimeToExt = [
-                'audio/mpeg' => 'mp3',
-                'audio/mp3'  => 'mp3',
-                'audio/webm' => 'webm',
-                'video/webm' => 'webm',
-                'audio/ogg'  => 'ogg',
-                'audio/wav'  => 'wav',
-                'audio/x-wav' => 'wav',
-                'audio/wave' => 'wav',
-                'audio/mp4'  => 'mp4',
+                'audio/mpeg'      => 'mp3',
+                'audio/mp3'       => 'mp3',
+                'audio/webm'      => 'webm',
+                'video/webm'      => 'webm',
+                'audio/ogg'       => 'ogg',
+                'audio/wav'       => 'wav',
+                'audio/x-wav'     => 'wav',
+                'audio/wave'      => 'wav',
+                'audio/mp4'       => 'mp4',
+                'video/mp4'       => 'mp4',
+                'audio/x-m4a'     => 'm4a',
+                'audio/m4a'       => 'm4a',
+                'application/octet-stream' => null, // se determinará por extensión original
             ];
             $baseMime = explode(';', $mime)[0];
-            $ext = $mimeToExt[$baseMime] ?? preg_replace('/[^\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
+            $ext = $mimeToExt[$baseMime] ?? null;
+            if (!$ext) {
+                $originalExt = strtolower($file->getClientOriginalExtension());
+                if (in_array($originalExt, ['mp3','webm','ogg','wav','mp4','m4a'])) {
+                    $ext = $originalExt;
+                } else {
+                    $ext = preg_replace('/[^\w]/', '', explode('/', $baseMime, 2)[1] ?? 'aud');
+                }
+            }
             $fileName = $v['meetingName'] . '.' . $ext;
 
             Log::debug('uploadPendingAudio uploading to Drive', [
@@ -634,13 +668,27 @@ class DriveController extends Controller
                 'audio_name'         => $fileName,
                 'subfolder_id'       => $subfolder->id,
                 'subfolder_created'  => $subfolderCreated,
-                'drive_type'         => $useOrgDrive ? 'organization' : 'personal', // Información del tipo de drive usado
+                'drive_type'         => $useOrgDrive ? 'organization' : 'personal',
                 'folder_info'        => [
                     'root_folder' => $rootFolder->name ?? 'Grabaciones',
                     'subfolder'   => $pendingSubfolderName,
                     'full_path'   => ($rootFolder->name ?? 'Grabaciones') . '/' . $pendingSubfolderName,
                     'drive_type'  => $useOrgDrive ? 'organization' : 'personal'
                 ],
+                // Información adicional de carpetas estándar para que el frontend conozca rutas definitivas
+                'standard_subfolders' => [
+                    'audio' => [
+                        'google_id' => $standardFolders['audio']['google_id'],
+                        'name'      => $standardFolders['audio']['name'],
+                        'path'      => $standardFolders['audio']['path'],
+                    ],
+                    'transcriptions' => [
+                        'google_id' => $standardFolders['transcriptions']['google_id'],
+                        'name'      => $standardFolders['transcriptions']['name'],
+                        'path'      => $standardFolders['transcriptions']['path'],
+                    ],
+                ],
+                'pending_mode' => $pendingMode,
             ];
             if ($subfolderCreated) {
                 \App\Models\PendingFolder::firstOrCreate([
