@@ -17,54 +17,29 @@ class TranscriptionController extends Controller
      * Optimiza la configuración de transcripción para mejor detección automática de hablantes
      * Permite que AssemblyAI detecte automáticamente sin ser demasiado sensible
      */
-    private function getOptimizedConfigForFormat($mimeType, $isMP4, $isMP3, $baseConfig)
+    private function getOptimizedConfigForFormat(string $mimeType, array $baseConfig): array
     {
-        // Para archivos MP3, usar configuración balanceada para detección automática
-        if ($isMP3) {
-            $mp3Config = $baseConfig;
-            $mp3Config['speaker_labels'] = true;        // Activar detección de hablantes
-            $mp3Config['format_text'] = false;          // Desactivado para mejor speaker detection
-            $mp3Config['speed_boost'] = false;          // Sin speed boost para asegurar calidad
-            $mp3Config['speech_threshold'] = 0.4;       // Menos sensible para evitar falsos positivos
-            $mp3Config['dual_channel'] = false;         // MP3 grabaciones son mono/stereo mixto
-            // Remover speakers_expected para permitir detección automática
-            unset($mp3Config['speakers_expected']);
+        $config = $baseConfig;
+        $config['speaker_labels'] = true;
+        $config['format_text'] = false;
+        $config['speed_boost'] = false;
+        $config['speech_threshold'] = $config['speech_threshold'] ?? 0.4;
+        $config['dual_channel'] = $config['dual_channel'] ?? false;
+        unset($config['speakers_expected']);
 
-            Log::info('Applied MP3 AUTO-DETECTION config for natural speaker detection', [
-                'speaker_labels' => $mp3Config['speaker_labels'],
-                'format_text' => $mp3Config['format_text'],
-                'speed_boost' => $mp3Config['speed_boost'],
-                'speech_threshold' => $mp3Config['speech_threshold'],
-                'speakers_expected' => 'AUTO (not forced)',
-            ]);
+        $isOgg = str_contains(strtolower($mimeType), 'ogg');
 
-            return $mp3Config;
-        }
+        Log::info('Applied neutral audio transcription config', [
+            'mime_type' => $mimeType,
+            'speaker_labels' => $config['speaker_labels'],
+            'format_text' => $config['format_text'],
+            'speed_boost' => $config['speed_boost'],
+            'speech_threshold' => $config['speech_threshold'],
+            'dual_channel' => $config['dual_channel'],
+            'is_ogg' => $isOgg,
+        ]);
 
-        // Para archivos MP4, usar configuración balanceada para detección automática
-        if ($isMP4) {
-            $mp4Config = $baseConfig;
-            $mp4Config['speaker_labels'] = true;        // Activar detección de hablantes
-            $mp4Config['format_text'] = false;          // Desactivado para mejor speaker detection
-            $mp4Config['speed_boost'] = false;          // Sin speed boost para máxima calidad
-            $mp4Config['speech_threshold'] = 0.4;       // Menos sensible para evitar falsos positivos
-            $mp4Config['dual_channel'] = false;         // Forzar mono-análisis para mejor detección
-            // Remover speakers_expected para permitir detección automática
-            unset($mp4Config['speakers_expected']);
-
-            Log::info('Applied MP4 AUTO-DETECTION config for natural speaker detection', [
-                'speaker_labels' => $mp4Config['speaker_labels'],
-                'format_text' => $mp4Config['format_text'],
-                'speed_boost' => $mp4Config['speed_boost'],
-                'speech_threshold' => $mp4Config['speech_threshold'],
-                'speakers_expected' => 'AUTO (not forced)',
-            ]);
-
-            return $mp4Config;
-        }
-
-        // Para otros formatos, usar configuración estándar con detección automática
-        return $baseConfig;
+        return $config;
     }
 
     public function store(Request $request)
@@ -76,35 +51,17 @@ class TranscriptionController extends Controller
 
         $file = $request->file('audio');
 
-        // Solo permitir formatos MP4/MP3 - NO WebM
-        $mimeType = $file->getMimeType();
+        $mimeType = strtolower($file->getMimeType());
         $fileName = $file->getClientOriginalName();
+        $normalizedName = strtolower($fileName);
 
-        $isWebM = strpos($mimeType, 'webm') !== false ||
-                  strpos($fileName, '.webm') !== false;
+        $isWebM = str_contains($mimeType, 'webm') || str_contains($normalizedName, '.webm');
+        $isMP4  = str_contains($mimeType, 'mp4') || str_contains($normalizedName, '.m4a') || str_contains($normalizedName, '.mp4');
+        $isMP3  = str_contains($mimeType, 'mpeg') || str_contains($normalizedName, '.mp3');
+        $isOgg  = str_contains($mimeType, 'ogg') || str_contains($normalizedName, '.ogg');
 
-        // Rechazar archivos WebM
-        if ($isWebM) {
-            Log::warning('Archivo WebM rechazado', [
-                'tipo' => $mimeType,
-                'nombre' => $fileName,
-                'tamaño' => $file->getSize()
-            ]);
-
-            return response()->json([
-                'error' => 'Formato WebM no permitido',
-                'message' => 'Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3) para asegurar la calidad de transcripción.',
-                'accepted_formats' => ['audio/mp4', 'audio/mpeg']
-            ], 422);
-        }
-
-        $isMP4 = strpos($mimeType, 'mp4') !== false ||
-                 strpos($fileName, '.m4a') !== false;
-
-        $isMP3 = strpos($mimeType, 'mpeg') !== false ||
-                 strpos($fileName, '.mp3') !== false;
-
-        $isLargeAudio = $isMP4 || $isMP3;
+        $isAudio = str_starts_with($mimeType, 'audio/');
+        $isLargeAudio = $isAudio || $isWebM;
 
         if ($isLargeAudio) {
             Log::info('Archivo de audio aceptado', [
@@ -112,6 +69,8 @@ class TranscriptionController extends Controller
                 'nombre' => $fileName,
                 'es_mp4' => $isMP4,
                 'es_mp3' => $isMP3,
+                'es_ogg' => $isOgg,
+                'es_webm' => $isWebM,
                 'tamaño' => $file->getSize()
             ]);
             set_time_limit(7200); // 2 horas para archivos grandes
@@ -132,6 +91,7 @@ class TranscriptionController extends Controller
             'language' => $language,
             'is_webm' => $isWebM,
             'is_mp3' => $isMP3,
+            'is_ogg' => $isOgg,
         ]);
 
         // Log específico para archivos grandes
@@ -273,7 +233,7 @@ class TranscriptionController extends Controller
             ];
 
             // Aplicar optimizaciones según el formato de audio
-            $transcriptionConfig = $this->getOptimizedConfigForFormat($mimeType, $isMP4, $isMP3, $baseConfig);
+            $transcriptionConfig = $this->getOptimizedConfigForFormat($mimeType, $baseConfig);
 
             $transcription = $transcriptionHttp->post('https://api.assemblyai.com/v2/transcript', $transcriptionConfig);
 
@@ -282,7 +242,8 @@ class TranscriptionController extends Controller
                 'successful' => $transcription->successful(),
                 'timeout_used' => $timeout,
                 'is_webm' => $isWebM,
-                'config_applied' => $isWebM ? 'WebM optimizations' : 'Standard config',
+                'is_ogg' => $isOgg,
+                'config_profile' => 'neutral-audio',
             ]);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             $failedPath = $this->saveFailedAudio($filePath);
@@ -594,7 +555,7 @@ class TranscriptionController extends Controller
         ], 202);
     }
 
-    private function processLargeAudioFile($filePath, $language, $mimeType = '', $isMP4 = false, $isMP3 = false)
+    private function processLargeAudioFile($filePath, $language, $mimeType = '')
     {
         $apiKey = config('services.assemblyai.api_key');
 
@@ -602,20 +563,22 @@ class TranscriptionController extends Controller
             throw new \Exception('AssemblyAI API key missing');
         }
 
-        // Si no se pasó explícitamente, detectar formato por extensión de archivo
-        if (!$isMP4 && !$isMP3) {
-            $lowerPath = strtolower($filePath);
-            $isMP4 = strpos($lowerPath, '.m4a') !== false;
-            $isMP3 = strpos($lowerPath, '.mp3') !== false;
-        }
-
-        $isLargeAudio = $isMP4 || $isMP3;
+        $lowerPath = strtolower($filePath);
+        $mimeType = strtolower((string) $mimeType);
+        $isWebM = str_contains($mimeType, 'webm') || str_contains($lowerPath, '.webm');
+        $isMP4 = str_contains($mimeType, 'mp4') || str_contains($lowerPath, '.m4a') || str_contains($lowerPath, '.mp4');
+        $isMP3 = str_contains($mimeType, 'mpeg') || str_contains($lowerPath, '.mp3');
+        $isOgg = str_contains($mimeType, 'ogg') || str_contains($lowerPath, '.ogg');
+        $isAudio = str_starts_with($mimeType, 'audio/');
+        $isLargeAudio = $isAudio || $isWebM;
 
         Log::info('Processing large audio file', [
             'file_path' => basename($filePath),
             'mime_type' => $mimeType,
             'is_mp4' => $isMP4,
             'is_mp3' => $isMP3,
+            'is_ogg' => $isOgg,
+            'is_webm' => $isWebM,
             'is_large_audio' => $isLargeAudio,
             'language' => $language,
         ]);
@@ -669,8 +632,7 @@ class TranscriptionController extends Controller
             'format_text'             => false,      // Desactivado para mejor speaker detection
             'dual_channel'            => false,      // Force mono analysis
             'speaker_labels'          => true,
-            'speakers_expected'       => 4,          // Forzar detección de múltiples speakers
-            'speech_threshold'        => 0.1,        // Ultra sensible
+            'speech_threshold'        => 0.4,        // Balanceado para evitar falsos positivos
             'speed_boost'             => false,
             'auto_highlights'         => false,      // Disable to improve speaker detection
             'content_safety'          => false,      // Disable to improve performance
@@ -682,7 +644,7 @@ class TranscriptionController extends Controller
         ];
 
         // Aplicar optimizaciones según el formato de audio
-        $payload = $this->getOptimizedConfigForFormat($mimeType, $isMP4, $isMP3, $basePayload);
+        $payload = $this->getOptimizedConfigForFormat($mimeType, $basePayload);
 
         if ($supportsExtras) {
             $payload['auto_chapters'] = true;

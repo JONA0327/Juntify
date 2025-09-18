@@ -51,7 +51,7 @@ function createLegacyMeeting(User $user, array $attributes = []): TranscriptionL
         'username' => $user->username,
         'meeting_name' => 'Legacy Meeting ' . Str::random(6),
         'audio_drive_id' => 'audio-' . Str::uuid(),
-        'audio_download_url' => 'https://example.test/audio.mp3',
+        'audio_download_url' => 'https://example.test/audio.ogg',
         'transcript_drive_id' => 'transcript-' . Str::uuid(),
         'transcript_download_url' => 'https://example.test/transcript.json',
     ];

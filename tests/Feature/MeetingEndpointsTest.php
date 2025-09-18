@@ -214,7 +214,7 @@ test('show legacy meeting returns audio data', function () {
         public function setAccessToken($token) {}
         public function getClient() { return new class { public function isAccessTokenExpired(){ return false; } }; }
         public function downloadFileContent($fileId) { return json_encode(['summary' => 's', 'key_points' => [], 'transcription' => 't']); }
-        public function findAudioInFolder($folderId, $meetingTitle, $meetingId) { return ['fileId' => 'file456', 'downloadUrl' => 'https://example.com/audio.mp3']; }
+        public function findAudioInFolder($folderId, $meetingTitle, $meetingId) { return ['fileId' => 'file456', 'downloadUrl' => 'https://example.com/audio.ogg']; }
         public function getFileInfo($fileId) { return new class { public function getParents(){ return []; } public function getName(){ return 'Parent'; } }; }
     });
 
@@ -222,7 +222,7 @@ test('show legacy meeting returns audio data', function () {
 
     $response->assertOk()
         ->assertJsonFragment([
-            'audio_path' => 'https://example.com/audio.mp3',
+            'audio_path' => 'https://example.com/audio.ogg',
             'audio_drive_id' => 'file456',
             'is_legacy' => true,
         ]);

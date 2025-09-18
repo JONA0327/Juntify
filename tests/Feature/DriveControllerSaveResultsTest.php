@@ -87,7 +87,7 @@ it('derives the audio extension from the mime type map', function () {
     $service->shouldReceive('uploadFile')
         ->once()->with('Meeting.ju', 'application/json', 'trans123', Mockery::type('string'))->ordered()->andReturn('t1');
     $service->shouldReceive('uploadFile')
-        ->once()->with('Meeting.mp3', 'audio/mpeg', 'audio123', Mockery::type('string'))->ordered()->andReturn('a1');
+        ->once()->with('Meeting.ogg', 'audio/ogg', 'audio123', Mockery::type('string'))->ordered()->andReturn('a1');
     $service->shouldReceive('getFileLink')
         ->twice()->ordered()->andReturn('tlink', 'alink');
 
@@ -107,7 +107,7 @@ it('derives the audio extension from the mime type map', function () {
             'tasks' => [],
         ],
         'audioData' => base64_encode('audio'),
-        'audioMimeType' => 'audio/mpeg',
+        'audioMimeType' => 'audio/ogg',
     ];
 
     $response = $this->actingAs($user)->post('/drive/save-results', $payload);

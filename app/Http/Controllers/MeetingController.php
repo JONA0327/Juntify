@@ -1184,7 +1184,7 @@ class MeetingController extends Controller
     private function streamLocalAudioFile(string $audioPath, ?string $mimeType = null): BinaryFileResponse
     {
         $headers = [
-            'Content-Type' => $mimeType ?? 'audio/mpeg',
+            'Content-Type' => $mimeType ?? 'audio/ogg',
             'Accept-Ranges' => 'bytes',
             'Access-Control-Allow-Origin' => '*',
         ];
@@ -1217,7 +1217,7 @@ class MeetingController extends Controller
                 $info = $this->googleDriveService->getFileInfo($effectiveFileId);
                 $mimeType = $info->getMimeType() ?: null;
                 $fileSize = $info->getSize() ? (int) $info->getSize() : null;
-                $extension = $this->detectAudioExtension($info->getName(), $mimeType ?? 'audio/mpeg');
+                $extension = $this->detectAudioExtension($info->getName(), $mimeType ?? 'audio/ogg');
                 $downloadName = $sanitizedName . '.' . $extension;
             } catch (\Throwable $e) {
                 Log::warning('streamAudio: No se pudo obtener metadata de Drive para streaming', [
@@ -1233,7 +1233,7 @@ class MeetingController extends Controller
         }
 
         if (!str_contains($downloadName, '.')) {
-            $downloadName .= '.mp3';
+            $downloadName .= '.ogg';
         }
 
         return $this->proxyStreamFromUrl($url, $mimeType, $fileSize, $downloadName);
@@ -1578,13 +1578,13 @@ class MeetingController extends Controller
             return $mimeToExtension[$baseMimeType];
         }
 
-        // Si no se pudo detectar, asumir mp3 como fallback
-        Log::warning('No se pudo detectar la extensión del audio, usando mp3 como fallback', [
+        // Si no se pudo detectar, asumir ogg como fallback
+        Log::warning('No se pudo detectar la extensión del audio, usando ogg como fallback', [
             'file_name' => $fileName,
             'mime_type' => $mimeType
         ]);
 
-        return 'mp3';
+        return 'ogg';
     }
 
     /**
@@ -2248,14 +2248,14 @@ class MeetingController extends Controller
                     return $this->audioError(404, 'Archivo de audio no disponible (temp)', $meetingModel->id);
                 }
                 try {
-                    $mimeType = @mime_content_type($audioPath) ?: 'audio/mpeg';
+                    $mimeType = @mime_content_type($audioPath) ?: 'audio/ogg';
                 } catch (\Throwable $e) {
-                    Log::warning('streamAudio: mime_content_type fallo, usando audio/mpeg', [
+                    Log::warning('streamAudio: mime_content_type fallo, usando audio/ogg', [
                         'meeting_id' => $meetingModel->id,
                         'audio_path' => $audioPath,
                         'error' => $e->getMessage()
                     ]);
-                    $mimeType = 'audio/mpeg';
+                    $mimeType = 'audio/ogg';
                 }
                 return $this->streamLocalAudioFile($audioPath, $mimeType);
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -2323,20 +2323,20 @@ class MeetingController extends Controller
                                 $local = $this->storeTemporaryFile($content, $fileName);
                                 return redirect()->to($this->publicUrlFromStoragePath($local), 302);
                             }
-                            return response($content)->header('Content-Type','audio/mpeg');
+                            return response($content)->header('Content-Type','audio/ogg');
                         } catch (\Throwable $e1) {
                             if ($sharedMeeting?->sharedBy?->email) {
                                 try {
                                     $sa->impersonate($sharedMeeting->sharedBy->email);
                                     $content = $sa->downloadFile($fileId);
                                     if ($storeTemp) {
-                                        try { $info = $sa->getFileInfo($fileId); $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType()); } catch (\Throwable $eInfo2) { $ext='mp3'; }
+                try { $info = $sa->getFileInfo($fileId); $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType()); } catch (\Throwable $eInfo2) { $ext='ogg'; }
                                         $san = preg_replace('/[^a-zA-Z0-9_-]/','_', $meetingModel->meeting_name);
                                         $fileName = $san . '_' . $meetingModel->id . '.' . $ext;
                                         $local = $this->storeTemporaryFile($content, $fileName);
                                         return redirect()->to($this->publicUrlFromStoragePath($local), 302);
                                     }
-                                    return response($content)->header('Content-Type','audio/mpeg');
+                                    return response($content)->header('Content-Type','audio/ogg');
                                 } catch (\Throwable $e2) {
                                     $dbg['sa_impersonate_error'] = $e2->getMessage();
                                 }
@@ -2390,13 +2390,13 @@ class MeetingController extends Controller
                 if (!isset($dbg['user_token_error'])) {
                     $content = $this->googleDriveService->downloadFileContent($fileId);
                     if ($storeTemp) {
-                        try { $info = $this->googleDriveService->getFileInfo($fileId); $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType()); } catch (\Throwable $eI) { $ext='mp3'; }
+                        try { $info = $this->googleDriveService->getFileInfo($fileId); $ext = $this->detectAudioExtension($info->getName(), $info->getMimeType()); } catch (\Throwable $eI) { $ext='ogg'; }
                         $san = preg_replace('/[^a-zA-Z0-9_-]/','_', $meetingModel->meeting_name);
                         $fileName = $san . '_' . $meetingModel->id . '.' . $ext;
                         $local = $this->storeTemporaryFile($content, $fileName);
                         return redirect()->to($this->publicUrlFromStoragePath($local), 302);
                     }
-                    return response($content)->header('Content-Type','audio/mpeg');
+                    return response($content)->header('Content-Type','audio/ogg');
                 }
             } catch (\Throwable $eDl) {
                 $dbg['direct_download_error'] = $eDl->getMessage();
@@ -2993,7 +2993,7 @@ class MeetingController extends Controller
             return response()->json([
                 'success' => true,
                 'audioData' => $audioBase64,
-                'mimeType' => 'audio/mpeg'
+                'mimeType' => 'audio/ogg'
             ]);
 
         } catch (\Exception $e) {
