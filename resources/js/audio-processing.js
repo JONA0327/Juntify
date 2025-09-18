@@ -1518,8 +1518,13 @@ async function loadDriveFolders() {
         driveSelectExists: !!driveSelect
     });
 
-    // First, load drive options with real folder names
+    // First, (re)load drive options ONLY preserving current selection to avoid overriding user choice
+    const previouslySelected = driveSelect ? driveSelect.value : null;
     await loadDriveOptions();
+    if (previouslySelected && driveSelect && driveSelect.querySelector(`option[value="${previouslySelected}"]`)) {
+        driveSelect.value = previouslySelected;
+        console.log('🔁 [loadDriveFolders] Restored user selection after options reload:', previouslySelected);
+    }
 
     // Updated logic to allow colaboradores to choose between personal and organization
     let useOrg;
@@ -1730,6 +1735,31 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
     const driveType = driveSelect ? driveSelect.value : 'personal'; // Default to personal
 
     console.log('🗂️ [processDatabaseSave] Drive type selected:', driveType);
+
+    // Si es drive organizacional, obtenemos/forzamos la carpeta raíz directamente desde el endpoint org y no del select (que puede estar vacío)
+    if (driveType === 'organization') {
+        try {
+            const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
+            if (organizationId) {
+                const res = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.root_folder) {
+                        rootFolder = data.root_folder.google_id;
+                        console.log('🏢 [processDatabaseSave] Using organization root folder from API:', rootFolder);
+                    } else {
+                        console.warn('⚠️ [processDatabaseSave] Organization root folder not found in response');
+                    }
+                } else {
+                    console.warn('⚠️ [processDatabaseSave] Failed to fetch organization root folder, status:', res.status);
+                }
+            } else {
+                console.warn('⚠️ [processDatabaseSave] No organizationId found on page context');
+            }
+        } catch (e) {
+            console.error('❌ [processDatabaseSave] Error fetching organization root folder:', e);
+        }
+    }
 
     // Contenedor de mensajes detallados
     const addMessage = (msg) => {
