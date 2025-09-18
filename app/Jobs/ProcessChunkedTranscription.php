@@ -93,9 +93,42 @@ class ProcessChunkedTranscription implements ShouldQueue
 
             $processedPath = $finalFilePath;
 
-            // Para archivos WebM, intentar validar y posiblemente convertir
+            // Para archivos WebM, intentar validar/comprobar integridad primero (mantiene lógica previa)
             if ($isWebM) {
                 $processedPath = $this->processWebMFile($finalFilePath, $metadata);
+            }
+
+            // Conversión unificada a OGG (Opus) si está habilitada en config('audio.force_ogg')
+            $converted = false;
+            if (config('audio.force_ogg')) {
+                try {
+                    $conversionService = app(\App\Services\AudioConversionService::class);
+                    $mimeGuess = @mime_content_type($processedPath) ?: null;
+                    $origExt = pathinfo($processedPath, PATHINFO_EXTENSION) ?: null;
+                    $result = $conversionService->convertToOgg($processedPath, $mimeGuess, $origExt);
+                    if ($result['was_converted']) {
+                        $processedPath = $result['path'];
+                        $converted = true;
+                        Log::info('Chunked transcription audio converted to ogg', [
+                            'upload_id' => $this->uploadId,
+                            'tracking_id' => $this->trackingId,
+                            'original_ext' => $origExt,
+                            'mime' => $result['mime_type']
+                        ]);
+                    }
+                } catch (\App\Exceptions\FfmpegUnavailableException $e) {
+                    Log::warning('FFmpeg unavailable for chunked transcription conversion', [
+                        'upload_id' => $this->uploadId,
+                        'tracking_id' => $this->trackingId,
+                        'error' => $e->getMessage(),
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::error('OGG conversion failed in chunked transcription, proceeding with original', [
+                        'upload_id' => $this->uploadId,
+                        'tracking_id' => $this->trackingId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             $transcriptionId = $this->uploadToAssemblyAI($processedPath, $metadata['language'], $isWebM);

@@ -384,44 +384,11 @@ class TranscriptionController extends Controller
         $uploadId = Str::uuid();
         $language = $request->input('language', 'es');
         $filename = $request->input('filename');
-
-        // Rechazar archivos WebM
-        $isWebM = strpos(strtolower($filename), '.webm') !== false;
-        if ($isWebM) {
-            Log::warning('WebM chunked upload rejected', [
-                'filename' => $filename,
-                'size_mb' => round($request->input('size') / 1024 / 1024, 2),
-                'chunks' => $request->input('chunks'),
-            ]);
-
-            return response()->json([
-                'error' => 'Formato WebM no permitido',
-                'message' => 'Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3) para asegurar la calidad de transcripción.',
-                'accepted_formats' => ['audio/mp4', 'audio/mpeg']
-            ], 422);
-        }
-
-        // Validar que sea MP4 o MP3
-        $isMP4 = strpos(strtolower($filename), '.m4a') !== false;
-        $isMP3 = strpos(strtolower($filename), '.mp3') !== false;
-
-        if (!$isMP4 && !$isMP3) {
-            Log::warning('Invalid audio format in chunked upload', [
-                'filename' => $filename,
-                'accepted_formats' => ['mp4', 'mp3']
-            ]);
-
-            return response()->json([
-                'error' => 'Formato de audio no soportado',
-                'message' => 'Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3).',
-                'accepted_formats' => ['audio/mp4', 'audio/mpeg']
-            ], 422);
-        }
-
-        Log::info('Valid audio format detected for chunked upload', [
+        $lower = strtolower($filename);
+        $ext = pathinfo($lower, PATHINFO_EXTENSION);
+        Log::info('Chunked upload accepted (format agnostic)', [
             'filename' => $filename,
-            'is_mp4' => $isMP4,
-            'is_mp3' => $isMP3,
+            'extension' => $ext,
             'size_mb' => round($request->input('size') / 1024 / 1024, 2),
             'chunks' => $request->input('chunks'),
         ]);

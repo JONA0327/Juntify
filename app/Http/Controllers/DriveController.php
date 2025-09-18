@@ -405,7 +405,7 @@ class DriveController extends Controller
         try {
             $v = $request->validate([
                 'meetingName' => 'required|string',
-                'audioFile'   => 'required|file|mimetypes:audio/*',
+                'audioFile'   => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4,video/mp4',
                 'rootFolder'  => 'nullable|string', // Cambiar a nullable
                 'driveType'   => 'nullable|string|in:personal,organization', // Nuevo campo para tipo de drive
             ]);
@@ -594,35 +594,42 @@ class DriveController extends Controller
             }
             $filePath = $file->getRealPath();
             $mime = $file->getMimeType();
-            $baseMime = explode(';', strtolower($mime))[0];
             $mimeToExt = [
-                'audio/mpeg'       => 'mp3',
-                'audio/mp3'        => 'mp3',
-                'audio/aac'        => 'aac',
-                'audio/x-aac'      => 'aac',
-                'audio/mp4'        => 'm4a',
-                'audio/x-m4a'      => 'm4a',
-                'audio/m4a'        => 'm4a',
-                'audio/webm'       => 'webm',
-                'video/webm'       => 'webm',
-                'audio/ogg'        => 'ogg',
-                'application/ogg'  => 'ogg',
-                'audio/opus'       => 'opus',
-                'audio/ogg;codecs=opus' => 'ogg',
-                'audio/x-opus+ogg' => 'ogg',
-                'audio/wav'        => 'wav',
-                'audio/x-wav'      => 'wav',
-                'audio/wave'       => 'wav',
-                'audio/flac'       => 'flac',
-                'audio/x-flac'     => 'flac',
-                'audio/amr'        => 'amr',
-                'audio/3gpp'       => '3gp',
-                'audio/3gpp2'      => '3g2',
+                'audio/mpeg' => 'mp3',
+                'audio/mp3'  => 'mp3',
+                'audio/webm' => 'webm',
+                'video/webm' => 'webm',
+                'audio/ogg'  => 'ogg',
+                'audio/wav'  => 'wav',
+                'audio/x-wav' => 'wav',
+                'audio/wave' => 'wav',
+                'audio/mp4'  => 'mp4',
             ];
-            $ext = $mimeToExt[$baseMime] ?? null;
-            if (empty($ext)) {
-                $ext = 'ogg';
+            $baseMime = explode(';', $mime)[0];
+            $ext = $mimeToExt[$baseMime] ?? preg_replace('/[^\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
+
+            // Conversión a OGG si está activada
+            $converted = null;
+            if (config('audio.force_ogg')) {
+                try {
+                    $conversionService = app(\App\Services\AudioConversionService::class);
+                    $converted = $conversionService->convertToOgg($filePath, $mime, $ext);
+                    if ($converted['was_converted']) {
+                        $filePath = $converted['path'];
+                        $mime = $converted['mime_type'];
+                        $ext = 'ogg';
+                        Log::info('uploadPendingAudio: audio converted to ogg', [
+                            'meeting' => $v['meetingName'],
+                            'mime' => $mime,
+                        ]);
+                    }
+                } catch (\App\Exceptions\FfmpegUnavailableException $e) {
+                    Log::warning('uploadPendingAudio: ffmpeg unavailable, skipping ogg conversion', ['error' => $e->getMessage()]);
+                } catch (\Throwable $e) {
+                    Log::error('uploadPendingAudio: ogg conversion failed, continuing with original', ['error' => $e->getMessage()]);
+                }
             }
+
             $fileName = $v['meetingName'] . '.' . $ext;
 
             Log::debug('uploadPendingAudio uploading to Drive', [
@@ -630,6 +637,7 @@ class DriveController extends Controller
                 'mime' => $mime,
                 'pendingFolderId' => $pendingFolderId,
                 'filePath' => $filePath,
+                'converted' => $converted ? ($converted['was_converted'] ? 'yes' : 'no') : 'disabled',
             ]);
             $fileContents = file_get_contents($filePath);
             $fileId = $serviceAccount->uploadFile(
@@ -638,6 +646,9 @@ class DriveController extends Controller
                 $pendingFolderId,
                 $fileContents
             );
+            if ($converted && $converted['was_converted']) {
+                @unlink($converted['path']);
+            }
             $audioUrl = $serviceAccount->getFileLink($fileId);
 
             // 4. Guardar en la BD
@@ -787,7 +798,7 @@ class DriveController extends Controller
             'audio/x-opus+ogg' => 'ogg',
             'audio/opus'       => 'opus',
             'video/webm'       => 'webm',
-            'video/mp4'        => 'mp4',
+            'video/mp4'       => 'mp4',
             'audio/wav'        => 'wav',
             'audio/x-wav'      => 'wav',
             'audio/wave'       => 'wav',
@@ -1001,10 +1012,28 @@ class DriveController extends Controller
             }
             $raw    = base64_decode($b64);
 
-            // 4. Guarda temporalmente el binario (NO lo cargues en memoria)
             $tmp   = tempnam(sys_get_temp_dir(), 'aud');
             file_put_contents($tmp, $raw);
-            // $audio = file_get_contents($tmp); // NO cargar en memoria
+
+            // Posible conversión a OGG
+            $audioMime = strtolower($v['audioMimeType']);
+            $converted = null;
+            if (config('audio.force_ogg')) {
+                try {
+                    $conversionService = app(\App\Services\AudioConversionService::class);
+                    $extOrig = pathinfo($tmp, PATHINFO_EXTENSION) ?: null; // probablemente vacío
+                    $converted = $conversionService->convertToOgg($tmp, $audioMime, $extOrig);
+                    if ($converted['was_converted']) {
+                        $tmp = $converted['path'];
+                        $audioMime = $converted['mime_type'];
+                        Log::info('saveResults: audio converted to ogg', ['meeting' => $v['meetingName']]);
+                    }
+                } catch (\App\Exceptions\FfmpegUnavailableException $e) {
+                    Log::warning('saveResults: ffmpeg unavailable, skipping ogg conversion', ['error' => $e->getMessage()]);
+                } catch (\Throwable $e) {
+                    Log::error('saveResults: ogg conversion failed, continuing with original', ['error' => $e->getMessage()]);
+                }
+            }
 
             // 5. Prepara payload de transcripción/análisis
             $analysis = $v['analysisResults'];
@@ -1022,39 +1051,29 @@ class DriveController extends Controller
 
                 // extrae la extensión a partir del mimeType usando un mapa conocido
                 $mime = strtolower($v['audioMimeType']);
-                $baseMime = explode(';', $mime)[0];
                 $mimeToExt = [
-                    'audio/mpeg'       => 'mp3',
-                    'audio/mp3'        => 'mp3',
-                    'audio/aac'        => 'aac',
-                    'audio/x-aac'      => 'aac',
-                    'audio/mp4'        => 'm4a',
-                    'audio/x-m4a'      => 'm4a',
-                    'audio/m4a'        => 'm4a',
-                    'audio/webm'       => 'webm',
-                    'audio/ogg'        => 'ogg',
-                    'application/ogg'  => 'ogg',
-                    'audio/x-opus+ogg' => 'ogg',
-                    'audio/opus'       => 'opus',
-                    'audio/wav'        => 'wav',
-                    'audio/x-wav'      => 'wav',
-                    'audio/wave'       => 'wav',
-                    'audio/flac'       => 'flac',
-                    'audio/x-flac'     => 'flac',
-                    'audio/amr'        => 'amr',
-                    'audio/3gpp'       => '3gp',
-                    'audio/3gpp2'      => '3g2',
-                    'video/webm'       => 'webm',
-                    'video/mp4'        => 'mp4',
+                    'audio/mpeg' => 'mp3',
+                    'audio/mp3'  => 'mp3',
+                    'audio/webm' => 'webm',
+                    'audio/ogg'  => 'ogg',
+                    'audio/wav'  => 'wav',
+                    'audio/x-wav' => 'wav',
+                    'audio/wave' => 'wav',
+                    'audio/mp4'  => 'mp4',
                 ];
-                $ext      = $mimeToExt[$baseMime] ?? null;
-                if (empty($ext)) {
-                    $ext = 'ogg';
+                if ($converted && $converted['was_converted']) {
+                    $mime = 'audio/ogg';
                 }
+                $baseMime = explode(';', $mime)[0];
+                $ext      = $mimeToExt[$baseMime]
+                    ?? preg_replace('/[^\\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
 
                 $audioFileId = $serviceAccount
-                    ->uploadFile("{$meetingName}.{$ext}", $v['audioMimeType'], $audioFolderId, $tmp);
+                    ->uploadFile("{$meetingName}.{$ext}", $mime, $audioFolderId, $tmp);
                 @unlink($tmp);
+                if ($converted && $converted['was_converted']) {
+                    @unlink($converted['path']);
+                }
             } catch (GoogleServiceException $e) {
                 Log::error('saveResults drive failure', [
                     'error'                  => $e->getMessage(),
