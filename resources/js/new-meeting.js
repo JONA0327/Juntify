@@ -1630,7 +1630,7 @@ function setupFileUpload() {
 }
 
 // Manejar la selección de archivo
-function handleFileSelection(file) {
+async function handleFileSelection(file) {
     const normalizedType = (file.type || '').toLowerCase();
     const normalizedName = file.name.toLowerCase();
 
@@ -1643,6 +1643,8 @@ function handleFileSelection(file) {
         'audio/x-m4a',
         'audio/aac',
         'audio/x-aac',
+        'audio/3gpp',
+        'video/3gpp',
         'audio/wav',
         'audio/x-wav',
         'audio/wave',
@@ -1653,13 +1655,13 @@ function handleFileSelection(file) {
         'audio/x-flac'
     ];
 
-    const validExtensions = /\.(mp3|m4a|mp4|aac|wav|wave|ogg|webm|flac)$/i;
+    const validExtensions = /\.(mp3|m4a|mp4|aac|wav|wave|ogg|webm|flac|3gp|3gpp)$/i;
 
     const hasValidMime = normalizedType && validMimeTypes.some((type) => normalizedType === type || normalizedType.startsWith(`${type};`));
     const hasValidExtension = validExtensions.test(normalizedName);
 
     if (!hasValidMime && !hasValidExtension) {
-        showError('❌ Tipo de archivo no soportado. Este sistema acepta archivos MP3 (.mp3), MP4/M4A (.mp4/.m4a), WAV (.wav), OGG (.ogg), WebM (.webm), FLAC (.flac) o AAC (.aac).');
+        showError('❌ Tipo de archivo no soportado. Este sistema acepta archivos MP3 (.mp3), MP4/M4A (.mp4/.m4a), WAV (.wav), OGG (.ogg), WebM (.webm), FLAC (.flac), AAC (.aac) o 3GPP (.3gp/.3gpp).');
         return;
     }
 
@@ -1669,15 +1671,107 @@ function handleFileSelection(file) {
         return;
     }
 
-    uploadedFile = file;
+    const selectedFileContainer = document.getElementById('selected-file');
+    const uploadArea = document.getElementById('upload-area');
+    const fileNameElement = document.getElementById('file-name');
+    const fileSizeElement = document.getElementById('file-size');
+    const progressContainer = document.getElementById('upload-progress');
+    const progressFill = document.getElementById('progress-fill');
+    const progressText = document.getElementById('progress-text');
+    const processButton = selectedFileContainer ? selectedFileContainer.querySelector('.process-btn') : null;
 
-    // Mostrar información del archivo
-    document.getElementById('file-name').textContent = file.name;
-    document.getElementById('file-size').textContent = formatFileSize(file.size);
-    document.getElementById('selected-file').style.display = 'block';
-    document.getElementById('upload-area').style.display = 'none';
+    if (uploadArea) uploadArea.style.display = 'none';
+    if (selectedFileContainer) selectedFileContainer.style.display = 'block';
 
-    showSuccess('Archivo seleccionado correctamente');
+    if (fileNameElement) fileNameElement.textContent = file.name;
+    if (fileSizeElement) fileSizeElement.textContent = formatFileSize(file.size);
+
+    const requiresConversion = !normalizedType.includes('mpeg') && !normalizedType.includes('mp3') && !normalizedName.endsWith('.mp3');
+
+    if (requiresConversion && processButton) {
+        processButton.disabled = true;
+        processButton.setAttribute('aria-disabled', 'true');
+        processButton.style.visibility = 'hidden';
+    }
+
+    if (requiresConversion && progressContainer && progressFill && progressText) {
+        progressContainer.style.display = 'block';
+        progressFill.style.width = '5%';
+        progressText.textContent = 'Convirtiendo archivo a MP3...';
+    } else if (progressContainer) {
+        progressContainer.style.display = 'none';
+    }
+
+    try {
+        let workingBlob = file;
+        let finalName = file.name;
+
+        if (requiresConversion) {
+            if (progressFill && progressText) {
+                progressFill.style.width = '25%';
+                progressText.textContent = 'Preparando conversión...';
+            }
+
+            const mp3Blob = await convertToMp3(file);
+
+            if (progressFill && progressText) {
+                progressFill.style.width = '65%';
+                progressText.textContent = 'Finalizando conversión...';
+            }
+
+            const baseName = file.name.includes('.') ? file.name.replace(/\.[^/.]+$/, '') : file.name;
+            finalName = `${baseName}.mp3`;
+            workingBlob = mp3Blob;
+        }
+
+        const finalFile = (workingBlob instanceof File && workingBlob.name === finalName)
+            ? workingBlob
+            : new File([workingBlob], finalName, {
+                type: 'audio/mpeg',
+                lastModified: Date.now()
+            });
+
+        uploadedFile = finalFile;
+
+        if (fileNameElement) fileNameElement.textContent = uploadedFile.name;
+        if (fileSizeElement) fileSizeElement.textContent = formatFileSize(uploadedFile.size);
+
+        if (progressFill && progressText && requiresConversion) {
+            progressFill.style.width = '100%';
+            progressText.textContent = 'MP3 listo para procesar';
+            setTimeout(() => {
+                if (progressContainer) {
+                    progressContainer.style.display = 'none';
+                }
+            }, 600);
+        }
+
+        if (processButton) {
+            processButton.disabled = false;
+            processButton.removeAttribute('aria-disabled');
+            processButton.style.visibility = 'visible';
+        }
+
+        showSuccess('Archivo listo para procesar');
+    } catch (conversionError) {
+        console.error('Error al convertir archivo a MP3:', conversionError);
+        showError('No se pudo convertir el archivo a MP3. Intenta nuevamente con otro archivo.');
+
+        uploadedFile = null;
+
+        if (progressContainer) {
+            progressContainer.style.display = 'none';
+        }
+
+        if (processButton) {
+            processButton.disabled = false;
+            processButton.removeAttribute('aria-disabled');
+            processButton.style.visibility = 'visible';
+        }
+
+        if (selectedFileContainer) selectedFileContainer.style.display = 'none';
+        if (uploadArea) uploadArea.style.display = 'block';
+    }
 }
 
 // Remover archivo seleccionado
