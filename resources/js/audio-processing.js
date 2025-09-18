@@ -1544,68 +1544,44 @@ async function loadDriveFolders() {
         reasoning: role === 'colaborador' ? 'colaborador can choose' : 'administrator choice'
     });
 
-    const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';
-
-    console.log('🔍 [loadDriveFolders] Using endpoint:', endpoint);
-
+    // Nueva lógica unificada para obtener la root folder
     try {
-        const res = await fetch(endpoint);
-        console.log('🔍 [loadDriveFolders] Fetch response status:', res.status);
-
-        if (res.status === 401 || res.status === 403) {
-            console.warn('🔍 [loadDriveFolders] Authentication error, redirecting to login');
-            window.location.href = '/login';
-            return;
-        }
-
-        if (!res.ok) {
-            console.error('🔍 [loadDriveFolders] Request failed with status:', res.status);
-            showNotification('No se pudieron cargar las carpetas de Drive', 'error');
-            return;
-        }
-
-        const contentType = res.headers.get('content-type') || '';
-        console.log('🔍 [loadDriveFolders] Response content type:', contentType);
-
-        if (!contentType.includes('application/json')) {
-            console.error('🔍 [loadDriveFolders] Unexpected response content type');
-            showNotification('Respuesta inesperada del servidor', 'error');
-            return;
-        }
-
-        const data = await res.json();
-        console.log('🔍 [loadDriveFolders] Received data:', data);
-
-        // Don't hide drive select for colaboradores anymore - they can choose
-        console.log('🔍 [loadDriveFolders] Drive select visibility:', {
-            role,
-            willHide: false, // Changed: don't hide for colaboradores
-            driveSelectExists: !!driveSelect
-        });
+        const rootInfo = await (async () => {
+            if (useOrg) {
+                if (!organizationId) return null;
+                const r = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
+                if (!r.ok) return null;
+                const data = await r.json();
+                return data.root_folder || null;
+            } else {
+                const r = await fetch('/drive/sync-subfolders');
+                if (!r.ok) return null;
+                const data = await r.json();
+                return data.root_folder || null;
+            }
+        })();
 
         if (rootSelect) {
             rootSelect.innerHTML = '';
-            if (data.root_folder) {
+            if (rootInfo) {
                 const opt = document.createElement('option');
-                opt.value = data.root_folder.google_id;
-                opt.textContent = `📁 ${data.root_folder.name}`;
+                opt.value = rootInfo.google_id;
+                opt.textContent = `📁 ${rootInfo.name}`;
                 rootSelect.appendChild(opt);
-                console.log('✅ [loadDriveFolders] Added root folder option:', {
-                    name: data.root_folder.name,
-                    googleId: data.root_folder.google_id
-                });
+                console.log('✅ [loadDriveFolders] Root folder cargada:', { name: rootInfo.name, id: rootInfo.google_id, driveType: useOrg ? 'organization' : 'personal' });
             } else {
-                console.warn('⚠️ [loadDriveFolders] No root folder found in response');
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = useOrg ? 'Sin carpeta de organización' : 'Sin carpeta personal';
+                rootSelect.appendChild(placeholder);
+                console.warn('⚠️ [loadDriveFolders] No se obtuvo root folder para', useOrg ? 'organization' : 'personal');
             }
         }
 
-        // Ya no se poblaban subcarpetas; estructura fija manejada en backend
-
-        console.log('✅ [loadDriveFolders] Successfully loaded drive folders');
-
+        console.log('✅ [loadDriveFolders] Finalizado (driveType actual =', useOrg ? 'organization' : 'personal', ')');
     } catch (e) {
-        console.error('❌ [loadDriveFolders] Error syncing subfolders:', e);
-        showNotification('No se pudo conectar con el servidor', 'error');
+        console.error('❌ [loadDriveFolders] Error obteniendo root folder:', e);
+        showNotification('No se pudo cargar la carpeta raíz', 'error');
     }
 }
 
