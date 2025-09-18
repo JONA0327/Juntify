@@ -44,24 +44,12 @@
         </div>
 
         <div class="border rounded p-4" x-show="rootFolder">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="font-medium">Subcarpetas</h2>
-                <div class="flex items-center gap-2">
-                    <input type="text" x-model="newSubfolder" placeholder="Nombre de la subcarpeta" class="border rounded px-2 py-1 text-sm" />
-                    <button @click="createSubfolder()" class="px-3 py-1.5 bg-gray-900 text-white rounded text-sm">Crear</button>
-                </div>
-            </div>
-            <template x-if="subfolders.length === 0">
-                <p class="text-sm text-gray-600">No hay subcarpetas.</p>
-            </template>
-            <ul class="divide-y">
-                <template x-for="sf in subfolders" :key="sf.id">
-                    <li class="py-2 flex items-center justify-between">
-                        <span class="font-medium" x-text="sf.name"></span>
-                        <span class="text-xs text-gray-500 font-mono" x-text="sf.google_id"></span>
-                    </li>
-                </template>
-            </ul>
+            <h2 class="font-medium mb-2">Estructura de almacenamiento</h2>
+            <p class="text-sm text-gray-600 leading-relaxed">
+                Las subcarpetas ahora se crean y usan automáticamente. El sistema gestionará las carpetas
+                <strong>Audios</strong>, <strong>Transcripciones</strong> y <strong>Audios Pospuestos</strong> dentro de la carpeta principal.
+                No es necesario crear ni administrar subcarpetas manualmente.
+            </p>
         </div>
     </div>
 </div>

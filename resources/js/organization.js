@@ -269,71 +269,29 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     },
 
     async loadDriveSubfolders(org) {
+        // Subcarpetas gestionadas automáticamente: sólo necesitamos estado conexión y root
         const state = this.getDriveState(org.id);
         state.isLoading = true;
         try {
-            // First, get status to know if connected and if root exists
             const statusRes = await fetch(`/api/organizations/${org.id}/drive/status`);
             if (statusRes.ok) {
                 const status = await statusRes.json();
                 state.connected = !!status.connected;
                 state.rootFolder = status.root_folder || null;
-                state.subfolders = status.subfolders || [];
-                // If connected and root exists but no subfolders were returned (some backends may skip), fetch explicitly
-                if (state.connected && state.rootFolder && (!Array.isArray(state.subfolders) || !state.subfolders.length)) {
-                    const response = await fetch(`/api/organizations/${org.id}/drive/subfolders`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        state.rootFolder = data.root_folder;
-                        state.subfolders = data.subfolders || [];
-                    }
-                }
+                // subfolders ignoradas intencionalmente
+                state.subfolders = [];
             }
         } catch (e) {
-            console.error('Error loading subfolders:', e);
+            console.error('Error loading drive status:', e);
             state.rootFolder = null;
-            state.subfolders = [];
         } finally {
             state.isLoading = false;
         }
     },
 
     async createSubfolder(org) {
-        const state = this.getDriveState(org.id);
-        if (state.isCreatingSubfolder) return;
-        const name = state.newSubfolderName?.trim();
-        if (!name) {
-            alert('El nombre de la subcarpeta es requerido');
-            return;
-        }
-        state.isCreatingSubfolder = true;
-        try {
-            const response = await fetch(`/api/organizations/${org.id}/drive/subfolders`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                },
-                body: JSON.stringify({ name }),
-            });
-            if (response.ok) {
-                state.newSubfolderName = '';
-                this.showStatus('Subcarpeta creada correctamente');
-                await this.loadDriveSubfolders(org);
-            } else {
-                let msg = 'Error al crear la subcarpeta';
-                try {
-                    const err = await response.json();
-                    msg = err.message || msg;
-                } catch {}
-                this.showStatus(msg, 'error');
-            }
-        } catch (e) {
-            console.error('Error creating subfolder:', e);
-            this.showStatus('Error al crear la subcarpeta', 'error');
-        } finally {
-            state.isCreatingSubfolder = false;
-        }
+        console.warn('Creación manual de subcarpetas deshabilitada (estructura automática).');
+        this.showStatus('Las subcarpetas se gestionan automáticamente', 'info');
     },
 
     // New: start editing a subfolder
