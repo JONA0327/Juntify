@@ -714,7 +714,7 @@ class DriveController extends Controller
 
         $v = $request->validate([
             'meetingName'            => 'required|string',
-            'rootFolder'             => 'required|string',
+            'rootFolder'             => 'nullable|string', // ahora opcional; se autodetecta
             'transcriptionSubfolder' => 'nullable|string',
             'audioSubfolder'         => 'nullable|string',
             'transcriptionData'      => 'required',
@@ -740,7 +740,7 @@ class DriveController extends Controller
             'hasOrganizationFolder' => !!$organizationFolder,
             'orgRole' => $orgRole,
             'username' => $user->username,
-            'rootFolder' => $v['rootFolder']
+            'rootFolder_param' => $v['rootFolder'] ?? null
         ]);
 
         if ($driveType === 'organization' && $organizationFolder) {
@@ -775,14 +775,22 @@ class DriveController extends Controller
             if (!$token) {
                 return response()->json(['message' => 'Token de Google no encontrado'], 400);
             }
-            $rootFolder = Folder::where('google_token_id', $token->id)
-                ->where(function($q) use ($v) {
-                    $q->where('google_id', $v['rootFolder'])
-                      ->orWhere('id', $v['rootFolder']);
-                })
-                ->first();
+
+            if (!empty($v['rootFolder'])) {
+                $rootFolder = Folder::where('google_token_id', $token->id)
+                    ->where(function($q) use ($v) {
+                        $q->where('google_id', $v['rootFolder'])
+                          ->orWhere('id', $v['rootFolder']);
+                    })
+                    ->first();
+            } else {
+                // Autodetectar primera carpeta raíz del usuario
+                $rootFolder = Folder::where('google_token_id', $token->id)
+                    ->whereNull('parent_id')
+                    ->first();
+            }
             if (!$rootFolder) {
-                return response()->json(['message' => 'Carpeta principal no encontrada en la base de datos'], 400);
+                return response()->json(['message' => 'Carpeta principal no encontrada o no configurada'], 400);
             }
         }
 

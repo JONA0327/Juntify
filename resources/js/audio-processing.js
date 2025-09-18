@@ -1506,7 +1506,7 @@ async function loadDriveFolders() {
     const role = window.userRole || document.body.dataset.userRole;
     const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
     const driveSelect = document.getElementById('drive-select');
-    const rootSelect = document.getElementById('root-folder-select');
+    const rootSelect = null; // eliminado: la carpeta raíz se resuelve automáticamente en backend
     // Subcarpetas manuales eliminadas: selects ya no existen
     const transcriptionSelect = null;
     const audioSelect = null;
@@ -1561,22 +1561,7 @@ async function loadDriveFolders() {
             }
         })();
 
-        if (rootSelect) {
-            rootSelect.innerHTML = '';
-            if (rootInfo) {
-                const opt = document.createElement('option');
-                opt.value = rootInfo.google_id;
-                opt.textContent = `📁 ${rootInfo.name}`;
-                rootSelect.appendChild(opt);
-                console.log('✅ [loadDriveFolders] Root folder cargada:', { name: rootInfo.name, id: rootInfo.google_id, driveType: useOrg ? 'organization' : 'personal' });
-            } else {
-                const placeholder = document.createElement('option');
-                placeholder.value = '';
-                placeholder.textContent = useOrg ? 'Sin carpeta de organización' : 'Sin carpeta personal';
-                rootSelect.appendChild(placeholder);
-                console.warn('⚠️ [loadDriveFolders] No se obtuvo root folder para', useOrg ? 'organization' : 'personal');
-            }
-        }
+        // rootSelect eliminado: ya no se muestra la carpeta raíz al usuario, se gestiona internamente
 
         console.log('✅ [loadDriveFolders] Finalizado (driveType actual =', useOrg ? 'organization' : 'personal', ')');
     } catch (e) {
@@ -1683,7 +1668,8 @@ async function saveToDatabase() {
     }
 
     showStep(7);
-    const result = await processDatabaseSave(meetingName, rootFolder, transcriptionSubfolder, audioSubfolder);
+    // rootFolder / subfolders ya no se usan; backend resuelve según driveType
+    const result = await processDatabaseSave(meetingName);
     if (!result.success) {
         const errorEl = document.getElementById('analysis-error-message');
         if (errorEl) {
@@ -1696,7 +1682,7 @@ async function saveToDatabase() {
 
 // ===== PASO 7: GUARDANDO EN BD =====
 
-async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfolder, audioSubfolder) { // params retained for backward compatibility
+async function processDatabaseSave(meetingName) { // rootFolder/subfolders deprecated
     const progressBar = document.getElementById('save-progress');
     const progressText = document.getElementById('save-progress-text');
     const progressPercent = document.getElementById('save-progress-percent');
@@ -1712,7 +1698,8 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
 
     console.log('🗂️ [processDatabaseSave] Drive type selected:', driveType);
 
-    // Si es drive organizacional, obtenemos/forzamos la carpeta raíz directamente desde el endpoint org y no del select (que puede estar vacío)
+    // Si es drive organizacional, obtenemos/forzamos la carpeta raíz directamente desde el endpoint (solo para logging)
+    let resolvedRootFolder = null; // solo para logging/debug
     if (driveType === 'organization') {
         try {
             const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
@@ -1721,8 +1708,8 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                 if (res.ok) {
                     const data = await res.json();
                     if (data.root_folder) {
-                        rootFolder = data.root_folder.google_id;
-                        console.log('🏢 [processDatabaseSave] Using organization root folder from API:', rootFolder);
+                        resolvedRootFolder = data.root_folder.google_id;
+                        console.log('🏢 [processDatabaseSave] Using organization root folder from API:', resolvedRootFolder);
                     } else {
                         console.warn('⚠️ [processDatabaseSave] Organization root folder not found in response');
                     }
@@ -1818,6 +1805,8 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                 root_folder: rootFolder,
                 transcription_subfolder: transcriptionSubfolder,
                 audio_subfolder: audioSubfolder,
+                    // root folder y subcarpetas ya no son necesarios: estructura automática
+                    // root folder / subcarpetas omitidos
                 transcription_data: transcription,
                 analysis_results: analysis
             });
@@ -1928,6 +1917,8 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
                     rootFolder,
                     transcriptionSubfolder,
                     audioSubfolder,
+                    meetingName,
+                    // rootFolder y subcarpetas omitidos
                     transcriptionData: transcription,
                     analysisResults: analysis,
                     audioData: audio,

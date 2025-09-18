@@ -298,10 +298,7 @@
                                 </select>
                             </div>
 
-                            <div class="form-group">
-                                <label class="form-label">Carpeta principal</label>
-                                <select class="form-select" id="root-folder-select"></select>
-                            </div>
+                            <!-- Selector de carpeta principal eliminado: ahora se determina automáticamente según el Drive seleccionado -->
 
                             <!-- Subcarpetas manuales eliminadas: ahora se usan carpetas fijas (Audios, Transcripciones, Audios Pospuestos) -->
 
