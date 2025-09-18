@@ -394,6 +394,11 @@ function togglePostponeMode() {
 async function rebuildDriveSelectOptions() {
     const driveSelect = document.getElementById('drive-select');
 
+    // Si ya no existe en la fase de configuración, salir silenciosamente
+    if (!driveSelect) {
+        return;
+    }
+
     if (!driveSelect) {
         console.warn('🔍 [new-meeting] Drive select element not found');
         return;
@@ -457,6 +462,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const driveSelect = document.getElementById('drive-select');
     if (driveSelect) {
+        // En esta pantalla ya no debería existir el selector; este bloque quedará para compatibilidad si persiste en cache
         await rebuildDriveSelectOptions();
 
         let saved = null;
@@ -957,8 +963,9 @@ function uploadAudioToDrive(blob, name, onProgress) {
     const fileName = `${name}.${fileExtension}`;
 
     // Get selected drive type (organization or personal)
+    // En flujo nuevo no hay drive-select aquí; el tipo se selecciona en paso de guardado (audio-processing)
     const driveSelect = document.getElementById('drive-select');
-    const driveType = driveSelect ? driveSelect.value : 'personal'; // Default to personal
+    const driveType = driveSelect ? driveSelect.value : 'personal';
 
     formData.append('audioFile', blob, fileName);
     formData.append('meetingName', name);

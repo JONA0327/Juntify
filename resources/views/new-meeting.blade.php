@@ -115,13 +115,7 @@
                             <option value="" disabled selected>🔍 Selecciona un micrófono...</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Drive</label>
-                        <select class="form-select" id="drive-select">
-                            <option value="personal">Personal</option>
-                            <option value="organization">Organization</option>
-                        </select>
-                    </div>
+                    <!-- Selector de Drive eliminado aquí: la elección se hace sólo antes de guardar -->
                 </div>
 
                 <!-- Contenedor para las interfaces de grabación -->
