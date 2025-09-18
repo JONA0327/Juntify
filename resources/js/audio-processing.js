@@ -2180,11 +2180,66 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
+const VALID_AUDIO_MIME_TYPES = new Set([
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/webm',
+    'video/webm',
+    'audio/ogg',
+    'audio/wav',
+    'audio/x-wav',
+    'audio/wave',
+    'audio/mp4',
+    'video/mp4',
+    'audio/x-m4a',
+    'audio/m4a',
+]);
+
+const MIME_NORMALIZATION_MAP = {
+    'audio/mp3': 'audio/mpeg',
+    'audio/x-wav': 'audio/wav',
+    'audio/wave': 'audio/wav',
+    'audio/x-m4a': 'audio/mp4',
+    'audio/m4a': 'audio/mp4',
+};
+
+const MIME_FALLBACK_PRIORITY = [
+    'audio/mp4',
+    'audio/mpeg',
+    'audio/webm',
+    'video/mp4',
+    'video/webm',
+    'audio/ogg',
+    'audio/wav',
+];
+
+function sanitizeMimeType(mime) {
+    if (!mime || typeof mime !== 'string') return null;
+    const base = mime.split(';')[0].trim().toLowerCase();
+    const normalized = MIME_NORMALIZATION_MAP[base] || base;
+    return VALID_AUDIO_MIME_TYPES.has(normalized) ? normalized : null;
+}
+
+function resolveMimeType(...candidates) {
+    for (const candidate of candidates) {
+        const sanitized = sanitizeMimeType(candidate);
+        if (sanitized) return sanitized;
+    }
+
+    for (const fallback of MIME_FALLBACK_PRIORITY) {
+        const sanitized = sanitizeMimeType(fallback);
+        if (sanitized) return sanitized;
+    }
+
+    return 'audio/webm';
+}
+
 function base64ToBlob(base64, mimeType = null) {
     // Si el base64 incluye el prefijo data:mime/type;base64,
     if (base64.includes(',')) {
         const parts = base64.split(',');
-        const mime = mimeType || (parts[0].match(/:(.*?);/)?.[1] || 'audio/webm');
+        const headerMime = parts[0].includes(':') ? parts[0].split(':')[1] : null;
+        const mime = resolveMimeType(mimeType, headerMime);
         const binary = atob(parts[1]);
         const len = binary.length;
         const buffer = new Uint8Array(len);
@@ -2194,7 +2249,7 @@ function base64ToBlob(base64, mimeType = null) {
         return new Blob([buffer], { type: mime });
     } else {
         // Base64 sin prefijo
-        const mime = mimeType || 'audio/webm';
+        const mime = resolveMimeType(mimeType);
         const binary = atob(base64);
         const len = binary.length;
         const buffer = new Uint8Array(len);
