@@ -94,6 +94,23 @@ Route::middleware(['web'])->post('/debug/request-dump', function(Request $reques
     ]);
 });
 
+// Endpoint para ver límites efectivos de carga (útil ante 413). Requiere sesión.
+Route::middleware(['web', 'auth'])->get('/debug/upload-limits', function() {
+    // Estos valores vienen de PHP ini; el límite real también puede estar en el servidor/proxy (nginx/apache)
+    $val = function($key) {
+        $v = ini_get($key);
+        return $v === false ? null : $v;
+    };
+    return response()->json([
+        'post_max_size' => $val('post_max_size'),
+        'upload_max_filesize' => $val('upload_max_filesize'),
+        'memory_limit' => $val('memory_limit'),
+        'max_input_vars' => $val('max_input_vars'),
+        'max_execution_time' => $val('max_execution_time'),
+        'note' => 'Si usas Nginx/Apache/Proxy, revisa client_max_body_size (Nginx) o LimitRequestBody (Apache).',
+    ]);
+});
+
 // Endpoint de prueba para verificar que API devuelve JSON
 Route::get('/test', function () {
     return response()->json([

@@ -1916,6 +1916,18 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                     return { success: false, message: 'No autorizado' };
                 }
 
+                // Manejo explícito para 413 Payload Too Large
+                if (response.status === 413) {
+                    const tooLargeMsg = 'El audio es demasiado grande para enviarlo de una sola vez (413). ' +
+                        'Prueba con: 1) usar "Posponer" para subir el audio como archivo, 2) grabar menos tiempo, o ' +
+                        '3) si eres admin, aumenta los límites de carga del servidor (post_max_size / upload_max_filesize / client_max_body_size).';
+                    addMessage(`⚠️ ${tooLargeMsg}`);
+                    showNotification(tooLargeMsg, 'error');
+                    resetUI();
+                    showStep(4);
+                    return { success: false, message: tooLargeMsg };
+                }
+
                 let errorMsg = 'Error al guardar los datos';
                 const contentType = response.headers.get('content-type') || '';
                 if (contentType.includes('application/json')) {
