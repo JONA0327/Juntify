@@ -49,11 +49,13 @@ let failedAudioName = null; // Nombre del archivo que falló
 let retryAttempts = 0; // Contador de intentos de resubida
 const MAX_RETRY_ATTEMPTS = 3; // Máximo número de reintentos
 
-// Función para obtener el mejor formato de audio disponible (solo MP4/MP3, evitar Opus)
+// Función para obtener el mejor formato de audio disponible priorizando OGG
 function getOptimalAudioFormat() {
     const formats = [
-        'audio/mp4',                // MP4 audio - PRIORIDAD MÁXIMA para reuniones
-        'audio/mpeg',               // MP3 - Respaldo estable
+        'audio/ogg;codecs=opus',    // OGG/Opus - PRIORIDAD MÁXIMA para compatibilidad abierta
+        'audio/ogg',                // OGG genérico como respaldo principal
+        'audio/mp4',                // MP4 audio como alternativa
+        'audio/mpeg',               // MP3 como último recurso tradicional
         'audio/webm;codecs=opus',   // WebM solo si es la única opción (evitar si es posible)
         'audio/webm'                // WebM genérico como último recurso
     ];
@@ -79,18 +81,22 @@ function getOptimalAudioFormat() {
 function getCorrectFileExtension(blob) {
     // Primero, intentar detectar por el tipo del blob convertido
     if (blob && blob.type) {
+        if (blob.type.includes('ogg')) return 'ogg';
         if (blob.type.includes('mpeg')) return 'mp3';
         if (blob.type.includes('mp4')) return 'mp4';
+        if (blob.type.includes('webm')) return 'webm';
     }
 
     // Si no, usar el formato almacenado de la grabación original
     if (currentRecordingFormat) {
+        if (currentRecordingFormat.includes('ogg')) return 'ogg';
         if (currentRecordingFormat.includes('mpeg')) return 'mp3';
         if (currentRecordingFormat.includes('mp4')) return 'mp4';
+        if (currentRecordingFormat.includes('webm')) return 'webm';
     }
 
-    // Fallback: usar MP4 como default (el formato preferido)
-    return 'mp4';
+    // Fallback: usar OGG como default abierto
+    return 'ogg';
 }
 
 // Función mejorada para descargar con formato correcto
@@ -102,96 +108,123 @@ function downloadAudioWithCorrectFormat(blob, baseName) {
     return fileName;
 }
 
-// Función específica para descargar siempre en MP3 cuando hay errores
-async function downloadAudioAsMP3(blob, baseName) {
+// Función específica para descargar siempre en OGG cuando hay errores
+async function downloadAudioAsOgg(blob, baseName) {
     try {
-        let mp3Blob = blob;
+        let oggBlob = blob;
 
-        // Si no es MP3, intentar convertir
-        if (!blob.type.includes('mpeg') && !blob.type.includes('mp3')) {
-            console.log('🎵 [Download] Convirtiendo a MP3 para descarga...');
-            mp3Blob = await convertToMp3(blob);
+        // Si no es OGG, intentar convertir
+        if (!blob.type.includes('ogg')) {
+            console.log('🎵 [Download] Convirtiendo a OGG para descarga...');
+            oggBlob = await convertToOgg(blob);
         }
 
-        const fileName = `${baseName}.mp3`;
-        downloadBlob(mp3Blob, fileName);
-        console.log(`💾 [Download] Audio descargado como MP3: ${fileName}`);
+        const fileName = `${baseName}.ogg`;
+        downloadBlob(oggBlob, fileName);
+        console.log(`💾 [Download] Audio descargado como OGG: ${fileName}`);
         return fileName;
     } catch (error) {
-        console.error('❌ [Download] Error al convertir a MP3:', error);
+        console.error('❌ [Download] Error al convertir a OGG:', error);
         // Fallback: usar la función normal si la conversión falla
         return downloadAudioWithCorrectFormat(blob, baseName);
     }
 }
 
-// Helper para convertir blobs WebM/Opus a MP3 usando ffmpeg.wasm
-// Función mejorada para conversión a MP3 sin FFmpeg (compatible con CORS)
-async function convertToMp3(blob) {
+// Helper para convertir blobs a OGG usando MediaRecorder
+// Función mejorada para conversión real a OGG
+async function convertToOgg(blob) {
     try {
-        console.log(`🎵 [Convert] Iniciando conversión a MP3...`);
+        console.log(`🎵 [Convert] Iniciando conversión a OGG...`);
         console.log(`🎵 [Convert] Blob original: ${blob.type}, Tamaño: ${(blob.size / 1024).toFixed(1)} KB`);
 
-        // Si ya es MP3/MPEG, devolver tal como está
-        if (blob.type.includes('mpeg') || blob.type.includes('mp3')) {
-            console.log(`✅ [Convert] Ya es MP3, no se requiere conversión`);
+        // Si ya es OGG, devolver tal como está
+        if (blob.type.includes('ogg')) {
+            console.log(`✅ [Convert] Ya es OGG, no se requiere conversión`);
             return blob;
         }
 
-        // Para MP4, podemos reempaquetar como MP3 cambiando el MIME type
-        if (blob.type.includes('mp4')) {
-            console.log(`🔄 [Convert] Reempaquetando MP4 como MP3...`);
-            const mp3Blob = new Blob([blob], { type: 'audio/mpeg' });
-            console.log(`✅ [Convert] MP4 reempaquetado como MP3: ${(mp3Blob.size / 1024).toFixed(1)} KB`);
-            return mp3Blob;
+        if (!window.MediaRecorder || !MediaRecorder.isTypeSupported || !MediaRecorder.isTypeSupported('audio/ogg')) {
+            console.warn('⚠️ [Convert] MediaRecorder no soporta audio/ogg. Ajustando MIME type como respaldo.');
+            const arrayBuffer = await blob.arrayBuffer();
+            return new Blob([arrayBuffer], { type: 'audio/ogg' });
         }
 
-        // Para WebM/Opus, intentar conversión usando Web Audio API
-        if (blob.type.includes('webm') || blob.type.includes('opus')) {
-            console.log(`🔄 [Convert] Convirtiendo WebM/Opus usando Web Audio API...`);
+        const ConversionAudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!ConversionAudioContext) {
+            console.warn('⚠️ [Convert] AudioContext no disponible. Ajustando MIME type como respaldo.');
+            const arrayBuffer = await blob.arrayBuffer();
+            return new Blob([arrayBuffer], { type: 'audio/ogg' });
+        }
 
-            try {
-                // Crear AudioContext si no existe
-                if (!audioContext || audioContext.state === 'closed') {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const conversionContext = new ConversionAudioContext();
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioBuffer = await conversionContext.decodeAudioData(arrayBuffer.slice(0));
+
+        console.log(`🎵 [Convert] Audio decodificado: ${audioBuffer.duration.toFixed(2)}s, ${audioBuffer.sampleRate}Hz`);
+
+        const destination = conversionContext.createMediaStreamDestination();
+        const source = conversionContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(destination);
+
+        const recordedChunks = [];
+
+        return await new Promise((resolve, reject) => {
+            let settled = false;
+            const recorder = new MediaRecorder(destination.stream, { mimeType: 'audio/ogg' });
+
+            recorder.ondataavailable = event => {
+                if (event.data && event.data.size > 0) {
+                    recordedChunks.push(event.data);
                 }
+            };
 
-                // Decodificar audio
-                const arrayBuffer = await blob.arrayBuffer();
-                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            recorder.onerror = event => {
+                if (!settled) {
+                    settled = true;
+                    try { recorder.stop(); } catch (_) {}
+                    conversionContext.close().catch(() => {});
+                    reject(event.error || new Error('Error desconocido al convertir a OGG'));
+                }
+            };
 
-                console.log(`🎵 [Convert] Audio decodificado: ${audioBuffer.duration.toFixed(2)}s, ${audioBuffer.sampleRate}Hz`);
+            recorder.onstop = () => {
+                if (!settled) {
+                    settled = true;
+                    const oggBlob = new Blob(recordedChunks, { type: 'audio/ogg' });
+                    console.log(`✅ [Convert] Conversión a OGG completada: ${(oggBlob.size / 1024).toFixed(1)} KB`);
+                    resolve(oggBlob);
+                }
+                conversionContext.close().catch(() => {});
+            };
 
-                // Crear MediaRecorder con formato MP3/MP4 para re-grabar
-                const stream = new MediaStream();
-                const source = audioContext.createMediaStreamSource(stream);
+            source.onended = () => {
+                if (recorder.state !== 'inactive') {
+                    recorder.stop();
+                }
+            };
 
-                // Como alternativa simple, crear un blob con MIME type MP3
-                // Esto funcionará para la mayoría de reproductores aunque no sea conversión real
-                const mp3Blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
-                console.log(`✅ [Convert] WebM convertido a MP3: ${(mp3Blob.size / 1024).toFixed(1)} KB`);
-                return mp3Blob;
-
-            } catch (webAudioError) {
-                console.warn(`⚠️ [Convert] Web Audio API falló, usando conversión de MIME type:`, webAudioError);
-                // Fallback: cambiar solo el MIME type
-                const mp3Blob = new Blob([blob], { type: 'audio/mpeg' });
-                return mp3Blob;
-            }
-        }
-
-        // Fallback para cualquier otro formato
-        console.log(`🔄 [Convert] Formato desconocido, aplicando MIME type MP3...`);
-        const mp3Blob = new Blob([blob], { type: 'audio/mpeg' });
-        console.log(`✅ [Convert] Conversión fallback completada: ${(mp3Blob.size / 1024).toFixed(1)} KB`);
-        return mp3Blob;
-
+            recorder.start();
+            conversionContext.resume()
+                .then(() => {
+                    source.start(0);
+                })
+                .catch(error => {
+                    if (!settled) {
+                        settled = true;
+                        recorder.stop();
+                        reject(error);
+                    }
+                });
+        });
     } catch (error) {
-        console.error('❌ [Convert] Error en conversión:', error);
+        console.error('❌ [Convert] Error en conversión a OGG:', error);
 
-        // Último recurso: devolver blob original con MIME type MP3
-        console.log(`🔄 [Convert] Aplicando MIME type MP3 como último recurso...`);
-        const fallbackBlob = new Blob([blob], { type: 'audio/mpeg' });
-        console.log(`✅ [Convert] Conversión de emergencia completada`);
+        // Último recurso: devolver blob original con MIME type OGG
+        console.log(`🔄 [Convert] Aplicando MIME type OGG como último recurso...`);
+        const arrayBuffer = await blob.arrayBuffer();
+        const fallbackBlob = new Blob([arrayBuffer], { type: 'audio/ogg' });
+        console.log(`✅ [Convert] Conversión de emergencia a OGG completada`);
         return fallbackBlob;
     }
 }
@@ -667,34 +700,10 @@ async function finalizeRecording() {
     const blobType = currentRecordingFormat || 'audio/mp4'; // Fallback a MP4 si no hay formato almacenado
     finalBlob = new Blob(recordedChunks, { type: blobType });
 
-    // Determinar MIME real del primer chunk y convertir si es WebM/Opus
+    // Determinar MIME real del primer chunk para registro
     const realMime = recordedChunks[0]?.type || blobType;
-
-    // SIEMPRE convertir a MP3 para máxima compatibilidad (especialmente móvil)
-    try {
-        console.log('🎵 [finalizeRecording] Convirtiendo automáticamente a MP3 desde', realMime);
-        console.log('🎵 [finalizeRecording] Tamaño original:', (finalBlob.size / 1024).toFixed(1), 'KB');
-
-        const convertedBlob = await convertToMp3(finalBlob);
-        finalBlob = convertedBlob;
-        currentRecordingFormat = 'audio/mpeg';
-
-        console.log('✅ [finalizeRecording] Conversión automática a MP3 exitosa');
-        console.log('🎵 [finalizeRecording] Tamaño MP3:', (finalBlob.size / 1024).toFixed(1), 'KB');
-        console.log('🎵 [finalizeRecording] Tipo final:', finalBlob.type);
-
-        // Mostrar notificación de conversión al usuario
-        showSuccess('✅ Audio convertido a MP3 exitosamente. Continuando con el procesamiento...');
-
-    } catch (e) {
-        console.error('🎵 [finalizeRecording] Error al convertir a MP3:', e);
-        console.log('⚠️ [finalizeRecording] Usando formato original:', realMime);
-
-        // Si la conversión falla, alertar al usuario sobre posibles problemas de compatibilidad
-        if (realMime.includes('opus') || realMime.includes('webm')) {
-            showError('Advertencia: El audio está en formato WebM/Opus que puede no ser compatible con todos los reproductores móviles.');
-        }
-    }
+    console.log('🎵 [finalizeRecording] Formato final detectado:', realMime);
+    currentRecordingFormat = realMime;
 
     console.log('🎵 [finalizeRecording] Preparando audio para procesamiento...');
     console.log('🎵 [finalizeRecording] Using blob for processing');
@@ -705,17 +714,17 @@ async function finalizeRecording() {
     const now = new Date();
     const name = `grabacion-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
 
-    // Determinar contexto y descargar copia local en MP3 cuando es reunión
+    // Determinar contexto y descargar copia local en OGG cuando es reunión
     const context = lastRecordingContext || (selectedMode === 'meeting' ? 'meeting' : 'recording');
     if (context === 'meeting') {
         try {
-            await downloadAudioAsMP3(finalBlob, name);
+            await downloadAudioAsOgg(finalBlob, name);
         } catch (_) {
             downloadAudioWithCorrectFormat(finalBlob, name);
         }
     }
-    if (sizeMB > 100) {
-        showError('La grabación supera el límite de 100 MB.');
+    if (sizeMB > 200) {
+        showError('La grabación supera el límite de 200 MB.');
         const upload = confirm('¿Deseas subirla en segundo plano? Cancelar para descargarla.');
         pendingSaveContext = context;
         if (upload) {
@@ -1004,10 +1013,10 @@ function uploadAudioToDrive(blob, name, onProgress) {
                 resolve(response);
             } else {
                 console.error('Upload failed with status:', xhr.status, xhr.responseText);
-                // Almacenar datos para reintento con conversión automática a MP3
+                // Almacenar datos para reintento con conversión automática a OGG
                 storeFailedUploadData(blob, name).then(() => {
                     showUploadRetryUI();
-                    showError(`Fallo al subir el audio (Error ${xhr.status}). Audio convertido a MP3 para próximo intento.`);
+                    showError(`Fallo al subir el audio (Error ${xhr.status}). Audio convertido a OGG para próximo intento.`);
                 }).catch(() => {
                     showUploadRetryUI();
                     showError(`Fallo al subir el audio (Error ${xhr.status}). Puedes reintentarlo más tarde.`);
@@ -1018,10 +1027,10 @@ function uploadAudioToDrive(blob, name, onProgress) {
 
         xhr.onerror = () => {
             console.error('Error uploading audio - Network error');
-            // Almacenar datos para reintento con conversión automática a MP3
+            // Almacenar datos para reintento con conversión automática a OGG
             storeFailedUploadData(blob, name).then(() => {
                 showUploadRetryUI();
-                showError('Error de conexión al subir el audio. Audio convertido a MP3 para próximo intento.');
+                showError('Error de conexión al subir el audio. Audio convertido a OGG para próximo intento.');
             }).catch(() => {
                 showUploadRetryUI();
                 showError('Error de conexión al subir el audio. Puedes reintentarlo más tarde.');
@@ -1075,7 +1084,7 @@ function pollPendingRecordingStatus(id) {
     check();
 }
 
-// Funciones para manejar subidas fallidas con conversión automática a MP3
+// Funciones para manejar subidas fallidas con conversión automática a OGG
 async function storeFailedUploadData(blob, name) {
     console.log('📦 [Failed Upload] Procesando datos para reintento:', {
         size: (blob.size / (1024 * 1024)).toFixed(2) + ' MB',
@@ -1083,30 +1092,30 @@ async function storeFailedUploadData(blob, name) {
         name: name
     });
 
-    // Intentar convertir a MP3 para mejorar compatibilidad en reintento
+    // Intentar convertir a OGG para mejorar compatibilidad en reintento
     try {
-        if (!blob.type.includes('mpeg') && !blob.type.includes('mp3')) {
-            console.log('🎵 [Failed Upload] Convirtiendo a MP3 para mejorar compatibilidad...');
-            const mp3Blob = await convertToMp3(blob);
+        if (!blob.type.includes('ogg')) {
+            console.log('🎵 [Failed Upload] Convirtiendo a OGG para mejorar compatibilidad...');
+            const oggBlob = await convertToOgg(blob);
 
-            failedAudioBlob = mp3Blob;
-            failedAudioName = name.replace(/\.(mp4|webm|wav)$/i, '.mp3'); // Cambiar extensión a MP3
+            failedAudioBlob = oggBlob;
+            failedAudioName = name.replace(/\.(mp4|webm|wav|mp3|m4a)$/i, '.ogg'); // Cambiar extensión a OGG
 
-            console.log('✅ [Failed Upload] Audio convertido a MP3 para reintento:', {
+            console.log('✅ [Failed Upload] Audio convertido a OGG para reintento:', {
                 originalSize: (blob.size / (1024 * 1024)).toFixed(2) + ' MB',
-                mp3Size: (mp3Blob.size / (1024 * 1024)).toFixed(2) + ' MB',
+                oggSize: (oggBlob.size / (1024 * 1024)).toFixed(2) + ' MB',
                 newName: failedAudioName
             });
 
-            showSuccess('Audio convertido a MP3 para mejorar compatibilidad en próximo intento');
+            showSuccess('Audio convertido a OGG para mejorar compatibilidad en próximo intento');
         } else {
-            // Ya es MP3, usar tal como está
+            // Ya es OGG, usar tal como está
             failedAudioBlob = blob;
             failedAudioName = name;
-            console.log('✅ [Failed Upload] Audio ya está en formato MP3');
+            console.log('✅ [Failed Upload] Audio ya está en formato OGG');
         }
     } catch (conversionError) {
-        console.warn('⚠️ [Failed Upload] Error al convertir a MP3, usando audio original:', conversionError);
+        console.warn('⚠️ [Failed Upload] Error al convertir a OGG, usando audio original:', conversionError);
         failedAudioBlob = blob;
         failedAudioName = name;
     }
@@ -1298,9 +1307,9 @@ async function analyzeNow() {
         sessionStorage.removeItem('recordingSegments');
         sessionStorage.removeItem('recordingMetadata');
     } catch (e) {
-        // Download as MP3 when there's an error for better compatibility
+        // Descargar en OGG cuando hay un error para contar con un mejor respaldo
         console.error('❌ [analyzeNow] Error preparando audio:', e);
-        downloadAudioAsMP3(pendingAudioBlob, 'grabacion_error').catch(() => {
+        downloadAudioAsOgg(pendingAudioBlob, 'grabacion_error').catch(() => {
             downloadAudioWithCorrectFormat(pendingAudioBlob, 'grabacion_error');
         });
         console.error('Error preparando audio', e);
@@ -1356,14 +1365,14 @@ async function fetchRemuxedBlob() {
         throw new Error('Remux failed');
     }
     const buffer = await response.arrayBuffer();
-    // Convertir a MP3 para descargas/compatibilidad si se usa este flujo
+    // Convertir a OGG para descargas/compatibilidad si se usa este flujo
     const webmBlob = new Blob([buffer], { type: 'audio/webm;codecs=opus' });
     try {
-        const mp3Blob = await convertToMp3(webmBlob);
-        return mp3Blob;
+        const oggBlob = await convertToOgg(webmBlob);
+        return oggBlob;
     } catch (_) {
-        // Fallback: devolver blob original pero marcando mpeg para evitar descargas .webm
-        return new Blob([buffer], { type: 'audio/mpeg' });
+        // Fallback: devolver blob original pero marcando ogg para evitar descargas .webm
+        return new Blob([buffer], { type: 'audio/ogg' });
     }
 }
 
@@ -1512,25 +1521,17 @@ function setupFileUpload() {
 
 // Manejar la selección de archivo
 function handleFileSelection(file) {
-    // Validar que NO sea WebM
-    const isWebM = file.type.includes('webm') || file.name.toLowerCase().includes('.webm');
-    if (isWebM) {
-        showError('❌ Archivos WebM no están permitidos. Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3) para asegurar la calidad de transcripción.');
+    const isAudioType = file.type && file.type.startsWith('audio/');
+    const looksLikeAudio = /\.(ogg|oga|wav|mp3|m4a|aac|flac|aiff|aif|wma|opus|weba|webm)$/i.test(file.name || '');
+
+    if (!isAudioType && !looksLikeAudio) {
+        showError('❌ Tipo de archivo no soportado. Selecciona un archivo de audio válido.');
         return;
     }
 
-    // Solo permitir formatos MP4/MP3
-    const validTypes = ['audio/mp3', 'audio/m4a', 'audio/mpeg', 'audio/mp4'];
-    const validExtensions = /\.(mp3|m4a)$/i;
-
-    if (!validTypes.includes(file.type) && !file.name.match(validExtensions)) {
-        showError('❌ Tipo de archivo no soportado. Este sistema solo acepta archivos MP4 (.m4a) o MP3 (.mp3).');
-        return;
-    }
-
-    // Validar tamaño (máximo 100MB)
-    if (file.size > 100 * 1024 * 1024) {
-        showError('El archivo es demasiado grande. El tamaño máximo es 100MB.');
+    // Validar tamaño (máximo 200MB)
+    if (file.size > 200 * 1024 * 1024) {
+        showError('El archivo es demasiado grande. El tamaño máximo es 200MB.');
         return;
     }
 
@@ -2242,11 +2243,11 @@ window.downloadFailedAudio = async function() {
     }
 
     try {
-        const fileName = await downloadAudioAsMP3(failedAudioBlob, failedAudioName);
+        const fileName = await downloadAudioAsOgg(failedAudioBlob, failedAudioName);
         console.log('💾 [Download] Archivo descargado:', fileName);
-        showSuccess(`Archivo ${fileName} descargado correctamente como MP3`);
+        showSuccess(`Archivo ${fileName} descargado correctamente como OGG`);
     } catch (error) {
-        console.error('❌ [Download] Error al descargar como MP3:', error);
+        console.error('❌ [Download] Error al descargar como OGG:', error);
         // Fallback to normal download
         const fileName = downloadAudioWithCorrectFormat(failedAudioBlob, failedAudioName);
         showSuccess(`Archivo ${fileName} descargado (formato original)`);

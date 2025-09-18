@@ -48,23 +48,23 @@ window.addEventListener('beforeunload', () => {
     if (!processingFinished) discardAudio();
 });
 
-// Función para detectar y manejar archivos de audio largos (solo MP4/MP3)
+// Función para detectar y manejar archivos de audio largos (MP4/OGG)
 function detectLargeAudioFile(audioBlob) {
     if (!audioBlob) return false;
 
     const isMP4 = audioBlob.type.includes('mp4') ||
                   (audioBlob.name && audioBlob.name.toLowerCase().includes('.m4a'));
 
-    const isMP3 = audioBlob.type.includes('mpeg') ||
-                  (audioBlob.name && audioBlob.name.toLowerCase().includes('.mp3'));
+    const isOGG = audioBlob.type.includes('ogg') ||
+                  (audioBlob.name && audioBlob.name.toLowerCase().includes('.ogg'));
 
-    const isLargeAudio = isMP4 || isMP3;
+    const isLargeAudio = isMP4 || isOGG;
 
     if (isLargeAudio) {
         const sizeMB = audioBlob.size / (1024 * 1024);
-        const formatName = isMP3 ? 'MP3' : isMP4 ? 'MP4' : 'Audio';
+        const formatName = isOGG ? 'OGG' : isMP4 ? 'MP4' : 'Audio';
 
-        console.log(`� [detectLargeAudioFile] ${formatName} file detected: ${sizeMB.toFixed(2)} MB`);
+        console.log(`🎵 [detectLargeAudioFile] ${formatName} file detected: ${sizeMB.toFixed(2)} MB`);
 
         if (sizeMB > 50) { // Archivos grandes (>50MB)
             showNotification(
@@ -73,18 +73,19 @@ function detectLargeAudioFile(audioBlob) {
             );
         }
 
-        return { isLargeAudio: true, format: formatName, isMP4, isMP3 };
+        return { isLargeAudio: true, format: formatName, isMP4, isOGG };
     }
 
     return { isLargeAudio: false };
 }
 
-// Función para obtener el formato de audio preferido (solo MP4/MP3)
+// Función para obtener el formato de audio preferido (MP4/OGG)
 function getPreferredAudioFormat() {
     // Solo formatos estables para reuniones - NO WebM
     const formats = [
-        'audio/mp4',            // MP4 audio - PRIORIDAD MÁXIMA
-        'audio/mpeg',           // MP3 - Respaldo estable
+        'audio/ogg;codecs=opus',// OGG/Opus - PRIORIDAD MÁXIMA
+        'audio/ogg',            // OGG genérico como respaldo
+        'audio/mp4',            // MP4 audio como alternativa
     ];
 
     for (const format of formats) {
@@ -95,14 +96,14 @@ function getPreferredAudioFormat() {
     }
 
     console.error('🎵 [getPreferredAudioFormat] ERROR: Ningún formato soportado. Este navegador no es compatible.');
-    throw new Error('Navegador no compatible: No soporta audio/mp4 ni audio/mpeg');
+    throw new Error('Navegador no compatible: No soporta audio/ogg ni audio/mp4');
 }
 
-// Función para obtener la extensión de archivo basada en el MIME type (solo MP4/MP3)
+// Función para obtener la extensión de archivo basada en el MIME type (MP4/OGG)
 function getFileExtensionForMimeType(mimeType) {
     const extensions = {
         'audio/mp4': 'm4a',
-        'audio/mpeg': 'mp3'
+        'audio/ogg': 'ogg'
     };
 
     for (const [mime, ext] of Object.entries(extensions)) {
@@ -111,8 +112,8 @@ function getFileExtensionForMimeType(mimeType) {
         }
     }
 
-    // Solo MP4 como fallback - NO más WebM
-    return 'm4a';
+    // OGG como fallback abierto
+    return 'ogg';
 }
 
 // ===== VARIABLES GLOBALES =====
@@ -978,9 +979,9 @@ function playSegmentAudio(segmentIndex) {
             if (error.message.includes('Timeout') || error.message.includes('tardando mucho')) {
                 alert('⏳ El audio está tardando en cargar. Esto puede deberse a:\n• Archivo muy grande\n• Conexión lenta\n• Problema con el formato de audio\n\nIntenta refrescar la página o usa un archivo más pequeño.');
             } else if (error.message.includes('Error cargando')) {
-                alert('❌ Error cargando el archivo de audio.\n\nPosibles soluciones:\n• Refrescar la página\n• Verificar que el archivo no esté dañado\n• Intentar con un formato diferente (MP3/MP4)');
+                alert('❌ Error cargando el archivo de audio.\n\nPosibles soluciones:\n• Refrescar la página\n• Verificar que el archivo no esté dañado\n• Intentar con un formato diferente (OGG/MP4)');
             } else if (error.name === 'NotSupportedError') {
-                alert('❌ Formato de audio no soportado por tu navegador.\n\nIntenta:\n• Usar Chrome, Firefox o Safari más recientes\n• Convertir el archivo a MP3 o MP4');
+                alert('❌ Formato de audio no soportado por tu navegador.\n\nIntenta:\n• Usar Chrome, Firefox o Safari más recientes\n• Convertir el archivo a OGG o MP4');
             } else if (error.name === 'NotAllowedError') {
                 alert('🔒 Reproducción bloqueada por el navegador.\n\nHaz clic en el botón de play del audio principal primero.');
             } else {
@@ -1768,7 +1769,7 @@ async function processDatabaseSave(meetingName, rootFolder, transcriptionSubfold
     const analysis = analysisResults;
 
     let audio = audioData;
-    // Configurar el tipo MIME preferido: MP3 si está disponible, sino WebM como fallback
+    // Configurar el tipo MIME preferido: OGG si está disponible, sino WebM como fallback
     let audioMimeType = getPreferredAudioFormat();
     if (audio && typeof audio !== 'string') {
         audioMimeType = audio.type || audioMimeType;
@@ -2294,7 +2295,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
                     if (result.success && result.audioData) {
                         // Convertir base64 a blob
-                        audioData = base64ToBlob(result.audioData, result.mimeType || 'audio/mpeg');
+                        audioData = base64ToBlob(result.audioData, result.mimeType || 'audio/ogg');
                         console.log("✅ Audio pendiente cargado desde servidor");
 
                         // Limpiar datos temporales
