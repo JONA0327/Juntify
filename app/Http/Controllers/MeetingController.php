@@ -22,7 +22,7 @@ use Google\Service\Drive\DriveFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
+// Log facade already imported earlier in this file
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +37,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamInterface;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Facades\Log;
 
 class MeetingController extends Controller
 {
@@ -2790,7 +2791,21 @@ class MeetingController extends Controller
             $audioUrl = $this->googleDriveService->getFileLink($newAudioFileId);
             $transcriptUrl = $this->googleDriveService->getFileLink($transcriptFileId);
 
-            // 4. Guardar en la BD principal (TranscriptionLaravel)
+            // 4. Guardar en la BD principal (TranscriptionLaravel) con validación de plan
+            try {
+                $planService = app(\App\Services\PlanLimitService::class);
+                if (!$planService->canCreateAnotherMeeting($user)) {
+                    $limits = $planService->getLimitsForUser($user);
+                    return response()->json([
+                        'code' => 'PLAN_LIMIT_REACHED',
+                        'message' => 'Has alcanzado el número máximo de reuniones para tu plan este mes.',
+                        'used' => $limits['used_this_month'],
+                        'max' => $limits['max_meetings_per_month']
+                    ], 403);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('MeetingController: plan limit check failed', ['error' => $e->getMessage()]);
+            }
             $transcription = \App\Models\TranscriptionLaravel::create([
                 'username' => $user->username,
                 'meeting_name' => $newMeetingName,

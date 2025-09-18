@@ -146,5 +146,23 @@
         window.currentOrganizationName = @json($organizationName ?? null);
     </script>
     @vite(['resources/js/new-meeting.js'])
+    <!-- Modal para opción de posponer bloqueada por plan -->
+    <div class="modal" id="postpone-locked-modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <x-icon name="lock" class="modal-icon" />
+                    Opción disponible en planes superiores
+                </h2>
+            </div>
+            <div class="modal-body">
+                <p>La opción "Posponer" está disponible para los planes: <strong>Negocios</strong> y <strong>Enterprise</strong>.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closePostponeLockedModal()">Cerrar</button>
+                <button class="btn btn-primary">Cambiar plan</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

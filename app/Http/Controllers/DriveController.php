@@ -311,6 +311,21 @@ class DriveController extends Controller
             ]);
 
             $user = Auth::user();
+            // Gate: postpone-only feature availability by plan
+            // This endpoint is exclusively used for "posponer" uploads. For free/basic it's disabled.
+            try {
+                $planService = app(\App\Services\PlanLimitService::class);
+                $limits = $planService->getLimitsForUser($user);
+                if (!$limits['allow_postpone']) {
+                    return response()->json([
+                        'code' => 'POSTPONE_NOT_ALLOWED',
+                        'message' => 'La opción de posponer está disponible para los planes Negocios y Enterprise.',
+                        'allowed_plans' => ['negocios','enterprise']
+                    ], 403);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('uploadPendingAudio: plan limits check failed', ['error' => $e->getMessage()]);
+            }
             $serviceAccount = app(GoogleServiceAccount::class);
 
             $organizationFolder = $user->organizationFolder;
@@ -726,6 +741,22 @@ class DriveController extends Controller
             'audioData.max' => 'Archivo de audio demasiado grande (máx. 200 MB)',
         ]);
 
+        $user = Auth::user();
+        // Enforce monthly meetings limit (count save as creating a meeting)
+        try {
+            $planService = app(\App\Services\PlanLimitService::class);
+            if (!$planService->canCreateAnotherMeeting($user)) {
+                $limits = $planService->getLimitsForUser($user);
+                return response()->json([
+                    'code' => 'PLAN_LIMIT_REACHED',
+                    'message' => 'Has alcanzado el número máximo de reuniones para tu plan este mes.',
+                    'used' => $limits['used_this_month'],
+                    'max' => $limits['max_meetings_per_month']
+                ], 403);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('saveResults: plan limit check failed', ['error' => $e->getMessage()]);
+        }
 
         $user = Auth::user();
         $organizationFolder = $user->organizationFolder;

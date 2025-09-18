@@ -43,6 +43,7 @@ let pendingSaveContext = null;
 let postponeMode = false;
 window.postponeMode = postponeMode;
 let limitWarningShown = false;
+let timeWarnNotified = false; // evitar notificar múltiples veces
 let currentRecordingFormat = null; // Almacenar el formato usado en la grabación actual
 let failedAudioBlob = null; // Almacenar blob que falló al subir
 let failedAudioName = null; // Nombre del archivo que falló
@@ -258,7 +259,17 @@ function setIcon(svgEl, name) {
 }
 
 // ===== CONFIGURACIÓN DE GRABACIÓN =====
-const MAX_DURATION_MS = 2 * 60 * 60 * 1000; // 2 horas
+let MAX_DURATION_MS = 2 * 60 * 60 * 1000; // 2 horas (dinámico por plan)
+let WARN_BEFORE_MINUTES = 5; // dinámico por plan
+let PLAN_LIMITS = {
+    role: (window.userRole || 'free'),
+    max_meetings_per_month: null,
+    used_this_month: 0,
+    remaining: null,
+    max_duration_minutes: 120,
+    allow_postpone: true,
+    warn_before_minutes: 5,
+};
 const SEGMENT_MS = 10 * 60 * 1000; // 10 minutos
 // Se almacenan todos los trozos generados por una única sesión del MediaRecorder
 let recordedChunks = [];
@@ -483,6 +494,84 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.warn('⚠️ [new-meeting] Could not persist drive selection:', error);
             }
         });
+    }
+
+    // Cargar límites del plan y aplicarlos a la UI/funcionalidad
+    try {
+        const resp = await fetch('/api/plan/limits', { credentials: 'include' });
+        if (resp.ok) {
+            const limits = await resp.json();
+            PLAN_LIMITS = limits;
+            // Duración máxima por reunión
+            const minutes = Number(limits.max_duration_minutes || 120);
+            MAX_DURATION_MS = minutes * 60 * 1000;
+            WARN_BEFORE_MINUTES = Number(limits.warn_before_minutes || 5);
+            // Actualizar mensajes de UI
+            const hintAudio = document.getElementById('max-duration-hint-audio');
+            const hintMeeting = document.getElementById('max-duration-hint-meeting');
+            const warn = WARN_BEFORE_MINUTES;
+            const hint = `Puedes grabar hasta ${minutes} minutos continuos. Se notificará cuando queden ${warn} min para el límite.`;
+            if (hintAudio) hintAudio.textContent = hint;
+            if (hintMeeting) hintMeeting.textContent = hint;
+
+            // Postponer: habilitar/deshabilitar
+            const postponeToggle = document.getElementById('postpone-toggle');
+            const postponeContainer = document.getElementById('postpone-switch');
+            if (postponeContainer) postponeContainer.style.display = 'flex';
+            if (postponeToggle) {
+                if (!limits.allow_postpone) {
+                    postponeToggle.checked = false;
+                    postponeToggle.disabled = false; // Permitimos click para mostrar el modal informativo
+                    setPostponeMode(false);
+                    // Hook para mostrar modal de upgrade cuando intente activarlo
+                    postponeToggle.addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            e.preventDefault();
+                            e.target.checked = false;
+                            setPostponeMode(false);
+                            showPostponeLockedModal();
+                        }
+                    });
+                    const postponeBtn = document.getElementById('postpone-btn');
+                    if (postponeBtn) {
+                        postponeBtn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            showPostponeLockedModal();
+                        });
+                    }
+                }
+            }
+
+            // Actualizar banner de análisis mensual
+            try {
+                const countEl = document.querySelector('.analysis-count');
+                const subtitle = document.querySelector('.analysis-subtitle');
+                const used = Number(limits.used_this_month || 0);
+                const max = limits.max_meetings_per_month;
+                if (countEl) {
+                    countEl.textContent = `${used}/${max ?? '∞'}`;
+                }
+                if (subtitle) {
+                    if (max !== null && used >= max) {
+                        subtitle.textContent = 'Has alcanzado el límite de reuniones para este mes.';
+                        // Deshabilitar inicio de nuevas grabaciones
+                        const micBtn = document.getElementById('mic-circle');
+                        const meetBtn = document.getElementById('meeting-record-btn');
+                        if (micBtn) { micBtn.disabled = true; micBtn.classList.add('disabled'); }
+                        if (meetBtn) { meetBtn.disabled = true; meetBtn.classList.add('disabled'); }
+                        // Mensaje visual rápido
+                        showWarning('Has alcanzado tu límite mensual de reuniones. Actualiza tu plan para continuar.');
+                    } else if (max !== null) {
+                        const remaining = Math.max(0, max - used);
+                        subtitle.textContent = `Te quedan ${remaining} reuniones este mes.`;
+                    } else {
+                        subtitle.textContent = 'Reuniones ilimitadas este mes.';
+                    }
+                }
+            } catch (_) {}
+        }
+    } catch (e) {
+        console.warn('No se pudieron cargar los límites del plan:', e);
     }
 });
 
@@ -923,8 +1012,8 @@ function updateTimer() {
         return;
     }
 
-    if (!limitWarningShown && elapsed >= MAX_DURATION_MS - 5 * 60 * 1000) {
-        showWarning('Quedan 5 minutos para el límite de grabación');
+    if (!limitWarningShown && elapsed >= MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000) {
+        showWarning(`Quedan ${WARN_BEFORE_MINUTES} minutos para el límite de grabación`);
         limitWarningShown = true;
     }
 
@@ -952,6 +1041,25 @@ function showWarning(message) {
     setTimeout(() => {
         notification.remove();
     }, 5000);
+
+    // Enviar notificación al backend solo para advertencia de tiempo restante
+    if (!timeWarnNotified && message.includes('minutos') && message.includes('límite')) {
+        timeWarnNotified = true;
+        try {
+            fetch('/api/notifications', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    type: 'time_limit_warning',
+                    message: message,
+                    data: { context: selectedMode }
+                })
+            }).catch(() => {});
+        } catch (_) {}
+    }
 }
 
 // Sube un blob de audio a Drive
@@ -2078,11 +2186,26 @@ function updateMeetingTimer() {
         return;
     }
 
-    if (!limitWarningShown && elapsed >= MAX_DURATION_MS - 5 * 60 * 1000) {
-        showWarning('Quedan 5 minutos para el límite de grabación');
+    if (!limitWarningShown && elapsed >= MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000) {
+        showWarning(`Quedan ${WARN_BEFORE_MINUTES} minutos para el límite de grabación`);
         limitWarningShown = true;
     }
 
+
+function showPostponeLockedModal() {
+    const modal = document.getElementById('postpone-locked-modal');
+    if (!modal) {
+        alert('Esta opción solo está disponible para los planes: Negocios, Enterprise, Founder, Developer y Superadmin.');
+        return;
+    }
+    modal.style.display = 'block';
+}
+
+// Cerrar modal de upgrade
+window.closePostponeLockedModal = function() {
+    const modal = document.getElementById('postpone-locked-modal');
+    if (modal) modal.style.display = 'none';
+}
     const hours = Math.floor(elapsed / 3600000);
     const minutes = Math.floor((elapsed % 3600000) / 60000);
     const seconds = Math.floor((elapsed % 60000) / 1000);

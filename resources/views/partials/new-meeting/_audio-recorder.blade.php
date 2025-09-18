@@ -55,7 +55,7 @@
                 </span>
             </label>
         </div>
-        <p class="text-xs text-gray-500 mt-4 text-center">Puedes grabar hasta 2 horas continuas. Se notificará cuando queden 5 min para el límite.</p>
+    <p id="max-duration-hint-audio" class="text-xs text-gray-500 mt-4 text-center">Puedes grabar hasta 2 horas continuas. Se notificará cuando queden 5 min para el límite.</p>
     </div>
 </div>
 

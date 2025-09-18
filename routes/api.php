@@ -21,6 +21,7 @@ use App\Http\Controllers\RecordingChunkController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\SharedMeetingController;
+use App\Http\Controllers\PlanController;
 
 /*
 |--------------------------------------------------------------------------
@@ -266,5 +267,8 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('/pending-meetings/complete', [MeetingController::class, 'completePendingMeeting']);
         Route::get('/pending-meetings/{id}/info', [MeetingController::class, 'getPendingProcessingInfo']);
         Route::get('/pending-meetings/audio/{tempFileName}', [MeetingController::class, 'getPendingAudioFile']);
+
+                // Plan limits
+                Route::get('/plan/limits', [PlanController::class, 'limits'])->name('api.plan.limits');
     });
 
