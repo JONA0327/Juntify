@@ -107,7 +107,7 @@ it('allows administrator to save meeting to personal drive', function () {
     $service = Mockery::mock(GoogleServiceAccount::class);
     $service->shouldReceive('shareFolder')->twice();
     $service->shouldReceive('uploadFile')->twice()->andReturn('t1', 'a1');
-    $service->shouldReceive('getFileLink')->twice()->andReturn('tlink', 'alink');
+    $service->shouldReceive('getFileLink')->twice()->andReturn('alink', 'tlink');
     app()->instance(GoogleServiceAccount::class, $service);
 
     $payload = [
@@ -161,7 +161,7 @@ it('allows administrator to save meeting to organization drive', function () {
     $service = Mockery::mock(GoogleServiceAccount::class);
     $service->shouldReceive('shareFolder')->twice();
     $service->shouldReceive('uploadFile')->twice()->andReturn('t1', 'a1');
-    $service->shouldReceive('getFileLink')->twice()->andReturn('tlink', 'alink');
+    $service->shouldReceive('getFileLink')->twice()->andReturn('alink', 'tlink');
     app()->instance(GoogleServiceAccount::class, $service);
 
     $payload = [

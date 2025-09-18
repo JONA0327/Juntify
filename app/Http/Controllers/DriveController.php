@@ -773,9 +773,10 @@ class DriveController extends Controller
             'audioSubfolder'         => 'prohibited',
             'transcriptionData'      => 'required',
             'analysisResults'        => 'required',
-            'audioData'              => 'required|string|max:' . (int) ceil($maxAudioBytes * 4 / 3),      // Base64 (~699MB)
-            'audioMimeType'          => 'required|string',      // p.ej. "audio/webm"
-            'driveType'              => 'nullable|string|in:personal,organization', // Nuevo campo para tipo de drive
+            'pendingRecordingId'     => 'nullable|integer|exists:pending_recordings,id',
+            'audioData'              => 'required_without:pendingRecordingId|string|max:' . (int) ceil($maxAudioBytes * 4 / 3),
+            'audioMimeType'          => 'required_without:pendingRecordingId|string',
+            'driveType'              => 'nullable|string|in:personal,organization',
         ], [
             'audioData.max' => 'Archivo de audio demasiado grande (máx. 500 MB)',
         ]);
@@ -855,23 +856,21 @@ class DriveController extends Controller
         $accountEmail = config('services.google.service_account_email');
         $serviceAccount = app(GoogleServiceAccount::class);
 
+        $pendingRecordingId = $v['pendingRecordingId'] ?? null;
+        $pendingRecording = null;
+        if ($pendingRecordingId) {
+            $pendingRecording = PendingRecording::where('id', $pendingRecordingId)
+                ->where('username', $user->username)
+                ->first();
+
+            if (! $pendingRecording) {
+                return response()->json(['message' => 'Grabación pendiente no encontrada'], 404);
+            }
+        }
+
         try {
-            // 2. Carpetas en Drive
             $meetingName = $v['meetingName'];
 
-            // 3. Decodifica Base64
-            $b64    = $v['audioData'];
-            if (str_contains($b64, ',')) {
-                [, $b64] = explode(',', $b64, 2);
-            }
-            $raw    = base64_decode($b64);
-
-            // 4. Guarda temporalmente el binario (NO lo cargues en memoria)
-            $tmp   = tempnam(sys_get_temp_dir(), 'aud');
-            file_put_contents($tmp, $raw);
-            // $audio = file_get_contents($tmp); // NO cargar en memoria
-
-            // 5. Prepara payload de transcripción/análisis
             $analysis = $v['analysisResults'];
             $payload  = [
                 'segments'  => $v['transcriptionData'],
@@ -880,30 +879,58 @@ class DriveController extends Controller
             ];
             $encrypted = Crypt::encryptString(json_encode($payload));
 
-            // 6. Sube los archivos a Drive usando la cuenta de servicio
+            $audioFileId = null;
+            $audioUrl = null;
+            $transcriptFileId = null;
+            $tmp = null;
+            $audioExtension = null;
+
             try {
                 $transcriptFileId = $serviceAccount
                     ->uploadFile("{$meetingName}.ju", 'application/json', $transcriptionFolderId, $encrypted);
 
-                // extrae la extensión a partir del mimeType usando un mapa conocido
-                $mime = strtolower($v['audioMimeType']);
-                $mimeToExt = [
-                    'audio/mpeg' => 'mp3',
-                    'audio/mp3'  => 'mp3',
-                    'audio/webm' => 'webm',
-                    'audio/ogg'  => 'ogg',
-                    'audio/wav'  => 'wav',
-                    'audio/x-wav' => 'wav',
-                    'audio/wave' => 'wav',
-                    'audio/mp4'  => 'mp4',
-                ];
-                $baseMime = explode(';', $mime)[0];
-                $ext      = $mimeToExt[$baseMime]
-                    ?? preg_replace('/[^\\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
+                if ($pendingRecording) {
+                    $originalName = $pendingRecording->meeting_name ?? 'audio.webm';
+                    $audioExtension = pathinfo($originalName, PATHINFO_EXTENSION) ?: null;
+                    $newAudioName = $audioExtension ? "{$meetingName}.{$audioExtension}" : $meetingName;
 
-                $audioFileId = $serviceAccount
-                    ->uploadFile("{$meetingName}.{$ext}", $v['audioMimeType'], $audioFolderId, $tmp);
-                @unlink($tmp);
+                    $audioFileId = $serviceAccount->moveAndRenameFile(
+                        $pendingRecording->audio_drive_id,
+                        $audioFolderId,
+                        $newAudioName
+                    );
+                    $audioUrl = $serviceAccount->getFileLink($audioFileId);
+                } else {
+                    $b64 = $v['audioData'];
+                    if (str_contains($b64, ',')) {
+                        [, $b64] = explode(',', $b64, 2);
+                    }
+                    $raw = base64_decode($b64);
+
+                    $tmp = tempnam(sys_get_temp_dir(), 'aud');
+                    file_put_contents($tmp, $raw);
+
+                    $mime = strtolower($v['audioMimeType']);
+                    $mimeToExt = [
+                        'audio/mpeg' => 'mp3',
+                        'audio/mp3'  => 'mp3',
+                        'audio/webm' => 'webm',
+                        'video/webm' => 'webm',
+                        'audio/ogg'  => 'ogg',
+                        'audio/wav'  => 'wav',
+                        'audio/x-wav' => 'wav',
+                        'audio/wave' => 'wav',
+                        'audio/mp4'  => 'mp4',
+                        'video/mp4'  => 'mp4',
+                    ];
+                    $baseMime = explode(';', $mime)[0];
+                    $audioExtension = $mimeToExt[$baseMime]
+                        ?? preg_replace('/[^\\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
+
+                    $audioFileId = $serviceAccount
+                        ->uploadFile("{$meetingName}.{$audioExtension}", $v['audioMimeType'], $audioFolderId, $tmp);
+                    $audioUrl = $serviceAccount->getFileLink($audioFileId);
+                }
             } catch (GoogleServiceException $e) {
                 Log::error('saveResults drive failure', [
                     'error'                  => $e->getMessage(),
@@ -938,10 +965,23 @@ class DriveController extends Controller
                 return response()->json([
                     'message' => 'Error de Drive: ' . $e->getMessage(),
                 ], 502);
+            } finally {
+                if ($tmp && file_exists($tmp)) {
+                    @unlink($tmp);
+                }
             }
 
             $transcriptUrl = $serviceAccount->getFileLink($transcriptFileId);
-            $audioUrl      = $serviceAccount->getFileLink($audioFileId);
+            $audioUrl      = $audioUrl ?: $serviceAccount->getFileLink($audioFileId);
+
+            if ($pendingRecording) {
+                $pendingRecording->update([
+                    'status'             => PendingRecording::STATUS_COMPLETED,
+                    'meeting_name'       => $audioExtension ? "{$meetingName}.{$audioExtension}" : $meetingName,
+                    'audio_drive_id'     => $audioFileId,
+                    'audio_download_url' => $audioUrl,
+                ]);
+            }
 
             // 7. Calcula información adicional
             $drivePath = implode(' | ', [

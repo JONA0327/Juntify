@@ -1783,7 +1783,117 @@ async function processDatabaseSave(meetingName, rootFolder) {
     let audio = audioData;
     // Configurar el tipo MIME preferido: MP3 si está disponible, sino WebM como fallback
     let audioMimeType = getPreferredAudioFormat();
-    if (audio && typeof audio !== 'string') {
+    const inlineUploadLimitBytes = 8 * 1024 * 1024; // 8MB aprox para envío inline
+
+    const ensurePendingUpload = async (blob) => {
+        addMessage('Archivo de audio grande detectado. Subiendo como pendiente...');
+        setProgress(5, 'Subiendo audio pendiente...');
+
+        const formData = new FormData();
+        const effectiveMime = blob.type || audioMimeType;
+        const fileExtension = getFileExtensionForMimeType(effectiveMime);
+        const pendingFileName = `${meetingName}.${fileExtension}`;
+
+        formData.append('audioFile', blob, pendingFileName);
+        formData.append('meetingName', meetingName);
+        formData.append('driveType', driveType);
+        if (rootFolder) {
+            formData.append('rootFolder', rootFolder);
+        }
+
+        let uploadResponse;
+        try {
+            uploadResponse = await fetch('/api/drive/upload-pending-audio', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken.getAttribute('content')
+                },
+                body: formData
+            });
+        } catch (networkError) {
+            console.error('Error de red al subir audio pendiente', networkError);
+            showNotification('No se pudo subir el audio grande. Revisa tu conexión.', 'error');
+            resetUI();
+            showStep(4);
+            return { success: false, message: 'Error de red al subir audio pendiente' };
+        }
+
+        if (!uploadResponse.ok) {
+            let errorMsg = 'Error al subir audio pendiente';
+            try {
+                const contentType = uploadResponse.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    const err = await uploadResponse.json();
+                    if (err && err.message) errorMsg = err.message;
+                } else {
+                    errorMsg = `${uploadResponse.status} ${uploadResponse.statusText}`;
+                }
+            } catch (parseErr) {
+                console.error('No se pudo interpretar el error del servidor', parseErr);
+            }
+
+            showNotification(errorMsg, 'error');
+            resetUI();
+            showStep(4);
+            return { success: false, message: errorMsg };
+        }
+
+        let pendingResult;
+        try {
+            pendingResult = await uploadResponse.json();
+        } catch (parseErr) {
+            console.error('Error al interpretar respuesta de subida pendiente', parseErr);
+            showNotification('Respuesta inválida al subir audio pendiente', 'error');
+            resetUI();
+            showStep(4);
+            return { success: false, message: 'Respuesta inválida al subir audio pendiente' };
+        }
+
+        window.pendingAudioInfo = {
+            pendingId: pendingResult?.pending_recording,
+            status: pendingResult?.status,
+            audioDriveId: pendingResult?.audio_drive_id,
+            driveType: pendingResult?.drive_type,
+            folderInfo: pendingResult?.folder_info,
+            audioName: pendingResult?.audio_name,
+        };
+
+        addMessage('Audio subido como pendiente. Continuando con el guardado...');
+        return { success: true };
+    };
+
+    if (!window.pendingAudioInfo && audio) {
+        if (audio instanceof Blob) {
+            audioMimeType = audio.type || audioMimeType;
+            if (audio.size > inlineUploadLimitBytes) {
+                const pendingResult = await ensurePendingUpload(audio);
+                if (!pendingResult.success) {
+                    return pendingResult;
+                }
+                audio = null;
+            }
+        } else if (typeof audio === 'string') {
+            const estimatedBytes = Math.floor((audio.length * 3) / 4);
+            if (estimatedBytes > inlineUploadLimitBytes) {
+                try {
+                    const blob = base64ToBlob(audio, audioMimeType);
+                    const pendingResult = await ensurePendingUpload(blob);
+                    if (!pendingResult.success) {
+                        return pendingResult;
+                    }
+                    audio = null;
+                } catch (conversionError) {
+                    console.error('No se pudo convertir audio grande para subirlo como pendiente', conversionError);
+                    showNotification('No se pudo preparar el audio grande', 'error');
+                    resetUI();
+                    showStep(4);
+                    return { success: false, message: 'No se pudo preparar el audio grande' };
+                }
+            }
+        }
+    }
+
+    if (!window.pendingAudioInfo && audio && typeof audio !== 'string') {
         audioMimeType = audio.type || audioMimeType;
         try {
             audio = await blobToBase64(audio);
@@ -1815,184 +1925,85 @@ async function processDatabaseSave(meetingName, rootFolder) {
         setProgress(10, 'Guardando resultados...');
         addMessage('Enviando datos al servidor...');
 
-        // Verificar si es un audio pendiente
-        if (window.pendingAudioInfo) {
-            addMessage('Completando procesamiento de audio pendiente...');
+        const payload = {
+            meetingName,
+            rootFolder,
+            transcriptionData: transcription,
+            analysisResults: analysis,
+            driveType
+        };
 
-            console.log('📦 Datos a enviar:', {
-                pending_id: window.pendingAudioInfo.pendingId,
-                meeting_name: meetingName,
-                root_folder: rootFolder,
-                transcription_data: transcription,
-                analysis_results: analysis
-            });
-
-            const response = await fetch('/api/pending-meetings/complete', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    pending_id: window.pendingAudioInfo.pendingId,
-                    meeting_name: meetingName,
-                    root_folder: rootFolder,
-                    transcription_data: transcription,
-                    analysis_results: analysis
-                })
-            });
-
-            console.log('📡 Respuesta del servidor:', {
-                status: response.status,
-                statusText: response.statusText,
-                headers: response.headers,
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                let errorMsg = 'Error al completar audio pendiente';
-                try {
-                    const contentType = response.headers.get('content-type') || '';
-                    if (contentType.includes('application/json')) {
-                        const err = await response.json();
-                        if (err && err.error) errorMsg = err.error;
-                    } else {
-                        // Si no es JSON, probablemente es una página de error HTML
-                        const errorText = await response.text();
-                        console.error('Respuesta no JSON recibida:', errorText.substring(0, 500));
-                        errorMsg = `Error del servidor (${response.status}): ${response.statusText}`;
-                    }
-                } catch (parseError) {
-                    console.error('Error al parsear respuesta de error:', parseError);
-                    errorMsg = `Error del servidor (${response.status}): ${response.statusText}`;
-                }
-
-                addMessage(`⚠️ ${errorMsg}`);
-                showNotification(errorMsg, 'error');
-                await discardAudio();
-                resetUI();
-                showStep(4);
-                return { success: false, message: errorMsg };
-            }
-
-            let result;
-            try {
-                result = await response.json();
-            } catch (jsonError) {
-                console.error('Error al parsear JSON de respuesta exitosa:', jsonError);
-                const responseText = await response.text();
-                console.error('Contenido de respuesta:', responseText.substring(0, 500));
-                addMessage('⚠️ Error al procesar respuesta del servidor');
-                showNotification('Error al procesar respuesta del servidor', 'error');
-                await discardAudio();
-                resetUI();
-                showStep(4);
-                return { success: false, message: 'Error al procesar respuesta del servidor' };
-            }
-
-            finalDrivePath = result.drive_path || '';
-            finalDrivePaths = result.drive_paths || null;
-            finalAudioDuration = result.audio_duration || 0;
-            finalSpeakerCount = result.speaker_count || 0;
-            finalTasks = result.tasks || [];
-            // Debug: show how tasks are structured right after analysis
-            try {
-                const t = finalTasks;
-                console.group('%cTareas detectadas (post-análisis)','color:#2563eb;font-weight:bold');
-                console.log('Tipo:', Array.isArray(t) ? 'Array' : typeof t);
-                console.log('Cantidad:', Array.isArray(t) ? t.length : 0);
-                if (Array.isArray(t) && t.length) {
-                    console.log('Ejemplo (primer elemento crudo):');
-                    console.dir(t[0]);
-                    // Tabla con campos comunes si existen
-                    const rows = t.slice(0, 20).map((x, i) => ({
-                        idx: i,
-                        id: x.id ?? x.name ?? x.title ?? x.tarea ?? null,
-                        title: x.title ?? x.name ?? x.tarea ?? null,
-                        description: x.description ?? x.desc ?? x.descripcion ?? null,
-                        assignee: x.assigned ?? x.assigned_to ?? x.owner ?? x.responsable ?? null,
-                        start: x.start ?? x.start_date ?? x.fecha_inicio ?? null,
-                        end: x.end ?? x.due ?? x.due_date ?? x.fecha_fin ?? x.fecha_limite ?? null,
-                        progress: x.progress ?? x.progreso ?? null,
-                        prioridad: x.prioridad ?? x.priority ?? null,
-                        hora: x.hora ?? x.hora_limite ?? x.time ?? x.due_time ?? null
-                    }));
-                    console.table(rows);
-                }
-                console.groupEnd();
-            } catch (e) { /* ignore log errors */ }
-
-            // Limpiar datos pendientes
-            window.pendingAudioInfo = null;
-
+        if (window.pendingAudioInfo?.pendingId) {
+            payload.pendingRecordingId = window.pendingAudioInfo.pendingId;
         } else {
-            // Flujo normal
-            const response = await fetch('/drive/save-results', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    meetingName,
-                    rootFolder,
-                    transcriptionData: transcription,
-                    analysisResults: analysis,
-                    audioData: audio,
-                    audioMimeType,
-                    driveType // Agregar el tipo de drive seleccionado
-                })
-            });
+            payload.audioData = audio;
+            payload.audioMimeType = audioMimeType;
+        }
 
-            if (!response.ok) {
-                if (response.status === 401) {
-                    window.location.href = '/login';
-                    return { success: false, message: 'No autorizado' };
-                }
+        const response = await fetch('/drive/save-results', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+        });
 
-                let errorMsg = 'Error al guardar los datos';
-                const contentType = response.headers.get('content-type') || '';
-                if (contentType.includes('application/json')) {
-                    try {
-                        const err = await response.json();
-                        if (err && err.message) errorMsg = err.message;
-                    } catch (_) {}
-                } else {
-                    errorMsg = 'Respuesta inesperada del servidor';
-                }
-
-                addMessage(`⚠️ ${errorMsg}`);
-                showNotification(errorMsg, 'error');
-                resetUI();
-                showStep(4);
-                return { success: false, message: errorMsg };
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return { success: false, message: 'No autorizado' };
             }
 
-            const result = await response.json();
-            finalDrivePath = result.drive_path || '';
-            finalDrivePaths = result.drive_paths || null;
-            finalAudioDuration = result.audio_duration || 0;
-            finalSpeakerCount = result.speaker_count || 0;
-            finalTasks = result.tasks || [];
-            // Debug (alt path): show task structure too
-            try {
-                const t = finalTasks;
-                console.group('%cTareas detectadas (post-análisis - ruta alterna)','color:#2563eb;font-weight:bold');
-                console.log('Tipo:', Array.isArray(t) ? 'Array' : typeof t);
-                console.log('Cantidad:', Array.isArray(t) ? t.length : 0);
-                if (Array.isArray(t) && t.length) {
-                    console.dir(t[0]);
-                    const rows = t.slice(0, 20).map((x, i) => ({
-                        idx: i,
-                        id: x.id ?? x.name ?? x.title ?? x.tarea ?? null,
-                        title: x.title ?? x.name ?? x.tarea ?? null,
-                        description: x.description ?? x.desc ?? x.descripcion ?? null,
-                        assignee: x.assigned ?? x.assigned_to ?? x.owner ?? x.responsable ?? null,
-                        start: x.start ?? x.start_date ?? x.fecha_inicio ?? null,
-                        end: x.end ?? x.due ?? x.due_date ?? x.fecha_fin ?? x.fecha_limite ?? null,
-                        progress: x.progress ?? x.progreso ?? null,
-                        prioridad: x.prioridad ?? x.priority ?? null,
-                        hora: x.hora ?? x.hora_limite ?? x.time ?? x.due_time ?? null
-                    }));
-                    console.table(rows);
-                }
-                console.groupEnd();
-            } catch (e) { /* ignore */ }
+            let errorMsg = 'Error al guardar los datos';
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                try {
+                    const err = await response.json();
+                    if (err && err.message) errorMsg = err.message;
+                } catch (_) {}
+            } else {
+                errorMsg = 'Respuesta inesperada del servidor';
+            }
+
+            addMessage(`⚠️ ${errorMsg}`);
+            showNotification(errorMsg, 'error');
+            resetUI();
+            showStep(4);
+            return { success: false, message: errorMsg };
         }
+
+        const result = await response.json();
+        finalDrivePath = result.drive_path || '';
+        finalDrivePaths = result.drive_paths || null;
+        finalAudioDuration = result.audio_duration || 0;
+        finalSpeakerCount = result.speaker_count || 0;
+        finalTasks = result.tasks || [];
+        // Debug: show how tasks are structured
+        try {
+            const t = finalTasks;
+            console.group('%cTareas detectadas (post-análisis)','color:#2563eb;font-weight:bold');
+            console.log('Tipo:', Array.isArray(t) ? 'Array' : typeof t);
+            console.log('Cantidad:', Array.isArray(t) ? t.length : 0);
+            if (Array.isArray(t) && t.length) {
+                console.log('Ejemplo (primer elemento crudo):');
+                console.dir(t[0]);
+                const rows = t.slice(0, 20).map((x, i) => ({
+                    idx: i,
+                    id: x.id ?? x.name ?? x.title ?? x.tarea ?? null,
+                    title: x.title ?? x.name ?? x.tarea ?? null,
+                    description: x.description ?? x.desc ?? x.descripcion ?? null,
+                    assignee: x.assigned ?? x.assigned_to ?? x.owner ?? x.responsable ?? null,
+                    start: x.start ?? x.start_date ?? x.fecha_inicio ?? null,
+                    end: x.end ?? x.due ?? x.due_date ?? x.fecha_fin ?? x.fecha_limite ?? null,
+                    progress: x.progress ?? x.progreso ?? null,
+                    prioridad: x.prioridad ?? x.priority ?? null,
+                    hora: x.hora ?? x.hora_limite ?? x.time ?? x.due_time ?? null
+                }));
+                console.table(rows);
+            }
+            console.groupEnd();
+        } catch (e) { /* ignore log errors */ }
+
+        // Limpiar datos pendientes
+        window.pendingAudioInfo = null;
 
         document.getElementById('audio-upload-status').textContent = '✅';
         document.getElementById('transcription-save-status').textContent = '✅';

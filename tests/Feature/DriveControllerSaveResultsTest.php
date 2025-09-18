@@ -4,6 +4,7 @@ use App\Http\Controllers\DriveController;
 use App\Models\User;
 use App\Models\GoogleToken;
 use App\Models\Folder;
+use App\Models\PendingRecording;
 use App\Services\GoogleServiceAccount;
 use Illuminate\Support\Facades\Config;
 use Mockery;
@@ -41,7 +42,7 @@ it('creates and shares standard folders when saving results', function () {
     $service->shouldReceive('uploadFile')
         ->twice()->ordered()->andReturn('t1', 'a1');
     $service->shouldReceive('getFileLink')
-        ->twice()->ordered()->andReturn('tlink', 'alink');
+        ->twice()->ordered()->andReturn('alink', 'tlink');
 
     app()->instance(GoogleServiceAccount::class, $service);
 
@@ -111,7 +112,7 @@ it('derives the audio extension from the mime type map', function () {
     $service->shouldReceive('uploadFile')
         ->once()->with('Meeting.mp3', 'audio/mpeg', 'audio123', Mockery::type('string'))->ordered()->andReturn('a1');
     $service->shouldReceive('getFileLink')
-        ->twice()->ordered()->andReturn('tlink', 'alink');
+        ->twice()->ordered()->andReturn('alink', 'tlink');
 
     app()->instance(GoogleServiceAccount::class, $service);
 
@@ -133,6 +134,81 @@ it('derives the audio extension from the mime type map', function () {
     $response = $this->actingAs($user)->post('/drive/save-results', $payload);
 
     $response->assertOk();
+});
+
+it('completes save using a pending recording reference', function () {
+    Config::set('services.google.service_account_email', 'svc@example.com');
+
+    $user = User::factory()->create(['username' => 'testuser']);
+
+    $token = GoogleToken::create([
+        'username'      => $user->username,
+        'access_token'  => 'access',
+        'refresh_token' => 'refresh',
+        'expiry_date'   => now()->addHour(),
+    ]);
+
+    Folder::create([
+        'google_token_id' => $token->id,
+        'google_id'       => 'root123',
+        'name'            => 'Root',
+        'parent_id'       => null,
+    ]);
+
+    $pending = PendingRecording::create([
+        'username'           => $user->username,
+        'meeting_name'       => 'OldName.mp3',
+        'audio_drive_id'     => 'file123',
+        'audio_download_url' => 'old-link',
+    ]);
+
+    $service = Mockery::mock(GoogleServiceAccount::class);
+    $service->shouldReceive('shareFolder')
+        ->once()->with('root123', 'svc@example.com')->ordered();
+    $service->shouldReceive('createFolder')
+        ->once()->with('Transcripciones', 'root123')->ordered()->andReturn('trans123');
+    $service->shouldReceive('shareFolder')
+        ->once()->with('trans123', 'svc@example.com')->ordered();
+    $service->shouldReceive('createFolder')
+        ->once()->with('Audio', 'root123')->ordered()->andReturn('audio123');
+    $service->shouldReceive('shareFolder')
+        ->once()->with('audio123', 'svc@example.com')->ordered();
+    $service->shouldReceive('uploadFile')
+        ->once()->with('Meeting.ju', 'application/json', 'trans123', Mockery::type('string'))->ordered()->andReturn('t1');
+    $service->shouldReceive('moveAndRenameFile')
+        ->once()->with('file123', 'audio123', 'Meeting.mp3')->ordered()->andReturn('aud456');
+    $service->shouldReceive('getFileLink')
+        ->twice()->ordered()->andReturn('alink', 'tlink');
+
+    app()->instance(GoogleServiceAccount::class, $service);
+
+    $payload = [
+        'meetingName' => 'Meeting',
+        'rootFolder' => 'root123',
+        'transcriptionData' => [
+            ['end' => 1, 'speaker' => 'A'],
+        ],
+        'analysisResults' => [
+            'summary' => 'sum',
+            'keyPoints' => [],
+            'tasks' => [],
+        ],
+        'pendingRecordingId' => $pending->id,
+    ];
+
+    $response = $this->actingAs($user)->post('/drive/save-results', $payload);
+
+    $response->assertOk()
+        ->assertJsonPath('audio_drive_id', 'aud456')
+        ->assertJsonPath('audio_download_url', 'alink')
+        ->assertJsonPath('transcript_download_url', 'tlink');
+
+    $this->assertDatabaseHas('pending_recordings', [
+        'id' => $pending->id,
+        'status' => PendingRecording::STATUS_COMPLETED,
+        'meeting_name' => 'Meeting.mp3',
+        'audio_drive_id' => 'aud456',
+    ]);
 });
 
 it('rejects manual subfolder parameters', function () {
