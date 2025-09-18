@@ -807,8 +807,8 @@ async function finalizeRecording() {
             downloadAudioWithCorrectFormat(finalBlob, name);
         }
     }
-    if (sizeMB > 100) {
-        showError('La grabación supera el límite de 100 MB.');
+    if (sizeMB > 500) {
+        showError('La grabación supera el límite de 500 MB.');
         const upload = confirm('¿Deseas subirla en segundo plano? Cancelar para descargarla.');
         pendingSaveContext = context;
         if (upload) {
@@ -1663,9 +1663,9 @@ function handleFileSelection(file) {
         return;
     }
 
-    // Validar tamaño (máximo 100MB)
-    if (file.size > 100 * 1024 * 1024) {
-        showError('El archivo es demasiado grande. El tamaño máximo es 100MB.');
+    // Validar tamaño (máximo 500MB)
+    if (file.size > 500 * 1024 * 1024) {
+        showError('El archivo es demasiado grande. El tamaño máximo es 500MB.');
         return;
     }
 
