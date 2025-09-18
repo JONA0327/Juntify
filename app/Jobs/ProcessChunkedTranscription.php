@@ -7,6 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Exceptions\FfmpegUnavailableException;
 use App\Services\AudioConversionService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -39,32 +40,32 @@ class ProcessChunkedTranscription implements ShouldQueue
         $processedPath = null;
 
         try {
-        $metadata = json_decode(file_get_contents($metadataPath), true);
-        if (!is_array($metadata)) {
-            throw new RuntimeException('Upload metadata is missing or invalid');
-        }
+            $metadata = json_decode(file_get_contents($metadataPath), true);
+            if (!is_array($metadata)) {
+                throw new RuntimeException('Upload metadata is missing or invalid');
+            }
 
-        $filename = $metadata['filename'] ?? '';
-        $originalExtension = strtolower($metadata['original_extension'] ?? pathinfo($filename, PATHINFO_EXTENSION));
-        $originalMimeType = $metadata['original_mime_type'] ?? $this->guessMimeType($originalExtension);
-        $isWebM = $originalExtension === 'webm';
+            $filename = $metadata['filename'] ?? '';
+            $originalExtension = strtolower($metadata['original_extension'] ?? pathinfo($filename, PATHINFO_EXTENSION));
+            $originalMimeType = $metadata['original_mime_type'] ?? $this->guessMimeType($originalExtension);
+            $isWebM = $originalExtension === 'webm';
 
-        $extensionSuffix = $originalExtension ? ".{$originalExtension}" : '';
-        $finalFilePath = "{$uploadDir}/final_audio{$extensionSuffix}";
+            $extensionSuffix = $originalExtension ? ".{$originalExtension}" : '';
+            $finalFilePath = "{$uploadDir}/final_audio{$extensionSuffix}";
 
-        if ($isWebM) {
-            Log::info('WebM file detected in chunked processing', [
-                'filename' => $filename,
-                'chunks' => $metadata['chunks_expected'],
-            ]);
-        }
+            if ($isWebM) {
+                Log::info('WebM file detected in chunked processing', [
+                    'filename' => $filename,
+                    'chunks' => $metadata['chunks_expected'],
+                ]);
+            }
 
-        // Combinar chunks utilizando la estrategia adecuada
-        if ($isWebM) {
-            $this->combineWebMChunks($uploadDir, $metadata, $finalFilePath);
-        } else {
-            $this->combineChunksStandard($uploadDir, $metadata, $finalFilePath);
-        }
+            // Combinar chunks utilizando la estrategia adecuada
+            if ($isWebM) {
+                $this->combineWebMChunks($uploadDir, $metadata, $finalFilePath);
+            } else {
+                $this->combineChunksStandard($uploadDir, $metadata, $finalFilePath);
+            }
 
             Log::info('Chunks combined successfully', [
                 'upload_id' => $this->uploadId,
@@ -112,6 +113,39 @@ class ProcessChunkedTranscription implements ShouldQueue
                     'was_converted' => $conversionResult['was_converted'] ?? null,
                     'mp3_path' => $processedPath,
                 ]);
+            } catch (FfmpegUnavailableException $ffmpegUnavailableException) {
+                $supportedExtensions = $metadata['supported_extensions'] ?? [];
+                if (empty($supportedExtensions) && isset($metadata['accepted_formats']) && is_array($metadata['accepted_formats'])) {
+                    $supportedExtensions = array_keys($metadata['accepted_formats']);
+                }
+                $supportedExtensions = array_map('strtolower', $supportedExtensions);
+                $isSupported = empty($supportedExtensions) || in_array($originalExtension, $supportedExtensions, true);
+
+                if ($isSupported) {
+                    $processedPath = $finalFilePath;
+
+                    Log::warning('FFmpeg unavailable during chunked processing, falling back to original audio upload', [
+                        'upload_id' => $this->uploadId,
+                        'tracking_id' => $this->trackingId,
+                        'source_extension' => $originalExtension,
+                    ]);
+                } else {
+                    $message = 'No se pudo convertir el audio combinado a MP3';
+                    Cache::put($cacheKey, [
+                        'status' => 'error',
+                        'error' => $message,
+                    ]);
+
+                    Log::error('FFmpeg unavailable and source format not supported for upload', [
+                        'upload_id' => $this->uploadId,
+                        'tracking_id' => $this->trackingId,
+                        'source_extension' => $originalExtension,
+                        'supported_extensions' => $supportedExtensions,
+                        'error' => $ffmpegUnavailableException->getMessage(),
+                    ]);
+
+                    throw new RuntimeException($message, 0, $ffmpegUnavailableException);
+                }
             } catch (Throwable $conversionException) {
                 $message = 'No se pudo convertir el audio combinado a MP3';
                 Cache::put($cacheKey, [
