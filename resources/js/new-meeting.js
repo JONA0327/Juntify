@@ -1067,13 +1067,19 @@ function uploadAudioToDrive(blob, name, onProgress) {
         };
 
         xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                let response;
+            let parsedResponse = null;
+            const rawResponse = xhr.responseText;
+
+            if (rawResponse) {
                 try {
-                    response = JSON.parse(xhr.responseText);
+                    parsedResponse = JSON.parse(rawResponse);
                 } catch (err) {
-                    response = xhr.responseText;
+                    parsedResponse = null;
                 }
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+                const response = parsedResponse ?? rawResponse;
 
                 console.log('✅ [Upload] Audio subido exitosamente:', response);
 
@@ -1096,14 +1102,34 @@ function uploadAudioToDrive(blob, name, onProgress) {
                 clearFailedUploadData();
                 resolve(response);
             } else {
-                console.error('Upload failed with status:', xhr.status, xhr.responseText);
+                const response = parsedResponse ?? rawResponse;
+                const serverMessage = typeof response === 'object' && response !== null
+                    ? response.message
+                    : (typeof response === 'string' && response.trim() ? response.trim() : null);
+
+                console.error('Upload failed with status:', xhr.status, response);
+
+                if (xhr.status === 403 && driveType === 'organization' && serverMessage) {
+                    showError(serverMessage);
+                    if (driveSelect) {
+                        driveSelect.value = 'personal';
+                        driveSelect.dispatchEvent(new Event('change'));
+                    }
+                    reject(new Error('Upload failed'));
+                    return;
+                }
+
+                const baseError = `Fallo al subir el audio (Error ${xhr.status}).`;
+                const conversionMessage = serverMessage ?? `${baseError} Audio convertido a MP3 para próximo intento.`;
+                const fallbackMessage = serverMessage ?? `${baseError} Puedes reintentarlo más tarde.`;
+
                 // Almacenar datos para reintento con conversión automática a MP3
                 storeFailedUploadData(blob, name).then(() => {
                     showUploadRetryUI();
-                    showError(`Fallo al subir el audio (Error ${xhr.status}). Audio convertido a MP3 para próximo intento.`);
+                    showError(conversionMessage);
                 }).catch(() => {
                     showUploadRetryUI();
-                    showError(`Fallo al subir el audio (Error ${xhr.status}). Puedes reintentarlo más tarde.`);
+                    showError(fallbackMessage);
                 });
                 reject(new Error('Upload failed'));
             }

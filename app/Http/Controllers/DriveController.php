@@ -411,6 +411,9 @@ class DriveController extends Controller
                         'orgRole' => $orgRole,
                         'username' => $user->username
                     ]);
+                    return response()->json([
+                        'message' => 'No tienes permisos para usar Drive organizacional'
+                    ], 403);
                 }
             } elseif ($driveType === 'organization' && !$organizationFolder) {
                 Log::warning('uploadPendingAudio: Organization drive requested but no organization folder found', [
