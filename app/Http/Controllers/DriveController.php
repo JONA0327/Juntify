@@ -23,6 +23,7 @@ use App\Http\Controllers\Auth\GoogleAuthController;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 use App\Models\OrganizationActivity;
+use App\Models\User;
 use App\Services\PlanLimitService;
 use Illuminate\Http\UploadedFile;
 
@@ -57,45 +58,104 @@ class DriveController extends Controller
 
         $result = [];
         $serviceEmail = config('services.google.service_account_email');
-        foreach ($names as $key => $folderName) {
-            try {
-                if ($useOrgDrive) {
-                    $model = OrganizationSubfolder::where('organization_folder_id', $rootFolder->id)
-                        ->where('name', $folderName)
-                        ->first();
-                    if (!$model) {
-                        $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
-                        $model = OrganizationSubfolder::create([
-                            'organization_folder_id' => $rootFolder->id,
-                            'google_id'              => $googleId,
-                            'name'                   => $folderName,
-                        ]);
-                        try { $serviceAccount->shareFolder($googleId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
+        $ownerEmail = $this->resolveRootOwnerEmail($rootFolder, $useOrgDrive);
+        $impersonated = false;
+
+        try {
+            foreach ($names as $key => $folderName) {
+                try {
+                    if ($useOrgDrive) {
+                        $model = OrganizationSubfolder::where('organization_folder_id', $rootFolder->id)
+                            ->where('name', $folderName)
+                            ->first();
+                        if (!$model) {
+                            if ($ownerEmail) {
+                                $serviceAccount->impersonate($ownerEmail);
+                                $impersonated = true;
+                            }
+                            $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                            $model = OrganizationSubfolder::create([
+                                'organization_folder_id' => $rootFolder->id,
+                                'google_id'              => $googleId,
+                                'name'                   => $folderName,
+                            ]);
+                            try { $serviceAccount->shareFolder($googleId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
+                        }
+                    } else {
+                        $model = Subfolder::where('folder_id', $rootFolder->id)
+                            ->where('name', $folderName)
+                            ->first();
+                        if (!$model) {
+                            if ($ownerEmail) {
+                                $serviceAccount->impersonate($ownerEmail);
+                                $impersonated = true;
+                            }
+                            $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                            $model = Subfolder::create([
+                                'folder_id' => $rootFolder->id,
+                                'google_id' => $googleId,
+                                'name'      => $folderName,
+                            ]);
+                            try { $serviceAccount->shareFolder($googleId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
+                        }
                     }
-                } else {
-                    $model = Subfolder::where('folder_id', $rootFolder->id)
-                        ->where('name', $folderName)
-                        ->first();
-                    if (!$model) {
-                        $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
-                        $model = Subfolder::create([
-                            'folder_id' => $rootFolder->id,
-                            'google_id' => $googleId,
-                            'name'      => $folderName,
-                        ]);
-                        try { $serviceAccount->shareFolder($googleId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
-                    }
+                    $result[$key] = $model;
+                } catch (\Throwable $e) {
+                    Log::warning('ensureStandardSubfolders failure', [
+                        'folder' => $folderName,
+                        'error'  => $e->getMessage(),
+                    ]);
                 }
-                $result[$key] = $model;
-            } catch (\Throwable $e) {
-                Log::warning('ensureStandardSubfolders failure', [
-                    'folder' => $folderName,
-                    'error'  => $e->getMessage(),
-                ]);
+            }
+        } finally {
+            if ($impersonated) {
+                try {
+                    $serviceAccount->impersonate(null);
+                } catch (\Throwable $e) {
+                    Log::debug('Failed to reset impersonation after ensuring subfolders', [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        if (!$ownerEmail) {
+            Log::debug('ensureStandardSubfolders owner email not found', [
+                'useOrgDrive' => $useOrgDrive,
+                'rootFolderId' => $rootFolder->id ?? null,
+            ]);
+        }
+
+        return $result;
+    }
+
+    private function resolveRootOwnerEmail($rootFolder, bool $useOrgDrive): ?string
+    {
+        if ($useOrgDrive && $rootFolder instanceof OrganizationFolder) {
+            $rootFolder->loadMissing(['organization.admin', 'googleToken']);
+            $token = $rootFolder->googleToken;
+            if ($token) {
+                $email = $token->impersonate_email
+                    ?? $token->connected_email
+                    ?? $token->owner_email
+                    ?? $token->email
+                    ?? null;
+                if ($email) {
+                    return $email;
+                }
             }
 
+            return optional(optional($rootFolder->organization)->admin)->email;
         }
-        return $result;
+
+        if (! $useOrgDrive && $rootFolder instanceof Folder) {
+            $token = GoogleToken::find($rootFolder->google_token_id);
+            if ($token) {
+                return User::where('username', $token->username)->value('email');
+            }
+        }
+
+        return null;
     }
 
     public function createMainFolder(Request $request)
