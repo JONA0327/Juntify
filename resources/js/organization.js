@@ -110,6 +110,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     alertMessage: '',
     alertType: 'success',
     alertTimeout: null,
+    containerModalRestoreContext: null,
 
     // NUEVO: contactos invitables para el modal
     invitableContacts: [],
@@ -417,6 +418,72 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             }));
         } else {
             this.organizations = [];
+        }
+
+        if (!this._containerModalEventsBound) {
+            const closeHandler = (event) => {
+                const detail = event.detail || {};
+                const containerFromDetail = detail.container ? { ...detail.container } : null;
+                const containerId = detail.containerId
+                    ?? containerFromDetail?.id
+                    ?? this.selectedContainer?.id
+                    ?? null;
+
+                this.containerModalRestoreContext = {
+                    containerId,
+                    detail,
+                    container: containerFromDetail
+                        || (this.selectedContainer ? { ...this.selectedContainer } : null)
+                };
+
+                this.showContainerMeetingsModal = false;
+            };
+
+            const reopenHandler = (event) => {
+                const detail = event.detail || {};
+                const context = this.containerModalRestoreContext;
+
+                if (!context) {
+                    return;
+                }
+
+                const contextId = context.container?.id ?? context.containerId;
+
+                if (!contextId) {
+                    return;
+                }
+
+                const shouldReload = typeof detail.shouldReload === 'boolean'
+                    ? detail.shouldReload
+                    : (typeof context.detail?.shouldReload === 'boolean'
+                        ? context.detail.shouldReload
+                        : true);
+
+                if (context.container && (!this.selectedContainer || this.selectedContainer.id !== context.container.id)) {
+                    this.selectedContainer = context.container;
+                } else if (!this.selectedContainer) {
+                    this.selectedContainer = { id: contextId };
+                }
+
+                if (!this.selectedContainer) {
+                    return;
+                }
+
+                this.showContainerMeetingsModal = true;
+
+                if (shouldReload && this.selectedContainer.id) {
+                    this.$nextTick(() => {
+                        this.openContainerMeetingsModal(this.selectedContainer);
+                    });
+                }
+
+                this.containerModalRestoreContext = null;
+            };
+
+            document.addEventListener('organization:container-meetings:temporarily-close', closeHandler);
+            document.addEventListener('organization:container-meetings:restore', reopenHandler);
+
+            this._containerModalEventsBound = true;
         }
 
         // Al abrir la pestaña de Permisos, cargar la lista completa de miembros por grupo
