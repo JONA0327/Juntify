@@ -1804,7 +1804,7 @@ function createMeetingCard(meeting) {
                 </div>
 
                 <div class="meeting-actions">
-                    <button class="icon-btn view-btn" onclick="openMeetingModal(${meeting.id})" title="Ver reunión">
+                    <button class="icon-btn view-btn" data-action="view-meeting" title="Ver reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -2166,9 +2166,23 @@ function attachMeetingEventListeners() {
                 e.stopPropagation();
             });
         }
+        const viewBtn = card.querySelector('.view-btn, [data-action="view-meeting"]');
+        if (viewBtn) {
+            viewBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const meetingId = card.dataset.meetingId;
+                const containerModal = document.getElementById('container-meetings-modal');
+                if (containerModal && !containerModal.classList.contains('hidden')) {
+                    openMeetingModalFromContainer(meetingId);
+                } else {
+                    const sharedId = card.dataset.sharedId || null;
+                    openMeetingModal(meetingId, sharedId);
+                }
+            });
+        }
         card.addEventListener('click', function(e) {
             // No abrir modal si se hizo click en los botones de acción
-            if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn') || e.target.closest('.remove-btn') || e.target.closest('.download-btn') || e.target.closest('.share-btn')) {
+            if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn') || e.target.closest('.remove-btn') || e.target.closest('.download-btn') || e.target.closest('.share-btn') || e.target.closest('.view-btn')) {
                 return;
             }
 
