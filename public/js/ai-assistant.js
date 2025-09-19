@@ -47,6 +47,7 @@ function setupEventListeners() {
     if (messageInput) {
         messageInput.addEventListener('input', function() {
             adjustTextareaHeight(this);
+            updateSendButton(isLoading);
         });
     }
 
@@ -1380,10 +1381,13 @@ function handleKeyDown(event) {
  * Actualizar botón de envío
  */
 function updateSendButton(loading) {
-    const sendBtn = document.getElementById('sendButton');
+    const sendBtn = document.getElementById('send-btn');
     if (!sendBtn) return;
 
-    sendBtn.disabled = loading;
+    const messageInput = document.getElementById('message-input');
+    const hasMessage = messageInput && messageInput.value.trim().length > 0;
+
+    sendBtn.disabled = loading || !hasMessage;
     if (loading) {
         sendBtn.innerHTML = `
             <div class="spinner" style="width: 1.125rem; height: 1.125rem;"></div>
