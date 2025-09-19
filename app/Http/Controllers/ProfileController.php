@@ -70,7 +70,11 @@ class ProfileController extends Controller
 
                 $file = $drive->getDrive()->files->get(
                     $token->recordings_folder_id,
-                    ['fields' => 'name']
+                    [
+                        'fields' => 'name',
+                        'supportsAllDrives' => true,
+                        'includeItemsFromAllDrives' => true,
+                    ]
                 );
                 $folderName = $file->getName() ?? "recordings_{$user->username}";
 
