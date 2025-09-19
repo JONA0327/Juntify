@@ -44,9 +44,9 @@ class GoogleServiceAccount
         $this->drive = new Drive($this->client);
     }
 
-    public function impersonate(string $email): void
+    public function impersonate(?string $email): void
     {
-        $this->client->setSubject($email);
+        $this->client->setSubject($email ?: null);
     }
 
     public function getClient(): Client
