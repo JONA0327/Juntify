@@ -52,7 +52,9 @@ test('ai assistant mixed context session returns meeting fragments', function ()
         ],
     ]);
 
-    $sessionResponse->assertOk()->assertJsonPath('success', true);
+    $sessionResponse->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('session.context_type', 'mixed');
     $sessionId = $sessionResponse->json('session.id');
 
     $messageResponse = $this->postJson("/api/ai-assistant/sessions/{$sessionId}/messages", [
