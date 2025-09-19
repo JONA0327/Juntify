@@ -2152,40 +2152,42 @@ class MeetingController extends Controller
 
                     // Para acceso por contenedores o compartido, priorizar el uso de Service Account
                     if ($containerAccess || $sharedAccess) {
-                         try {
-                             /** @var \App\Services\GoogleServiceAccount $sa */
-                             $sa = app(\App\Services\GoogleServiceAccount::class);
-                             $owner = $sharedMeeting?->sharedBy ?? $meetingModel->user;
-                             if ($owner && $owner->email) {
-                                 $sa->impersonate($owner->email);
-                             }
-                             $audioContent = $sa->downloadFile($meetingModel->audio_drive_id);
-                             $ext = $this->detectAudioExtension($meetingModel->meeting_name, 'audio/ogg');
-                             $tempFileName = 'stream_' . $meetingModel->id . '.' . $ext;
-                             $audioPath = $this->storeTemporaryFile($audioContent, $tempFileName);
-                         } catch (\Throwable $saError) {
-                             Log::warning('streamAudio: Fallo al descargar con Service Account, intentando otros métodos.', [
-                                 'meeting_id' => $meetingModel->id,
-                                 'error' => $saError->getMessage()
-                             ]);
-                             // Continuar para intentar con el token del usuario si es posible
-                         }
-                     }
-
-                    try {
-                        $audioPath = $this->getAudioPath($meetingModel);
-                    } catch (\Throwable $eGet) {
-                        Log::error('streamAudio: getAudioPath lanzó excepción', [
-                            'meeting_id' => $meetingModel->id,
-                            'error' => $eGet->getMessage()
-                        ]);
-                        $dbg['getAudioPath_exception'] = $eGet->getMessage();
-                        // Fallback inmediato: reutilizar la lógica de descarga directa estilo downloadAudioFile
-                        $fallback = $this->resolveLegacyAudio($meetingModel, $sharedAccess, null, $debug, $dbg);
-                        if ($fallback instanceof \Illuminate\Http\JsonResponse || $fallback instanceof \Illuminate\Http\RedirectResponse || $fallback instanceof \Symfony\Component\HttpFoundation\Response) {
-                            return $fallback;
+                        try {
+                            /** @var \App\Services\GoogleServiceAccount $sa */
+                            $sa = app(\App\Services\GoogleServiceAccount::class);
+                            $owner = $sharedMeeting?->sharedBy ?? $meetingModel->user;
+                            if ($owner && $owner->email) {
+                                $sa->impersonate($owner->email);
+                            }
+                            $audioContent = $sa->downloadFile($meetingModel->audio_drive_id);
+                            $ext = $this->detectAudioExtension($meetingModel->meeting_name, 'audio/ogg');
+                            $tempFileName = 'stream_' . $meetingModel->id . '.' . $ext;
+                            $audioPath = $this->storeTemporaryFile($audioContent, $tempFileName);
+                        } catch (\Throwable $saError) {
+                            Log::warning('streamAudio: Fallo al descargar con Service Account, intentando otros métodos.', [
+                                'meeting_id' => $meetingModel->id,
+                                'error' => $saError->getMessage()
+                            ]);
+                            // Continuar para intentar con el token del usuario si es posible
                         }
-                        $audioPath = null;
+                    }
+
+                    if (empty($audioPath)) {
+                        try {
+                            $audioPath = $this->getAudioPath($meetingModel);
+                        } catch (\Throwable $eGet) {
+                            Log::error('streamAudio: getAudioPath lanzó excepción', [
+                                'meeting_id' => $meetingModel->id,
+                                'error' => $eGet->getMessage()
+                            ]);
+                            $dbg['getAudioPath_exception'] = $eGet->getMessage();
+                            // Fallback inmediato: reutilizar la lógica de descarga directa estilo downloadAudioFile
+                            $fallback = $this->resolveLegacyAudio($meetingModel, $sharedAccess, null, $debug, $dbg);
+                            if ($fallback instanceof \Illuminate\Http\JsonResponse || $fallback instanceof \Illuminate\Http\RedirectResponse || $fallback instanceof \Symfony\Component\HttpFoundation\Response) {
+                                return $fallback;
+                            }
+                            $audioPath = null;
+                        }
                     }
                     if (!$audioPath) {
                         Log::warning('streamAudio: Audio no disponible para reunión legacy', [
