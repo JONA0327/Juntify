@@ -284,7 +284,7 @@ function updateSessionInfo(session) {
     if (!session) return;
 
     // Actualizar el título de la sesión si existe un elemento para ello
-    const sessionTitle = document.getElementById('sessionTitle');
+    const sessionTitle = document.getElementById('current-session-title') || document.getElementById('sessionTitle');
     if (sessionTitle && session.title) {
         sessionTitle.textContent = session.title;
     }
@@ -421,6 +421,11 @@ async function sendMessage(messageText = null) {
         if (data.success) {
             // Agregar respuesta de la IA
             addMessageToChat(data.assistant_message);
+
+            if (data.session) {
+                updateSessionInfo(data.session);
+                await loadChatSessions();
+            }
         } else {
             throw new Error(data.message || 'Error al enviar mensaje');
         }

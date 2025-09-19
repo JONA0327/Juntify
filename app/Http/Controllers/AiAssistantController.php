@@ -199,6 +199,11 @@ class AiAssistantController extends Controller
         $session = AiChatSession::byUser($user->username)
             ->findOrFail($sessionId);
 
+        $isFirstUserMessage = ! $session->messages()
+            ->visible()
+            ->where('role', 'user')
+            ->exists();
+
         // Crear mensaje del usuario
         $userMessage = AiChatMessage::create([
             'session_id' => $session->id,
@@ -207,11 +212,22 @@ class AiAssistantController extends Controller
             'attachments' => $request->attachments ?? []
         ]);
 
+        if ($isFirstUserMessage) {
+            $derivedTitle = $this->deriveSessionTitle($request->content, $session->title);
+
+            if ($derivedTitle && $derivedTitle !== $session->title) {
+                $session->title = $derivedTitle;
+                $session->save();
+            }
+        }
+
         // Procesar con IA y generar respuesta
         $assistantMessage = $this->processAiResponse($session, $request->content, $request->attachments ?? []);
 
         // Actualizar actividad de la sesión
         $session->updateActivity();
+
+        $session->refresh();
 
         $assistantArray = $assistantMessage->toArray();
 
@@ -220,6 +236,13 @@ class AiAssistantController extends Controller
             'user_message' => $userMessage->toArray(),
             'assistant_message' => $assistantArray,
             'citations' => $assistantArray['metadata']['citations'] ?? [],
+            'session' => [
+                'id' => $session->id,
+                'title' => $session->title,
+                'context_type' => $session->context_type,
+                'context_data' => $session->context_data,
+                'last_activity' => $session->last_activity,
+            ],
         ]);
     }
 
@@ -493,6 +516,19 @@ class AiAssistantController extends Controller
         }
 
         return array_values(array_merge($contextFragments, $additional));
+    }
+
+    private function deriveSessionTitle(string $message, ?string $currentTitle = null): ?string
+    {
+        $normalized = trim(preg_replace('/\s+/u', ' ', strip_tags($message)));
+
+        if ($normalized === '') {
+            return $currentTitle ?: null;
+        }
+
+        $title = Str::ucfirst(Str::words($normalized, 8, '…'));
+
+        return Str::limit($title, 60, '…');
     }
 
     private function buildMixedContextFragments(AiChatSession $session, string $query): array
