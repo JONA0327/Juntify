@@ -71,7 +71,25 @@ function setupEventListeners() {
     }
 
     // Drag and drop para documentos
-    setupFileDropZone();
+    // Uploader modal usa su propio setup cuando se abre; aquí sólo el chat
+    setupChatDropZone();
+    // Paperclip para adjuntar desde el chat
+    const attachBtn = document.getElementById('attach-file-btn');
+    const chatHiddenInput = document.getElementById('file-input');
+    if (attachBtn && chatHiddenInput) {
+        attachBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            chatHiddenInput.click();
+        });
+        chatHiddenInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length > 0) {
+                uploadChatAttachments(files);
+            }
+            // Reset input so selecting same file again triggers change
+            e.target.value = '';
+        });
+    }
 
     // Pestañas de detalles
     setupDetailsTabs();
@@ -1190,6 +1208,8 @@ async function openDocumentUploader() {
 
     // Cargar documentos existentes por defecto
     await loadExistingDocuments();
+    // Enlazar drag&drop del uploader ahora que los elementos existen en DOM
+    setupFileDropZone();
 }
 
 /**
@@ -1387,10 +1407,12 @@ async function uploadDocuments() {
             closeDocumentUploader();
 
             // Actualizar contexto para incluir documentos
+            const uploaded = Array.isArray(data.documents) ? data.documents : [];
+            const docIds = uploaded.map(d => d && (d.id ?? d.document_id)).filter(Boolean);
             currentContext = {
                 type: 'documents',
                 id: 'uploaded',
-                data: { documents: data.documents }
+                data: docIds
             };
 
             await createNewChatSession();
@@ -1480,7 +1502,7 @@ function loadSelectedDocuments() {
     currentContext = {
         type: 'documents',
         id: 'selected',
-        data: { document_ids: selectedDocuments }
+        data: selectedDocuments
     };
 
     createNewChatSession();
@@ -2078,14 +2100,9 @@ function setupDetailsTabs() {
 /**
  * Configurar zona de drop para archivos
  */
-function setupFileDropZone() {
-    // Implementación básica para drag and drop de archivos
+function setupChatDropZone() {
     const dropZone = document.getElementById('messages-container');
-    const fileInput = document.getElementById('file-input');
-
-    if (!dropZone || !fileInput) return;
-
-    dropZone.addEventListener('click', () => fileInput.click());
+    if (!dropZone) return;
 
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -2101,18 +2118,54 @@ function setupFileDropZone() {
         e.preventDefault();
         dropZone.classList.remove('drag-over');
 
-        const files = Array.from(e.dataTransfer.files);
+        const files = Array.from(e.dataTransfer.files || []);
         if (files.length > 0) {
-            handleFileUpload(files);
+            uploadChatAttachments(files);
         }
     });
+}
 
-    fileInput.addEventListener('change', (e) => {
-        const files = Array.from(e.target.files);
-        if (files.length > 0) {
-            handleFileUpload(files);
+async function uploadChatAttachments(files) {
+    try {
+        const formData = new FormData();
+        files.forEach(file => formData.append('files[]', file));
+
+        const response = await fetch('/api/ai-assistant/documents/upload', {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+            body: formData
+        });
+
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.message || 'No se pudo subir el archivo');
         }
-    });
+
+        showNotification('Archivo(s) subido(s) y cargados al contexto', 'success');
+        const uploaded = Array.isArray(data.documents) ? data.documents : [];
+        const docIds = uploaded.map(d => d && (d.id ?? d.document_id)).filter(Boolean);
+        // Esperar brevemente a que terminen de procesarse (si ya están listos, seguirá de inmediato)
+        if (docIds.length > 0) {
+            try {
+                await fetch('/api/ai-assistant/documents/wait', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify({ ids: docIds, timeout_ms: 8000 })
+                });
+            } catch(_) { /* no-op */ }
+        }
+        if (docIds.length > 0) {
+            currentContext = { type: 'documents', id: 'uploaded', data: docIds };
+            await createNewChatSession();
+            updateContextIndicator();
+        }
+    } catch (error) {
+        console.error('Error subiendo adjuntos del chat:', error);
+        showNotification('Error al subir adjuntos', 'error');
+    }
 }
 
 /**

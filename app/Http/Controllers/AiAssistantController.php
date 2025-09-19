@@ -451,55 +451,72 @@ class AiAssistantController extends Controller
         $user = Auth::user();
 
         $request->validate([
-            'file' => 'required|file|max:51200', // 50MB max
+            'file' => 'sometimes|file|max:51200', // 50MB max
+            'files.*' => 'sometimes|file|max:51200',
             'drive_folder_id' => 'nullable|string',
-            'drive_type' => 'required|in:personal,organization',
+            'drive_type' => 'sometimes|in:personal,organization',
             'session_id' => 'nullable|integer'
         ]);
 
         try {
-            $file = $request->file('file');
-            $originalName = $file->getClientOriginalName();
-            $mimeType = $file->getMimeType();
-            $fileSize = $file->getSize();
-
-            // Determinar tipo de documento
-            $documentType = $this->getDocumentType($mimeType, $originalName);
-
-            // Subir a Google Drive
-            $driveResult = $this->uploadToGoogleDrive($file, $request->drive_folder_id, $request->drive_type, $user);
-
-            // Crear registro en la base de datos
-            $document = AiDocument::create([
-                'username' => $user->username,
-                'name' => pathinfo($originalName, PATHINFO_FILENAME),
-                'original_filename' => $originalName,
-                'document_type' => $documentType,
-                'mime_type' => $mimeType,
-                'file_size' => $fileSize,
-                'drive_file_id' => $driveResult['file_id'],
-                'drive_folder_id' => $driveResult['folder_id'],
-                'drive_type' => $request->drive_type,
-                'processing_status' => 'pending',
-                'document_metadata' => $driveResult['metadata'] ?? null,
-            ]);
-
-            // Procesar documento en background (OCR, extracción de texto)
-            $this->processDocumentInBackground($document);
-
-            // Si viene una sesión, asociar documento al contexto (reunión/contenedor)
+            $driveType = $request->input('drive_type', 'personal');
+            $folderId = $request->input('drive_folder_id');
             $sessionId = (int) $request->input('session_id');
-            if ($sessionId) {
-                $session = AiChatSession::where('id', $sessionId)->where('username', $user->username)->first();
-                if ($session) {
-                    $this->associateDocumentToSessionContext($document, $session, $user->username);
+
+            $files = [];
+            if ($request->hasFile('files')) {
+                $files = $request->file('files');
+            } elseif ($request->hasFile('file')) {
+                $files = [$request->file('file')];
+            }
+
+            if (empty($files)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se proporcionó ningún archivo para subir.'
+                ], 422);
+            }
+
+            $documents = [];
+            foreach ($files as $file) {
+                if (! $file) continue;
+                $originalName = $file->getClientOriginalName();
+                $mimeType = $file->getMimeType();
+                $fileSize = $file->getSize();
+
+                $documentType = $this->getDocumentType($mimeType, $originalName);
+                $driveResult = $this->uploadToGoogleDrive($file, $folderId, $driveType, $user);
+
+                $document = AiDocument::create([
+                    'username' => $user->username,
+                    'name' => pathinfo($originalName, PATHINFO_FILENAME),
+                    'original_filename' => $originalName,
+                    'document_type' => $documentType,
+                    'mime_type' => $mimeType,
+                    'file_size' => $fileSize,
+                    'drive_file_id' => $driveResult['file_id'],
+                    'drive_folder_id' => $driveResult['folder_id'],
+                    'drive_type' => $driveType,
+                    'processing_status' => 'pending',
+                    'document_metadata' => $driveResult['metadata'] ?? null,
+                ]);
+
+                $this->processDocumentInBackground($document);
+
+                if ($sessionId) {
+                    $session = AiChatSession::where('id', $sessionId)->where('username', $user->username)->first();
+                    if ($session) {
+                        $this->associateDocumentToSessionContext($document, $session, $user->username);
+                    }
                 }
+
+                $documents[] = $document;
             }
 
             return response()->json([
                 'success' => true,
-                'document' => $document,
-                'message' => 'Documento subido correctamente. Se está procesando...'
+                'documents' => $documents,
+                'message' => 'Documento(s) subido(s). Procesando contenido...'
             ]);
 
         } catch (\Throwable $e) {
@@ -542,6 +559,45 @@ class AiAssistantController extends Controller
         return response()->json([
             'success' => true,
             'documents' => $documents
+        ]);
+    }
+
+    /**
+     * Esperar hasta que los documentos indicados hayan sido procesados
+     */
+    public function waitDocuments(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        $ids = Arr::wrap($request->input('ids', []));
+        $timeoutMs = (int) ($request->input('timeout_ms', 12000));
+        $pollMs = 400;
+        $deadline = microtime(true) + ($timeoutMs / 1000.0);
+
+        $last = collect();
+        do {
+            $docs = AiDocument::byUser($user->username)
+                ->whereIn('id', $ids)
+                ->get();
+            $last = $docs;
+            $allDone = $docs->every(function ($d) {
+                return in_array($d->processing_status, ['completed','failed'], true);
+            });
+            if ($allDone) break;
+            usleep($pollMs * 1000);
+        } while (microtime(true) < $deadline);
+
+        $documents = $last->map(function ($document) {
+            return [
+                'id' => $document->id,
+                'name' => $document->name,
+                'processing_status' => $document->processing_status,
+                'has_text' => $document->hasText(),
+            ];
+        })->values();
+
+        return response()->json([
+            'success' => true,
+            'documents' => $documents,
         ]);
     }
 
