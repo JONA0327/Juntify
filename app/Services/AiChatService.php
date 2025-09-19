@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\AiChatMessage;
 use App\Models\AiChatSession;
 use App\Support\OpenAiConfig;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 // Use the SDK global entrypoint to avoid facade collisions
 
 class AiChatService
@@ -19,13 +21,25 @@ class AiChatService
      */
     public function generateReply(AiChatSession $session, ?string $systemMessage = null, array $context = []): array
     {
+        // Limit chat history to avoid blowing the token window
+        $historyLimit = (int) env('AI_ASSISTANT_HISTORY_LIMIT', 12);
+        $historyMaxChars = (int) env('AI_ASSISTANT_HISTORY_TEXT_LIMIT', 2000);
+
         $history = AiChatMessage::where('session_id', $session->id)
-            ->orderBy('created_at')
+            ->orderByDesc('created_at')
+            ->limit(max(1, $historyLimit))
             ->get()
-            ->map(fn (AiChatMessage $m) => [
-                'role' => $m->role,
-                'content' => $m->content,
-            ])->toArray();
+            ->reverse()
+            ->map(function (AiChatMessage $m) use ($historyMaxChars) {
+                $text = (string) $m->content;
+                if ($historyMaxChars > 0 && Str::length($text) > $historyMaxChars) {
+                    $text = Str::limit($text, $historyMaxChars, '…');
+                }
+                return [
+                    'role' => $m->role,
+                    'content' => $text,
+                ];
+            })->toArray();
 
         $messages = [];
 
@@ -34,12 +48,19 @@ class AiChatService
             $messages[] = ['role' => 'system', 'content' => $groundingInstruction];
         }
 
-        if (! empty($context)) {
-            $contextJson = json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        // Compact context to fit within reasonable limits
+        $maxFragments = (int) env('AI_ASSISTANT_MAX_CONTEXT_FRAGMENTS', 24);
+        $fragmentTextLimit = (int) env('AI_ASSISTANT_FRAGMENT_TEXT_LIMIT', 800);
+        $includeContextJson = filter_var(env('AI_ASSISTANT_INCLUDE_CONTEXT_JSON', true), FILTER_VALIDATE_BOOLEAN);
+
+        $compactedContext = $this->compactContext($context, $maxFragments, $fragmentTextLimit);
+
+        if ($includeContextJson && ! empty($compactedContext)) {
+            $contextJson = json_encode($compactedContext, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if ($contextJson !== false) {
                 $messages[] = [
                     'role' => 'system',
-                    'content' => "Fragmentos de contexto (JSON):\n" . $contextJson,
+                    'content' => "Contexto relevante (resumido):\n" . $contextJson,
                 ];
             }
         }
@@ -52,8 +73,9 @@ class AiChatService
         }
         $client = \OpenAI::client($apiKey);
         $start = microtime(true);
+        $model = config('services.openai.chat_model', env('AI_ASSISTANT_MODEL', 'gpt-4o-mini'));
         $response = $client->chat()->create([
-            'model' => 'gpt-3.5-turbo',
+            'model' => $model,
             'messages' => $messages,
         ]);
         $processingTime = microtime(true) - $start;
@@ -70,13 +92,62 @@ class AiChatService
         return [
             'content' => $content,
             'metadata' => [
-                'model' => $response->model ?? null,
+                'model' => $response->model ?? $model,
                 'usage' => $usage,
                 'processing_time' => $processingTime,
                 'context_fragments' => $context,
                 'citations' => $citations,
             ],
         ];
+    }
+
+    /**
+     * Reduce context: keep the most relevant fragments (by similarity if present),
+     * truncate text, and drop heavy metadata to lower token usage.
+     *
+     * @param  array<int, array<string, mixed>>  $context
+     * @return array<int, array<string, mixed>>
+     */
+    private function compactContext(array $context, int $maxFragments, int $fragmentTextLimit): array
+    {
+        if (empty($context)) {
+            return [];
+        }
+
+        // Sort by similarity desc when available
+        usort($context, function ($a, $b) {
+            $sa = is_numeric($a['similarity'] ?? null) ? (float) $a['similarity'] : -INF;
+            $sb = is_numeric($b['similarity'] ?? null) ? (float) $b['similarity'] : -INF;
+            if ($sa === $sb) return 0;
+            return $sa < $sb ? 1 : -1;
+        });
+
+        $context = array_slice($context, 0, max(1, $maxFragments));
+
+        return array_map(function ($frag) use ($fragmentTextLimit) {
+            $text = (string) ($frag['text'] ?? '');
+            if ($fragmentTextLimit > 0 && Str::length($text) > $fragmentTextLimit) {
+                $text = Str::limit($text, $fragmentTextLimit, '…');
+            }
+            $loc = Arr::get($frag, 'location', []);
+            $minimalLoc = [];
+            if (is_array($loc)) {
+                $minimalLoc['type'] = $loc['type'] ?? null;
+                // Preserve a couple of useful identifiers
+                foreach (['title','name','meeting_id','document_id','chat_id','timestamp','page','url'] as $k) {
+                    if (isset($loc[$k]) && $loc[$k] !== null && $loc[$k] !== '') {
+                        $minimalLoc[$k] = $loc[$k];
+                    }
+                }
+                $minimalLoc = array_filter($minimalLoc, fn($v) => $v !== null && $v !== '');
+            }
+
+            return array_filter([
+                'text' => $text,
+                'citation' => $frag['citation'] ?? null,
+                'location' => $minimalLoc ?: null,
+            ], fn($v) => $v !== null);
+        }, $context);
     }
 
     private function buildGroundingInstruction(?string $systemMessage): ?string

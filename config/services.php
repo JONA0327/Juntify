@@ -49,5 +49,10 @@ return [
 
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
+        // Modelos configurables
+        // chat_model: modelo para conversaciones del asistente
+        // embedding_model: modelo para embeddings semánticos
+        'chat_model' => env('AI_ASSISTANT_MODEL', 'gpt-4o-mini'),
+        'embedding_model' => env('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small'),
     ],
 ];
