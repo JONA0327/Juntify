@@ -3272,6 +3272,20 @@ async function closeMeetingModal() {
                 }
 
                 cleanupModalFiles();
+
+                if (organizationContainerModalContext) {
+                    const meetingIdForRestore = currentModalMeeting?.id || organizationContainerModalContext.meetingId || null;
+                    document.dispatchEvent(
+                        new CustomEvent('organization:container-meetings:restore', {
+                            detail: {
+                                ...organizationContainerModalContext,
+                                meetingId: meetingIdForRestore
+                            },
+                            bubbles: true
+                        })
+                    );
+                    organizationContainerModalContext = null;
+                }
             }
         }, 300);
     }
@@ -4831,6 +4845,7 @@ function initializeDownloadModal() {
 // Variables globales para el modal de reuniones del contenedor
 let currentContainerForMeetings = null;
 let previousContainerForDownload = null;
+let organizationContainerModalContext = null;
 
 // ===============================================
 // MODAL DE REUNIONES DEL CONTENEDOR
@@ -4948,7 +4963,34 @@ function renderContainerMeetings(meetings) {
 }
 
 function openMeetingModalFromContainer(meetingId) {
-    // Cerrar el modal del contenedor
+    // Detectar si estamos dentro del componente de organización (Alpine)
+    const organizationComponent = document.querySelector('[x-data^="organizationPage"]');
+
+    if (organizationComponent) {
+        const alpineComponent = organizationComponent.__x;
+        const alpineData = alpineComponent?.$data || {};
+        const selectedContainer = alpineData.selectedContainer || null;
+
+        // Registrar el contexto actual del contenedor para restaurarlo luego
+        organizationContainerModalContext = {
+            containerId: (selectedContainer && selectedContainer.id) || currentContainerForMeetings || null,
+            meetingId,
+            shouldReload: true,
+            container: selectedContainer ? { ...selectedContainer } : null
+        };
+
+        // Notificar al componente de organización para que oculte su modal de contenedor
+        document.dispatchEvent(
+            new CustomEvent('organization:container-meetings:temporarily-close', {
+                detail: organizationContainerModalContext,
+                bubbles: true
+            })
+        );
+    } else {
+        organizationContainerModalContext = null;
+    }
+
+    // Cerrar el modal del contenedor (fallback para páginas fuera de organización)
     closeContainerMeetingsModal();
 
     // Abrir el modal de la reunión
