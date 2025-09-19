@@ -23,6 +23,8 @@ export default defineConfig({
                 'resources/js/auth/login.js',
                 'resources/css/auth/register.css',
                 'resources/js/auth/register.js',
+                'resources/css/auth/forgot.css',
+                'resources/js/auth/forgot.js',
                 'resources/css/reuniones_v2.css',
                 'resources/js/reuniones_v2.js',
                 'resources/css/new-meeting.css',
