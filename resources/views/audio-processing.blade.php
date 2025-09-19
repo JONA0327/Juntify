@@ -299,7 +299,7 @@
 
                             <!-- Selector de carpeta principal eliminado: ahora se determina automáticamente según el Drive seleccionado -->
 
-                            <!-- Subcarpetas manuales eliminadas: ahora se usan carpetas fijas (Audios, Transcripciones, Audios Pospuestos) -->
+                            <!-- Subcarpetas manuales eliminadas: ahora se usan carpetas fijas (Audios, Transcripciones, Audios Pospuestos, Documentos) -->
 
                             <div class="form-group">
                                 <label class="form-label">Nombre de la reunión</label>
@@ -308,7 +308,7 @@
 
                             <div class="form-group" style="font-size:0.85rem; line-height:1.4; color:#94a3b8;">
                                 <strong>Estructura automática:</strong> Los resultados se guardarán en carpetas fijas dentro de tu carpeta principal:
-                                <em>Audios</em>, <em>Transcripciones</em> y <em>Audios Pospuestos</em>. Ya no es necesario elegir subcarpetas manualmente.
+                                <em>Audios</em>, <em>Transcripciones</em>, <em>Audios Pospuestos</em> y <em>Documentos</em>. Ya no es necesario elegir subcarpetas manualmente.
                             </div>
                         </div>
                     </div>

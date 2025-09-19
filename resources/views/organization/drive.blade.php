@@ -47,7 +47,7 @@
             <h2 class="font-medium mb-2">Estructura de almacenamiento</h2>
             <p class="text-sm text-gray-600 leading-relaxed">
                 Las subcarpetas ahora se crean y usan automáticamente. El sistema gestionará las carpetas
-                <strong>Audios</strong>, <strong>Transcripciones</strong> y <strong>Audios Pospuestos</strong> dentro de la carpeta principal.
+                <strong>Audios</strong>, <strong>Transcripciones</strong>, <strong>Audios Pospuestos</strong> y <strong>Documentos</strong> dentro de la carpeta principal.
                 No es necesario crear ni administrar subcarpetas manualmente.
             </p>
         </div>

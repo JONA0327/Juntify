@@ -120,6 +120,10 @@ it('retries personal subfolder creation with impersonation when required', funct
         ->with('Audios Pospuestos', 'root123')
         ->once()
         ->andReturn('pending-id');
+    $service->shouldReceive('createFolder')
+        ->with('Documentos', 'root123')
+        ->once()
+        ->andReturn('documents-id');
     $service->shouldReceive('shareFolder')->zeroOrMoreTimes()->andReturnNull();
     $service->shouldReceive('uploadFile')->twice()->andReturn('t1', 'a1');
     $service->shouldReceive('getFileLink')->twice()->andReturn('tlink', 'alink');
@@ -144,9 +148,9 @@ it('retries personal subfolder creation with impersonation when required', funct
     $response->assertOk();
 
     $subfolders = Subfolder::where('folder_id', $rootFolder->id)->get();
-    expect($subfolders)->toHaveCount(3);
+    expect($subfolders)->toHaveCount(4);
     expect($subfolders->pluck('folder_id')->unique()->all())->toEqual([$rootFolder->id]);
-    expect($subfolders->pluck('name')->sort()->values()->all())->toEqual(['Audios', 'Audios Pospuestos', 'Transcripciones']);
+    expect($subfolders->pluck('name')->sort()->values()->all())->toEqual(['Audios', 'Audios Pospuestos', 'Documentos', 'Transcripciones']);
 });
 
 it('impersonates the organization connector when creating missing subfolders', function () {
@@ -192,6 +196,8 @@ it('impersonates the organization connector when creating missing subfolders', f
     $service->shouldReceive('createFolder')->with('Transcripciones', 'org-root')->once()->ordered('trans')->andReturn('org-trans');
     $service->shouldReceive('impersonate')->with('admin@example.com')->once()->ordered('pending');
     $service->shouldReceive('createFolder')->with('Audios Pospuestos', 'org-root')->once()->ordered('pending')->andReturn('org-pending');
+    $service->shouldReceive('impersonate')->with('admin@example.com')->once()->ordered('documents');
+    $service->shouldReceive('createFolder')->with('Documentos', 'org-root')->once()->ordered('documents')->andReturn('org-documents');
     $service->shouldReceive('impersonate')->with(null)->once();
     $service->shouldReceive('shareFolder')->zeroOrMoreTimes()->andReturnNull();
     $service->shouldReceive('uploadFile')->twice()->andReturn('t1', 'a1');
@@ -218,9 +224,9 @@ it('impersonates the organization connector when creating missing subfolders', f
     $response->assertOk();
 
     $subfolders = OrganizationSubfolder::where('organization_folder_id', $rootFolder->id)->get();
-    expect($subfolders)->toHaveCount(3);
+    expect($subfolders)->toHaveCount(4);
     expect($subfolders->pluck('organization_folder_id')->unique()->all())->toEqual([$rootFolder->id]);
-    expect($subfolders->pluck('name')->sort()->values()->all())->toEqual(['Audios', 'Audios Pospuestos', 'Transcripciones']);
+    expect($subfolders->pluck('name')->sort()->values()->all())->toEqual(['Audios', 'Audios Pospuestos', 'Documentos', 'Transcripciones']);
 });
 
 it('derives the audio extension from the mime type map', function () {

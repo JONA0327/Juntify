@@ -47,6 +47,9 @@ it('creates main folder', function () {
     $serviceAccount->shouldReceive('createFolder')
         ->with('Audios Pospuestos', 'folder123')
         ->andReturn('pospuestos');
+    $serviceAccount->shouldReceive('createFolder')
+        ->with('Documentos', 'folder123')
+        ->andReturn('documentos');
     $serviceAccount->shouldReceive('shareFolder')->andReturnNull();
 
     app()->instance(GoogleDriveService::class, $service);
@@ -109,6 +112,9 @@ it('shares main folder with the service account email', function () {
     $serviceAccount->shouldReceive('createFolder')
         ->with('Audios Pospuestos', 'folder123')
         ->andReturn('pospuestos');
+    $serviceAccount->shouldReceive('createFolder')
+        ->with('Documentos', 'folder123')
+        ->andReturn('documentos');
     $serviceAccount->shouldReceive('shareFolder')->andReturnNull();
 
     app()->instance(GoogleDriveService::class, $service);
@@ -201,6 +207,9 @@ it('falls back to oauth client when service account cannot create main folder', 
     $serviceAccount->shouldReceive('createFolder')
         ->with('Audios Pospuestos', 'folder123')
         ->andReturn('pospuestos');
+    $serviceAccount->shouldReceive('createFolder')
+        ->with('Documentos', 'folder123')
+        ->andReturn('documentos');
     $serviceAccount->shouldReceive('shareFolder')->andReturnNull();
 
     app()->instance(GoogleDriveService::class, $service);

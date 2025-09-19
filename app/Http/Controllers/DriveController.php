@@ -40,10 +40,11 @@ class DriveController extends Controller
     }
 
     /**
-     * Ensure the three standard subfolders exist under the provided root folder:
+     * Ensure the four standard subfolders exist under the provided root folder:
      *  - Audios
      *  - Transcripciones
      *  - Audios Pospuestos
+     *  - Documentos
      * Works for both personal and organization drives, creating missing folders in Google Drive
      * and persisting them in the corresponding DB tables. Returns an associative array with the
      * Subfolder / OrganizationSubfolder models: ['audio' => ..., 'transcription' => ..., 'pending' => ...]
@@ -54,6 +55,7 @@ class DriveController extends Controller
             'audio'         => 'Audios',
             'transcription' => 'Transcripciones',
             'pending'       => 'Audios Pospuestos',
+            'documents'     => 'Documentos',
         ];
 
         $result = [];
@@ -394,7 +396,7 @@ class DriveController extends Controller
         // Ensure standard subfolders exist in the new personal root (idempotent) using SA
         try {
             $serviceEmail = config('services.google.service_account_email');
-            $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos'];
+            $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos', 'Documentos'];
             foreach ($needed as $name) {
                 try {
                     $subId = $serviceAccount->createFolder($name, $folderId);
@@ -489,7 +491,7 @@ class DriveController extends Controller
             foreach ($subfolders as $sf) {
                 $existing[strtolower($sf->name)] = true;
             }
-            $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos'];
+            $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos', 'Documentos'];
             foreach ($needed as $name) {
                 if (!isset($existing[strtolower($name)])) {
                     try {
@@ -526,7 +528,7 @@ class DriveController extends Controller
     {
         return response()->json([
             'deprecated' => true,
-            'message' => 'La creación manual de subcarpetas fue deshabilitada. Ahora se crean automáticamente (Audios, Transcripciones, Audios Pospuestos).'
+            'message' => 'La creación manual de subcarpetas fue deshabilitada. Ahora se crean automáticamente (Audios, Transcripciones, Audios Pospuestos, Documentos).'
         ], 410);
     }
 
