@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AiChatSession;
 use App\Models\AiContextEmbedding;
 use App\Models\AiDocument;
+use App\Models\Container;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -186,11 +187,90 @@ class EmbeddingSearch
                     $filters['meeting_summary'] = $normalized;
                 }
                 break;
+
+            case 'mixed':
+                $items = Arr::get($session->context_data ?? [], 'items', []);
+                if (is_array($items)) {
+                    $containerMeetingsCache = [];
+
+                    foreach ($items as $item) {
+                        if (! is_array($item)) {
+                            continue;
+                        }
+
+                        $type = $item['type'] ?? null;
+                        $id = $item['id'] ?? null;
+
+                        if (! $type || $id === null || $id === '') {
+                            continue;
+                        }
+
+                        switch ($type) {
+                            case 'meeting':
+                                $meetingId = (string) $id;
+                                $filters['meeting_transcript'][] = $meetingId;
+                                $filters['meeting_summary'][] = $meetingId;
+                                break;
+
+                            case 'container':
+                                $containerId = (string) $id;
+                                $filters['container_overview'][] = $containerId;
+
+                                if (! array_key_exists($containerId, $containerMeetingsCache)) {
+                                    $containerMeetingsCache[$containerId] = $this->resolveContainerMeetingIds($session->username, $id);
+                                }
+
+                                $meetingIds = $containerMeetingsCache[$containerId];
+
+                                if (! empty($meetingIds)) {
+                                    $filters['meeting_transcript'] = array_merge($filters['meeting_transcript'] ?? [], $meetingIds);
+                                    $filters['meeting_summary'] = array_merge($filters['meeting_summary'] ?? [], $meetingIds);
+                                }
+                                break;
+
+                            case 'documents':
+                            case 'document':
+                                $filters['document_text'][] = (string) $id;
+                                break;
+
+                            case 'contact_chat':
+                            case 'chat':
+                                $filters['chat_message'][] = (string) $id;
+                                break;
+                        }
+                    }
+                }
+                break;
         }
 
         if (! empty($filters)) {
+            foreach ($filters as $type => $ids) {
+                $filters[$type] = array_values(array_unique(array_map(fn ($id) => (string) $id, $ids)));
+            }
+
             $this->applyContentIdFilters($query, $filters);
         }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function resolveContainerMeetingIds(string $username, $containerId): array
+    {
+        $container = Container::query()
+            ->where('id', $containerId)
+            ->where('username', $username)
+            ->first();
+
+        if (! $container) {
+            return [];
+        }
+
+        return $container->meetings()
+            ->where('username', $username)
+            ->pluck('transcriptions_laravel.id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
     }
 
     /**

@@ -826,12 +826,24 @@ async function loadSelectedContext() {
     if (loadedContextItems.length === 0) return;
 
     try {
+        const serializedItems = loadedContextItems
+            .filter(item => item && item.type && item.id !== undefined && item.id !== null)
+            .map(item => ({
+                type: item.type,
+                id: item.id
+            }));
+
+        if (serializedItems.length === 0) {
+            showNotification('No se pudo cargar el contexto seleccionado', 'error');
+            return;
+        }
+
         // Configurar contexto con los elementos seleccionados
         currentContext = {
-            type: 'general',
-            id: 'custom',
+            type: 'mixed',
+            id: null,
             data: {
-                items: loadedContextItems
+                items: serializedItems
             }
         };
 
@@ -907,11 +919,20 @@ async function selectAllMeetings() {
         const data = await response.json();
 
         if (data.success) {
+            const meetings = Array.isArray(data.meetings) ? data.meetings : [];
+            const items = meetings
+                .filter(meeting => meeting && meeting.id !== undefined && meeting.id !== null)
+                .map(meeting => ({
+                    type: 'meeting',
+                    id: meeting.id
+                }));
+
             currentContext = {
-                type: 'meeting',
-                id: 'all',
+                type: 'mixed',
+                id: null,
                 data: {
-                    meetings: data.meetings
+                    items: items,
+                    label: 'Todas las reuniones'
                 }
             };
 
@@ -1410,6 +1431,15 @@ function updateContextIndicator() {
             contextText = 'Documentos';
             titleText = 'Análisis de Documentos';
             break;
+        case 'mixed': {
+            const items = currentContext.data && Array.isArray(currentContext.data.items)
+                ? currentContext.data.items.length
+                : 0;
+            const label = currentContext.data && currentContext.data.label ? currentContext.data.label : 'Contexto mixto';
+            contextText = items > 0 ? `${label} (${items} elementos)` : label;
+            titleText = label;
+            break;
+        }
     }
 
     indicator.innerHTML = `<span class="context-type">${contextText}</span>`;
@@ -1601,6 +1631,7 @@ function getContextDisplayName(contextType) {
         'general': 'General',
         'container': 'Contenedor',
         'meeting': 'Reunión',
+        'mixed': 'Mixto',
         'contact_chat': 'Chat',
         'documents': 'Documentos'
     };
@@ -1880,13 +1911,11 @@ function updateContextIndicator() {
     if (currentContext.type === 'container') {
         contextText = `Contenedor: ${currentContext.data.container_name || 'Seleccionado'}`;
     } else if (currentContext.type === 'meeting') {
-        if (currentContext.id === 'all') {
-            contextText = 'Todas las reuniones';
-        } else {
-            contextText = `Reunión: ${currentContext.data.meeting_name || 'Seleccionada'}`;
-        }
+        contextText = `Reunión: ${currentContext.data.meeting_name || 'Seleccionada'}`;
     } else if (currentContext.type === 'mixed') {
-        contextText = `Contexto mixto (${currentContext.data.items.length} elementos)`;
+        const items = currentContext.data && Array.isArray(currentContext.data.items) ? currentContext.data.items.length : 0;
+        const label = currentContext.data && currentContext.data.label ? currentContext.data.label : 'Contexto mixto';
+        contextText = items > 0 ? `${label} (${items} elementos)` : label;
     } else {
         contextText = '';
     }

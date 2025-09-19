@@ -460,9 +460,77 @@ class AiAssistantController extends Controller
             case 'contact_chat':
                 $additional = $this->buildChatContextFragments($session);
                 break;
+
+            case 'mixed':
+                $additional = $this->buildMixedContextFragments($session, $query);
+                break;
         }
 
         return array_values(array_merge($contextFragments, $additional));
+    }
+
+    private function buildMixedContextFragments(AiChatSession $session, string $query): array
+    {
+        $items = Arr::get($session->context_data ?? [], 'items', []);
+
+        if (! is_array($items) || empty($items)) {
+            return [];
+        }
+
+        $fragments = [];
+
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $type = $item['type'] ?? null;
+            $contextId = $item['id'] ?? null;
+
+            if (! $type || $contextId === null || $contextId === '') {
+                continue;
+            }
+
+            switch ($type) {
+                case 'meeting':
+                    $meetingSession = $this->createVirtualSession($session, 'meeting', $contextId);
+                    $fragments = array_merge($fragments, $this->buildMeetingContextFragments($meetingSession, $query));
+                    break;
+
+                case 'container':
+                    $containerSession = $this->createVirtualSession($session, 'container', $contextId);
+                    $fragments = array_merge($fragments, $this->buildContainerContextFragments($containerSession));
+                    break;
+
+                case 'documents':
+                case 'document':
+                    $documentSession = $this->createVirtualSession($session, 'documents', null, [$contextId]);
+                    $fragments = array_merge($fragments, $this->buildDocumentContextFragments($documentSession));
+                    break;
+
+                case 'contact_chat':
+                case 'chat':
+                    $chatSession = $this->createVirtualSession($session, 'contact_chat', $contextId);
+                    $fragments = array_merge($fragments, $this->buildChatContextFragments($chatSession));
+                    break;
+            }
+        }
+
+        return $fragments;
+    }
+
+    private function createVirtualSession(AiChatSession $base, string $type, $contextId = null, $contextData = []): AiChatSession
+    {
+        $virtual = AiChatSession::make([
+            'username' => $base->username,
+            'context_type' => $type,
+            'context_id' => $contextId,
+            'context_data' => $contextData,
+        ]);
+
+        $virtual->id = $base->id;
+
+        return $virtual;
     }
 
     private function buildContainerContextFragments(AiChatSession $session): array
