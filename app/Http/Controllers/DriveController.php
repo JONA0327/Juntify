@@ -69,10 +69,9 @@ class DriveController extends Controller
                             ->where('name', $folderName)
                             ->first();
                         if (!$model) {
-                            if ($ownerEmail) {
-                                $serviceAccount->impersonate($ownerEmail);
-                                $impersonated = true;
-                            }
+                            // For organization drives, do NOT impersonate a user. The service account
+                            // should have direct access to the shared drive and create subfolders under
+                            // the provided parent id to ensure correct placement at the org root.
                             $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
                             $model = OrganizationSubfolder::create([
                                 'organization_folder_id' => $rootFolder->id,
@@ -945,13 +944,38 @@ class DriveController extends Controller
             }
         }
 
-        // Garantizar subcarpetas estándar
-        $standard = $this->ensureStandardSubfolders($rootFolder, $useOrgDrive, app(GoogleServiceAccount::class));
-        $audioFolderId = $standard['audio']->google_id ?? $rootFolder->google_id;
-        $transcriptionFolderId = $standard['transcription']->google_id ?? $rootFolder->google_id;
-
-        $accountEmail = config('services.google.service_account_email');
+        // Asegurar que la cuenta de servicio tiene acceso de escritura al folder raíz antes de crear subcarpetas
+        $serviceEmail = config('services.google.service_account_email');
         $serviceAccount = app(GoogleServiceAccount::class);
+        try {
+            $serviceAccount->shareFolder($rootFolder->google_id, $serviceEmail);
+        } catch (GoogleServiceException $e) {
+            if (
+                $e->getCode() === 404 ||
+                $e->getCode() === 403 ||
+                str_contains($e->getMessage(), 'File not found') ||
+                str_contains($e->getMessage(), 'The caller does not have permission')
+            ) {
+                return response()->json([
+                    'code'    => 'FOLDER_NOT_SHARED',
+                    'message' => "La carpeta principal no está compartida con la cuenta de servicio. Comparte la carpeta con {$serviceEmail}",
+                ], 403);
+            }
+        }
+
+        // Garantizar subcarpetas estándar dentro del folder raíz seleccionado
+        $standard = $this->ensureStandardSubfolders($rootFolder, $useOrgDrive, $serviceAccount);
+        $audioModel = $standard['audio'] ?? null;
+        $transModel = $standard['transcription'] ?? null;
+        if (!$audioModel || !$transModel) {
+            return response()->json([
+                'message' => 'No se pudieron preparar las subcarpetas estándar (Audios/Transcripciones) dentro de la carpeta raíz. Verifica permisos de la cuenta de servicio.'
+            ], 500);
+        }
+        $audioFolderId = $audioModel->google_id;
+        $transcriptionFolderId = $transModel->google_id;
+
+        $accountEmail = $serviceEmail;
 
         try {
             $serviceAccount->shareFolder($transcriptionFolderId, $accountEmail);

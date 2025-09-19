@@ -61,6 +61,10 @@ class GoogleServiceAccount
 
     public function createFolder(string $name, ?string $parentId = null): string
     {
+        Log::info('GoogleServiceAccount.createFolder: start', [
+            'name' => $name,
+            'parentId' => $parentId,
+        ]);
         $fileMetadata = new DriveFile([
             'name'     => $name,
             'mimeType' => 'application/vnd.google-apps.folder',
@@ -74,7 +78,11 @@ class GoogleServiceAccount
             'fields' => 'id',
             'supportsAllDrives' => true,
         ]);
-
+        Log::info('GoogleServiceAccount.createFolder: created', [
+            'name' => $name,
+            'parentId' => $parentId,
+            'id' => $folder->getId(),
+        ]);
         return $folder->getId();
     }
 
@@ -158,6 +166,12 @@ class GoogleServiceAccount
         string $parentId,
         $contentsOrPath
     ): string {
+        Log::info('GoogleServiceAccount.uploadFile: start', [
+            'name' => $name,
+            'mimeType' => $mimeType,
+            'parentId' => $parentId,
+            'contents_type' => is_resource($contentsOrPath) ? 'resource' : (is_string($contentsOrPath) && is_file($contentsOrPath) ? 'file_path' : gettype($contentsOrPath)),
+        ]);
         $fileMetadata = new DriveFile([
             'name'    => $name,
             'parents' => [$parentId],
@@ -186,6 +200,12 @@ class GoogleServiceAccount
             throw new RuntimeException('No se obtuvo ID al subir el archivo.');
         }
 
+        Log::info('GoogleServiceAccount.uploadFile: created', [
+            'name' => $name,
+            'mimeType' => $mimeType,
+            'parentId' => $parentId,
+            'id' => $file->id,
+        ]);
         return $file->id;
     }
 
