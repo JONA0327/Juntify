@@ -6,7 +6,7 @@ use App\Models\AiChatSession;
 use App\Models\AiChatMessage;
 use App\Models\AiDocument;
 use App\Models\AiMeetingDocument;
-use App\Models\Container;
+use App\Models\MeetingContentContainer;
 use App\Models\TranscriptionLaravel;
 use App\Models\Chat;
 use App\Models\ChatMessage;
@@ -292,16 +292,19 @@ class AiAssistantController extends Controller
     {
         $user = Auth::user();
 
-        $containers = Container::where('username', $user->username)
-            ->withCount('meetings')
+        // Use MeetingContentContainer which relates through meeting_content_relations
+        $containers = MeetingContentContainer::where('username', $user->username)
+            ->where('is_active', true)
+            ->withCount(['meetings as meetings_count'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function($container) {
                 return [
                     'id' => $container->id,
                     'name' => $container->name,
-                    'meetings_count' => $container->meetings_count,
-                    'created_at' => $container->created_at
+                    'meetings_count' => (int) ($container->meetings_count ?? 0),
+                    'created_at' => $container->created_at,
+                    'description' => $container->description,
                 ];
             });
 
@@ -561,7 +564,7 @@ class AiAssistantController extends Controller
 
         switch ($session->context_type) {
             case 'container':
-                $additional = $this->buildContainerContextFragments($session);
+                $additional = $this->buildContainerContextFragments($session, $query);
                 break;
 
             case 'meeting':
@@ -627,7 +630,7 @@ class AiAssistantController extends Controller
 
                 case 'container':
                     $containerSession = $this->createVirtualSession($session, 'container', $contextId);
-                    $fragments = array_merge($fragments, $this->buildContainerContextFragments($containerSession));
+                    $fragments = array_merge($fragments, $this->buildContainerContextFragments($containerSession, $query));
                     break;
 
                 case 'documents':
@@ -661,21 +664,19 @@ class AiAssistantController extends Controller
         return $virtual;
     }
 
-    private function buildContainerContextFragments(AiChatSession $session): array
+    private function buildContainerContextFragments(AiChatSession $session, string $query = ''): array
     {
         $fragments = [];
 
         if ($session->context_id) {
-            $container = Container::withCount(['meetings' => function ($query) use ($session) {
-                    $query->where('username', $session->username);
-                }])
-                ->with(['meetings' => function ($query) use ($session) {
-                    $query->where('username', $session->username)
-                        ->latest('created_at')
-                        ->limit(5);
+            $container = MeetingContentContainer::withCount(['meetings'])
+                ->with(['meetings' => function ($q) use ($session) {
+                    $q->where('username', $session->username)
+                        ->orderByDesc('created_at');
                 }])
                 ->where('id', $session->context_id)
                 ->where('username', $session->username)
+                ->where('is_active', true)
                 ->first();
 
             if ($container) {
@@ -683,10 +684,7 @@ class AiAssistantController extends Controller
                     'text' => sprintf(
                         'Contenedor "%s" con %d reuniones registradas.',
                         $container->name,
-                        $container->meetings_count
-                            ?? $container->meetings()
-                                ->where('username', $session->username)
-                                ->count()
+                        (int)($container->meetings_count ?? $container->meetings()->count())
                     ),
                     'source_id' => 'container:' . $container->id,
                     'content_type' => 'container_overview',
@@ -701,21 +699,37 @@ class AiAssistantController extends Controller
                     'metadata' => [],
                 ];
 
+                // Incluir fragmentos desde los .ju de TODAS las reuniones del contenedor
+                $totalLimit = 120; // límite de seguridad global de fragmentos
+                $perMeetingLimit = 10; // orientativo (buildFragmentsFromJu ya limita segmentos)
+                $count = 0;
                 foreach ($container->meetings as $meeting) {
+                    // Breve ficha de la reunión como contexto estructural
                     $fragments[] = [
                         'text' => sprintf(
-                            'Reunión "%s" con transcripción %s y audio %s disponible.',
+                            'Reunión "%s" (%s). Recursos: %s transcripción, %s audio.',
                             $meeting->meeting_name,
-                            $meeting->transcript_drive_id ? 'en' : 'no',
-                            $meeting->audio_drive_id ? 'sí' : 'no'
+                            optional($meeting->created_at)->toDateString() ?? 'sin fecha',
+                            $meeting->transcript_drive_id ? 'con' : 'sin',
+                            $meeting->audio_drive_id ? 'con' : 'sin'
                         ),
                         'source_id' => 'meeting:' . $meeting->id,
                         'content_type' => 'container_meeting',
                         'location' => $this->buildLegacyMeetingLocation($meeting),
                         'similarity' => null,
-                        'citation' => 'meeting:' . $meeting->id . ' recursos',
+                        'citation' => 'meeting:' . $meeting->id,
                         'metadata' => $this->buildLegacyMeetingMetadata($meeting),
                     ];
+
+                    if ($count >= $totalLimit) continue;
+                    $juFragments = $this->buildFragmentsFromJu($meeting, $query);
+                    if (!empty($juFragments)) {
+                        // Recortar por reunión si fuera necesario
+                        $slice = array_slice($juFragments, 0, $perMeetingLimit);
+                        $fragments = array_merge($fragments, $slice);
+                        $count += count($slice);
+                        if ($count >= $totalLimit) break;
+                    }
                 }
             }
         }
@@ -742,6 +756,12 @@ class AiAssistantController extends Controller
                     'citation' => 'meeting:' . $meeting->id,
                     'metadata' => $this->buildLegacyMeetingMetadata($meeting),
                 ];
+
+                // Añadir también algo de contenido .ju cuando sea posible
+                $juFragments = $this->buildFragmentsFromJu($meeting, $query);
+                if (!empty($juFragments)) {
+                    $fragments = array_merge($fragments, array_slice($juFragments, 0, 8));
+                }
             }
         }
 
@@ -1475,10 +1495,12 @@ class AiAssistantController extends Controller
         }
 
         if ($session->context_type === 'container' && $session->context_id) {
-            $container = Container::where('id', $session->context_id)
+            $container = MeetingContentContainer::where('id', $session->context_id)
                 ->where('username', $session->username)
+                ->where('is_active', true)
                 ->first();
             if ($container) {
+                // meetings() is a hasManyThrough to TranscriptionLaravel
                 $meetingIds = $container->meetings()->pluck('transcriptions_laravel.id')->all();
                 foreach ($meetingIds as $mid) {
                     AiMeetingDocument::create([
