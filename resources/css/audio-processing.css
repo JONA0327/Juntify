@@ -587,6 +587,7 @@ body {
     justify-content: space-between;
     gap: 1rem;
     padding: 2rem;
+    margin-bottom: 2rem;
     background: var(--glass-bg);
     border-radius: 12px;
     border: 1px solid var(--glass-border);
