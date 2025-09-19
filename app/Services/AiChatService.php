@@ -45,7 +45,11 @@ class AiChatService
 
         $messages = array_merge($messages, $history);
 
-        $client = OpenAI::client(config('services.openai.api_key'));
+        $apiKey = config('services.openai.api_key');
+        if (empty($apiKey)) {
+            throw new \RuntimeException('Falta la API Key de OpenAI. Define OPENAI_API_KEY en .env');
+        }
+        $client = OpenAI::client($apiKey);
         $start = microtime(true);
         $response = $client->chat()->create([
             'model' => 'gpt-3.5-turbo',

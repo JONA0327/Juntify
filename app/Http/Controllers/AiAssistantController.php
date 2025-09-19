@@ -200,6 +200,17 @@ class AiAssistantController extends Controller
             'attachments' => 'nullable|array'
         ]);
 
+        // Validar API Key de OpenAI antes de continuar
+        $apiKey = config('services.openai.api_key');
+        if (empty($apiKey)) {
+            Log::warning('AI assistant: missing OPENAI_API_KEY');
+            return response()->json([
+                'success' => false,
+                'message' => 'Falta la API Key de OpenAI. Configura OPENAI_API_KEY en el servidor e intenta de nuevo.',
+                'code' => 'OPENAI_API_KEY_MISSING'
+            ], 422);
+        }
+
         $session = AiChatSession::byUser($user->username)
             ->findOrFail($sessionId);
 
@@ -225,8 +236,8 @@ class AiAssistantController extends Controller
             }
         }
 
-        // Procesar con IA y generar respuesta
-        $assistantMessage = $this->processAiResponse($session, $request->content, $request->attachments ?? []);
+    // Procesar con IA y generar respuesta
+    $assistantMessage = $this->processAiResponse($session, $request->content, $request->attachments ?? []);
 
         // Actualizar actividad de la sesión
         $session->updateActivity();
@@ -488,12 +499,25 @@ class AiAssistantController extends Controller
      */
     private function gatherContext(AiChatSession $session, string $query): array
     {
-        /** @var EmbeddingSearch $search */
-        $search = app(EmbeddingSearch::class);
-        $contextFragments = $search->search($session->username, $query, [
-            'session' => $session,
-            'limit' => 8,
-        ]);
+        $contextFragments = [];
+
+        // Si hay API key de OpenAI, usamos búsqueda semántica; si no, la omitimos
+        $apiKey = config('services.openai.api_key');
+        if (!empty($apiKey)) {
+            /** @var EmbeddingSearch $search */
+            $search = app(EmbeddingSearch::class);
+            try {
+                $contextFragments = $search->search($session->username, $query, [
+                    'session' => $session,
+                    'limit' => 8,
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('EmbeddingSearch failed, continuing with fallback context', [
+                    'error' => $e->getMessage(),
+                ]);
+                $contextFragments = [];
+            }
+        }
 
         $additional = [];
 
