@@ -469,6 +469,23 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     return;
                 }
 
+                const modalEl = document.getElementById('container-meetings-modal');
+                if (modalEl) {
+                    modalEl.classList.remove('hidden');
+                    if (modalEl.style.pointerEvents === 'none') {
+                        modalEl.style.pointerEvents = '';
+                    }
+                    if (modalEl.style.visibility === 'hidden') {
+                        modalEl.style.visibility = '';
+                    }
+                    if (modalEl.style.opacity === '0') {
+                        modalEl.style.opacity = '';
+                    }
+                    if (modalEl.getAttribute('aria-hidden') === 'true') {
+                        modalEl.removeAttribute('aria-hidden');
+                    }
+                }
+
                 this.showContainerMeetingsModal = true;
 
                 if (shouldReload && this.selectedContainer.id) {
