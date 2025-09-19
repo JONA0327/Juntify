@@ -46,7 +46,7 @@ class PasswordResetController extends Controller
             })
             ->delete();
 
-        // Guardar el token (hash del código para no almacenar en claro) y created_at
+        // Guardar el token (hash del código para no almacenar en claro) y created_at / expires_at
         $insert = [
             'token' => Hash::make($code),
             'created_at' => now(),
@@ -56,6 +56,11 @@ class PasswordResetController extends Controller
         }
         if ($hasUserIdCol) {
             $insert['user_id'] = $user->id;
+        }
+        // Si la tabla requiere expires_at (no null), establecerlo a 10 minutos desde ahora
+        $hasExpiresAtCol = Schema::hasColumn('password_reset_tokens', 'expires_at');
+        if ($hasExpiresAtCol) {
+            $insert['expires_at'] = now()->addMinutes(10);
         }
         DB::table('password_reset_tokens')->insert($insert);
 
@@ -94,9 +99,17 @@ class PasswordResetController extends Controller
             return response()->json(['ok' => false, 'message' => 'Código inválido o expirado.'], 422);
         }
 
-        // Verificar expiración: 10 minutos
-        $createdAt = Carbon::parse($record->created_at);
-        if (now()->greaterThan($createdAt->copy()->addMinutes(10))) {
+        // Verificar expiración: usar expires_at si existe; si no, created_at + 10 minutos
+        $hasExpiresAtCol = Schema::hasColumn('password_reset_tokens', 'expires_at');
+        $isExpired = false;
+        if ($hasExpiresAtCol && isset($record->expires_at) && $record->expires_at) {
+            $isExpired = now()->greaterThan(Carbon::parse($record->expires_at));
+        } else {
+            $createdAt = Carbon::parse($record->created_at);
+            $isExpired = now()->greaterThan($createdAt->copy()->addMinutes(10));
+        }
+
+        if ($isExpired) {
             DB::table('password_reset_tokens')
                 ->where(function ($q) use ($email, $user, $hasEmailCol, $hasUserIdCol) {
                     if ($hasEmailCol) {
@@ -145,8 +158,16 @@ class PasswordResetController extends Controller
             return response()->json(['ok' => false, 'message' => 'Código inválido o expirado.'], 422);
         }
 
-        $createdAt = Carbon::parse($record->created_at);
-        if (now()->greaterThan($createdAt->copy()->addMinutes(10))) {
+        $hasExpiresAtCol = Schema::hasColumn('password_reset_tokens', 'expires_at');
+        $isExpired = false;
+        if ($hasExpiresAtCol && isset($record->expires_at) && $record->expires_at) {
+            $isExpired = now()->greaterThan(Carbon::parse($record->expires_at));
+        } else {
+            $createdAt = Carbon::parse($record->created_at);
+            $isExpired = now()->greaterThan($createdAt->copy()->addMinutes(10));
+        }
+
+        if ($isExpired) {
             DB::table('password_reset_tokens')
                 ->where(function ($q) use ($email, $user, $hasEmailCol, $hasUserIdCol) {
                     if ($hasEmailCol) {
