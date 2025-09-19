@@ -51,6 +51,15 @@ class DriveController extends Controller
      */
     private function ensureStandardSubfolders($rootFolder, bool $useOrgDrive, GoogleServiceAccount $serviceAccount): array
     {
+        // Guard: root folder must have a valid Google ID
+        $parentId = $rootFolder->google_id ?? null;
+        if (empty($parentId)) {
+            Log::error('ensureStandardSubfolders: root folder has no google_id', [
+                'useOrgDrive' => $useOrgDrive,
+                'root_model_id' => $rootFolder->id ?? null,
+            ]);
+            return [];
+        }
         $names = [
             'audio'         => 'Audios',
             'transcription' => 'Transcripciones',
@@ -71,20 +80,31 @@ class DriveController extends Controller
                             ->where('name', $folderName)
                             ->first();
                         if (!$model) {
-                            // Try with the service account first (expected for shared drives)
+                            // First, try to find an existing subfolder in Drive with same name under the root
+                            $existingId = $this->findExistingSubfolderIdInDrive($serviceAccount, $parentId, $folderName);
+                            if ($existingId) {
+                                $model = OrganizationSubfolder::firstOrCreate([
+                                    'organization_folder_id' => $rootFolder->id,
+                                    'google_id'              => $existingId,
+                                ], ['name' => $folderName]);
+                                try { if ($serviceEmail) { $serviceAccount->shareFolder($existingId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
+                                $result[$key] = $model;
+                                continue;
+                            }
+                            // Otherwise, create missing subfolder with the service account (expected for shared drives)
                             try {
-                                $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                                $googleId = $serviceAccount->createFolder($folderName, $parentId);
                             } catch (\Throwable $e) {
                                 Log::warning('Org subfolder create with SA failed, trying impersonation', [
                                     'folder' => $folderName,
-                                    'parent' => $rootFolder->google_id,
+                                    'parent' => $parentId,
                                     'error'  => $e->getMessage(),
                                 ]);
                                 if ($ownerEmail) {
                                     try {
                                         $serviceAccount->impersonate($ownerEmail);
                                         $impersonationActive = true;
-                                        $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                                        $googleId = $serviceAccount->createFolder($folderName, $parentId);
                                     } catch (\Throwable $e2) {
                                         throw $e2; // bubble up to outer catch for logging
                                     }
@@ -107,14 +127,25 @@ class DriveController extends Controller
                             $impersonatedForFolder = false;
 
                             try {
+                                // Try to find an existing subfolder in Drive with same name under the root
+                                $existingId = $this->findExistingSubfolderIdInDrive($serviceAccount, $parentId, $folderName);
+                                if ($existingId) {
+                                    $model = Subfolder::firstOrCreate([
+                                        'folder_id' => $rootFolder->id,
+                                        'google_id' => $existingId,
+                                    ], ['name' => $folderName]);
+                                    try { if ($serviceEmail) { $serviceAccount->shareFolder($existingId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
+                                    $result[$key] = $model;
+                                    continue;
+                                }
                                 try {
-                                    $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                                    $googleId = $serviceAccount->createFolder($folderName, $parentId);
                                 } catch (\Throwable $createException) {
                                     $requiresImpersonation = $this->shouldRetryWithImpersonation($createException);
                                     if ($requiresImpersonation && $ownerEmail) {
                                         Log::notice('Personal subfolder creation requires impersonation', [
                                             'folder'      => $folderName,
-                                            'parent'      => $rootFolder->google_id,
+                                            'parent'      => $parentId,
                                             'ownerEmail'  => $ownerEmail,
                                             'error'       => $createException->getMessage(),
                                         ]);
@@ -122,11 +153,11 @@ class DriveController extends Controller
                                         $serviceAccount->impersonate($ownerEmail);
                                         $impersonationActive = true;
                                         $impersonatedForFolder = true;
-                                        $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                                        $googleId = $serviceAccount->createFolder($folderName, $parentId);
                                     } elseif ($requiresImpersonation) {
                                         Log::error('Personal subfolder creation failed: impersonation unavailable', [
                                             'folder'     => $folderName,
-                                            'parent'     => $rootFolder->google_id,
+                                            'parent'     => $parentId,
                                             'ownerEmail' => $ownerEmail,
                                             'error'      => $createException->getMessage(),
                                         ]);
@@ -175,6 +206,38 @@ class DriveController extends Controller
         }
 
         return $result;
+    }
+
+    /**
+     * Busca una subcarpeta existente en Drive bajo un root dado por nombre.
+     * Devuelve el ID si se encuentra; de lo contrario, null.
+     */
+    private function findExistingSubfolderIdInDrive(GoogleServiceAccount $serviceAccount, string $parentId, string $name): ?string
+    {
+        try {
+            $drive = $serviceAccount->getDrive();
+            $results = $drive->files->listFiles([
+                'q' => sprintf(
+                    "mimeType='application/vnd.google-apps.folder' and name='%s' and '%s' in parents and trashed=false",
+                    addslashes($name),
+                    $parentId
+                ),
+                'fields' => 'files(id,name,parents)',
+                'supportsAllDrives' => true,
+                'includeItemsFromAllDrives' => true,
+            ]);
+            $files = $results->getFiles();
+            if (!empty($files)) {
+                return $files[0]->getId();
+            }
+        } catch (\Throwable $e) {
+            Log::debug('findExistingSubfolderIdInDrive failed', [
+                'parentId' => $parentId,
+                'name' => $name,
+                'error' => $e->getMessage(),
+            ]);
+        }
+        return null;
     }
 
     private function shouldRetryWithImpersonation(\Throwable $exception): bool
@@ -701,18 +764,26 @@ class DriveController extends Controller
                     return response()->json(['message' => 'Token de Google no encontrado'], 400);
                 }
 
-                // Si no se especifica rootFolder, usar la primera carpeta raíz del usuario
-                if (empty($v['rootFolder'])) {
+                // Resolución del root personal (prioridad): recordings_folder_id del token -> rootFolder parámetro -> primer root en BD
+                $rootFolder = null;
+                if (!empty($token->recordings_folder_id)) {
                     $rootFolder = Folder::where('google_token_id', $token->id)
+                        ->where('google_id', $token->recordings_folder_id)
                         ->whereNull('parent_id')
                         ->first();
-                } else {
+                }
+                if (!$rootFolder && !empty($v['rootFolder'])) {
                     $rootFolder = Folder::where('google_token_id', $token->id)
                         ->whereNull('parent_id')
                         ->where(function ($q) use ($v) {
                             $q->where('google_id', $v['rootFolder'])
                               ->orWhere('id', $v['rootFolder']);
                         })
+                        ->first();
+                }
+                if (!$rootFolder) {
+                    $rootFolder = Folder::where('google_token_id', $token->id)
+                        ->whereNull('parent_id')
                         ->first();
                 }
 
@@ -1198,14 +1269,24 @@ class DriveController extends Controller
                 return response()->json(['message' => 'Token de Google no encontrado'], 400);
             }
 
-            if (!empty($v['rootFolder'])) {
+            // Resolución del root personal (prioridad): recordings_folder_id del token -> rootFolder parámetro -> primer root en BD
+            $rootFolder = null;
+            if (!empty($token->recordings_folder_id)) {
+                $rootFolder = Folder::where('google_token_id', $token->id)
+                    ->where('google_id', $token->recordings_folder_id)
+                    ->whereNull('parent_id')
+                    ->first();
+            }
+            if (!$rootFolder && !empty($v['rootFolder'])) {
                 $rootFolder = Folder::where('google_token_id', $token->id)
                     ->where(function($q) use ($v) {
                         $q->where('google_id', $v['rootFolder'])
                           ->orWhere('id', $v['rootFolder']);
                     })
+                    ->whereNull('parent_id')
                     ->first();
-            } else {
+            }
+            if (!$rootFolder) {
                 // Autodetectar primera carpeta raíz del usuario
                 $rootFolder = Folder::where('google_token_id', $token->id)
                     ->whereNull('parent_id')
