@@ -89,9 +89,18 @@ class OrganizationDriveController extends Controller
         if (!$this->userCanManage($organization)) {
             abort(403, 'No autorizado');
         }
+
+        $parentFolderId = config('drive.root_folder_id');
+        if (empty($parentFolderId)) {
+            Log::error('Google Drive root folder ID is not configured.');
+
+            return response()->json([
+                'message' => 'El ID de la carpeta raíz de Google Drive no está configurado.',
+            ], 500);
+        }
         $token = $this->initDrive($organization);
 
-        $folderId = $this->drive->createFolder($organization->nombre_organizacion);
+        $folderId = $this->drive->createFolder($organization->nombre_organizacion, $parentFolderId);
 
         $folder = OrganizationFolder::create([
             'organization_id' => $organization->id,

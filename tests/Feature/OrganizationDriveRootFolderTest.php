@@ -14,6 +14,7 @@ uses(RefreshDatabase::class);
 
 it('allows administrator to create organization root folder', function () {
     Config::set('services.google.service_account_email', 'svc@test');
+    Config::set('drive.root_folder_id', 'drive-root');
 
     $admin = User::factory()->create(['username' => 'admin']);
 
@@ -39,7 +40,7 @@ it('allows administrator to create organization root folder', function () {
 
     $drive = Mockery::mock(GoogleDriveService::class);
     $drive->shouldReceive('getClient')->andReturn($client);
-    $drive->shouldReceive('createFolder')->once()->with('Org')->andReturn('root123');
+    $drive->shouldReceive('createFolder')->once()->with('Org', 'drive-root')->andReturn('root123');
     $drive->shouldReceive('shareFolder')->once()->with('root123', 'svc@test');
 
     app()->instance(GoogleDriveService::class, $drive);
@@ -72,5 +73,27 @@ it('denies root folder creation to collaborator', function () {
     $response = $this->actingAs($collab)->postJson("/api/organizations/{$organization->id}/drive/root-folder");
 
     $response->assertStatus(403);
+});
+
+it('returns an error when the drive root folder id is missing', function () {
+    Config::set('drive.root_folder_id', null);
+
+    $admin = User::factory()->create(['username' => 'admin']);
+
+    $organization = Organization::create([
+        'nombre_organizacion' => 'Org',
+        'descripcion' => 'desc',
+        'num_miembros' => 0,
+        'admin_id' => $admin->id,
+    ]);
+
+    $organization->users()->attach($admin->id, ['rol' => 'administrador']);
+
+    $response = $this->actingAs($admin)->postJson("/api/organizations/{$organization->id}/drive/root-folder");
+
+    $response->assertStatus(500)
+        ->assertJson([
+            'message' => 'El ID de la carpeta raíz de Google Drive no está configurado.',
+        ]);
 });
 
