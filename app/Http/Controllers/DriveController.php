@@ -381,16 +381,29 @@ class DriveController extends Controller
         ]);
 
         $serviceEmail = config('services.google.service_account_email');
-        if ($serviceEmail) {
-            try {
+        // Share root with Service Account (if created via OAuth) and with the user (always)
+        try {
+            if ($usedOAuthFallback && $serviceEmail) {
+                // Folder created via OAuth: ensure SA has access
                 $this->drive->shareFolder($folderId, $serviceEmail);
-            } catch (\Throwable $shareError) {
-                Log::warning('createMainFolder failed to share root folder', [
-                    'username' => Auth::user()->username,
-                    'error' => $shareError->getMessage(),
-                    'used_oauth_fallback' => $usedOAuthFallback,
-                ]);
             }
+        } catch (\Throwable $shareError) {
+            Log::warning('createMainFolder failed to share root with SA via OAuth', [
+                'username' => Auth::user()->username,
+                'error' => $shareError->getMessage(),
+            ]);
+        }
+        try {
+            $userEmail = Auth::user()->email;
+            if ($userEmail) {
+                // Ensure the OAuth user can access a folder created by the SA
+                $serviceAccount->shareItem($folderId, $userEmail, 'writer');
+            }
+        } catch (\Throwable $shareUserError) {
+            Log::warning('createMainFolder failed to share root with user', [
+                'username' => Auth::user()->username,
+                'error' => $shareUserError->getMessage(),
+            ]);
         }
 
         // Ensure standard subfolders exist in the new personal root (idempotent) using SA
@@ -404,7 +417,12 @@ class DriveController extends Controller
                         'folder_id' => $folder->id,
                         'google_id' => $subId,
                     ], ['name' => $name]);
-                    try { $serviceAccount->shareFolder($subId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
+                    try { if ($serviceEmail) { $serviceAccount->shareFolder($subId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
+                    // Also share with the user so OAuth can read
+                    try {
+                        $userEmail = Auth::user()->email;
+                        if ($userEmail) { $serviceAccount->shareItem($subId, $userEmail, 'writer'); }
+                    } catch (\Throwable $e) { /* ignore */ }
                 } catch (\Throwable $e) {
                     Log::warning('createMainFolder: failed to create standard subfolder', [
                         'name' => $name,
