@@ -116,7 +116,7 @@ class AiChatService
 
         // If container context, use broader limits and ensure at least one overview per meeting
         if ($session->context_type === 'container') {
-            $maxFragments = (int) env('AI_ASSISTANT_MAX_CONTEXT_FRAGMENTS_CONTAINER', $maxFragments > 0 ? $maxFragments : 48);
+            $maxFragments = (int) env('AI_ASSISTANT_MAX_CONTEXT_FRAGMENTS_CONTAINER', 48);
             $fragmentTextLimit = (int) env('AI_ASSISTANT_FRAGMENT_TEXT_LIMIT_CONTAINER', max(400, $fragmentTextLimit));
 
             // Group by meeting

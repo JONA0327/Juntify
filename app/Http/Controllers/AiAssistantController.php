@@ -52,6 +52,54 @@ class AiAssistantController extends Controller
     }
 
     /**
+     * Pre-cargar datos de .ju para todas las reuniones de un contenedor
+     */
+    public function preloadContainer(Request $request, int $containerId): JsonResponse
+    {
+        $user = Auth::user();
+
+        $container = MeetingContentContainer::with(['meetings' => function ($q) use ($user) {
+            $q->where('username', $user->username)
+              ->orderByDesc('created_at');
+        }])
+        ->where('id', $containerId)
+        ->where('username', $user->username)
+        ->where('is_active', true)
+        ->first();
+
+        if (! $container) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Contenedor no encontrado o sin acceso',
+            ], 404);
+        }
+
+        $preloaded = [];
+        $errors = [];
+
+        foreach ($container->meetings as $meeting) {
+            try {
+                // Trigger download/parse flow by attempting to build fragments from .ju
+                // This does not persist, but verifies availability and warms caches
+                $this->buildFragmentsFromJu($meeting, '');
+                $preloaded[] = (int) $meeting->id;
+            } catch (\Throwable $e) {
+                $errors[] = [
+                    'meeting_id' => (int) $meeting->id,
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'container_id' => (int) $container->id,
+            'meetings_preloaded' => $preloaded,
+            'errors' => $errors,
+        ]);
+    }
+
+    /**
      * Obtener todas las sesiones de chat del usuario
      */
     public function getSessions(): JsonResponse
@@ -740,7 +788,34 @@ class AiAssistantController extends Controller
                         $slice = array_slice($juFragments, 0, $perMeetingLimit);
                         $fragments = array_merge($fragments, $slice);
                         $count += count($slice);
-                        if ($count >= $totalLimit) break;
+                        if ($count >= $totalLimit) continue;
+                    } else {
+                        // Fallback mínimo cuando no hay .ju utilizable
+                        if (! empty($meeting->transcript_download_url)) {
+                            $fragments[] = [
+                                'text' => sprintf('Transcripción disponible en: %s', $meeting->transcript_download_url),
+                                'source_id' => 'meeting:' . $meeting->id . ':transcript',
+                                'content_type' => 'meeting_transcript_link',
+                                'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'transcript_link']),
+                                'similarity' => null,
+                                'citation' => 'meeting:' . $meeting->id . ' transcript',
+                                'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['resource' => 'transcript']),
+                            ];
+                            $count++;
+                            if ($count >= $totalLimit) continue;
+                        }
+                        if (! empty($meeting->audio_download_url) && $count < $totalLimit) {
+                            $fragments[] = [
+                                'text' => sprintf('Audio disponible en: %s', $meeting->audio_download_url),
+                                'source_id' => 'meeting:' . $meeting->id . ':audio',
+                                'content_type' => 'meeting_audio_link',
+                                'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'audio_link']),
+                                'similarity' => null,
+                                'citation' => 'meeting:' . $meeting->id . ' audio',
+                                'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['resource' => 'audio']),
+                            ];
+                            $count++;
+                        }
                     }
                 }
             }

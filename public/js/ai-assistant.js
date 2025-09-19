@@ -918,6 +918,23 @@ async function loadSelectedContext() {
         if (serializedItems.length === 1 && serializedItems[0].type === 'container') {
             const containerId = serializedItems[0].id;
             const container = allContainers.find(c => c.id === containerId);
+
+            // Preload all .ju files for meetings in this container before creating the session
+            try {
+                const csrf = document.querySelector('meta[name="csrf-token"]').content;
+                const preloadResp = await fetch(`/api/ai-assistant/containers/${containerId}/preload`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrf
+                    },
+                    body: JSON.stringify({})
+                });
+                // Ignore result intentionally; just warming cache and verifying availability
+                await preloadResp.json().catch(() => ({}));
+            } catch (e) {
+                console.warn('Preload contenedor falló, continúo de todos modos', e);
+            }
             currentContext = {
                 type: 'container',
                 id: containerId,

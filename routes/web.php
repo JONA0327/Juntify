@@ -229,6 +229,7 @@ Route::middleware(['auth'])->group(function () {
 
             // Generación de PDF de resumen
             Route::post('/sessions/{id}/summary-pdf', [AiAssistantController::class, 'generateSummaryPdf'])->name('api.ai-assistant.sessions.summary-pdf');
+            Route::post('/containers/{containerId}/preload', [AiAssistantController::class, 'preloadContainer'])->name('api.ai-assistant.containers.preload');
         });
     });
 
