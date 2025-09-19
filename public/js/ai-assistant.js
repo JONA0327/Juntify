@@ -101,7 +101,7 @@ async function loadChatSessions() {
  * Renderizar sesiones de chat en la sidebar
  */
 function renderChatSessions(sessions) {
-    const sessionsList = document.getElementById('chatSessionsList');
+    const sessionsList = document.getElementById('sessions-list');
     if (!sessionsList) return;
 
     if (sessions.length === 0) {
@@ -235,7 +235,7 @@ function updateSessionInfo(session) {
  * Renderizar mensajes en el chat
  */
 function renderMessages(messages) {
-    const chatMessages = document.getElementById('chatMessages');
+    const chatMessages = document.getElementById('messages-container');
     if (!chatMessages) return;
 
     if (messages.length === 0) {
@@ -372,7 +372,8 @@ async function sendMessage(messageText = null) {
  * Agregar mensaje al chat (para actualizaciones en tiempo real)
  */
 function addMessageToChat(message) {
-    const chatMessages = document.getElementById('chatMessages');
+    const chatMessages = document.getElementById('messages-container');
+    if (!chatMessages) return;
 
     // Remover mensaje de bienvenida si existe
     const welcomeMessage = chatMessages.querySelector('.welcome-message');
@@ -383,7 +384,10 @@ function addMessageToChat(message) {
     // Agregar nuevo mensaje
     const messageElement = document.createElement('div');
     messageElement.innerHTML = renderMessage(message);
-    chatMessages.appendChild(messageElement.firstElementChild);
+    const newMessage = messageElement.firstElementChild;
+    if (newMessage) {
+        chatMessages.appendChild(newMessage);
+    }
 
     scrollToBottom();
 }
@@ -392,7 +396,8 @@ function addMessageToChat(message) {
  * Enviar sugerencia predefinida
  */
 function sendSuggestion(suggestion) {
-    const messageInput = document.getElementById('messageInput');
+    const messageInput = document.getElementById('message-input');
+    if (!messageInput) return;
     messageInput.value = suggestion;
     adjustTextareaHeight(messageInput);
     sendMessage();
@@ -1396,7 +1401,7 @@ function updateSendButton(loading) {
  * Scroll al final del chat
  */
 function scrollToBottom() {
-    const chatMessages = document.getElementById('chatMessages');
+    const chatMessages = document.getElementById('messages-container');
     if (chatMessages) {
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
@@ -1873,6 +1878,8 @@ async function handleMessageSubmit(e) {
     e.preventDefault();
 
     const messageInput = document.getElementById('message-input');
+    if (!messageInput) return;
+
     const message = messageInput.value.trim();
 
     if (!message || isLoading) return;
@@ -1895,6 +1902,7 @@ async function handleMessageSubmit(e) {
  * Ajustar altura del textarea
  */
 function adjustTextareaHeight(textarea) {
+    if (!textarea) return;
     textarea.style.height = 'auto';
     textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
 }
