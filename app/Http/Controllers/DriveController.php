@@ -558,7 +558,16 @@ class DriveController extends Controller
                         $driveService = app(\App\Services\GoogleDriveService::class);
                         $driveService->setToken($token);
 
-                        $folderId = $driveService->createFolder($defaultFolderName);
+                        $parentRootFolderId = config('drive.root_folder_id');
+                        if (empty($parentRootFolderId)) {
+                            Log::error('uploadPendingAudio: missing configured root folder id for default creation', [
+                                'username' => $user->username,
+                            ]);
+
+                            return response()->json(['message' => 'Carpeta raíz de Drive no configurada'], 500);
+                        }
+
+                        $folderId = $driveService->createFolder($defaultFolderName, $parentRootFolderId);
 
                         // Save the folder to database
                         $rootFolder = Folder::create([
@@ -571,7 +580,8 @@ class DriveController extends Controller
                         Log::info('uploadPendingAudio: default root folder created', [
                             'username' => $user->username,
                             'folder_id' => $folderId,
-                            'folder_name' => $defaultFolderName
+                            'folder_name' => $defaultFolderName,
+                            'parent_root_id' => $parentRootFolderId,
                         ]);
 
                     } catch (\Exception $e) {
