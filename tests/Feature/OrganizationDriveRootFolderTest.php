@@ -59,6 +59,9 @@ it('allows administrator to create organization root folder', function () {
     $serviceAccount->shouldReceive('createFolder')
         ->with('Audios Pospuestos', 'root123')
         ->andReturn('pospuestos');
+    $serviceAccount->shouldReceive('createFolder')
+        ->with('Documentos', 'root123')
+        ->andReturn('documentos');
     $serviceAccount->shouldReceive('shareFolder')->andReturnNull();
 
     app()->instance(GoogleDriveService::class, $drive);
@@ -122,6 +125,9 @@ it('falls back to oauth client when service account cannot create root folder', 
     $serviceAccount->shouldReceive('createFolder')
         ->with('Audios Pospuestos', 'root123')
         ->andReturn('pospuestos');
+    $serviceAccount->shouldReceive('createFolder')
+        ->with('Documentos', 'root123')
+        ->andReturn('documentos');
     $serviceAccount->shouldReceive('shareFolder')->andReturnNull();
 
     app()->instance(GoogleDriveService::class, $drive);

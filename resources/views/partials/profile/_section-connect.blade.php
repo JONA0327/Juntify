@@ -154,6 +154,7 @@
                         <li><strong>Audios</strong>: Archivos de audio finales</li>
                         <li><strong>Transcripciones</strong>: Archivos .ju encriptados con la transcripción y resumen</li>
                         <li><strong>Audios Pospuestos</strong>: Audios subidos pendientes de completar</li>
+                        <li><strong>Documentos</strong>: Exportaciones y archivos adicionales relacionados a la reunión</li>
                     </ul>
                     No necesitas crear subcarpetas manualmente. Esta sección reemplaza la antigua gestión de subcarpetas.
                 </div>

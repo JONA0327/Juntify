@@ -181,7 +181,7 @@ class OrganizationDriveController extends Controller
         // Ensure standard subfolders exist for organization root
         try {
             $serviceEmail = config('services.google.service_account_email');
-            $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos'];
+            $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos', 'Documentos'];
             foreach ($needed as $name) {
                 try {
                     $subId = $serviceAccount->createFolder($name, $folderId);

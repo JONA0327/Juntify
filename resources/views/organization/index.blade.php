@@ -231,7 +231,7 @@
                                         <div class="mt-4">
                                             <h4 class="font-semibold mb-3">Estructura de almacenamiento</h4>
                                             <p class="text-slate-400 text-sm leading-relaxed">
-                                                Las subcarpetas se gestionan automáticamente. El sistema usa las carpetas fijas <strong>Audios</strong>, <strong>Transcripciones</strong> y <strong>Audios Pospuestos</strong> dentro de la carpeta raíz de la organización. No necesitas crear subcarpetas manualmente.
+                                                Las subcarpetas se gestionan automáticamente. El sistema usa las carpetas fijas <strong>Audios</strong>, <strong>Transcripciones</strong>, <strong>Audios Pospuestos</strong> y <strong>Documentos</strong> dentro de la carpeta raíz de la organización. No necesitas crear subcarpetas manualmente.
                                             </p>
                                         </div>
                                     </div>
