@@ -34,6 +34,12 @@ Route::post('/login',   [LoginController::class, 'login']);
 Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
 Route::post('/register',[RegisterController::class, 'register']);
 
+// Recuperación de contraseña
+Route::get('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'showForgotForm'])->name('password.forgot');
+Route::post('/forgot-password/send-code', [\App\Http\Controllers\PasswordResetController::class, 'sendCode'])->name('password.sendCode');
+Route::post('/forgot-password/verify-code', [\App\Http\Controllers\PasswordResetController::class, 'verifyCode'])->name('password.verifyCode');
+Route::post('/forgot-password/reset', [\App\Http\Controllers\PasswordResetController::class, 'resetPassword'])->name('password.reset');
+
 // Google OAuth routes
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);

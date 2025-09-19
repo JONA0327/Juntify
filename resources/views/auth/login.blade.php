@@ -66,7 +66,7 @@
           >
           <div class="error-message" id="passwordError"></div>
           <div class="forgot-password">
-            <a href="#">¿Olvidaste tu contraseña?</a>
+            <a href="{{ route('password.forgot') }}">¿Olvidaste tu contraseña?</a>
           </div>
         </div>
 

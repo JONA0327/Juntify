@@ -37,11 +37,13 @@ return [
         'smtp' => [
             'transport' => 'smtp',
             'url' => env('MAIL_URL'),
-            'host' => env('MAIL_HOST', 'smtp.mailgun.org'),
-            'port' => env('MAIL_PORT', 587),
-            'encryption' => env('MAIL_ENCRYPTION', 'tls'),
-            'username' => env('MAIL_USERNAME'),
-            'password' => env('MAIL_PASSWORD'),
+            // Permite usar variables personalizadas SMTP_* si existen
+            'host' => env('MAIL_HOST', env('SMTP_HOST', 'smtp.mailgun.org')),
+            'port' => env('MAIL_PORT', env('SMTP_PORT', 587)),
+            // Si MAIL_ENCRYPTION no está, y SMTP_SECURE=true, utiliza 'ssl'
+            'encryption' => env('MAIL_ENCRYPTION', env('SMTP_SECURE') ? 'ssl' : 'tls'),
+            'username' => env('MAIL_USERNAME', env('SMTP_USER')),
+            'password' => env('MAIL_PASSWORD', env('SMTP_PASS')),
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
         ],
@@ -107,10 +109,23 @@ return [
     |
     */
 
-    'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
-        'name' => env('MAIL_FROM_NAME', 'Example'),
-    ],
+    'from' => (function () {
+        $composed = env('EMAIL_FROM');
+        $address = env('MAIL_FROM_ADDRESS', env('SMTP_USER', 'hello@example.com'));
+        $name = env('MAIL_FROM_NAME', env('APP_NAME', 'Juntify'));
+        if ($composed) {
+            if (preg_match('/^\s*"?([^<"]+)"?\s*<\s*([^>]+)\s*>\s*$/', $composed, $m)) {
+                $name = trim($m[1]);
+                $address = trim($m[2]);
+            } elseif (filter_var($composed, FILTER_VALIDATE_EMAIL)) {
+                $address = $composed;
+            }
+        }
+        return [
+            'address' => $address,
+            'name' => $name,
+        ];
+    })(),
 
     /*
     |--------------------------------------------------------------------------
