@@ -4,6 +4,7 @@ use App\Models\User;
 use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Services\GoogleServiceAccount;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Config;
 use Mockery;
 
@@ -43,16 +44,15 @@ it('shares both folders with the service account when saving results', function 
         'rootFolder' => 'root123',
         'transcriptionSubfolder' => 'trans123',
         'audioSubfolder' => 'audio123',
-        'transcriptionData' => [
+        'transcriptionData' => json_encode([
             ['end' => 1, 'speaker' => 'A'],
-        ],
-        'analysisResults' => [
+        ]),
+        'analysisResults' => json_encode([
             'summary' => 'sum',
             'keyPoints' => [],
             'tasks' => [],
-        ],
-        'audioData' => base64_encode('audio'),
-        'audioMimeType' => 'audio/webm',
+        ]),
+        'audioFile' => UploadedFile::fake()->createWithContent('audio.ogg', 'audio-bytes', 'audio/ogg'),
     ];
 
     $response = $this->actingAs($user)->post('/drive/save-results', $payload);
