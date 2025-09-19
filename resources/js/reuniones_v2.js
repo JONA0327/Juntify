@@ -4885,15 +4885,39 @@ async function openContainerMeetingsModal(containerId) {
     await loadContainerMeetings(containerId);
 }
 
-function closeContainerMeetingsModal() {
+function closeContainerMeetingsModal(options = {}) {
     const el = document.getElementById('container-meetings-modal');
     if (!el) return;
-    el.classList.add('hidden');
-    // Ensure it's non-interactive and behind other modals
-    el.setAttribute('aria-hidden', 'true');
-    el.style.pointerEvents = 'none';
-    el.style.visibility = 'hidden';
-    el.style.opacity = '0';
+
+    const hasExplicitOrganizationFlag = typeof options.fromOrganization === 'boolean';
+    const isOrganizationContext = hasExplicitOrganizationFlag
+        ? options.fromOrganization
+        : el.hasAttribute('x-show') || !!document.querySelector('[x-data^="organizationPage" i]');
+
+    if (isOrganizationContext) {
+        // El modal está administrado por Alpine, evitar manipular clases/estilos que interfieran.
+        el.classList.remove('hidden');
+        if (el.getAttribute('aria-hidden') === 'true') {
+            el.removeAttribute('aria-hidden');
+        }
+        if (el.style.pointerEvents === 'none') {
+            el.style.pointerEvents = '';
+        }
+        if (el.style.visibility === 'hidden') {
+            el.style.visibility = '';
+        }
+        if (el.style.opacity === '0') {
+            el.style.opacity = '';
+        }
+    } else {
+        el.classList.add('hidden');
+        // Ensure it's non-interactive and behind other modals (legacy modal)
+        el.setAttribute('aria-hidden', 'true');
+        el.style.pointerEvents = 'none';
+        el.style.visibility = 'hidden';
+        el.style.opacity = '0';
+    }
+
     currentContainerForMeetings = null;
 }
 
@@ -5005,7 +5029,7 @@ function openMeetingModalFromContainer(meetingId) {
     }
 
     // Cerrar el modal del contenedor (fallback para páginas fuera de organización)
-    closeContainerMeetingsModal();
+    closeContainerMeetingsModal({ fromOrganization: !!organizationComponent });
 
     // Abrir el modal de la reunión
     setTimeout(() => {
