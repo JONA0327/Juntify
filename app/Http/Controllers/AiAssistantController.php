@@ -200,9 +200,11 @@ class AiAssistantController extends Controller
             'attachments' => 'nullable|array'
         ]);
 
-        // Validar API Key de OpenAI antes de continuar
+        // Modo offline opcional: responder sin llamar a OpenAI
+        $offline = filter_var(env('AI_ASSISTANT_OFFLINE', false), FILTER_VALIDATE_BOOLEAN);
+        // Validar API Key de OpenAI antes de continuar (si no estamos offline)
         $apiKey = config('services.openai.api_key');
-        if (empty($apiKey)) {
+        if (!$offline && empty($apiKey)) {
             Log::warning('AI assistant: missing OPENAI_API_KEY');
             return response()->json([
                 'success' => false,
@@ -236,8 +238,28 @@ class AiAssistantController extends Controller
             }
         }
 
-    // Procesar con IA y generar respuesta
-    $assistantMessage = $this->processAiResponse($session, $request->content, $request->attachments ?? []);
+        // Si estamos en modo offline, generar una respuesta básica usando solo el contexto
+        if ($offline) {
+            $contextFragments = $this->gatherContext($session, $request->content);
+            $snippet = '';
+            if (!empty($contextFragments)) {
+                $texts = array_map(fn($f) => $f['text'] ?? '', array_slice($contextFragments, 0, 3));
+                $snippet = implode("\n- ", array_filter($texts));
+            }
+            $content = "(Modo offline) Puedo ayudarte a analizar esta conversación basándome en el contexto disponible.\n\nResumen de contexto:\n- " . ($snippet ?: 'No hay fragmentos de contexto disponibles.') . "\n\nHaz tu pregunta específica y te orientaré con la información encontrada.";
+
+            $assistantMessage = AiChatMessage::create([
+                'session_id' => $session->id,
+                'role' => 'assistant',
+                'content' => $content,
+                'metadata' => [
+                    'offline' => true,
+                ],
+            ]);
+        } else {
+            // Procesar con IA y generar respuesta
+            $assistantMessage = $this->processAiResponse($session, $request->content, $request->attachments ?? []);
+        }
 
         // Actualizar actividad de la sesión
         $session->updateActivity();
