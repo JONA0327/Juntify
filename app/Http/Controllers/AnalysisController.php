@@ -1,12 +1,13 @@
 <?php
 namespace App\Http\Controllers;
-use App\Models\Analyzer;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Auth;
-use OpenAI; // Importar el facade de OpenAI
-use App\Http\Controllers\Controller;
 
+use App\Http\Controllers\Controller;
+use App\Models\Analyzer;
+use App\Support\OpenAiConfig;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use OpenAI; // Importar el facade de OpenAI
 
 class AnalysisController extends Controller
 {
@@ -35,7 +36,7 @@ class AnalysisController extends Controller
 
         Log::info('Prompt enviado a OpenAI', ['prompt' => substr($userPrompt, 0, 100)]);
 
-        $client = OpenAI::client(config('services.openai.api_key'));
+        $client = OpenAI::client(OpenAiConfig::apiKey());
 
         $user = Auth::user();
         $model = 'gpt-4o-mini';

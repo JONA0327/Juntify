@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AiChatMessage;
 use App\Models\AiChatSession;
+use App\Support\OpenAiConfig;
 use OpenAI\Laravel\Facades\OpenAI;
 
 class AiChatService
@@ -45,7 +46,7 @@ class AiChatService
 
         $messages = array_merge($messages, $history);
 
-        $apiKey = config('services.openai.api_key');
+        $apiKey = OpenAiConfig::apiKey();
         if (empty($apiKey)) {
             throw new \RuntimeException('Falta la API Key de OpenAI. Define OPENAI_API_KEY en .env');
         }

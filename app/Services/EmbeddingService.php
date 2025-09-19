@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\OpenAiConfig;
 use Illuminate\Support\Arr;
 use OpenAI\Laravel\Facades\OpenAI;
 use RuntimeException;
@@ -21,7 +22,7 @@ class EmbeddingService
             return [];
         }
 
-        $apiKey = config('services.openai.api_key');
+        $apiKey = OpenAiConfig::apiKey();
         if (! $apiKey) {
             throw new RuntimeException('Falta la API key de OpenAI para generar embeddings.');
         }

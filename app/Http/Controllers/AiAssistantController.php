@@ -27,6 +27,7 @@ use App\Services\EmbeddingSearch;
 use App\Services\GoogleServiceAccount;
 use Google\Service\Exception as GoogleServiceException;
 use RuntimeException;
+use App\Support\OpenAiConfig;
 use App\Traits\MeetingContentParsing;
 
 class AiAssistantController extends Controller
@@ -203,7 +204,7 @@ class AiAssistantController extends Controller
         // Modo offline opcional: responder sin llamar a OpenAI
         $offline = filter_var(env('AI_ASSISTANT_OFFLINE', false), FILTER_VALIDATE_BOOLEAN);
         // Validar API Key de OpenAI antes de continuar (si no estamos offline)
-        $apiKey = config('services.openai.api_key');
+        $apiKey = OpenAiConfig::apiKey();
         if (!$offline && empty($apiKey)) {
             Log::warning('AI assistant: missing OPENAI_API_KEY');
             return response()->json([
@@ -524,7 +525,7 @@ class AiAssistantController extends Controller
         $contextFragments = [];
 
         // Si hay API key de OpenAI, usamos búsqueda semántica; si no, la omitimos
-        $apiKey = config('services.openai.api_key');
+        $apiKey = OpenAiConfig::apiKey();
         if (!empty($apiKey)) {
             /** @var EmbeddingSearch $search */
             $search = app(EmbeddingSearch::class);

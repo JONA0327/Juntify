@@ -6,6 +6,7 @@ use App\Models\AiChatSession;
 use App\Models\AiContextEmbedding;
 use App\Models\AiDocument;
 use App\Models\Container;
+use App\Support\OpenAiConfig;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -22,8 +23,13 @@ class EmbeddingSearch
      */
     public function search(string $username, string $query, array $options = []): array
     {
+        $apiKey = OpenAiConfig::apiKey();
+        if (! $apiKey) {
+            return [];
+        }
+
         try {
-            $client = OpenAI::client(config('services.openai.api_key'));
+            $client = OpenAI::client($apiKey);
             $response = $client->embeddings()->create([
                 'model' => 'text-embedding-3-small',
                 'input' => $query,
