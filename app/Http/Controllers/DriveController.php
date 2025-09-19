@@ -278,6 +278,15 @@ class DriveController extends Controller
             }
         }
 
+        // Validate parent container where root folders are created
+        $parentRootId = (string) config('drive.root_folder_id');
+        if (empty($parentRootId)) {
+            Log::error('createMainFolder: missing GOOGLE_DRIVE_ROOT_FOLDER (config.drive.root_folder_id)');
+            return response()->json([
+                'message' => 'Carpeta raíz de Google Drive no configurada. Define GOOGLE_DRIVE_ROOT_FOLDER en .env.',
+            ], 500);
+        }
+
         // Create folder using Service Account for homogeneity (with impersonation fallback)
         $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
         $folderId = null;
@@ -289,10 +298,7 @@ class DriveController extends Controller
         }
 
         try {
-            $folderId = $serviceAccount->createFolder(
-                $request->input('name'),
-                config('drive.root_folder_id')
-            );
+            $folderId = $serviceAccount->createFolder($request->input('name'), $parentRootId);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (GoogleServiceException $e) {
@@ -316,10 +322,7 @@ class DriveController extends Controller
                 try {
                     $serviceAccount->impersonate($ownerEmail);
                     $impersonated = true;
-                    $folderId = $serviceAccount->createFolder(
-                        $request->input('name'),
-                        config('drive.root_folder_id')
-                    );
+                    $folderId = $serviceAccount->createFolder($request->input('name'), $parentRootId);
                 } catch (\Throwable $impersonationError) {
                     $serviceAccountError = $impersonationError;
                 }
@@ -330,10 +333,7 @@ class DriveController extends Controller
                 try {
                     $serviceAccount->impersonate($ownerEmail);
                     $impersonated = true;
-                    $folderId = $serviceAccount->createFolder(
-                        $request->input('name'),
-                        config('drive.root_folder_id')
-                    );
+                    $folderId = $serviceAccount->createFolder($request->input('name'), $parentRootId);
                 } catch (\Throwable $impersonationError) {
                     $serviceAccountError = $impersonationError;
                 }
@@ -352,10 +352,7 @@ class DriveController extends Controller
             ]);
 
             try {
-                $folderId = $this->drive->createFolder(
-                    $request->input('name'),
-                    config('drive.root_folder_id')
-                );
+                $folderId = $this->drive->createFolder($request->input('name'), $parentRootId);
                 $usedOAuthFallback = true;
             } catch (\Throwable $oauthException) {
                 Log::error('createMainFolder Google error', [
@@ -463,7 +460,11 @@ class DriveController extends Controller
         }
 
         $drive      = $this->drive->getDrive();
-        $folderData = $drive->files->get($request->input('id'), ['fields' => 'name']);
+        $folderData = $drive->files->get($request->input('id'), [
+            'fields' => 'name',
+            'supportsAllDrives' => true,
+            'includeItemsFromAllDrives' => true,
+        ]);
         $folderName = $folderData->getName();
 
         $token->recordings_folder_id = $request->input('id');

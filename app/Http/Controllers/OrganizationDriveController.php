@@ -90,12 +90,13 @@ class OrganizationDriveController extends Controller
             abort(403, 'No autorizado');
         }
 
-        $parentFolderId = config('drive.root_folder_id');
+        // Prefer organization-specific parent if configured; otherwise fallback to personal root parent
+        $parentFolderId = (string) (config('drive.org_root_folder_id') ?: config('drive.root_folder_id'));
         if (empty($parentFolderId)) {
-            Log::error('Google Drive root folder ID is not configured.');
+            Log::error('Google Drive root folder ID is not configured for organizations.');
 
             return response()->json([
-                'message' => 'El ID de la carpeta raíz de Google Drive no está configurado.',
+                'message' => 'Falta configurar GOOGLE_DRIVE_ORG_ROOT_FOLDER o GOOGLE_DRIVE_ROOT_FOLDER en el .env',
             ], 500);
         }
         $token = $this->initDrive($organization);
@@ -157,26 +158,26 @@ class OrganizationDriveController extends Controller
         ]);
 
         $serviceEmail = config('services.google.service_account_email');
+        $adminEmail = optional($organization->admin)->email;
         if ($usedOAuthFallback) {
             if ($serviceEmail) {
                 try {
+                    // Root was created with OAuth client → grant SA access via OAuth
                     $this->drive->shareFolder($folderId, $serviceEmail);
                 } catch (\Throwable $shareError) {
-                    Log::warning('createRootFolder (org) failed to share via OAuth fallback', [
+                    Log::warning('createRootFolder (org) failed to share SA via OAuth fallback', [
                         'org' => $organization->id,
                         'error' => $shareError->getMessage(),
                     ]);
                 }
             }
-        } else {
-            try {
-                $serviceAccount->shareFolder($folderId, $serviceEmail);
-            } catch (\Throwable $shareError) {
-                Log::warning('createRootFolder (org) failed to share via service account', [
-                    'org' => $organization->id,
-                    'error' => $shareError->getMessage(),
-                ]);
+            if ($adminEmail) {
+                try { $this->drive->shareFolder($folderId, $adminEmail); } catch (\Throwable $e) { /* ignore */ }
             }
+        } else {
+            // Root created by Service Account → share to SA (idempotent) and to org admin/user so they can see it in UI
+            try { if ($serviceEmail) { $serviceAccount->shareFolder($folderId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
+            try { if ($adminEmail) { $serviceAccount->shareItem($folderId, $adminEmail, 'writer'); } } catch (\Throwable $e) { /* ignore */ }
         }
         // Ensure standard subfolders exist for organization root
         try {
@@ -189,7 +190,8 @@ class OrganizationDriveController extends Controller
                         'organization_folder_id' => $folder->id,
                         'google_id'              => $subId,
                     ], ['name' => $name]);
-                    try { $serviceAccount->shareFolder($subId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
+                    try { if ($serviceEmail) { $serviceAccount->shareFolder($subId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
+                    try { if ($adminEmail) { $serviceAccount->shareItem($subId, $adminEmail, 'writer'); } } catch (\Throwable $e) { /* ignore */ }
                 } catch (\Throwable $e) {
                     Log::warning('OrganizationDriveController: failed to create standard subfolder', [
                         'name' => $name,
