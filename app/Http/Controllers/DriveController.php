@@ -278,11 +278,21 @@ class DriveController extends Controller
 
         // Create folder using Service Account for homogeneity (with impersonation fallback)
         $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
+        $folderId = null;
+        $serviceAccountError = null;
+        $impersonated = false;
+        $ownerEmail = Auth::user()->email;
+        if (!$ownerEmail) {
+            $ownerEmail = \App\Models\User::where('username', Auth::user()->username)->value('email');
+        }
+
         try {
             $folderId = $serviceAccount->createFolder(
                 $request->input('name'),
                 config('drive.root_folder_id')
             );
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (GoogleServiceException $e) {
             if (str_contains($e->getMessage(), 'invalid_grant')) {
                 Log::warning('createMainFolder invalid_grant', [
@@ -299,35 +309,63 @@ class DriveController extends Controller
                 ], 401);
             }
 
-            // If SA could not create (permissions), try impersonating the owner email
-            try {
-                $ownerEmail = Auth::user()->email;
-                if (!$ownerEmail) {
-                    $ownerEmail = \App\Models\User::where('username', Auth::user()->username)->value('email');
-                }
-                if ($ownerEmail) {
+            $serviceAccountError = $e;
+            if ($ownerEmail) {
+                try {
                     $serviceAccount->impersonate($ownerEmail);
+                    $impersonated = true;
                     $folderId = $serviceAccount->createFolder(
                         $request->input('name'),
                         config('drive.root_folder_id')
                     );
-                } else {
-                    throw $e;
+                } catch (\Throwable $impersonationError) {
+                    $serviceAccountError = $impersonationError;
                 }
-            } catch (\Throwable $e2) {
+            }
+        } catch (\Throwable $e) {
+            $serviceAccountError = $e;
+            if ($ownerEmail) {
+                try {
+                    $serviceAccount->impersonate($ownerEmail);
+                    $impersonated = true;
+                    $folderId = $serviceAccount->createFolder(
+                        $request->input('name'),
+                        config('drive.root_folder_id')
+                    );
+                } catch (\Throwable $impersonationError) {
+                    $serviceAccountError = $impersonationError;
+                }
+            }
+        } finally {
+            if ($impersonated) {
+                try { $serviceAccount->impersonate(null); } catch (\Throwable $e) { /* ignore */ }
+            }
+        }
+
+        $usedOAuthFallback = false;
+        if (!$folderId) {
+            Log::warning('createMainFolder falling back to OAuth client', [
+                'username' => Auth::user()->username,
+                'error' => $serviceAccountError?->getMessage(),
+            ]);
+
+            try {
+                $folderId = $this->drive->createFolder(
+                    $request->input('name'),
+                    config('drive.root_folder_id')
+                );
+                $usedOAuthFallback = true;
+            } catch (\Throwable $oauthException) {
                 Log::error('createMainFolder Google error', [
                     'username' => Auth::user()->username,
-                    'error'    => $e2->getMessage(),
+                    'error'    => $oauthException->getMessage(),
+                    'service_error' => $serviceAccountError?->getMessage(),
                 ]);
 
                 return response()->json([
-                    'message' => 'Error de Drive: ' . $e2->getMessage(),
+                    'message' => 'Error de Drive: ' . $oauthException->getMessage(),
                 ], 502);
-            } finally {
-                try { $serviceAccount->impersonate(null); } catch (\Throwable $e3) { /* ignore */ }
             }
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
         }
 
         GoogleToken::where('username', Auth::user()->username)
@@ -340,7 +378,18 @@ class DriveController extends Controller
             'parent_id'       => null,
         ]);
 
-        $this->drive->shareFolder($folderId, config('services.google.service_account_email'));
+        $serviceEmail = config('services.google.service_account_email');
+        if ($serviceEmail) {
+            try {
+                $this->drive->shareFolder($folderId, $serviceEmail);
+            } catch (\Throwable $shareError) {
+                Log::warning('createMainFolder failed to share root folder', [
+                    'username' => Auth::user()->username,
+                    'error' => $shareError->getMessage(),
+                    'used_oauth_fallback' => $usedOAuthFallback,
+                ]);
+            }
+        }
 
         // Ensure standard subfolders exist in the new personal root (idempotent) using SA
         try {
