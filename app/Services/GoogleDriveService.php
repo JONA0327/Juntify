@@ -111,6 +111,7 @@ class GoogleDriveService
 
         $folder = $this->drive->files->create($fileMetadata, [
             'fields' => 'id',
+            'supportsAllDrives' => true,
         ]);
 
         return $folder->getId();
@@ -126,6 +127,8 @@ class GoogleDriveService
         $results = $this->drive->files->listFiles([
             'q'      => $q,
             'fields' => 'files(id,name)',
+            'supportsAllDrives' => true,
+            'includeItemsFromAllDrives' => true,
         ]);
 
         return $results->getFiles();
@@ -137,7 +140,9 @@ class GoogleDriveService
                 "mimeType='application/vnd.google-apps.folder' and '%s' in parents and trashed=false",
                 $parentId
             ),
-            'fields' => 'files(id,name)'
+            'fields' => 'files(id,name)',
+            'supportsAllDrives' => true,
+            'includeItemsFromAllDrives' => true,
         ]);
 
         return $response->getFiles();
@@ -205,6 +210,7 @@ class GoogleDriveService
             'mimeType'     => $mimeType,
             'uploadType'   => 'multipart',
             'fields'       => 'id',
+            'supportsAllDrives' => true,
         ]);
 
         if (! $file->id) {

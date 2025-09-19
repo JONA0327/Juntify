@@ -71,6 +71,7 @@ class GoogleServiceAccount
 
         $folder = $this->drive->files->create($fileMetadata, [
             'fields' => 'id',
+            'supportsAllDrives' => true,
         ]);
 
         return $folder->getId();
@@ -177,6 +178,7 @@ class GoogleServiceAccount
             'mimeType'   => $mimeType,
             'uploadType' => 'media',
             'fields'     => 'id',
+            'supportsAllDrives' => true,
         ]);
 
         if (! $file->id) {
@@ -189,7 +191,8 @@ class GoogleServiceAccount
     public function getFileLink(string $fileId): string
     {
         $file = $this->drive->files->get($fileId, [
-            'fields' => 'webViewLink'
+            'fields' => 'webViewLink',
+            'supportsAllDrives' => true,
         ]);
 
         if (empty($file->webViewLink)) {

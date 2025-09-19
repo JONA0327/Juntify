@@ -22,6 +22,8 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\SharedMeetingController;
 use App\Http\Controllers\PlanController;
+use App\Services\AudioConversionService;
+use App\Exceptions\FfmpegUnavailableException;
 
 /*
 |--------------------------------------------------------------------------
@@ -92,6 +94,65 @@ Route::middleware(['web'])->post('/debug/request-dump', function(Request $reques
         ],
         'csrf_meta' => optional($request->session())->token(),
     ]);
+});
+
+// Endpoint de diagnóstico: convierte un archivo subido a OGG (Opus)
+// Requiere sesión para evitar abuso. Usar desde Postman/Frontend para probar conversión en el servidor.
+Route::middleware(['web', 'auth'])->post('/debug/convert-audio-to-ogg', function(Request $request) {
+    try {
+        $request->validate([
+            'audioFile' => 'required|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,video/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4,video/mp4,audio/aac,audio/x-aac,audio/m4a,audio/x-m4a,audio/flac,audio/x-flac,audio/amr,audio/3gpp,audio/3gpp2'
+        ]);
+
+        $file = $request->file('audioFile');
+        $maxBytes = 200 * 1024 * 1024; // 200 MB
+        if ($file->getSize() > $maxBytes) {
+            return response()->json([
+                'code' => 'PAYLOAD_TOO_LARGE',
+                'message' => 'Archivo demasiado grande (máx. 200 MB)'
+            ], 413);
+        }
+
+        $path = $file->getRealPath();
+        $mime = $file->getMimeType();
+        $ext  = pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION) ?: null;
+
+        /** @var AudioConversionService $svc */
+        $svc = app(AudioConversionService::class);
+        $res = $svc->convertToOgg($path, $mime, $ext);
+
+        $download = (string) $request->query('download', '0');
+        $filename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME) . '.ogg';
+
+        if ($download === '1') {
+            return response()->download($res['path'], $filename, [
+                'Content-Type' => 'audio/ogg'
+            ])->deleteFileAfterSend(true);
+        }
+
+        $size = is_file($res['path']) ? filesize($res['path']) : null;
+        // Si no se descargará, limpiamos el archivo temporal para no dejar basura
+        if ($res['was_converted'] && is_file($res['path'])) {
+            @unlink($res['path']);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'was_converted' => $res['was_converted'],
+            'output_mime' => $res['mime_type'],
+            'output_size' => $size,
+        ]);
+    } catch (FfmpegUnavailableException $e) {
+        return response()->json([
+            'code' => 'FFMPEG_UNAVAILABLE',
+            'message' => 'FFmpeg/ffprobe no están disponibles en el servidor. Instálalos para habilitar la conversión a OGG.',
+        ], 500);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'code' => 'OGG_CONVERSION_FAILED',
+            'message' => 'Falló la conversión a OGG: ' . $e->getMessage(),
+        ], 500);
+    }
 });
 
 // Endpoint para ver límites efectivos de carga (útil ante 413). Requiere sesión.

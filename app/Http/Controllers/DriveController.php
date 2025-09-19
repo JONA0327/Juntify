@@ -331,8 +331,9 @@ class DriveController extends Controller
             $serviceAccount = app(GoogleServiceAccount::class);
 
             $organizationFolder = $user->organizationFolder;
-            // Simplificación: asumimos acceso si existe carpeta organizacional
-            $orgRole = $organizationFolder ? 'miembro' : null;
+            // Simplificación: permitir uso del Drive organizacional si existe la carpeta raíz
+            // Nota: anteriormente se comprobaba un rol 'colaborador/administrador' que nunca se establecía aquí,
+            // lo que impedía el uso del Drive de la organización incluso siendo miembro. Corregido.
 
             // Determinar si usar Drive organizacional basado en driveType
             $driveType = $v['driveType'] ?? 'personal'; // Default a personal si no se especifica
@@ -341,23 +342,14 @@ class DriveController extends Controller
             Log::info('uploadPendingAudio: Drive type selection', [
                 'driveType' => $driveType,
                 'hasOrganizationFolder' => !!$organizationFolder,
-                'orgRole' => $orgRole,
                 'username' => $user->username
             ]);
 
             if ($driveType === 'organization' && $organizationFolder) {
-                if ($orgRole === 'colaborador' || $orgRole === 'administrador') {
-                    $useOrgDrive = true;
-                    Log::info('uploadPendingAudio: Using organization drive', [
-                        'orgRole' => $orgRole,
-                        'orgFolderId' => $organizationFolder->google_id
-                    ]);
-                } else {
-                    Log::warning('uploadPendingAudio: User has no valid role for organization', [
-                        'orgRole' => $orgRole,
-                        'username' => $user->username
-                    ]);
-                }
+                $useOrgDrive = true;
+                Log::info('uploadPendingAudio: Using organization drive', [
+                    'orgFolderId' => $organizationFolder->google_id
+                ]);
             } elseif ($driveType === 'organization' && !$organizationFolder) {
                 Log::warning('uploadPendingAudio: Organization drive requested but no organization folder found', [
                     'username' => $user->username
@@ -778,8 +770,7 @@ class DriveController extends Controller
         }
 
         $user = Auth::user();
-        $organizationFolder = $user->organizationFolder;
-        $orgRole = $organizationFolder ? 'miembro' : null;
+    $organizationFolder = $user->organizationFolder;
 
         // Determinar si usar Drive organizacional basado en driveType
         $driveType = $v['driveType'] ?? 'personal'; // Default a personal si no se especifica
@@ -788,27 +779,15 @@ class DriveController extends Controller
         Log::info('saveResults: Drive type selection', [
             'driveType' => $driveType,
             'hasOrganizationFolder' => !!$organizationFolder,
-            'orgRole' => $orgRole,
             'username' => $user->username,
             'rootFolder_param' => $v['rootFolder'] ?? null
         ]);
 
         if ($driveType === 'organization' && $organizationFolder) {
-            if ($orgRole === 'colaborador' || $orgRole === 'administrador') {
-                $useOrgDrive = true;
+            $useOrgDrive = true;
                 Log::info('saveResults: Using organization drive', [
-                    'orgRole' => $orgRole,
                     'orgFolderId' => $organizationFolder->google_id
                 ]);
-            } else {
-                Log::warning('saveResults: User has no valid role for organization', [
-                    'orgRole' => $orgRole,
-                    'username' => $user->username
-                ]);
-                return response()->json([
-                    'message' => 'No tienes permisos para usar Drive organizacional'
-                ], 403);
-            }
         } elseif ($driveType === 'organization' && !$organizationFolder) {
             Log::warning('saveResults: Organization drive requested but no organization folder found', [
                 'username' => $user->username
