@@ -90,15 +90,16 @@ class OrganizationDriveController extends Controller
             abort(403, 'No autorizado');
         }
 
-        // Prefer organization-specific parent if configured; otherwise fallback to personal root parent
-        $parentFolderId = (string) (config('drive.org_root_folder_id') ?: config('drive.root_folder_id'));
+        // Allow dynamic parent from request (?parentId=); fallback to org_root_folder_id then root_folder_id
+        $parentFolderId = (string) (request('parentId') ?: (config('drive.org_root_folder_id') ?: config('drive.root_folder_id')));
         if (empty($parentFolderId)) {
             Log::error('Google Drive root folder ID is not configured for organizations.');
 
             return response()->json([
-                'message' => 'Falta configurar GOOGLE_DRIVE_ORG_ROOT_FOLDER o GOOGLE_DRIVE_ROOT_FOLDER en el .env',
-            ], 500);
+                'message' => 'Debes indicar parentId (carpeta o unidad compartida) o configurar GOOGLE_DRIVE_ORG_ROOT_FOLDER / GOOGLE_DRIVE_ROOT_FOLDER en .env',
+            ], 400);
         }
+        Log::info('Organization createRootFolder: using parent', ['parentId' => $parentFolderId, 'org' => $organization->id]);
         $token = $this->initDrive($organization);
 
         // Create using Service Account for homogeneity; impersonate org admin if needed

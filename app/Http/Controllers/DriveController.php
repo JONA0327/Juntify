@@ -253,6 +253,7 @@ class DriveController extends Controller
     {
         $request->validate([
             'name' => 'required|string',
+            'parentId' => 'nullable|string',
         ]);
         $token  = GoogleToken::where('username', Auth::user()->username)->firstOrFail();
         $client = $this->drive->getClient();
@@ -278,14 +279,15 @@ class DriveController extends Controller
             }
         }
 
-        // Validate parent container where root folders are created
-        $parentRootId = (string) config('drive.root_folder_id');
+        // Choose parent container where the root folder will be created (dynamic first, then config fallback)
+        $parentRootId = (string) ($request->input('parentId') ?: config('drive.root_folder_id'));
         if (empty($parentRootId)) {
-            Log::error('createMainFolder: missing GOOGLE_DRIVE_ROOT_FOLDER (config.drive.root_folder_id)');
+            Log::error('createMainFolder: missing parent id (no parentId provided and no GOOGLE_DRIVE_ROOT_FOLDER)');
             return response()->json([
-                'message' => 'Carpeta raíz de Google Drive no configurada. Define GOOGLE_DRIVE_ROOT_FOLDER en .env.',
-            ], 500);
+                'message' => 'Debes indicar parentId (carpeta o unidad compartida donde crear) o configurar GOOGLE_DRIVE_ROOT_FOLDER en .env.',
+            ], 400);
         }
+        Log::info('createMainFolder: using parent', ['parentId' => $parentRootId]);
 
         // Create folder using Service Account for homogeneity (with impersonation fallback)
         $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
