@@ -304,6 +304,105 @@ test('shared meeting audio endpoint uses service account temporary file when ava
     $response->assertRedirect($expectedUrl);
 });
 
+test('shared meeting audio endpoint falls back to impersonation after initial service account failure', function () {
+    $owner = User::factory()->create(['email' => 'owner@example.com']);
+    $recipient = User::factory()->create();
+
+    GoogleToken::create([
+        'username' => $recipient->username,
+        'access_token' => 'test-access',
+        'refresh_token' => 'test-refresh',
+        'expiry_date' => now()->addDay(),
+    ]);
+
+    $meeting = createLegacyMeeting($owner, [
+        'meeting_name' => 'Service Account Meeting',
+        'audio_drive_id' => 'sa-file-id',
+        'audio_download_url' => '',
+    ]);
+
+    SharedMeeting::create([
+        'meeting_id' => $meeting->id,
+        'shared_by' => $owner->id,
+        'shared_with' => $recipient->id,
+        'status' => 'accepted',
+        'shared_at' => now(),
+    ]);
+
+    app()->instance(GoogleDriveService::class, new class {
+        public function setAccessToken($token) {}
+        public function getClient() { return new class { public function isAccessTokenExpired() { return false; } }; }
+        public function refreshToken($refreshToken) { return ['access_token' => 'new-token', 'expires_in' => 3600]; }
+        public function findAudioInFolder($folderId, $meetingTitle, $meetingId) { return []; }
+        public function downloadFileContent($fileId) { return ''; }
+        public function getFileInfo($fileId) { return new class {
+            public function getParents() { return []; }
+            public function getName() { return 'Parent'; }
+            public function getMimeType() { return 'audio/ogg'; }
+        }; }
+        public function getWebContentLink($fileId) { return null; }
+    });
+
+    $serviceAccount = new class {
+        public ?string $impersonated = null;
+        public int $downloadAttempts = 0;
+
+        public function impersonate($email)
+        {
+            $this->impersonated = $email;
+        }
+
+        public function downloadFile($fileId)
+        {
+            $this->downloadAttempts++;
+
+            if ($this->downloadAttempts === 1) {
+                throw new \Exception('service account download failed');
+            }
+
+            if (!$this->impersonated) {
+                throw new \Exception('impersonation was not triggered');
+            }
+
+            return 'fake audio';
+        }
+
+        public function getClient()
+        {
+            return new class {
+                public function fetchAccessTokenWithAssertion()
+                {
+                    return ['access_token' => 'sa-token'];
+                }
+            };
+        }
+
+        public function getFileInfo($fileId)
+        {
+            return new class {
+                public function getName() { return 'audio'; }
+                public function getMimeType() { return 'audio/ogg'; }
+            };
+        }
+    };
+
+    app()->instance(\App\Services\GoogleServiceAccount::class, $serviceAccount);
+
+    Storage::disk('public')->delete('temp/stream_' . $meeting->id . '.ogg');
+    Storage::disk('public')->makeDirectory('temp');
+
+    $response = $this->actingAs($recipient, 'sanctum')->get('/api/meetings/' . $meeting->id . '/audio');
+
+    $expectedPath = storage_path('app/public/temp/stream_' . $meeting->id . '.ogg');
+    expect(file_exists($expectedPath))->toBeTrue();
+
+    $expectedUrl = asset('storage/temp/stream_' . $meeting->id . '.ogg');
+    $response->assertRedirect($expectedUrl);
+
+    expect($serviceAccount->downloadAttempts)->toBe(2);
+    expect($serviceAccount->impersonated)->toBe('owner@example.com');
+});
+
 
 test('destroy meeting returns 500 when Google Drive deletion fails', function () {
     $user = User::factory()->create(['username' => 'user']);
