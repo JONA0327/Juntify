@@ -90,16 +90,13 @@ class OrganizationDriveController extends Controller
             abort(403, 'No autorizado');
         }
 
-        // Allow dynamic parent from request (?parentId=); fallback to org_root_folder_id then root_folder_id
-        $parentFolderId = (string) (request('parentId') ?: (config('drive.org_root_folder_id') ?: config('drive.root_folder_id')));
-        if (empty($parentFolderId)) {
-            Log::error('Google Drive root folder ID is not configured for organizations.');
-
-            return response()->json([
-                'message' => 'Debes indicar parentId (carpeta o unidad compartida) o configurar GOOGLE_DRIVE_ORG_ROOT_FOLDER / GOOGLE_DRIVE_ROOT_FOLDER en .env',
-            ], 400);
+        // Prefer parentId from request; if none, we will create under admin's My Drive using impersonation
+        $parentFolderId = (string) request('parentId');
+        if (!empty($parentFolderId)) {
+            Log::info('Organization createRootFolder: using explicit parent', ['parentId' => $parentFolderId, 'org' => $organization->id]);
+        } else {
+            Log::info('Organization createRootFolder: no parent provided; will create at admin My Drive root via impersonation', ['org' => $organization->id]);
         }
-        Log::info('Organization createRootFolder: using parent', ['parentId' => $parentFolderId, 'org' => $organization->id]);
         $token = $this->initDrive($organization);
 
         // Create using Service Account for homogeneity; impersonate org admin if needed
@@ -107,19 +104,49 @@ class OrganizationDriveController extends Controller
         $folderId = null;
         $serviceAccountError = null;
         $impersonated = false;
+        $createdViaImpersonation = false;
+        $sharedWithSA = false;
 
         try {
-            $folderId = $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId);
-        } catch (\Throwable $e) {
-            $serviceAccountError = $e;
-            $ownerEmail = optional($organization->admin)->email;
-            if ($ownerEmail) {
-                try {
+            if (!empty($parentFolderId)) {
+                // Create under provided parent with SA
+                $folderId = $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId);
+            } else {
+                // Create at admin's My Drive root via impersonation
+                $ownerEmail = optional($organization->admin)->email;
+                if ($ownerEmail) {
                     $serviceAccount->impersonate($ownerEmail);
                     $impersonated = true;
-                    $folderId = $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId);
-                } catch (\Throwable $impersonationError) {
-                    $serviceAccountError = $impersonationError;
+                    $createdViaImpersonation = true;
+                    $folderId = $serviceAccount->createFolder($organization->nombre_organizacion);
+                    // While impersonating (admin owns the folder), grant SA access now
+                    $serviceEmail = config('services.google.service_account_email');
+                    if ($serviceEmail) {
+                        try { $serviceAccount->shareFolder($folderId, $serviceEmail); $sharedWithSA = true; } catch (\Throwable $e) { /* ignore */ }
+                    }
+                } else {
+                    throw new \RuntimeException('No se pudo determinar el email del administrador de la organización');
+                }
+            }
+        } catch (\Throwable $e) {
+            $serviceAccountError = $e;
+            // If we initially tried with SA under a parent and failed, try impersonation fallback
+            if (!$impersonated) {
+                $ownerEmail = optional($organization->admin)->email;
+                if ($ownerEmail) {
+                    try {
+                        $serviceAccount->impersonate($ownerEmail);
+                        $impersonated = true;
+                        $createdViaImpersonation = true;
+                        $folderId = !empty($parentFolderId)
+                            ? $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId)
+                            : $serviceAccount->createFolder($organization->nombre_organizacion);
+                        // Share with SA while impersonating
+                        $serviceEmail = config('services.google.service_account_email');
+                        if ($serviceEmail) { try { $serviceAccount->shareFolder($folderId, $serviceEmail); $sharedWithSA = true; } catch (\Throwable $e2) { /* ignore */ } }
+                    } catch (\Throwable $impersonationError) {
+                        $serviceAccountError = $impersonationError;
+                    }
                 }
             }
         } finally {
@@ -176,9 +203,13 @@ class OrganizationDriveController extends Controller
                 try { $this->drive->shareFolder($folderId, $adminEmail); } catch (\Throwable $e) { /* ignore */ }
             }
         } else {
-            // Root created by Service Account → share to SA (idempotent) and to org admin/user so they can see it in UI
-            try { if ($serviceEmail) { $serviceAccount->shareFolder($folderId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
-            try { if ($adminEmail) { $serviceAccount->shareItem($folderId, $adminEmail, 'writer'); } } catch (\Throwable $e) { /* ignore */ }
+            if ($createdViaImpersonation) {
+                // Already shared with SA while impersonating; nothing else required. Optionally ensure admin has access (owner).
+            } else {
+                // Root created by SA under a parent → grant admin access
+                try { if ($serviceEmail && !$sharedWithSA) { $serviceAccount->shareFolder($folderId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
+                try { if ($adminEmail) { $serviceAccount->shareItem($folderId, $adminEmail, 'writer'); } } catch (\Throwable $e) { /* ignore */ }
+            }
         }
         // Ensure standard subfolders exist for organization root
         try {
