@@ -1410,6 +1410,89 @@ class MeetingController extends Controller
     }
 
     /**
+     * When legacy meetings store a Drive folder instead of a file, locate the actual audio file.
+     *
+     * @return array{0:?string,1:?string,2:bool} [fileId, downloadUrl, resolved]
+     */
+    private function resolveAudioDriveReference(TranscriptionLaravel $meetingModel, array &$dbg = [], bool $persist = false): array
+    {
+        $fileId = $meetingModel->audio_drive_id;
+        $downloadUrl = $meetingModel->audio_download_url;
+        $resolved = false;
+
+        if (empty($fileId)) {
+            return [$fileId, $downloadUrl, $resolved];
+        }
+
+        $originalFileId = $fileId;
+        $shouldSearchFolder = false;
+        $wasFolder = false;
+        $fileIdChanged = false;
+
+        try {
+            $info = $this->googleDriveService->getFileInfo($fileId);
+            $mimeType = null;
+
+            if ($info instanceof DriveFile) {
+                $mimeType = $info->getMimeType();
+            } elseif (is_object($info) && method_exists($info, 'getMimeType')) {
+                $mimeType = $info->getMimeType();
+            }
+
+            if ($mimeType === 'application/vnd.google-apps.folder') {
+                $shouldSearchFolder = true;
+                $dbg['audio_drive_id_is_folder'] = true;
+                $wasFolder = true;
+            }
+        } catch (\Throwable $e) {
+            $shouldSearchFolder = true;
+            $dbg['audio_drive_folder_check_error'] = $e->getMessage();
+        }
+
+        if ($shouldSearchFolder) {
+            try {
+                $audioData = $this->googleDriveService->findAudioInFolder(
+                    $originalFileId,
+                    $meetingModel->meeting_name,
+                    (string) $meetingModel->id
+                );
+
+                if (!empty($audioData['fileId'])) {
+                    $fileId = $audioData['fileId'];
+                    $resolved = true;
+                    $dbg['audio_drive_id_resolved'] = $fileId;
+                    $fileIdChanged = true;
+                }
+
+                if (!empty($audioData['downloadUrl'])) {
+                    $downloadUrl = $audioData['downloadUrl'];
+                    $resolved = true;
+                    $dbg['audio_download_url_resolved'] = $downloadUrl;
+                }
+            } catch (\Throwable $e) {
+                $dbg['audio_drive_folder_search_error'] = $e->getMessage();
+            }
+        }
+
+        if ($wasFolder && !$fileIdChanged && !empty($downloadUrl)) {
+            $dbg['audio_drive_id_cleared'] = true;
+            $fileId = null;
+        }
+
+        if ($persist && $resolved && !empty($fileId) && $fileId !== $originalFileId && $meetingModel->exists) {
+            try {
+                $meetingModel->forceFill(['audio_drive_id' => $fileId]);
+                $meetingModel->save();
+                $dbg['audio_drive_id_persisted'] = true;
+            } catch (\Throwable $e) {
+                $dbg['audio_drive_id_persist_error'] = $e->getMessage();
+            }
+        }
+
+        return [$fileId, $downloadUrl, $resolved];
+    }
+
+    /**
      * Obtiene la ruta del audio para una reunión
      * Prioriza la URL directa de descarga si está disponible,
      * sino descarga desde Drive y detecta el formato automáticamente
@@ -2141,6 +2224,29 @@ class MeetingController extends Controller
                     'username' => $meetingModel->username
                 ]);
 
+                [$resolvedFileId, $resolvedDownloadUrl, $resolvedFromFolder] = $this->resolveAudioDriveReference(
+                    $meetingModel,
+                    $dbg,
+                    true
+                );
+
+                if (!empty($resolvedFileId)) {
+                    $meetingModel->audio_drive_id = $resolvedFileId;
+                }
+
+                if (!empty($resolvedDownloadUrl)) {
+                    $meetingModel->audio_download_url = $resolvedDownloadUrl;
+                }
+
+                $effectiveFileId = $resolvedFileId;
+                if ($effectiveFileId === null && !$resolvedFromFolder) {
+                    $effectiveFileId = $meetingModel->audio_drive_id;
+                }
+
+                if ($resolvedFromFolder) {
+                    $dbg['audio_drive_resolved_for_stream'] = $effectiveFileId;
+                }
+
                 $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meetingModel->meeting_name);
                 $pattern = storage_path('app/public/temp/' . $sanitizedName . '_' . $meetingModel->id . '.*');
                 $existingFiles = glob($pattern);
@@ -2151,6 +2257,8 @@ class MeetingController extends Controller
                      Log::info('streamAudio: Obteniendo ruta de audio');
 
                     // Para acceso por contenedores o compartido, priorizar el uso de Service Account
+                    $fileIdForDownload = $effectiveFileId;
+
                     if ($containerAccess || $sharedAccess) {
                         try {
                             /** @var \App\Services\GoogleServiceAccount $sa */
@@ -2159,7 +2267,11 @@ class MeetingController extends Controller
                             if ($owner && $owner->email) {
                                 $sa->impersonate($owner->email);
                             }
-                            $audioContent = $sa->downloadFile($meetingModel->audio_drive_id);
+                            if (!empty($fileIdForDownload)) {
+                                $audioContent = $sa->downloadFile($fileIdForDownload);
+                            } else {
+                                throw new \RuntimeException('No audio file id available for service account download');
+                            }
                             $ext = $this->detectAudioExtension($meetingModel->meeting_name, 'audio/ogg');
                             $tempFileName = 'stream_' . $meetingModel->id . '.' . $ext;
                             $audioPath = $this->storeTemporaryFile($audioContent, $tempFileName);
@@ -2213,7 +2325,7 @@ class MeetingController extends Controller
                     $streamed = $this->streamRemoteAudio(
                         $audioPath,
                         $meetingModel->meeting_name . '_' . $meetingModel->id,
-                        $meetingModel->audio_drive_id
+                        $effectiveFileId
                     );
                     if ($streamed) {
                         return $streamed;
@@ -2307,7 +2419,29 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
-            $fileId = $meetingModel->audio_drive_id;
+            [$resolvedFileId, $resolvedDownloadUrl, $resolvedFromFolder] = $this->resolveAudioDriveReference(
+                $meetingModel,
+                $dbg,
+                true
+            );
+
+            if (!empty($resolvedFileId)) {
+                $meetingModel->audio_drive_id = $resolvedFileId;
+            }
+
+            $fileId = $resolvedFileId;
+            if ($fileId === null && !$resolvedFromFolder) {
+                $fileId = $meetingModel->audio_drive_id;
+            }
+
+            if (!empty($resolvedDownloadUrl)) {
+                $meetingModel->audio_download_url = $resolvedDownloadUrl;
+            }
+
+            if ($resolvedFromFolder) {
+                $dbg['resolve_fileId_from_folder'] = $fileId;
+            }
+
             $dbg['resolve_fileId_initial'] = $fileId;
 
             if ($sharedAccess) {
