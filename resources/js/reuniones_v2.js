@@ -2898,9 +2898,6 @@ function renderSegments(segments) {
                             </div>
                         </div>
                         <div class="segment-controls" style="display: flex; gap: 0.5rem; flex-shrink: 0;">
-                            <button class="control-btn" onclick="playSegmentAudio(${index})" title="Reproducir fragmento" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; padding: 0.5rem; color: #94a3b8; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center;">
-                                ${getPlayIcon('btn-icon')}
-                            </button>
                             <button class="control-btn" onclick="openChangeSpeakerModal(${index})" title="Editar hablante" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; padding: 0.5rem; color: #94a3b8; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center;">
                                 <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" style="width: 1rem; height: 1rem;">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487l3.651 3.651-9.375 9.375-3.651.975.975-3.651 9.4-9.35zM5.25 18.75h13.5" />
@@ -2966,10 +2963,8 @@ function updateSegmentButtons(activeIndex) {
     meetingSegments.forEach((_, idx) => {
         const segmentEl = document.querySelector(`[data-segment="${idx}"]`);
         if (!segmentEl) return;
-        const headerBtn = segmentEl.querySelector('.segment-controls .control-btn');
         const miniBtn = segmentEl.querySelector('.play-btn-mini');
         const isActive = idx === activeIndex;
-        if (headerBtn) headerBtn.innerHTML = isActive ? getPauseIcon('btn-icon') : getPlayIcon('btn-icon');
         if (miniBtn) miniBtn.innerHTML = isActive ? getPauseIcon('play-icon') : getPlayIcon('play-icon');
     });
 }
@@ -2978,9 +2973,7 @@ function setSegmentButtonsDisabled(disabled) {
     meetingSegments.forEach((_, idx) => {
         const segmentEl = document.querySelector(`[data-segment="${idx}"]`);
         if (!segmentEl) return;
-        const headerBtn = segmentEl.querySelector('.segment-controls .control-btn');
         const miniBtn = segmentEl.querySelector('.play-btn-mini');
-        if (headerBtn) headerBtn.disabled = disabled;
         if (miniBtn) miniBtn.disabled = disabled;
     });
 }
