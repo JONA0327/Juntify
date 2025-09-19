@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Support\OpenAiConfig;
 use Illuminate\Support\Arr;
-use OpenAI\Laravel\Facades\OpenAI;
+// Avoid facade; use SDK global entrypoint
 use RuntimeException;
 use Throwable;
 
@@ -28,7 +28,7 @@ class EmbeddingService
         }
 
         $modelName = $model ?? config('services.openai.embedding_model', 'text-embedding-3-small');
-        $client = OpenAI::client($apiKey);
+    $client = \OpenAI::client($apiKey);
 
         $vectors = [];
         $batches = array_chunk($chunks, max(1, $batchSize));
@@ -60,9 +60,10 @@ class EmbeddingService
                 throw new RuntimeException('Error al generar embeddings: ' . $exception->getMessage(), 0, $exception);
             }
 
-            foreach ($response->data as $position => $data) {
+            $rows = $response->data ?? [];
+            foreach ($rows as $position => $row) {
                 $chunkIndex = $indexMap[$position] ?? $position;
-                $embedding = $data->embedding ?? [];
+                $embedding = $row->embedding ?? [];
 
                 $vectors[$chunkIndex] = array_map(static fn ($value) => (float) $value, Arr::wrap($embedding));
             }

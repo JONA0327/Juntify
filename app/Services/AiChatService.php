@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\AiChatMessage;
 use App\Models\AiChatSession;
 use App\Support\OpenAiConfig;
-use OpenAI\Laravel\Facades\OpenAI;
+// Use the SDK global entrypoint to avoid facade collisions
 
 class AiChatService
 {
@@ -50,7 +50,7 @@ class AiChatService
         if (empty($apiKey)) {
             throw new \RuntimeException('Falta la API Key de OpenAI. Define OPENAI_API_KEY en .env');
         }
-        $client = OpenAI::client($apiKey);
+        $client = \OpenAI::client($apiKey);
         $start = microtime(true);
         $response = $client->chat()->create([
             'model' => 'gpt-3.5-turbo',

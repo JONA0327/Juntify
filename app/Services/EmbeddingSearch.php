@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use OpenAI\Laravel\Facades\OpenAI;
+// Avoid facade; use SDK global entrypoint
 
 class EmbeddingSearch
 {
@@ -29,7 +29,7 @@ class EmbeddingSearch
         }
 
         try {
-            $client = OpenAI::client($apiKey);
+            $client = \OpenAI::client($apiKey);
             $response = $client->embeddings()->create([
                 'model' => 'text-embedding-3-small',
                 'input' => $query,

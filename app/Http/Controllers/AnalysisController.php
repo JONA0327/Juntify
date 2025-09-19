@@ -7,7 +7,7 @@ use App\Support\OpenAiConfig;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use OpenAI; // Importar el facade de OpenAI
+// Nota: evitar el Facade; usaremos el entrypoint global de la SDK: \OpenAI
 
 class AnalysisController extends Controller
 {
@@ -36,7 +36,15 @@ class AnalysisController extends Controller
 
         Log::info('Prompt enviado a OpenAI', ['prompt' => substr($userPrompt, 0, 100)]);
 
-        $client = OpenAI::client(OpenAiConfig::apiKey());
+        $apiKey = OpenAiConfig::apiKey();
+        if (! $apiKey) {
+            return response()->json([
+                'error' => 'OPENAI_API_KEY_MISSING',
+                'message' => 'Falta la API Key de OpenAI en la configuración.',
+            ], 422);
+        }
+
+        $client = \OpenAI::client($apiKey);
 
         $user = Auth::user();
         $model = 'gpt-4o-mini';
