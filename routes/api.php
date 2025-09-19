@@ -266,7 +266,8 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('/tasks/{task}/complete', [TaskController::class, 'complete'])->name('api.tasks.complete');
     });
 
-    Route::middleware('group.role')->group(function () {
+    // Contenedores (requieren sesión web + auth + verificación de rol de grupo)
+    Route::middleware(['web', 'auth', 'group.role'])->group(function () {
         Route::post('/containers', [ContainerController::class, 'store'])->name('api.containers.store');
         Route::patch('/containers/{id}', [ContainerController::class, 'update'])->name('api.containers.update');
         Route::delete('/containers/{id}', [ContainerController::class, 'destroy'])->name('api.containers.destroy');
