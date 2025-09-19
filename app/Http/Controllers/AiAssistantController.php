@@ -97,15 +97,24 @@ class AiAssistantController extends Controller
         $request->validate([
             'title' => 'sometimes|string|max:255',
             'context_type' => 'required|in:general,container,meeting,contact_chat,documents,mixed',
-            'context_id' => 'nullable|string',
+            // Aceptar números o strings para evitar 422 cuando el front envía un número
+            'context_id' => 'nullable',
             'context_data' => 'nullable|array'
         ]);
+
+        // Normalizar context_id a string si viene definido (la columna es string)
+        $contextId = $request->input('context_id');
+        if ($contextId !== null && $contextId !== '') {
+            $contextId = (string) $contextId;
+        } else {
+            $contextId = null;
+        }
 
         $session = AiChatSession::create([
             'username' => $user->username,
             'title' => $request->title ?? 'Nueva conversación',
             'context_type' => $request->context_type,
-            'context_id' => $request->context_id,
+            'context_id' => $contextId,
             'context_data' => $request->context_data ?? [],
             'last_activity' => now()
         ]);

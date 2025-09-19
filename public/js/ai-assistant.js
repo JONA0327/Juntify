@@ -603,7 +603,7 @@ function renderContainers(containers) {
     }
 
     grid.innerHTML = containers.map(container => `
-        <div class="container-card" onclick="selectContainer(${container.id})">
+        <div class="container-card" onclick="addContainerToContext(${container.id})">
             <h4>${escapeHtml(container.name)}</h4>
             <div class="container-meta">
                 ${container.meetings_count} reuniones
@@ -914,14 +914,36 @@ async function loadSelectedContext() {
             return;
         }
 
-        // Configurar contexto con los elementos seleccionados
-        currentContext = {
-            type: 'mixed',
-            id: null,
-            data: {
-                items: serializedItems
-            }
-        };
+        // Si solo hay un elemento y es un contenedor, crear sesión de tipo 'container'
+        if (serializedItems.length === 1 && serializedItems[0].type === 'container') {
+            const containerId = serializedItems[0].id;
+            const container = allContainers.find(c => c.id === containerId);
+            currentContext = {
+                type: 'container',
+                id: containerId,
+                data: {
+                    container_name: container ? container.name : 'Contenedor seleccionado'
+                }
+            };
+        } else if (serializedItems.length === 1 && serializedItems[0].type === 'meeting') {
+            // Mantener compatibilidad para un único meeting seleccionado
+            const meetingId = serializedItems[0].id;
+            const meeting = allMeetings.find(m => m.id === meetingId);
+            currentContext = {
+                type: 'meeting',
+                id: meetingId,
+                data: meeting ? meeting : { meeting_name: 'Reunión seleccionada' }
+            };
+        } else {
+            // Contexto mixto para múltiples elementos
+            currentContext = {
+                type: 'mixed',
+                id: null,
+                data: {
+                    items: serializedItems
+                }
+            };
+        }
 
         await createNewChatSession();
         closeContextSelector();
@@ -967,23 +989,49 @@ async function selectContainer(containerId) {
         const data = await response.json();
 
         if (data.success) {
-            currentContext = {
-                type: 'container',
-                id: containerId,
-                data: {
-                    meetings: data.meetings,
-                    container_name: data.container_name
-                }
-            };
-
-            await createNewChatSession();
-            closeContextSelector();
-            updateContextIndicator();
+            // En lugar de crear sesión inmediata, agregar al panel de contexto cargado
+            const name = data.container?.name || data.container_name || 'Contenedor';
+            // Evitar duplicados
+            const exists = loadedContextItems.some(i => i.type === 'container' && i.id === containerId);
+            if (!exists) {
+                loadedContextItems.push({ type: 'container', id: containerId, title: name, data: { name } });
+                updateLoadedContextUI();
+                showNotification('Contenedor agregado al contexto', 'success');
+            } else {
+                showNotification('Este contenedor ya está en el contexto', 'warning');
+            }
         }
     } catch (error) {
         console.error('Error selecting container:', error);
         showNotification('Error al seleccionar contenedor', 'error');
     }
+}
+
+/**
+ * Agregar contenedor al contexto cargado (sin llamar al backend)
+ */
+function addContainerToContext(containerId) {
+    const container = allContainers.find(c => c && c.id === containerId);
+    if (!container) {
+        showNotification('Contenedor no encontrado', 'error');
+        return;
+    }
+
+    const exists = loadedContextItems.some(item => item.type === 'container' && item.id === containerId);
+    if (exists) {
+        showNotification('Este contenedor ya está cargado en el contexto', 'warning');
+        return;
+    }
+
+    loadedContextItems.push({
+        type: 'container',
+        id: containerId,
+        title: container.name,
+        data: { name: container.name }
+    });
+
+    updateLoadedContextUI();
+    showNotification('Contenedor agregado al contexto', 'success');
 }
 
 /**
