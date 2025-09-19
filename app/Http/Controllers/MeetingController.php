@@ -2182,7 +2182,7 @@ class MeetingController extends Controller
                             ]);
                             $dbg['getAudioPath_exception'] = $eGet->getMessage();
                             // Fallback inmediato: reutilizar la lógica de descarga directa estilo downloadAudioFile
-                            $fallback = $this->resolveLegacyAudio($meetingModel, $sharedAccess, null, $debug, $dbg);
+                            $fallback = $this->resolveLegacyAudio($meetingModel, $sharedAccess, $sharedMeeting, $debug, $dbg);
                             if ($fallback instanceof \Illuminate\Http\JsonResponse || $fallback instanceof \Illuminate\Http\RedirectResponse || $fallback instanceof \Symfony\Component\HttpFoundation\Response) {
                                 return $fallback;
                             }
@@ -2196,7 +2196,7 @@ class MeetingController extends Controller
                             'audio_download_url' => $meetingModel->audio_download_url
                         ]);
                         // Fallback final: intentar flujo directo sin crear archivo temporal
-                        $fallback = $this->resolveLegacyAudio($meetingModel, $sharedAccess, null, $debug, $dbg);
+                        $fallback = $this->resolveLegacyAudio($meetingModel, $sharedAccess, $sharedMeeting, $debug, $dbg);
                         if ($fallback instanceof \Illuminate\Http\JsonResponse || $fallback instanceof \Illuminate\Http\RedirectResponse || $fallback instanceof \Symfony\Component\HttpFoundation\Response) {
                             return $fallback;
                         }
@@ -2224,7 +2224,7 @@ class MeetingController extends Controller
                         'audio_path' => $audioPath,
                     ]);
 
-                    $fallback = $this->resolveLegacyAudio($meetingModel, $sharedAccess, null, $debug, $dbg);
+                    $fallback = $this->resolveLegacyAudio($meetingModel, $sharedAccess, $sharedMeeting, $debug, $dbg);
                     if ($fallback instanceof \Illuminate\Http\JsonResponse || $fallback instanceof \Illuminate\Http\RedirectResponse || $fallback instanceof \Symfony\Component\HttpFoundation\Response) {
                         return $fallback;
                     }
@@ -2276,7 +2276,7 @@ class MeetingController extends Controller
             try {
                 $legacyModel = TranscriptionLaravel::find($meeting);
                 if ($legacyModel) {
-                    $fallback = $this->resolveLegacyAudio($legacyModel, false, null, request()->query('debug') !== null, $dbg = [], true);
+                    $fallback = $this->resolveLegacyAudio($legacyModel, false, $sharedMeeting, request()->query('debug') !== null, $dbg = [], true);
                     if ($fallback instanceof \Illuminate\Http\JsonResponse || $fallback instanceof \Illuminate\Http\RedirectResponse || $fallback instanceof \Symfony\Component\HttpFoundation\Response) {
                         return $fallback;
                     }
