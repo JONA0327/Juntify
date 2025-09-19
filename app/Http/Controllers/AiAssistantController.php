@@ -24,11 +24,14 @@ use App\Services\GoogleDriveService;
 use App\Services\GoogleTokenRefreshService;
 use App\Jobs\ProcessAiDocumentJob;
 use App\Services\EmbeddingSearch;
+use App\Services\GoogleServiceAccount;
 use Google\Service\Exception as GoogleServiceException;
 use RuntimeException;
+use App\Traits\MeetingContentParsing;
 
 class AiAssistantController extends Controller
 {
+    use MeetingContentParsing;
     private const DEFAULT_AI_FOLDER_NAME = 'Juntify AI Documents';
 
     private GoogleDriveService $googleDriveService;
@@ -688,31 +691,15 @@ class AiAssistantController extends Controller
         if (! $session->context_id) {
             return [];
         }
-
+        // Intentar construir contexto SIN depender de tablas transcriptions/key_points
         $loadKeyPoints = Schema::hasTable('key_points');
 
-        $relations = [
-            'transcriptions' => function ($relation) use ($query) {
-                $relation->orderBy('time');
-
-                $keywords = $this->extractQueryKeywords($query);
-                if (! empty($keywords)) {
-                    $relation->where(function ($builder) use ($keywords) {
-                        foreach ($keywords as $keyword) {
-                            $builder->orWhere('text', 'like', '%' . $keyword . '%');
-                        }
-                    });
-                }
-
-                $relation->limit(5);
-            },
-        ];
-
+        $withRelations = [];
         if ($loadKeyPoints) {
-            $relations['keyPoints'] = fn ($relation) => $relation->ordered()->limit(5);
+            $withRelations['keyPoints'] = fn ($relation) => $relation->ordered()->limit(5);
         }
 
-        $meeting = TranscriptionLaravel::with($relations)
+        $meeting = TranscriptionLaravel::with($withRelations)
             ->where('username', $session->username)
             ->where('id', $session->context_id)
             ->first();
@@ -724,18 +711,13 @@ class AiAssistantController extends Controller
                 $meeting->setRelation('keyPoints', collect());
             }
 
-            if (! empty($meeting->summary)) {
-                $fragments[] = [
-                    'text' => Str::limit($meeting->summary, 800),
-                    'source_id' => 'meeting:' . $meeting->id . ':summary',
-                    'content_type' => 'meeting_summary',
-                    'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'summary']),
-                    'similarity' => null,
-                    'citation' => 'meeting:' . $meeting->id . ' resumen',
-                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['summary' => true]),
-                ];
+            // 1) Prefer .ju file content to avoid DB transcriptions dependency
+            $juFragments = $this->buildFragmentsFromJu($meeting, $query);
+            if (!empty($juFragments)) {
+                $fragments = array_merge($fragments, $juFragments);
             }
 
+            // 2) Add key points if available (table exists)
             foreach ($meeting->keyPoints as $index => $point) {
                 $fragments[] = [
                     'text' => $point->point_text,
@@ -752,38 +734,6 @@ class AiAssistantController extends Controller
                         'key_point' => true,
                         'order' => $point->order_num,
                         'point_id' => $point->id,
-                    ]),
-                ];
-            }
-
-            $segments = $meeting->transcriptions;
-            if ($segments->isEmpty()) {
-                $segments = $meeting->transcriptions()->orderBy('time')->limit(3)->get();
-            }
-
-            foreach ($segments as $segment) {
-                if (trim((string) $segment->text) === '') {
-                    continue;
-                }
-
-                $speaker = $segment->display_speaker ?? $segment->speaker;
-                $fragments[] = [
-                    'text' => trim(($speaker ?? 'Participante') . ': ' . $segment->text),
-                    'source_id' => 'meeting:' . $meeting->id . ':segment:' . ($segment->id ?? $segment->time),
-                    'content_type' => 'meeting_transcription_segment',
-                    'location' => $this->buildLegacyMeetingLocation($meeting, [
-                        'section' => 'transcription',
-                        'speaker' => $speaker,
-                        'timestamp' => $segment->time,
-                        'segment_id' => $segment->id,
-                    ]),
-                    'similarity' => null,
-                    'citation' => 'meeting:' . $meeting->id . ' t.' . $this->formatTimeForCitation($segment->time),
-                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
-                        'transcription_segment' => true,
-                        'segment_id' => $segment->id,
-                        'timestamp' => $segment->time,
-                        'speaker' => $speaker,
                     ]),
                 ];
             }
@@ -818,6 +768,118 @@ class AiAssistantController extends Controller
                     'metadata' => $this->buildLegacyMeetingMetadata($legacy, ['resource' => 'audio']),
                 ];
             }
+        }
+
+        return $fragments;
+    }
+
+    /**
+     * Construye fragmentos en memoria a partir del archivo .ju (en Drive) sin usar la tabla transcriptions
+     */
+    private function buildFragmentsFromJu(TranscriptionLaravel $meeting, string $query): array
+    {
+        $fragments = [];
+
+        $fileId = $meeting->transcript_drive_id;
+        if (! $fileId) {
+            return $fragments;
+        }
+
+        try {
+            // Intentar descargar y desencriptar .ju usando Service Account primero
+            try {
+                /** @var GoogleServiceAccount $sa */
+                $sa = app(GoogleServiceAccount::class);
+                $content = $sa->downloadFile($fileId);
+            } catch (\Throwable $inner) {
+                // Fallback a GoogleDriveService (OAuth del usuario/organización)
+                $content = $this->googleDriveService->downloadFileContent($fileId);
+            }
+            if (! is_string($content) || $content === '') {
+                return $fragments;
+            }
+
+            $parsed = $this->decryptJuFile($content);
+            $data = $this->processTranscriptData($parsed['data'] ?? []);
+
+            // Resumen
+            if (! empty($data['summary'])) {
+                $fragments[] = [
+                    'text' => Str::limit((string)$data['summary'], 800),
+                    'source_id' => 'meeting:' . $meeting->id . ':summary',
+                    'content_type' => 'meeting_summary',
+                    'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'summary']),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' resumen',
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['summary' => true]),
+                ];
+            }
+
+            // Puntos clave
+            foreach (($data['key_points'] ?? []) as $idx => $kp) {
+                $text = is_array($kp) ? ($kp['text'] ?? ($kp['point'] ?? json_encode($kp))) : (string)$kp;
+                if (trim($text) === '') continue;
+                $fragments[] = [
+                    'text' => $text,
+                    'source_id' => 'meeting:' . $meeting->id . ':keypoint:ju:' . ($idx+1),
+                    'content_type' => 'meeting_key_point',
+                    'location' => $this->buildLegacyMeetingLocation($meeting, [
+                        'section' => 'key_point',
+                        'order' => $idx + 1,
+                    ]),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' punto ' . ($idx + 1),
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                        'key_point' => true,
+                        'order' => $idx + 1,
+                        'source' => 'ju',
+                    ]),
+                ];
+            }
+
+            // Segmentos: filtrar por palabras clave del query y limitar
+            $keywords = $this->extractQueryKeywords($query);
+            $segments = is_array($data['segments'] ?? null) ? $data['segments'] : [];
+            $segments = array_values(array_filter($segments, function($seg) use ($keywords) {
+                $txt = is_array($seg) ? ($seg['text'] ?? '') : '';
+                if (trim($txt) === '') return false;
+                if (empty($keywords)) return true;
+                foreach ($keywords as $kw) {
+                    if (stripos($txt, $kw) !== false) return true;
+                }
+                return false;
+            }));
+            $segments = array_slice($segments, 0, 5);
+
+            foreach ($segments as $seg) {
+                $txt = (string)($seg['text'] ?? '');
+                $speaker = $seg['speaker'] ?? $seg['display_speaker'] ?? 'Participante';
+                $time = $seg['start'] ?? $seg['time'] ?? null;
+                $fragments[] = [
+                    'text' => trim($speaker . ': ' . $txt),
+                    'source_id' => 'meeting:' . $meeting->id . ':segment:ju:' . ($time ?? uniqid()),
+                    'content_type' => 'meeting_transcription_segment',
+                    'location' => $this->buildLegacyMeetingLocation($meeting, [
+                        'section' => 'transcription',
+                        'speaker' => $speaker,
+                        'timestamp' => $time,
+                    ]),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' t.' . ($time ? $this->formatTimeForCitation($time) : '—'),
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                        'transcription_segment' => true,
+                        'timestamp' => $time,
+                        'speaker' => $speaker,
+                        'source' => 'ju',
+                    ]),
+                ];
+            }
+
+        } catch (\Throwable $e) {
+            Log::warning('buildFragmentsFromJu failed', [
+                'meeting_id' => $meeting->id,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         return $fragments;
