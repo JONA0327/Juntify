@@ -281,26 +281,44 @@ class DriveController extends Controller
 
         // Choose parent container where the root folder will be created (dynamic first, then config fallback)
         $parentRootId = (string) ($request->input('parentId') ?: config('drive.root_folder_id'));
+        $ownerEmail = Auth::user()->email;
+        $implicitUserDrive = false; // creating under user's My Drive without explicit parent
         if (empty($parentRootId)) {
-            Log::error('createMainFolder: missing parent id (no parentId provided and no GOOGLE_DRIVE_ROOT_FOLDER)');
-            return response()->json([
-                'message' => 'Debes indicar parentId (carpeta o unidad compartida donde crear) o configurar GOOGLE_DRIVE_ROOT_FOLDER en .env.',
-            ], 400);
+            // Backward-compatible behavior: create at user's My Drive root via Service Account impersonation
+            Log::info('createMainFolder: no parent provided; will create at user My Drive root via impersonation');
+        } else {
+            Log::info('createMainFolder: using parent', ['parentId' => $parentRootId]);
         }
-        Log::info('createMainFolder: using parent', ['parentId' => $parentRootId]);
 
         // Create folder using Service Account for homogeneity (with impersonation fallback)
         $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
         $folderId = null;
         $serviceAccountError = null;
         $impersonated = false;
-        $ownerEmail = Auth::user()->email;
         if (!$ownerEmail) {
             $ownerEmail = \App\Models\User::where('username', Auth::user()->username)->value('email');
         }
 
+        $sharedWithSA = false;
         try {
-            $folderId = $serviceAccount->createFolder($request->input('name'), $parentRootId);
+            if (!empty($parentRootId)) {
+                $folderId = $serviceAccount->createFolder($request->input('name'), $parentRootId);
+            } else {
+                // Create directly in user's My Drive using impersonation
+                if ($ownerEmail) {
+                    $serviceAccount->impersonate($ownerEmail);
+                    $impersonated = true;
+                    $implicitUserDrive = true;
+                    $folderId = $serviceAccount->createFolder($request->input('name'));
+                    // While impersonating the user (owner), grant SA access now
+                    $serviceEmail = config('services.google.service_account_email');
+                    if ($serviceEmail) {
+                        try { $serviceAccount->shareFolder($folderId, $serviceEmail); $sharedWithSA = true; } catch (\Throwable $e) { /* ignore */ }
+                    }
+                } else {
+                    throw new RuntimeException('No se pudo determinar el email del propietario para crear la carpeta en su Drive');
+                }
+            }
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (GoogleServiceException $e) {
@@ -385,6 +403,9 @@ class DriveController extends Controller
             if ($usedOAuthFallback && $serviceEmail) {
                 // Folder created via OAuth: ensure SA has access
                 $this->drive->shareFolder($folderId, $serviceEmail);
+            } elseif ($implicitUserDrive && $serviceEmail && !$sharedWithSA) {
+                // Fallback attempt (should already be shared during impersonation)
+                try { $serviceAccount->shareFolder($folderId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
             }
         } catch (\Throwable $shareError) {
             Log::warning('createMainFolder failed to share root with SA via OAuth', [
@@ -394,8 +415,8 @@ class DriveController extends Controller
         }
         try {
             $userEmail = Auth::user()->email;
-            if ($userEmail) {
-                // Ensure the OAuth user can access a folder created by the SA
+            if ($userEmail && !$implicitUserDrive) {
+                // Ensure the OAuth user can access a folder created by the SA (non-impersonated)
                 $serviceAccount->shareItem($folderId, $userEmail, 'writer');
             }
         } catch (\Throwable $shareUserError) {
