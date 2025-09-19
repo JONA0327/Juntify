@@ -20,7 +20,8 @@ class GoogleServiceAccount
     public function __construct()
     {
         $this->client = new Client();
-        $jsonPath = env('GOOGLE_APPLICATION_CREDENTIALS');
+        // Read from config to work correctly with cached configuration
+        $jsonPath = (string) config('services.google.service_account_json');
 
         if ($jsonPath) {
             $jsonPath = str_replace('\\', DIRECTORY_SEPARATOR, $jsonPath);
@@ -33,7 +34,7 @@ class GoogleServiceAccount
             $jsonPath = realpath($jsonPath) ?: $jsonPath;
         }
 
-        Log::debug('Service Account JSON Path', ['path' => $jsonPath, 'exists' => file_exists($jsonPath)]);
+        Log::debug('Service Account JSON Path', ['path' => $jsonPath, 'exists' => $jsonPath ? file_exists($jsonPath) : false]);
         if (!file_exists($jsonPath)) {
             throw new \RuntimeException('Service account JSON path is invalid');
         }
