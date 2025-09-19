@@ -2097,6 +2097,8 @@ class MeetingController extends Controller
                     Log::info('streamAudio: Configurando Service Account');
                     /** @var \App\Services\GoogleServiceAccount $sa */
                     $sa = app(\App\Services\GoogleServiceAccount::class);
+                    // No es necesario obtener el token aquí, el servicio ya está configurado.
+                    // La impersonación se manejará más adelante si es necesario.
                     $token = $sa->getClient()->fetchAccessTokenWithAssertion();
                     $this->googleDriveService->setAccessToken($token);
                 } else {
@@ -2146,27 +2148,29 @@ class MeetingController extends Controller
                 if (!empty($existingFiles)) {
                     $audioPath = $existingFiles[0];
                 } else {
-                    Log::info('streamAudio: Obteniendo ruta de audio');
+                     Log::info('streamAudio: Obteniendo ruta de audio');
 
-                    // Para acceso por contenedores, usar directamente la URL si está disponible
-                    if ($containerAccess && !empty($meetingModel->audio_download_url)) {
-                        Log::info('streamAudio: Usando URL directa para acceso por contenedores', [
-                            'meeting_id' => $meetingModel->id,
-                            'audio_download_url' => $meetingModel->audio_download_url
-                        ]);
-                        $streamed = $this->streamRemoteAudio(
-                            $meetingModel->audio_download_url,
-                            $meetingModel->meeting_name . '_' . $meetingModel->id,
-                            $meetingModel->audio_drive_id
-                        );
-                        if ($streamed) {
-                            return $streamed;
-                        }
-                        Log::warning('streamAudio: No se pudo retransmitir audio directo para contenedor, continuando con fallback', [
-                            'meeting_id' => $meetingModel->id,
-                            'audio_download_url' => $meetingModel->audio_download_url
-                        ]);
-                    }
+                    // Para acceso por contenedores o compartido, priorizar el uso de Service Account
+                    if ($containerAccess || $sharedAccess) {
+                         try {
+                             /** @var \App\Services\GoogleServiceAccount $sa */
+                             $sa = app(\App\Services\GoogleServiceAccount::class);
+                             $owner = $sharedMeeting?->sharedBy ?? $meetingModel->user;
+                             if ($owner && $owner->email) {
+                                 $sa->impersonate($owner->email);
+                             }
+                             $audioContent = $sa->downloadFile($meetingModel->audio_drive_id);
+                             $ext = $this->detectAudioExtension($meetingModel->meeting_name, 'audio/ogg');
+                             $tempFileName = 'stream_' . $meetingModel->id . '.' . $ext;
+                             $audioPath = $this->storeTemporaryFile($audioContent, $tempFileName);
+                         } catch (\Throwable $saError) {
+                             Log::warning('streamAudio: Fallo al descargar con Service Account, intentando otros métodos.', [
+                                 'meeting_id' => $meetingModel->id,
+                                 'error' => $saError->getMessage()
+                             ]);
+                             // Continuar para intentar con el token del usuario si es posible
+                         }
+                     }
 
                     try {
                         $audioPath = $this->getAudioPath($meetingModel);
