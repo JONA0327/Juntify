@@ -1757,9 +1757,13 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
     const analysis = analysisResults;
 
     let audio = audioData;
+    let audioBlob = null;
     // Configurar el tipo MIME preferido: OGG si está disponible, sino WebM como fallback
     let audioMimeType = getPreferredAudioFormat();
-    if (audio && typeof audio !== 'string') {
+    if (audio instanceof Blob) {
+        audioMimeType = audio.type || audioMimeType;
+        audioBlob = audio;
+    } else if (audio && typeof audio !== 'string') {
         audioMimeType = audio.type || audioMimeType;
         try {
             audio = await blobToBase64(audio);
@@ -1782,9 +1786,12 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
         return { success: false, message: 'Token de seguridad no encontrado' };
     }
 
-    const headers = {
-        'Content-Type': 'application/json',
+    const baseHeaders = {
         'X-CSRF-TOKEN': csrfToken.getAttribute('content')
+    };
+    const jsonHeaders = {
+        ...baseHeaders,
+        'Content-Type': 'application/json'
     };
 
     try {
@@ -1804,7 +1811,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
 
             const response = await fetch('/api/pending-meetings/complete', {
                 method: 'POST',
-                headers,
+                headers: jsonHeaders,
                 body: JSON.stringify({
                     pending_id: window.pendingAudioInfo.pendingId,
                     meeting_name: meetingName,
@@ -1897,18 +1904,38 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
 
         } else {
             // Flujo normal
-            const response = await fetch('/drive/save-results', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    meetingName,
-                    transcriptionData: transcription,
-                    analysisResults: analysis,
-                    audioData: audio,
-                    audioMimeType,
-                    driveType
-                })
-            });
+            let requestOptions;
+            if (audioBlob) {
+                const formData = new FormData();
+                const [, typeSub] = (audioBlob.type || 'audio/ogg').split('/');
+                const extension = (typeSub || 'ogg').split(';')[0] || 'ogg';
+                formData.append('meetingName', meetingName);
+                formData.append('transcriptionData', JSON.stringify(transcription));
+                formData.append('analysisResults', JSON.stringify(analysis));
+                formData.append('driveType', driveType);
+                formData.append('audioMimeType', audioMimeType);
+                formData.append('audioFile', audioBlob, `audio.${extension}`);
+                requestOptions = {
+                    method: 'POST',
+                    headers: baseHeaders,
+                    body: formData
+                };
+            } else {
+                requestOptions = {
+                    method: 'POST',
+                    headers: jsonHeaders,
+                    body: JSON.stringify({
+                        meetingName,
+                        transcriptionData: transcription,
+                        analysisResults: analysis,
+                        audioData: audio,
+                        audioMimeType,
+                        driveType
+                    })
+                };
+            }
+
+            const response = await fetch('/drive/save-results', requestOptions);
 
             if (!response.ok) {
                 if (response.status === 401) {

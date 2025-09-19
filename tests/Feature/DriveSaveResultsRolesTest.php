@@ -6,6 +6,7 @@ use App\Models\GoogleToken;
 use App\Models\Folder;
 use App\Models\OrganizationFolder;
 use App\Services\GoogleServiceAccount;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -51,16 +52,15 @@ it('prevents collaborator from saving meeting to personal drive', function () {
     $payload = [
         'meetingName' => 'Meeting',
         'rootFolder' => 'personal123',
-        'transcriptionData' => [
+        'transcriptionData' => json_encode([
             ['end' => 1, 'speaker' => 'A'],
-        ],
-        'analysisResults' => [
+        ]),
+        'analysisResults' => json_encode([
             'summary' => 'sum',
             'keyPoints' => [],
             'tasks' => [],
-        ],
-        'audioData' => base64_encode('audio'),
-        'audioMimeType' => 'audio/webm',
+        ]),
+        'audioFile' => UploadedFile::fake()->createWithContent('audio.ogg', 'audio', 'audio/ogg'),
     ];
 
     $response = $this->actingAs($collab)->post('/drive/save-results', $payload);
@@ -113,16 +113,15 @@ it('allows administrator to save meeting to personal drive', function () {
     $payload = [
         'meetingName' => 'Meeting',
         'rootFolder' => 'personal123',
-        'transcriptionData' => [
+        'transcriptionData' => json_encode([
             ['end' => 1, 'speaker' => 'A'],
-        ],
-        'analysisResults' => [
+        ]),
+        'analysisResults' => json_encode([
             'summary' => 'sum',
             'keyPoints' => [],
             'tasks' => [],
-        ],
-        'audioData' => base64_encode('audio'),
-        'audioMimeType' => 'audio/webm',
+        ]),
+        'audioFile' => UploadedFile::fake()->createWithContent('audio.ogg', 'audio', 'audio/ogg'),
     ];
 
     $response = $this->actingAs($admin)->post('/drive/save-results', $payload);

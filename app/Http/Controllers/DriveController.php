@@ -24,6 +24,7 @@ use Illuminate\Validation\ValidationException;
 use Throwable;
 use App\Models\OrganizationActivity;
 use App\Services\PlanLimitService;
+use Illuminate\Http\UploadedFile;
 
 class DriveController extends Controller
 {
@@ -92,6 +93,7 @@ class DriveController extends Controller
                     'error'  => $e->getMessage(),
                 ]);
             }
+
         }
         return $result;
     }
@@ -736,7 +738,7 @@ class DriveController extends Controller
         // Permitir hasta 5 minutos de ejecución para cargas grandes
         set_time_limit(300);
         // 1. Validación: ahora esperamos también el mime type del audio
-    $maxAudioBytes = 200 * 1024 * 1024; // 200 MB
+        $maxAudioBytes = 200 * 1024 * 1024; // 200 MB
 
         $v = $request->validate([
             'meetingName'            => 'required|string',
@@ -745,12 +747,43 @@ class DriveController extends Controller
             'audioSubfolder'         => 'nullable|string',
             'transcriptionData'      => 'required',
             'analysisResults'        => 'required',
-            'audioData'              => 'required|string|max:' . (int) ceil($maxAudioBytes * 4 / 3),      // Base64 (~266MB bruto)
-            'audioMimeType'          => 'required|string',      // p.ej. "audio/webm"
+            'audioData'              => 'required_without:audioFile|string|max:' . (int) ceil($maxAudioBytes * 4 / 3),      // Base64 (~266MB bruto)
+            'audioMimeType'          => 'required_without:audioFile|string',      // p.ej. "audio/webm"
+            'audioFile'              => 'required_without:audioData|file|mimetypes:audio/mpeg,audio/mp3,audio/webm,audio/ogg,audio/wav,audio/x-wav,audio/wave,audio/mp4|max:204800',
             'driveType'              => 'nullable|string|in:personal,organization', // Nuevo campo para tipo de drive
         ], [
             'audioData.max' => 'Archivo de audio demasiado grande (máx. 200 MB)',
         ]);
+
+        if (is_string($v['transcriptionData'])) {
+            $decoded = json_decode($v['transcriptionData'], true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $v['transcriptionData'] = $decoded;
+            }
+        }
+
+        if (is_string($v['analysisResults'])) {
+            $decoded = json_decode($v['analysisResults'], true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $v['analysisResults'] = $decoded;
+            }
+        }
+
+        if (!is_array($v['transcriptionData'])) {
+            return response()->json([
+                'message' => 'Transcripción inválida',
+            ], 422);
+        }
+
+        if (!is_array($v['analysisResults'])) {
+            if (is_null($v['analysisResults'])) {
+                $v['analysisResults'] = [];
+            } else {
+                return response()->json([
+                    'message' => 'Resultados de análisis inválidos',
+                ], 422);
+            }
+        }
 
         $user = Auth::user();
         // Enforce monthly meetings limit (count save as creating a meeting)
@@ -869,18 +902,46 @@ class DriveController extends Controller
             // 2. Carpetas en Drive
             $meetingName = $v['meetingName'];
 
-            // 3. Decodifica Base64
-            $b64    = $v['audioData'];
-            if (str_contains($b64, ',')) {
-                [, $b64] = explode(',', $b64, 2);
-            }
-            $raw    = base64_decode($b64);
+            $audioFile = $request->file('audioFile');
+            $tmp = null;
+            if ($audioFile instanceof UploadedFile) {
+                if ($audioFile->getSize() > $maxAudioBytes) {
+                    return response()->json([
+                        'message' => 'Archivo de audio demasiado grande (máx. 200 MB)',
+                    ], 422);
+                }
 
-            $tmp   = tempnam(sys_get_temp_dir(), 'aud');
-            file_put_contents($tmp, $raw);
+                $tmp = tempnam(sys_get_temp_dir(), 'aud');
+                file_put_contents($tmp, file_get_contents($audioFile->getRealPath()));
+                $audioMime = strtolower($audioFile->getMimeType() ?: $audioFile->getClientMimeType() ?: ($v['audioMimeType'] ?? ''));
+            } else {
+                // 3. Decodifica Base64
+                $b64    = $v['audioData'];
+                if (str_contains($b64, ',')) {
+                    [, $b64] = explode(',', $b64, 2);
+                }
+                $raw    = base64_decode($b64);
+                if ($raw === false) {
+                    return response()->json([
+                        'message' => 'Audio inválido o corrupto',
+                    ], 422);
+                }
+                if (strlen($raw) > $maxAudioBytes) {
+                    return response()->json([
+                        'message' => 'Archivo de audio demasiado grande (máx. 200 MB)',
+                    ], 422);
+                }
+
+                $tmp   = tempnam(sys_get_temp_dir(), 'aud');
+                file_put_contents($tmp, $raw);
+                $audioMime = strtolower($v['audioMimeType']);
+            }
+
+            if (empty($audioMime)) {
+                $audioMime = 'audio/ogg';
+            }
 
             // Posible conversión a OGG (política: subir solo OGG)
-            $audioMime = strtolower($v['audioMimeType']);
             $converted = null;
             if (config('audio.force_ogg')) {
                 try {
@@ -916,7 +977,7 @@ class DriveController extends Controller
             }
 
             // 5. Prepara payload de transcripción/análisis
-            $analysis = $v['analysisResults'];
+            $analysis = is_array($v['analysisResults']) ? $v['analysisResults'] : [];
             $payload  = [
                 'segments'  => $v['transcriptionData'],
                 'summary'   => $analysis['summary']   ?? null,
@@ -930,7 +991,7 @@ class DriveController extends Controller
                     ->uploadFile("{$meetingName}.ju", 'application/json', $transcriptionFolderId, $encrypted);
 
                 // extrae la extensión a partir del mimeType usando un mapa conocido
-                $mime = strtolower($v['audioMimeType']);
+                $mime = $audioMime;
                 $mimeToExt = [
                     'audio/mpeg' => 'mp3',
                     'audio/mp3'  => 'mp3',
