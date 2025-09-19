@@ -186,11 +186,24 @@ class EmbeddingSearch
                 break;
 
             case 'container':
+                // If context_data already contains meeting ids, use them
                 $relatedIds = Arr::wrap($session->context_data ?? []);
                 if (! empty($relatedIds)) {
                     $normalized = array_map(fn ($id) => (string) $id, $relatedIds);
                     $filters['meeting_transcript'] = $normalized;
                     $filters['meeting_summary'] = $normalized;
+                }
+
+                // Also, when context_id is a container id, resolve its meetings directly
+                if (! empty($session->context_id)) {
+                    $containerId = (string) $session->context_id;
+                    $filters['container_overview'][] = $containerId;
+
+                    $meetingIds = $this->resolveContainerMeetingIds($session->username, $containerId);
+                    if (! empty($meetingIds)) {
+                        $filters['meeting_transcript'] = array_merge($filters['meeting_transcript'] ?? [], $meetingIds);
+                        $filters['meeting_summary'] = array_merge($filters['meeting_summary'] ?? [], $meetingIds);
+                    }
                 }
                 break;
 

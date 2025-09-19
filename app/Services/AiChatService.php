@@ -53,7 +53,7 @@ class AiChatService
         $fragmentTextLimit = (int) env('AI_ASSISTANT_FRAGMENT_TEXT_LIMIT', 800);
         $includeContextJson = filter_var(env('AI_ASSISTANT_INCLUDE_CONTEXT_JSON', true), FILTER_VALIDATE_BOOLEAN);
 
-        $compactedContext = $this->compactContext($context, $maxFragments, $fragmentTextLimit);
+    $compactedContext = $this->compactContext($session, $context, $maxFragments, $fragmentTextLimit);
 
         if ($includeContextJson && ! empty($compactedContext)) {
             $contextJson = json_encode($compactedContext, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -108,10 +108,69 @@ class AiChatService
      * @param  array<int, array<string, mixed>>  $context
      * @return array<int, array<string, mixed>>
      */
-    private function compactContext(array $context, int $maxFragments, int $fragmentTextLimit): array
+    private function compactContext(AiChatSession $session, array $context, int $maxFragments, int $fragmentTextLimit): array
     {
         if (empty($context)) {
             return [];
+        }
+
+        // If container context, use broader limits and ensure at least one overview per meeting
+        if ($session->context_type === 'container') {
+            $maxFragments = (int) env('AI_ASSISTANT_MAX_CONTEXT_FRAGMENTS_CONTAINER', $maxFragments > 0 ? $maxFragments : 48);
+            $fragmentTextLimit = (int) env('AI_ASSISTANT_FRAGMENT_TEXT_LIMIT_CONTAINER', max(400, $fragmentTextLimit));
+
+            // Group by meeting
+            $byMeeting = [];
+            foreach ($context as $frag) {
+                $meetingId = $this->extractMeetingId($frag);
+                if ($meetingId === null) {
+                    $byMeeting['__no_meeting'][] = $frag;
+                } else {
+                    $byMeeting[$meetingId][] = $frag;
+                }
+            }
+
+            // Pick one overview per meeting if present
+            $selected = [];
+            $includeOverviews = filter_var(env('AI_ASSISTANT_INCLUDE_MEETING_OVERVIEWS', true), FILTER_VALIDATE_BOOLEAN);
+            if ($includeOverviews) {
+                foreach ($byMeeting as $meetingId => $list) {
+                    // Prefer container_meeting or meeting_summary as the overview
+                    $overview = null;
+                    foreach ($list as $frag) {
+                        $type = $frag['content_type'] ?? '';
+                        if (in_array($type, ['container_meeting','meeting_summary'], true)) {
+                            $overview = $frag; break;
+                        }
+                    }
+                    if ($overview) {
+                        $selected[] = $overview;
+                    }
+                }
+            }
+
+            // Merge the rest and continue with generic compacting
+            // Avoid duplicates
+            $selectedHashes = [];
+            $unique = function($frag) use (&$selectedHashes) {
+                $key = md5(json_encode([
+                    $frag['citation'] ?? null,
+                    $frag['source_id'] ?? null,
+                    substr($frag['text'] ?? '', 0, 50),
+                ]));
+                if (isset($selectedHashes[$key])) return false;
+                $selectedHashes[$key] = true;
+                return true;
+            };
+
+            $selected = array_values(array_filter($selected, $unique));
+            // Append the rest of fragments
+            foreach ($context as $frag) {
+                if (!$unique($frag)) continue;
+                $selected[] = $frag;
+            }
+
+            $context = $selected;
         }
 
         // Sort by similarity desc when available
@@ -148,6 +207,21 @@ class AiChatService
                 'location' => $minimalLoc ?: null,
             ], fn($v) => $v !== null);
         }, $context);
+    }
+
+    private function extractMeetingId(array $frag): ?string
+    {
+        $loc = $frag['location'] ?? [];
+        if (is_array($loc) && isset($loc['meeting_id'])) {
+            return (string) $loc['meeting_id'];
+        }
+        foreach (['citation','source_id'] as $k) {
+            $v = $frag[$k] ?? '';
+            if (is_string($v) && preg_match('/meeting:(\d+)/', $v, $m)) {
+                return (string) $m[1];
+            }
+        }
+        return null;
     }
 
     private function buildGroundingInstruction(?string $systemMessage): ?string

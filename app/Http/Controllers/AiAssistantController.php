@@ -557,9 +557,12 @@ class AiAssistantController extends Controller
             /** @var EmbeddingSearch $search */
             $search = app(EmbeddingSearch::class);
             try {
+                $semanticLimit = $session->context_type === 'container'
+                    ? (int) env('AI_ASSISTANT_SEMANTIC_LIMIT_CONTAINER', 20)
+                    : 8;
                 $contextFragments = $search->search($session->username, $query, [
                     'session' => $session,
-                    'limit' => 8,
+                    'limit' => $semanticLimit,
                 ]);
             } catch (\Throwable $e) {
                 Log::warning('EmbeddingSearch failed, continuing with fallback context', [
