@@ -18,6 +18,7 @@ let loadedContextItems = [];
 let currentContextType = 'containers';
 let allMeetings = [];
 let allContainers = [];
+let chatSessions = [];
 
 // Inicialización
 document.addEventListener('DOMContentLoaded', function() {
@@ -91,7 +92,8 @@ async function loadChatSessions() {
         const data = await response.json();
 
         if (data.success) {
-            renderChatSessions(data.sessions);
+            chatSessions = Array.isArray(data.sessions) ? data.sessions : [];
+            renderChatSessions(chatSessions);
         }
     } catch (error) {
         console.error('Error loading chat sessions:', error);
@@ -117,16 +119,77 @@ function renderChatSessions(sessions) {
     sessionsList.innerHTML = sessions.map(session => `
         <div class="chat-session-item ${session.id === currentSessionId ? 'active' : ''}"
              onclick="loadChatSession(${session.id})">
-            <div class="session-title">${escapeHtml(session.title)}</div>
-            ${session.last_message ? `
-                <div class="session-preview">${escapeHtml(session.last_message.content)}</div>
-            ` : ''}
-            <div class="session-meta">
-                <span class="session-context">${getContextDisplayName(session.context_type)}</span>
-                <span class="session-time">${formatRelativeTime(session.last_activity)}</span>
+            <div class="session-info">
+                <div class="session-title">${escapeHtml(session.title)}</div>
+                ${session.last_message ? `
+                    <div class="session-preview">${escapeHtml(session.last_message.content)}</div>
+                ` : ''}
+                <div class="session-meta">
+                    <span class="session-context">${getContextDisplayName(session.context_type)}</span>
+                    <span class="session-time">${formatRelativeTime(session.last_activity)}</span>
+                </div>
             </div>
+            <button type="button"
+                    class="session-delete-btn"
+                    onclick="event.stopPropagation(); deleteChatSession(${session.id});"
+                    aria-label="Eliminar conversación">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M6 7h12m-9 0V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0v12a2 2 0 01-2 2H9a2 2 0 01-2-2V7h10z"></path>
+                </svg>
+            </button>
         </div>
     `).join('');
+}
+
+/**
+ * Eliminar una sesión de chat existente
+ */
+async function deleteChatSession(sessionId) {
+    try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        const response = await fetch(`/api/ai-assistant/sessions/${sessionId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken || ''
+            },
+            body: JSON.stringify({ force_delete: false })
+        });
+
+        if (!response.ok) {
+            throw new Error('Respuesta no válida del servidor');
+        }
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.message || 'No se pudo eliminar la conversación');
+        }
+
+        chatSessions = chatSessions.filter(session => session.id !== sessionId);
+        let nextSessionId = null;
+
+        if (sessionId === currentSessionId) {
+            currentSessionId = null;
+            if (chatSessions.length > 0) {
+                nextSessionId = chatSessions[0].id;
+            } else {
+                renderMessages([]);
+            }
+        }
+
+        renderChatSessions(chatSessions);
+
+        if (nextSessionId !== null) {
+            await loadChatSession(nextSessionId);
+        }
+
+        showNotification('Conversación eliminada correctamente', 'success');
+    } catch (error) {
+        console.error('Error deleting chat session:', error);
+        showNotification('Error al eliminar la conversación', 'error');
+    }
 }
 
 /**

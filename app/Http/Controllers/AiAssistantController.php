@@ -122,6 +122,32 @@ class AiAssistantController extends Controller
     }
 
     /**
+     * Eliminar o desactivar una sesión de chat
+     */
+    public function deleteSession(Request $request, int $sessionId): JsonResponse
+    {
+        $user = Auth::user();
+
+        $session = AiChatSession::byUser($user->username)
+            ->findOrFail($sessionId);
+
+        $forceDelete = $request->boolean('force_delete');
+
+        if ($forceDelete) {
+            $session->messages()->delete();
+            $session->delete();
+        } else {
+            $session->update(['is_active' => false]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'session_id' => $sessionId,
+            'deleted' => $forceDelete,
+        ]);
+    }
+
+    /**
      * Obtener mensajes de una sesión específica
      */
     public function getMessages($sessionId): JsonResponse
