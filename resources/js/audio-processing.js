@@ -118,7 +118,7 @@ function getFileExtensionForMimeType(mimeType) {
 
 // ===== VARIABLES GLOBALES =====
 let currentStep = 1;
-let selectedAnalyzer = 'general';
+let selectedAnalyzer = null;
 let availableAnalyzers = [];
 let audioData = null;
 let audioSegments = [];
@@ -258,18 +258,18 @@ function renderAnalyzerCards() {
 
     if (!availableAnalyzers.length) {
         if (msg) msg.style.display = 'block';
+        updateStartAnalysisButtonState();
         return;
     }
     if (msg) msg.style.display = 'none';
 
-    availableAnalyzers.forEach((a, idx) => {
+    availableAnalyzers.forEach((a) => {
         const card = document.createElement('div');
         card.className = 'analyzer-card';
         card.dataset.analyzer = a.id;
         card.addEventListener('click', () => selectAnalyzer(a.id));
-        if ((selectedAnalyzer && selectedAnalyzer === a.id) || (!selectedAnalyzer && idx === 0)) {
+        if (selectedAnalyzer && selectedAnalyzer === a.id) {
             card.classList.add('active');
-            selectedAnalyzer = a.id;
         }
         card.innerHTML = `
             <div class="analyzer-icon">${a.icon || '🧠'}</div>
@@ -278,6 +278,14 @@ function renderAnalyzerCards() {
         `;
         grid.appendChild(card);
     });
+
+    updateStartAnalysisButtonState();
+}
+
+function updateStartAnalysisButtonState() {
+    const startButton = document.getElementById('start-analysis-button');
+    if (!startButton) return;
+    startButton.disabled = !selectedAnalyzer;
 }
 
 // ===== PASO 1: PROCESAMIENTO DE AUDIO =====
@@ -1177,16 +1185,25 @@ function showAnalysisSelector() {
 }
 
 function selectAnalyzer(analyzerType) {
-    // Remover selección anterior
+    let found = false;
     document.querySelectorAll('.analyzer-card').forEach(card => {
-        card.classList.remove('active');
+        if (card.dataset.analyzer === analyzerType) {
+            card.classList.add('active');
+            found = true;
+        } else {
+            card.classList.remove('active');
+        }
     });
 
-    // Seleccionar nuevo analizador
-    document.querySelector(`[data-analyzer="${analyzerType}"]`).classList.add('active');
-    selectedAnalyzer = analyzerType;
+    selectedAnalyzer = found ? analyzerType : null;
 
-    console.log('Analizador seleccionado:', analyzerType);
+    if (found) {
+        console.log('Analizador seleccionado:', analyzerType);
+    } else {
+        console.warn('Analizador no encontrado para selección:', analyzerType);
+    }
+
+    updateStartAnalysisButtonState();
 }
 
 function startAnalysis() {

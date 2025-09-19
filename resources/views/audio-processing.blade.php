@@ -211,7 +211,7 @@
                         <button class="btn btn-secondary" onclick="goBackToTranscription()">
                             ← Volver a transcripción
                         </button>
-                        <button class="btn btn-primary" onclick="startAnalysis()">
+                        <button id="start-analysis-button" class="btn btn-primary" onclick="startAnalysis()" disabled>
                             <x-icon name="rocket" class="btn-icon" />
                             <span class="sr-only">Comenzar análisis</span>
                             Comenzar análisis
