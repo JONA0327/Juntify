@@ -102,27 +102,50 @@ class OrganizationDriveController extends Controller
 
         // Create using Service Account for homogeneity; impersonate org admin if needed
         $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
+        $folderId = null;
+        $serviceAccountError = null;
+        $impersonated = false;
+
         try {
             $folderId = $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId);
         } catch (\Throwable $e) {
-            try {
-                $ownerEmail = optional($organization->admin)->email;
-                if ($ownerEmail) {
+            $serviceAccountError = $e;
+            $ownerEmail = optional($organization->admin)->email;
+            if ($ownerEmail) {
+                try {
                     $serviceAccount->impersonate($ownerEmail);
+                    $impersonated = true;
                     $folderId = $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId);
-                } else {
-                    throw $e;
+                } catch (\Throwable $impersonationError) {
+                    $serviceAccountError = $impersonationError;
                 }
-            } catch (\Throwable $e2) {
-                Log::error('createRootFolder (org) failed to create root via service account', [
+            }
+        } finally {
+            if ($impersonated) {
+                try { $serviceAccount->impersonate(null); } catch (\Throwable $e) { /* ignore */ }
+            }
+        }
+
+        $usedOAuthFallback = false;
+        if (!$folderId) {
+            Log::warning('createRootFolder (org) falling back to OAuth client', [
+                'org' => $organization->id,
+                'error' => $serviceAccountError?->getMessage(),
+            ]);
+
+            try {
+                $folderId = $this->drive->createFolder($organization->nombre_organizacion, $parentFolderId);
+                $usedOAuthFallback = true;
+            } catch (\Throwable $oauthException) {
+                Log::error('createRootFolder (org) failed even with OAuth fallback', [
                     'org' => $organization->id,
-                    'error' => $e2->getMessage(),
+                    'service_error' => $serviceAccountError?->getMessage(),
+                    'oauth_error' => $oauthException->getMessage(),
                 ]);
+
                 return response()->json([
-                    'message' => 'Error creando la carpeta de organización en Drive: ' . $e2->getMessage(),
+                    'message' => 'Error creando la carpeta de organización en Drive: ' . $oauthException->getMessage(),
                 ], 502);
-            } finally {
-                try { $serviceAccount->impersonate(null); } catch (\Throwable $e3) { /* ignore */ }
             }
         }
 
@@ -133,7 +156,28 @@ class OrganizationDriveController extends Controller
             'name'            => $organization->nombre_organizacion,
         ]);
 
-        $serviceAccount->shareFolder($folderId, config('services.google.service_account_email'));
+        $serviceEmail = config('services.google.service_account_email');
+        if ($usedOAuthFallback) {
+            if ($serviceEmail) {
+                try {
+                    $this->drive->shareFolder($folderId, $serviceEmail);
+                } catch (\Throwable $shareError) {
+                    Log::warning('createRootFolder (org) failed to share via OAuth fallback', [
+                        'org' => $organization->id,
+                        'error' => $shareError->getMessage(),
+                    ]);
+                }
+            }
+        } else {
+            try {
+                $serviceAccount->shareFolder($folderId, $serviceEmail);
+            } catch (\Throwable $shareError) {
+                Log::warning('createRootFolder (org) failed to share via service account', [
+                    'org' => $organization->id,
+                    'error' => $shareError->getMessage(),
+                ]);
+            }
+        }
         // Ensure standard subfolders exist for organization root
         try {
             $serviceEmail = config('services.google.service_account_email');
