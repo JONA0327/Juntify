@@ -2688,8 +2688,9 @@ function showMeetingModal(meeting) {
     if (meetingAudioPlayer && audioSrc) {
         const loadingEl = document.getElementById('audio-loading');
         const loadingBar = document.getElementById('audio-loading-bar');
-        const origin = typeof location !== 'undefined' ? location.origin : '';
-        const fallbackUrl = meeting?.id ? `/api/meetings/${meeting.id}/audio` : null;
+    const origin = typeof location !== 'undefined' ? location.origin : '';
+    // Cache-busting param to avoid stale cached 404s on re-open
+    const fallbackUrl = meeting?.id ? `/api/meetings/${meeting.id}/audio?ts=${Date.now()}` : null;
         const resolvedFallbackUrl = fallbackUrl && origin ? new URL(fallbackUrl, origin).href : null;
         const isExternalAudio = !!(audioSrc && origin && !audioSrc.startsWith(origin));
         let triedFallback = false;
@@ -3216,6 +3217,24 @@ async function closeMeetingModal() {
 
     const modal = document.getElementById('meetingModal');
     if (modal) {
+        // Cleanup audio element to avoid stale src/blob URLs and event listeners
+        const audioEl = document.getElementById('meeting-audio');
+        if (audioEl) {
+            try { audioEl.pause(); } catch (_) {}
+            // Revoke blob URL if used
+            const current = audioEl.currentSrc || audioEl.src;
+            if (current && typeof current === 'string' && current.startsWith('blob:')) {
+                try { URL.revokeObjectURL(current); } catch (_) {}
+            }
+            // Remove src and force unload
+            try {
+                audioEl.removeAttribute('src');
+                audioEl.load();
+            } catch (_) {}
+        }
+        // Reset global reference
+        try { window.meetingAudioPlayer = null; } catch (_) {}
+
         modal.classList.remove('active');
         document.body.style.overflow = '';
 
@@ -4821,7 +4840,14 @@ async function openContainerMeetingsModal(containerId) {
     currentContainerForMeetings = containerId;
 
     // Mostrar modal
-    document.getElementById('container-meetings-modal').classList.remove('hidden');
+    const el = document.getElementById('container-meetings-modal');
+    if (el) {
+        el.classList.remove('hidden');
+        el.removeAttribute('aria-hidden');
+        el.style.pointerEvents = '';
+        el.style.visibility = '';
+        el.style.opacity = '';
+    }
 
     // Mostrar estado de carga
     showContainerMeetingsLoading();
@@ -4831,7 +4857,14 @@ async function openContainerMeetingsModal(containerId) {
 }
 
 function closeContainerMeetingsModal() {
-    document.getElementById('container-meetings-modal').classList.add('hidden');
+    const el = document.getElementById('container-meetings-modal');
+    if (!el) return;
+    el.classList.add('hidden');
+    // Ensure it's non-interactive and behind other modals
+    el.setAttribute('aria-hidden', 'true');
+    el.style.pointerEvents = 'none';
+    el.style.visibility = 'hidden';
+    el.style.opacity = '0';
     currentContainerForMeetings = null;
 }
 
@@ -4921,7 +4954,7 @@ function openMeetingModalFromContainer(meetingId) {
     // Abrir el modal de la reunión
     setTimeout(() => {
         openMeetingModal(meetingId);
-    }, 100);
+    }, 250);
 }
 
 function retryLoadContainerMeetings() {
