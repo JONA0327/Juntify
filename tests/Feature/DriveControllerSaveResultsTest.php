@@ -11,7 +11,11 @@ use App\Models\OrganizationGoogleToken;
 use App\Services\GoogleServiceAccount;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Config;
-use Mockery;
+use Google\Service\Exception as GoogleServiceException;
+
+if (! class_exists(GoogleServiceException::class)) {
+    class_alias(\Exception::class, GoogleServiceException::class);
+}
 
 it('shares both folders with the service account when saving results', function () {
     Config::set('services.google.service_account_email', 'svc@example.com');
@@ -65,7 +69,7 @@ it('shares both folders with the service account when saving results', function 
     $response->assertOk();
 });
 
-it('impersonates the personal drive owner when creating missing subfolders', function () {
+it('retries personal subfolder creation with impersonation when required', function () {
     Config::set('services.google.service_account_email', 'svc@example.com');
 
     $user = User::factory()->create([
@@ -87,14 +91,35 @@ it('impersonates the personal drive owner when creating missing subfolders', fun
         'parent_id'       => null,
     ]);
 
+    $permissionException = new GoogleServiceException('Insufficient Permission');
+
     $service = Mockery::mock(GoogleServiceAccount::class);
-    $service->shouldReceive('impersonate')->with('owner@example.com')->once()->ordered('audios');
-    $service->shouldReceive('createFolder')->with('Audios', 'root123')->once()->ordered('audios')->andReturn('audios-id');
-    $service->shouldReceive('impersonate')->with('owner@example.com')->once()->ordered('trans');
-    $service->shouldReceive('createFolder')->with('Transcripciones', 'root123')->once()->ordered('trans')->andReturn('trans-id');
-    $service->shouldReceive('impersonate')->with('owner@example.com')->once()->ordered('pending');
-    $service->shouldReceive('createFolder')->with('Audios Pospuestos', 'root123')->once()->ordered('pending')->andReturn('pending-id');
-    $service->shouldReceive('impersonate')->with(null)->once();
+    $service->shouldReceive('createFolder')
+        ->with('Audios', 'root123')
+        ->once()
+        ->ordered('audios')
+        ->andThrow($permissionException);
+    $service->shouldReceive('impersonate')
+        ->with('owner@example.com')
+        ->once()
+        ->ordered('audios');
+    $service->shouldReceive('createFolder')
+        ->with('Audios', 'root123')
+        ->once()
+        ->ordered('audios')
+        ->andReturn('audios-id');
+    $service->shouldReceive('impersonate')
+        ->with(null)
+        ->once()
+        ->ordered('audios');
+    $service->shouldReceive('createFolder')
+        ->with('Transcripciones', 'root123')
+        ->once()
+        ->andReturn('trans-id');
+    $service->shouldReceive('createFolder')
+        ->with('Audios Pospuestos', 'root123')
+        ->once()
+        ->andReturn('pending-id');
     $service->shouldReceive('shareFolder')->zeroOrMoreTimes()->andReturnNull();
     $service->shouldReceive('uploadFile')->twice()->andReturn('t1', 'a1');
     $service->shouldReceive('getFileLink')->twice()->andReturn('tlink', 'alink');

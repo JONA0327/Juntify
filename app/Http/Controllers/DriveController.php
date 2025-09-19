@@ -59,7 +59,7 @@ class DriveController extends Controller
         $result = [];
         $serviceEmail = config('services.google.service_account_email');
         $ownerEmail = $this->resolveRootOwnerEmail($rootFolder, $useOrgDrive);
-        $impersonated = false;
+        $impersonationActive = false;
 
         try {
             foreach ($names as $key => $folderName) {
@@ -81,7 +81,7 @@ class DriveController extends Controller
                                 if ($ownerEmail) {
                                     try {
                                         $serviceAccount->impersonate($ownerEmail);
-                                        $impersonated = true;
+                                        $impersonationActive = true;
                                         $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
                                     } catch (\Throwable $e2) {
                                         throw $e2; // bubble up to outer catch for logging
@@ -102,36 +102,66 @@ class DriveController extends Controller
                             ->where('name', $folderName)
                             ->first();
                         if (!$model) {
-                            if ($ownerEmail) {
-                                $serviceAccount->impersonate($ownerEmail);
-                                $impersonated = true;
+                            $impersonatedForFolder = false;
+
+                            try {
+                                try {
+                                    $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                                } catch (\Throwable $createException) {
+                                    $requiresImpersonation = $this->shouldRetryWithImpersonation($createException);
+                                    if ($requiresImpersonation && $ownerEmail) {
+                                        Log::notice('Personal subfolder creation requires impersonation', [
+                                            'folder'      => $folderName,
+                                            'parent'      => $rootFolder->google_id,
+                                            'ownerEmail'  => $ownerEmail,
+                                            'error'       => $createException->getMessage(),
+                                        ]);
+
+                                        $serviceAccount->impersonate($ownerEmail);
+                                        $impersonationActive = true;
+                                        $impersonatedForFolder = true;
+                                        $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                                    } elseif ($requiresImpersonation) {
+                                        Log::error('Personal subfolder creation failed: impersonation unavailable', [
+                                            'folder'     => $folderName,
+                                            'parent'     => $rootFolder->google_id,
+                                            'ownerEmail' => $ownerEmail,
+                                            'error'      => $createException->getMessage(),
+                                        ]);
+
+                                        throw $createException;
+                                    } else {
+                                        throw $createException;
+                                    }
+                                }
+
+                                $model = Subfolder::create([
+                                    'folder_id' => $rootFolder->id,
+                                    'google_id' => $googleId,
+                                    'name'      => $folderName,
+                                ]);
+                                try { $serviceAccount->shareFolder($googleId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
+                            } finally {
+                                if ($impersonatedForFolder) {
+                                    $this->resetImpersonation($serviceAccount, $impersonationActive);
+                                }
                             }
-                            $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
-                            $model = Subfolder::create([
-                                'folder_id' => $rootFolder->id,
-                                'google_id' => $googleId,
-                                'name'      => $folderName,
-                            ]);
-                            try { $serviceAccount->shareFolder($googleId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
                         }
                     }
                     $result[$key] = $model;
                 } catch (\Throwable $e) {
                     Log::warning('ensureStandardSubfolders failure', [
                         'folder' => $folderName,
+                        'requires_impersonation' => $this->shouldRetryWithImpersonation($e),
+                        'impersonation_active' => $impersonationActive,
+                        'ownerEmailAvailable' => (bool) $ownerEmail,
                         'error'  => $e->getMessage(),
                     ]);
                 }
             }
         } finally {
-            if ($impersonated) {
-                try {
-                    $serviceAccount->impersonate(null);
-                } catch (\Throwable $e) {
-                    Log::debug('Failed to reset impersonation after ensuring subfolders', [
-                        'error' => $e->getMessage(),
-                    ]);
-                }
+            if ($impersonationActive) {
+                $this->resetImpersonation($serviceAccount, $impersonationActive);
             }
         }
 
@@ -143,6 +173,49 @@ class DriveController extends Controller
         }
 
         return $result;
+    }
+
+    private function shouldRetryWithImpersonation(\Throwable $exception): bool
+    {
+        $message = strtolower($exception->getMessage() ?? '');
+        $keywords = ['permission', 'insufficient', 'forbidden', 'invalid_grant', 'access denied'];
+
+        foreach ($keywords as $keyword) {
+            if (str_contains($message, $keyword)) {
+                return true;
+            }
+        }
+
+        if (method_exists($exception, 'getErrors')) {
+            $errors = $exception->getErrors();
+            if (is_array($errors)) {
+                foreach ($errors as $error) {
+                    $reason = strtolower($error['reason'] ?? '');
+                    if (in_array($reason, ['invalid_grant', 'insufficientpermissions', 'forbidden', 'accessdenied'], true)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function resetImpersonation(GoogleServiceAccount $serviceAccount, bool &$impersonationActive): void
+    {
+        if (! $impersonationActive) {
+            return;
+        }
+
+        try {
+            $serviceAccount->impersonate(null);
+        } catch (\Throwable $e) {
+            Log::debug('Failed to reset impersonation after ensuring subfolders', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $impersonationActive = false;
     }
 
     private function resolveRootOwnerEmail($rootFolder, bool $useOrgDrive): ?string
