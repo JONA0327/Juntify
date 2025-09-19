@@ -310,24 +310,26 @@ function renderMessage(message) {
  * Enviar mensaje
  */
 async function sendMessage(messageText = null) {
-    if (!currentSessionId || isLoading) return;
+    if (!currentSessionId) return;
 
     const messageInput = document.getElementById('message-input');
     const message = messageText || messageInput?.value?.trim() || '';
 
     if (!message && selectedFiles.length === 0) return;
 
-    try {
-        isLoading = true;
-        updateSendButton(true);
+    const attachmentsToSend = [...selectedFiles];
 
+    isLoading = true;
+    updateSendButton(true);
+
+    try {
         // Agregar mensaje del usuario inmediatamente
         if (message) {
             addMessageToChat({
                 role: 'user',
                 content: message,
                 created_at: new Date().toISOString(),
-                attachments: selectedFiles.map(f => ({ name: f.name, type: 'file' }))
+                attachments: attachmentsToSend.map(f => ({ name: f.name, type: 'file' }))
             });
         }
 
@@ -348,7 +350,7 @@ async function sendMessage(messageText = null) {
             },
             body: JSON.stringify({
                 content: message,
-                attachments: selectedFiles
+                attachments: attachmentsToSend
             })
         });
 
@@ -1888,17 +1890,14 @@ async function handleMessageSubmit(e) {
 
     if (!message || isLoading) return;
 
-    try {
-        isLoading = true;
-        messageInput.value = '';
-        adjustTextareaHeight(messageInput);
+    messageInput.value = '';
+    adjustTextareaHeight(messageInput);
 
+    try {
         await sendMessage(message);
     } catch (error) {
         console.error('Error sending message:', error);
         showNotification('Error al enviar el mensaje', 'error');
-    } finally {
-        isLoading = false;
     }
 }
 
