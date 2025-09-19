@@ -186,7 +186,7 @@ class DriveController extends Controller
             }
         }
 
-        if (method_exists($exception, 'getErrors')) {
+        if ($exception instanceof GoogleServiceException && method_exists($exception, 'getErrors')) {
             $errors = $exception->getErrors();
             if (is_array($errors)) {
                 foreach ($errors as $error) {
@@ -276,8 +276,10 @@ class DriveController extends Controller
             }
         }
 
+        // Create folder using Service Account for homogeneity (with impersonation fallback)
+        $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
         try {
-            $folderId = $this->drive->createFolder(
+            $folderId = $serviceAccount->createFolder(
                 $request->input('name'),
                 config('drive.root_folder_id')
             );
@@ -297,14 +299,33 @@ class DriveController extends Controller
                 ], 401);
             }
 
-            Log::error('createMainFolder Google error', [
-                'username' => Auth::user()->username,
-                'error'    => $e->getMessage(),
-            ]);
+            // If SA could not create (permissions), try impersonating the owner email
+            try {
+                $ownerEmail = Auth::user()->email;
+                if (!$ownerEmail) {
+                    $ownerEmail = \App\Models\User::where('username', Auth::user()->username)->value('email');
+                }
+                if ($ownerEmail) {
+                    $serviceAccount->impersonate($ownerEmail);
+                    $folderId = $serviceAccount->createFolder(
+                        $request->input('name'),
+                        config('drive.root_folder_id')
+                    );
+                } else {
+                    throw $e;
+                }
+            } catch (\Throwable $e2) {
+                Log::error('createMainFolder Google error', [
+                    'username' => Auth::user()->username,
+                    'error'    => $e2->getMessage(),
+                ]);
 
-            return response()->json([
-                'message' => 'Error de Drive: ' . $e->getMessage(),
-            ], 502);
+                return response()->json([
+                    'message' => 'Error de Drive: ' . $e2->getMessage(),
+                ], 502);
+            } finally {
+                try { $serviceAccount->impersonate(null); } catch (\Throwable $e3) { /* ignore */ }
+            }
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }
@@ -320,6 +341,30 @@ class DriveController extends Controller
         ]);
 
         $this->drive->shareFolder($folderId, config('services.google.service_account_email'));
+
+        // Ensure standard subfolders exist in the new personal root (idempotent) using SA
+        try {
+            $serviceEmail = config('services.google.service_account_email');
+            $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos'];
+            foreach ($needed as $name) {
+                try {
+                    $subId = $serviceAccount->createFolder($name, $folderId);
+                    \App\Models\Subfolder::firstOrCreate([
+                        'folder_id' => $folder->id,
+                        'google_id' => $subId,
+                    ], ['name' => $name]);
+                    try { $serviceAccount->shareFolder($subId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
+                } catch (\Throwable $e) {
+                    Log::warning('createMainFolder: failed to create standard subfolder', [
+                        'name' => $name,
+                        'parent' => $folderId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('createMainFolder: ensure standard subfolders failed', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['id' => $folderId]);
     }
@@ -385,6 +430,40 @@ class DriveController extends Controller
                 'id'    => $request->input('id'),
                 'error' => $e->getMessage(),
             ]);
+        }
+
+        // Ensure standard subfolders exist under the selected root folder (idempotent)
+        try {
+            $serviceEmail = config('services.google.service_account_email');
+            // Build a set of existing subfolder names (case-insensitive)
+            $existing = [];
+            foreach ($subfolders as $sf) {
+                $existing[strtolower($sf->name)] = true;
+            }
+            $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos'];
+            foreach ($needed as $name) {
+                if (!isset($existing[strtolower($name)])) {
+                    try {
+                        $newId = $this->drive->createFolder($name, $request->input('id'));
+                        $model = Subfolder::create([
+                            'folder_id' => $folder->id,
+                            'google_id' => $newId,
+                            'name'      => $name,
+                        ]);
+                        // Share subfolder with service account for later automation
+                        try { $this->drive->shareFolder($newId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
+                        $subfolders[] = $model;
+                    } catch (\Throwable $e) {
+                        Log::warning('setMainFolder: failed to create standard subfolder', [
+                            'name' => $name,
+                            'parent' => $request->input('id'),
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('setMainFolder: ensure standard subfolders failed', ['error' => $e->getMessage()]);
         }
 
         return response()->json([

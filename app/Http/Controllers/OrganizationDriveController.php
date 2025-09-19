@@ -100,7 +100,31 @@ class OrganizationDriveController extends Controller
         }
         $token = $this->initDrive($organization);
 
-        $folderId = $this->drive->createFolder($organization->nombre_organizacion, $parentFolderId);
+        // Create using Service Account for homogeneity; impersonate org admin if needed
+        $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
+        try {
+            $folderId = $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId);
+        } catch (\Throwable $e) {
+            try {
+                $ownerEmail = optional($organization->admin)->email;
+                if ($ownerEmail) {
+                    $serviceAccount->impersonate($ownerEmail);
+                    $folderId = $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId);
+                } else {
+                    throw $e;
+                }
+            } catch (\Throwable $e2) {
+                Log::error('createRootFolder (org) failed to create root via service account', [
+                    'org' => $organization->id,
+                    'error' => $e2->getMessage(),
+                ]);
+                return response()->json([
+                    'message' => 'Error creando la carpeta de organización en Drive: ' . $e2->getMessage(),
+                ], 502);
+            } finally {
+                try { $serviceAccount->impersonate(null); } catch (\Throwable $e3) { /* ignore */ }
+            }
+        }
 
         $folder = OrganizationFolder::create([
             'organization_id' => $organization->id,
@@ -109,10 +133,30 @@ class OrganizationDriveController extends Controller
             'name'            => $organization->nombre_organizacion,
         ]);
 
-        $this->drive->shareFolder(
-            $folderId,
-            config('services.google.service_account_email')
-        );
+        $serviceAccount->shareFolder($folderId, config('services.google.service_account_email'));
+        // Ensure standard subfolders exist for organization root
+        try {
+            $serviceEmail = config('services.google.service_account_email');
+            $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos'];
+            foreach ($needed as $name) {
+                try {
+                    $subId = $serviceAccount->createFolder($name, $folderId);
+                    \App\Models\OrganizationSubfolder::firstOrCreate([
+                        'organization_folder_id' => $folder->id,
+                        'google_id'              => $subId,
+                    ], ['name' => $name]);
+                    try { $serviceAccount->shareFolder($subId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
+                } catch (\Throwable $e) {
+                    Log::warning('OrganizationDriveController: failed to create standard subfolder', [
+                        'name' => $name,
+                        'parent' => $folderId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('OrganizationDriveController: ensure standard subfolders failed', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['id' => $folderId, 'folder' => $folder], 201);
     }
