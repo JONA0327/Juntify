@@ -501,7 +501,7 @@ class DriveController extends Controller
             $baseMime = explode(';', $mime)[0];
             $ext = $mimeToExt[$baseMime] ?? preg_replace('/[^\w]/', '', explode('/', $baseMime, 2)[1] ?? '');
 
-            // Conversión a OGG si está activada
+            // Conversión a OGG si está activada (política: subir solo OGG)
             $converted = null;
             if (config('audio.force_ogg')) {
                 try {
@@ -515,11 +515,28 @@ class DriveController extends Controller
                             'meeting' => $v['meetingName'],
                             'mime' => $mime,
                         ]);
+                    } else {
+                        // Si no convirtió y no era ya OGG, forzamos error si la política exige OGG
+                        $alreadyOgg = str_contains(strtolower($mime), 'ogg') || str_ends_with(strtolower($filePath), '.ogg');
+                        if (!$alreadyOgg) {
+                            return response()->json([
+                                'code' => 'OGG_REQUIRED',
+                                'message' => 'La conversión a OGG es obligatoria y no se pudo completar.',
+                            ], 500);
+                        }
                     }
                 } catch (\App\Exceptions\FfmpegUnavailableException $e) {
-                    Log::warning('uploadPendingAudio: ffmpeg unavailable, skipping ogg conversion', ['error' => $e->getMessage()]);
+                    Log::warning('uploadPendingAudio: ffmpeg unavailable - OGG required policy', ['error' => $e->getMessage()]);
+                    return response()->json([
+                        'code' => 'FFMPEG_UNAVAILABLE',
+                        'message' => 'FFmpeg no está disponible en el servidor. La conversión a OGG es obligatoria. Instala ffmpeg o desactiva AUDIO_FORCE_OGG para desarrollo.',
+                    ], 500);
                 } catch (\Throwable $e) {
-                    Log::error('uploadPendingAudio: ogg conversion failed, continuing with original', ['error' => $e->getMessage()]);
+                    Log::error('uploadPendingAudio: ogg conversion failed (policy requires OGG)', ['error' => $e->getMessage()]);
+                    return response()->json([
+                        'code' => 'OGG_CONVERSION_FAILED',
+                        'message' => 'Falló la conversión a OGG. Intenta con otro archivo o contacta al administrador.',
+                    ], 500);
                 }
             }
 
@@ -883,7 +900,7 @@ class DriveController extends Controller
             $tmp   = tempnam(sys_get_temp_dir(), 'aud');
             file_put_contents($tmp, $raw);
 
-            // Posible conversión a OGG
+            // Posible conversión a OGG (política: subir solo OGG)
             $audioMime = strtolower($v['audioMimeType']);
             $converted = null;
             if (config('audio.force_ogg')) {
@@ -895,11 +912,27 @@ class DriveController extends Controller
                         $tmp = $converted['path'];
                         $audioMime = $converted['mime_type'];
                         Log::info('saveResults: audio converted to ogg', ['meeting' => $v['meetingName']]);
+                    } else {
+                        $alreadyOgg = str_contains(strtolower($audioMime), 'ogg') || str_ends_with(strtolower($tmp), '.ogg');
+                        if (!$alreadyOgg) {
+                            return response()->json([
+                                'code' => 'OGG_REQUIRED',
+                                'message' => 'La conversión a OGG es obligatoria y no se pudo completar.',
+                            ], 500);
+                        }
                     }
                 } catch (\App\Exceptions\FfmpegUnavailableException $e) {
-                    Log::warning('saveResults: ffmpeg unavailable, skipping ogg conversion', ['error' => $e->getMessage()]);
+                    Log::warning('saveResults: ffmpeg unavailable - OGG required policy', ['error' => $e->getMessage()]);
+                    return response()->json([
+                        'code' => 'FFMPEG_UNAVAILABLE',
+                        'message' => 'FFmpeg no está disponible en el servidor. La conversión a OGG es obligatoria. Instala ffmpeg o desactiva AUDIO_FORCE_OGG para desarrollo.',
+                    ], 500);
                 } catch (\Throwable $e) {
-                    Log::error('saveResults: ogg conversion failed, continuing with original', ['error' => $e->getMessage()]);
+                    Log::error('saveResults: ogg conversion failed (policy requires OGG)', ['error' => $e->getMessage()]);
+                    return response()->json([
+                        'code' => 'OGG_CONVERSION_FAILED',
+                        'message' => 'Falló la conversión a OGG. Intenta con otro archivo o contacta al administrador.',
+                    ], 500);
                 }
             }
 
