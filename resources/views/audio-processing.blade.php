@@ -207,11 +207,6 @@
                 </div>
 
                 <div class="analysis-selector">
-                    <div class="analyzer-grid" id="analyzer-grid"></div>
-                    <p id="no-analyzers-msg" style="display:none">No se encontraron analizadores</p>
-
-                    <div id="analysis-error-message" class="error-message" style="display:none; color: #ef4444; margin-top: 1rem;"></div>
-
                     <div class="analysis-actions">
                         <button class="btn btn-secondary" onclick="goBackToTranscription()">
                             ← Volver a transcripción
@@ -222,6 +217,10 @@
                             Comenzar análisis
                         </button>
                     </div>
+                    <div class="analyzer-grid" id="analyzer-grid"></div>
+                    <p id="no-analyzers-msg" style="display:none">No se encontraron analizadores</p>
+
+                    <div id="analysis-error-message" class="error-message" style="display:none; color: #ef4444; margin-top: 1rem;"></div>
                 </div>
             </div>
 
