@@ -640,25 +640,54 @@ class DriveController extends Controller
     public function syncDriveSubfolders(Request $request)
     {
         // Compatibilidad: algunos frontends antiguos aún llaman a este endpoint.
-        // Devolvemos la carpeta raíz y un array vacío de subcarpetas para evitar errores 410.
+        // Ahora además garantizamos y devolvemos las subcarpetas estándar bajo la raíz personal.
         $username = Auth::user()->username;
         $token = GoogleToken::where('username', $username)->first();
         if (!$token) {
             return response()->json([
                 'root_folder' => null,
-                'subfolders' => [],
-                'message' => 'Token no encontrado',
-                'deprecated' => true,
+                'subfolders'  => [],
+                'message'     => 'Token no encontrado',
+                'deprecated'  => false,
             ], 200);
         }
+
         $rootFolder = Folder::where('google_token_id', $token->id)
             ->whereNull('parent_id')
             ->first();
+
+        if (!$rootFolder) {
+            return response()->json([
+                'root_folder' => null,
+                'subfolders'  => [],
+                'message'     => 'Carpeta raíz personal no configurada',
+                'deprecated'  => false,
+            ], 200);
+        }
+
+        // Garantizar subcarpetas estándar con la cuenta de servicio (si faltan, crearlas dentro de la raíz)
+        try {
+            /** @var GoogleServiceAccount $serviceAccount */
+            $serviceAccount = app(GoogleServiceAccount::class);
+            $this->ensureStandardSubfolders($rootFolder, false, $serviceAccount);
+        } catch (\Throwable $e) {
+            Log::warning('syncDriveSubfolders: ensureStandardSubfolders failed', [
+                'root_folder_id' => $rootFolder->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Devolver el estado actualizado desde BD para evitar llamadas adicionales a Drive
+        $subfolders = Subfolder::where('folder_id', $rootFolder->id)
+            ->orderBy('name')
+            ->get()
+            ->values();
+
         return response()->json([
             'root_folder' => $rootFolder,
-            'subfolders' => [],
-            'deprecated' => true,
-            'message' => 'Estructura automática activa. No se requieren subcarpetas manuales.'
+            'subfolders'  => $subfolders,
+            'deprecated'  => false,
+            'message'     => 'Subcarpetas sincronizadas automáticamente bajo la carpeta raíz personal.'
         ], 200);
     }
     public function status()
