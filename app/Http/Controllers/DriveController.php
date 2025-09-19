@@ -69,10 +69,27 @@ class DriveController extends Controller
                             ->where('name', $folderName)
                             ->first();
                         if (!$model) {
-                            // For organization drives, do NOT impersonate a user. The service account
-                            // should have direct access to the shared drive and create subfolders under
-                            // the provided parent id to ensure correct placement at the org root.
-                            $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                            // Try with the service account first (expected for shared drives)
+                            try {
+                                $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                            } catch (\Throwable $e) {
+                                Log::warning('Org subfolder create with SA failed, trying impersonation', [
+                                    'folder' => $folderName,
+                                    'parent' => $rootFolder->google_id,
+                                    'error'  => $e->getMessage(),
+                                ]);
+                                if ($ownerEmail) {
+                                    try {
+                                        $serviceAccount->impersonate($ownerEmail);
+                                        $impersonated = true;
+                                        $googleId = $serviceAccount->createFolder($folderName, $rootFolder->google_id);
+                                    } catch (\Throwable $e2) {
+                                        throw $e2; // bubble up to outer catch for logging
+                                    }
+                                } else {
+                                    throw $e;
+                                }
+                            }
                             $model = OrganizationSubfolder::create([
                                 'organization_folder_id' => $rootFolder->id,
                                 'google_id'              => $googleId,
