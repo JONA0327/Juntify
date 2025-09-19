@@ -17,6 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use App\Services\AiChatService;
 use App\Services\GoogleDriveService;
@@ -688,8 +689,9 @@ class AiAssistantController extends Controller
             return [];
         }
 
-        $meeting = TranscriptionLaravel::with([
-            'keyPoints' => fn ($relation) => $relation->ordered()->limit(5),
+        $loadKeyPoints = Schema::hasTable('key_points');
+
+        $relations = [
             'transcriptions' => function ($relation) use ($query) {
                 $relation->orderBy('time');
 
@@ -704,7 +706,13 @@ class AiAssistantController extends Controller
 
                 $relation->limit(5);
             },
-        ])
+        ];
+
+        if ($loadKeyPoints) {
+            $relations['keyPoints'] = fn ($relation) => $relation->ordered()->limit(5);
+        }
+
+        $meeting = TranscriptionLaravel::with($relations)
             ->where('username', $session->username)
             ->where('id', $session->context_id)
             ->first();
@@ -712,6 +720,10 @@ class AiAssistantController extends Controller
         $fragments = [];
 
         if ($meeting) {
+            if (! $loadKeyPoints && ! $meeting->relationLoaded('keyPoints')) {
+                $meeting->setRelation('keyPoints', collect());
+            }
+
             if (! empty($meeting->summary)) {
                 $fragments[] = [
                     'text' => Str::limit($meeting->summary, 800),
