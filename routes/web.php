@@ -226,6 +226,9 @@ Route::middleware(['auth'])->group(function () {
             // Gestión de documentos
             Route::get('/documents', [AiAssistantController::class, 'getDocuments'])->name('api.ai-assistant.documents');
             Route::post('/documents/upload', [AiAssistantController::class, 'uploadDocument'])->name('api.ai-assistant.documents.upload');
+
+            // Generación de PDF de resumen
+            Route::post('/sessions/{id}/summary-pdf', [AiAssistantController::class, 'generateSummaryPdf'])->name('api.ai-assistant.sessions.summary-pdf');
         });
     });
 

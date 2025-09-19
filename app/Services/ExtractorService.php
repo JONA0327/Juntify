@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\OpenAiConfig;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -130,32 +131,6 @@ class ExtractorService
 
     private function extractWord(string $filePath, string $extension): array
     {
-        if (class_exists('PhpOffice\\PhpWord\\IOFactory')) {
-            try {
-                $phpWord = \PhpOffice\PhpWord\IOFactory::load($filePath);
-                $sections = $phpWord->getSections();
-                $lines = [];
-
-                foreach ($sections as $section) {
-                    foreach ($section->getElements() as $element) {
-                        if (method_exists($element, 'getText')) {
-                            $lines[] = $element->getText();
-                        }
-                    }
-                }
-
-                return [
-                    'text' => $this->normalizeText(implode("\n", $lines)),
-                    'metadata' => [
-                        'detected_type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                        'engine' => 'phpoffice/phpword',
-                    ],
-                ];
-            } catch (\Throwable $exception) {
-                // Fall back to manual extraction below.
-            }
-        }
-
         if ($extension === 'docx') {
             return $this->extractDocx($filePath);
         }
@@ -374,8 +349,17 @@ class ExtractorService
                 $ocr->lang('spa', 'eng');
                 $text = $ocr->run();
 
+                $normalized = $this->normalizeText($text);
+                // If OCR yields too little text, try OpenAI Vision fallback
+                if ($normalized === '' || mb_strlen($normalized) < 20) {
+                    $vision = $this->tryOpenAiVision($filePath);
+                    if ($vision !== null) {
+                        return $vision;
+                    }
+                }
+
                 return [
-                    'text' => $this->normalizeText($text),
+                    'text' => $normalized,
                     'metadata' => [
                         'detected_type' => 'image/ocr',
                         'engine' => 'tesseract-php',
@@ -388,6 +372,12 @@ class ExtractorService
 
         $binary = $this->resolveBinary('tesseract');
         if (! $binary) {
+            // If no OCR engine is available, try OpenAI Vision before giving up
+            $vision = $this->tryOpenAiVision($filePath);
+            if ($vision !== null) {
+                return $vision;
+            }
+
             throw new RuntimeException('No se encontró un motor OCR disponible para imágenes.');
         }
 
@@ -397,6 +387,12 @@ class ExtractorService
         $process->run();
 
         if (! $process->isSuccessful()) {
+            // As a last resort on OCR failure, try OpenAI Vision
+            $vision = $this->tryOpenAiVision($filePath);
+            if ($vision !== null) {
+                return $vision;
+            }
+
             throw new RuntimeException('No se pudo ejecutar OCR: ' . $process->getErrorOutput());
         }
 
@@ -407,8 +403,16 @@ class ExtractorService
             File::delete($textFile);
         }
 
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '' || mb_strlen($normalized) < 20) {
+            $vision = $this->tryOpenAiVision($filePath);
+            if ($vision !== null) {
+                return $vision;
+            }
+        }
+
         return [
-            'text' => $this->normalizeText($text),
+            'text' => $normalized,
             'metadata' => [
                 'detected_type' => 'image/ocr',
                 'engine' => 'tesseract-cli',
@@ -442,5 +446,73 @@ class ExtractorService
         $path = trim($process->getOutput());
 
         return $path !== '' ? $path : null;
+    }
+
+    /**
+     * Attempts to extract useful text from an image using OpenAI Vision when OCR is unavailable or insufficient.
+     * Returns null if the API key is missing or any error occurs.
+     *
+     * @return array{text: string, metadata: array}|null
+     */
+    private function tryOpenAiVision(string $filePath): ?array
+    {
+        try {
+            $apiKey = OpenAiConfig::apiKey();
+            if (! is_string($apiKey) || trim($apiKey) === '') {
+                return null;
+            }
+
+            $bytes = @File::get($filePath);
+            if ($bytes === false) {
+                return null;
+            }
+
+            // Determine mime type
+            $mime = 'image/png';
+            if (class_exists('finfo')) {
+                $f = new \finfo(\FILEINFO_MIME_TYPE);
+                $detected = $f->file($filePath);
+                if (is_string($detected) && $detected !== '') {
+                    $mime = $detected;
+                }
+            }
+
+            $dataUrl = 'data:' . $mime . ';base64,' . base64_encode($bytes);
+
+            $client = \OpenAI::client($apiKey);
+            $response = $client->chat()->create([
+                'model' => 'gpt-4o-mini',
+                'messages' => [[
+                    'role' => 'user',
+                    'content' => [
+                        [
+                            'type' => 'text',
+                            'text' => 'Extrae todo el texto legible y un breve resumen de esta imagen. Devuelve solo el texto extraído, sin viñetas ni formato adicional. Si no hay texto visible, describe brevemente el contenido en 2-3 oraciones.'
+                        ],
+                        [
+                            'type' => 'image_url',
+                            'image_url' => ['url' => $dataUrl],
+                        ],
+                    ],
+                ]],
+                'temperature' => 0.2,
+            ]);
+
+            $content = trim($response->choices[0]->message->content ?? '');
+            if ($content === '') {
+                return null;
+            }
+
+            return [
+                'text' => $this->normalizeText($content),
+                'metadata' => [
+                    'detected_type' => 'image/vision',
+                    'engine' => 'openai-gpt-4o-mini',
+                ],
+            ];
+        } catch (\Throwable $e) {
+            // Vision fallback failed; ignore and return null
+            return null;
+        }
     }
 }

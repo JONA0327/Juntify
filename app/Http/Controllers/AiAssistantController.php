@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AiChatSession;
 use App\Models\AiChatMessage;
 use App\Models\AiDocument;
+use App\Models\AiMeetingDocument;
 use App\Models\Container;
 use App\Models\TranscriptionLaravel;
 use App\Models\Chat;
@@ -33,7 +34,7 @@ use App\Traits\MeetingContentParsing;
 class AiAssistantController extends Controller
 {
     use MeetingContentParsing;
-    private const DEFAULT_AI_FOLDER_NAME = 'Juntify AI Documents';
+    private const DOCUMENTS_FOLDER_NAME = 'Documentos';
 
     private GoogleDriveService $googleDriveService;
     private GoogleTokenRefreshService $googleTokenRefreshService;
@@ -390,9 +391,10 @@ class AiAssistantController extends Controller
         $user = Auth::user();
 
         $request->validate([
-            'file' => 'required|file|max:10240', // 10MB max
+            'file' => 'required|file|max:51200', // 50MB max
             'drive_folder_id' => 'nullable|string',
-            'drive_type' => 'required|in:personal,organization'
+            'drive_type' => 'required|in:personal,organization',
+            'session_id' => 'nullable|integer'
         ]);
 
         try {
@@ -424,6 +426,15 @@ class AiAssistantController extends Controller
 
             // Procesar documento en background (OCR, extracción de texto)
             $this->processDocumentInBackground($document);
+
+            // Si viene una sesión, asociar documento al contexto (reunión/contenedor)
+            $sessionId = (int) $request->input('session_id');
+            if ($sessionId) {
+                $session = AiChatSession::where('id', $sessionId)->where('username', $user->username)->first();
+                if ($session) {
+                    $this->associateDocumentToSessionContext($document, $session, $user->username);
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -1150,7 +1161,7 @@ class AiAssistantController extends Controller
             try {
                 $this->ensureValidAccessToken($driveType, $context);
 
-                $destinationFolderId = $folderId ?: $this->ensureDestinationFolder($driveType, $context);
+                $destinationFolderId = $folderId ?: $this->ensureDocumentsFolder($driveType, $context);
 
                 $fileContents = @file_get_contents($file->getRealPath());
                 if ($fileContents === false) {
@@ -1359,7 +1370,7 @@ class AiAssistantController extends Controller
         return null;
     }
 
-    private function ensureDestinationFolder(string $driveType, array $context): string
+    private function ensureDocumentsFolder(string $driveType, array $context): string
     {
         $parentId = $context['root_folder_id'] ?? null;
 
@@ -1367,7 +1378,7 @@ class AiAssistantController extends Controller
             throw new RuntimeException('La organización no tiene una carpeta raíz configurada en Google Drive.');
         }
 
-        $folderName = self::DEFAULT_AI_FOLDER_NAME;
+    $folderName = self::DOCUMENTS_FOLDER_NAME;
 
         $existingFolder = $this->findExistingFolder($folderName, $parentId);
         if ($existingFolder) {
@@ -1448,5 +1459,111 @@ class AiAssistantController extends Controller
         ]);
 
         ProcessAiDocumentJob::dispatch($document->id);
+    }
+
+    private function associateDocumentToSessionContext(AiDocument $document, AiChatSession $session, string $username): void
+    {
+        if ($session->context_type === 'meeting' && $session->context_id) {
+            AiMeetingDocument::create([
+                'document_id' => $document->id,
+                'meeting_id' => (string) $session->context_id,
+                'meeting_type' => AiMeetingDocument::MEETING_TYPE_LEGACY,
+                'assigned_by_username' => $username,
+                'assignment_note' => 'Cargado desde el asistente',
+            ]);
+            return;
+        }
+
+        if ($session->context_type === 'container' && $session->context_id) {
+            $container = Container::where('id', $session->context_id)
+                ->where('username', $session->username)
+                ->first();
+            if ($container) {
+                $meetingIds = $container->meetings()->pluck('transcriptions_laravel.id')->all();
+                foreach ($meetingIds as $mid) {
+                    AiMeetingDocument::create([
+                        'document_id' => $document->id,
+                        'meeting_id' => (string) $mid,
+                        'meeting_type' => AiMeetingDocument::MEETING_TYPE_LEGACY,
+                        'assigned_by_username' => $username,
+                        'assignment_note' => 'Cargado desde el asistente (contenedor)',
+                    ]);
+                }
+            }
+        }
+    }
+
+    public function generateSummaryPdf(Request $request, int $id): JsonResponse
+    {
+        $user = Auth::user();
+        $session = AiChatSession::where('id', $id)->where('username', $user->username)->firstOrFail();
+
+        $fragments = [];
+        if ($session->context_type === 'meeting') {
+            $virtual = $this->createVirtualSession($session, 'meeting', $session->context_id);
+            $fragments = $this->buildMeetingContextFragments($virtual, '');
+        } elseif ($session->context_type === 'container') {
+            $virtual = $this->createVirtualSession($session, 'container', $session->context_id);
+            $fragments = $this->buildContainerContextFragments($virtual);
+        } else {
+            $fragments = $this->gatherContext($session, 'resumen');
+        }
+
+        $title = match ($session->context_type) {
+            'meeting' => 'Resumen de reunión',
+            'container' => 'Resumen del contenedor',
+            default => 'Resumen general',
+        };
+
+        $citations = array_values(array_unique(array_filter(array_map(fn($f) => $f['citation'] ?? null, $fragments))));
+
+        $html = view('ai.summary_pdf', [
+            'title' => $title,
+            'session' => $session,
+            'fragments' => $fragments,
+            'citations' => $citations,
+            'generatedAt' => now(),
+            'user' => $user,
+        ])->render();
+
+        $pdf = app('dompdf.wrapper');
+        $pdf->loadHTML($html)->setPaper('a4', 'portrait');
+
+        $tmpPath = storage_path('app/tmp');
+        if (!is_dir($tmpPath)) @mkdir($tmpPath, 0775, true);
+        $filename = $title . ' - ' . now()->format('Ymd_His') . '.pdf';
+        $absolute = $tmpPath . DIRECTORY_SEPARATOR . $filename;
+        file_put_contents($absolute, $pdf->output());
+
+        try {
+            $driveResult = $this->uploadToGoogleDrive(new \Illuminate\Http\File($absolute), null, $request->input('drive_type', 'personal'), $user);
+
+            $document = AiDocument::create([
+                'username' => $user->username,
+                'name' => pathinfo($filename, PATHINFO_FILENAME),
+                'original_filename' => $filename,
+                'document_type' => 'pdf',
+                'mime_type' => 'application/pdf',
+                'file_size' => @filesize($absolute) ?: null,
+                'drive_file_id' => $driveResult['file_id'],
+                'drive_folder_id' => $driveResult['folder_id'],
+                'drive_type' => $request->input('drive_type', 'personal'),
+                'processing_status' => 'completed',
+                'document_metadata' => [
+                    'summary_generated' => true,
+                    'citations' => $citations,
+                ],
+            ]);
+
+            $this->associateDocumentToSessionContext($document, $session, $user->username);
+
+            return response()->json([
+                'success' => true,
+                'document' => $document,
+                'message' => 'Resumen PDF generado y guardado en Drive.'
+            ]);
+        } finally {
+            @unlink($absolute);
+        }
     }
 }
