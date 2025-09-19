@@ -214,6 +214,7 @@ Route::middleware(['auth'])->group(function () {
             // Sesiones de chat
             Route::get('/sessions', [AiAssistantController::class, 'getSessions'])->name('api.ai-assistant.sessions');
             Route::post('/sessions', [AiAssistantController::class, 'createSession'])->name('api.ai-assistant.sessions.create');
+            Route::delete('/sessions/{id}', [AiAssistantController::class, 'deleteSession'])->name('api.ai-assistant.sessions.delete');
             Route::get('/sessions/{id}/messages', [AiAssistantController::class, 'getMessages'])->name('api.ai-assistant.sessions.messages');
             Route::post('/sessions/{id}/messages', [AiAssistantController::class, 'sendMessage'])->name('api.ai-assistant.sessions.send-message');
 
