@@ -25,12 +25,13 @@ class OrganizationDriveController extends Controller
         if (!$user) return false;
         if ($organization->admin_id === $user->id) return true;
         // Colaborador o Administrador a nivel de organización
-        $orgRole = $organization->users()
+        $orgRole = $organization->users() // Usuarios directamente asociados a la organizacion
             ->where('users.id', $user->id)
             ->wherePivotIn('rol', ['colaborador', 'administrador'])
             ->exists();
         if ($orgRole) return true;
         // Colaborador o Administrador en cualquier grupo de la organización
+        // si el usuario es colaborador o administrador en algun grupo de la organizacion
         return $organization->groups()->whereHas('users', function($q) use ($user) {
             $q->where('users.id', $user->id)->whereIn('group_user.rol', ['colaborador', 'administrador']);
         })->exists();
