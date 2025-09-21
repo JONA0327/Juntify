@@ -118,6 +118,40 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     invitableContactsError: null,
     inviteContactSearch: '',
 
+    // Utilidad: formateador de fechas robusto para cadenas variadas
+    formatDate(value) {
+        if (!value) return '';
+        // Si ya es Date
+        if (value instanceof Date) {
+            return isNaN(value) ? '' : value.toLocaleDateString();
+        }
+        // Timestamps numéricos
+        if (typeof value === 'number') {
+            const d = new Date(value);
+            return isNaN(d) ? '' : d.toLocaleDateString();
+        }
+        // Cadenas: normalizar "YYYY-MM-DD HH:MM:SS" a ISO
+        if (typeof value === 'string') {
+            let s = value.trim();
+            if (!s) return '';
+            // Reemplazar espacio por 'T' si faltara la 'T'
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)) {
+                s = s.replace(' ', 'T');
+            }
+            // Agregar 'Z' si parece ISO sin zona
+            if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(s)) {
+                s = s + 'Z';
+            }
+            const d = new Date(s);
+            if (!isNaN(d)) return d.toLocaleDateString();
+            // Fallback: intentar parsear solo fecha
+            const onlyDate = s.split('T')[0];
+            const d2 = new Date(onlyDate);
+            return isNaN(d2) ? '' : d2.toLocaleDateString();
+        }
+        return '';
+    },
+
     get filteredInvitableContacts() {
         const term = (this.inviteContactSearch || '').toLowerCase();
         if (!term) return this.invitableContacts;

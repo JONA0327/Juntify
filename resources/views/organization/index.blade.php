@@ -816,7 +816,7 @@
                                         <p class="text-sm text-slate-300 mb-3" x-text="container.description"></p>
                                         <div class="flex justify-between items-center text-xs text-slate-400 mb-3">
                                             <span x-text="'Reuniones: ' + (container.meetings_count || 0)"></span>
-                                            <span x-text="new Date(container.created_at).toLocaleDateString()"></span>
+                                            <span x-text="formatDate(container.created_at)"></span>
                                         </div>
                                         <div class="flex space-x-2">
                                             <button @click.stop="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition-colors">
