@@ -2208,11 +2208,36 @@ class MeetingController extends Controller
             // Intentar flujo legacy primero
             try {
                 Log::info('streamAudio: Intentando flujo legacy');
-                $meetingModel = TranscriptionLaravel::where('id', $meeting)
-                    ->when(!$sharedAccess && !$containerAccess, function ($q) use ($user) {
-                        $q->where('username', $user->username);
-                    })
-                    ->firstOrFail();
+                // Primero obtenemos por ID, y luego validamos acceso explícitamente para evitar falsos 404 por mayúsculas/minúsculas u orígenes legacy
+                $meetingModel = TranscriptionLaravel::where('id', $meeting)->firstOrFail();
+
+                if (!$sharedAccess && !$containerAccess) {
+                    $isOwner = false;
+                    // Preferir relación por usuario si existe
+                    try {
+                        if (property_exists($meetingModel, 'user_id') && !empty($meetingModel->user_id)) {
+                            $isOwner = ((int) $meetingModel->user_id) === ((int) $user->id);
+                        }
+                    } catch (\Throwable $eOwn) { /* ignore */ }
+                    // Compatibilidad legacy por username (case-insensitive)
+                    if (!$isOwner) {
+                        $mx = (string) ($meetingModel->username ?? '');
+                        $ux = (string) ($user->username ?? '');
+                        if ($mx !== '' && $ux !== '' && strcasecmp($mx, $ux) === 0) {
+                            $isOwner = true;
+                        }
+                    }
+                    if (!$isOwner) {
+                        Log::warning('streamAudio: acceso denegado (no owner/shared/container)', [
+                            'meeting_id' => $meeting,
+                            'meeting_username' => $meetingModel->username ?? null,
+                            'user_username' => $user->username ?? null,
+                            'user_id' => $user->id ?? null,
+                            'meeting_user_id' => $meetingModel->user_id ?? null,
+                        ]);
+                        return $this->audioError(403, 'No tienes acceso a este audio', $meetingModel->id);
+                    }
+                }
                 $dbg['legacy'] = true;
                 $dbg['audio_drive_id'] = $meetingModel->audio_drive_id;
                 $dbg['audio_download_url'] = $meetingModel->audio_download_url;
