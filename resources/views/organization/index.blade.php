@@ -1185,7 +1185,7 @@ document.getElementById('meeting-modal').addEventListener('click', function(e) {
 </script>
 
 <!-- Modal de Vista Previa de PDF a pantalla completa -->
-<div id="fullPreviewModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[90] hidden">
+<div id="fullPreviewModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[10000] hidden">
     <div class="relative w-[95vw] h-[90vh] bg-slate-900 border border-slate-700 rounded-lg shadow-2xl overflow-hidden">
         <!-- Header -->
         <div class="absolute top-0 left-0 right-0 flex items-center justify-between bg-slate-900/90 border-b border-slate-700 px-4 py-2 z-10">
