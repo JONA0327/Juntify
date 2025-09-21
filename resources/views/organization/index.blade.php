@@ -726,7 +726,7 @@
                     </div>
                 </div>
                 <!-- Modal ver reuniones del contenedor -->
-                <div x-show="showContainerMeetingsModal" id="container-meetings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-60" x-cloak>
+                <div x-show="showContainerMeetingsModal" id="container-meetings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[75]" x-cloak>
                     <div class="bg-slate-950 rounded-xl border border-slate-700/50 shadow-2xl shadow-black/20 w-full max-w-6xl max-h-[90vh] overflow-hidden">
                         <!-- Header del modal -->
                         <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
@@ -1183,6 +1183,23 @@ document.getElementById('meeting-modal').addEventListener('click', function(e) {
     }
 });
 </script>
+
+<!-- Modal de Vista Previa de PDF a pantalla completa -->
+<div id="fullPreviewModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[90] hidden">
+    <div class="relative w-[95vw] h-[90vh] bg-slate-900 border border-slate-700 rounded-lg shadow-2xl overflow-hidden">
+        <!-- Header -->
+        <div class="absolute top-0 left-0 right-0 flex items-center justify-between bg-slate-900/90 border-b border-slate-700 px-4 py-2 z-10">
+            <span class="text-slate-200 text-sm">Vista previa del PDF</span>
+            <button id="closeFullPreview" class="text-slate-300 hover:text-white transition-colors" title="Cerrar">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <!-- Iframe -->
+        <iframe id="fullPreviewFrame" class="w-full h-full mt-[40px] bg-slate-900" title="Vista previa del PDF"></iframe>
+    </div>
+</div>
 
 </body>
 </html>

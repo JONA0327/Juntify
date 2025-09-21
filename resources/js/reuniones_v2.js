@@ -4243,7 +4243,13 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
         // Cerrar el modal de contenedor si está abierto
         previousContainerForDownload = currentContainerForMeetings;
         if (previousContainerForDownload) {
-            closeContainerMeetingsModal();
+            try {
+                document.dispatchEvent(new CustomEvent('organization:container-meetings:temporarily-close', {
+                    detail: { containerId: previousContainerForDownload, reason: 'open-download-modal' }
+                }));
+            } catch (_) {
+                try { closeContainerMeetingsModal(); } catch (_) {}
+            }
         }
 
         // Mostrar loading inicial
@@ -4622,9 +4628,16 @@ function closeDownloadModal() {
         downloadModal.remove();
     }
 
-    // Reabrir modal de contenedor si estaba activo
+    // Reabrir modal de contenedor si estaba activo (coordinado con organization.js)
     if (previousContainerForDownload) {
-        openContainerMeetingsModal(previousContainerForDownload);
+        try {
+            document.dispatchEvent(new CustomEvent('organization:container-meetings:restore', {
+                detail: { shouldReload: true, containerId: previousContainerForDownload }
+            }));
+        } catch (_) {
+            // Fallback si no está el manejador
+            try { openContainerMeetingsModal(previousContainerForDownload); } catch (_) {}
+        }
         previousContainerForDownload = null;
     }
 }
@@ -4645,6 +4658,11 @@ function openFullPreviewModal(url) {
     ensurePreviewModal();
     const modal = document.getElementById('fullPreviewModal');
     const frame = document.getElementById('fullPreviewFrame');
+    if (!modal || !frame) {
+        // Fallback: abrir en nueva pestaña si el modal no existe en el DOM
+        try { window.open(url, '_blank'); } catch (_) {}
+        return;
+    }
     frame.src = url + '#navpanes=0&zoom=page-width';
     modal.classList.remove('hidden');
 }
