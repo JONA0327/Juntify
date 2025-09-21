@@ -59,6 +59,17 @@ class GoogleServiceAccount
         return $this->drive;
     }
 
+    /**
+     * Obtiene información detallada de un archivo usando la Service Account
+     */
+    public function getFileInfo(string $fileId): DriveFile
+    {
+        return $this->drive->files->get($fileId, [
+            'fields' => 'id,name,parents,mimeType,size,createdTime,modifiedTime',
+            'supportsAllDrives' => true,
+        ]);
+    }
+
     public function createFolder(string $name, ?string $parentId = null): string
     {
         Log::info('GoogleServiceAccount.createFolder: start', [

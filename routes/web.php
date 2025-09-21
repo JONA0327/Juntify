@@ -93,9 +93,7 @@ Route::middleware(['auth'])->group(function () {
         return response()->json($status);
     })->name('api.google.status');
 
-    // Rutas POST para manejo de carpetas
-    Route::post('/drive/main-folder',     [DriveController::class, 'createMainFolder'])
-         ->name('drive.createMainFolder');
+    // Rutas POST para manejo de carpetas (crear carpeta manual está deshabilitado; se crea automáticamente tras conectar)
     Route::post('/drive/set-main-folder', [DriveController::class, 'setMainFolder'])
          ->name('drive.setMainFolder');
     Route::post('/drive/subfolder',       [DriveController::class, 'createSubfolder'])

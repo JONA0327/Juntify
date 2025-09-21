@@ -89,79 +89,7 @@ function connectDrive() {
     });
 }
 
-/**
- * Muestra el modal para crear carpeta principal
- */
-function showCreateFolderModal() {
-  const modal = document.getElementById('create-folder-modal');
-  const input = document.getElementById('folder-name-input');
-
-  // Generar nombre sugerido
-  const suggestedName = `Juntify-Reuniones-${new Date().getFullYear()}`;
-  input.value = suggestedName;
-
-  modal.classList.add('show');
-
-  // Focus en el input después de la animación
-  setTimeout(() => {
-    input.focus();
-    input.select();
-  }, 300);
-}
-
-/**
- * Cierra el modal de crear carpeta principal
- */
-function closeCreateFolderModal() {
-  const modal = document.getElementById('create-folder-modal');
-  const input = document.getElementById('folder-name-input');
-
-  modal.classList.remove('show');
-  input.value = '';
-}
-
-/**
- * Confirma la creación de la carpeta principal
- */
-function confirmCreateFolder() {
-  const input = document.getElementById('folder-name-input');
-  const name = input.value.trim();
-  const btn = document.getElementById('confirm-create-btn');
-  const mainInput = document.getElementById('main-folder-input');
-
-  if (!name) {
-    alert('Por favor ingresa un nombre para la carpeta');
-    input.focus();
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Creando...';
-
-  axios.post('/drive/main-folder', { name })
-    .then(res => {
-      mainInput.value = res.data.id;
-      closeCreateFolderModal();
-
-      // Mostrar mensaje de éxito
-      showSuccessMessage(`Carpeta "${name}" creada exitosamente`);
-
-      // Mostrar la sección de subcarpetas sin auto-completar
-      const subfolderCard = document.getElementById('subfolder-card');
-      if (subfolderCard) {
-        subfolderCard.style.display = 'block';
-      }
-    })
-    .catch(err => {
-      console.error('Error creando carpeta principal:', err.response?.data || err.message);
-      const serverMessage = err.response?.data?.message;
-      showErrorMessage(serverMessage ?? 'No se pudo crear la carpeta principal. Inténtalo de nuevo.');
-    })
-    .finally(() => {
-      btn.disabled = false;
-      btn.textContent = '✅ Crear Carpeta';
-    });
-}
+// Creación manual de carpeta principal eliminada: ahora es automática en el backend
 
 /**
  * Establece la carpeta principal existente por su ID
@@ -188,15 +116,27 @@ function setMainFolder() {
 
   btn.disabled = true;
   axios.post('/drive/set-main-folder', { id: mainFolderId })
-    .then(() => {
-      mainFolderName.textContent  = mainFolderId;
-      subfolderCard.style.display = 'block';
-      alert('Carpeta principal establecida: ' + mainFolderId);
+    .then((res) => {
+      const msg = res?.data?.message || 'Carpeta principal establecida.';
+      // Actualiza nombre/ID visibles
+      if (mainFolderName) {
+        const nameEl = document.querySelector('#main-folder-name div:first-child');
+        const idEl = document.querySelector('#main-folder-name div:last-child');
+        if (nameEl && idEl) {
+          nameEl.textContent = nameEl.textContent || 'Carpeta personalizada';
+          idEl.textContent = `ID: ${mainFolderId}`;
+        } else {
+          mainFolderName.textContent = mainFolderId;
+        }
+      }
+      if (subfolderCard) subfolderCard.style.display = 'block';
+      showSuccessMessage(msg);
       input.dataset.id = mainFolderId;
     })
     .catch(err => {
       console.error('Error estableciendo carpeta principal:', err.response?.data || err.message);
-      alert('No se pudo establecer la carpeta principal.');
+      const serverMessage = err.response?.data?.message;
+      showErrorMessage(serverMessage ?? 'No se pudo establecer la carpeta principal.');
     })
     .finally(() => {
       btn.disabled = false;
@@ -355,7 +295,6 @@ document.addEventListener('click', e => {
 // Cerrar modales con ESC
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    closeCreateFolderModal();
     closeCreateSubfolderModal();
   }
 });
@@ -363,7 +302,6 @@ document.addEventListener('keydown', e => {
 // Cerrar modales al hacer click fuera
 document.addEventListener('click', e => {
   if (e.target.classList.contains('modal')) {
-    closeCreateFolderModal();
     closeCreateSubfolderModal();
   }
 });
@@ -466,9 +404,6 @@ window.toggleSidebar       = toggleSidebar;
 window.closeSidebar        = closeSidebar;
 window.toggleMobileNavbar = toggleMobileNavbar;
 window.connectDrive        = connectDrive;
-window.showCreateFolderModal = showCreateFolderModal;
-window.closeCreateFolderModal = closeCreateFolderModal;
-window.confirmCreateFolder = confirmCreateFolder;
 window.showCreateSubfolderModal = showCreateSubfolderModal;
 window.closeCreateSubfolderModal = closeCreateSubfolderModal;
 window.confirmCreateSubfolder = confirmCreateSubfolder;

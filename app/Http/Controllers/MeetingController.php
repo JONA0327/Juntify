@@ -2434,6 +2434,19 @@ class MeetingController extends Controller
                 $fileId = $meetingModel->audio_drive_id;
             }
 
+            // Nuevo: si no hay fileId pero existe audio_download_url, intentar extraer el ID de Drive
+            if (empty($fileId) && !empty($meetingModel->audio_download_url)) {
+                try {
+                    $maybeId = $this->normalizeDriveId($meetingModel->audio_download_url);
+                    if (!empty($maybeId) && $maybeId !== $meetingModel->audio_download_url) {
+                        $fileId = $maybeId;
+                        $dbg['fileId_from_download_url'] = true;
+                    }
+                } catch (\Throwable $eNorm) {
+                    $dbg['normalize_download_url_error'] = $eNorm->getMessage();
+                }
+            }
+
             if (!empty($resolvedDownloadUrl)) {
                 $meetingModel->audio_download_url = $resolvedDownloadUrl;
             }

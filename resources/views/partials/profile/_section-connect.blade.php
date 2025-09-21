@@ -105,6 +105,11 @@
                             <span class="info-value" style="color: #ef4444;">{{ $folderMessage }}</span>
                         </div>
                     @endif
+                    <div class="info-item">
+                        <span class="info-value" style="color:#cbd5e1;">
+                            Juntify ya establece una carpeta automática en tu Google Drive. Si prefieres usar otra como principal, pega aquí su ID y haz clic en "Establecer Carpeta".
+                        </span>
+                    </div>
                     @if($folder)
                         <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
                             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
@@ -131,9 +136,6 @@
                     >
 
                     <div class="action-buttons">
-                        <button class="btn btn-primary" onclick="showCreateFolderModal()">
-                            ➕ Crear Carpeta Principal
-                        </button>
                         <button class="btn btn-secondary" id="set-main-folder-btn">
                             ✅ Establecer Carpeta
                         </button>
