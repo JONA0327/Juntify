@@ -3295,12 +3295,35 @@ class MeetingController extends Controller
                 ->where('status', 'accepted')
                 ->exists();
 
-            // Validar que la reunión pertenece al usuario
-            $meeting = TranscriptionLaravel::where('id', $id)
-                ->when(!$sharedAccess, function ($q) use ($user) {
-                    $q->where('username', $user->username);
-                })
-                ->firstOrFail();
+            // Permitir acceso también por contenedores organizacionales (como en show/streamAudio)
+            $containerAccess = false;
+            if (!$sharedAccess) {
+                $containerAccess = DB::table('meeting_content_relations')
+                    ->join('meeting_content_containers', 'meeting_content_relations.container_id', '=', 'meeting_content_containers.id')
+                    ->join('groups', 'meeting_content_containers.group_id', '=', 'groups.id')
+                    ->leftJoin('group_user', function($join) use ($user) {
+                        $join->on('groups.id', '=', 'group_user.id_grupo')
+                             ->where('group_user.user_id', '=', $user->id);
+                    })
+                    ->leftJoin('organizations', 'groups.id_organizacion', '=', 'organizations.id')
+                    ->where('meeting_content_relations.meeting_id', $id)
+                    ->where('meeting_content_containers.is_active', true)
+                    ->where(function($query) use ($user) {
+                        $query->where('meeting_content_containers.username', $user->username)
+                              ->orWhereNotNull('group_user.user_id')
+                              ->orWhere('organizations.admin_id', $user->id);
+                    })
+                    ->exists();
+            }
+
+            // Validar y obtener la reunión; si es acceso compartido o por contenedor, no filtrar por username
+            if ($sharedAccess || $containerAccess) {
+                $meeting = TranscriptionLaravel::where('id', $id)->firstOrFail();
+            } else {
+                $meeting = TranscriptionLaravel::where('id', $id)
+                    ->where('username', $user->username)
+                    ->firstOrFail();
+            }
 
             // Validar request
             $request->validate([
@@ -3321,18 +3344,20 @@ class MeetingController extends Controller
             $organizationName = null;
             $organizationLogo = null;
             if ($hasOrganization) {
-                $container = $meeting->containers()->first();
-                if ($container && isset($container->organization)) {
-                    $organizationName = $container->organization->name ?? 'Organización';
-                    $organizationLogo = $container->organization->imagen ?? null;
+                $container = $meeting->containers()->with('group.organization')->first();
+                if ($container && $container->group && $container->group->organization) {
+                    $organizationName = $container->group->organization->name
+                        ?? $container->group->organization->nombre_organizacion
+                        ?? 'Organización';
+                    $organizationLogo = $container->group->organization->imagen ?? null;
                 }
             }
 
             // Crear el HTML para el PDF
             // Si se solicitó la sección de tareas, usar siempre las tareas de la BD y mapear a columnas específicas
             if (in_array('tasks', $sections)) {
-                // Cuando es una reunión compartida, las tareas están guardadas con el username del dueño de la reunión
-                $taskUsername = ($sharedAccess && isset($meeting->username)) ? $meeting->username : $user->username;
+                // Usar el username del dueño de la reunión (también en acceso por contenedor)
+                $taskUsername = $meeting->username ?? $user->username;
 
                 $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
                     ->where('username', $taskUsername)
@@ -3417,11 +3442,34 @@ class MeetingController extends Controller
                 ->where('status', 'accepted')
                 ->exists();
 
-            $meeting = TranscriptionLaravel::where('id', $id)
-                ->when(!$sharedAccess, function ($q) use ($user) {
-                    $q->where('username', $user->username);
-                })
-                ->firstOrFail();
+            // Permitir acceso también por contenedores organizacionales (como en show/streamAudio)
+            $containerAccess = false;
+            if (!$sharedAccess) {
+                $containerAccess = DB::table('meeting_content_relations')
+                    ->join('meeting_content_containers', 'meeting_content_relations.container_id', '=', 'meeting_content_containers.id')
+                    ->join('groups', 'meeting_content_containers.group_id', '=', 'groups.id')
+                    ->leftJoin('group_user', function($join) use ($user) {
+                        $join->on('groups.id', '=', 'group_user.id_grupo')
+                             ->where('group_user.user_id', '=', $user->id);
+                    })
+                    ->leftJoin('organizations', 'groups.id_organizacion', '=', 'organizations.id')
+                    ->where('meeting_content_relations.meeting_id', $id)
+                    ->where('meeting_content_containers.is_active', true)
+                    ->where(function($query) use ($user) {
+                        $query->where('meeting_content_containers.username', $user->username)
+                              ->orWhereNotNull('group_user.user_id')
+                              ->orWhere('organizations.admin_id', $user->id);
+                    })
+                    ->exists();
+            }
+
+            if ($sharedAccess || $containerAccess) {
+                $meeting = TranscriptionLaravel::where('id', $id)->firstOrFail();
+            } else {
+                $meeting = TranscriptionLaravel::where('id', $id)
+                    ->where('username', $user->username)
+                    ->firstOrFail();
+            }
 
             $request->validate([
                 'sections' => 'required|array',
@@ -3449,8 +3497,8 @@ class MeetingController extends Controller
 
             // Si se solicitó la sección de tareas, usar siempre las tareas de la BD y mapear a columnas específicas
             if (in_array('tasks', $sections)) {
-                // En reuniones compartidas, las tareas pertenecen al owner (meeting->username)
-                $taskUsername = ($sharedAccess && isset($meeting->username)) ? $meeting->username : $user->username;
+                // Usar el username del dueño de la reunión (también en acceso por contenedor)
+                $taskUsername = $meeting->username ?? $user->username;
 
                 $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
                     ->where('username', $taskUsername)
