@@ -620,8 +620,42 @@ class SharedMeetingController extends Controller
                 $this->shareDriveItem($sa, $legacy->transcript_drive_id, $recipientEmail, 'grantDriveAccess: share .ju failed');
             }
 
-            if (!empty($legacy->audio_drive_id)) {
+            // Apply same robust logic for AUDIO as for transcript
+            // 1) If we have audio_drive_id and it exists, share it
+            if (!empty($legacy->audio_drive_id) && $this->driveFileExists($sa, $legacy->audio_drive_id)) {
                 $this->shareDriveItem($sa, $legacy->audio_drive_id, $recipientEmail, 'grantDriveAccess: share audio failed');
+            } else {
+                // 2) If missing/invalid, try to extract ID from audio_download_url
+                $maybeId = null;
+                if (!empty($legacy->audio_download_url)) {
+                    $maybeId = $this->extractDriveIdFromUrl((string) $legacy->audio_download_url);
+                }
+                if ($maybeId) {
+                    try {
+                        if ($this->driveFileExists($sa, $maybeId)) {
+                            $this->shareDriveItem($sa, $maybeId, $recipientEmail, 'grantDriveAccess: share audio (from url) failed');
+                            // Optionally persist normalized id for future operations
+                            try {
+                                if (empty($legacy->audio_drive_id)) {
+                                    $legacy->forceFill(['audio_drive_id' => $maybeId]);
+                                    $legacy->save();
+                                }
+                            } catch (\Throwable $e) {
+                                Log::warning('grantDriveAccess: failed to persist extracted audio_drive_id', [
+                                    'meeting_id' => $legacy->id,
+                                    'maybe_id' => $maybeId,
+                                    'error' => $e->getMessage(),
+                                ]);
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('grantDriveAccess: audio share from URL failed', [
+                            'meeting_id' => $legacy->id,
+                            'maybe_id' => $maybeId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
             }
         } catch (\Throwable $e) {
             Log::warning('grantDriveAccessForShare failed', [ 'error' => $e->getMessage() ]);
@@ -659,6 +693,29 @@ class SharedMeetingController extends Controller
             Log::error($context, ['item_id' => $itemId, 'recipient' => $email, 'error' => $e->getMessage()]);
             throw $e;
         }
+    }
+
+    /**
+     * Extrae un ID de archivo de Google Drive desde una URL (formatos de file/d/{id} y ?id=)
+     */
+    private function extractDriveIdFromUrl(string $url): ?string
+    {
+        try {
+            // Patterns comunes: /file/d/{id}/, uc?id=, open?id=
+            if (preg_match('#/file/d/([a-zA-Z0-9_-]{10,})#', $url, $m)) {
+                return $m[1];
+            }
+            $parts = parse_url($url);
+            if (!empty($parts['query'])) {
+                parse_str($parts['query'], $q);
+                if (!empty($q['id']) && is_string($q['id'])) {
+                    return $q['id'];
+                }
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+        return null;
     }
 
 }
