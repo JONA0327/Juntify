@@ -1804,7 +1804,7 @@ function createMeetingCard(meeting) {
                 </div>
 
                 <div class="meeting-actions">
-                    <button class="icon-btn view-btn" data-action="view-meeting" title="Ver reunión">
+                    <button class="icon-btn view-btn" onclick="openMeetingModal(${meeting.id})" title="Ver reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -2103,6 +2103,56 @@ function createContainerMeetingCard(meeting) {
     `;
 }
 
+// Minimal card for organization container: only the PDF download button
+function createOrgContainerMeetingCard(meeting) {
+    return `
+        <div class="meeting-card" data-meeting-id="${meeting.id}" draggable="false">
+            <div class="meeting-card-header">
+                <div class="meeting-content">
+                    <div class="meeting-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <h3 class="meeting-title">${escapeHtml(meeting.meeting_name)}</h3>
+                    <p class="meeting-date">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        ${meeting.created_at}
+                    </p>
+
+                    <div class="meeting-folders">
+                        <div class="folder-info">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span>Transcripción:</span>
+                            <span class="folder-name">${escapeHtml(meeting.transcript_folder || 'No encontrado')}</span>
+                        </div>
+                        <div class="folder-info">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728" />
+                            </svg>
+                            <span>Audio:</span>
+                            <span class="folder-name">${escapeHtml(meeting.audio_folder || 'No encontrado')}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="meeting-actions">
+                    <button class="download-btn icon-btn" onclick="openDownloadModal(${meeting.id})" title="Descargar reunión (PDF)">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+window.createOrgContainerMeetingCard = createOrgContainerMeetingCard;
+
 function createContainerCard(container) {
     return `
         <div class="meeting-card container-card" data-container-id="${container.id}" onclick="openContainerMeetingsModal(${container.id})" style="cursor: pointer;">
@@ -2166,23 +2216,9 @@ function attachMeetingEventListeners() {
                 e.stopPropagation();
             });
         }
-        const viewBtn = card.querySelector('.view-btn, [data-action="view-meeting"]');
-        if (viewBtn) {
-            viewBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const meetingId = card.dataset.meetingId;
-                const containerModal = document.getElementById('container-meetings-modal');
-                if (containerModal && !containerModal.classList.contains('hidden')) {
-                    openMeetingModalFromContainer(meetingId);
-                } else {
-                    const sharedId = card.dataset.sharedId || null;
-                    openMeetingModal(meetingId, sharedId);
-                }
-            });
-        }
         card.addEventListener('click', function(e) {
             // No abrir modal si se hizo click en los botones de acción
-            if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn') || e.target.closest('.remove-btn') || e.target.closest('.download-btn') || e.target.closest('.share-btn') || e.target.closest('.view-btn')) {
+            if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn') || e.target.closest('.container-btn') || e.target.closest('.remove-btn') || e.target.closest('.download-btn') || e.target.closest('.share-btn')) {
                 return;
             }
 
@@ -2723,6 +2759,9 @@ function showMeetingModal(meeting) {
                     try { meetingAudioPlayer.load(); } catch (_) {}
                 } else {
                     if (loadingEl) loadingEl.innerHTML = `<p class="text-red-400 text-sm">No se pudo cargar el audio. <a class='underline' href='${encodeURI(audioSrc)}'>Descargar</a></p>`;
+                    // Ocultar el spinner y mostrar un ícono de error
+                    const spinner = loadingEl.querySelector('.animate-pulse');
+                    if(spinner) spinner.parentElement.innerHTML = '<svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
                 }
             });
         };
@@ -3286,20 +3325,6 @@ async function closeMeetingModal() {
                 }
 
                 cleanupModalFiles();
-
-                if (organizationContainerModalContext) {
-                    const meetingIdForRestore = currentModalMeeting?.id || organizationContainerModalContext.meetingId || null;
-                    document.dispatchEvent(
-                        new CustomEvent('organization:container-meetings:restore', {
-                            detail: {
-                                ...organizationContainerModalContext,
-                                meetingId: meetingIdForRestore
-                            },
-                            bubbles: true
-                        })
-                    );
-                    organizationContainerModalContext = null;
-                }
             }
         }, 300);
     }
@@ -4859,7 +4884,6 @@ function initializeDownloadModal() {
 // Variables globales para el modal de reuniones del contenedor
 let currentContainerForMeetings = null;
 let previousContainerForDownload = null;
-let organizationContainerModalContext = null;
 
 // ===============================================
 // MODAL DE REUNIONES DEL CONTENEDOR
@@ -4885,39 +4909,15 @@ async function openContainerMeetingsModal(containerId) {
     await loadContainerMeetings(containerId);
 }
 
-function closeContainerMeetingsModal(options = {}) {
+function closeContainerMeetingsModal() {
     const el = document.getElementById('container-meetings-modal');
     if (!el) return;
-
-    const hasExplicitOrganizationFlag = typeof options.fromOrganization === 'boolean';
-    const isOrganizationContext = hasExplicitOrganizationFlag
-        ? options.fromOrganization
-        : el.hasAttribute('x-show') || !!document.querySelector('[x-data^="organizationPage" i]');
-
-    if (isOrganizationContext) {
-        // El modal está administrado por Alpine, evitar manipular clases/estilos que interfieran.
-        el.classList.remove('hidden');
-        if (el.getAttribute('aria-hidden') === 'true') {
-            el.removeAttribute('aria-hidden');
-        }
-        if (el.style.pointerEvents === 'none') {
-            el.style.pointerEvents = '';
-        }
-        if (el.style.visibility === 'hidden') {
-            el.style.visibility = '';
-        }
-        if (el.style.opacity === '0') {
-            el.style.opacity = '';
-        }
-    } else {
-        el.classList.add('hidden');
-        // Ensure it's non-interactive and behind other modals (legacy modal)
-        el.setAttribute('aria-hidden', 'true');
-        el.style.pointerEvents = 'none';
-        el.style.visibility = 'hidden';
-        el.style.opacity = '0';
-    }
-
+    el.classList.add('hidden');
+    // Ensure it's non-interactive and behind other modals
+    el.setAttribute('aria-hidden', 'true');
+    el.style.pointerEvents = 'none';
+    el.style.visibility = 'hidden';
+    el.style.opacity = '0';
     currentContainerForMeetings = null;
 }
 
@@ -5001,35 +5001,8 @@ function renderContainerMeetings(meetings) {
 }
 
 function openMeetingModalFromContainer(meetingId) {
-    // Detectar si estamos dentro del componente de organización (Alpine)
-    const organizationComponent = document.querySelector('[x-data^="organizationPage"]');
-
-    if (organizationComponent) {
-        const alpineComponent = organizationComponent.__x;
-        const alpineData = alpineComponent?.$data || {};
-        const selectedContainer = alpineData.selectedContainer || null;
-
-        // Registrar el contexto actual del contenedor para restaurarlo luego
-        organizationContainerModalContext = {
-            containerId: (selectedContainer && selectedContainer.id) || currentContainerForMeetings || null,
-            meetingId,
-            shouldReload: true,
-            container: selectedContainer ? { ...selectedContainer } : null
-        };
-
-        // Notificar al componente de organización para que oculte su modal de contenedor
-        document.dispatchEvent(
-            new CustomEvent('organization:container-meetings:temporarily-close', {
-                detail: organizationContainerModalContext,
-                bubbles: true
-            })
-        );
-    } else {
-        organizationContainerModalContext = null;
-    }
-
-    // Cerrar el modal del contenedor (fallback para páginas fuera de organización)
-    closeContainerMeetingsModal({ fromOrganization: !!organizationComponent });
+    // Cerrar el modal del contenedor
+    closeContainerMeetingsModal();
 
     // Abrir el modal de la reunión
     setTimeout(() => {

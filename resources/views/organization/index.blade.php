@@ -748,7 +748,7 @@
                                 <div class="meetings-grid">
                                     <template x-for="meeting in selectedContainer.meetings" :key="meeting.id">
                                         <div>
-                                            <div x-html="createMeetingCard(meeting)"></div>
+                                            <div x-html="createOrgContainerMeetingCard(meeting)"></div>
                                             <p x-show="!meeting.has_transcript" class="text-xs text-slate-400 mt-2">Transcripción no disponible</p>
                                         </div>
                                     </template>
