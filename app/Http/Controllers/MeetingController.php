@@ -2285,6 +2285,26 @@ class MeetingController extends Controller
                     }
 
                     if (empty($audioPath)) {
+                        // Owner flow fallback: if user token couldn't get it, try Service Account without impersonation
+                        if (!$containerAccess && !$sharedAccess && !empty($fileIdForDownload)) {
+                            try {
+                                /** @var \App\Services\GoogleServiceAccount $sa */
+                                $sa = app(\App\Services\GoogleServiceAccount::class);
+                                $audioContent = $sa->downloadFile($fileIdForDownload);
+                                $ext = $this->detectAudioExtension($meetingModel->meeting_name, 'audio/ogg');
+                                $tempFileName = 'stream_' . $meetingModel->id . '.' . $ext;
+                                $audioPath = $this->storeTemporaryFile($audioContent, $tempFileName);
+                                Log::info('streamAudio: Owner fallback served via Service Account', [
+                                    'meeting_id' => $meetingModel->id,
+                                    'file_id' => $fileIdForDownload,
+                                ]);
+                            } catch (\Throwable $saOwnerError) {
+                                Log::warning('streamAudio: Owner fallback via Service Account failed', [
+                                    'meeting_id' => $meetingModel->id,
+                                    'error' => $saOwnerError->getMessage(),
+                                ]);
+                            }
+                        }
                         try {
                             $audioPath = $this->getAudioPath($meetingModel);
                         } catch (\Throwable $eGet) {
