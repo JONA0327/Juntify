@@ -2125,34 +2125,26 @@ class MeetingController extends Controller
             $sharedAccess = (bool) $sharedMeeting;
             $dbg['sharedAccess'] = $sharedAccess;
 
-            // Verificar acceso por contenedores (protegido si faltan tablas en entornos legacy)
+            // Verificar acceso por contenedores (protegido si faltan tablas o columnas)
             $containerAccess = false;
             try {
                 if (\Illuminate\Support\Facades\Schema::hasTable('meeting_content_relations') &&
                     \Illuminate\Support\Facades\Schema::hasTable('meeting_content_containers') &&
                     \Illuminate\Support\Facades\Schema::hasTable('groups')) {
-                    $query = DB::table('meeting_content_relations as mcr')
-                        ->join('meeting_content_containers as mcc', 'mcr.container_id', '=', 'mcc.id')
-                        ->join('groups as g', 'mcc.organization_group_id', '=', 'g.id')
-                        ->where('mcr.meeting_id', $meeting)
-                        ->where(function ($q2) use ($user) {
-                            $q2->where('g.creator', $user->username)
-                               ->orWhereExists(function ($subquery) use ($user) {
-                                   if (\Illuminate\Support\Facades\Schema::hasTable('group_members')) {
-                                       $subquery->select(DB::raw(1))
-                                           ->from('group_members')
-                                           ->whereColumn('group_members.group_id', 'g.id')
-                                           ->where('group_members.username', $user->username);
-                                   } else {
-                                       $subquery->select(DB::raw(1))->whereRaw('1=0'); // fuerza falso si tabla no existe
-                                   }
-                               })
-                               ->orWhereExists(function ($subquery) use ($user) {
-                                   $subquery->select(DB::raw(1))
-                                       ->from('organizations as o')
-                                       ->whereColumn('o.id', 'g.organization_id')
-                                       ->where('o.admin_user', $user->username);
-                               });
+                    $query = DB::table('meeting_content_relations')
+                        ->join('meeting_content_containers', 'meeting_content_relations.container_id', '=', 'meeting_content_containers.id')
+                        ->join('groups', 'meeting_content_containers.group_id', '=', 'groups.id')
+                        ->leftJoin('group_user', function($join) use ($user) {
+                            $join->on('groups.id', '=', 'group_user.id_grupo')
+                                 ->where('group_user.user_id', '=', $user->id);
+                        })
+                        ->leftJoin('organizations', 'groups.id_organizacion', '=', 'organizations.id')
+                        ->where('meeting_content_relations.meeting_id', $meeting)
+                        ->where('meeting_content_containers.is_active', true)
+                        ->where(function($q) use ($user) {
+                            $q->where('meeting_content_containers.username', $user->username) // creador del contenedor
+                              ->orWhereNotNull('group_user.user_id') // miembro del grupo
+                              ->orWhere('organizations.admin_id', $user->id); // admin de la organización
                         });
                     $containerAccess = $query->exists();
                 }
@@ -2164,7 +2156,8 @@ class MeetingController extends Controller
                 $containerAccess = false; // fallback a false
             }
 
-            $useServiceAccount = $containerAccess;
+            // Usar Service Account cuando sea acceso por contenedor o reunión compartida
+            $useServiceAccount = ($containerAccess || $sharedAccess);
             $dbg['containerAccess'] = $containerAccess; $dbg['useServiceAccount'] = $useServiceAccount;
 
             Log::info('streamAudio: Tipos de acceso', [
@@ -2217,25 +2210,50 @@ class MeetingController extends Controller
                     $ux = (string) ($user->username ?? '');
                     $isOwner = ($mx !== '' && $ux !== '' && strcasecmp($mx, $ux) === 0);
                     if (!$isOwner) {
-                        Log::warning('streamAudio: acceso denegado (no owner/shared/container)', [
-                            'meeting_id' => $meeting,
-                            'meeting_username' => $meetingModel->username ?? null,
-                            'user_username' => $user->username ?? null,
-                            'user_id' => $user->id ?? null,
-                            'meeting_user_id' => $meetingModel->user_id ?? null,
-                        ]);
-                        // Si ?debug=1, devolver detalle adicional
-                        if ($debug ?? false) {
-                            return response()->json([
-                                'error' => 'No tienes acceso a este audio',
-                                'status' => 403,
-                                'meeting_id' => $meetingModel->id,
-                                'sharedAccess' => $sharedAccess,
-                                'containerAccess' => $containerAccess,
-                                'owner_by_username_ci' => ($mx !== '' && $ux !== '' && strcasecmp($mx, $ux) === 0),
-                            ], 403);
+                        // Permisivo en datos legacy: si el registro no tiene user_id (origen antiguo)
+                        // y el usuario actual tiene Drive conectado, permitimos seguir con fallbacks
+                        // (se intentará con Service Account o redirecciones). Esto hace que el audio
+                        // sea tan accesible como el .ju en escenarios antiguos.
+                        $isLegacy = empty($meetingModel->user_id);
+                        $hasToken = false;
+                        try {
+                            $hasToken = \App\Models\GoogleToken::where('user_id', $user->id)
+                                ->orWhere('username', $user->username)
+                                ->exists();
+                        } catch (\Throwable $e) {
+                            $hasToken = false;
                         }
-                        return $this->audioError(403, 'No tienes acceso a este audio', $meetingModel->id);
+
+                        if (!($isLegacy && $hasToken)) {
+                            Log::warning('streamAudio: acceso denegado (no owner/shared/container)', [
+                                'meeting_id' => $meeting,
+                                'meeting_username' => $meetingModel->username ?? null,
+                                'user_username' => $user->username ?? null,
+                                'user_id' => $user->id ?? null,
+                                'meeting_user_id' => $meetingModel->user_id ?? null,
+                            ]);
+                            // Si ?debug=1, devolver detalle adicional
+                            if ($debug ?? false) {
+                                return response()->json([
+                                    'error' => 'No tienes acceso a este audio',
+                                    'status' => 403,
+                                    'meeting_id' => $meetingModel->id,
+                                    'sharedAccess' => $sharedAccess,
+                                    'containerAccess' => $containerAccess,
+                                    'owner_by_username_ci' => ($mx !== '' && $ux !== '' && strcasecmp($mx, $ux) === 0),
+                                    'legacy_permissive' => false,
+                                ], 403);
+                            }
+                            return $this->audioError(403, 'No tienes acceso a este audio', $meetingModel->id);
+                        }
+
+                        // Continuar de forma permisiva (legacy) sin cortar el flujo
+                        Log::info('streamAudio: Permitiendo flujo legacy pese a mismatch de owner (token presente)', [
+                            'meeting_id' => $meetingModel->id,
+                            'meeting_username' => $meetingModel->username,
+                            'user_username' => $user->username,
+                        ]);
+                        $dbg['legacy_owner_permissive'] = true;
                     }
                 }
                 $dbg['legacy'] = true;
