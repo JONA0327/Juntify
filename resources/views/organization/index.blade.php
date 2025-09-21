@@ -1031,17 +1031,47 @@ function openMeetingModal(meetingId) {
             document.getElementById('meeting-modal-title').textContent = meeting.meeting_name || 'Reunión sin título';
             document.getElementById('meeting-modal-date').textContent = meeting.created_at || '';
 
-            // Configurar audio
+            // Configurar audio con fallback a endpoint de streaming
             const audioSection = document.getElementById('meeting-audio-section');
             const audioPlayer = document.getElementById('meeting-audio-player');
-            if (meeting.audio_path) {
-                audioPlayer.src = meeting.audio_path;
-                audioPlayer.load();
-                audioSection.classList.remove('hidden');
-            } else {
-                audioPlayer.removeAttribute('src');
-                audioPlayer.load();
+            // Limpiar estado previo
+            audioPlayer.pause();
+            audioPlayer.removeAttribute('src');
+            try { audioPlayer.load(); } catch (_) {}
+
+            const audioSrc = meeting.audio_path || '';
+            const fallbackUrl = meeting?.id ? `/api/meetings/${meeting.id}/audio?ts=${Date.now()}` : null;
+            const origin = window.location.origin;
+            const isExternalAudio = !!(audioSrc && origin && !audioSrc.startsWith(origin));
+
+            if (!audioSrc && !fallbackUrl) {
                 audioSection.classList.add('hidden');
+            } else {
+                audioSection.classList.remove('hidden');
+                let triedFallback = false;
+                const finalizePlayer = () => {
+                    // Mostrar el reproductor cuando haya metadata
+                };
+                audioPlayer.addEventListener('error', () => {
+                    if (!triedFallback && fallbackUrl && audioPlayer.src !== fallbackUrl) {
+                        triedFallback = true;
+                        audioPlayer.src = fallbackUrl;
+                        try { audioPlayer.load(); } catch (_) {}
+                    }
+                }, { once: true });
+
+                if (isExternalAudio && fallbackUrl) {
+                    // Ir directo al endpoint de streaming cuando el origen es externo
+                    audioPlayer.src = fallbackUrl;
+                    try { audioPlayer.load(); } catch (_) {}
+                } else if (audioSrc) {
+                    // Probar la URL directa primero
+                    audioPlayer.src = audioSrc;
+                    try { audioPlayer.load(); } catch (_) {}
+                } else if (fallbackUrl) {
+                    audioPlayer.src = fallbackUrl;
+                    try { audioPlayer.load(); } catch (_) {}
+                }
             }
 
             // Mostrar resumen
