@@ -2212,21 +2212,10 @@ class MeetingController extends Controller
                 $meetingModel = TranscriptionLaravel::where('id', $meeting)->firstOrFail();
 
                 if (!$sharedAccess && !$containerAccess) {
-                    $isOwner = false;
-                    // Preferir relación por usuario si existe
-                    try {
-                        if (property_exists($meetingModel, 'user_id') && !empty($meetingModel->user_id)) {
-                            $isOwner = ((int) $meetingModel->user_id) === ((int) $user->id);
-                        }
-                    } catch (\Throwable $eOwn) { /* ignore */ }
-                    // Compatibilidad legacy por username (case-insensitive)
-                    if (!$isOwner) {
-                        $mx = (string) ($meetingModel->username ?? '');
-                        $ux = (string) ($user->username ?? '');
-                        if ($mx !== '' && $ux !== '' && strcasecmp($mx, $ux) === 0) {
-                            $isOwner = true;
-                        }
-                    }
+                    // Compatibilidad legacy por username (case-insensitive), igual que en downloadJuFile
+                    $mx = (string) ($meetingModel->username ?? '');
+                    $ux = (string) ($user->username ?? '');
+                    $isOwner = ($mx !== '' && $ux !== '' && strcasecmp($mx, $ux) === 0);
                     if (!$isOwner) {
                         Log::warning('streamAudio: acceso denegado (no owner/shared/container)', [
                             'meeting_id' => $meeting,
@@ -2235,6 +2224,17 @@ class MeetingController extends Controller
                             'user_id' => $user->id ?? null,
                             'meeting_user_id' => $meetingModel->user_id ?? null,
                         ]);
+                        // Si ?debug=1, devolver detalle adicional
+                        if ($debug ?? false) {
+                            return response()->json([
+                                'error' => 'No tienes acceso a este audio',
+                                'status' => 403,
+                                'meeting_id' => $meetingModel->id,
+                                'sharedAccess' => $sharedAccess,
+                                'containerAccess' => $containerAccess,
+                                'owner_by_username_ci' => ($mx !== '' && $ux !== '' && strcasecmp($mx, $ux) === 0),
+                            ], 403);
+                        }
                         return $this->audioError(403, 'No tienes acceso a este audio', $meetingModel->id);
                     }
                 }
