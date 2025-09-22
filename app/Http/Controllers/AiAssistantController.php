@@ -1127,8 +1127,8 @@ class AiAssistantController extends Controller
         $user = Auth::user();
 
         $request->validate([
-            'file' => 'sometimes|file|max:51200|mimes:pdf,jpg,jpeg,png,xlsx,docx,pptx', // 50MB max, allowed types only
-            'files.*' => 'sometimes|file|max:51200|mimes:pdf,jpg,jpeg,png,xlsx,docx,pptx',
+            'file' => 'sometimes|file|max:102400|mimes:pdf,jpg,jpeg,png,xlsx,docx,pptx', // 100MB max, allowed types only
+            'files.*' => 'sometimes|file|max:102400|mimes:pdf,jpg,jpeg,png,xlsx,docx,pptx',
             'drive_folder_id' => 'nullable|string',
             'drive_type' => 'sometimes|in:personal,organization',
             'session_id' => 'nullable|integer'

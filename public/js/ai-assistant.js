@@ -1636,7 +1636,7 @@ function handleFiles(files) {
  * Validar archivo
  */
 function isValidFile(file) {
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 100 * 1024 * 1024; // 100MB, alineado con backend
     const allowedTypes = [
         'application/pdf',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
@@ -1645,8 +1645,15 @@ function isValidFile(file) {
         'image/jpeg', // .jpg/.jpeg
         'image/png'   // .png
     ];
+    const allowedExt = ['pdf', 'docx', 'xlsx', 'pptx', 'jpg', 'jpeg', 'png'];
 
-    return file.size <= maxSize && allowedTypes.includes(file.type);
+    // Algunas plataformas devuelven type vacío o genérico: validar por extensión también
+    const name = (file && file.name) ? String(file.name) : '';
+    const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+    const typeOk = allowedTypes.includes(file.type) || allowedExt.includes(ext);
+    const sizeOk = (Number(file.size) || 0) <= maxSize;
+
+    return typeOk && sizeOk;
 }
 
 /**
