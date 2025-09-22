@@ -3341,6 +3341,16 @@ async function closeMeetingModal() {
                 }
 
                 cleanupModalFiles();
+
+                // Si la reunión fue abierta desde el modal del contenedor, restaurarlo automáticamente
+                if (resumeContainerOnClose && lastContainerForMeetings) {
+                    try {
+                        openContainerMeetingsModal(lastContainerForMeetings);
+                    } catch (_) {}
+                    // Resetear banderas
+                    resumeContainerOnClose = false;
+                    lastContainerForMeetings = null;
+                }
             }
         }, 300);
     }
@@ -3865,6 +3875,9 @@ async function confirmDeleteMeeting(meetingId) {
 // ===============================================
 let containers = [];
 let currentContainer = null;
+// Track last opened container and whether to resume it after closing a meeting modal
+let lastContainerForMeetings = null;
+let resumeContainerOnClose = false;
 let isEditMode = false;
 
 // Inicializar funcionalidad de contenedores
@@ -5032,6 +5045,9 @@ function renderContainerMeetings(meetings) {
 }
 
 function openMeetingModalFromContainer(meetingId) {
+    // Marcar que debemos restaurar el modal de contenedor al cerrar la reunión
+    resumeContainerOnClose = true;
+    lastContainerForMeetings = currentContainerForMeetings;
     // Mostrar loading inmediato para evitar vacío visual en estado limpio
     try { document.querySelectorAll('#meetingModal').forEach(el => el.remove()); } catch (_) {}
     try { showModalLoadingState(); } catch (e) { /* no-op */ }
