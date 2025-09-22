@@ -126,7 +126,137 @@ class ExtractorService
             ];
         }
 
+        // OCR fallback for PDFs: convert pages to images with pdftoppm and OCR with tesseract
+        $pdftoppm = $this->resolveBinary('pdftoppm');
+        $tesseract = $this->resolveBinary('tesseract');
+        if ($pdftoppm && $tesseract) {
+            $prefix = $filePath . '_ppm';
+            $process = new Process([$pdftoppm, '-png', '-f', '1', '-l', '5', $filePath, $prefix]);
+            $process->setTimeout(90);
+            $process->run();
+
+            if ($process->isSuccessful()) {
+                $texts = [];
+                // Collect generated PNGs (prefix-1.png, prefix-2.png, ...)
+                $dir = dirname($filePath);
+                $base = basename($prefix);
+                $pattern = $dir . DIRECTORY_SEPARATOR . $base . '-*.png';
+                foreach (glob($pattern) as $png) {
+                    try {
+                        $p = new Process([$tesseract, $png, 'stdout', '-l', 'spa+eng']);
+                        $p->setTimeout(60);
+                        $p->run();
+                        if ($p->isSuccessful()) {
+                            $texts[] = $p->getOutput();
+                        }
+                    } catch (\Throwable $e) {
+                        // ignore individual page failures
+                    } finally {
+                        @unlink($png);
+                    }
+                }
+
+                $joined = $this->normalizeText(implode("\n\n", array_filter($texts, fn($t) => trim($t) !== '')));
+                if ($joined !== '') {
+                    return [
+                        'text' => $joined,
+                        'metadata' => [
+                            'detected_type' => 'application/pdf',
+                            'engine' => 'pdftoppm+tesseract',
+                        ],
+                    ];
+                }
+            }
+        }
+
+        // Last-resort naive extractor (pure PHP, best-effort)
+        $naive = $this->extractPdfNaively($filePath);
+        if ($naive !== null && trim($naive) !== '') {
+            return [
+                'text' => $this->normalizeText($naive),
+                'metadata' => [
+                    'detected_type' => 'application/pdf',
+                    'engine' => 'naive-parser',
+                ],
+            ];
+        }
+
         throw new RuntimeException('No se encontró ningún motor para extraer texto de PDF.');
+    }
+
+    /**
+     * Very naive pure-PHP PDF text extractor.
+     * Parses BT/ET blocks and Tj/TJ operators to retrieve visible text.
+     * Not robust, but better than failing when no engine is available.
+     */
+    private function extractPdfNaively(string $filePath): ?string
+    {
+        try {
+            $contents = @file_get_contents($filePath);
+            if ($contents === false || $contents === '') {
+                return null;
+            }
+
+            // Attempt to find text drawing operators
+            $textBlocks = [];
+            if (preg_match_all('/BT(.*?)ET/s', $contents, $btMatches)) {
+                foreach ($btMatches[1] as $block) {
+                    $textBlocks[] = $block;
+                }
+            } else {
+                // If no BT/ET blocks found, use whole content as a fallback region
+                $textBlocks[] = $contents;
+            }
+
+            $out = [];
+            foreach ($textBlocks as $block) {
+                // Match string literals used with Tj: (text) Tj
+                if (preg_match_all('/\((?:\\\)|\\\(|\\\\|\\[0-7]{1,3}|[^()\\])*\)\s*Tj/s', $block, $matches)) {
+                    foreach ($matches[0] as $m) {
+                        if (preg_match('/\(((?:\\\)|\\\(|\\\\|\\[0-7]{1,3}|[^()\\])*)\)\s*Tj/s', $m, $mm)) {
+                            $out[] = $this->pdfDecodeString($mm[1]);
+                        }
+                    }
+                }
+
+                // Match array of strings used with TJ: [ (a) (b) ] TJ
+                if (preg_match_all('/\[((?:\s*\((?:\\\)|\\\(|\\\\|\\[0-7]{1,3}|[^()\\])*\)\s*-?\d*\s*)+)\]\s*TJ/s', $block, $matchesTJ)) {
+                    foreach ($matchesTJ[1] as $arr) {
+                        if (preg_match_all('/\((?:\\\)|\\\(|\\\\|\\[0-7]{1,3}|[^()\\])*\)/s', $arr, $strs)) {
+                            foreach ($strs[0] as $s) {
+                                $s = trim($s);
+                                $s = preg_replace('/^\(|\)$/', '', $s);
+                                $out[] = $this->pdfDecodeString($s);
+                            }
+                        }
+                    }
+                }
+            }
+
+            $joined = trim(implode("\n", array_filter($out, fn($v) => $v !== '')));
+            return $joined;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function pdfDecodeString(string $text): string
+    {
+        // Replace escaped characters
+        $text = str_replace(['\\n','\\r','\\t','\\f','\\b'], ["\n","\r","\t","\f","\b"], $text);
+        $text = str_replace(['\\(','\\)','\\\\'], ['(',')','\\'], $text);
+
+        // Handle octal escapes (\\ddd)
+        $text = preg_replace_callback('/\\\d{1,3}/', function ($m) {
+            $oct = substr($m[0], 1);
+            $code = octdec($oct);
+            if ($code === 0) return '';
+            return chr($code);
+        }, $text) ?? $text;
+
+        // Remove stray non-printables
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', ' ', $text);
+        return trim($text);
     }
 
     private function extractWord(string $filePath, string $extension): array
