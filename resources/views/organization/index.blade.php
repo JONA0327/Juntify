@@ -743,8 +743,17 @@
 
                         <!-- Contenido del modal -->
                         <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                            <!-- Loading state mientras se cargan las reuniones -->
+                            <div x-show="selectedContainer && selectedContainer._isLoading" class="flex justify-center items-center py-20">
+                                <svg class="animate-spin h-8 w-8 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                </svg>
+                                <span class="ml-3 text-slate-300">Cargando reuniones...</span>
+                            </div>
+
                             <!-- Lista de reuniones -->
-                            <template x-if="selectedContainer?.meetings?.length > 0">
+                            <template x-if="!selectedContainer?._isLoading && selectedContainer?.meetings?.length > 0">
                                 <div class="meetings-grid">
                                     <template x-for="meeting in selectedContainer.meetings" :key="meeting.id">
                                         <div>
@@ -756,7 +765,7 @@
                             </template>
 
                             <!-- Estado vacío -->
-                            <template x-if="!selectedContainer?.meetings?.length">
+                            <template x-if="!selectedContainer?._isLoading && (!selectedContainer?.meetings || selectedContainer.meetings.length === 0)">
                                 <div class="text-center py-16">
                                     <div class="mx-auto w-24 h-24 bg-slate-800/30 rounded-full flex items-center justify-center mb-6">
                                         <svg class="w-12 h-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

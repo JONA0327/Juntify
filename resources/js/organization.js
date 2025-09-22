@@ -1823,6 +1823,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
     async openContainerMeetingsModal(container) {
         try {
+            // Mostrar modal inmediatamente con estado de carga visual
+            this.selectedContainer = { ...container, meetings: [], _isLoading: true };
+            this.showContainerMeetingsModal = true;
             // Cargar las reuniones del contenedor
             const response = await fetch(`/api/content-containers/${container.id}/meetings`);
             if (response.ok) {
@@ -1831,9 +1834,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     ...container,
                     is_company: container.is_company ?? false,
                     group_name: container.group_name ?? null,
-                    meetings: data.meetings || []
+                    meetings: data.meetings || [],
+                    _isLoading: false
                 };
-                this.showContainerMeetingsModal = true;
                 this.$nextTick(() => {
                     if (typeof attachMeetingEventListeners === 'function') {
                         attachMeetingEventListeners();
@@ -1871,6 +1874,29 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             console.error('Error loading container meetings:', error);
             alert('Error al cargar las reuniones del contenedor');
         }
+    },
+
+    init() {
+        // Escuchar evento global para reabrir modal de contenedor desde reuniones_v2
+        window.addEventListener('juntify:open-container-meetings', (e) => {
+            const id = e?.detail?.containerId;
+            if (!id) return;
+            // Si ya tenemos currentGroup, buscar el contenedor por id
+            const container = (this.currentGroup?.containers || []).find(c => String(c.id) === String(id));
+            if (container) {
+                // Mostrar loading rápido para feedback
+                this.selectedContainer = { ...container, meetings: [], _isLoading: true };
+                this.showContainerMeetingsModal = true;
+                // Abrir con fetch
+                this.openContainerMeetingsModal(container);
+            } else {
+                // Fallback: construir objeto mínimo
+                this.selectedContainer = { id, name: 'Contenedor', description: '', meetings: [], _isLoading: true };
+                this.showContainerMeetingsModal = true;
+                // Intentar cargar igualmente
+                this.openContainerMeetingsModal({ id, name: 'Contenedor', description: '' });
+            }
+        });
     },
 
     editContainer(container) {
