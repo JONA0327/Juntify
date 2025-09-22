@@ -27,6 +27,7 @@ use App\Services\GoogleTokenRefreshService;
 use App\Jobs\ProcessAiDocumentJob;
 use App\Services\EmbeddingSearch;
 use App\Services\GoogleServiceAccount;
+use App\Services\MeetingJuCacheService;
 use Google\Service\Exception as GoogleServiceException;
 use RuntimeException;
 use App\Support\OpenAiConfig;
@@ -95,11 +96,21 @@ class AiAssistantController extends Controller
         $preloaded = [];
         $errors = [];
 
+        /** @var MeetingJuCacheService $cache */
+        $cache = app(MeetingJuCacheService::class);
+
         foreach ($container->meetings as $meeting) {
             try {
-                // Trigger download/parse flow by attempting to build fragments from .ju
-                // This does not persist, but verifies availability and warms caches
-                $this->buildFragmentsFromJu($meeting, '');
+                // Descargar + parsear y cachear permanentemente el .ju
+                $content = $this->tryDownloadJuContent($meeting);
+                if (is_string($content) && $content !== '') {
+                    $parsed = $this->decryptJuFile($content);
+                    $normalized = $this->processTranscriptData($parsed['data'] ?? []);
+                    $cache->setCachedParsed((int)$meeting->id, $normalized);
+                } else {
+                    // Intentar al menos construir fragmentos (por si hay otra fuente)
+                    $this->buildFragmentsFromJu($meeting, '');
+                }
                 $preloaded[] = (int) $meeting->id;
             } catch (\Throwable $e) {
                 $errors[] = [
@@ -1377,14 +1388,19 @@ class AiAssistantController extends Controller
         }
 
         try {
-            // Usar un flujo robusto para descargar el .ju priorizando acceso por organizaci f3n si aplica
-            $content = $this->tryDownloadJuContent($meeting);
-            if (! is_string($content) || $content === '') {
-                return $fragments;
+            /** @var MeetingJuCacheService $cache */
+            $cache = app(MeetingJuCacheService::class);
+            $data = $cache->getCachedParsed((int)$meeting->id);
+            if (!is_array($data)) {
+                // Descargar y cachear si no existe
+                $content = $this->tryDownloadJuContent($meeting);
+                if (! is_string($content) || $content === '') {
+                    return $fragments;
+                }
+                $parsed = $this->decryptJuFile($content);
+                $data = $this->processTranscriptData($parsed['data'] ?? []);
+                $cache->setCachedParsed((int)$meeting->id, $data);
             }
-
-            $parsed = $this->decryptJuFile($content);
-            $data = $this->processTranscriptData($parsed['data'] ?? []);
 
             // Resumen
             if (! empty($data['summary'])) {
