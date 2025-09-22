@@ -77,6 +77,22 @@ class ExtractorService
 
     private function extractPdf(string $filePath): array
     {
+        // OCR configuration via environment (with safe defaults)
+        $ocrDpi = (int) (env('OCR_PDF_DPI', 300));
+        if ($ocrDpi < 72) { $ocrDpi = 72; }
+        if ($ocrDpi > 600) { $ocrDpi = 600; }
+
+        $ocrFirstPage = (int) (env('OCR_PDF_FIRST_PAGE', 1));
+        if ($ocrFirstPage < 1) { $ocrFirstPage = 1; }
+        $ocrMaxPages = (int) (env('OCR_PDF_MAX_PAGES', 5));
+        if ($ocrMaxPages < 1) { $ocrMaxPages = 1; }
+        if ($ocrMaxPages > 20) { $ocrMaxPages = 20; }
+        $ocrLastPage = $ocrFirstPage + $ocrMaxPages - 1;
+
+        $ocrLangsRaw = trim((string) env('OCR_LANGUAGES', 'spa+eng,eng,spa'));
+        $ocrLangs = array_values(array_filter(array_map('trim', explode(',', $ocrLangsRaw)), fn($v) => $v !== ''));
+        if (empty($ocrLangs)) { $ocrLangs = ['spa+eng', 'eng', 'spa']; }
+
         // Prefer native PHP libraries if they are installed.
         if (class_exists('Smalot\\PdfParser\\Parser')) {
             try {
@@ -167,8 +183,18 @@ class ExtractorService
             try {
                 $dir = dirname($filePath);
                 $prefix = $filePath . '_gs';
-                // Render up to first 5 pages at 300dpi for better OCR quality
-                $process = new Process([$gs, '-q', '-dSAFER', '-sDEVICE=png16m', '-r300', '-o', $prefix . '-%03d.png', $filePath]);
+                // Render limited pages at configurable DPI for better OCR quality
+                $process = new Process([
+                    $gs,
+                    '-q',
+                    '-dSAFER',
+                    '-sDEVICE=png16m',
+                    '-r' . $ocrDpi,
+                    '-dFirstPage=' . $ocrFirstPage,
+                    '-dLastPage=' . $ocrLastPage,
+                    '-o', $prefix . '-%03d.png',
+                    $filePath
+                ]);
                 $process->setTimeout(120);
                 $process->run();
 
@@ -180,7 +206,7 @@ class ExtractorService
                         try {
                             if ($tesseract) {
                                 // Try multiple language options for robustness
-                                foreach (['spa+eng', 'eng', 'spa'] as $lang) {
+                                foreach ($ocrLangs as $lang) {
                                     $p = new Process([$tesseract, $png, 'stdout', '-l', $lang]);
                                     $p->setTimeout(60);
                                     $p->run();
@@ -227,8 +253,8 @@ class ExtractorService
         $tesseract = $this->resolveBinary('tesseract');
         if ($pdftoppm && $tesseract) {
             $prefix = $filePath . '_ppm';
-            // Use 300 DPI for better OCR accuracy and limit to first 5 pages
-            $process = new Process([$pdftoppm, '-png', '-r', '300', '-f', '1', '-l', '5', $filePath, $prefix]);
+            // Use configurable DPI and page range for better OCR accuracy
+            $process = new Process([$pdftoppm, '-png', '-r', (string) $ocrDpi, '-f', (string) $ocrFirstPage, '-l', (string) $ocrLastPage, $filePath, $prefix]);
             $process->setTimeout(90);
             $process->run();
 
@@ -242,7 +268,7 @@ class ExtractorService
                     try {
                         // Try multiple languages in order of preference
                         $recognized = '';
-                        foreach (['spa+eng', 'eng', 'spa'] as $lang) {
+                        foreach ($ocrLangs as $lang) {
                             $p = new Process([$tesseract, $png, 'stdout', '-l', $lang]);
                             $p->setTimeout(60);
                             $p->run();

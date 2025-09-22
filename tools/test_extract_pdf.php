@@ -18,6 +18,14 @@ if (!is_file($filePath)) {
     exit(1);
 }
 
+// Ensure Composer dependencies are installed before bootstrapping Laravel
+$autoload = __DIR__ . '/../vendor/autoload.php';
+if (!file_exists($autoload)) {
+    fwrite(STDERR, "Composer dependencies are missing. From the project root, run:\n" .
+        "  composer install --no-dev --prefer-dist\n\n");
+    exit(1);
+}
+
 // Bootstrap Laravel so facades/config/env work
 $app = require __DIR__ . '/../bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
