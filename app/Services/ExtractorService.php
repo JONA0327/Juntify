@@ -84,46 +84,56 @@ class ExtractorService
                 $pdf = $parser->parseFile($filePath);
                 $text = $this->normalizeText($pdf->getText());
 
-                return [
-                    'text' => $text,
-                    'metadata' => [
-                        'detected_type' => 'application/pdf',
-                        'pages' => count($pdf->getPages()),
-                        'engine' => 'smalot/pdfparser',
-                    ],
-                ];
+                // If smalot returns empty text (common in scanned PDFs), continue to fallbacks
+                if ($text !== '') {
+                    return [
+                        'text' => $text,
+                        'metadata' => [
+                            'detected_type' => 'application/pdf',
+                            'pages' => count($pdf->getPages()),
+                            'engine' => 'smalot/pdfparser',
+                        ],
+                    ];
+                }
             } catch (\Throwable $exception) {
                 // Fall back to CLI strategy below.
             }
         }
 
-    $binary = $this->resolveBinary('pdftotext');
-    if ($binary) {
+        $binary = $this->resolveBinary('pdftotext');
+        if ($binary) {
             $outputFile = $filePath . '.txt';
             $process = new Process([$binary, '-layout', $filePath, $outputFile]);
             $process->setTimeout(60);
             $process->run();
 
-            if (! $process->isSuccessful()) {
-                throw new RuntimeException('No se pudo extraer texto del PDF: ' . $process->getErrorOutput());
-            }
+            // If pdftotext failed, don't stop—continue with OCR fallbacks
+            if ($process->isSuccessful()) {
+                $text = File::exists($outputFile) ? File::get($outputFile) : '';
+                if ($text === false) {
+                    $text = '';
+                }
+                if ($outputFile && File::exists($outputFile)) {
+                    File::delete($outputFile);
+                }
 
-            $text = File::exists($outputFile) ? File::get($outputFile) : '';
-            if ($text === false) {
-                $text = '';
+                $normalized = $this->normalizeText($text);
+                // If text is non-empty, return; otherwise try OCR fallbacks
+                if ($normalized !== '') {
+                    return [
+                        'text' => $normalized,
+                        'metadata' => [
+                            'detected_type' => 'application/pdf',
+                            'engine' => 'pdftotext-cli',
+                        ],
+                    ];
+                }
+            } else {
+                // Clean up possible output file if process failed
+                if ($outputFile && File::exists($outputFile)) {
+                    File::delete($outputFile);
+                }
             }
-
-            if ($outputFile && File::exists($outputFile)) {
-                File::delete($outputFile);
-            }
-
-            return [
-                'text' => $this->normalizeText($text),
-                'metadata' => [
-                    'detected_type' => 'application/pdf',
-                    'engine' => 'pdftotext-cli',
-                ],
-            ];
         }
 
         // Ghostscript fallback using txtwrite device (if available)
@@ -157,8 +167,8 @@ class ExtractorService
             try {
                 $dir = dirname($filePath);
                 $prefix = $filePath . '_gs';
-                // Render up to first 5 pages at 150dpi to keep it fast
-                $process = new Process([$gs, '-q', '-dSAFER', '-sDEVICE=png16m', '-r150', '-o', $prefix . '-%03d.png', $filePath]);
+                // Render up to first 5 pages at 300dpi for better OCR quality
+                $process = new Process([$gs, '-q', '-dSAFER', '-sDEVICE=png16m', '-r300', '-o', $prefix . '-%03d.png', $filePath]);
                 $process->setTimeout(120);
                 $process->run();
 
@@ -169,11 +179,15 @@ class ExtractorService
                     foreach ($generated as $png) {
                         try {
                             if ($tesseract) {
-                                $p = new Process([$tesseract, $png, 'stdout', '-l', 'spa+eng']);
-                                $p->setTimeout(60);
-                                $p->run();
-                                if ($p->isSuccessful()) {
-                                    $texts[] = $p->getOutput();
+                                // Try multiple language options for robustness
+                                foreach (['spa+eng', 'eng', 'spa'] as $lang) {
+                                    $p = new Process([$tesseract, $png, 'stdout', '-l', $lang]);
+                                    $p->setTimeout(60);
+                                    $p->run();
+                                    if ($p->isSuccessful() && trim($p->getOutput()) !== '') {
+                                        $texts[] = $p->getOutput();
+                                        break;
+                                    }
                                 }
                             } else {
                                 // No tesseract: try OpenAI Vision per page
@@ -213,7 +227,8 @@ class ExtractorService
         $tesseract = $this->resolveBinary('tesseract');
         if ($pdftoppm && $tesseract) {
             $prefix = $filePath . '_ppm';
-            $process = new Process([$pdftoppm, '-png', '-f', '1', '-l', '5', $filePath, $prefix]);
+            // Use 300 DPI for better OCR accuracy and limit to first 5 pages
+            $process = new Process([$pdftoppm, '-png', '-r', '300', '-f', '1', '-l', '5', $filePath, $prefix]);
             $process->setTimeout(90);
             $process->run();
 
@@ -225,11 +240,19 @@ class ExtractorService
                 $pattern = $dir . DIRECTORY_SEPARATOR . $base . '-*.png';
                 foreach (glob($pattern) as $png) {
                     try {
-                        $p = new Process([$tesseract, $png, 'stdout', '-l', 'spa+eng']);
-                        $p->setTimeout(60);
-                        $p->run();
-                        if ($p->isSuccessful()) {
-                            $texts[] = $p->getOutput();
+                        // Try multiple languages in order of preference
+                        $recognized = '';
+                        foreach (['spa+eng', 'eng', 'spa'] as $lang) {
+                            $p = new Process([$tesseract, $png, 'stdout', '-l', $lang]);
+                            $p->setTimeout(60);
+                            $p->run();
+                            if ($p->isSuccessful() && trim($p->getOutput()) !== '') {
+                                $recognized = $p->getOutput();
+                                break;
+                            }
+                        }
+                        if ($recognized !== '') {
+                            $texts[] = $recognized;
                         }
                     } catch (\Throwable $e) {
                         // ignore individual page failures
