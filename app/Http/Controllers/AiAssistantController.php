@@ -28,6 +28,7 @@ use App\Jobs\ProcessAiDocumentJob;
 use App\Services\EmbeddingSearch;
 use App\Services\GoogleServiceAccount;
 use App\Services\MeetingJuCacheService;
+use App\Models\AiMeetingJuCache;
 use Google\Service\Exception as GoogleServiceException;
 use RuntimeException;
 use App\Support\OpenAiConfig;
@@ -106,7 +107,7 @@ class AiAssistantController extends Controller
                 if (is_string($content) && $content !== '') {
                     $parsed = $this->decryptJuFile($content);
                     $normalized = $this->processTranscriptData($parsed['data'] ?? []);
-                    $cache->setCachedParsed((int)$meeting->id, $normalized);
+                    $cache->setCachedParsed((int)$meeting->id, $normalized, (string)$meeting->transcript_drive_id);
                 } else {
                     // Intentar al menos construir fragmentos (por si hay otra fuente)
                     $this->buildFragmentsFromJu($meeting, '');
@@ -349,6 +350,37 @@ class AiAssistantController extends Controller
                     }
                 }
             }
+
+            // 3.b) Eliminar cache de .ju cifrado (solo para reuniones vinculadas a esta sesión)
+            try {
+                // Reuniones asociadas a esta sesión
+                $sessionMeetingIds = $this->collectSessionMeetingIds($session);
+                if (!empty($sessionMeetingIds)) {
+                    // Recolectar reuniones referenciadas por otras sesiones activas
+                    $referencedMeetingsElsewhere = [];
+                    $otherSessions = AiChatSession::byUser($user->username)
+                        ->where('id', '!=', $session->id)
+                        ->active()
+                        ->get();
+                    foreach ($otherSessions as $other) {
+                        $ids = $this->collectSessionMeetingIds($other);
+                        if (!empty($ids)) {
+                            $referencedMeetingsElsewhere = array_merge($referencedMeetingsElsewhere, $ids);
+                        }
+                    }
+                    $referencedMeetingsElsewhere = array_values(array_unique(array_filter($referencedMeetingsElsewhere, fn($v) => is_numeric($v))));
+
+                    $meetingIdsToDelete = array_values(array_diff($sessionMeetingIds, $referencedMeetingsElsewhere));
+                    if (!empty($meetingIdsToDelete)) {
+                        AiMeetingJuCache::whereIn('meeting_id', $meetingIdsToDelete)->delete();
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo eliminar cache de .ju al borrar la sesión', [
+                    'session_id' => $session->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         } else {
             $docIdsToDelete = [];
         }
@@ -435,6 +467,58 @@ class AiAssistantController extends Controller
 
         // Normalizar y devolver únicos
         return array_values(array_unique(array_map('intval', $ids)));
+    }
+
+    /**
+     * Recolecta IDs de reuniones vinculadas a la sesión a partir de su contexto
+     * - meeting: context_id es el ID de la reunión
+     * - container: incluye todas las reuniones del contenedor
+     * - mixed: items[] puede contener type=meeting o type=container
+     */
+    private function collectSessionMeetingIds(AiChatSession $session): array
+    {
+        $ids = [];
+
+        try {
+            if ($session->context_type === 'meeting' && $session->context_id && is_numeric($session->context_id)) {
+                $ids[] = (int) $session->context_id;
+            }
+
+            if ($session->context_type === 'container' && $session->context_id) {
+                $container = MeetingContentContainer::with(['meetings' => function ($q) {
+                    $q->select('id');
+                }])->find($session->context_id);
+                if ($container) {
+                    $ids = array_merge($ids, $container->meetings->pluck('id')->map(fn($v)=> (int)$v)->all());
+                }
+            }
+
+            if ($session->context_type === 'mixed') {
+                $data = is_array($session->context_data) ? $session->context_data : [];
+                $items = \Illuminate\Support\Arr::get($data, 'items', []);
+                if (is_array($items)) {
+                    foreach ($items as $item) {
+                        if (!is_array($item)) continue;
+                        $type = $item['type'] ?? null;
+                        $id = $item['id'] ?? null;
+                        if ($type === 'meeting' && is_numeric($id)) {
+                            $ids[] = (int) $id;
+                        } elseif ($type === 'container' && $id) {
+                            $container = MeetingContentContainer::with(['meetings' => function ($q) {
+                                $q->select('id');
+                            }])->find($id);
+                            if ($container) {
+                                $ids = array_merge($ids, $container->meetings->pluck('id')->map(fn($v)=> (int)$v)->all());
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // ignore and return what we have
+        }
+
+        return array_values(array_unique(array_filter(array_map('intval', $ids), fn($v)=> $v>0)));
     }
 
     /**
@@ -1399,7 +1483,7 @@ class AiAssistantController extends Controller
                 }
                 $parsed = $this->decryptJuFile($content);
                 $data = $this->processTranscriptData($parsed['data'] ?? []);
-                $cache->setCachedParsed((int)$meeting->id, $data);
+                $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id);
             }
 
             // Resumen
