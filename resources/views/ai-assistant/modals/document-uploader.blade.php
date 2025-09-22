@@ -43,7 +43,7 @@
                             <p class="drop-text">Arrastra archivos aquí o <span class="browse-link">haz clic para seleccionar</span></p>
                             <p class="file-types">PDF, Word, Excel, PowerPoint, Imágenes, TXT (Max: 10MB)</p>
                         </div>
-                        <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt" style="display: none;">
+                        <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.docx,.pptx" style="display: none;">
                     </div>
 
                     <div class="upload-options">

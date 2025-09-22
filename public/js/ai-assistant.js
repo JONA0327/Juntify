@@ -1482,16 +1482,11 @@ function isValidFile(file) {
     const maxSize = 10 * 1024 * 1024; // 10MB
     const allowedTypes = [
         'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-powerpoint',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'text/plain',
-        'image/jpeg',
-        'image/png',
-        'image/gif'
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',      // .xlsx
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+        'image/jpeg', // .jpg/.jpeg
+        'image/png'   // .png
     ];
 
     return file.size <= maxSize && allowedTypes.includes(file.type);
@@ -2578,8 +2573,16 @@ function setupChatDropZone() {
 
 async function uploadChatAttachments(files) {
     try {
+        // Filtrar tipos no permitidos
+        const validFiles = files.filter(isValidFile);
+        const rejected = files.filter(f => !isValidFile(f));
+        if (rejected.length) {
+            showNotification(`Se omitieron ${rejected.length} archivo(s) no permitidos. Tipos válidos: PDF, JPG/JPEG, PNG, XLSX, DOCX, PPTX.`, 'warning');
+        }
+        if (!validFiles.length) return;
+
         const formData = new FormData();
-        files.forEach(file => formData.append('files[]', file));
+        validFiles.forEach(file => formData.append('files[]', file));
 
         // Mantener la sesión actual (no crear otra)
         if (currentSessionId) {
@@ -2587,7 +2590,7 @@ async function uploadChatAttachments(files) {
         }
 
         // Mostrar mensajes de carga en el chat por cada archivo
-        files.forEach(file => {
+        validFiles.forEach(file => {
             addMessageToChat({
                 role: 'assistant',
                 content: `Cargando documento "${file.name}"…`,

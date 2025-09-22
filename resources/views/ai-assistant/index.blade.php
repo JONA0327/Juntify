@@ -127,7 +127,7 @@
 </div>
 
 <!-- Input de archivo oculto -->
-<input type="file" id="file-input" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png" style="display: none;">
+<input type="file" id="file-input" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.docx,.pptx" style="display: none;">
 
 <!-- Modal de selección de contexto -->
 @include('ai-assistant.modals.container-selector')
