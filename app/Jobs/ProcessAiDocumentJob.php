@@ -91,10 +91,6 @@ class ProcessAiDocumentJob implements ShouldQueue
             $document->update(['processing_progress' => 75, 'processing_step' => 'embedding']);
             $embeddings = $embeddingService->embedChunks($chunks, 20, $embeddingModel);
 
-            if (empty($embeddings)) {
-                throw new RuntimeException('No se obtuvieron embeddings para los fragmentos generados.');
-            }
-
             DB::transaction(function () use ($document, $chunks, $normalizedText, $embeddings, $extracted, $embeddingModel) {
                 AiContextEmbedding::where('content_type', 'document_text')
                     ->where('content_id', (string) $document->id)
@@ -144,6 +140,9 @@ class ProcessAiDocumentJob implements ShouldQueue
             if (stripos($message, 'No se encontró ningún motor para extraer texto de PDF') !== false
                 || stripos($message, 'El documento no contiene texto utilizable') !== false) {
                 $message .= ' · Sugerencia: instala pdftotext/poppler, ghostscript y/o tesseract (spa+eng) en el servidor, o sube un PDF con texto seleccionable. Si es un escaneo, activa OCR.';
+            }
+            if (stripos($message, 'embeddings') !== false) {
+                $message .= ' · Sugerencia: verifica OPENAI_API_KEY y permisos, el modelo de embeddings (config/services.php -> openai.embedding_model), y que el texto no esté vacío o sea demasiado largo por petición.';
             }
             $document->update([
                 'processing_status' => 'failed',

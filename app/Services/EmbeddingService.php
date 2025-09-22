@@ -71,6 +71,10 @@ class EmbeddingService
 
         ksort($vectors);
 
+        if (empty($vectors)) {
+            throw new RuntimeException('La API devolvió 0 embeddings. Revisa OPENAI_API_KEY, el modelo de embeddings y los límites de contenido.');
+        }
+
         return $vectors;
     }
 }

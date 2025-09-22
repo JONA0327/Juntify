@@ -266,19 +266,33 @@ class AiAssistantController extends Controller
         $session = AiChatSession::byUser($user->username)
             ->findOrFail($sessionId);
 
-        $forceDelete = $request->boolean('force_delete');
+        // Por defecto, borra definitivamente a menos que se indique lo contrario
+        $forceDelete = $request->has('force_delete')
+            ? $request->boolean('force_delete')
+            : true;
+
+        // Siempre eliminar los mensajes para evitar que queden residuos de contexto
+        $session->messages()->delete();
 
         if ($forceDelete) {
-            $session->messages()->delete();
+            // Borrado definitivo de la sesión
             $session->delete();
         } else {
-            $session->update(['is_active' => false]);
+            // Borrado "suave": dejar la sesión inactiva y completamente limpia de contexto
+            $session->fill([
+                'is_active' => false,
+                'context_type' => 'general',
+                'context_id' => null,
+                'context_data' => [],
+                'title' => 'Nueva conversación',
+            ])->save();
         }
 
         return response()->json([
             'success' => true,
             'session_id' => $sessionId,
             'deleted' => $forceDelete,
+            'wiped' => ! $forceDelete,
         ]);
     }
 
@@ -642,18 +656,7 @@ class AiAssistantController extends Controller
         $documents = AiDocument::byUser($user->username)
             ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function($document) {
-                return [
-                    'id' => $document->id,
-                    'name' => $document->name,
-                    'original_filename' => $document->original_filename,
-                    'document_type' => $document->document_type,
-                    'file_size' => $document->file_size,
-                    'processing_status' => $document->processing_status,
-                    'has_text' => $document->hasText(),
-                    'created_at' => $document->created_at
-                ];
-            });
+            ->map(fn($document) => $this->formatDocumentForResponse($document));
 
         return response()->json([
             'success' => true,
@@ -685,22 +688,54 @@ class AiAssistantController extends Controller
             usleep($pollMs * 1000);
         } while (microtime(true) < $deadline);
 
-        $documents = $last->map(function ($document) {
-            return [
-                'id' => $document->id,
-                'name' => $document->name,
-                'processing_status' => $document->processing_status,
-                'processing_progress' => $document->processing_progress,
-                'processing_step' => $document->processing_step,
-                'has_text' => $document->hasText(),
-                'processing_error' => $document->processing_error,
-            ];
-        })->values();
+        $documents = $last->map(fn($document) => $this->formatDocumentForResponse($document))->values();
 
         return response()->json([
             'success' => true,
             'documents' => $documents,
         ]);
+    }
+
+    /**
+     * Estandariza la salida de documentos para el front con etiquetas legibles
+     */
+    private function formatDocumentForResponse(\App\Models\AiDocument $document): array
+    {
+        $status = (string) ($document->processing_status ?? 'pending');
+        $step = (string) ($document->processing_step ?? '');
+
+        $statusLabels = [
+            'pending' => 'En cola',
+            'processing' => 'Procesando',
+            'completed' => 'Completado',
+            'failed' => 'Error',
+        ];
+
+        $stepLabels = [
+            'preparing' => 'Preparando',
+            'downloading' => 'Descargando',
+            'extracting' => 'Extrayendo texto',
+            'chunking' => 'Dividiendo en fragmentos',
+            'embedding' => 'Generando embeddings',
+            'done' => 'Listo',
+            'error' => 'Error',
+        ];
+
+        return [
+            'id' => $document->id,
+            'name' => $document->name,
+            'original_filename' => $document->original_filename,
+            'document_type' => $document->document_type,
+            'file_size' => $document->file_size,
+            'processing_status' => $status,
+            'processing_progress' => $document->processing_progress,
+            'processing_step' => $step,
+            'processing_error' => $document->processing_error,
+            'status_label' => $statusLabels[$status] ?? ucfirst($status),
+            'step_label' => $step ? ($stepLabels[$step] ?? ucfirst($step)) : null,
+            'has_text' => $document->hasText(),
+            'created_at' => $document->created_at,
+        ];
     }
 
     /**
