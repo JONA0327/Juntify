@@ -763,14 +763,19 @@ function renderDriveDocuments(files) {
         return `
         <div class="meeting-card" onclick="toggleDriveDocSelection('${id}')">
             <div class="meeting-card-header">
-                <div class="meeting-card-title">
-                    <h4>${icon} ${escapeHtml(name)}</h4>
-                    <div class="meeting-card-meta">
+                <div class="meeting-card-title" style="min-width:0;">
+                    <div class="file-title-row" style="display:flex;align-items:center;gap:8px;min-width:0;">
+                        <span class="file-type-icon" aria-hidden="true">${icon}</span>
+                        <h4 title="${escapeHtml(name)}" style="margin:0;font-size:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">
+                            ${escapeHtml(name)}
+                        </h4>
+                    </div>
+                    <div class="meeting-card-meta" style="margin-top:6px;opacity:.85;">
                         ${escapeHtml(size || '—')} ${modified ? '• ' + escapeHtml(modified) : ''}
                     </div>
                 </div>
-                <div class="meeting-card-actions">
-                    <label class="meeting-action-btn" title="Seleccionar">
+                <div class="meeting-card-actions" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;">
+                    <label class="meeting-action-btn" title="Seleccionar" style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;">
                         <input type="checkbox" id="drive-doc-${id}" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleDriveDocSelection('${id}')">
                     </label>
                 </div>
