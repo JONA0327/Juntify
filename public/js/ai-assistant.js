@@ -17,6 +17,85 @@ let selectedFiles = [];
 let selectedDocuments = [];
 // Mapa de nombres de documentos por id para mostrar chips legibles
 const documentNameById = new Map();
+// Seguimiento de documentos en procesamiento para actualizar UI cuando terminen
+const pendingDocIds = new Set();
+let pendingDocWatcher = null;
+
+function addPendingDoc(id) {
+    if (!Number.isFinite(Number(id))) return;
+    pendingDocIds.add(Number(id));
+    ensurePendingDocWatcher();
+}
+
+function removePendingDoc(id) {
+    pendingDocIds.delete(Number(id));
+    if (pendingDocIds.size === 0) stopPendingDocWatcher();
+}
+
+function ensurePendingDocWatcher() {
+    if (pendingDocWatcher) return;
+    // Revisa cada 3s el estado en servidor de los docs pendientes
+    pendingDocWatcher = setInterval(async () => {
+        try {
+            if (pendingDocIds.size === 0) {
+                stopPendingDocWatcher();
+                return;
+            }
+            const ids = Array.from(pendingDocIds);
+            const resp = await fetch('/api/ai-assistant/documents/wait', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ ids, timeout_ms: 1 })
+            });
+            const data = await resp.json().catch(() => ({ success: false }));
+            if (!data || !data.success || !Array.isArray(data.documents)) return;
+            let anyStateChange = false;
+            data.documents.forEach(doc => {
+                if (!doc || !doc.id) return;
+                if (doc && doc.name) documentNameById.set(Number(doc.id), String(doc.name));
+                if (doc.processing_status === 'completed') {
+                    const name = documentNameById.get(Number(doc.id)) || doc.name || 'Documento';
+                    addMessageToChat({
+                        role: 'assistant',
+                        content: `El documento "${name}" ya está cargado y listo para usar en esta conversación.`,
+                        created_at: new Date().toISOString(),
+                    });
+                    addDocIdToSessionContext(Number(doc.id));
+                    removePendingDoc(Number(doc.id));
+                    anyStateChange = true;
+                } else if (doc.processing_status === 'failed') {
+                    const name = documentNameById.get(Number(doc.id)) || doc.name || 'Documento';
+                    const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : '';
+                    addMessageToChat({
+                        role: 'assistant',
+                        content: `Hubo un error procesando el documento "${name}".${hint}`,
+                        created_at: new Date().toISOString(),
+                    });
+                    removePendingDoc(Number(doc.id));
+                    anyStateChange = true;
+                }
+            });
+            if (anyStateChange) {
+                try { loadExistingDocuments(); } catch (_) {}
+                if (window.currentContextType === 'documents') { try { loadDriveDocuments(); } catch (_) {} }
+                try { await loadChatSessions(); } catch (_) {}
+                try { await loadMessages(); } catch (_) {}
+                // Actualizar chips de contexto si aplica
+                try { renderContextDocs(); } catch (_) {}
+            }
+        } catch (_) { /* ignore polling errors */ }
+    }, 3000);
+}
+
+function stopPendingDocWatcher() {
+    if (pendingDocWatcher) {
+        clearInterval(pendingDocWatcher);
+        pendingDocWatcher = null;
+    }
+}
 let loadedContextItems = [];
 let currentContextType = 'containers';
 let allMeetings = [];
@@ -1801,6 +1880,7 @@ async function uploadDocuments() {
                                 content: `El documento "${name}" sigue procesándose. Te avisaré cuando esté listo.`,
                                 created_at: new Date().toISOString(),
                             });
+                            if (doc && doc.id) addPendingDoc(Number(doc.id));
                         }
                     });
 
@@ -1845,6 +1925,8 @@ async function uploadDocuments() {
                                     // Si todos ya no est1n en processing, salir
                                     const anyProcessing = pd.documents.some(d => (d.processing_status || 'processing') === 'processing');
                                     if (!anyProcessing) break;
+                                    // Agregar los que aún sigan en processing al watcher
+                                    pd.documents.filter(d => (d.processing_status || 'processing') === 'processing').forEach(d => { if (d && d.id) addPendingDoc(Number(d.id)); });
                                 }
                             } catch (_) { /* ignore */ }
                             polls++;
@@ -2825,6 +2907,7 @@ async function uploadChatAttachments(files) {
                             content: `El documento "${name}" sigue procesándose. Te avisaré cuando esté listo.`,
                             created_at: new Date().toISOString(),
                         });
+                        if (doc && doc.id) addPendingDoc(Number(doc.id));
                     }
                 });
                 // Poll corto adicional para notificar sin refrescar
@@ -2867,6 +2950,8 @@ async function uploadChatAttachments(files) {
                                 });
                                 const anyProcessing = pd.documents.some(d => (d.processing_status || 'processing') === 'processing');
                                 if (!anyProcessing) break;
+                                // Añadir los que siguen en processing al watcher
+                                pd.documents.filter(d => (d.processing_status || 'processing') === 'processing').forEach(d => { if (d && d.id) addPendingDoc(Number(d.id)); });
                             }
                         } catch (_) { /* ignore */ }
                         polls++;
