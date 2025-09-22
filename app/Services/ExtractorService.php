@@ -152,6 +152,62 @@ class ExtractorService
             }
         }
 
+        // Ghostscript -> PNG fallback + OCR (if pdftoppm not available)
+        if ($gs) {
+            try {
+                $dir = dirname($filePath);
+                $prefix = $filePath . '_gs';
+                // Render up to first 5 pages at 150dpi to keep it fast
+                $process = new Process([$gs, '-q', '-dSAFER', '-sDEVICE=png16m', '-r150', '-o', $prefix . '-%03d.png', $filePath]);
+                $process->setTimeout(120);
+                $process->run();
+
+                $generated = glob($prefix . '-*.png') ?: [];
+                if (!empty($generated)) {
+                    $texts = [];
+                    $tesseract = $this->resolveBinary('tesseract');
+                    foreach ($generated as $png) {
+                        try {
+                            if ($tesseract) {
+                                $p = new Process([$tesseract, $png, 'stdout', '-l', 'spa+eng']);
+                                $p->setTimeout(60);
+                                $p->run();
+                                if ($p->isSuccessful()) {
+                                    $texts[] = $p->getOutput();
+                                }
+                            } else {
+                                // No tesseract: try OpenAI Vision per page
+                                $vision = $this->tryOpenAiVision($png);
+                                if ($vision !== null) {
+                                    $texts[] = $vision['text'] ?? '';
+                                }
+                            }
+                        } catch (\Throwable $e) {
+                            // ignore per-page errors
+                        } finally {
+                            @unlink($png);
+                        }
+                        if (count($texts) >= 5) { // limit to first 5 pages
+                            break;
+                        }
+                    }
+
+                    $joined = $this->normalizeText(implode("\n\n", array_filter($texts, fn ($t) => trim($t) !== '')));
+                    if ($joined !== '') {
+                        return [
+                            'text' => $joined,
+                            'metadata' => [
+                                'detected_type' => 'application/pdf',
+                                'engine' => $tesseract ? 'ghostscript+ocr-tesseract' : 'ghostscript+openai-vision',
+                            ],
+                        ];
+                    }
+                }
+            } catch (\Throwable $e) {
+                // ignore and continue
+            }
+        }
+
         // OCR fallback for PDFs: convert pages to images with pdftoppm and OCR with tesseract
         $pdftoppm = $this->resolveBinary('pdftoppm');
         $tesseract = $this->resolveBinary('tesseract');

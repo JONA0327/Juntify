@@ -133,8 +133,9 @@ class ProcessAiDocumentJob implements ShouldQueue
             });
         } catch (Throwable $exception) {
             $message = $exception->getMessage();
-            if (stripos($message, 'No se encontró ningún motor para extraer texto de PDF') !== false) {
-                $message .= ' · Sugerencia: instala pdftotext/poppler o tesseract en el servidor, o sube un PDF con texto real (no imagen). Si es un escaneo, activa OCR.';
+            if (stripos($message, 'No se encontró ningún motor para extraer texto de PDF') !== false
+                || stripos($message, 'El documento no contiene texto utilizable') !== false) {
+                $message .= ' · Sugerencia: instala pdftotext/poppler, ghostscript y/o tesseract (spa+eng) en el servidor, o sube un PDF con texto seleccionable. Si es un escaneo, activa OCR.';
             }
             $document->update([
                 'processing_status' => 'failed',
