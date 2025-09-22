@@ -80,7 +80,8 @@ class AiChatService
         ]);
         $processingTime = microtime(true) - $start;
 
-        $content = $response->choices[0]->message->content ?? '';
+    $content = $response->choices[0]->message->content ?? '';
+    $content = $this->sanitizeOutput((string) $content);
         $usage = [
             'prompt_tokens' => $response->usage->prompt_tokens ?? null,
             'completion_tokens' => $response->usage->completion_tokens ?? null,
@@ -236,7 +237,8 @@ class AiChatService
             . "- Utiliza exclusivamente los fragmentos proporcionados para sustentar afirmaciones factuales.\n"
             . "- Cita siempre la fuente usando la cadena exacta del campo \"citation\" entre corchetes, por ejemplo [doc:123 p.2].\n"
             . "- No inventes fuentes ni información; si los fragmentos no contienen la respuesta, indícalo explícitamente.\n"
-            . "- Mantén la coherencia con los fragmentos y evita especulaciones.";
+            . "- Mantén la coherencia con los fragmentos y evita especulaciones.\n"
+            . "- Presenta la respuesta en Markdown claro y limpio (títulos breves, listas con \"- \" y sin caracteres extraños o invisibles).";
 
         if (empty($sections)) {
             return null;
@@ -277,5 +279,49 @@ class AiChatService
         }
 
         return $citations;
+    }
+
+    /**
+     * Limpia y normaliza el texto de salida para que sea más presentable en la UI.
+     */
+    private function sanitizeOutput(string $text): string
+    {
+        // Reemplazos básicos de tipografía y espacios
+        $map = [
+            "\u{00A0}" => ' ',   // NBSP
+            "\u{202F}" => ' ',   // NNBSP
+            "\u{2009}" => ' ',   // Thin space
+            "\u{200A}" => ' ',   // Hair space
+            "\u{2002}" => ' ', "\u{2003}" => ' ', "\u{2004}" => ' ',
+            "\u{2005}" => ' ', "\u{2006}" => ' ', "\u{2007}" => ' ', "\u{2008}" => ' ',
+            "•" => '- ',
+            "–" => '-',
+            "—" => '-',
+            "“" => '"', "”" => '"', "„" => '"',
+            "‘" => "'", "’" => "'",
+        ];
+        $text = strtr($text, $map);
+
+        // Eliminar caracteres invisibles de control (excepto \n y \t)
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text);
+        // Eliminar zero-width y BOMs
+        $text = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $text);
+        // Normalizar espacios finos restantes
+        $text = preg_replace('/[\x{2000}-\x{200A}]/u', ' ', $text);
+
+        // Estandarizar listas con guiones y un espacio
+        $text = preg_replace('/^\s*[\-*]\s+/m', '- ', $text);
+        // Quitar espacios en blanco al final de cada línea
+        $text = preg_replace('/[ \t]+$/m', '', $text);
+        // Reducir líneas en blanco repetidas a como mucho 1
+        $text = preg_replace('/(\R){3,}/', "\n\n", $text);
+        // Colapsar múltiples espacios en uno (sin afectar saltos de línea)
+        $text = preg_replace('/[\t ]{2,}/', ' ', $text);
+
+        // Recortes finales
+        $text = trim($text);
+        // Asegurar saltos de línea estilo \n
+        $text = str_replace(["\r\n", "\r"], "\n", $text);
+        return $text;
     }
 }

@@ -21,7 +21,12 @@ let loadedContextItems = [];
 let currentContextType = 'containers';
 let allMeetings = [];
 let allContainers = [];
+let allDocuments = [];
 let chatSessions = [];
+// Menciones (@ documentos, # reuniones/contenedores)
+let pendingMentions = [];
+let mentionState = { active: false, symbol: null, startIndex: 0, query: '', items: [], selectedIndex: 0 };
+let mentionsDropdownEl = null;
 
 // Inicialización
 document.addEventListener('DOMContentLoaded', function() {
@@ -36,6 +41,8 @@ async function initializeAiAssistant() {
         await loadChatSessions();
         setupEventListeners();
         await ensureCurrentSession();
+        // Precargar datos básicos para menciones
+        try { await preloadMentionDatasets(); } catch (e) { console.warn('No se pudieron precargar datos de menciones:', e); }
     } catch (error) {
         console.error('Error initializing AI Assistant:', error);
         showNotification('Error al inicializar el asistente', 'error');
@@ -52,6 +59,14 @@ function setupEventListeners() {
         messageInput.addEventListener('input', function() {
             adjustTextareaHeight(this);
             updateSendButton(isLoading);
+            handleMentionsTrigger(this);
+        });
+        messageInput.addEventListener('keydown', function(e) {
+            if (!mentionState.active) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); moveMentionsSelection(1); }
+            if (e.key === 'ArrowUp') { e.preventDefault(); moveMentionsSelection(-1); }
+            if (e.key === 'Enter') { e.preventDefault(); applySelectedMention(); }
+            if (e.key === 'Escape') { closeMentionsDropdown(); }
         });
     }
 
@@ -442,6 +457,7 @@ function renderMessage(message) {
     const metadata = message.metadata || {};
     const attachments = message.attachments && message.attachments.length > 0 ? renderAttachments(message.attachments) : '';
     const citations = !isUser ? renderMessageCitations(metadata) : '';
+    const userMentions = isUser ? renderUserMentions(metadata) : '';
 
     return `
         <div class="message ${isUser ? 'user' : 'assistant'}">
@@ -452,6 +468,7 @@ function renderMessage(message) {
                 <div class="message-bubble">
                     ${formatMessageContent(message.content)}
                     ${attachments}
+                    ${userMentions}
                     ${citations}
                 </div>
                 <div class="message-time">${formatTime(message.created_at)}</div>
@@ -483,7 +500,8 @@ async function sendMessage(messageText = null) {
                 role: 'user',
                 content: message,
                 created_at: new Date().toISOString(),
-                attachments: attachmentsToSend.map(f => ({ name: f.name, type: 'file' }))
+                attachments: attachmentsToSend.map(f => ({ name: f.name, type: 'file' })),
+                metadata: pendingMentions.length ? { mentions: [...pendingMentions] } : {}
             });
         }
 
@@ -504,7 +522,8 @@ async function sendMessage(messageText = null) {
             },
             body: JSON.stringify({
                 content: message,
-                attachments: attachmentsToSend
+                attachments: attachmentsToSend,
+                mentions: pendingMentions
             })
         });
 
@@ -527,6 +546,7 @@ async function sendMessage(messageText = null) {
     } finally {
         isLoading = false;
         updateSendButton(false);
+        pendingMentions = [];
     }
 }
 
@@ -725,6 +745,25 @@ async function loadMeetings() {
         console.error('Error loading meetings:', error);
         grid.innerHTML = '<div class="empty-state"><p>Error al cargar reuniones</p></div>';
     }
+}
+
+async function preloadMentionDatasets() {
+    // Documentos (para @)
+    try {
+        const resp = await fetch('/api/ai-assistant/documents');
+        const data = await resp.json();
+        if (data && data.success && Array.isArray(data.documents)) {
+            allDocuments = data.documents.map(d => ({ id: d.id, name: d.name || d.original_filename }));
+            window.cachedDocuments = allDocuments;
+        }
+    } catch (e) { /* ignore */ }
+    // Reuniones y contenedores ya se cargan bajo demanda en modales, pero intentamos un fetch ligero si aún vacíos
+    try {
+        if (!allMeetings.length) { const r = await fetch('/api/ai-assistant/meetings'); const j = await r.json(); if (j && j.success) allMeetings = j.meetings || []; }
+    } catch (e) { /* ignore */ }
+    try {
+        if (!allContainers.length) { const r = await fetch('/api/ai-assistant/containers'); const j = await r.json(); if (j && j.success) allContainers = j.containers || []; }
+    } catch (e) { /* ignore */ }
 }
 
 /**
@@ -1978,6 +2017,129 @@ function formatMessageContent(content) {
     content = content.replace(/\n/g, '<br>');
 
     return content;
+}
+
+function renderUserMentions(metadata) {
+    const list = metadata && Array.isArray(metadata.mentions) ? metadata.mentions : [];
+    if (!list.length) return '';
+    const pills = list.map(m => {
+        const type = m.type;
+        const id = m.id;
+        const title = m.title || (type === 'document' ? `Doc #${id}` : type === 'meeting' ? `Reunión #${id}` : `Contenedor #${id}`);
+        const color = type === 'document' ? '#60a5fa' : (type === 'meeting' ? '#34d399' : '#f59e0b');
+        return `<span class="mention-pill" style="display:inline-block;background:${color}1a;color:${color};border:1px solid ${color}66;border-radius:999px;padding:2px 8px;font-size:12px;margin:2px;">${escapeHtml(title)}</span>`;
+    }).join('');
+    return `<div class="message-mentions" style="margin-top:8px;">${pills}</div>`;
+}
+
+// ===================== MENCIONES (@ y #) =====================
+function handleMentionsTrigger(textarea) {
+    const value = textarea.value;
+    const cursor = textarea.selectionStart || value.length;
+    // Buscar el símbolo más reciente antes del cursor que no tenga espacios
+    let start = cursor - 1;
+    while (start >= 0 && !['\n', ' '].includes(value[start])) {
+        start--;
+    }
+    start++;
+    const segment = value.slice(start, cursor);
+    if (!segment) { closeMentionsDropdown(); return; }
+    const first = segment[0];
+    if (first !== '@' && first !== '#') { closeMentionsDropdown(); return; }
+    const query = segment.slice(1);
+    mentionState.active = true;
+    mentionState.symbol = first;
+    mentionState.startIndex = start;
+    mentionState.query = query;
+    mentionState.selectedIndex = 0;
+    updateMentionsItems(query, first);
+    openMentionsDropdown(textarea);
+}
+
+function updateMentionsItems(query, symbol) {
+    const q = (query || '').toLowerCase();
+    let items = [];
+    if (symbol === '@') {
+        // Sugerir documentos
+        items = (window.cachedDocuments || allDocuments || []).map(d => ({ type: 'document', id: d.id, title: d.name || d.original_filename || `Documento #${d.id}` }));
+    } else {
+        // Sugerir reuniones y contenedores
+        const meetings = (allMeetings || []).map(m => ({ type: 'meeting', id: m.id, title: m.meeting_name || `Reunión #${m.id}` }));
+        const containers = (allContainers || []).map(c => ({ type: 'container', id: c.id, title: c.name || `Contenedor #${c.id}` }));
+        items = meetings.concat(containers);
+    }
+    if (q) {
+        items = items.filter(it => String(it.title).toLowerCase().includes(q));
+    }
+    mentionState.items = items.slice(0, 8);
+    renderMentionsDropdown();
+}
+
+function openMentionsDropdown(textarea) {
+    if (!mentionsDropdownEl) {
+        mentionsDropdownEl = document.createElement('div');
+        mentionsDropdownEl.className = 'mentions-dropdown';
+        mentionsDropdownEl.style.position = 'absolute';
+        mentionsDropdownEl.style.zIndex = 1000;
+        mentionsDropdownEl.style.background = '#0b1220';
+        mentionsDropdownEl.style.border = '1px solid #1f2937';
+        mentionsDropdownEl.style.borderRadius = '8px';
+        mentionsDropdownEl.style.padding = '6px 0';
+        mentionsDropdownEl.style.boxShadow = '0 10px 25px rgba(0,0,0,0.4)';
+        document.body.appendChild(mentionsDropdownEl);
+    }
+    const rect = textarea.getBoundingClientRect();
+    mentionsDropdownEl.style.left = (rect.left + 20) + 'px';
+    mentionsDropdownEl.style.top = (rect.top - 8) + 'px';
+    renderMentionsDropdown();
+}
+
+function renderMentionsDropdown() {
+    if (!mentionState.active || !mentionsDropdownEl) return;
+    const items = mentionState.items || [];
+    if (items.length === 0) { mentionsDropdownEl.style.display = 'none'; return; }
+    mentionsDropdownEl.style.display = 'block';
+    mentionsDropdownEl.innerHTML = items.map((it, idx) => {
+        const active = idx === mentionState.selectedIndex;
+        const icon = it.type === 'document' ? '📄' : (it.type === 'meeting' ? '🗣️' : '🗂️');
+        return `<div class="mention-item${active ? ' active' : ''}" data-index="${idx}" style="padding:6px 10px;cursor:pointer;${active ? 'background:#111827;' : ''}" onclick="selectMentionItem(${idx})">${icon} ${escapeHtml(it.title)} <span style="opacity:.7;font-size:12px;">(${it.type})</span></div>`;
+    }).join('');
+}
+
+function closeMentionsDropdown() {
+    mentionState.active = false;
+    mentionState.items = [];
+    mentionState.query = '';
+    if (mentionsDropdownEl) mentionsDropdownEl.style.display = 'none';
+}
+
+function moveMentionsSelection(delta) {
+    if (!mentionState.items.length) return;
+    const len = mentionState.items.length;
+    mentionState.selectedIndex = (mentionState.selectedIndex + delta + len) % len;
+    renderMentionsDropdown();
+}
+
+function selectMentionItem(index) {
+    mentionState.selectedIndex = index;
+    applySelectedMention();
+}
+
+function applySelectedMention() {
+    const textarea = document.getElementById('message-input');
+    const chosen = mentionState.items[mentionState.selectedIndex];
+    if (!textarea || !chosen) { closeMentionsDropdown(); return; }
+    const val = textarea.value;
+    const before = val.slice(0, mentionState.startIndex);
+    const after = val.slice((textarea.selectionStart || val.length));
+    const label = chosen.title || `${chosen.type} #${chosen.id}`;
+    const inserted = `[ ${mentionState.symbol}${label}]`;
+    textarea.value = before + inserted + after;
+    // Registrar mención para enviar al backend
+    pendingMentions.push({ type: chosen.type, id: chosen.id, title: chosen.title });
+    adjustTextareaHeight(textarea);
+    updateSendButton(isLoading);
+    closeMentionsDropdown();
 }
 
 /**

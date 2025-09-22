@@ -814,7 +814,12 @@ class AiAssistantController extends Controller
 
         $request->validate([
             'content' => 'required|string',
-            'attachments' => 'nullable|array'
+            'attachments' => 'nullable|array',
+            // Mentions: [{ type: document|meeting|container, id: int, title?: string }]
+            'mentions' => 'nullable|array',
+            'mentions.*.type' => 'required_with:mentions|string|in:document,meeting,container',
+            'mentions.*.id' => 'required_with:mentions|integer',
+            'mentions.*.title' => 'nullable|string'
         ]);
 
         // Modo offline opcional: responder sin llamar a OpenAI
@@ -838,13 +843,71 @@ class AiAssistantController extends Controller
             ->where('role', 'user')
             ->exists();
 
-        // Crear mensaje del usuario
+        // Crear mensaje del usuario (temporal, luego añadimos metadata de menciones si aplica)
         $userMessage = AiChatMessage::create([
             'session_id' => $session->id,
             'role' => 'user',
             'content' => $request->content,
             'attachments' => $request->attachments ?? []
         ]);
+
+        // Aplicar menciones al contexto de la sesión y guardar en metadata del mensaje
+        $mentions = Arr::wrap($request->input('mentions', []));
+        if (!empty($mentions)) {
+            try {
+                $contextData = is_array($session->context_data) ? $session->context_data : [];
+                // Documentos: agregar IDs explícitos para priorizar su uso en contexto
+                $existingDocIds = Arr::get($contextData, 'doc_ids', []);
+                if (!is_array($existingDocIds)) { $existingDocIds = []; }
+                $newDocIds = collect($mentions)
+                    ->where('type', 'document')
+                    ->pluck('id')
+                    ->filter(fn($v) => is_numeric($v))
+                    ->map(fn($v) => (int) $v)
+                    ->values()
+                    ->all();
+                $contextData['doc_ids'] = array_values(array_unique(array_merge($existingDocIds, $newDocIds)));
+
+                // Reuniones y contenedores: registrar como elementos mencionados adicionales
+                $mentionItems = Arr::get($contextData, 'mention_items', []);
+                if (!is_array($mentionItems)) { $mentionItems = []; }
+                foreach ($mentions as $m) {
+                    if (!is_array($m)) continue;
+                    $type = $m['type'] ?? null;
+                    $id = $m['id'] ?? null;
+                    if (!$type || $id === null) continue;
+                    if (in_array($type, ['meeting','container','document'], true)) {
+                        $mentionItems[] = [
+                            'type' => $type,
+                            'id' => (int) $id,
+                            'title' => $m['title'] ?? null,
+                        ];
+                    }
+                }
+                // Limitar duplicados conservando el último título conocido
+                $byKey = [];
+                foreach ($mentionItems as $it) {
+                    $k = ($it['type'] ?? '') . ':' . ($it['id'] ?? '');
+                    if (!isset($byKey[$k]) || !empty($it['title'])) {
+                        $byKey[$k] = $it;
+                    }
+                }
+                $contextData['mention_items'] = array_values($byKey);
+
+                // Guardar en sesión
+                $session->context_data = $contextData;
+                $session->save();
+
+                // Guardar menciones en el mensaje del usuario para que el frontend pueda mostrarlas
+                $userMessage->metadata = array_merge($userMessage->metadata ?? [], [ 'mentions' => $mentions ]);
+                $userMessage->save();
+            } catch (\Throwable $e) {
+                Log::warning('No se pudieron aplicar menciones al contexto', [
+                    'session_id' => $session->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         if ($isFirstUserMessage) {
             $derivedTitle = $this->deriveSessionTitle($request->content, $session->title);
@@ -1393,7 +1456,138 @@ class AiAssistantController extends Controller
 
         // Si hay documentos explícitos, no añadimos resúmenes/overviews para evitar ruido.
 
+        // Añadir fragmentos derivados de menciones explícitas (meetings, containers, documents)
+        try {
+            $mentionItems = [];
+            $data = is_array($session->context_data) ? $session->context_data : [];
+            $items = Arr::get($data, 'mention_items', []);
+            if (is_array($items) && !empty($items)) {
+                $mentionItems = $items;
+            }
+
+            if (!empty($mentionItems)) {
+                foreach ($mentionItems as $it) {
+                    if (!is_array($it)) continue;
+                    $type = $it['type'] ?? null;
+                    $contextId = $it['id'] ?? null;
+                    if (!$type || $contextId === null || $contextId === '') continue;
+                    switch ($type) {
+                        case 'meeting':
+                            $meetingSession = $this->createVirtualSession($session, 'meeting', $contextId);
+                            $additional = array_merge($additional, $this->buildMeetingContextFragments($meetingSession, $query));
+                            break;
+                        case 'container':
+                            $containerSession = $this->createVirtualSession($session, 'container', $contextId);
+                            $additional = array_merge($additional, $this->buildContainerContextFragments($containerSession, $query));
+                            break;
+                        case 'document':
+                            // Para documentos, reutilizamos el builder de documentos creando una sesión virtual
+                            $docSession = $this->createVirtualSession($session, 'documents', null, [ (int) $contextId ]);
+                            $additional = array_merge($additional, $this->buildDocumentContextFragments($docSession));
+                            break;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Si algo falla al construir fragmentos por menciones, continuar sin bloquear
+            Log::info('gatherContext: menciones ignoradas por error', [ 'error' => $e->getMessage() ]);
+        }
+
+        // Añadir fragmentos de documentos si el usuario se refiere a "imagen", "pdf", "documento", etc.
+        try {
+            [$requestedTypes, $isGenericDocs] = $this->detectDocumentTypesFromQuery($query);
+            if ($isGenericDocs || !empty($requestedTypes)) {
+                $docFrags = $this->buildDocumentFragmentsByTypesOrAll($session, $requestedTypes, 12);
+                if (!empty($docFrags['list'])) {
+                    $additional[] = $docFrags['list'];
+                }
+                if (!empty($docFrags['fragments'])) {
+                    $additional = array_merge($additional, $docFrags['fragments']);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::info('gatherContext: ignorando doc-type inferidos por error', ['error' => $e->getMessage()]);
+        }
+
         return array_values(array_merge($contextFragments, $additional));
+    }
+
+    /**
+     * Detectar tipos de documento mencionados en la consulta del usuario.
+     * Retorna [array<string> $types, bool $isGenericDocs]
+     */
+    private function detectDocumentTypesFromQuery(string $query): array
+    {
+        $q = Str::lower($query);
+        // Normalizar algunos errores frecuentes
+        $q = str_replace([' psf ', 'psf', 'pdfs'], [' pdf ', 'pdf', 'pdf'], $q);
+
+        $map = [
+            'image' => ['imagen', 'foto', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'logo', 'icono'],
+            'pdf' => ['pdf'],
+            'word' => ['word', 'doc', 'docx'],
+            'excel' => ['excel', 'xls', 'xlsx', 'hoja de cálculo', 'hoja de calculo'],
+            'powerpoint' => ['powerpoint', 'ppt', 'pptx', 'presentación', 'presentacion'],
+            'text' => ['txt', 'texto', 'plain text'],
+        ];
+
+        $genericTokens = ['documento', 'documentos', 'archivo', 'archivos', 'fichero', 'ficheros'];
+
+        $types = [];
+        foreach ($map as $type => $tokens) {
+            foreach ($tokens as $t) {
+                if (Str::contains($q, $t)) { $types[$type] = true; break; }
+            }
+        }
+
+        $isGeneric = false;
+        foreach ($genericTokens as $gt) {
+            if (Str::contains($q, $gt)) { $isGeneric = true; break; }
+        }
+
+        return [array_keys($types), $isGeneric];
+    }
+
+    /**
+     * Construir fragmentos de contexto para documentos por tipo(s) o todos.
+     * Retorna ['list' => fragmento resumen listado, 'fragments' => array de document_overview]
+     */
+    private function buildDocumentFragmentsByTypesOrAll(AiChatSession $session, array $types = [], int $limit = 12): array
+    {
+        $user = Auth::user();
+        if (!$user) { return ['list' => null, 'fragments' => []]; }
+
+        $query = \App\Models\AiDocument::byUser($session->username)->orderByDesc('created_at');
+        if (!empty($types)) {
+            $query->whereIn('document_type', $types);
+        }
+        $docs = $query->limit(max(1, $limit))->get();
+        if ($docs->isEmpty()) { return ['list' => null, 'fragments' => []]; }
+
+        $docIds = $docs->pluck('id')->map(fn($v) => (int) $v)->values()->all();
+
+        // Construir listado legible
+        $lines = [];
+        foreach ($docs as $d) {
+            $name = $d->name ?: ($d->original_filename ?: ('Documento ' . $d->id));
+            $lines[] = sprintf('- %s (id %d, tipo %s)', $name, $d->id, $d->document_type);
+        }
+        $title = !empty($types) ? ('Documentos disponibles (' . implode(', ', $types) . ')') : 'Documentos disponibles';
+        $listFragment = [
+            'text' => $title . ":\n" . implode("\n", $lines),
+            'source_id' => 'documents:list',
+            'content_type' => 'documents_list',
+            'location' => [ 'type' => 'documents' ],
+            'similarity' => null,
+            'citation' => 'docs:list',
+            'metadata' => [ 'count' => count($docIds), 'types' => $types ],
+        ];
+
+        // Reutilizar builder de documentos creando una sesión virtual con doc_ids
+        $docSession = $this->createVirtualSession($session, 'documents', null, $docIds);
+        $docFragments = $this->buildDocumentContextFragments($docSession);
+
+        return [ 'list' => $listFragment, 'fragments' => $docFragments ];
     }
 
     private function deriveSessionTitle(string $message, ?string $currentTitle = null): ?string
