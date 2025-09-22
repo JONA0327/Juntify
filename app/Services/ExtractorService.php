@@ -670,17 +670,102 @@ class ExtractorService
 
     private function resolveBinary(string $binary): ?string
     {
-        $process = Process::fromShellCommandline('command -v ' . escapeshellarg($binary));
-        $process->setTimeout(5);
-        $process->run();
+        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
 
-        if (! $process->isSuccessful()) {
-            return null;
+        // 0) Environment overrides for explicit paths
+        $envMap = [
+            'tesseract' => env('TESSERACT_PATH'),
+            'gs' => env('GHOSTSCRIPT_PATH'),
+            'pdftoppm' => env('PDFTOPPM_PATH'),
+            'pdftotext' => env('PDFTOTEXT_PATH'),
+        ];
+        if (isset($envMap[$binary]) && is_string($envMap[$binary]) && $envMap[$binary] !== '') {
+            $p = $envMap[$binary];
+            if (@file_exists($p)) {
+                return $p;
+            }
         }
 
-        $path = trim($process->getOutput());
+        // Build candidate executable names per platform
+        $candidates = [$binary];
+        if ($isWindows) {
+            if (!Str::endsWith($binary, '.exe')) {
+                $candidates[] = $binary . '.exe';
+            }
+            if ($binary === 'gs') {
+                // Ghostscript on Windows uses gswinXXc.exe
+                array_unshift($candidates, 'gswin64c.exe', 'gswin32c.exe', 'gswin64.exe', 'gswin32.exe', 'gs.exe');
+            } elseif ($binary === 'pdftotext') {
+                array_unshift($candidates, 'pdftotext.exe');
+            } elseif ($binary === 'pdftoppm') {
+                array_unshift($candidates, 'pdftoppm.exe');
+            } elseif ($binary === 'tesseract') {
+                array_unshift($candidates, 'tesseract.exe');
+            }
+        }
 
-        return $path !== '' ? $path : null;
+        // 1) Try PATH lookup (which/where)
+        foreach ($candidates as $name) {
+            try {
+                $proc = $isWindows
+                    ? new Process(['where.exe', $name])
+                    : new Process(['which', $name]);
+                $proc->setTimeout(5);
+                $proc->run();
+                if ($proc->isSuccessful()) {
+                    $out = trim($proc->getOutput());
+                    // Take the first line if multiple
+                    $line = trim(strtok($out, "\r\n"));
+                    if ($line !== '' && @file_exists($line)) {
+                        return $line;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // continue
+            }
+        }
+
+        // 2) Try common installation paths on Windows
+        if ($isWindows) {
+            $pathsToCheck = [];
+
+            // Tesseract default installs
+            if ($binary === 'tesseract') {
+                $pathsToCheck[] = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe';
+                $pathsToCheck[] = 'C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe';
+            }
+
+            // Ghostscript default installs
+            if ($binary === 'gs') {
+                foreach (['C:\\Program Files\\gs\\*\\bin\\gswin64c.exe', 'C:\\Program Files (x86)\\gs\\*\\bin\\gswin32c.exe'] as $pattern) {
+                    foreach (glob($pattern) ?: [] as $p) {
+                        $pathsToCheck[] = $p;
+                    }
+                }
+            }
+
+            // Poppler default installs
+            if (in_array($binary, ['pdftotext', 'pdftoppm'], true)) {
+                $exe = $binary . '.exe';
+                foreach ([
+                    'C:\\Program Files\\poppler*\\bin\\' . $exe,
+                    'C:\\Program Files (x86)\\poppler*\\bin\\' . $exe,
+                    'C:\\poppler*\\bin\\' . $exe,
+                ] as $pattern) {
+                    foreach (glob($pattern) ?: [] as $p) {
+                        $pathsToCheck[] = $p;
+                    }
+                }
+            }
+
+            foreach ($pathsToCheck as $p) {
+                if (@file_exists($p)) {
+                    return $p;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
