@@ -345,7 +345,9 @@ class GoogleDriveService
 
         $response = $this->drive->files->listFiles([
             'q' => $searchQuery,
-            'fields' => 'files(id,name,parents,mimeType)'
+            'fields' => 'files(id,name,parents,mimeType)',
+            'supportsAllDrives' => true,
+            'includeItemsFromAllDrives' => true,
         ]);
 
         return $response->getFiles();

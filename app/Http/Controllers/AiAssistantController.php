@@ -104,6 +104,15 @@ class AiAssistantController extends Controller
             try {
                 // Descargar + parsear y cachear permanentemente el .ju
                 $content = $this->tryDownloadJuContent($meeting);
+                // Si no hay fileId o falló, intentar localizar el .ju por nombre/ID en Drive
+                if ((!$content || $content === '') && empty($meeting->transcript_drive_id)) {
+                    $found = $this->locateJuForMeeting($meeting, $container);
+                    if ($found) {
+                        $meeting->transcript_drive_id = $found;
+                        $meeting->save();
+                        $content = $this->tryDownloadJuContent($meeting);
+                    }
+                }
                 if (is_string($content) && $content !== '') {
                     $parsed = $this->decryptJuFile($content);
                     $normalized = $this->processTranscriptData($parsed['data'] ?? []);
@@ -127,6 +136,81 @@ class AiAssistantController extends Controller
             'meetings_preloaded' => $preloaded,
             'errors' => $errors,
         ]);
+    }
+
+    /**
+     * Intenta localizar el archivo .ju de una reunión en Drive cuando no está definido en DB
+     * Estrategia: buscar por nombre de reunión o ID dentro de la carpeta padre del audio si existe, o en la raíz conocida
+     */
+    private function locateJuForMeeting(TranscriptionLaravel $meeting, MeetingContentContainer $container): ?string
+    {
+        $keywords = [];
+        if (!empty($meeting->meeting_name)) { $keywords[] = $meeting->meeting_name; }
+        $keywords[] = (string) $meeting->id;
+
+        $parentsToSearch = [];
+        // Si hay audio_drive_id, intentar su carpeta padre primero
+        if (!empty($meeting->audio_drive_id)) {
+            try {
+                $audioFile = $this->googleDriveService->getFileInfo($meeting->audio_drive_id);
+                $parents = $audioFile->getParents();
+                if (is_array($parents) && !empty($parents)) {
+                    $parentsToSearch = array_merge($parentsToSearch, $parents);
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        // Si el contenedor pertenece a una organización con root configurado, incluir esa raíz
+        $orgRoot = $container->group?->organization?->folder?->google_id;
+        if (!empty($orgRoot)) {
+            $parentsToSearch[] = $orgRoot;
+        }
+
+        $parentsToSearch = array_values(array_unique(array_filter($parentsToSearch)));
+
+        // Preparar token de organización si existe, o dejar que tryDownloadJuContent maneje tokens
+        try {
+            $orgTokenModel = $container->group?->organization?->googleToken;
+            if ($orgTokenModel) {
+                $this->googleDriveService->setAccessToken($this->normalizeOrganizationToken($orgTokenModel));
+            }
+        } catch (\Throwable $e) {}
+
+        foreach ($parentsToSearch as $parentId) {
+            foreach ($keywords as $kw) {
+                try {
+                    $files = $this->googleDriveService->searchFiles($kw, $parentId);
+                    foreach ($files as $file) {
+                        // Preferir archivos .ju por nombre o mime
+                        $name = method_exists($file, 'getName') ? $file->getName() : ($file['name'] ?? '');
+                        $mime = method_exists($file, 'getMimeType') ? $file->getMimeType() : ($file['mimeType'] ?? '');
+                        $isJu = str_ends_with(strtolower($name), '.ju') || $mime === 'application/json';
+                        if ($isJu) {
+                            $id = method_exists($file, 'getId') ? $file->getId() : ($file['id'] ?? null);
+                            if ($id) { return $id; }
+                        }
+                    }
+                } catch (\Throwable $e) { /* seguir */ }
+            }
+        }
+
+        // Último intento: búsqueda global por nombre/ID (puede ser costosa)
+        foreach ($keywords as $kw) {
+            try {
+                $files = $this->googleDriveService->searchFiles($kw, null);
+                foreach ($files as $file) {
+                    $name = method_exists($file, 'getName') ? $file->getName() : ($file['name'] ?? '');
+                    $mime = method_exists($file, 'getMimeType') ? $file->getMimeType() : ($file['mimeType'] ?? '');
+                    $isJu = str_ends_with(strtolower($name), '.ju') || $mime === 'application/json';
+                    if ($isJu) {
+                        $id = method_exists($file, 'getId') ? $file->getId() : ($file['id'] ?? null);
+                        if ($id) { return $id; }
+                    }
+                }
+            } catch (\Throwable $e) { /* ignore */ }
+        }
+
+        return null;
     }
 
     /**
