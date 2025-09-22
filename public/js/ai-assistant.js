@@ -751,26 +751,32 @@ function renderDriveDocuments(files) {
         return;
     }
 
-    const rows = files.map(f => {
-        const id = f.id;
+    grid.innerHTML = files.map(f => {
+        const id = String(f.id);
         const name = f.name || `Archivo ${id}`;
         const size = f.file_size ? formatFileSize(Number(f.file_size)) : '';
         const mime = f.mime_type || '';
         const icon = getFileTypeIcon(mimeToDocType(mime));
+        const modified = f.modified_time ? formatRelativeTime(f.modified_time) : '';
+        const isSelected = loadedContextItems.some(it => it.type === 'document' && String(it.id) === id);
+
         return `
-        <div class="document-item" onclick="toggleDriveDocSelection('${id}')">
-            <input type="checkbox" id="drive-doc-${id}" style="margin-right: 0.75rem;">
-            <div class="file-info">
-                <div class="file-icon">${icon}</div>
-                <div class="file-details">
-                    <h5>${escapeHtml(name)}</h5>
-                    <div class="file-size">${escapeHtml(size)}</div>
+        <div class="meeting-card" onclick="toggleDriveDocSelection('${id}')">
+            <div class="meeting-card-header">
+                <div class="meeting-card-title">
+                    <h4>${icon} ${escapeHtml(name)}</h4>
+                    <div class="meeting-card-meta">
+                        ${escapeHtml(size || '—')} ${modified ? '• ' + escapeHtml(modified) : ''}
+                    </div>
+                </div>
+                <div class="meeting-card-actions">
+                    <label class="meeting-action-btn" title="Seleccionar">
+                        <input type="checkbox" id="drive-doc-${id}" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleDriveDocSelection('${id}')">
+                    </label>
                 </div>
             </div>
         </div>`;
     }).join('');
-
-    grid.innerHTML = rows;
 }
 
 // Selección de documentos Drive: almacenamos por ahora sus IDs de Drive en loadedContextItems como type=document (con id driveId)
@@ -1152,7 +1158,7 @@ function updateLoadedContextUI() {
             <div class="context-item">
                 <div class="context-item-info">
                     <div class="context-item-title">${escapeHtml(item.title)}</div>
-                    <div class="context-item-type">${item.type === 'meeting' ? 'Reunión' : 'Contenedor'}</div>
+                    <div class="context-item-type">${item.type === 'meeting' ? 'Reunión' : item.type === 'container' ? 'Contenedor' : 'Documento'}</div>
                 </div>
                 <button class="context-item-remove" onclick="removeContextItem(${index})">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
