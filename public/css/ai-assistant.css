@@ -346,7 +346,17 @@
 .message.user .message-bubble {
     background: rgba(251, 191, 36, 0.2);
     border: 1px solid rgba(251, 191, 36, 0.5);
-    color: #1f2937;
+    color: #ffffff; /* texto blanco para mejor contraste */
+}
+
+/* Enlaces dentro del mensaje del usuario: azul claro y subrayados para legibilidad */
+.message.user .message-bubble a {
+    color: #bfdbfe; /* azul muy claro */
+    text-decoration: underline;
+}
+
+.message.user .message-bubble a:hover {
+    color: #e5efff;
 }
 
 .message-citations {
