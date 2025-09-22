@@ -12,6 +12,7 @@ let currentContext = {
     data: {}
 };
 let isLoading = false;
+let isLoadingContext = false;
 let selectedFiles = [];
 let selectedDocuments = [];
 let loadedContextItems = [];
@@ -172,7 +173,8 @@ async function deleteChatSession(sessionId) {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken || ''
             },
-            body: JSON.stringify({ force_delete: false })
+            // Hard delete by default to limpiar completamente de la BD
+            body: JSON.stringify({ force_delete: true })
         });
 
         if (!response.ok) {
@@ -995,6 +997,12 @@ async function loadSelectedContext() {
     if (loadedContextItems.length === 0) return;
 
     try {
+        // Evitar múltiples envíos mientras se pre-carga/crea el contexto
+        if (isLoadingContext) return;
+        isLoadingContext = true;
+        const loadBtn = document.getElementById('loadContextBtn');
+        setButtonLoading(loadBtn, true, 'Cargar Contexto', 'Cargando...');
+
         const serializedItems = loadedContextItems
             .filter(item => item && item.type && item.id !== undefined && item.id !== null)
             .map(item => ({
@@ -1067,6 +1075,11 @@ async function loadSelectedContext() {
     } catch (error) {
         console.error('Error loading context:', error);
         showNotification('Error al cargar el contexto', 'error');
+    } finally {
+        // Restaurar estado del botón
+        const loadBtn = document.getElementById('loadContextBtn');
+        setButtonLoading(loadBtn, false, 'Cargar Contexto', 'Cargando...');
+        isLoadingContext = false;
     }
 }
 
@@ -1585,7 +1598,31 @@ function renderExistingDocuments(documents) {
         return;
     }
 
-    list.innerHTML = documents.map(doc => `
+    list.innerHTML = documents.map(doc => {
+        const statusText = doc.status_label || getProcessingStatus(doc.processing_status);
+        const stepText = doc.step_label || '';
+        const progress = typeof doc.processing_progress === 'number' ? Math.max(0, Math.min(100, doc.processing_progress)) : null;
+        const isProcessing = (doc.processing_status === 'processing');
+        const isFailed = (doc.processing_status === 'failed');
+        const hasError = !!doc.processing_error;
+
+        // Bloque de progreso simple sin depender de CSS externos
+        const progressBar = isProcessing && progress !== null ? `
+            <div class="doc-progress" style="margin-top:6px;">
+                <div style="height:6px;background:#1f2937;border-radius:4px;overflow:hidden;">
+                    <div style="height:6px;width:${progress}%;background:#3b82f6;"></div>
+                </div>
+                <div style="font-size:12px;color:#94a3b8;margin-top:4px;">${stepText} • ${progress}%</div>
+            </div>
+        ` : '';
+
+        const errorBlock = isFailed && hasError ? `
+            <div class="doc-error" style="margin-top:6px;color:#fca5a5;font-size:12px;">
+                Error: ${escapeHtml(String(doc.processing_error))}
+            </div>
+        ` : '';
+
+        return `
         <div class="document-item" onclick="toggleDocumentSelection(${doc.id})">
             <input type="checkbox" id="doc-${doc.id}" style="margin-right: 0.75rem;">
             <div class="file-info">
@@ -1594,11 +1631,13 @@ function renderExistingDocuments(documents) {
                 </div>
                 <div class="file-details">
                     <h5>${escapeHtml(doc.name)}</h5>
-                    <div class="file-size">${formatFileSize(doc.file_size)} • ${getProcessingStatus(doc.processing_status)}</div>
+                    <div class="file-size">${formatFileSize(doc.file_size)} • ${escapeHtml(statusText)}</div>
+                    ${progressBar}
+                    ${errorBlock}
                 </div>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 /**
@@ -1642,6 +1681,28 @@ function loadSelectedDocuments() {
  * FUNCIONES DE UTILIDAD
  * =========================================
  */
+
+/**
+ * Habilita/deshabilita un botón mostrando estado de carga
+ */
+function setButtonLoading(buttonEl, loading, defaultText = 'Enviar', loadingText = 'Cargando...') {
+    if (!buttonEl) return;
+    buttonEl.disabled = !!loading;
+    if (loading) {
+        buttonEl.dataset._originalText = buttonEl.dataset._originalText || buttonEl.innerHTML;
+        buttonEl.innerHTML = `
+            <span class="btn-spinner" style="display:inline-block;width:14px;height:14px;border:2px solid #cbd5e1;border-top-color:transparent;border-radius:50%;margin-right:8px;vertical-align:-2px;"></span>
+            ${loadingText}
+        `;
+    } else {
+        if (buttonEl.dataset._originalText) {
+            buttonEl.innerHTML = buttonEl.dataset._originalText;
+            delete buttonEl.dataset._originalText;
+        } else {
+            buttonEl.textContent = defaultText;
+        }
+    }
+}
 
 /**
  * Ajustar altura del textarea
