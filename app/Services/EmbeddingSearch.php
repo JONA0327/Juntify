@@ -44,6 +44,12 @@ class EmbeddingSearch
         }
 
         $limit = max(1, (int) ($options['limit'] ?? 5));
+        $pool = (int) ($options['pool'] ?? env('AI_ASSISTANT_RETRIEVAL_POOL', 80));
+        $pool = max($limit, $pool);
+        $lambda = (float) ($options['lambda'] ?? env('AI_ASSISTANT_MMR_LAMBDA', 0.7));
+        if ($lambda < 0.0 || $lambda > 1.0) {
+            $lambda = 0.7;
+        }
 
         $embeddingsQuery = AiContextEmbedding::byUser($username);
 
@@ -68,25 +74,116 @@ class EmbeddingSearch
 
         $documents = $this->loadDocumentsForEmbeddings($embeddings);
 
-        $results = $embeddings->map(function (AiContextEmbedding $item) use ($queryVector, $documents) {
-            $similarity = $this->cosineSimilarity($queryVector, $item->embedding_vector ?? []);
-            $location = $this->resolveLocation($item, $documents);
-
+        // Build candidate list with vectors and base similarities
+        $candidates = $embeddings->map(function (AiContextEmbedding $item) use ($queryVector) {
+            $vec = $item->embedding_vector ?? [];
             return [
+                'model' => $item,
+                'vector' => is_array($vec) ? array_values($vec) : [],
+                'sim_q' => $this->cosineSimilarity($queryVector, is_array($vec) ? $vec : []),
+            ];
+        })->filter(function (array $row) {
+            // Discard empty vectors
+            return !empty($row['vector']);
+        })->values()->all();
+
+        if (empty($candidates)) {
+            return [];
+        }
+
+        // Sort by similarity to query and take a dynamic pool to diversify from
+        usort($candidates, function ($a, $b) {
+            return ($b['sim_q'] <=> $a['sim_q']);
+        });
+        $shortlist = array_slice($candidates, 0, min($pool, count($candidates)));
+
+        // Apply MMR to pick top-K diversified results
+        $selectedIdx = $this->mmrSelect($shortlist, $limit, $lambda);
+        if (empty($selectedIdx)) {
+            // Fallback to top-K by similarity if MMR returns nothing
+            $selected = array_slice($shortlist, 0, $limit);
+        } else {
+            $selected = array_map(fn ($i) => $shortlist[$i], $selectedIdx);
+        }
+
+        // Map to the public result shape
+        $results = [];
+        foreach ($selected as $row) {
+            /** @var AiContextEmbedding $item */
+            $item = $row['model'];
+            $location = $this->resolveLocation($item, $documents);
+            $results[] = [
                 'text' => $item->content_snippet,
                 'source_id' => (string) $item->content_id,
                 'content_type' => $item->content_type,
                 'location' => $location,
-                'similarity' => $similarity,
+                'similarity' => $row['sim_q'],
                 'metadata' => $item->metadata ?? [],
                 'citation' => $this->buildCitation($item, $location),
             ];
-        })->filter(fn (array $result) => $result['text'] !== '')->values();
+        }
 
-        return $results->sortByDesc('similarity')
-            ->take($limit)
-            ->values()
-            ->toArray();
+        return $results;
+    }
+
+    /**
+     * Select K items via Maximal Marginal Relevance (MMR) to balance relevance and diversity.
+     * Returns the indices (relative to $candidates) of selected items.
+     *
+     * @param  array<int, array{model: AiContextEmbedding, vector: array<int,float>, sim_q: float}>  $candidates
+     * @return array<int,int>
+     */
+    private function mmrSelect(array $candidates, int $k, float $lambda = 0.7): array
+    {
+        $n = count($candidates);
+        if ($n === 0 || $k <= 0) {
+            return [];
+        }
+
+        // Always start with the most relevant item
+        $selected = [];
+        $selected[] = 0; // candidates are pre-sorted by sim_q desc before calling
+
+        // Precompute pairwise similarities lazily with cache to avoid O(n^2) recompute cost
+        $pairCache = [];
+        $sim = function (int $i, int $j) use (&$pairCache, $candidates) {
+            if ($i === $j) return 1.0;
+            $key = $i < $j ? "$i-$j" : "$j-$i";
+            if (!isset($pairCache[$key])) {
+                $pairCache[$key] = $this->cosineSimilarity($candidates[$i]['vector'], $candidates[$j]['vector']);
+            }
+            return $pairCache[$key];
+        };
+
+        while (count($selected) < min($k, $n)) {
+            $bestIdx = null;
+            $bestScore = -INF;
+
+            for ($i = 0; $i < $n; $i++) {
+                if (in_array($i, $selected, true)) continue;
+
+                // Diversity term: max similarity to any already selected item
+                $maxSimToSelected = 0.0;
+                foreach ($selected as $j) {
+                    $maxSimToSelected = max($maxSimToSelected, $sim($i, $j));
+                }
+
+                // MMR score
+                $score = $lambda * $candidates[$i]['sim_q'] - (1.0 - $lambda) * $maxSimToSelected;
+                if ($score > $bestScore) {
+                    $bestScore = $score;
+                    $bestIdx = $i;
+                }
+            }
+
+            if ($bestIdx === null) {
+                break;
+            }
+            $selected[] = $bestIdx;
+        }
+
+        sort($selected);
+        return $selected;
     }
 
     private function cosineSimilarity(array $a, array $b): float

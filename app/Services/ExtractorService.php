@@ -555,11 +555,23 @@ class ExtractorService
 
     private function extractImage(string $filePath): array
     {
-        if (class_exists('thiagoalessio\\TesseractOCR\\TesseractOCR')) {
+        if (class_exists('thiagoalessio\TesseractOCR\TesseractOCR')) {
             try {
-                $ocr = new \thiagoalessio\TesseractOCR\TesseractOCR($filePath);
-                $ocr->lang('spa', 'eng');
-                $text = $ocr->run();
+                // Try spa+eng first, then eng, then spa
+                $langsToTry = [['spa','eng'], ['eng'], ['spa']];
+                $text = '';
+                foreach ($langsToTry as $langs) {
+                    try {
+                        $ocr = new \thiagoalessio\TesseractOCR\TesseractOCR($filePath);
+                        $ocr->lang(...$langs);
+                        $text = $ocr->run();
+                        if (is_string($text) && trim($text) !== '') {
+                            break;
+                        }
+                    } catch (\Throwable $e) {
+                        // try next
+                    }
+                }
 
                 $normalized = $this->normalizeText($text);
                 // If OCR yields too little text, try OpenAI Vision fallback
@@ -594,18 +606,29 @@ class ExtractorService
         }
 
         $tempOutput = $filePath . '_ocr';
-        $process = new Process([$binary, $filePath, $tempOutput, '-l', 'spa+eng']);
-        $process->setTimeout(60);
-        $process->run();
+        $langsToTry = ['spa+eng', 'eng', 'spa'];
+        $ocrOk = false;
+        $errMsg = '';
+        foreach ($langsToTry as $lang) {
+            $process = new Process([$binary, $filePath, $tempOutput, '-l', $lang]);
+            $process->setTimeout(60);
+            $process->run();
+            if ($process->isSuccessful()) {
+                $ocrOk = true;
+                break;
+            } else {
+                $errMsg = $process->getErrorOutput();
+            }
+        }
 
-        if (! $process->isSuccessful()) {
+        if (! $ocrOk) {
             // As a last resort on OCR failure, try OpenAI Vision
             $vision = $this->tryOpenAiVision($filePath);
             if ($vision !== null) {
                 return $vision;
             }
 
-            throw new RuntimeException('No se pudo ejecutar OCR: ' . $process->getErrorOutput());
+            throw new RuntimeException('No se pudo ejecutar OCR: ' . $errMsg);
         }
 
         $textFile = $tempOutput . '.txt';
