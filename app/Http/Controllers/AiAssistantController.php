@@ -1748,7 +1748,14 @@ class AiAssistantController extends Controller
             'processing_error' => null,
         ]);
 
-        ProcessAiDocumentJob::dispatch($document->id);
+        // If the queue driver is 'sync', dispatching will block the request and can cause 504s.
+        // In that case, prefer dispatchAfterResponse so we return JSON immediately and process afterwards.
+        $driver = (string) config('queue.default', 'sync');
+        if ($driver === 'sync') {
+            ProcessAiDocumentJob::dispatchAfterResponse($document->id);
+        } else {
+            ProcessAiDocumentJob::dispatch($document->id);
+        }
     }
 
     private function associateDocumentToSessionContext(AiDocument $document, AiChatSession $session, string $username): void
