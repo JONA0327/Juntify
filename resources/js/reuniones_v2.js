@@ -2122,22 +2122,32 @@ function createOrgContainerMeetingCard(meeting) {
                         ${meeting.created_at}
                     </p>
 
-                    <div class="meeting-folders">
-                        <div class="folder-info">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span>Transcripción:</span>
-                            <span class="folder-name">${escapeHtml(meeting.transcript_folder || 'No encontrado')}</span>
-                        </div>
-                        <div class="folder-info">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728" />
-                            </svg>
-                            <span>Audio:</span>
-                            <span class="folder-name">${escapeHtml(meeting.audio_folder || 'No encontrado')}</span>
-                        </div>
-                    </div>
+                    ${(() => {
+                        const t = (meeting.transcript_folder || '').trim();
+                        const a = (meeting.audio_folder || '').trim();
+                        const hasT = t && !/no\s*encontrado/i.test(t) && !/archivo\s*no\s*encontrado/i.test(t);
+                        const hasA = a && !/no\s*encontrado/i.test(a) && !/archivo\s*no\s*encontrado/i.test(a);
+                        if (!(hasT || hasA)) return '';
+                        return `
+                        <div class="meeting-folders">
+                            ${hasT ? `
+                            <div class="folder-info">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <span>Transcripción:</span>
+                                <span class="folder-name">${escapeHtml(t)}</span>
+                            </div>` : ''}
+                            ${hasA ? `
+                            <div class="folder-info">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728" />
+                                </svg>
+                                <span>Audio:</span>
+                                <span class="folder-name">${escapeHtml(a)}</span>
+                            </div>` : ''}
+                        </div>`;
+                    })()}
                 </div>
 
                 <div class="meeting-actions">
@@ -2155,7 +2165,7 @@ window.createOrgContainerMeetingCard = createOrgContainerMeetingCard;
 
 function createContainerCard(container) {
     return `
-        <div class="meeting-card container-card" data-container-id="${container.id}" onclick="openContainerMeetingsModal(${container.id})" style="cursor: pointer;">
+        <div class="meeting-card container-card" data-container-id="${container.id}" onclick="(function(id){ try { showContainerMeetingsLoading(); } catch(e){} openContainerMeetingsModal(id); })(${container.id})" style="cursor: pointer;">
             <div class="meeting-card-header">
                 <div class="meeting-content">
                     <div class="meeting-icon">
@@ -5019,13 +5029,16 @@ function renderContainerMeetings(meetings) {
 }
 
 function openMeetingModalFromContainer(meetingId) {
+    // Mostrar loading inmediato para evitar vacío visual
+    try { showModalLoadingState(); } catch (e) { /* no-op */ }
+
     // Cerrar el modal del contenedor
     closeContainerMeetingsModal();
 
-    // Abrir el modal de la reunión
+    // Abrir el modal de la reunión después de un pequeño delay para asegurar el DOM
     setTimeout(() => {
         openMeetingModal(meetingId);
-    }, 250);
+    }, 100);
 }
 
 function retryLoadContainerMeetings() {
