@@ -32,7 +32,7 @@ async function initializeAiAssistant() {
     try {
         await loadChatSessions();
         setupEventListeners();
-        await createNewChatSession();
+        await ensureCurrentSession();
     } catch (error) {
         console.error('Error initializing AI Assistant:', error);
         showNotification('Error al inicializar el asistente', 'error');
@@ -245,6 +245,31 @@ async function createNewChatSession() {
     } catch (error) {
         console.error('Error creating new chat session:', error);
         showNotification('Error al crear nueva conversación', 'error');
+    }
+}
+
+/**
+ * Asegurar que exista una sesión actual: si hay previas, usar la última; si no, crear una
+ */
+async function ensureCurrentSession() {
+    try {
+        if (!chatSessions || chatSessions.length === 0) {
+            // No hay sesiones previas: crear una nueva en contexto actual
+            await createNewChatSession();
+            return;
+        }
+        // Usar la última sesión activa (ordenadas desc por last_activity)
+        const last = chatSessions[0];
+        currentSessionId = last.id;
+        // Mantener contexto visual según la sesión recuperada
+        currentContext.type = last.context_type || 'general';
+        currentContext.id = last.context_id || null;
+        currentContext.data = last.context_data || {};
+        await loadMessages();
+        updateContextIndicator();
+    } catch (e) {
+        console.warn('Fallo al asegurar sesión actual, creando nueva:', e);
+        await createNewChatSession();
     }
 }
 
@@ -490,6 +515,56 @@ function sendSuggestion(suggestion) {
     messageInput.value = suggestion;
     adjustTextareaHeight(messageInput);
     sendMessage();
+}
+
+/**
+ * Actualizar contexto de la sesión actual (sin crear una nueva). Si no hay sesión, crea una.
+ */
+async function updateCurrentSessionContext() {
+    try {
+        // Si no hay sesión actual, intentar reutilizar alguna existente primero
+        if (!currentSessionId) {
+            await ensureCurrentSession();
+        }
+
+        // Si aún no hay, crear nueva
+        if (!currentSessionId) {
+            await createNewChatSession();
+            return;
+        }
+
+        const csrf = document.querySelector('meta[name="csrf-token"]').content;
+        const response = await fetch(`/api/ai-assistant/sessions/${currentSessionId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrf
+            },
+            body: JSON.stringify({
+                context_type: currentContext.type,
+                context_id: currentContext.id,
+                context_data: currentContext.data
+            })
+        });
+
+        if (!response.ok) {
+            // Si la sesión ya no existe o no es válida, crear nueva
+            await createNewChatSession();
+            return;
+        }
+
+        const data = await response.json();
+        if (data && data.success) {
+            await loadChatSessions();
+            await loadMessages();
+        } else {
+            // Fallback a crear una nueva si el backend no pudo actualizar
+            await createNewChatSession();
+        }
+    } catch (error) {
+        console.warn('No se pudo actualizar el contexto de la sesión, creando nueva:', error);
+        await createNewChatSession();
+    }
 }
 
 /**
@@ -980,7 +1055,7 @@ async function loadSelectedContext() {
             };
         }
 
-        await createNewChatSession();
+    await updateCurrentSessionContext();
         closeContextSelector();
         updateContextIndicator();
 
@@ -1095,7 +1170,7 @@ async function selectAllMeetings() {
                 }
             };
 
-            await createNewChatSession();
+            await updateCurrentSessionContext();
             closeContextSelector();
             updateContextIndicator();
         }
@@ -1173,7 +1248,7 @@ function selectContactChat(chatId) {
         data: {}
     };
 
-    createNewChatSession();
+    updateCurrentSessionContext();
     closeContactChatSelector();
     updateContextIndicator();
 }
@@ -1188,7 +1263,7 @@ function loadAllContactChats() {
         data: {}
     };
 
-    createNewChatSession();
+    updateCurrentSessionContext();
     closeContactChatSelector();
     updateContextIndicator();
 }
@@ -1556,7 +1631,7 @@ function loadSelectedDocuments() {
         data: selectedDocuments
     };
 
-    createNewChatSession();
+    updateCurrentSessionContext();
     closeDocumentUploader();
     updateContextIndicator();
 }

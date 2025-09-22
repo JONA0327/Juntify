@@ -137,6 +137,7 @@ class AiAssistantController extends Controller
                     'id' => $session->id,
                     'title' => $session->title,
                     'context_type' => $session->context_type,
+                    'context_id' => $session->context_id,
                     'context_data' => $session->context_data,
                     'last_activity' => $session->last_activity,
                     'last_message' => $lastMessage ? [
@@ -150,6 +151,59 @@ class AiAssistantController extends Controller
         return response()->json([
             'success' => true,
             'sessions' => $sessions
+        ]);
+    }
+
+    /**
+     * Actualiza el contexto de una sesión existente sin crear una nueva
+     */
+    public function updateSession(Request $request, int $id): JsonResponse
+    {
+        $user = Auth::user();
+        $validated = $request->validate([
+            'context_type' => 'required|in:general,container,meeting,contact_chat,documents,mixed',
+            'context_id' => 'nullable',
+            'context_data' => 'nullable|array',
+        ]);
+
+        $session = AiChatSession::where('id', $id)
+            ->where('username', $user->username)
+            ->firstOrFail();
+
+        // Mantener doc_ids previamente cargados si no vienen en el payload
+        $newData = $validated['context_data'] ?? [];
+        $currentData = is_array($session->context_data) ? $session->context_data : [];
+        if (!array_key_exists('doc_ids', $newData) && array_key_exists('doc_ids', $currentData)) {
+            $newData['doc_ids'] = $currentData['doc_ids'];
+        }
+
+        // Normalizar context_id a string
+        $contextId = $validated['context_id'] ?? null;
+        if (is_array($contextId) || is_object($contextId)) {
+            $contextId = json_encode($contextId);
+        } elseif ($contextId !== null) {
+            $contextId = (string) $contextId;
+        }
+
+        $session->update([
+            'context_type' => $validated['context_type'],
+            'context_id' => $contextId,
+            'context_data' => $newData,
+        ]);
+
+        $session->refresh();
+        $session->updateActivity();
+
+        return response()->json([
+            'success' => true,
+            'session' => [
+                'id' => $session->id,
+                'context_type' => $session->context_type,
+                'context_id' => $session->context_id,
+                'context_data' => $session->context_data,
+                'title' => $session->title,
+                'last_activity' => $session->last_activity,
+            ],
         ]);
     }
 
