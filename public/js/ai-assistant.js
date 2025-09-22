@@ -2021,8 +2021,10 @@ function renderUserMentions(metadata) {
         const type = m.type;
         const id = m.id;
         const title = m.title || (type === 'document' ? `Doc #${id}` : type === 'meeting' ? `Reunión #${id}` : `Contenedor #${id}`);
-        const color = type === 'document' ? '#60a5fa' : (type === 'meeting' ? '#34d399' : '#f59e0b');
-        return `<span class="mention-pill" style="display:inline-block;background:${color}1a;color:${color};border:1px solid ${color}66;border-radius:999px;padding:2px 8px;font-size:12px;margin:2px;">${escapeHtml(title)}</span>`;
+        const bg = '#60a5fa'; // azul claro
+        const text = '#ffffff'; // letras en blanco
+        const border = '#3b82f6'; // borde azul un poco más intenso
+        return `<span class=\"mention-pill\" style=\"display:inline-block;background:${bg};color:${text};border:1px solid ${border};border-radius:999px;padding:2px 10px;font-size:12px;margin:2px;\">${escapeHtml(title)}</span>`;
     }).join('');
     return `<div class="message-mentions" style="margin-top:8px;">${pills}</div>`;
 }
