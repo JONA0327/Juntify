@@ -603,7 +603,8 @@ class AiAssistantController extends Controller
     {
         $user = Auth::user();
 
-        $meetings = TranscriptionLaravel::where('username', $user->username)
+        // Reuniones propias
+        $own = TranscriptionLaravel::where('username', $user->username)
             ->orderByDesc('created_at')
             ->get()
             ->map(function (TranscriptionLaravel $meeting) {
@@ -613,6 +614,8 @@ class AiAssistantController extends Controller
                     'title' => $meeting->meeting_name,
                     'source' => 'transcriptions_laravel',
                     'is_legacy' => true,
+                    'is_shared' => false,
+                    'shared_by' => null,
                     'created_at' => optional($meeting->created_at)->toIso8601String(),
                     'updated_at' => optional($meeting->updated_at)->toIso8601String(),
                     'has_transcription' => ! empty($meeting->transcript_drive_id),
@@ -622,7 +625,50 @@ class AiAssistantController extends Controller
                     'audio_drive_id' => $meeting->audio_drive_id,
                     'audio_download_url' => $meeting->audio_download_url,
                 ];
-            })
+            });
+
+        // Reuniones compartidas contigo (aceptadas)
+        $shared = collect();
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('shared_meetings')) {
+                $shared = \App\Models\SharedMeeting::with(['meeting','sharedBy'])
+                    ->accepted()
+                    ->forUser($user->id)
+                    ->whereHas('meeting')
+                    ->orderByDesc('shared_at')
+                    ->get()
+                    ->map(function($share) {
+                        $m = $share->meeting;
+                        $by = $share->sharedBy;
+                        return [
+                            'id' => $m->id,
+                            'meeting_name' => $m->meeting_name,
+                            'title' => $m->meeting_name,
+                            'source' => 'shared',
+                            'is_legacy' => true,
+                            'is_shared' => true,
+                            'shared_by' => $by?->full_name ?? $by?->username ?? 'Usuario',
+                            'created_at' => optional($m->created_at)->toIso8601String(),
+                            'updated_at' => optional($m->updated_at)->toIso8601String(),
+                            'has_transcription' => ! empty($m->transcript_drive_id),
+                            'has_audio' => ! empty($m->audio_drive_id),
+                            'transcript_drive_id' => $m->transcript_drive_id,
+                            'transcript_download_url' => $m->transcript_download_url,
+                            'audio_drive_id' => $m->audio_drive_id,
+                            'audio_download_url' => $m->audio_download_url,
+                        ];
+                    });
+            }
+        } catch (\Throwable $e) {
+            // ignorar si la tabla/relación no existe
+        }
+
+        // Unir propias + compartidas, eliminar duplicados por id priorizando propias
+        $byId = [];
+        foreach ($own as $item) { $byId[$item['id']] = $item; }
+        foreach ($shared as $item) { if (!isset($byId[$item['id']])) { $byId[$item['id']] = $item; } }
+        $meetings = collect(array_values($byId))
+            ->sortByDesc(function($m) { return $m['created_at'] ?? null; })
             ->values();
 
         return response()->json([

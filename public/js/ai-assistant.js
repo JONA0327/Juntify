@@ -15,6 +15,8 @@ let isLoading = false;
 let isLoadingContext = false;
 let selectedFiles = [];
 let selectedDocuments = [];
+// Mapa de nombres de documentos por id para mostrar chips legibles
+const documentNameById = new Map();
 let loadedContextItems = [];
 let currentContextType = 'containers';
 let allMeetings = [];
@@ -371,6 +373,16 @@ function updateSessionInfo(session) {
             selectedDocuments = [...new Set(docIds.map(Number).filter(n => Number.isFinite(n)))];
             renderContextDocs();
         }
+    }
+
+    // Precargar nombres si el backend los envía (opcional)
+    if (Array.isArray(session.recent_documents)) {
+        session.recent_documents.forEach(d => {
+            if (d && d.id && d.name) {
+                documentNameById.set(Number(d.id), String(d.name));
+            }
+        });
+        renderContextDocs();
     }
 }
 
@@ -1541,6 +1553,8 @@ async function uploadDocuments() {
         if (data.success) {
             showNotification('Documentos subidos, procesando…', 'success');
             const uploaded = Array.isArray(data.documents) ? data.documents : [];
+            // precargar mapa id->name
+            uploaded.forEach(d => { if (d && d.id && d.name) documentNameById.set(Number(d.id), String(d.name)); });
             const docIds = uploaded.map(d => d && (d.id ?? d.document_id)).filter(Boolean);
 
             // Limpiar selección y cerrar modal
@@ -1564,7 +1578,8 @@ async function uploadDocuments() {
 
                     finishedDocs.forEach(doc => {
                         const status = doc.processing_status || 'processing';
-                        const name = doc.name || 'Documento';
+                        if (doc && doc.id && doc.name) documentNameById.set(Number(doc.id), String(doc.name));
+                        const name = (doc && doc.id && documentNameById.get(Number(doc.id))) || doc.name || 'Documento';
                         if (status === 'completed') {
                             addMessageToChat({
                                 role: 'assistant',
@@ -1607,10 +1622,11 @@ async function uploadDocuments() {
                                 const pd = await pr.json().catch(() => ({ success: false }));
                                 if (pd && pd.success) {
                                     pd.documents.forEach(doc => {
+                                        if (doc && doc.id && doc.name) documentNameById.set(Number(doc.id), String(doc.name));
                                         if (doc.processing_status === 'completed') {
                                             addMessageToChat({
                                                 role: 'assistant',
-                                                content: `El documento "${doc.name || 'Documento'}" ya está cargado y listo para usar en esta conversación.`,
+                                                content: `El documento "${(doc && doc.id && documentNameById.get(Number(doc.id))) || doc.name || 'Documento'}" ya está cargado y listo para usar en esta conversación.`,
                                                 created_at: new Date().toISOString(),
                                             });
                                             if (doc && doc.id) { addDocIdToSessionContext(Number(doc.id)); }
@@ -1618,7 +1634,7 @@ async function uploadDocuments() {
                                             const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : '';
                                             addMessageToChat({
                                                 role: 'assistant',
-                                                content: `Hubo un error procesando el documento "${doc.name || 'Documento'}".${hint}`,
+                                                content: `Hubo un error procesando el documento "${(doc && doc.id && documentNameById.get(Number(doc.id))) || doc.name || 'Documento'}".${hint}`,
                                                 created_at: new Date().toISOString(),
                                             });
                                         }
@@ -1631,6 +1647,12 @@ async function uploadDocuments() {
                             polls++;
                         }
                     }
+                    // Refrescar sesiones y mensajes para reflejar actividad reciente
+                    try { await loadChatSessions(); } catch (_) {}
+                    try { await loadMessages(); } catch (_) {}
+                    // Refrescar sesiones y mensajes para reflejar actividad reciente
+                    try { await loadChatSessions(); } catch (_) {}
+                    try { await loadMessages(); } catch (_) {}
                 } catch (e) {
                     console.warn('Espera de procesamiento de documentos falló:', e);
                 }
@@ -2424,6 +2446,8 @@ async function uploadChatAttachments(files) {
 
         showNotification('Archivo(s) subido(s), procesando…', 'success');
     const uploaded = Array.isArray(data.documents) ? data.documents : [];
+        // Pre-cargar nombres
+        uploaded.forEach(d => { if (d && d.id && d.name) documentNameById.set(Number(d.id), String(d.name)); });
         const docIds = uploaded.map(d => d && (d.id ?? d.document_id)).filter(Boolean);
         // Esperar brevemente a que terminen de procesarse (si ya están listos, seguirá de inmediato)
         if (docIds.length > 0) {
@@ -2440,7 +2464,8 @@ async function uploadChatAttachments(files) {
                 const finishedDocs = (waitData && waitData.success ? waitData.documents : uploaded) || [];
                 finishedDocs.forEach(doc => {
                     const status = doc.processing_status || 'processing';
-                    const name = doc.name || 'Documento';
+                    if (doc && doc.id && doc.name) documentNameById.set(Number(doc.id), String(doc.name));
+                    const name = (doc && doc.id && documentNameById.get(Number(doc.id))) || doc.name || 'Documento';
                     if (status === 'completed') {
                         addMessageToChat({
                             role: 'assistant',
@@ -2485,10 +2510,11 @@ async function uploadChatAttachments(files) {
                             const pd = await pr.json().catch(() => ({ success: false }));
                             if (pd && pd.success) {
                                 pd.documents.forEach(doc => {
+                                    if (doc && doc.id && doc.name) documentNameById.set(Number(doc.id), String(doc.name));
                                     if (doc.processing_status === 'completed') {
                                         addMessageToChat({
                                             role: 'assistant',
-                                            content: `El documento "${doc.name || 'Documento'}" ya está cargado y listo para usar en esta conversación.`,
+                                            content: `El documento "${(doc && doc.id && documentNameById.get(Number(doc.id))) || doc.name || 'Documento'}" ya está cargado y listo para usar en esta conversación.`,
                                             created_at: new Date().toISOString(),
                                         });
                                         if (doc && doc.id) { addDocIdToSessionContext(Number(doc.id)); }
@@ -2496,7 +2522,7 @@ async function uploadChatAttachments(files) {
                                         const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : '';
                                         addMessageToChat({
                                             role: 'assistant',
-                                            content: `Hubo un error procesando el documento "${doc.name || 'Documento'}".${hint}`,
+                                            content: `Hubo un error procesando el documento "${(doc && doc.id && documentNameById.get(Number(doc.id))) || doc.name || 'Documento'}".${hint}`,
                                             created_at: new Date().toISOString(),
                                         });
                                     }
@@ -2534,12 +2560,15 @@ function renderContextDocs() {
     }
 
     bar.style.display = 'flex';
-    chips.innerHTML = ids.map(id => `
+    chips.innerHTML = ids.map(id => {
+        const name = documentNameById.get(Number(id));
+        const label = name ? `${escapeHtml(name)}` : `Doc #${id}`;
+        return `
         <span class="doc-chip" data-doc-id="${id}">
-            Doc #${id}
+            ${label}
             <button class="chip-remove" title="Quitar" onclick="removeDocFromContext(${id})">×</button>
-        </span>
-    `).join('');
+        </span>`;
+    }).join('');
 }
 
 function addDocIdToSessionContext(id) {

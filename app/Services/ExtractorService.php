@@ -28,6 +28,10 @@ class ExtractorService
             return $this->extractWord($filePath, $extension);
         }
 
+        if ($this->isPowerPoint($mimeType, $extension)) {
+            return $this->extractPowerPoint($filePath, $extension);
+        }
+
         if ($this->isSpreadsheet($mimeType, $extension)) {
             return $this->extractSpreadsheet($filePath, $extension);
         }
@@ -47,6 +51,14 @@ class ExtractorService
     private function isWordDocument(string $mimeType, string $extension): bool
     {
         return str_contains($mimeType, 'word') || in_array($extension, ['doc', 'docx']);
+    }
+
+    private function isPowerPoint(string $mimeType, string $extension): bool
+    {
+        if (in_array($extension, ['ppt', 'pptx'])) return true;
+        $mimeType = strtolower($mimeType);
+        return str_contains($mimeType, 'powerpoint')
+            || str_contains($mimeType, 'presentation');
     }
 
     private function isSpreadsheet(string $mimeType, string $extension): bool
@@ -409,6 +421,174 @@ class ExtractorService
         ];
     }
 
+    private function extractPowerPoint(string $filePath, string $extension): array
+    {
+        if ($extension === 'pptx') {
+            // Extract text from PPTX by reading slide XML files
+            $zip = new ZipArchive();
+            if ($zip->open($filePath) !== true) {
+                throw new RuntimeException('No se pudo abrir el archivo PPTX.');
+            }
+
+            $texts = [];
+
+            // Collect slide XMLs: ppt/slides/slide1.xml, slide2.xml, ...
+            $slideXmlNames = [];
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $name = $zip->getNameIndex($i);
+                if (is_string($name) && str_starts_with($name, 'ppt/slides/slide') && str_ends_with($name, '.xml')) {
+                    $slideXmlNames[] = $name;
+                }
+            }
+            sort($slideXmlNames);
+
+            foreach ($slideXmlNames as $name) {
+                $xmlContent = $zip->getFromName($name);
+                if ($xmlContent === false) { continue; }
+                try {
+                    $xml = simplexml_load_string($xmlContent);
+                    if (!$xml) { continue; }
+                    // Register drawing namespace for <a:t>
+                    $xml->registerXPathNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
+                    $nodes = $xml->xpath('//a:t');
+                    $slideTexts = [];
+                    foreach ($nodes as $node) {
+                        $slideTexts[] = (string) $node;
+                    }
+                    $slideText = trim(implode("\n", array_filter($slideTexts, fn($t) => trim($t) !== '')));
+                    if ($slideText !== '') {
+                        $texts[] = $slideText;
+                    }
+                } catch (\Throwable $e) {
+                    // ignore individual slide errors
+                }
+            }
+
+            // Also attempt to read notes slides if present (ppt/notesSlides/notesSlide*.xml)
+            $noteXmlNames = [];
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $name = $zip->getNameIndex($i);
+                if (is_string($name) && str_starts_with($name, 'ppt/notesSlides/notesSlide') && str_ends_with($name, '.xml')) {
+                    $noteXmlNames[] = $name;
+                }
+            }
+            sort($noteXmlNames);
+            foreach ($noteXmlNames as $name) {
+                $xmlContent = $zip->getFromName($name);
+                if ($xmlContent === false) { continue; }
+                try {
+                    $xml = simplexml_load_string($xmlContent);
+                    if (!$xml) { continue; }
+                    $xml->registerXPathNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
+                    $nodes = $xml->xpath('//a:t');
+                    $noteTexts = [];
+                    foreach ($nodes as $node) {
+                        $noteTexts[] = (string) $node;
+                    }
+                    $note = trim(implode("\n", array_filter($noteTexts, fn($t) => trim($t) !== '')));
+                    if ($note !== '') {
+                        $texts[] = '# Notas:\n' . $note;
+                    }
+                } catch (\Throwable $e) {
+                    // ignore
+                }
+            }
+
+            $zip->close();
+
+            $normalized = $this->normalizeText(implode("\n\n---\n\n", $texts));
+            if ($normalized !== '') {
+                return [
+                    'text' => $normalized,
+                    'metadata' => [
+                        'detected_type' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                        'engine' => 'zip-xml',
+                        'slides' => count($slideXmlNames),
+                    ],
+                ];
+            }
+
+            // If no text extracted from XML (images-only slides), try converting to PDF and OCR
+            $pdfResult = $this->convertOfficeToPdfAndExtract($filePath);
+            if ($pdfResult !== null) {
+                return $pdfResult;
+            }
+
+            throw new RuntimeException('No se pudo extraer texto del PPTX.');
+        }
+
+        // Legacy .ppt: try LibreOffice conversion to PDF → extractPdf
+        $pdfResult = $this->convertOfficeToPdfAndExtract($filePath);
+        if ($pdfResult !== null) {
+            return $pdfResult;
+        }
+
+        // Fallback best-effort: read binary and strip non-printables
+        $contents = @File::get($filePath);
+        $text = $this->normalizeText($contents ?: '');
+        if ($text !== '') {
+            return [
+                'text' => $text,
+                'metadata' => [
+                    'detected_type' => 'application/vnd.ms-powerpoint',
+                    'engine' => 'fallback-binary-cleanup',
+                ],
+            ];
+        }
+
+        throw new RuntimeException('No se pudo extraer texto de la presentación.');
+    }
+
+    /**
+     * Uses LibreOffice (soffice) if available to convert office docs to PDF, then extracts text via extractPdf.
+     * Returns null if soffice not available or conversion fails.
+     *
+     * @return array{ text: string, metadata: array }|null
+     */
+    private function convertOfficeToPdfAndExtract(string $filePath): ?array
+    {
+        $soffice = $this->resolveBinary('soffice');
+        if (!$soffice) {
+            return null;
+        }
+
+        $outDir = dirname($filePath);
+        $proc = new Process([$soffice, '--headless', '--nologo', '--nofirststartwizard', '--convert-to', 'pdf', '--outdir', $outDir, $filePath]);
+        $proc->setTimeout(120);
+        $proc->run();
+        if (!$proc->isSuccessful()) {
+            return null;
+        }
+
+        // Determine output PDF path (same basename with .pdf extension)
+        $pdfPath = preg_replace('/\.[^.]+$/', '.pdf', $filePath);
+        if (!is_string($pdfPath) || !@file_exists($pdfPath)) {
+            // LibreOffice might place output in outdir with basename
+            $base = pathinfo($filePath, PATHINFO_FILENAME) . '.pdf';
+            $candidate = $outDir . DIRECTORY_SEPARATOR . $base;
+            if (@file_exists($candidate)) {
+                $pdfPath = $candidate;
+            } else {
+                return null;
+            }
+        }
+
+        try {
+            $result = $this->extractPdf($pdfPath);
+            return [
+                'text' => $result['text'],
+                'metadata' => array_merge($result['metadata'] ?? [], [
+                    'engine' => ($result['metadata']['engine'] ?? '') . '+libreoffice-pdf',
+                    'converted_from' => pathinfo($filePath, PATHINFO_EXTENSION),
+                ]),
+            ];
+        } catch (\Throwable $e) {
+            return null;
+        } finally {
+            @unlink($pdfPath);
+        }
+    }
+
     private function extractDocx(string $filePath): array
     {
         $zip = new ZipArchive();
@@ -727,6 +907,7 @@ class ExtractorService
             'gs' => env('GHOSTSCRIPT_PATH'),
             'pdftoppm' => env('PDFTOPPM_PATH'),
             'pdftotext' => env('PDFTOTEXT_PATH'),
+            'soffice' => env('LIBREOFFICE_PATH'),
         ];
         if (isset($envMap[$binary]) && is_string($envMap[$binary]) && $envMap[$binary] !== '') {
             $p = $envMap[$binary];
@@ -750,6 +931,8 @@ class ExtractorService
                 array_unshift($candidates, 'pdftoppm.exe');
             } elseif ($binary === 'tesseract') {
                 array_unshift($candidates, 'tesseract.exe');
+            } elseif ($binary === 'soffice') {
+                array_unshift($candidates, 'soffice.exe');
             }
         }
 
@@ -804,6 +987,16 @@ class ExtractorService
                     foreach (glob($pattern) ?: [] as $p) {
                         $pathsToCheck[] = $p;
                     }
+                }
+            }
+
+            // LibreOffice default installs
+            if ($binary === 'soffice') {
+                foreach ([
+                    'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
+                    'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
+                ] as $p) {
+                    $pathsToCheck[] = $p;
                 }
             }
 
