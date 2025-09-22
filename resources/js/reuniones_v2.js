@@ -2489,6 +2489,9 @@ function closeContainerSelectModal() {
 // ===============================================
 async function openMeetingModal(meetingId, sharedMeetingId = null) {
     try {
+        // Normalizar estado previo: remover modal residual y resetear overflow
+        try { document.querySelectorAll('#meetingModal').forEach(el => el.remove()); } catch (_) {}
+        document.body.style.overflow = '';
         // Mostrar modal de loading inmediatamente
         showModalLoadingState();
 
@@ -3301,11 +3304,14 @@ async function closeMeetingModal() {
         modal.classList.remove('active');
         document.body.style.overflow = '';
 
-        // Esperar a que termine la animación antes de ocultar
+    // Esperar a que termine la animación antes de ocultar
         setTimeout(async () => {
             if (modal && !modal.classList.contains('active')) {
                 modal.style.display = 'none';
                 modal.remove();
+        // Reset referencia de reunión actual y remover posibles duplicados
+        try { currentModalMeeting = null; } catch (_) {}
+        try { document.querySelectorAll('#meetingModal').forEach(el => el.remove()); } catch (_) {}
 
                 if (currentModalMeeting?.needs_encryption) {
                     try {
@@ -3357,6 +3363,8 @@ function showLoadingState(container, message = 'Cargando reuniones...') {
 }
 
 function showModalLoadingState() {
+    // Asegurar que no existan modales residuales antes de crear uno nuevo
+    try { document.querySelectorAll('#meetingModal').forEach(el => el.remove()); } catch (_) {}
     const modalHtml = `
         <div class="meeting-modal active" id="meetingModal">
             <div class="modal-content loading">
@@ -3395,11 +3403,6 @@ function showModalLoadingState() {
             </div>
         </div>
     `;
-
-    const existingModal = document.getElementById('meetingModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     document.body.style.overflow = 'hidden';
@@ -5029,7 +5032,8 @@ function renderContainerMeetings(meetings) {
 }
 
 function openMeetingModalFromContainer(meetingId) {
-    // Mostrar loading inmediato para evitar vacío visual
+    // Mostrar loading inmediato para evitar vacío visual en estado limpio
+    try { document.querySelectorAll('#meetingModal').forEach(el => el.remove()); } catch (_) {}
     try { showModalLoadingState(); } catch (e) { /* no-op */ }
 
     // Cerrar el modal del contenedor
