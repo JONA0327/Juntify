@@ -690,6 +690,8 @@ class AiAssistantController extends Controller
                 'id' => $document->id,
                 'name' => $document->name,
                 'processing_status' => $document->processing_status,
+                'processing_progress' => $document->processing_progress,
+                'processing_step' => $document->processing_step,
                 'has_text' => $document->hasText(),
                 'processing_error' => $document->processing_error,
             ];

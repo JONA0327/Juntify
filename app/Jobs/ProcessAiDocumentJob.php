@@ -44,6 +44,8 @@ class ProcessAiDocumentJob implements ShouldQueue
         $document->update([
             'processing_status' => 'processing',
             'processing_error' => null,
+            'processing_progress' => 5,
+            'processing_step' => 'preparing',
         ]);
 
         $tempFile = null;
@@ -55,6 +57,7 @@ class ProcessAiDocumentJob implements ShouldQueue
             }
 
             $driveService->setAccessToken($token);
+            $document->update(['processing_progress' => 10, 'processing_step' => 'downloading']);
             $fileContents = $driveService->downloadFileContent($document->drive_file_id);
 
             if ($fileContents === null) {
@@ -62,6 +65,7 @@ class ProcessAiDocumentJob implements ShouldQueue
             }
 
             $tempFile = $this->storeTemporaryFile($document, $fileContents);
+            $document->update(['processing_progress' => 20, 'processing_step' => 'extracting']);
 
             $extracted = $extractorService->extract(
                 $tempFile['absolute_path'],
@@ -74,6 +78,7 @@ class ProcessAiDocumentJob implements ShouldQueue
                 throw new RuntimeException('El documento no contiene texto utilizable.');
             }
 
+            $document->update(['processing_progress' => 60, 'processing_step' => 'chunking']);
             $chunkResult = $chunkerService->chunk($text);
             $chunks = $chunkResult['chunks'] ?? [];
             $normalizedText = $chunkResult['normalized_text'] ?? '';
@@ -83,6 +88,7 @@ class ProcessAiDocumentJob implements ShouldQueue
             }
 
             $embeddingModel = config('services.openai.embedding_model', 'text-embedding-3-small');
+            $document->update(['processing_progress' => 75, 'processing_step' => 'embedding']);
             $embeddings = $embeddingService->embedChunks($chunks, 20, $embeddingModel);
 
             if (empty($embeddings)) {
@@ -129,6 +135,8 @@ class ProcessAiDocumentJob implements ShouldQueue
                     'ocr_metadata' => $extracted['metadata'] ?? [],
                     'processing_status' => 'completed',
                     'processing_error' => null,
+                    'processing_progress' => 100,
+                    'processing_step' => 'done',
                 ]);
             });
         } catch (Throwable $exception) {
@@ -140,6 +148,7 @@ class ProcessAiDocumentJob implements ShouldQueue
             $document->update([
                 'processing_status' => 'failed',
                 'processing_error' => $message,
+                'processing_step' => 'error',
             ]);
 
             Log::error('Failed to process AI document', [

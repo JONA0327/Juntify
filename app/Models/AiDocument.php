@@ -24,6 +24,8 @@ class AiDocument extends Model
         'extracted_text',
         'ocr_metadata',
         'processing_status',
+        'processing_progress',
+        'processing_step',
         'processing_error',
         'document_metadata',
     ];
@@ -32,6 +34,7 @@ class AiDocument extends Model
         'ocr_metadata' => 'array',
         'document_metadata' => 'array',
         'file_size' => 'integer',
+        'processing_progress' => 'integer',
     ];
 
     public function user(): BelongsTo
