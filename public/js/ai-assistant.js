@@ -1390,6 +1390,22 @@ async function uploadDocuments() {
         if (driveFolderId) {
             formData.append('drive_folder_id', driveFolderId);
         }
+        // Mantener la sesión actual (no crear otra)
+        if (currentSessionId) {
+            formData.append('session_id', String(currentSessionId));
+        }
+
+        // Mostrar mensajes de carga en el chat por cada archivo
+        const loadingMessages = [];
+        selectedFiles.forEach(file => {
+            const msg = {
+                role: 'assistant',
+                content: `Cargando documento "${file.name}"…`,
+                created_at: new Date().toISOString(),
+            };
+            addMessageToChat(msg);
+            loadingMessages.push({ name: file.name });
+        });
 
         const response = await fetch('/api/ai-assistant/documents/upload', {
             method: 'POST',
@@ -1401,21 +1417,56 @@ async function uploadDocuments() {
 
         const data = await response.json();
         if (data.success) {
-            showNotification('Documentos subidos correctamente', 'success');
+            showNotification('Documentos subidos, procesando…', 'success');
+            const uploaded = Array.isArray(data.documents) ? data.documents : [];
+            const docIds = uploaded.map(d => d && (d.id ?? d.document_id)).filter(Boolean);
+
+            // Limpiar selección y cerrar modal
             selectedFiles = [];
             updateFileDisplay();
             closeDocumentUploader();
 
-            // Actualizar contexto para incluir documentos
-            const uploaded = Array.isArray(data.documents) ? data.documents : [];
-            const docIds = uploaded.map(d => d && (d.id ?? d.document_id)).filter(Boolean);
-            currentContext = {
-                type: 'documents',
-                id: 'uploaded',
-                data: docIds
-            };
+            // Esperar a que terminen de procesarse y confirmar en el chat
+            if (docIds.length > 0) {
+                try {
+                    const waitResp = await fetch('/api/ai-assistant/documents/wait', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        },
+                        body: JSON.stringify({ ids: docIds, timeout_ms: 12000 })
+                    });
+                    const waitData = await waitResp.json().catch(() => ({ success: false }));
+                    const finishedDocs = (waitData && waitData.success ? waitData.documents : uploaded) || [];
 
-            await createNewChatSession();
+                    finishedDocs.forEach(doc => {
+                        const status = doc.processing_status || 'processing';
+                        const name = doc.name || 'Documento';
+                        if (status === 'completed') {
+                            addMessageToChat({
+                                role: 'assistant',
+                                content: `El documento "${name}" ya está cargado y listo para usar en esta conversación.`,
+                                created_at: new Date().toISOString(),
+                            });
+                        } else if (status === 'failed') {
+                            addMessageToChat({
+                                role: 'assistant',
+                                content: `Hubo un error procesando el documento "${name}".`,
+                                created_at: new Date().toISOString(),
+                            });
+                        } else {
+                            addMessageToChat({
+                                role: 'assistant',
+                                content: `El documento "${name}" sigue procesándose. Te avisaré cuando esté listo.`,
+                                created_at: new Date().toISOString(),
+                            });
+                        }
+                    });
+                } catch (e) {
+                    console.warn('Espera de procesamiento de documentos falló:', e);
+                }
+            }
         } else {
             throw new Error(data.message || 'Error al subir documentos');
         }
@@ -2130,6 +2181,20 @@ async function uploadChatAttachments(files) {
         const formData = new FormData();
         files.forEach(file => formData.append('files[]', file));
 
+        // Mantener la sesión actual (no crear otra)
+        if (currentSessionId) {
+            formData.append('session_id', String(currentSessionId));
+        }
+
+        // Mostrar mensajes de carga en el chat por cada archivo
+        files.forEach(file => {
+            addMessageToChat({
+                role: 'assistant',
+                content: `Cargando documento "${file.name}"…`,
+                created_at: new Date().toISOString(),
+            });
+        });
+
         const response = await fetch('/api/ai-assistant/documents/upload', {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
@@ -2141,13 +2206,13 @@ async function uploadChatAttachments(files) {
             throw new Error(data.message || 'No se pudo subir el archivo');
         }
 
-        showNotification('Archivo(s) subido(s) y cargados al contexto', 'success');
+        showNotification('Archivo(s) subido(s), procesando…', 'success');
         const uploaded = Array.isArray(data.documents) ? data.documents : [];
         const docIds = uploaded.map(d => d && (d.id ?? d.document_id)).filter(Boolean);
         // Esperar brevemente a que terminen de procesarse (si ya están listos, seguirá de inmediato)
         if (docIds.length > 0) {
             try {
-                await fetch('/api/ai-assistant/documents/wait', {
+                const waitResp = await fetch('/api/ai-assistant/documents/wait', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2155,12 +2220,32 @@ async function uploadChatAttachments(files) {
                     },
                     body: JSON.stringify({ ids: docIds, timeout_ms: 8000 })
                 });
+                const waitData = await waitResp.json().catch(() => ({ success: false }));
+                const finishedDocs = (waitData && waitData.success ? waitData.documents : uploaded) || [];
+                finishedDocs.forEach(doc => {
+                    const status = doc.processing_status || 'processing';
+                    const name = doc.name || 'Documento';
+                    if (status === 'completed') {
+                        addMessageToChat({
+                            role: 'assistant',
+                            content: `El documento "${name}" ya está cargado y listo para usar en esta conversación.`,
+                            created_at: new Date().toISOString(),
+                        });
+                    } else if (status === 'failed') {
+                        addMessageToChat({
+                            role: 'assistant',
+                            content: `Hubo un error procesando el documento "${name}".`,
+                            created_at: new Date().toISOString(),
+                        });
+                    } else {
+                        addMessageToChat({
+                            role: 'assistant',
+                            content: `El documento "${name}" sigue procesándose. Te avisaré cuando esté listo.`,
+                            created_at: new Date().toISOString(),
+                        });
+                    }
+                });
             } catch(_) { /* no-op */ }
-        }
-        if (docIds.length > 0) {
-            currentContext = { type: 'documents', id: 'uploaded', data: docIds };
-            await createNewChatSession();
-            updateContextIndicator();
         }
     } catch (error) {
         console.error('Error subiendo adjuntos del chat:', error);

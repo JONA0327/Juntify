@@ -534,6 +534,24 @@ class AiAssistantController extends Controller
                     $session = AiChatSession::where('id', $sessionId)->where('username', $user->username)->first();
                     if ($session) {
                         $this->associateDocumentToSessionContext($document, $session, $user->username);
+                        // Agregar el documento al contexto de la sesión (lista doc_ids)
+                        try {
+                            $contextData = is_array($session->context_data) ? $session->context_data : [];
+                            $docIds = \Illuminate\Support\Arr::get($contextData, 'doc_ids', []);
+                            if (!is_array($docIds)) { $docIds = []; }
+                            if (!in_array($document->id, $docIds, true)) {
+                                $docIds[] = $document->id;
+                                $contextData['doc_ids'] = array_values($docIds);
+                                $session->context_data = $contextData;
+                                $session->save();
+                            }
+                        } catch (\Throwable $e) {
+                            Log::warning('No se pudo actualizar doc_ids en el contexto de la sesión', [
+                                'session_id' => $session->id,
+                                'document_id' => $document->id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
                     }
                 }
 
@@ -703,7 +721,7 @@ class AiAssistantController extends Controller
             }
         }
 
-        $additional = [];
+    $additional = [];
 
         switch ($session->context_type) {
             case 'container':
@@ -725,6 +743,18 @@ class AiAssistantController extends Controller
             case 'mixed':
                 $additional = $this->buildMixedContextFragments($session, $query);
                 break;
+        }
+
+        // Incluir documentos agregados explícitamente a la sesión (doc_ids en context_data)
+        try {
+            $docIds = Arr::get(is_array($session->context_data) ? $session->context_data : [], 'doc_ids', []);
+            if (is_array($docIds) && count($docIds) > 0) {
+                $docSession = $this->createVirtualSession($session, 'documents', null, $docIds);
+                $docFragments = $this->buildDocumentContextFragments($docSession);
+                $additional = array_merge($additional, $docFragments);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Failed to build document fragments from session doc_ids', ['error' => $e->getMessage()]);
         }
 
         return array_values(array_merge($contextFragments, $additional));
@@ -1680,8 +1710,9 @@ class AiAssistantController extends Controller
         }
 
         if ($session->context_type === 'container' && $session->context_id) {
+            // Permitir contenedores organizacionales donde el usuario tenga acceso,
+            // sin restringir al creador únicamente
             $container = MeetingContentContainer::where('id', $session->context_id)
-                ->where('username', $session->username)
                 ->where('is_active', true)
                 ->first();
             if ($container) {
