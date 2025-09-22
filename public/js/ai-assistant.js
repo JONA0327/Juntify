@@ -97,6 +97,18 @@ function setupEventListeners() {
 }
 
 /**
+ * Restablecer contexto a 'general' y limpiar selección temporal
+ */
+function resetContextToGeneral(clearLoaded = false) {
+    currentContext = { type: 'general', id: null, data: {} };
+    if (clearLoaded) {
+        loadedContextItems = [];
+        updateLoadedContextUI();
+    }
+    updateContextIndicator();
+}
+
+/**
  * =========================================
  * GESTIÓN DE SESIONES DE CHAT
  * =========================================
@@ -216,6 +228,8 @@ async function deleteChatSession(sessionId) {
  * Crear nueva sesión de chat
  */
 async function createNewChat() {
+    // Siempre limpiar contexto para nuevas conversaciones
+    resetContextToGeneral(true);
     await createNewChatSession();
 }
 
@@ -224,6 +238,13 @@ async function createNewChat() {
  */
 async function createNewChatSession() {
     try {
+        // Forzar contexto general para nuevas conversaciones
+        const payloadContext = {
+            type: 'general',
+            id: null,
+            data: {}
+        };
+
         const response = await fetch('/api/ai-assistant/sessions', {
             method: 'POST',
             headers: {
@@ -231,9 +252,9 @@ async function createNewChatSession() {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
             },
             body: JSON.stringify({
-                context_type: currentContext.type,
-                context_id: currentContext.id,
-                context_data: currentContext.data
+                context_type: payloadContext.type,
+                context_id: payloadContext.id,
+                context_data: payloadContext.data
             })
         });
 
@@ -242,6 +263,7 @@ async function createNewChatSession() {
             currentSessionId = data.session.id;
             await loadChatSessions();
             await loadMessages();
+            // Actualizar indicador (vacío para general)
             updateContextIndicator();
         }
     } catch (error) {
@@ -256,7 +278,8 @@ async function createNewChatSession() {
 async function ensureCurrentSession() {
     try {
         if (!chatSessions || chatSessions.length === 0) {
-            // No hay sesiones previas: crear una nueva en contexto actual
+            // No hay sesiones previas: crear una nueva en contexto limpio
+            resetContextToGeneral(true);
             await createNewChatSession();
             return;
         }
