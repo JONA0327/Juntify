@@ -3344,10 +3344,12 @@ async function closeMeetingModal() {
 
                 // Si la reunión fue abierta desde el modal del contenedor, restaurarlo automáticamente
                 if (resumeContainerOnClose && lastContainerForMeetings) {
-                    try {
-                        // Notificar a Alpine (organización) para reabrir el modal del contenedor con loading
-                        window.dispatchEvent(new CustomEvent('juntify:open-container-meetings', { detail: { containerId: lastContainerForMeetings } }));
-                    } catch (_) {}
+                    setTimeout(() => {
+                        try {
+                            // Notificar a Alpine (organización) para reabrir el modal del contenedor con loading
+                            window.dispatchEvent(new CustomEvent('juntify:open-container-meetings', { detail: { containerId: lastContainerForMeetings } }));
+                        } catch (_) {}
+                    }, 50);
                     // Resetear banderas
                     resumeContainerOnClose = false;
                     lastContainerForMeetings = null;

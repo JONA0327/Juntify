@@ -1823,6 +1823,15 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
     async openContainerMeetingsModal(container) {
         try {
+            // Normalizar estilos del modal por si otra lógica los dejó en hidden/pointer-events:none
+            const el = document.getElementById('container-meetings-modal');
+            if (el) {
+                el.classList.remove('hidden');
+                el.removeAttribute('aria-hidden');
+                el.style.pointerEvents = '';
+                el.style.visibility = '';
+                el.style.opacity = '';
+            }
             // Mostrar modal inmediatamente con estado de carga visual
             this.selectedContainer = { ...container, meetings: [], _isLoading: true };
             this.showContainerMeetingsModal = true;
