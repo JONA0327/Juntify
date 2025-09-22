@@ -132,14 +132,18 @@ class ProcessAiDocumentJob implements ShouldQueue
                 ]);
             });
         } catch (Throwable $exception) {
+            $message = $exception->getMessage();
+            if (stripos($message, 'No se encontró ningún motor para extraer texto de PDF') !== false) {
+                $message .= ' · Sugerencia: instala pdftotext/poppler o tesseract en el servidor, o sube un PDF con texto real (no imagen). Si es un escaneo, activa OCR.';
+            }
             $document->update([
                 'processing_status' => 'failed',
-                'processing_error' => $exception->getMessage(),
+                'processing_error' => $message,
             ]);
 
             Log::error('Failed to process AI document', [
                 'document_id' => $document->id,
-                'error' => $exception->getMessage(),
+                'error' => $message,
                 'trace' => $exception->getTraceAsString(),
             ]);
 
@@ -193,7 +197,7 @@ class ProcessAiDocumentJob implements ShouldQueue
 
         return [
             'relative_path' => $relativePath,
-            'absolute_path' => Storage::disk('local')->path($relativePath),
+            'absolute_path' => storage_path('app' . DIRECTORY_SEPARATOR . $relativePath),
         ];
     }
 

@@ -1525,9 +1525,10 @@ async function uploadDocuments() {
                                 created_at: new Date().toISOString(),
                             });
                         } else if (status === 'failed') {
+                            const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : ' Sugerencia: si es un PDF escaneado, habilita OCR o sube una versión con texto seleccionable.';
                             addMessageToChat({
                                 role: 'assistant',
-                                content: `Hubo un error procesando el documento "${name}".`,
+                                content: `Hubo un error procesando el documento "${name}".${hint}`,
                                 created_at: new Date().toISOString(),
                             });
                         } else {
@@ -2307,9 +2308,10 @@ async function uploadChatAttachments(files) {
                             created_at: new Date().toISOString(),
                         });
                     } else if (status === 'failed') {
+                        const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : ' Sugerencia: si es un PDF escaneado, habilita OCR o sube una versión con texto seleccionable.';
                         addMessageToChat({
                             role: 'assistant',
-                            content: `Hubo un error procesando el documento "${name}".`,
+                            content: `Hubo un error procesando el documento "${name}".${hint}`,
                             created_at: new Date().toISOString(),
                         });
                     } else {

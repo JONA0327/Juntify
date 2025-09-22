@@ -97,8 +97,8 @@ class ExtractorService
             }
         }
 
-        $binary = $this->resolveBinary('pdftotext');
-        if ($binary) {
+    $binary = $this->resolveBinary('pdftotext');
+    if ($binary) {
             $outputFile = $filePath . '.txt';
             $process = new Process([$binary, '-layout', $filePath, $outputFile]);
             $process->setTimeout(60);
@@ -124,6 +124,32 @@ class ExtractorService
                     'engine' => 'pdftotext-cli',
                 ],
             ];
+        }
+
+        // Ghostscript fallback using txtwrite device (if available)
+        $gs = $this->resolveBinary('gs');
+        if ($gs) {
+            try {
+                // -q quiet, -dSAFER safety, -sDEVICE=txtwrite write text to stdout (-o -)
+                $process = new Process([$gs, '-q', '-dSAFER', '-sDEVICE=txtwrite', '-o', '-', $filePath]);
+                $process->setTimeout(90);
+                $process->run();
+                if ($process->isSuccessful()) {
+                    $text = $process->getOutput();
+                    $normalized = $this->normalizeText($text ?? '');
+                    if ($normalized !== '') {
+                        return [
+                            'text' => $normalized,
+                            'metadata' => [
+                                'detected_type' => 'application/pdf',
+                                'engine' => 'ghostscript-txtwrite',
+                            ],
+                        ];
+                    }
+                }
+            } catch (\Throwable $e) {
+                // ignore and continue to next fallback
+            }
         }
 
         // OCR fallback for PDFs: convert pages to images with pdftoppm and OCR with tesseract
