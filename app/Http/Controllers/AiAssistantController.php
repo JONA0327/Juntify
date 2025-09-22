@@ -18,6 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use App\Services\AiChatService;
@@ -58,20 +59,37 @@ class AiAssistantController extends Controller
     {
         $user = Auth::user();
 
-        $container = MeetingContentContainer::with(['meetings' => function ($q) use ($user) {
-            $q->where('username', $user->username)
-              ->orderByDesc('created_at');
-        }])
-        ->where('id', $containerId)
-        ->where('username', $user->username)
-        ->where('is_active', true)
-        ->first();
+        // Permitir contenedores personales y organizacionales (si el usuario es miembro/owner)
+        $container = MeetingContentContainer::with(['group', 'group.organization', 'meetings' => function ($q) {
+                $q->orderByDesc('created_at');
+            }])
+            ->where('id', $containerId)
+            ->where('is_active', true)
+            ->first();
 
         if (! $container) {
             return response()->json([
                 'success' => false,
-                'message' => 'Contenedor no encontrado o sin acceso',
+                'message' => 'Contenedor no encontrado',
             ], 404);
+        }
+
+        $isCreator = $container->username === $user->username;
+        $isMember = $container->group_id
+            ? DB::table('group_user')
+                ->where('id_grupo', $container->group_id)
+                ->where('user_id', $user->id)
+                ->exists()
+            : false;
+        $isOrgOwner = $container->group && $container->group->organization
+            ? $container->group->organization->admin_id === $user->id
+            : false;
+
+        if (!($isCreator || $isMember || $isOrgOwner)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permisos para precargar este contenedor',
+            ], 403);
         }
 
         $preloaded = [];
@@ -349,19 +367,28 @@ class AiAssistantController extends Controller
     {
         $user = Auth::user();
 
-        // Use MeetingContentContainer which relates through meeting_content_relations
-        $containers = MeetingContentContainer::where('username', $user->username)
+        // Incluir contenedores personales y organizacionales donde el usuario es miembro
+        $containers = MeetingContentContainer::with('group')
             ->where('is_active', true)
-            ->withCount(['meetings as meetings_count'])
+            ->where(function ($q) use ($user) {
+                $q->where('username', $user->username)
+                  ->orWhereIn('group_id', function ($sub) use ($user) {
+                      $sub->select('id_grupo')
+                          ->from('group_user')
+                          ->where('user_id', $user->id);
+                  });
+            })
             ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function($container) {
+            ->map(function ($container) {
                 return [
                     'id' => $container->id,
                     'name' => $container->name,
-                    'meetings_count' => (int) ($container->meetings_count ?? 0),
-                    'created_at' => $container->created_at,
                     'description' => $container->description,
+                    'created_at' => $container->created_at,
+                    'meetings_count' => $container->meetingRelations()->count(),
+                    'is_company' => $container->group_id !== null,
+                    'group_name' => $container->group->nombre_grupo ?? null,
                 ];
             });
 
@@ -785,17 +812,32 @@ class AiAssistantController extends Controller
         $fragments = [];
 
         if ($session->context_id) {
+            $user = Auth::user();
             $container = MeetingContentContainer::withCount(['meetings'])
-                ->with(['meetings' => function ($q) use ($session) {
-                    $q->where('username', $session->username)
-                        ->orderByDesc('created_at');
+                ->with(['group', 'group.organization', 'meetings' => function ($q) {
+                    $q->orderByDesc('created_at');
                 }])
                 ->where('id', $session->context_id)
-                ->where('username', $session->username)
                 ->where('is_active', true)
                 ->first();
 
             if ($container) {
+                // Verificar permisos: creador, miembro del grupo o dueño de la organización
+                $isCreator = $container->username === $session->username;
+                $isMember = $container->group_id
+                    ? DB::table('group_user')
+                        ->where('id_grupo', $container->group_id)
+                        ->where('user_id', $user->id)
+                        ->exists()
+                    : false;
+                $isOrgOwner = $container->group && $container->group->organization
+                    ? $container->group->organization->admin_id === $user->id
+                    : false;
+
+                if (!($isCreator || $isMember || $isOrgOwner)) {
+                    return [];
+                }
+
                 $fragments[] = [
                     'text' => sprintf(
                         'Contenedor "%s" con %d reuniones registradas.',
