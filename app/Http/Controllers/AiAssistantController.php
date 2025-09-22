@@ -29,6 +29,7 @@ use App\Services\EmbeddingSearch;
 use App\Services\GoogleServiceAccount;
 use App\Services\MeetingJuCacheService;
 use App\Models\AiMeetingJuCache;
+use App\Models\TaskLaravel;
 use Google\Service\Exception as GoogleServiceException;
 use RuntimeException;
 use App\Support\OpenAiConfig;
@@ -136,6 +137,168 @@ class AiAssistantController extends Controller
             'meetings_preloaded' => $preloaded,
             'errors' => $errors,
         ]);
+    }
+
+    /**
+     * Pre-cargar .ju y además importar tareas a BD para todas las reuniones de un contenedor
+     */
+    public function importContainerTasks(Request $request, int $containerId): JsonResponse
+    {
+        $user = Auth::user();
+
+        $container = MeetingContentContainer::with(['group', 'group.organization', 'meetings' => function ($q) {
+                $q->orderByDesc('created_at');
+            }])
+            ->where('id', $containerId)
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $isCreator = $container->username === $user->username;
+        $isMember = $container->group_id
+            ? DB::table('group_user')
+                ->where('id_grupo', $container->group_id)
+                ->where('user_id', $user->id)
+                ->exists()
+            : false;
+        $isOrgOwner = $container->group && $container->group->organization
+            ? $container->group->organization->admin_id === $user->id
+            : false;
+
+        if (!($isCreator || $isMember || $isOrgOwner)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permisos para importar tareas en este contenedor',
+            ], 403);
+        }
+
+        $results = [];
+        $errors = [];
+
+        /** @var MeetingJuCacheService $cache */
+        $cache = app(MeetingJuCacheService::class);
+
+        foreach ($container->meetings as $meeting) {
+            $meetingInfo = [
+                'id' => (int)$meeting->id,
+                'name' => (string)$meeting->meeting_name,
+                'has_transcript' => !empty($meeting->transcript_drive_id),
+                'summary' => null,
+                'key_points' => [],
+                'tasks_imported' => ['created' => 0, 'updated' => 0],
+            ];
+
+            try {
+                // Garantizar .ju disponible y cacheado
+                $content = $this->tryDownloadJuContent($meeting);
+                if ((!$content || $content === '') && empty($meeting->transcript_drive_id)) {
+                    $found = $this->locateJuForMeeting($meeting, $container);
+                    if ($found) {
+                        $meeting->transcript_drive_id = $found;
+                        $meeting->save();
+                        $content = $this->tryDownloadJuContent($meeting);
+                    }
+                }
+
+                $data = null;
+                if (is_string($content) && $content !== '') {
+                    $parsed = $this->decryptJuFile($content);
+                    $data = $this->processTranscriptData($parsed['data'] ?? []);
+                    $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id);
+                } else {
+                    // Última oportunidad: intentar leer cache previa
+                    $cached = $cache->getCachedParsed((int)$meeting->id);
+                    if (is_array($cached)) { $data = $cached; }
+                }
+
+                if ($data) {
+                    $meetingInfo['summary'] = $data['summary'] ?? null;
+                    $meetingInfo['key_points'] = $data['key_points'] ?? [];
+
+                    // Importar tareas
+                    $rawTasks = $data['tasks'] ?? [];
+                    $tuple = $this->upsertTasksForMeeting($user->username, $meeting, $rawTasks);
+                    $meetingInfo['tasks_imported'] = $tuple;
+                }
+
+                $results[] = $meetingInfo;
+            } catch (\Throwable $e) {
+                $errors[] = [
+                    'meeting_id' => (int) $meeting->id,
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'container_id' => (int)$container->id,
+            'meetings' => $results,
+            'errors' => $errors,
+        ]);
+    }
+
+    private function upsertTasksForMeeting(string $username, TranscriptionLaravel $meeting, $rawTasks): array
+    {
+        $created = 0; $updated = 0;
+        $items = is_array($rawTasks) ? $rawTasks : ($rawTasks ? [$rawTasks] : []);
+        foreach ($items as $item) {
+            $parsed = $this->parseRawTaskForDb($item);
+
+            $prioridad = null; $hora = null;
+            if (is_array($item)) {
+                $isAssoc = array_keys($item) !== range(0, count($item) - 1);
+                if ($isAssoc) {
+                    $prioridad = $item['prioridad'] ?? $item['priority'] ?? null;
+                    $rawTime = $item['hora'] ?? $item['hora_limite'] ?? $item['time'] ?? $item['due_time'] ?? null;
+                    if (is_string($rawTime) && preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', trim($rawTime), $tm)) {
+                        $h = str_pad($tm[1], 2, '0', STR_PAD_LEFT); $m = $tm[2];
+                        $hora = $h . ':' . $m;
+                    }
+                    foreach (['end','due','due_date','fecha_fin','start','start_date','fecha_inicio'] as $k) {
+                        if (!empty($item[$k]) && is_string($item[$k]) && preg_match('/^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}:\d{2})(?::\d{2})?$/', $item[$k], $dm)) {
+                            $parsedDate = $dm[1]; $parsedTime = $dm[2];
+                            if (empty($parsed['fecha_limite']) && in_array($k, ['end','due','due_date','fecha_fin'])) { $parsed['fecha_limite'] = $parsedDate; }
+                            if (empty($parsed['fecha_inicio']) && in_array($k, ['start','start_date','fecha_inicio'])) { $parsed['fecha_inicio'] = $parsedDate; }
+                            if ($hora === null) { $hora = strlen($parsedTime) === 4 ? '0'.$parsedTime : $parsedTime; }
+                        }
+                    }
+                } else {
+                    foreach ($item as $tok) {
+                        if (is_string($tok) && preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', trim($tok), $tm)) {
+                            $h = str_pad($tm[1], 2, '0', STR_PAD_LEFT); $m = $tm[2];
+                            $hora = $h . ':' . $m; break;
+                        }
+                    }
+                }
+            } elseif (is_string($item)) {
+                if (preg_match('/(\d{1,2}:\d{2})(?::\d{2})?/', $item, $tm)) {
+                    $parts = explode(':', $tm[1]);
+                    $hora = str_pad($parts[0], 2, '0', STR_PAD_LEFT) . ':' . $parts[1];
+                }
+            }
+
+            $payload = [
+                'username' => $username,
+                'meeting_id' => $meeting->id,
+                'tarea' => substr((string)($parsed['tarea'] ?? 'Sin nombre'), 0, 255),
+                'prioridad' => $prioridad ? substr((string)$prioridad, 0, 20) : null,
+                'fecha_inicio' => $parsed['fecha_inicio'] ?: null,
+                'fecha_limite' => $parsed['fecha_limite'] ?: null,
+                'hora_limite' => $hora,
+                'descripcion' => $parsed['descripcion'] ?: null,
+                'asignado' => $item['assignee'] ?? $item['assigned'] ?? $item['responsable'] ?? null,
+                'progreso' => $parsed['progreso'] ?? 0,
+            ];
+
+            $existing = TaskLaravel::where('meeting_id', $payload['meeting_id'])
+                ->where('tarea', $payload['tarea'])
+                ->where('username', $username)
+                ->first();
+            if ($existing) { $existing->update($payload); $updated++; }
+            else { TaskLaravel::create($payload); $created++; }
+        }
+
+        return ['created' => $created, 'updated' => $updated];
     }
 
     /**
