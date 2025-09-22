@@ -103,9 +103,11 @@ function resetContextToGeneral(clearLoaded = false) {
     currentContext = { type: 'general', id: null, data: {} };
     if (clearLoaded) {
         loadedContextItems = [];
+        selectedDocuments = [];
         updateLoadedContextUI();
     }
     updateContextIndicator();
+    renderContextDocs();
 }
 
 /**
@@ -360,6 +362,15 @@ function updateSessionInfo(session) {
     // Actualizar cualquier otra información de la sesión
     if (session.context_info) {
         updateContextIndicator(session.context_info);
+    }
+
+    // Si el backend devuelve context_data, mantener doc_ids sincronizados
+    if (session.context_data && typeof session.context_data === 'object') {
+        const docIds = Array.isArray(session.context_data.doc_ids) ? session.context_data.doc_ids : [];
+        if (Array.isArray(docIds)) {
+            selectedDocuments = [...new Set(docIds.map(Number).filter(n => Number.isFinite(n)))];
+            renderContextDocs();
+        }
     }
 }
 
@@ -2367,7 +2378,7 @@ async function uploadChatAttachments(files) {
         }
 
         showNotification('Archivo(s) subido(s), procesando…', 'success');
-        const uploaded = Array.isArray(data.documents) ? data.documents : [];
+    const uploaded = Array.isArray(data.documents) ? data.documents : [];
         const docIds = uploaded.map(d => d && (d.id ?? d.document_id)).filter(Boolean);
         // Esperar brevemente a que terminen de procesarse (si ya están listos, seguirá de inmediato)
         if (docIds.length > 0) {
@@ -2391,6 +2402,10 @@ async function uploadChatAttachments(files) {
                             content: `El documento "${name}" ya está cargado y listo para usar en esta conversación.`,
                             created_at: new Date().toISOString(),
                         });
+                        // Añadir a doc_ids del contexto y persistir en la sesión
+                        if (doc && doc.id) {
+                            addDocIdToSessionContext(Number(doc.id));
+                        }
                     } else if (status === 'failed') {
                         const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : ' Sugerencia: si es un PDF escaneado, habilita OCR o sube una versión con texto seleccionable.';
                         addMessageToChat({
@@ -2412,6 +2427,66 @@ async function uploadChatAttachments(files) {
         console.error('Error subiendo adjuntos del chat:', error);
         showNotification('Error al subir adjuntos', 'error');
     }
+}
+
+/**
+ * ================================
+ * UI: Documentos en contexto
+ * ================================
+ */
+function renderContextDocs() {
+    const bar = document.getElementById('context-docs-bar');
+    const chips = document.getElementById('context-docs-chips');
+    if (!bar || !chips) return;
+
+    const ids = Array.from(new Set((selectedDocuments || []).map(Number).filter(n => Number.isFinite(n))));
+    if (ids.length === 0) {
+        bar.style.display = 'none';
+        chips.innerHTML = '';
+        return;
+    }
+
+    bar.style.display = 'flex';
+    chips.innerHTML = ids.map(id => `
+        <span class="doc-chip" data-doc-id="${id}">
+            Doc #${id}
+            <button class="chip-remove" title="Quitar" onclick="removeDocFromContext(${id})">×</button>
+        </span>
+    `).join('');
+}
+
+function addDocIdToSessionContext(id) {
+    if (!Number.isFinite(id)) return;
+    const data = currentContext.data || {};
+    const docIds = Array.isArray(data.doc_ids) ? data.doc_ids : [];
+    if (!docIds.includes(id)) {
+        docIds.push(id);
+    }
+    data.doc_ids = docIds;
+    currentContext.data = data;
+    selectedDocuments = [...new Set(docIds.map(Number))];
+    renderContextDocs();
+    // Persistir en el backend
+    debounceUpdateSessionContext();
+}
+
+function removeDocFromContext(id) {
+    const data = currentContext.data || {};
+    let docIds = Array.isArray(data.doc_ids) ? data.doc_ids : [];
+    docIds = docIds.filter(d => Number(d) !== Number(id));
+    data.doc_ids = docIds;
+    currentContext.data = data;
+    selectedDocuments = [...new Set(docIds.map(Number))];
+    renderContextDocs();
+    debounceUpdateSessionContext();
+}
+
+let updateCtxTimer = null;
+function debounceUpdateSessionContext() {
+    clearTimeout(updateCtxTimer);
+    updateCtxTimer = setTimeout(() => {
+        updateCurrentSessionContext();
+    }, 300);
 }
 
 /**

@@ -929,6 +929,15 @@ class AiAssistantController extends Controller
         // Preferencia: usar embeddings solo si está habilitado y disponible; si no, usar MetadataSearch
         $useEmbeddings = (bool) env('AI_ASSISTANT_USE_EMBEDDINGS', false);
         $apiKey = OpenAiConfig::apiKey();
+        // Doc IDs explícitamente agregados al contexto de la sesión
+        $explicitDocIds = [];
+        try {
+            $data = is_array($session->context_data) ? $session->context_data : [];
+            $ids = Arr::get($data, 'doc_ids', []);
+            if (is_array($ids)) {
+                $explicitDocIds = array_values(array_unique(array_map('intval', array_filter($ids, fn($v) => is_numeric($v)))));
+            }
+        } catch (\Throwable $e) {}
         if ($useEmbeddings && !empty($apiKey)) {
             /** @var EmbeddingSearch $search */
             $search = app(EmbeddingSearch::class);
@@ -936,10 +945,15 @@ class AiAssistantController extends Controller
                 $semanticLimit = $session->context_type === 'container'
                     ? (int) env('AI_ASSISTANT_SEMANTIC_LIMIT_CONTAINER', 20)
                     : 8;
-                $contextFragments = $search->search($session->username, $query, [
+                $options = [
                     'session' => $session,
                     'limit' => $semanticLimit,
-                ]);
+                ];
+                if (!empty($explicitDocIds)) {
+                    $options['content_types'] = ['document_text'];
+                    $options['content_ids'] = ['document_text' => $explicitDocIds];
+                }
+                $contextFragments = $search->search($session->username, $query, $options);
             } catch (\Throwable $e) {
                 Log::warning('EmbeddingSearch failed, falling back to metadata search', [
                     'error' => $e->getMessage(),
@@ -952,14 +966,20 @@ class AiAssistantController extends Controller
             /** @var \App\Services\MetadataSearch $meta */
             $meta = app(\App\Services\MetadataSearch::class);
             $metaLimit = $session->context_type === 'container' ? 20 : 8;
-            $contextFragments = $meta->search($session->username, $query, [
+            $metaOptions = [
                 'session' => $session,
                 'limit' => $metaLimit,
-            ]);
+            ];
+            if (!empty($explicitDocIds)) {
+                $metaOptions['doc_ids'] = $explicitDocIds;
+            }
+            $contextFragments = $meta->search($session->username, $query, $metaOptions);
         }
 
     $additional = [];
 
+        // Si hay documentos explícitos en el contexto, evitamos mezclar con otros fragmentos
+        if (empty($explicitDocIds)) {
         switch ($session->context_type) {
             case 'container':
                 $additional = $this->buildContainerContextFragments($session, $query);
@@ -981,18 +1001,9 @@ class AiAssistantController extends Controller
                 $additional = $this->buildMixedContextFragments($session, $query);
                 break;
         }
-
-        // Incluir documentos agregados explícitamente a la sesión (doc_ids en context_data)
-        try {
-            $docIds = Arr::get(is_array($session->context_data) ? $session->context_data : [], 'doc_ids', []);
-            if (is_array($docIds) && count($docIds) > 0) {
-                $docSession = $this->createVirtualSession($session, 'documents', null, $docIds);
-                $docFragments = $this->buildDocumentContextFragments($docSession);
-                $additional = array_merge($additional, $docFragments);
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Failed to build document fragments from session doc_ids', ['error' => $e->getMessage()]);
         }
+
+        // Si hay documentos explícitos, no añadimos resúmenes/overviews para evitar ruido.
 
         return array_values(array_merge($contextFragments, $additional));
     }

@@ -68,6 +68,12 @@
             </div>
         </div>
 
+        <!-- Documentos en contexto -->
+        <div id="context-docs-bar" class="context-docs-bar" style="display:none;">
+            <div class="context-docs-title">Documentos en contexto:</div>
+            <div id="context-docs-chips" class="context-docs-chips"></div>
+        </div>
+
         <!-- Área de mensajes -->
         <div id="messages-container" class="messages-container">
             <div class="welcome-message">

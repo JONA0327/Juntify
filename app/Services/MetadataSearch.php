@@ -19,6 +19,7 @@ class MetadataSearch
     {
         $limit = max(1, (int) ($options['limit'] ?? 8));
         $session = ($options['session'] ?? null);
+        $filterDocIds = array_values(array_unique(array_map('intval', array_filter(Arr::wrap($options['doc_ids'] ?? []), fn($v) => is_numeric($v)))));
 
         $docsQuery = AiDocument::byUser($username)->processed();
 
@@ -29,9 +30,13 @@ class MetadataSearch
                 $docsQuery->whereIn('id', $ids);
             }
         }
+        // If explicit filter provided, prioritize it
+        if (!empty($filterDocIds)) {
+            $docsQuery->whereIn('id', $filterDocIds);
+        }
 
         /** @var Collection<int, AiDocument> $documents */
-        $documents = $docsQuery->orderByDesc('updated_at')->limit(80)->get();
+    $documents = $docsQuery->orderByDesc('updated_at')->limit(80)->get();
 
         if ($documents->isEmpty()) {
             return [];
