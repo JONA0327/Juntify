@@ -1281,6 +1281,173 @@ class AiAssistantController extends Controller
     }
 
     /**
+     * Listar archivos dentro de la carpeta "Documentos" de Google Drive
+     * Permite visualizar documentos cargados directamente desde Drive y agregarlos al contexto.
+     */
+    public function listDriveDocuments(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        $driveType = (string) $request->query('drive_type', 'personal'); // personal | organization
+        $search = trim((string) $request->query('search', ''));
+
+        try {
+            $context = $this->resolveDriveContext($driveType, $user);
+            $this->ensureValidAccessToken($driveType, $context);
+
+            $folderId = $this->ensureDocumentsFolder($driveType, $context);
+
+            // Construir query para listar archivos dentro de la carpeta
+            $q = sprintf("'%s' in parents and trashed=false", $folderId);
+            if ($search !== '') {
+                $escaped = str_replace("'", "\\'", $search);
+                $q .= " and name contains '" . $escaped . "'";
+            }
+
+            $drive = $this->googleDriveService->getDrive();
+            $response = $drive->files->listFiles([
+                'q' => $q,
+                'fields' => 'files(id,name,mimeType,size,modifiedTime,webViewLink)',
+                'supportsAllDrives' => true,
+                'includeItemsFromAllDrives' => true,
+                'orderBy' => 'modifiedTime desc,name',
+                'pageSize' => 100,
+            ]);
+
+            $files = collect($response->getFiles() ?: [])->map(function ($file) {
+                return [
+                    'id' => $file->getId(),
+                    'name' => $file->getName(),
+                    'mime_type' => $file->getMimeType(),
+                    'file_size' => $file->getSize(),
+                    'modified_time' => $file->getModifiedTime(),
+                    'web_view_link' => $file->getWebViewLink(),
+                ];
+            })->values();
+
+            return response()->json([
+                'success' => true,
+                'folder_id' => $folderId,
+                'drive_type' => $driveType,
+                'files' => $files,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error listing Drive documents for assistant', [
+                'drive_type' => $driveType,
+                'user' => $user?->username,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudieron listar los documentos de Drive: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Adjuntar archivos seleccionados desde Drive como documentos del asistente.
+     * Si no existen en la BD, se crean y se lanza su procesamiento.
+     * Si se envía session_id, se agregan a context_data.doc_ids de esa sesión.
+     */
+    public function attachDriveDocuments(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        $validated = $request->validate([
+            'drive_file_ids' => 'required|array|min:1',
+            'drive_file_ids.*' => 'string',
+            'drive_type' => 'sometimes|in:personal,organization',
+            'session_id' => 'nullable|integer',
+        ]);
+
+        $driveType = (string) ($validated['drive_type'] ?? 'personal');
+        $driveIds = array_values(array_unique(array_filter($validated['drive_file_ids'] ?? [], fn($v) => is_string($v) && $v !== '')));
+        $sessionId = (int) ($validated['session_id'] ?? 0);
+
+        try {
+            $context = $this->resolveDriveContext($driveType, $user);
+            $this->ensureValidAccessToken($driveType, $context);
+
+            $attached = [];
+            foreach ($driveIds as $fileId) {
+                // Buscar si ya existe para este usuario
+                $existing = AiDocument::where('username', $user->username)
+                    ->where('drive_file_id', $fileId)
+                    ->first();
+
+                if ($existing) {
+                    $document = $existing;
+                } else {
+                    // Obtener info del archivo para nombre/mime/size
+                    $info = $this->googleDriveService->getFileInfo($fileId);
+                    $name = $info->getName() ?: ('Archivo ' . $fileId);
+                    $mime = $info->getMimeType() ?: 'application/octet-stream';
+                    $size = $info->getSize();
+
+                    $document = AiDocument::create([
+                        'username' => $user->username,
+                        'name' => pathinfo($name, PATHINFO_FILENAME) ?: $name,
+                        'original_filename' => $name,
+                        'document_type' => $this->getDocumentType($mime, $name),
+                        'mime_type' => $mime,
+                        'file_size' => $size ? (int) $size : null,
+                        'drive_file_id' => $fileId,
+                        'drive_folder_id' => null,
+                        'drive_type' => $driveType,
+                        'processing_status' => 'pending',
+                        'document_metadata' => [
+                            'attached_from_drive' => true,
+                        ],
+                    ]);
+
+                    // Lanzar procesamiento (descarga/extracción)
+                    $this->processDocumentInBackground($document);
+                }
+
+                // Si se envía session_id, agregarlos a doc_ids del contexto
+                if ($sessionId) {
+                    $session = AiChatSession::where('id', $sessionId)->where('username', $user->username)->first();
+                    if ($session) {
+                        try {
+                            $contextData = is_array($session->context_data) ? $session->context_data : [];
+                            $docIds = \Illuminate\Support\Arr::get($contextData, 'doc_ids', []);
+                            if (!is_array($docIds)) { $docIds = []; }
+                            if (!in_array($document->id, $docIds, true)) {
+                                $docIds[] = $document->id;
+                                $contextData['doc_ids'] = array_values($docIds);
+                                $session->context_data = $contextData;
+                                $session->save();
+                            }
+                        } catch (\Throwable $e) {
+                            Log::warning('No se pudo actualizar doc_ids al adjuntar desde Drive', [
+                                'session_id' => $session->id,
+                                'document_id' => $document->id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+                }
+
+                $attached[] = $this->formatDocumentForResponse($document);
+            }
+
+            return response()->json([
+                'success' => true,
+                'documents' => $attached,
+                'message' => 'Documentos de Drive adjuntados correctamente.'
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error attaching Drive documents for assistant', [
+                'drive_type' => $driveType,
+                'user' => $user?->username,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudieron adjuntar documentos de Drive: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Estandariza la salida de documentos para el front con etiquetas legibles
      */
     private function formatDocumentForResponse(\App\Models\AiDocument $document): array
@@ -1909,7 +2076,26 @@ class AiAssistantController extends Controller
 
         $fileId = $meeting->transcript_drive_id;
         if (! $fileId) {
-            return $fragments;
+            // Intentar localizar el .ju cuando no está seteado en la reunión
+            try {
+                // Buscar en posibles contenedores vinculados para ubicar el .ju
+                $containers = $meeting->containers()->with(['group', 'group.organization'])->get();
+                foreach ($containers as $container) {
+                    $found = $this->locateJuForMeeting($meeting, $container);
+                    if ($found) {
+                        $meeting->transcript_drive_id = $found;
+                        $meeting->save();
+                        $fileId = $found;
+                        break;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // continuar sin bloquear
+            }
+
+            if (! $fileId) {
+                return $fragments;
+            }
         }
 
         try {
@@ -1920,7 +2106,23 @@ class AiAssistantController extends Controller
                 // Descargar y cachear si no existe
                 $content = $this->tryDownloadJuContent($meeting);
                 if (! is_string($content) || $content === '') {
-                    return $fragments;
+                    // Si falló la descarga, intentar localizar de nuevo por si cambió el contexto
+                    try {
+                        $containers = $meeting->containers()->with(['group', 'group.organization'])->get();
+                        foreach ($containers as $container) {
+                            $found = $this->locateJuForMeeting($meeting, $container);
+                            if ($found) {
+                                $meeting->transcript_drive_id = $found;
+                                $meeting->save();
+                                $content = $this->tryDownloadJuContent($meeting);
+                                if (is_string($content) && $content !== '') { break; }
+                            }
+                        }
+                    } catch (\Throwable $e) { /* ignore */ }
+
+                    if (! is_string($content) || $content === '') {
+                        return $fragments;
+                    }
                 }
                 $parsed = $this->decryptJuFile($content);
                 $data = $this->processTranscriptData($parsed['data'] ?? []);

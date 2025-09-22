@@ -34,6 +34,12 @@
                         </svg>
                         Reuniones
                     </button>
+                    <button class="context-nav-item" onclick="switchContextType('documents')" data-type="documents">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h10M7 11h10M7 15h6m-2 4H7a2 2 0 01-2-2V7a2 2 0 012-2h6l4 4v10a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Documentos
+                    </button>
                 </div>
             </div>
 
@@ -70,6 +76,16 @@
                         <div class="loading-state">
                             <div class="spinner"></div>
                             <p>Cargando reuniones...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista de documentos (Drive) -->
+                <div id="documentsView" class="context-view">
+                    <div class="context-grid" id="documentsGrid">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Cargando documentos de Drive...</p>
                         </div>
                     </div>
                 </div>

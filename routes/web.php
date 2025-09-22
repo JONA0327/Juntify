@@ -226,6 +226,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/documents', [AiAssistantController::class, 'getDocuments'])->name('api.ai-assistant.documents');
             Route::post('/documents/upload', [AiAssistantController::class, 'uploadDocument'])->name('api.ai-assistant.documents.upload');
             Route::post('/documents/wait', [AiAssistantController::class, 'waitDocuments'])->name('api.ai-assistant.documents.wait');
+            // Listado directo desde la carpeta de Drive "Documentos"
+            Route::get('/documents/drive', [AiAssistantController::class, 'listDriveDocuments'])->name('api.ai-assistant.documents.drive');
+            Route::post('/documents/drive/attach', [AiAssistantController::class, 'attachDriveDocuments'])->name('api.ai-assistant.documents.drive.attach');
 
             // Generación de PDF de resumen
             Route::post('/sessions/{id}/summary-pdf', [AiAssistantController::class, 'generateSummaryPdf'])->name('api.ai-assistant.sessions.summary-pdf');

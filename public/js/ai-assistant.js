@@ -420,6 +420,9 @@ function renderMessages(messages) {
                 <div class="welcome-content">
                     <h3>¡Hola! Soy tu asistente IA</h3>
                     <p>Puedo ayudarte con análisis de reuniones, búsqueda en documentos, y responder preguntas sobre tu contenido. ¿En qué puedo ayudarte hoy?</p>
+                    <p style="margin-top:8px;opacity:.9;">
+                        Tipos de referencia: usa <strong>@</strong> para mencionar documentos y seleccionarlos; usa <strong>#</strong> para referenciar reuniones o contenedores.
+                    </p>
                     <div class="suggestions">
                         <button class="suggestion-btn" onclick="sendSuggestion('Muéstrame un resumen de mis últimas reuniones')">
                             📊 Resumen de reuniones recientes
@@ -688,6 +691,9 @@ function switchContextType(type) {
     } else if (type === 'meetings') {
         document.getElementById('meetingsView').classList.add('active');
         document.getElementById('contextSearchInput').placeholder = 'Buscar reuniones...';
+    } else if (type === 'documents') {
+        document.getElementById('documentsView').classList.add('active');
+        document.getElementById('contextSearchInput').placeholder = 'Buscar documentos...';
     }
 
     // Cargar datos del tipo seleccionado
@@ -702,7 +708,88 @@ async function loadContextData() {
         await loadContainers();
     } else if (currentContextType === 'meetings') {
         await loadMeetings();
+    } else if (currentContextType === 'documents') {
+        await loadDriveDocuments();
     }
+}
+
+/**
+ * Cargar documentos desde la carpeta de Drive "Documentos"
+ */
+async function loadDriveDocuments(searchTerm = '') {
+    const grid = document.getElementById('documentsGrid');
+    if (!grid) return;
+    grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Cargando documentos de Drive...</p></div>';
+
+    try {
+        const params = new URLSearchParams();
+        // En esta primera versión usamos siempre personal; luego podríamos agregar un selector
+        params.set('drive_type', 'personal');
+        if (searchTerm) params.set('search', searchTerm);
+        const resp = await fetch(`/api/ai-assistant/documents/drive?${params.toString()}`);
+        const data = await resp.json();
+        if (data && data.success) {
+            renderDriveDocuments(data.files || []);
+        } else {
+            grid.innerHTML = '<div class="empty-state"><p>No se pudieron cargar los documentos de Drive</p></div>';
+        }
+    } catch (e) {
+        console.error('Error loading Drive documents', e);
+        grid.innerHTML = '<div class="empty-state"><p>Error al cargar documentos de Drive</p></div>';
+    }
+}
+
+/**
+ * Renderizar documentos de Drive con selección múltiple
+ */
+function renderDriveDocuments(files) {
+    const grid = document.getElementById('documentsGrid');
+    if (!grid) return;
+
+    if (!Array.isArray(files) || files.length === 0) {
+        grid.innerHTML = '<div class="empty-state"><p>No hay documentos en la carpeta de Drive</p></div>';
+        return;
+    }
+
+    const rows = files.map(f => {
+        const id = f.id;
+        const name = f.name || `Archivo ${id}`;
+        const size = f.file_size ? formatFileSize(Number(f.file_size)) : '';
+        const mime = f.mime_type || '';
+        const icon = getFileTypeIcon(mimeToDocType(mime));
+        return `
+        <div class="document-item" onclick="toggleDriveDocSelection('${id}')">
+            <input type="checkbox" id="drive-doc-${id}" style="margin-right: 0.75rem;">
+            <div class="file-info">
+                <div class="file-icon">${icon}</div>
+                <div class="file-details">
+                    <h5>${escapeHtml(name)}</h5>
+                    <div class="file-size">${escapeHtml(size)}</div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    grid.innerHTML = rows;
+}
+
+// Selección de documentos Drive: almacenamos por ahora sus IDs de Drive en loadedContextItems como type=document (con id driveId)
+function toggleDriveDocSelection(driveId) {
+    const cb = document.getElementById(`drive-doc-${driveId}`);
+    if (!cb) return;
+    cb.checked = !cb.checked;
+
+    const existsIndex = loadedContextItems.findIndex(it => it.type === 'document' && it.id === driveId);
+    if (cb.checked) {
+        if (existsIndex === -1) {
+            const labelEl = document.querySelector(`#drive-doc-${CSS.escape(driveId)}`)?.closest('.document-item')?.querySelector('h5');
+            const title = labelEl ? labelEl.textContent : `Documento ${driveId}`;
+            loadedContextItems.push({ type: 'document', id: driveId, title });
+        }
+    } else {
+        if (existsIndex !== -1) loadedContextItems.splice(existsIndex, 1);
+    }
+    updateLoadedContextUI();
 }
 
 /**
@@ -833,6 +920,17 @@ function renderMeetings(meetings) {
         </div>
     `;
     }).join('');
+}
+
+// Utilidad: mapear mime a tipo de documento para iconos
+function mimeToDocType(mime) {
+    if (!mime) return 'text';
+    if (mime.includes('pdf')) return 'pdf';
+    if (mime.includes('presentation')) return 'powerpoint';
+    if (mime.includes('spreadsheet') || mime.includes('sheet')) return 'excel';
+    if (mime.includes('word') || mime.includes('document')) return 'word';
+    if (mime.startsWith('image/')) return 'image';
+    return 'text';
 }
 
 /**
@@ -1137,6 +1235,16 @@ async function loadSelectedContext() {
                 id: meetingId,
                 data: meeting ? meeting : { meeting_name: 'Reunión seleccionada' }
             };
+        } else if (serializedItems.length === 1 && serializedItems[0].type === 'document') {
+            // Si se seleccionó un único documento (Drive), lo adjuntamos como documento de asistente
+            const driveIds = [String(serializedItems[0].id)];
+            await attachDriveDocsAndSetContext(driveIds);
+            return;
+        } else if (serializedItems.length > 0 && serializedItems.every(it => it.type === 'document')) {
+            // Todos son documentos de Drive: adjuntar y establecer contexto de documentos
+            const driveIds = serializedItems.map(it => String(it.id));
+            await attachDriveDocsAndSetContext(driveIds);
+            return;
         } else {
             // Contexto mixto para múltiples elementos
             currentContext = {
@@ -1168,6 +1276,42 @@ async function loadSelectedContext() {
     }
 }
 
+async function attachDriveDocsAndSetContext(driveIds) {
+    try {
+        const csrf = document.querySelector('meta[name="csrf-token"]').content;
+        const resp = await fetch('/api/ai-assistant/documents/drive/attach', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+            body: JSON.stringify({ drive_file_ids: driveIds, drive_type: 'personal', session_id: currentSessionId || null })
+        });
+        const data = await resp.json();
+        if (!data || !data.success) {
+            showNotification(data && data.message ? data.message : 'No se pudieron adjuntar documentos de Drive', 'error');
+            return;
+        }
+        // Registrar nombres y doc_ids
+        const docs = Array.isArray(data.documents) ? data.documents : [];
+        const ids = [];
+        docs.forEach(d => { if (d && d.id) { ids.push(Number(d.id)); if (d.name) documentNameById.set(Number(d.id), String(d.name)); } });
+        selectedDocuments = Array.from(new Set([...(selectedDocuments || []), ...ids]));
+        // Establecer contexto de documentos con esos IDs
+        currentContext = { type: 'documents', id: 'selected', data: { doc_ids: selectedDocuments } };
+        await updateCurrentSessionContext();
+        closeContextSelector();
+        updateContextIndicator();
+        loadedContextItems = [];
+        updateLoadedContextUI();
+        renderContextDocs();
+        showNotification('Documentos agregados al contexto', 'success');
+        // Refrescar listas
+        try { loadExistingDocuments(); } catch (_) {}
+        if (currentContextType === 'documents') { try { loadDriveDocuments(); } catch (_) {} }
+    } catch (e) {
+        console.error('Error adjuntando documentos Drive:', e);
+        showNotification('Error al adjuntar documentos de Drive', 'error');
+    }
+}
+
 /**
  * Filtrar elementos de contexto
  */
@@ -1184,6 +1328,8 @@ function filterContextItems(searchTerm) {
             (meeting.meeting_name || '').toLowerCase().includes(term)
         );
         renderMeetings(filtered);
+    } else if (currentContextType === 'documents') {
+        loadDriveDocuments(term);
     }
 }
 
@@ -1621,6 +1767,9 @@ async function uploadDocuments() {
                                 created_at: new Date().toISOString(),
                             });
                             if (doc && doc.id) { addDocIdToSessionContext(Number(doc.id)); }
+                            // Refrescar listas visibles
+                            try { loadExistingDocuments(); } catch (_) {}
+                            if (currentContextType === 'documents') { try { loadDriveDocuments(); } catch (_) {} }
                         } else if (status === 'failed') {
                             const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : ' Sugerencia: si es un PDF escaneado, habilita OCR o sube una versión con texto seleccionable.';
                             addMessageToChat({
@@ -1664,6 +1813,8 @@ async function uploadDocuments() {
                                                 created_at: new Date().toISOString(),
                                             });
                                             if (doc && doc.id) { addDocIdToSessionContext(Number(doc.id)); }
+                                            try { loadExistingDocuments(); } catch (_) {}
+                                            if (currentContextType === 'documents') { try { loadDriveDocuments(); } catch (_) {} }
                                         } else if (doc.processing_status === 'failed') {
                                             const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : '';
                                             addMessageToChat({
@@ -2685,6 +2836,8 @@ async function uploadChatAttachments(files) {
                                             created_at: new Date().toISOString(),
                                         });
                                         if (doc && doc.id) { addDocIdToSessionContext(Number(doc.id)); }
+                                        try { loadExistingDocuments(); } catch (_) {}
+                                        if (currentContextType === 'documents') { try { loadDriveDocuments(); } catch (_) {} }
                                     } else if (doc.processing_status === 'failed') {
                                         const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : '';
                                         addMessageToChat({
