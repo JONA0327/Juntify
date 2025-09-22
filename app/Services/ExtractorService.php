@@ -446,14 +446,15 @@ class ExtractorService
                 $xmlContent = $zip->getFromName($name);
                 if ($xmlContent === false) { continue; }
                 try {
-                    $xml = simplexml_load_string($xmlContent);
-                    if (!$xml) { continue; }
-                    // Register drawing namespace for <a:t>
-                    $xml->registerXPathNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
-                    $nodes = $xml->xpath('//a:t');
+                    $dom = new \DOMDocument();
+                    if (!@$dom->loadXML($xmlContent)) { continue; }
+                    $xp = new \DOMXPath($dom);
+                    $nodes = $xp->query('//*[local-name()="t"]');
                     $slideTexts = [];
-                    foreach ($nodes as $node) {
-                        $slideTexts[] = (string) $node;
+                    if ($nodes) {
+                        foreach ($nodes as $node) {
+                            $slideTexts[] = $node->textContent ?? '';
+                        }
                     }
                     $slideText = trim(implode("\n", array_filter($slideTexts, fn($t) => trim($t) !== '')));
                     if ($slideText !== '') {
@@ -477,13 +478,13 @@ class ExtractorService
                 $xmlContent = $zip->getFromName($name);
                 if ($xmlContent === false) { continue; }
                 try {
-                    $xml = simplexml_load_string($xmlContent);
-                    if (!$xml) { continue; }
-                    $xml->registerXPathNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
-                    $nodes = $xml->xpath('//a:t');
+                    $dom = new \DOMDocument();
+                    if (!@$dom->loadXML($xmlContent)) { continue; }
+                    $xp = new \DOMXPath($dom);
+                    $nodes = $xp->query('//*[local-name()="t"]');
                     $noteTexts = [];
-                    foreach ($nodes as $node) {
-                        $noteTexts[] = (string) $node;
+                    if ($nodes) {
+                        foreach ($nodes as $node) { $noteTexts[] = $node->textContent ?? ''; }
                     }
                     $note = trim(implode("\n", array_filter($noteTexts, fn($t) => trim($t) !== '')));
                     if ($note !== '') {
@@ -603,22 +604,24 @@ class ExtractorService
             throw new RuntimeException('El archivo DOCX no contiene document.xml.');
         }
 
-        $xml = simplexml_load_string($documentXml);
-        if (! $xml) {
+        // Usar DOM + XPath con local-name() para evitar problemas de namespaces
+        $dom = new \DOMDocument();
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        if (!@$dom->loadXML($documentXml)) {
             throw new RuntimeException('No se pudo interpretar el contenido del DOCX.');
         }
-
-        $xml->registerXPathNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
-        $paragraphs = $xml->xpath('//w:p');
+        $xp = new \DOMXPath($dom);
+        $nodes = $xp->query('//*[local-name()="p"]');
         $lines = [];
-
-        foreach ($paragraphs as $paragraph) {
-            $texts = [];
-            foreach ($paragraph->xpath('.//w:t') as $node) {
-                $texts[] = (string) $node;
-            }
-            if (! empty($texts)) {
-                $lines[] = implode('', $texts);
+        if ($nodes) {
+            foreach ($nodes as $p) {
+                $tNodes = (new \DOMXPath($p->ownerDocument))->query('.//*[local-name()="t"]', $p);
+                $texts = [];
+                if ($tNodes) {
+                    foreach ($tNodes as $t) { $texts[] = $t->textContent; }
+                }
+                if (!empty($texts)) { $lines[] = implode('', $texts); }
             }
         }
 
@@ -626,7 +629,7 @@ class ExtractorService
             'text' => $this->normalizeText(implode("\n", $lines)),
             'metadata' => [
                 'detected_type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'engine' => 'zip-xml',
+                'engine' => 'zip-xml(dom)',
             ],
         ];
     }
@@ -697,15 +700,17 @@ class ExtractorService
         $sharedStrings = [];
         $shared = $zip->getFromName('xl/sharedStrings.xml');
         if ($shared !== false) {
-            $xml = simplexml_load_string($shared);
-            if ($xml) {
-                $xml->registerXPathNamespace('s', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-                foreach ($xml->xpath('//s:si') as $stringItem) {
-                    $pieces = [];
-                    foreach ($stringItem->xpath('.//s:t') as $node) {
-                        $pieces[] = (string) $node;
+            $dom = new \DOMDocument();
+            if (@$dom->loadXML($shared)) {
+                $xp = new \DOMXPath($dom);
+                $siList = $xp->query('//*[local-name()="si"]');
+                if ($siList) {
+                    foreach ($siList as $si) {
+                        $tList = (new \DOMXPath($si->ownerDocument))->query('.//*[local-name()="t"]', $si);
+                        $pieces = [];
+                        if ($tList) { foreach ($tList as $t) { $pieces[] = $t->textContent; } }
+                        $sharedStrings[] = implode('', $pieces);
                     }
-                    $sharedStrings[] = implode('', $pieces);
                 }
             }
         }
@@ -725,19 +730,22 @@ class ExtractorService
                 continue;
             }
 
-            $xml = simplexml_load_string($sheetContent);
-            if (! $xml) {
-                continue;
-            }
-
-            $xml->registerXPathNamespace('s', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+            $dom = new \DOMDocument();
+            if (!@$dom->loadXML($sheetContent)) { continue; }
+            $xp = new \DOMXPath($dom);
+            $rowNodes = $xp->query('//*[local-name()="sheetData"]/*[local-name()="row"]');
             $rows = [];
-            foreach ($xml->sheetData->row as $row) {
-                $values = [];
-                foreach ($row->c as $cell) {
-                    $values[] = $this->resolveSpreadsheetValue($cell, $sharedStrings);
+            if ($rowNodes) {
+                foreach ($rowNodes as $row) {
+                    $cellNodes = (new \DOMXPath($row->ownerDocument))->query('./*[local-name()="c"]', $row);
+                    $values = [];
+                    if ($cellNodes) {
+                        foreach ($cellNodes as $cell) {
+                            $values[] = $this->resolveSpreadsheetValueDom($cell, $sharedStrings);
+                        }
+                    }
+                    $rows[] = trim(implode("\t", array_filter($values, fn ($value) => $value !== '')));
                 }
-                $rows[] = trim(implode("\t", array_filter($values, fn ($value) => $value !== '')));
             }
 
             $rows = array_filter($rows, fn ($rowText) => $rowText !== '');
@@ -763,23 +771,51 @@ class ExtractorService
         ];
     }
 
-    private function resolveSpreadsheetValue(\SimpleXMLElement $cell, array $sharedStrings): string
+    private function resolveSpreadsheetValueDom(\DOMElement $cell, array $sharedStrings): string
     {
-        $type = (string) ($cell['t'] ?? '');
+        $type = $cell->getAttribute('t') ?: '';
+        // Shared string
         if ($type === 's') {
-            $index = (int) ($cell->v ?? 0);
+            $v = $this->firstChildTextByLocalName($cell, 'v');
+            $index = is_numeric($v) ? (int)$v : 0;
             return $sharedStrings[$index] ?? '';
         }
 
+        // Inline string
         if ($type === 'inlineStr') {
-            return trim((string) ($cell->is->t ?? ''));
+            $isNode = $this->firstChildByLocalName($cell, 'is');
+            if ($isNode instanceof \DOMElement) {
+                $t = $this->firstChildTextByLocalName($isNode, 't');
+                return trim($t);
+            }
+            return '';
         }
 
+        // Boolean
         if ($type === 'b') {
-            return ((string) $cell->v) === '1' ? 'TRUE' : 'FALSE';
+            $v = $this->firstChildTextByLocalName($cell, 'v');
+            return $v === '1' ? 'TRUE' : 'FALSE';
         }
 
-        return trim((string) ($cell->v ?? ''));
+        // Default numeric/string
+        $v = $this->firstChildTextByLocalName($cell, 'v');
+        return trim($v);
+    }
+
+    private function firstChildByLocalName(\DOMElement $parent, string $local): ?\DOMElement
+    {
+        foreach ($parent->childNodes as $ch) {
+            if ($ch instanceof \DOMElement && strtolower($ch->localName) === strtolower($local)) {
+                return $ch;
+            }
+        }
+        return null;
+    }
+
+    private function firstChildTextByLocalName(\DOMElement $parent, string $local): string
+    {
+        $el = $this->firstChildByLocalName($parent, $local);
+        return $el ? ($el->textContent ?? '') : '';
     }
 
     private function extractImage(string $filePath): array
