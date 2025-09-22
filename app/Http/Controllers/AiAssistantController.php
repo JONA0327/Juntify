@@ -271,7 +271,88 @@ class AiAssistantController extends Controller
             ? $request->boolean('force_delete')
             : true;
 
-        // Siempre eliminar los mensajes para evitar que queden residuos de contexto
+        if ($forceDelete) {
+            // 1) Reunir documentos asociados a esta sesión (context_data, items, y metadatos creados por esta sesión)
+            $docIdsFromContext = $this->collectSessionDocumentIds($session);
+            $docIdsFromMetadata = [];
+            try {
+                // Documentos que fueron creados explícitamente dentro de esta sesión (metadato: created_in_session)
+                $metaDocs = AiDocument::byUser($user->username)
+                    ->where('document_metadata->created_in_session', (string) $session->id)
+                    ->pluck('id')
+                    ->all();
+                $docIdsFromMetadata = array_map('intval', $metaDocs);
+            } catch (\Throwable $e) {
+                // Si la BD no soporta whereJson, ignorar silenciosamente
+            }
+            $sessionDocIds = array_values(array_unique(array_filter(array_merge($docIdsFromContext, $docIdsFromMetadata), fn($v) => is_numeric($v))));
+
+            // 2) Verificar si esos documentos están referenciados por OTRAS sesiones activas del mismo usuario
+            $referencedElsewhere = [];
+            if (!empty($sessionDocIds)) {
+                $otherSessions = AiChatSession::byUser($user->username)
+                    ->where('id', '!=', $session->id)
+                    ->active()
+                    ->get();
+                foreach ($otherSessions as $other) {
+                    $ids = $this->collectSessionDocumentIds($other);
+                    if (!empty($ids)) {
+                        $referencedElsewhere = array_merge($referencedElsewhere, $ids);
+                    }
+                    // También intentar capturar docs creados dentro de esa otra sesión
+                    try {
+                        $metaDocsOther = AiDocument::byUser($user->username)
+                            ->where('document_metadata->created_in_session', (string) $other->id)
+                            ->pluck('id')
+                            ->all();
+                        $referencedElsewhere = array_merge($referencedElsewhere, array_map('intval', $metaDocsOther));
+                    } catch (\Throwable $e) {}
+                }
+                $referencedElsewhere = array_values(array_unique(array_filter($referencedElsewhere, fn($v) => is_numeric($v))));
+            }
+
+            $docIdsToDelete = empty($sessionDocIds)
+                ? []
+                : array_values(array_diff($sessionDocIds, $referencedElsewhere));
+
+            // 3) Eliminar embeddings y documentos de esta sesión que no estén usados por otras sesiones
+            if (!empty($docIdsToDelete)) {
+                foreach ($docIdsToDelete as $docId) {
+                    try {
+                        // Embeddings asociados a estos documentos
+                        \App\Models\AiContextEmbedding::where('username', $user->username)
+                            ->where('content_type', 'document_text')
+                            ->where('content_id', (string) $docId)
+                            ->delete();
+
+                        // Borrado del documento (cascade eliminará asignaciones como ai_meeting_documents)
+                        AiDocument::where('id', (int) $docId)
+                            ->where('username', $user->username)
+                            ->delete();
+                    } catch (\Throwable $e) {
+                        Log::warning('No se pudo eliminar completamente un documento al borrar la sesión', [
+                            'session_id' => $session->id,
+                            'document_id' => $docId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            }
+        } else {
+            $docIdsToDelete = [];
+        }
+
+        // 4) Intentar eliminar embeddings de mensajes del chat asociados a la sesión (si existieran)
+        try {
+            \App\Models\AiContextEmbedding::where('username', $user->username)
+                ->where('content_type', 'chat_message')
+                ->where('metadata->session_id', (string) $session->id)
+                ->delete();
+        } catch (\Throwable $e) {
+            // Ignorar si la BD no soporta el filtro JSON o si no existen
+        }
+
+        // 5) Siempre eliminar los mensajes (incluye mensajes del sistema ocultos)
         $session->messages()->delete();
 
         if ($forceDelete) {
@@ -293,7 +374,56 @@ class AiAssistantController extends Controller
             'session_id' => $sessionId,
             'deleted' => $forceDelete,
             'wiped' => ! $forceDelete,
+            'documents_deleted' => $docIdsToDelete,
         ]);
+    }
+
+    /**
+     * Recolecta IDs de documentos vinculados a una sesión a partir de su context_data.
+     * - context_type = 'documents': context_data es lista de IDs
+     * - context_data['doc_ids'] si existe
+     * - context_type = 'mixed': items[] con type=document|documents
+     */
+    private function collectSessionDocumentIds(AiChatSession $session): array
+    {
+        $ids = [];
+        $data = is_array($session->context_data) ? $session->context_data : [];
+
+        // doc_ids explicitamente agregados al contexto
+        $docIds = Arr::get($data, 'doc_ids', []);
+        if (is_array($docIds)) {
+            $ids = array_merge($ids, $docIds);
+        }
+
+        // Sesión de tipo documentos: el context_data es una lista de IDs
+        if ($session->context_type === 'documents' && is_array($data)) {
+            foreach ($data as $v) {
+                if (is_numeric($v)) $ids[] = (int) $v;
+            }
+        }
+
+        // Sesión mixta: items[] puede contener documentos
+        if ($session->context_type === 'mixed') {
+            $items = Arr::get($data, 'items', []);
+            if (is_array($items)) {
+                foreach ($items as $item) {
+                    if (!is_array($item)) continue;
+                    $type = $item['type'] ?? null;
+                    $id = $item['id'] ?? null;
+                    if (in_array($type, ['document', 'documents'], true) && is_numeric($id)) {
+                        $ids[] = (int) $id;
+                    }
+                    if ($type === 'documents' && is_array($id)) {
+                        foreach ($id as $sub) {
+                            if (is_numeric($sub)) $ids[] = (int) $sub;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Normalizar y devolver únicos
+        return array_values(array_unique(array_map('intval', $ids)));
     }
 
     /**
@@ -593,7 +723,10 @@ class AiAssistantController extends Controller
                     'drive_folder_id' => $driveResult['folder_id'],
                     'drive_type' => $driveType,
                     'processing_status' => 'pending',
-                    'document_metadata' => $driveResult['metadata'] ?? null,
+                    'document_metadata' => array_merge((array) ($driveResult['metadata'] ?? []), [
+                        'created_in_session' => $sessionId ? (string) $sessionId : null,
+                        'created_via' => 'assistant_upload',
+                    ]),
                 ]);
 
                 $this->processDocumentInBackground($document);
@@ -717,6 +850,7 @@ class AiAssistantController extends Controller
             'extracting' => 'Extrayendo texto',
             'chunking' => 'Dividiendo en fragmentos',
             'embedding' => 'Generando embeddings',
+            'indexing' => 'Indexando',
             'done' => 'Listo',
             'error' => 'Error',
         ];
@@ -792,9 +926,10 @@ class AiAssistantController extends Controller
     {
         $contextFragments = [];
 
-        // Si hay API key de OpenAI, usamos búsqueda semántica; si no, la omitimos
+        // Preferencia: usar embeddings solo si está habilitado y disponible; si no, usar MetadataSearch
+        $useEmbeddings = (bool) env('AI_ASSISTANT_USE_EMBEDDINGS', false);
         $apiKey = OpenAiConfig::apiKey();
-        if (!empty($apiKey)) {
+        if ($useEmbeddings && !empty($apiKey)) {
             /** @var EmbeddingSearch $search */
             $search = app(EmbeddingSearch::class);
             try {
@@ -806,11 +941,21 @@ class AiAssistantController extends Controller
                     'limit' => $semanticLimit,
                 ]);
             } catch (\Throwable $e) {
-                Log::warning('EmbeddingSearch failed, continuing with fallback context', [
+                Log::warning('EmbeddingSearch failed, falling back to metadata search', [
                     'error' => $e->getMessage(),
                 ]);
                 $contextFragments = [];
             }
+        }
+
+        if (empty($contextFragments)) {
+            /** @var \App\Services\MetadataSearch $meta */
+            $meta = app(\App\Services\MetadataSearch::class);
+            $metaLimit = $session->context_type === 'container' ? 20 : 8;
+            $contextFragments = $meta->search($session->username, $query, [
+                'session' => $session,
+                'limit' => $metaLimit,
+            ]);
         }
 
     $additional = [];
@@ -1889,6 +2034,8 @@ class AiAssistantController extends Controller
                 'document_metadata' => [
                     'summary_generated' => true,
                     'citations' => $citations,
+                    'created_in_session' => (string) $session->id,
+                    'created_via' => 'assistant_summary_pdf',
                 ],
             ]);
 

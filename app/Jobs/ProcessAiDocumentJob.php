@@ -87,48 +87,68 @@ class ProcessAiDocumentJob implements ShouldQueue
                 throw new RuntimeException('No se pudieron generar fragmentos del documento.');
             }
 
+            $useEmbeddings = (bool) env('AI_ASSISTANT_USE_EMBEDDINGS', false);
             $embeddingModel = config('services.openai.embedding_model', 'text-embedding-3-small');
-            $document->update(['processing_progress' => 75, 'processing_step' => 'embedding']);
-            $embeddings = $embeddingService->embedChunks($chunks, 20, $embeddingModel);
+            $embeddings = [];
+            if ($useEmbeddings) {
+                $document->update(['processing_progress' => 75, 'processing_step' => 'embedding']);
+                $embeddings = $embeddingService->embedChunks($chunks, 20, $embeddingModel);
+            } else {
+                // Sin embeddings: pasamos a indexado ligero por metadatos
+                $document->update(['processing_progress' => 75, 'processing_step' => 'indexing']);
+            }
 
-            DB::transaction(function () use ($document, $chunks, $normalizedText, $embeddings, $extracted, $embeddingModel) {
-                AiContextEmbedding::where('content_type', 'document_text')
-                    ->where('content_id', (string) $document->id)
-                    ->where('username', $document->username)
-                    ->delete();
+            DB::transaction(function () use ($document, $chunks, $normalizedText, $embeddings, $extracted, $embeddingModel, $useEmbeddings) {
+                if ($useEmbeddings) {
+                    AiContextEmbedding::where('content_type', 'document_text')
+                        ->where('content_id', (string) $document->id)
+                        ->where('username', $document->username)
+                        ->delete();
+                }
 
+                // Construir chunks ligeros en metadatos para MetadataSearch
+                $lightChunks = [];
                 foreach ($chunks as $chunk) {
-                    $index = $chunk['index'];
-                    $vector = $embeddings[$index] ?? null;
+                    $index = (int) $chunk['index'];
+                    $snippet = (string) ($chunk['normalized_text'] ?? '');
+                    $page = $chunk['metadata']['page'] ?? null;
+                    $lightChunks[] = [
+                        'index' => $index,
+                        'snippet' => $snippet,
+                        'page' => $page,
+                    ];
+                    if ($useEmbeddings) {
+                        $vector = $embeddings[$index] ?? null;
+                        if (!empty($vector)) {
+                            $metadata = array_merge(
+                                $extracted['metadata'] ?? [],
+                                $chunk['metadata'] ?? [],
+                                [
+                                    'chunk_index' => $index,
+                                    'tokens' => $chunk['tokens'] ?? null,
+                                    'embedding_model' => $embeddingModel,
+                                    'source_filename' => $document->original_filename,
+                                ]
+                            );
 
-                    if (empty($vector)) {
-                        continue;
+                            AiContextEmbedding::create([
+                                'username' => $document->username,
+                                'content_type' => 'document_text',
+                                'content_id' => (string) $document->id,
+                                'content_snippet' => $snippet,
+                                'embedding_vector' => $vector,
+                                'metadata' => $metadata,
+                            ]);
+                        }
                     }
-
-                    $metadata = array_merge(
-                        $extracted['metadata'] ?? [],
-                        $chunk['metadata'] ?? [],
-                        [
-                            'chunk_index' => $index,
-                            'tokens' => $chunk['tokens'] ?? null,
-                            'embedding_model' => $embeddingModel,
-                            'source_filename' => $document->original_filename,
-                        ]
-                    );
-
-                    AiContextEmbedding::create([
-                        'username' => $document->username,
-                        'content_type' => 'document_text',
-                        'content_id' => (string) $document->id,
-                        'content_snippet' => $chunk['normalized_text'],
-                        'embedding_vector' => $vector,
-                        'metadata' => $metadata,
-                    ]);
                 }
 
                 $document->update([
                     'extracted_text' => $normalizedText,
                     'ocr_metadata' => $extracted['metadata'] ?? [],
+                    'document_metadata' => array_merge((array) $document->document_metadata ?: [], [
+                        'chunks' => $lightChunks,
+                    ]),
                     'processing_status' => 'completed',
                     'processing_error' => null,
                     'processing_progress' => 100,
