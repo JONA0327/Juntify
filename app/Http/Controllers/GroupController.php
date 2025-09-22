@@ -340,17 +340,51 @@ class GroupController extends Controller
                     'message' => 'Notificación enviada al usuario de Juntify'
                 ]);
             } else {
-                // Usuario no existe o se forzó email - enviar por correo
-                $code = Str::uuid()->toString();
+                // Usuario no existe o se forzó email - enviar por correo con diseño unificado
+                // Asegurar que el grupo tenga un código de invitación de 6 dígitos
+                $group->loadMissing('organization', 'code');
+                if (!$group->code) {
+                    do {
+                        $newCode = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                    } while (\App\Models\GroupCode::where('code', $newCode)->exists());
+                    \App\Models\GroupCode::create([
+                        'group_id' => $group->id,
+                        'code' => $newCode,
+                    ]);
+                    $group->load('code');
+                }
+
+                $inviterName = $user->full_name ?? $user->username ?? 'Un miembro de Juntify';
+                $organizationName = optional($group->organization)->nombre_organizacion ?? 'Organización';
+                $groupName = $group->nombre_grupo ?? null;
+                $groupCode = $group->code->code ?? '------';
+                $signupUrl = route('register');
 
                 Log::info('Group invitation email prepared', [
                     'email' => $validated['email'],
                     'group_id' => $group->id,
-                    'code' => $code
+                    'group_code' => $groupCode,
+                    'organization' => $organizationName,
                 ]);
 
-                // Aquí puedes implementar el envío de email
-                // Mail::to($validated['email'])->send(new GroupInvitation($code, $group->id));
+                try {
+                    Mail::to($validated['email'])->send(new GroupInvitation(
+                        $inviterName,
+                        $organizationName,
+                        $groupName,
+                        $groupCode,
+                        $signupUrl
+                    ));
+                } catch (\Throwable $e) {
+                    Log::error('Error sending group invitation email', [
+                        'email' => $validated['email'],
+                        'error' => $e->getMessage(),
+                    ]);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No se pudo enviar el correo de invitación en este momento'
+                    ], 500);
+                }
 
                 OrganizationActivity::create([
                     'organization_id' => $group->id_organizacion,

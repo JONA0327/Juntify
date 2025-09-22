@@ -10,21 +10,31 @@ class GroupInvitation extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public $code;
-    public $groupId;
+    public string $inviterName;
+    public string $organizationName;
+    public ?string $groupName;
+    public string $groupCode;
+    public string $signupUrl;
 
-    public function __construct(string $code, int $groupId)
+    public function __construct(string $inviterName, string $organizationName, ?string $groupName, string $groupCode, string $signupUrl)
     {
-        $this->code = $code;
-        $this->groupId = $groupId;
+        $this->inviterName = $inviterName;
+        $this->organizationName = $organizationName;
+        $this->groupName = $groupName;
+        $this->groupCode = $groupCode;
+        $this->signupUrl = $signupUrl;
     }
 
     public function build()
     {
-        $url = url('/register?code=' . $this->code . '&group=' . $this->groupId);
-
-        return $this->subject('Invitación a unirse a un grupo')
+        return $this->subject('Invitación a unirte a un grupo en Juntify')
             ->view('emails.group-invitation')
-            ->with(['url' => $url]);
+            ->with([
+                'inviterName' => $this->inviterName,
+                'organizationName' => $this->organizationName,
+                'groupName' => $this->groupName,
+                'groupCode' => $this->groupCode,
+                'signupUrl' => $this->signupUrl,
+            ]);
     }
 }
