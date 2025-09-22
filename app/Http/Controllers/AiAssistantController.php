@@ -1331,15 +1331,8 @@ class AiAssistantController extends Controller
         }
 
         try {
-            // Intentar descargar y desencriptar .ju usando Service Account primero
-            try {
-                /** @var GoogleServiceAccount $sa */
-                $sa = app(GoogleServiceAccount::class);
-                $content = $sa->downloadFile($fileId);
-            } catch (\Throwable $inner) {
-                // Fallback a GoogleDriveService (OAuth del usuario/organización)
-                $content = $this->googleDriveService->downloadFileContent($fileId);
-            }
+            // Usar un flujo robusto para descargar el .ju priorizando acceso por organizaci f3n si aplica
+            $content = $this->tryDownloadJuContent($meeting);
             if (! is_string($content) || $content === '') {
                 return $fragments;
             }
@@ -1428,6 +1421,103 @@ class AiAssistantController extends Controller
         }
 
         return $fragments;
+    }
+
+    /**
+     * Descarga el contenido del .ju con una secuencia tolerante a fallos:
+     * 1) Si la reuni f3n pertenece a un contenedor de organizaci f3n que tiene token: usar ese token.
+     * 2) Service Account impersonando al due f1o de la reuni f3n (si hay email).
+     * 3) Service Account sin impersonate.
+     * 4) Token del due f1o.
+     * 5) Token del usuario actual.
+     */
+    private function tryDownloadJuContent(TranscriptionLaravel $meeting): ?string
+    {
+        $fileId = $meeting->transcript_drive_id;
+        if (! $fileId) { return null; }
+
+        // 1) Intentar con token de organizaci f3n de alg fan contenedor vinculado
+        try {
+            $containers = $meeting->containers()->with(['group.organization.googleToken'])->get();
+            foreach ($containers as $container) {
+                $org = $container->group?->organization;
+                $orgTokenModel = $org?->googleToken;
+                if ($orgTokenModel) {
+                    try {
+                        $tokenData = $this->normalizeOrganizationToken($orgTokenModel);
+                        $this->googleDriveService->setAccessToken($tokenData);
+                        $content = $this->googleDriveService->downloadFileContent($fileId);
+                        if (is_string($content) && $content !== '') {
+                            return $content;
+                        }
+                    } catch (\Throwable $eOrg) {
+                        // seguir con siguientes metodos
+                        Log::info('tryDownloadJuContent: fallo acceso por token de organizacion, continuar', [
+                            'meeting_id' => $meeting->id,
+                            'error' => $eOrg->getMessage(),
+                        ]);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Continuar con siguientes metodos
+        }
+
+    // 2) Service Account con impersonate del dueno
+        try {
+            /** @var GoogleServiceAccount $sa */
+            $sa = app(GoogleServiceAccount::class);
+            $owner = $meeting->user()->first();
+            if ($owner && !empty($owner->email)) {
+                try {
+                    $sa->impersonate($owner->email);
+                } catch (\Throwable $eImp) {
+                    // Si falla impersonate, intentar sin el mas abajo
+                }
+            }
+            $content = $sa->downloadFile($fileId);
+            if (is_string($content) && $content !== '') { return $content; }
+        } catch (\Throwable $eSaImp) {
+            // continuar
+        }
+
+        // 3) Service Account sin impersonate
+        try {
+            /** @var GoogleServiceAccount $saNo */
+            $saNo = app(GoogleServiceAccount::class);
+            $content = $saNo->downloadFile($fileId);
+            if (is_string($content) && $content !== '') { return $content; }
+        } catch (\Throwable $eSa) {
+            // continuar
+        }
+
+    // 4) Token del dueno (si existe)
+        try {
+            $owner = $meeting->user()->first();
+            $ownerToken = $owner?->googleToken;
+            if ($ownerToken && method_exists($ownerToken, 'getTokenArray')) {
+                $this->googleDriveService->setAccessToken($ownerToken->getTokenArray());
+                $content = $this->googleDriveService->downloadFileContent($fileId);
+                if (is_string($content) && $content !== '') { return $content; }
+            }
+        } catch (\Throwable $eOwner) {
+            // continuar
+        }
+
+    // 5) Token del usuario actual (si existe)
+        try {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $userToken = $user?->googleToken;
+            if ($userToken && method_exists($userToken, 'getTokenArray')) {
+                $this->googleDriveService->setAccessToken($userToken->getTokenArray());
+                $content = $this->googleDriveService->downloadFileContent($fileId);
+                if (is_string($content) && $content !== '') { return $content; }
+            }
+        } catch (\Throwable $eUser) {
+            // continuar
+        }
+
+        return null;
     }
 
     private function buildDocumentContextFragments(AiChatSession $session): array

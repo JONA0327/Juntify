@@ -1571,6 +1571,7 @@ async function uploadDocuments() {
                                 content: `El documento "${name}" ya está cargado y listo para usar en esta conversación.`,
                                 created_at: new Date().toISOString(),
                             });
+                            if (doc && doc.id) { addDocIdToSessionContext(Number(doc.id)); }
                         } else if (status === 'failed') {
                             const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : ' Sugerencia: si es un PDF escaneado, habilita OCR o sube una versión con texto seleccionable.';
                             addMessageToChat({
@@ -1586,6 +1587,50 @@ async function uploadDocuments() {
                             });
                         }
                     });
+
+                    // Poll corto adicional para notificar sin refrescar si alguno sigue en processing
+                    const pendingIds = finishedDocs.filter(d => (d.processing_status || 'processing') === 'processing').map(d => d.id).filter(Boolean);
+                    if (pendingIds.length > 0) {
+                        let polls = 0;
+                        const maxPolls = 5; // ~5 * 2s = 10s
+                        while (polls < maxPolls) {
+                            await new Promise(r => setTimeout(r, 2000));
+                            try {
+                                const pr = await fetch('/api/ai-assistant/documents/wait', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                                    },
+                                    body: JSON.stringify({ ids: pendingIds, timeout_ms: 1 })
+                                });
+                                const pd = await pr.json().catch(() => ({ success: false }));
+                                if (pd && pd.success) {
+                                    pd.documents.forEach(doc => {
+                                        if (doc.processing_status === 'completed') {
+                                            addMessageToChat({
+                                                role: 'assistant',
+                                                content: `El documento "${doc.name || 'Documento'}" ya está cargado y listo para usar en esta conversación.`,
+                                                created_at: new Date().toISOString(),
+                                            });
+                                            if (doc && doc.id) { addDocIdToSessionContext(Number(doc.id)); }
+                                        } else if (doc.processing_status === 'failed') {
+                                            const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : '';
+                                            addMessageToChat({
+                                                role: 'assistant',
+                                                content: `Hubo un error procesando el documento "${doc.name || 'Documento'}".${hint}`,
+                                                created_at: new Date().toISOString(),
+                                            });
+                                        }
+                                    });
+                                    // Si todos ya no est1n en processing, salir
+                                    const anyProcessing = pd.documents.some(d => (d.processing_status || 'processing') === 'processing');
+                                    if (!anyProcessing) break;
+                                }
+                            } catch (_) { /* ignore */ }
+                            polls++;
+                        }
+                    }
                 } catch (e) {
                     console.warn('Espera de procesamiento de documentos falló:', e);
                 }
@@ -2383,7 +2428,7 @@ async function uploadChatAttachments(files) {
         // Esperar brevemente a que terminen de procesarse (si ya están listos, seguirá de inmediato)
         if (docIds.length > 0) {
             try {
-                const waitResp = await fetch('/api/ai-assistant/documents/wait', {
+                    const waitResp = await fetch('/api/ai-assistant/documents/wait', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2421,6 +2466,48 @@ async function uploadChatAttachments(files) {
                         });
                     }
                 });
+                // Poll corto adicional para notificar sin refrescar
+                const pendingIds = finishedDocs.filter(d => (d.processing_status || 'processing') === 'processing').map(d => d.id).filter(Boolean);
+                if (pendingIds.length > 0) {
+                    let polls = 0;
+                    const maxPolls = 5;
+                    while (polls < maxPolls) {
+                        await new Promise(r => setTimeout(r, 2000));
+                        try {
+                            const pr = await fetch('/api/ai-assistant/documents/wait', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                                },
+                                body: JSON.stringify({ ids: pendingIds, timeout_ms: 1 })
+                            });
+                            const pd = await pr.json().catch(() => ({ success: false }));
+                            if (pd && pd.success) {
+                                pd.documents.forEach(doc => {
+                                    if (doc.processing_status === 'completed') {
+                                        addMessageToChat({
+                                            role: 'assistant',
+                                            content: `El documento "${doc.name || 'Documento'}" ya está cargado y listo para usar en esta conversación.`,
+                                            created_at: new Date().toISOString(),
+                                        });
+                                        if (doc && doc.id) { addDocIdToSessionContext(Number(doc.id)); }
+                                    } else if (doc.processing_status === 'failed') {
+                                        const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : '';
+                                        addMessageToChat({
+                                            role: 'assistant',
+                                            content: `Hubo un error procesando el documento "${doc.name || 'Documento'}".${hint}`,
+                                            created_at: new Date().toISOString(),
+                                        });
+                                    }
+                                });
+                                const anyProcessing = pd.documents.some(d => (d.processing_status || 'processing') === 'processing');
+                                if (!anyProcessing) break;
+                            }
+                        } catch (_) { /* ignore */ }
+                        polls++;
+                    }
+                }
             } catch(_) { /* no-op */ }
         }
     } catch (error) {
