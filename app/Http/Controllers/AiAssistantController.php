@@ -7,6 +7,7 @@ use App\Models\AiChatMessage;
 use App\Models\AiDocument;
 use App\Models\AiMeetingDocument;
 use App\Models\MeetingContentContainer;
+use App\Models\MeetingContentRelation;
 use App\Models\TranscriptionLaravel;
 use App\Models\Chat;
 use App\Models\ChatMessage;
@@ -1305,10 +1306,79 @@ class AiAssistantController extends Controller
             // ignorar si la tabla/relación no existe
         }
 
+        // Reuniones provenientes de contenedores accesibles
+        $containerMeetings = collect();
+        try {
+            if (
+                Schema::hasTable('meeting_content_relations') &&
+                Schema::hasTable('meeting_content_containers')
+            ) {
+                $relations = MeetingContentRelation::with(['container' => function ($query) {
+                        $query->with(['group.organization']);
+                    }])
+                    ->whereHas('container', function ($containerQuery) use ($user) {
+                        $containerQuery->where('is_active', true)
+                            ->where(function ($accessQuery) use ($user) {
+                                $accessQuery->where('username', $user->username)
+                                    ->orWhereIn('group_id', function ($sub) use ($user) {
+                                        $sub->select('id_grupo')
+                                            ->from('group_user')
+                                            ->where('user_id', $user->id);
+                                    })
+                                    ->orWhereHas('group.organization', function ($orgQuery) use ($user) {
+                                        $orgQuery->where('admin_id', $user->id);
+                                    });
+                            });
+                    })
+                    ->get();
+
+                $meetingIds = $relations->pluck('meeting_id')->unique()->values();
+
+                if ($meetingIds->isNotEmpty()) {
+                    $meetingsById = TranscriptionLaravel::whereIn('id', $meetingIds)->get()->keyBy('id');
+                    $byMeeting = [];
+
+                    foreach ($relations as $relation) {
+                        $meeting = $meetingsById->get($relation->meeting_id);
+
+                        if (! $meeting || isset($byMeeting[$relation->meeting_id])) {
+                            continue;
+                        }
+
+                        $container = $relation->container;
+                        $containerName = $container?->name ?? 'Contenedor';
+
+                        $byMeeting[$relation->meeting_id] = [
+                            'id' => $meeting->id,
+                            'meeting_name' => $meeting->meeting_name,
+                            'title' => $meeting->meeting_name,
+                            'source' => 'container',
+                            'is_legacy' => true,
+                            'is_shared' => true,
+                            'shared_by' => $containerName,
+                            'created_at' => optional($meeting->created_at)->toIso8601String(),
+                            'updated_at' => optional($meeting->updated_at)->toIso8601String(),
+                            'has_transcription' => ! empty($meeting->transcript_drive_id),
+                            'has_audio' => ! empty($meeting->audio_drive_id),
+                            'transcript_drive_id' => $meeting->transcript_drive_id,
+                            'transcript_download_url' => $meeting->transcript_download_url,
+                            'audio_drive_id' => $meeting->audio_drive_id,
+                            'audio_download_url' => $meeting->audio_download_url,
+                        ];
+                    }
+
+                    $containerMeetings = collect(array_values($byMeeting));
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignorar si las tablas/relaciones no existen
+        }
+
         // Unir propias + compartidas, eliminar duplicados por id priorizando propias
         $byId = [];
         foreach ($own as $item) { $byId[$item['id']] = $item; }
         foreach ($shared as $item) { if (!isset($byId[$item['id']])) { $byId[$item['id']] = $item; } }
+        foreach ($containerMeetings as $item) { if (!isset($byId[$item['id']])) { $byId[$item['id']] = $item; } }
         $meetings = collect(array_values($byId))
             ->sortByDesc(function($m) { return $m['created_at'] ?? null; })
             ->values();
