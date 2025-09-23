@@ -148,6 +148,7 @@ class OrganizationDriveController extends Controller
                     } catch (\Throwable $impersonationError) {
                         $serviceAccountError = $impersonationError;
                     }
+
                 }
             }
         } finally {
