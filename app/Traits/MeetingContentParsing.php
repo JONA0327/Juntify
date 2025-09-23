@@ -45,14 +45,129 @@ trait MeetingContentParsing
             return $segment;
         }, $segments);
 
+        $transcription = $data['transcription'] ?? '';
+        $transcription = is_string($transcription) ? trim($transcription) : '';
+        $placeholderTranscriptions = [
+            '',
+            'Transcripción no disponible',
+            'No hay transcripción disponible',
+        ];
+
+        $hasSegmentText = false;
+        foreach ($segments as $segment) {
+            if (isset($segment['text']) && trim((string) $segment['text']) !== '') {
+                $hasSegmentText = true;
+                break;
+            }
+        }
+
+        if (in_array($transcription, $placeholderTranscriptions, true) && $hasSegmentText) {
+            $transcription = $this->buildTranscriptFromSegments($segments);
+        }
+
+        if ($transcription === '') {
+            $transcription = 'No hay transcripción disponible';
+        }
+
         return [
             'summary' => $data['summary'] ?? 'No hay resumen disponible',
             'key_points' => $data['key_points'] ?? [],
             'tasks' => $data['tasks'] ?? [],
-            'transcription' => $data['transcription'] ?? 'No hay transcripción disponible',
+            'transcription' => $transcription,
             'speakers' => $data['speakers'] ?? [],
             'segments' => $segments,
         ];
+    }
+
+    protected function buildTranscriptFromSegments(array $segments): string
+    {
+        $lines = [];
+
+        foreach ($segments as $segment) {
+            $parts = [];
+
+            $timestamp = $segment['timestamp'] ?? null;
+            if (!$timestamp) {
+                $start = $segment['start'] ?? null;
+                $end = $segment['end'] ?? null;
+                $formattedRange = $this->formatSegmentRange($start, $end);
+                if ($formattedRange !== null) {
+                    $timestamp = $formattedRange;
+                }
+            }
+            if (is_string($timestamp) && trim($timestamp) !== '') {
+                $parts[] = '[' . trim($timestamp) . ']';
+            }
+
+            $speaker = $segment['speaker'] ?? $segment['speaker_name'] ?? null;
+            if (is_string($speaker) && trim($speaker) !== '') {
+                $parts[] = trim($speaker) . ':';
+            }
+
+            $text = $segment['text'] ?? $segment['content'] ?? '';
+            $text = is_string($text) ? trim($text) : '';
+
+            if (empty($parts) && $text === '') {
+                continue;
+            }
+
+            $line = trim(implode(' ', $parts));
+            if ($text !== '') {
+                $line = $line === '' ? $text : $line . ' ' . $text;
+            }
+
+            if ($line !== '') {
+                $lines[] = $line;
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    protected function formatSegmentRange($start, $end): ?string
+    {
+        $formattedStart = $this->formatSegmentTimestamp($start);
+        $formattedEnd = $this->formatSegmentTimestamp($end);
+
+        if ($formattedStart && $formattedEnd) {
+            return $formattedStart . ' - ' . $formattedEnd;
+        }
+
+        if ($formattedStart) {
+            return $formattedStart;
+        }
+
+        if ($formattedEnd) {
+            return $formattedEnd;
+        }
+
+        return null;
+    }
+
+    protected function formatSegmentTimestamp($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (!is_numeric($value)) {
+            return null;
+        }
+
+        $seconds = (int) round((float) $value);
+        if ($seconds < 0) {
+            $seconds = 0;
+        }
+
+        $hours = intdiv($seconds, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+        $remainingSeconds = $seconds % 60;
+
+        if ($hours > 0) {
+            return sprintf('%02d:%02d:%02d', $hours, $minutes, $remainingSeconds);
+        }
+
+        return sprintf('%02d:%02d', $minutes, $remainingSeconds);
     }
 
     /**

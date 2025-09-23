@@ -90,3 +90,61 @@ it('caches ju data for every meeting when container fragments exceed the global 
 
     expect(array_unique($fakeCache->called))->toHaveCount($meetingCount);
 });
+
+it('persists generated transcript when ju payload only includes segments', function () {
+    $user = User::factory()->create();
+    $meeting = createLegacyMeeting($user);
+
+    $segments = [
+        [
+            'timestamp' => '00:00 - 00:05',
+            'speaker' => 'Ana',
+            'text' => 'Bienvenidos al proyecto',
+        ],
+        [
+            'start' => 5,
+            'end' => 12,
+            'speaker' => 'Luis',
+            'text' => 'Gracias Ana',
+        ],
+        [
+            'start' => 12,
+            'speaker' => 'Ana',
+            'text' => 'Continuemos con la agenda',
+        ],
+    ];
+
+    $payload = [
+        'summary' => 'Resumen breve',
+        'key_points' => ['Introducción'],
+        'tasks' => [],
+        'speakers' => ['Ana', 'Luis'],
+        'segments' => $segments,
+    ];
+
+    $parser = new class {
+        use \App\Traits\MeetingContentParsing;
+
+        public function normalize(array $data): array
+        {
+            return $this->processTranscriptData($data);
+        }
+    };
+
+    $normalized = $parser->normalize($payload);
+
+    $expectedTranscript = implode("\n", [
+        '[00:00 - 00:05] Ana: Bienvenidos al proyecto',
+        '[00:05 - 00:12] Luis: Gracias Ana',
+        '[00:12] Ana: Continuemos con la agenda',
+    ]);
+
+    expect($normalized['transcription'])->toBe($expectedTranscript);
+
+    /** @var MeetingJuCacheService $service */
+    $service = app(MeetingJuCacheService::class);
+    $service->setCachedParsed((int) $meeting->id, $normalized, (string) $meeting->transcript_drive_id);
+
+    $cached = AiMeetingJuCache::where('meeting_id', $meeting->id)->firstOrFail();
+    expect($cached->data['transcription'])->toBe($expectedTranscript);
+});
