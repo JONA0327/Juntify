@@ -2237,16 +2237,169 @@ class AiAssistantController extends Controller
                     }
                 } catch (\Throwable $e) { /* ignore list build errors */ }
 
-                // Incluir fragmentos desde los .ju de TODAS las reuniones del contenedor
-                // Ajustes para cubrir TODAS las reuniones de forma equilibrada:
-                // - Aumentamos el límite global para no cortar las primeras reuniones
-                // - Limitamos tareas por reunión cuando la consulta no las pide explícitamente
-                $totalLimit = 240; // límite de seguridad global de fragmentos (equivale aprox a 6 reuniones con 8-10 frags + algunas tareas)
-                $perMeetingLimit = 8; // ju fragments por reunión (summary + key points + 2-3 segmentos)
+                // -------------------------------------------------------------
+                //  DETECCIÓN DE ENFOQUE ESPECÍFICO A UNA REUNIÓN
+                //  Ejemplos capturados: "[#Kualifin #1]", "Kualifin #3", "reunion Kualifin 2"
+                // -------------------------------------------------------------
+                $focusedMeetingIds = [];
                 $qLower = Str::lower($query);
+                if ($query !== '') {
+                    foreach ($container->meetings as $m) {
+                        $nameLower = Str::lower((string)$m->meeting_name);
+                        // Normalizar: quitar acentos simples (si llegan) y comparar.
+                        if (preg_match('/kualifin/i', $query)) { /* ejemplo concreto dado */ }
+                        // Patrón: nombre completo dentro del query
+                        if ($nameLower !== '' && Str::contains($qLower, $nameLower)) {
+                            $focusedMeetingIds[] = (int)$m->id; continue;
+                        }
+                        // Patrón: Nombre base + # + número
+                        if (preg_match('/kualifin\s*[#\- ]{0,2}' . preg_quote((string)$m->id, '/') . '\b/i', $query)) {
+                            $focusedMeetingIds[] = (int)$m->id; continue;
+                        }
+                        // Patrón con corchetes [#Kualifin #N]
+                        if (preg_match('/\[#?\s*' . preg_quote(explode('#', $nameLower)[0], '/') . '\s*#?' . preg_quote((string)$m->id, '/') . '\]/i', $qLower)) {
+                            $focusedMeetingIds[] = (int)$m->id; continue;
+                        }
+                        // Patrón genérico: "reunion 72" o "reunión 72"
+                        if (preg_match('/reuni[oó]n\s*' . (int)$m->id . '\b/i', $qLower)) {
+                            $focusedMeetingIds[] = (int)$m->id; continue;
+                        }
+                    }
+                    $focusedMeetingIds = array_values(array_unique($focusedMeetingIds));
+                }
+
+                // -------------------------------------------------------------
+                //  CONFIGURACIÓN DE LÍMITES
+                // -------------------------------------------------------------
+                $totalLimit = 240; // límite global
+                $perMeetingLimit = 8; // por reunión (summary + key points + segmentos)
+                if (count($focusedMeetingIds) === 1) {
+                    // Cuando solo preguntan por una reunión específica, ampliamos un poco los segmentos
+                    $perMeetingLimit = 20; // summary + key points + más segmentos
+                }
                 $tasksWanted = Str::contains($qLower, ['tarea', 'tareas', 'task', 'tasks', 'pendiente', 'pendientes', 'asignado']);
-                $tasksPerMeetingLimit = $tasksWanted ? 10 : 3; // si no piden tareas, incluir como máximo 3 por reunión
-                foreach ($container->meetings as $meeting) {
+                $tasksPerMeetingLimit = $tasksWanted ? 10 : 3;
+
+                // Selección de conjunto de reuniones a iterar
+                $meetingsToIterate = $container->meetings;
+                if (!empty($focusedMeetingIds)) {
+                    $meetingsToIterate = $container->meetings->filter(fn($m) => in_array((int)$m->id, $focusedMeetingIds))->values();
+                }
+
+                // -------------------------------------------------------------
+                //  AGREGADO DE RESUMENES DE TODAS LAS REUNIONES (consulta global)
+                //  Si la consulta es general (no enfocada a 1 sola) y pide "de qué se habló"
+                // -------------------------------------------------------------
+                $wantsGlobal = empty($focusedMeetingIds) && (
+                    Str::contains($qLower, ['de que se hablo', 'de qué se habló', 'todas las reuniones', 'resumen general', 'que se hablo en el contenedor'])
+                );
+                if ($wantsGlobal) {
+                    // Construir bloques agregados usando el cache de TODAS las reuniones
+                    try {
+                        /** @var MeetingJuCacheService $cache */
+                        $cache = app(MeetingJuCacheService::class);
+                        $summaryLines = [];
+                        $allKeyPoints = [];
+                        $allTasks = [];
+                        $stats = [
+                            'total_meetings' => 0,
+                            'total_segments' => 0,
+                            'total_key_points' => 0,
+                            'total_tasks' => 0,
+                        ];
+
+                        foreach ($container->meetings as $m) {
+                            $cached = $cache->getCachedParsed((int)$m->id);
+                            if (!is_array($cached)) { continue; }
+                            $stats['total_meetings']++;
+                            $segmentsCount = is_countable($cached['segments'] ?? null) ? count($cached['segments']) : 0;
+                            $kpCount = is_countable($cached['key_points'] ?? null) ? count($cached['key_points']) : 0;
+                            $tasksCount = is_countable($cached['tasks'] ?? null) ? count($cached['tasks']) : 0;
+                            $stats['total_segments'] += $segmentsCount;
+                            $stats['total_key_points'] += $kpCount;
+                            $stats['total_tasks'] += $tasksCount;
+
+                            if (!empty($cached['summary'])) {
+                                $summaryLines[] = $m->meeting_name . ': ' . Str::limit(trim((string)$cached['summary']), 800);
+                            }
+                            // Agregar key points (limitados) con prefijo del nombre de la reunión
+                            if ($kpCount) {
+                                $take = min(5, $kpCount); // limitar por reunión
+                                foreach (array_slice($cached['key_points'], 0, $take) as $kp) {
+                                    $kpTxt = is_array($kp) ? ($kp['text'] ?? ($kp['point'] ?? json_encode($kp))) : (string)$kp;
+                                    $kpTxt = Str::limit(trim($kpTxt), 300);
+                                    if ($kpTxt !== '') {
+                                        $allKeyPoints[] = $m->meeting_name . ': ' . $kpTxt;
+                                    }
+                                }
+                            }
+                            // Agregar tasks (si existen) — tareas vienen vacías en tu dataset actual pero dejamos la lógica
+                            if ($tasksCount) {
+                                $takeT = min(5, $tasksCount);
+                                foreach (array_slice($cached['tasks'], 0, $takeT) as $task) {
+                                    if (is_array($task)) {
+                                        $title = $task['tarea'] ?? $task['title'] ?? $task['name'] ?? json_encode($task);
+                                    } else { $title = (string)$task; }
+                                    $title = Str::limit(trim((string)$title), 160);
+                                    if ($title !== '') { $allTasks[] = $m->meeting_name . ': ' . $title; }
+                                }
+                            }
+                        }
+
+                        if (!empty($summaryLines)) {
+                            $fragments[] = [
+                                'text' => "Resumen agregado de reuniones (" . $stats['total_meetings'] . " reuniones):\n" . implode("\n\n", $summaryLines),
+                                'source_id' => 'container:' . $container->id . ':aggregated_summaries',
+                                'content_type' => 'container_meetings_aggregated',
+                                'location' => ['type' => 'container', 'container_id' => $container->id, 'aggregated' => true],
+                                'similarity' => null,
+                                'citation' => 'container:' . $container->id . ' resumenes',
+                                'metadata' => ['aggregated' => true, 'count' => count($summaryLines), 'stats' => $stats],
+                            ];
+                        }
+                        if (!empty($allKeyPoints)) {
+                            $fragments[] = [
+                                'text' => "Puntos clave destacados (primeros por reunión):\n" . implode("\n", $allKeyPoints),
+                                'source_id' => 'container:' . $container->id . ':aggregated_key_points',
+                                'content_type' => 'container_key_points_aggregated',
+                                'location' => ['type' => 'container', 'container_id' => $container->id, 'aggregated' => true],
+                                'similarity' => null,
+                                'citation' => 'container:' . $container->id . ' keypoints',
+                                'metadata' => ['aggregated' => true, 'count' => count($allKeyPoints)],
+                            ];
+                        }
+                        if (!empty($allTasks)) {
+                            $fragments[] = [
+                                'text' => "Tareas detectadas (limitadas):\n" . implode("\n", $allTasks),
+                                'source_id' => 'container:' . $container->id . ':aggregated_tasks',
+                                'content_type' => 'container_tasks_aggregated',
+                                'location' => ['type' => 'container', 'container_id' => $container->id, 'aggregated' => true],
+                                'similarity' => null,
+                                'citation' => 'container:' . $container->id . ' tareas',
+                                'metadata' => ['aggregated' => true, 'count' => count($allTasks)],
+                            ];
+                        }
+                        // Estadísticas compactas
+                        if ($stats['total_meetings'] > 0) {
+                            $fragments[] = [
+                                'text' => sprintf('Estadísticas: %d reuniones, %d segmentos, %d puntos clave, %d tareas.',
+                                    $stats['total_meetings'], $stats['total_segments'], $stats['total_key_points'], $stats['total_tasks']
+                                ),
+                                'source_id' => 'container:' . $container->id . ':aggregated_stats',
+                                'content_type' => 'container_stats',
+                                'location' => ['type' => 'container', 'container_id' => $container->id],
+                                'similarity' => null,
+                                'citation' => 'container:' . $container->id . ' stats',
+                                'metadata' => $stats,
+                            ];
+                        }
+                    } catch (\Throwable $e) { /* silencioso */ }
+                }
+
+                // -------------------------------------------------------------
+                //  RECORRER REUNIONES SELECCIONADAS
+                // -------------------------------------------------------------
+                foreach ($meetingsToIterate as $meeting) {
                     $meetingFragments = [];
 
                     // Breve ficha de la reunión como contexto estructural
@@ -2266,7 +2419,9 @@ class AiAssistantController extends Controller
                         'metadata' => $this->buildLegacyMeetingMetadata($meeting),
                     ];
 
-                    $juFragments = $this->buildFragmentsFromJu($meeting, $query);
+                    // Si estamos enfocados a una sola reunión, permitimos query vacío para no filtrar segmentos por palabras clave.
+                    $effectiveQuery = (count($focusedMeetingIds) === 1) ? '' : $query;
+                    $juFragments = $this->buildFragmentsFromJu($meeting, $effectiveQuery);
                     if (!empty($juFragments)) {
                         // Recortar por reunión si fuera necesario
                         $slice = array_slice($juFragments, 0, $perMeetingLimit);
@@ -2620,16 +2775,21 @@ class AiAssistantController extends Controller
                 $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id, $parsed['raw'] ?? null);
             }
 
-            // Resumen
+            // -------------------------------------------------
+            // Resumen (modo truncado o completo según query)
+            // -------------------------------------------------
+            $qLower = Str::lower($query);
+            $wantsFullSummary = Str::contains($qLower, ['resumen completo', 'resumen detallado', 'resumen extendido', 'summary full', 'full summary']);
             if (! empty($data['summary'])) {
+                $summaryText = (string)$data['summary'];
                 $fragments[] = [
-                    'text' => Str::limit((string)$data['summary'], 800),
-                    'source_id' => 'meeting:' . $meeting->id . ':summary',
-                    'content_type' => 'meeting_summary',
-                    'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'summary']),
+                    'text' => $wantsFullSummary ? $summaryText : Str::limit($summaryText, 800),
+                    'source_id' => 'meeting:' . $meeting->id . ':summary' . ($wantsFullSummary ? ':full' : ''),
+                    'content_type' => $wantsFullSummary ? 'meeting_summary_full' : 'meeting_summary',
+                    'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'summary', 'full' => $wantsFullSummary]),
                     'similarity' => null,
                     'citation' => 'meeting:' . $meeting->id . ' resumen',
-                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['summary' => true]),
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['summary' => true, 'full' => $wantsFullSummary]),
                 ];
             }
 
@@ -2655,21 +2815,49 @@ class AiAssistantController extends Controller
                 ];
             }
 
-            // Segmentos: filtrar por palabras clave del query y limitar
-            $keywords = $this->extractQueryKeywords($query);
-            $segments = is_array($data['segments'] ?? null) ? $data['segments'] : [];
-            $segments = array_values(array_filter($segments, function($seg) use ($keywords) {
-                $txt = is_array($seg) ? ($seg['text'] ?? '') : '';
-                if (trim($txt) === '') return false;
-                if (empty($keywords)) return true;
-                foreach ($keywords as $kw) {
-                    if (stripos($txt, $kw) !== false) return true;
-                }
-                return false;
-            }));
-            $segments = array_slice($segments, 0, 5);
+            // -------------------------------------------------
+            // Segmentos (modo focalizado por speaker/tema o estándar)
+            // -------------------------------------------------
+            $segmentsAll = is_array($data['segments'] ?? null) ? $data['segments'] : [];
+            $segmentsSelected = [];
 
-            foreach ($segments as $seg) {
+            // Detección simple de speaker (nombres capitalizados en query) y tema (resto de palabras)
+            $speakerCandidate = null;
+            if (preg_match('/\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,})\b/u', $query, $mSp)) {
+                $speakerCandidate = $mSp[1];
+            }
+            $keywords = $this->extractQueryKeywords($query);
+
+            if ($speakerCandidate) {
+                // Filtrar segmentos del speaker y, si hay keywords adicionales, que coincidan
+                foreach ($segmentsAll as $seg) {
+                    $txt = is_array($seg) ? ($seg['text'] ?? '') : '';
+                    if (trim($txt) === '') continue;
+                    $speaker = $seg['speaker'] ?? $seg['display_speaker'] ?? '';
+                    if ($speaker && stripos($speaker, $speakerCandidate) === false) continue;
+                    $ok = true;
+                    foreach ($keywords as $kw) {
+                        if (stripos($txt, $kw) === false && stripos((string)$speaker, $kw) === false) { $ok = false; break; }
+                    }
+                    if ($ok) { $segmentsSelected[] = $seg; }
+                }
+                // En modo focalizado no limitamos a 5, pero ponemos un máximo alto para evitar excesos
+                $segmentsSelected = array_slice($segmentsSelected, 0, 80);
+            } else {
+                // Modo estándar previo
+                $segmentsSelected = array_values(array_filter($segmentsAll, function($seg) use ($keywords) {
+                    $txt = is_array($seg) ? ($seg['text'] ?? '') : '';
+                    if (trim($txt) === '') return false;
+                    if (empty($keywords)) return true;
+                    foreach ($keywords as $kw) {
+                        if (stripos($txt, $kw) !== false) return true;
+                    }
+                    return false;
+                }));
+                $segmentsSelected = array_slice($segmentsSelected, 0, 5);
+            }
+
+            foreach ($segmentsSelected as $seg) {
                 $txt = (string)($seg['text'] ?? '');
                 $speaker = $seg['speaker'] ?? $seg['display_speaker'] ?? 'Participante';
                 $time = $seg['start'] ?? $seg['time'] ?? null;
@@ -2681,6 +2869,7 @@ class AiAssistantController extends Controller
                         'section' => 'transcription',
                         'speaker' => $speaker,
                         'timestamp' => $time,
+                        'focused_speaker' => (bool)$speakerCandidate,
                     ]),
                     'similarity' => null,
                     'citation' => 'meeting:' . $meeting->id . ' t.' . ($time ? $this->formatTimeForCitation($time) : '—'),
@@ -2689,6 +2878,7 @@ class AiAssistantController extends Controller
                         'timestamp' => $time,
                         'speaker' => $speaker,
                         'source' => 'ju',
+                        'focused_speaker' => (bool)$speakerCandidate,
                     ]),
                 ];
             }
