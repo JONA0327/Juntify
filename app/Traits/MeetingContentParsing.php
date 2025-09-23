@@ -187,6 +187,7 @@ trait MeetingContentParsing
                 Log::info('decryptJuFile: Content is already valid JSON (unencrypted)');
                 return [
                     'data' => $this->extractMeetingDataFromJson($json_data),
+                    'raw' => $json_data,
                     'needs_encryption' => true,
                 ];
             }
@@ -203,6 +204,7 @@ trait MeetingContentParsing
                         Log::info('decryptJuFile: JSON parsing after decryption successful', ['keys' => array_keys($json_data)]);
                         return [
                             'data' => $this->extractMeetingDataFromJson($json_data),
+                            'raw' => $json_data,
                             'needs_encryption' => false,
                         ];
                     }
@@ -223,6 +225,7 @@ trait MeetingContentParsing
                         Log::info('decryptJuFile: JSON parsing after Laravel Crypt decryption successful', ['keys' => array_keys($json_data)]);
                         return [
                             'data' => $this->extractMeetingDataFromJson($json_data),
+                            'raw' => $json_data,
                             'needs_encryption' => false,
                         ];
                     }
@@ -234,6 +237,7 @@ trait MeetingContentParsing
             Log::warning('decryptJuFile: Using default data - all decryption methods failed');
             return [
                 'data' => $this->getDefaultMeetingData(),
+                'raw' => null,
                 'needs_encryption' => false,
             ];
 
@@ -241,6 +245,7 @@ trait MeetingContentParsing
             Log::error('decryptJuFile: General exception', ['error' => $e->getMessage()]);
             return [
                 'data' => $this->getDefaultMeetingData(),
+                'raw' => null,
                 'needs_encryption' => false,
             ];
         }

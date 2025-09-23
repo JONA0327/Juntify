@@ -40,7 +40,7 @@ class MeetingJuCacheService
         }
     }
 
-    public function setCachedParsed(int $meetingId, array $parsed, ?string $transcriptDriveId = null): bool
+    public function setCachedParsed(int $meetingId, array $parsed, ?string $transcriptDriveId = null, ?array $rawFull = null): bool
     {
         try {
             $row = AiMeetingJuCache::firstOrNew(['meeting_id' => $meetingId]);
@@ -48,6 +48,9 @@ class MeetingJuCacheService
                 $row->transcript_drive_id = $transcriptDriveId;
             }
             $row->data = $parsed; // mutator encrypts and sets checksum/size
+            if ($rawFull !== null) {
+                $row->raw_data = $rawFull; // nuevo mutator
+            }
             $row->save();
             return true;
         } catch (\Throwable $e) {
@@ -56,6 +59,7 @@ class MeetingJuCacheService
                 $payload = [
                     'cached_at' => now()->toIso8601String(),
                     'data' => $parsed,
+                    'raw' => $rawFull,
                 ];
                 $path = $this->pathFor($meetingId);
                 Storage::disk($this->disk)->makeDirectory('ju-cache');

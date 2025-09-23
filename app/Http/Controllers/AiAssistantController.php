@@ -121,7 +121,7 @@ class AiAssistantController extends Controller
                 if (is_string($content) && $content !== '') {
                     $parsed = $this->decryptJuFile($content);
                     $normalized = $this->processTranscriptData($parsed['data'] ?? []);
-                    $cache->setCachedParsed((int)$meeting->id, $normalized, (string)$meeting->transcript_drive_id);
+                    $cache->setCachedParsed((int)$meeting->id, $normalized, (string)$meeting->transcript_drive_id, $parsed['raw'] ?? null);
                 } else {
                     // Intentar al menos construir fragmentos (por si hay otra fuente)
                     $this->buildFragmentsFromJu($meeting, '');
@@ -207,7 +207,7 @@ class AiAssistantController extends Controller
                 if (is_string($content) && $content !== '') {
                     $parsed = $this->decryptJuFile($content);
                     $data = $this->processTranscriptData($parsed['data'] ?? []);
-                    $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id);
+                    $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id, $parsed['raw'] ?? null);
                 } else {
                     // Última oportunidad: intentar leer cache previa
                     $cached = $cache->getCachedParsed((int)$meeting->id);
@@ -388,14 +388,13 @@ class AiAssistantController extends Controller
                 if (is_string($content) && $content !== '') {
                     $parsed = $this->decryptJuFile($content);
                     $data = $this->processTranscriptData($parsed['data'] ?? []);
-                    $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id);
+                    $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id, $parsed['raw'] ?? null);
                     $entry['summary'] = !empty($data['summary']);
                     $entry['key_points'] = is_array($data['key_points'] ?? null) ? count($data['key_points']) : 0;
                     $entry['segments'] = is_array($data['segments'] ?? null) ? min( (int) count($data['segments']), 5) : 0;
                 } else {
                     $entry['error'] = $entry['error'] ?: 'no_access_or_not_found';
                 }
-
                 // Contar tareas existentes en BD (sin modificar)
                 try {
                     $entry['tasks_count'] = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
@@ -460,7 +459,7 @@ class AiAssistantController extends Controller
 
                 /** @var MeetingJuCacheService $cache */
                 $cache = app(MeetingJuCacheService::class);
-                $cache->setCachedParsed((int)$meeting->id, $normalized, (string)$meeting->transcript_drive_id);
+                $cache->setCachedParsed((int)$meeting->id, $normalized, (string)$meeting->transcript_drive_id, $parsed['raw'] ?? null);
                 $preloaded = true;
             } else {
                 // Construir al menos fragmentos (puede ser vacío si no hay fuentes)
@@ -525,7 +524,6 @@ class AiAssistantController extends Controller
                 'fecha_inicio' => $parsed['fecha_inicio'] ?: null,
                 'fecha_limite' => $parsed['fecha_limite'] ?: null,
                 'hora_limite' => $hora,
-                'descripcion' => $parsed['descripcion'] ?: null,
                 'asignado' => $item['assignee'] ?? $item['assigned'] ?? $item['responsable'] ?? null,
                 'progreso' => $parsed['progreso'] ?? 0,
             ];
@@ -2619,7 +2617,7 @@ class AiAssistantController extends Controller
                 }
                 $parsed = $this->decryptJuFile($content);
                 $data = $this->processTranscriptData($parsed['data'] ?? []);
-                $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id);
+                $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id, $parsed['raw'] ?? null);
             }
 
             // Resumen
