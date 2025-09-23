@@ -1736,14 +1736,34 @@ class MeetingController extends Controller
                 ->where('status', 'accepted')
                 ->exists();
 
+            $containerAccess = false;
+            if (!$sharedAccess) {
+                $containerAccess = DB::table('meeting_content_relations')
+                    ->join('meeting_content_containers', 'meeting_content_relations.container_id', '=', 'meeting_content_containers.id')
+                    ->join('groups', 'meeting_content_containers.group_id', '=', 'groups.id')
+                    ->leftJoin('group_user', function ($join) use ($user) {
+                        $join->on('groups.id', '=', 'group_user.id_grupo')
+                             ->where('group_user.user_id', '=', $user->id);
+                    })
+                    ->leftJoin('organizations', 'groups.id_organizacion', '=', 'organizations.id')
+                    ->where('meeting_content_relations.meeting_id', $id)
+                    ->where('meeting_content_containers.is_active', true)
+                    ->where(function ($query) use ($user) {
+                        $query->where('meeting_content_containers.username', $user->username)
+                              ->orWhereNotNull('group_user.user_id')
+                              ->orWhere('organizations.admin_id', $user->id);
+                    })
+                    ->exists();
+            }
+
             $meeting = TranscriptionLaravel::where('id', $id)
-                ->when(!$sharedAccess, function ($q) use ($user) {
+                ->when(!$sharedAccess && !$containerAccess, function ($q) use ($user) {
                     $q->where('username', $user->username);
                 })
                 ->firstOrFail();
 
             $isOwner = isset($user->username) && $meeting->username === $user->username;
-            $recipientShared = $sharedAccess && !$isOwner;
+            $recipientShared = ($sharedAccess || $containerAccess) && !$isOwner;
 
             if (empty($meeting->transcript_drive_id)) {
                 return response()->json(['error' => 'No se encontró archivo .ju para esta reunión'], 404);
