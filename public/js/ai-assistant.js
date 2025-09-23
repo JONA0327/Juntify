@@ -674,17 +674,16 @@ function sendSuggestion(suggestion) {
 /**
  * Actualizar contexto de la sesión actual (sin crear una nueva). Si no hay sesión, crea una.
  */
-async function updateCurrentSessionContext() {
+async function updateCurrentSessionContext(_retried = false) {
     try {
         // Si no hay sesión actual, intentar reutilizar alguna existente primero
         if (!currentSessionId) {
             await ensureCurrentSession();
         }
 
-        // Si aún no hay, crear nueva
+        // Si aún no hay, crear nueva, pero NO salir: continuamos para aplicar el contexto seleccionado
         if (!currentSessionId) {
             await createNewChatSession();
-            return;
         }
 
         const csrf = document.querySelector('meta[name="csrf-token"]').content;
@@ -702,9 +701,12 @@ async function updateCurrentSessionContext() {
         });
 
         if (!response.ok) {
-            // Si la sesión ya no existe o no es válida, crear nueva
-            await createNewChatSession();
-            return;
+            // Si la sesión ya no existe o no es válida, crear nueva y reintentar una vez
+            if (!_retried) {
+                await createNewChatSession();
+                return await updateCurrentSessionContext(true);
+            }
+            throw new Error('PATCH contexto falló y reintento agotado');
         }
 
         const data = await response.json();
@@ -716,8 +718,16 @@ async function updateCurrentSessionContext() {
             await createNewChatSession();
         }
     } catch (error) {
-        console.warn('No se pudo actualizar el contexto de la sesión, creando nueva:', error);
-        await createNewChatSession();
+        console.warn('No se pudo actualizar el contexto de la sesión:', error);
+        // Intento de recuperación: crear y reintentar una vez si aún no reintentamos
+        if (!_retried) {
+            try {
+                await createNewChatSession();
+                return await updateCurrentSessionContext(true);
+            } catch (e) {
+                console.warn('Fallo al reintentar actualización de contexto:', e);
+            }
+        }
     }
 }
 
