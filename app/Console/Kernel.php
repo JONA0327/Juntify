@@ -17,6 +17,7 @@ class Kernel extends ConsoleKernel
 
         // $schedule->command('inspire')->hourly();
         $schedule->command('activities:cleanup')->cron('0 0 1 * *');
+        $schedule->command('plans:expire')->dailyAt('02:00');
     }
 
     /**

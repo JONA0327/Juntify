@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\MercadoPagoPayment;
+use App\Models\User;
+use App\Services\UserPlans\UserPlanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -190,6 +192,47 @@ class PaymentController extends Controller
             'external_reference' => $record->external_reference,
             'status' => $record->status,
         ]);
+
+        if ($status === MercadoPagoPayment::STATUS_APPROVED) {
+            $metadata = $normalizedMetadata ?? [];
+            $userId = data_get($metadata, 'user_id') ?? data_get($paymentInfo, 'metadata.user_id');
+
+            if (! $userId) {
+                Log::warning('Pago aprobado sin user_id en metadata.', [
+                    'payment_id' => $paymentInfo->id ?? null,
+                ]);
+            } else {
+                $user = User::find($userId);
+
+                if (! $user) {
+                    Log::warning('No se encontró el usuario asociado al pago aprobado.', [
+                        'user_id' => $userId,
+                        'payment_id' => $paymentInfo->id ?? null,
+                    ]);
+                } elseif (empty($metadata)) {
+                    Log::warning('Pago aprobado sin metadata para actualizar el plan.', [
+                        'user_id' => $userId,
+                        'payment_id' => $paymentInfo->id ?? null,
+                    ]);
+                } else {
+                    $paidAt = data_get($paymentInfo, 'date_approved')
+                        ?? data_get($paymentInfo, 'money_release_date')
+                        ?? data_get($paymentInfo, 'date_last_updated')
+                        ?? now()->toIso8601String();
+
+                    app(UserPlanService::class)->activateFromPayment($user, $metadata, [
+                        'provider' => 'mercado_pago',
+                        'payment_id' => (string) $paymentInfo->id,
+                        'external_reference' => $record->external_reference,
+                        'status' => $status,
+                        'amount' => $record->amount,
+                        'currency' => $record->currency,
+                        'paid_at' => $paidAt,
+                        'metadata' => $metadata,
+                    ]);
+                }
+            }
+        }
 
         return response()->json(['message' => 'processed']);
     }

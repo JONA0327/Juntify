@@ -90,4 +90,19 @@ class User extends Authenticatable
     {
         return $this->hasMany(Contact::class, 'contact_id');
     }
+
+    public function plans(): HasMany
+    {
+        return $this->hasMany(UserPlan::class);
+    }
+
+    public function currentPlan(): HasOne
+    {
+        return $this->hasOne(UserPlan::class)->current();
+    }
+
+    public function planPurchases(): HasManyThrough
+    {
+        return $this->hasManyThrough(PlanPurchase::class, UserPlan::class);
+    }
 }
