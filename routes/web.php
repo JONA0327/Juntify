@@ -237,6 +237,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/meetings/{id}/preload', [AiAssistantController::class, 'preloadMeeting'])->name('api.ai-assistant.meetings.preload');
             // Importar tareas de todas las reuniones del contenedor (garantiza .ju descargado/cacheado)
             Route::post('/containers/{containerId}/import-tasks', [AiAssistantController::class, 'importContainerTasks'])->name('api.ai-assistant.containers.import-tasks');
+            // Diagnóstico por contenedor
+            Route::get('/containers/{containerId}/diagnostics', [AiAssistantController::class, 'containerDiagnostics'])->name('api.ai-assistant.containers.diagnostics');
         });
     });
 

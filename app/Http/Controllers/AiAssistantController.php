@@ -238,6 +238,182 @@ class AiAssistantController extends Controller
     }
 
     /**
+     * Diagnóstico detallado de acceso a .ju y cobertura por reunión en un contenedor
+     * - Intenta descargar el .ju con distintos credenciales
+     * - Si falla, intenta re-localizar el archivo en Drive
+     * - Reporta si hay summary/puntos clave/segmentos, y cuantifica tareas existentes
+     * Nota: No realiza upsert de tareas (solo lectura), para evitar efectos colaterales.
+     */
+    public function containerDiagnostics(Request $request, int $containerId): JsonResponse
+    {
+        $user = Auth::user();
+
+        $container = MeetingContentContainer::with(['group', 'group.organization.googleToken', 'meetings' => function ($q) {
+                $q->orderByDesc('created_at');
+            }])
+            ->where('id', $containerId)
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $isCreator = $container->username === $user->username;
+        $isMember = $container->group_id
+            ? DB::table('group_user')
+                ->where('id_grupo', $container->group_id)
+                ->where('user_id', $user->id)
+                ->exists()
+            : false;
+        $isOrgOwner = $container->group && $container->group->organization
+            ? $container->group->organization->admin_id === $user->id
+            : false;
+
+        if (!($isCreator || $isMember || $isOrgOwner)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permisos para diagnosticar este contenedor',
+            ], 403);
+        }
+
+        $report = [];
+
+        /** @var MeetingJuCacheService $cache */
+        $cache = app(MeetingJuCacheService::class);
+
+        foreach ($container->meetings as $meeting) {
+            $entry = [
+                'id' => (int) $meeting->id,
+                'name' => (string) $meeting->meeting_name,
+                'date' => optional($meeting->created_at)->toDateString(),
+                'original_file_id' => $meeting->transcript_drive_id,
+                'relocated' => false,
+                'new_file_id' => null,
+                'access_path' => null,
+                'summary' => false,
+                'key_points' => 0,
+                'segments' => 0,
+                'tasks_count' => 0,
+                'error' => null,
+            ];
+
+            try {
+                $fileId = $meeting->transcript_drive_id;
+                $content = null;
+
+                // 1) Organización token (si existe)
+                try {
+                    $orgTokenModel = $container->group?->organization?->googleToken;
+                    if ($orgTokenModel && $fileId) {
+                        $this->googleDriveService->setAccessToken($this->normalizeOrganizationToken($orgTokenModel));
+                        $content = $this->googleDriveService->downloadFileContent($fileId);
+                        if (is_string($content) && $content !== '') { $entry['access_path'] = 'org_token'; }
+                    }
+                } catch (\Throwable $e) { /* continue */ }
+
+                // 2) Service Account con impersonate
+                if (!is_string($content) || $content === '') {
+                    try {
+                        /** @var GoogleServiceAccount $sa */
+                        $sa = app(GoogleServiceAccount::class);
+                        $owner = $meeting->user()->first();
+                        if ($owner && !empty($owner->email)) {
+                            try { $sa->impersonate($owner->email); } catch (\Throwable $eImp) {}
+                        }
+                        if ($fileId) {
+                            $content = $sa->downloadFile($fileId);
+                            if (is_string($content) && $content !== '') { $entry['access_path'] = 'sa_impersonate'; }
+                        }
+                    } catch (\Throwable $e) { /* continue */ }
+                }
+
+                // 3) Service Account sin impersonate
+                if (!is_string($content) || $content === '') {
+                    try {
+                        /** @var GoogleServiceAccount $saNo */
+                        $saNo = app(GoogleServiceAccount::class);
+                        if ($fileId) {
+                            $content = $saNo->downloadFile($fileId);
+                            if (is_string($content) && $content !== '') { $entry['access_path'] = 'sa_direct'; }
+                        }
+                    } catch (\Throwable $e) { /* continue */ }
+                }
+
+                // 4) Token del dueño
+                if (!is_string($content) || $content === '') {
+                    try {
+                        $owner = $meeting->user()->first();
+                        $ownerToken = $owner?->googleToken;
+                        if ($ownerToken && $fileId && method_exists($ownerToken, 'getTokenArray')) {
+                            $this->googleDriveService->setAccessToken($ownerToken->getTokenArray());
+                            $content = $this->googleDriveService->downloadFileContent($fileId);
+                            if (is_string($content) && $content !== '') { $entry['access_path'] = 'owner_token'; }
+                        }
+                    } catch (\Throwable $e) { /* continue */ }
+                }
+
+                // 5) Token del usuario actual
+                if (!is_string($content) || $content === '') {
+                    try {
+                        $userToken = $user?->googleToken;
+                        if ($userToken && $fileId && method_exists($userToken, 'getTokenArray')) {
+                            $this->googleDriveService->setAccessToken($userToken->getTokenArray());
+                            $content = $this->googleDriveService->downloadFileContent($fileId);
+                            if (is_string($content) && $content !== '') { $entry['access_path'] = 'user_token'; }
+                        }
+                    } catch (\Throwable $e) { /* continue */ }
+                }
+
+                // Si no logramos descargar y/o no hay fileId, intentar re-localizar
+                if (!is_string($content) || $content === '' || !$fileId) {
+                    try {
+                        $found = $this->locateJuForMeeting($meeting, $container);
+                        if ($found && $found !== $fileId) {
+                            $entry['relocated'] = true;
+                            $entry['new_file_id'] = $found;
+                            $meeting->transcript_drive_id = $found;
+                            $meeting->save();
+                            // Intentar con Service Account directa como fallback
+                            /** @var GoogleServiceAccount $saNo */
+                            $saNo = app(GoogleServiceAccount::class);
+                            $content = $saNo->downloadFile($found);
+                            if (is_string($content) && $content !== '' && !$entry['access_path']) {
+                                $entry['access_path'] = 'sa_direct (after relocate)';
+                            }
+                        }
+                    } catch (\Throwable $e) { /* continue */ }
+                }
+
+                if (is_string($content) && $content !== '') {
+                    $parsed = $this->decryptJuFile($content);
+                    $data = $this->processTranscriptData($parsed['data'] ?? []);
+                    $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id);
+                    $entry['summary'] = !empty($data['summary']);
+                    $entry['key_points'] = is_array($data['key_points'] ?? null) ? count($data['key_points']) : 0;
+                    $entry['segments'] = is_array($data['segments'] ?? null) ? min( (int) count($data['segments']), 5) : 0;
+                } else {
+                    $entry['error'] = $entry['error'] ?: 'no_access_or_not_found';
+                }
+
+                // Contar tareas existentes en BD (sin modificar)
+                try {
+                    $entry['tasks_count'] = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
+                        ->where('username', $user->username)
+                        ->count();
+                } catch (\Throwable $e) { /* ignore */ }
+            } catch (\Throwable $e) {
+                $entry['error'] = $e->getMessage();
+            }
+
+            $report[] = $entry;
+        }
+
+        return response()->json([
+            'success' => true,
+            'container_id' => (int) $container->id,
+            'container_name' => (string) $container->name,
+            'meetings' => $report,
+        ]);
+    }
+
+    /**
      * Pre-cargar .ju para una reunión específica (cachear contenido procesado)
      */
     public function preloadMeeting(Request $request, int $meetingId): JsonResponse
@@ -1991,8 +2167,14 @@ class AiAssistantController extends Controller
                 } catch (\Throwable $e) { /* ignore list build errors */ }
 
                 // Incluir fragmentos desde los .ju de TODAS las reuniones del contenedor
-                $totalLimit = 120; // límite de seguridad global de fragmentos
-                $perMeetingLimit = 10; // orientativo (buildFragmentsFromJu ya limita segmentos)
+                // Ajustes para cubrir TODAS las reuniones de forma equilibrada:
+                // - Aumentamos el límite global para no cortar las primeras reuniones
+                // - Limitamos tareas por reunión cuando la consulta no las pide explícitamente
+                $totalLimit = 240; // límite de seguridad global de fragmentos (equivale aprox a 6 reuniones con 8-10 frags + algunas tareas)
+                $perMeetingLimit = 8; // ju fragments por reunión (summary + key points + 2-3 segmentos)
+                $qLower = Str::lower($query);
+                $tasksWanted = Str::contains($qLower, ['tarea', 'tareas', 'task', 'tasks', 'pendiente', 'pendientes', 'asignado']);
+                $tasksPerMeetingLimit = $tasksWanted ? 10 : 3; // si no piden tareas, incluir como máximo 3 por reunión
                 $count = 0;
                 foreach ($container->meetings as $meeting) {
                     // Breve ficha de la reunión como contexto estructural
@@ -2049,33 +2231,35 @@ class AiAssistantController extends Controller
                         }
                     }
 
-                    // Incluir tareas de la reunión desde tasks_laravel
+                    // Incluir tareas de la reunión desde tasks_laravel (limitadas si el usuario no las pide explícitamente)
                     try {
-                        $tasks = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
+                        if ($tasksPerMeetingLimit > 0 && $count < $totalLimit) {
+                            $tasks = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
                             ->where('username', $session->username)
-                            ->orderByDesc('updated_at')
-                            ->limit(10)
-                            ->get();
-                        foreach ($tasks as $t) {
-                            $desc = $t->descripcion ? ("\n" . trim((string)$t->descripcion)) : '';
-                            $metaBits = [];
-                            if ($t->prioridad) { $metaBits[] = 'prioridad ' . $t->prioridad; }
-                            if ($t->fecha_inicio) { $metaBits[] = 'inicio ' . $t->fecha_inicio; }
-                            if ($t->fecha_limite) { $metaBits[] = 'vence ' . $t->fecha_limite; }
-                            if ($t->hora_limite) { $metaBits[] = 'hora ' . $t->hora_limite; }
-                            if ($t->asignado) { $metaBits[] = 'asignado a ' . $t->asignado; }
-                            $metaTxt = empty($metaBits) ? '' : (' (' . implode('; ', $metaBits) . ')');
-                            $fragments[] = [
-                                'text' => '- ' . trim((string)$t->tarea) . $metaTxt . $desc,
-                                'source_id' => 'meeting:' . $meeting->id . ':task:' . $t->id,
-                                'content_type' => 'meeting_task',
-                                'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'tasks', 'task_id' => $t->id]),
-                                'similarity' => null,
-                                'citation' => 'task:' . $t->id,
-                                'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['task_id' => $t->id]),
-                            ];
-                            $count++;
-                            if ($count >= $totalLimit) { break; }
+                                ->orderByDesc('updated_at')
+                                ->limit($tasksPerMeetingLimit)
+                                ->get();
+                            foreach ($tasks as $t) {
+                                $desc = $t->descripcion ? ("\n" . trim((string)$t->descripcion)) : '';
+                                $metaBits = [];
+                                if ($t->prioridad) { $metaBits[] = 'prioridad ' . $t->prioridad; }
+                                if ($t->fecha_inicio) { $metaBits[] = 'inicio ' . $t->fecha_inicio; }
+                                if ($t->fecha_limite) { $metaBits[] = 'vence ' . $t->fecha_limite; }
+                                if ($t->hora_limite) { $metaBits[] = 'hora ' . $t->hora_limite; }
+                                if ($t->asignado) { $metaBits[] = 'asignado a ' . $t->asignado; }
+                                $metaTxt = empty($metaBits) ? '' : (' (' . implode('; ', $metaBits) . ')');
+                                $fragments[] = [
+                                    'text' => '- ' . trim((string)$t->tarea) . $metaTxt . $desc,
+                                    'source_id' => 'meeting:' . $meeting->id . ':task:' . $t->id,
+                                    'content_type' => 'meeting_task',
+                                    'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'tasks', 'task_id' => $t->id]),
+                                    'similarity' => null,
+                                    'citation' => 'task:' . $t->id,
+                                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['task_id' => $t->id]),
+                                ];
+                                $count++;
+                                if ($count >= $totalLimit) { break; }
+                            }
                         }
                     } catch (\Throwable $e) { /* ignore tasks inclusion */ }
                 }
