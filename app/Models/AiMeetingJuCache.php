@@ -72,3 +72,7 @@ class AiMeetingJuCache extends Model
         $this->attributes['raw_size_bytes'] = strlen($json);
     }
 }
+
+<?php
+$meeting = App\Models\TranscriptionLaravel::find(74);
+app(App\Http\Controllers\AiAssistantController::class)->preloadMeeting(request(), 74);
