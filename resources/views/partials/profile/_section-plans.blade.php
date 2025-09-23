@@ -1,48 +1,53 @@
+@php
+    $pricing = json_decode(file_get_contents(resource_path('data/pricing.json')), true);
+@endphp
+
 <!-- Sección: Planes -->
 <div class="content-section" id="section-plans" style="display: none;">
-    <div class="pricing-toggle">
-        <button class="toggle-btn active">Anual</button>
-        <button class="toggle-btn">Mensual</button>
-    </div>
-
-    <div class="pricing-grid">
-        <div class="pricing-card">
-            <h3 class="pricing-title">Freemium</h3>
-            <div class="pricing-price">$0</div>
-            <div class="pricing-period">mes</div>
-            <ul class="pricing-features">
-                <li>Hasta 3 reuniones por mes</li>
-                <li>Transcripción básica</li>
-                <li>Resúmenes automáticos</li>
-                <li>Exportar como texto</li>
-            </ul>
-            <button class="pricing-btn secondary">Plan Actual</button>
+    <div class="pricing-wrapper">
+        <div class="pricing-toggle">
+            <button class="toggle-btn active" data-target="annual">Anual</button>
+            <button class="toggle-btn" data-target="monthly">Mensual</button>
+            <button class="toggle-btn" data-target="addons">Reuniones adicionales</button>
         </div>
 
-        <div class="pricing-card popular">
-            <h3 class="pricing-title">Básico</h3>
-            <div class="pricing-price">$499</div>
-            <div class="pricing-period">mes</div>
-            <ul class="pricing-features">
-                <li>Reuniones ilimitadas</li>
-                <li>Transcripción avanzada</li>
-                <li>Identificación de hablantes</li>
-                <li>Integraciones básicas</li>
-            </ul>
-            <button class="pricing-btn">Actualizar Plan</button>
-        </div>
-
-        <div class="pricing-card">
-            <h3 class="pricing-title">Negocios</h3>
-            <div class="pricing-price">$999</div>
-            <div class="pricing-period">mes</div>
-            <ul class="pricing-features">
-                <li>Todo lo del plan Básico</li>
-                <li>IA avanzada para análisis</li>
-                <li>Dashboards ejecutivos</li>
-                <li>API personalizada</li>
-            </ul>
-            <button class="pricing-btn">Actualizar Plan</button>
+        <div class="pricing-groups">
+            @foreach (['annual', 'monthly', 'addons'] as $group)
+                <div class="pricing-grid {{ $group === 'annual' ? '' : 'hidden' }}" data-plan-group="{{ $group }}">
+                    @foreach ($pricing[$group] as $plan)
+                        @php
+                            $ctaLabel = 'Actualizar plan';
+                            $ctaClass = '';
+                            $disabled = false;
+                            if ($group === 'addons') {
+                                $ctaLabel = 'Agregar al plan';
+                            }
+                            if ($plan['id'] === 'freemium' && $group !== 'addons') {
+                                $ctaLabel = 'Plan actual';
+                                $ctaClass = 'secondary';
+                                $disabled = true;
+                            }
+                            if ($plan['id'] === 'enterprise' && $group !== 'addons') {
+                                $ctaLabel = 'Hablar con ventas';
+                            }
+                        @endphp
+                        <div class="pricing-card {{ !empty($plan['popular']) ? 'popular' : '' }}">
+                            <h3 class="pricing-title">{{ $plan['name'] }}</h3>
+                            <div class="pricing-price">{{ $plan['price'] }}</div>
+                            <div class="pricing-period">{{ $plan['period'] }}</div>
+                            @if (!empty($plan['description']))
+                                <p class="pricing-description">{{ $plan['description'] }}</p>
+                            @endif
+                            <ul class="pricing-features">
+                                @foreach ($plan['features'] as $feature)
+                                    <li>{{ $feature }}</li>
+                                @endforeach
+                            </ul>
+                            <button type="button" class="pricing-btn {{ $ctaClass }}" {{ $disabled ? 'disabled' : '' }}>{{ $ctaLabel }}</button>
+                        </div>
+                    @endforeach
+                </div>
+            @endforeach
         </div>
     </div>
 </div>

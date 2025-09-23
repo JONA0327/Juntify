@@ -1,0 +1,172 @@
+{
+  "annual": [
+    {
+      "id": "freemium",
+      "name": "Freemium",
+      "price": "$0",
+      "period": "por mes",
+      "description": "Ideal para uso personal y equipos pequeños que buscan optimizar sus reuniones básicas.",
+      "features": [
+        "Hasta 3 reuniones por mes",
+        "Transcripción básica",
+        "Resúmenes automáticos de 30 minutos",
+        "Exportar como texto",
+        "Soporte por email"
+      ]
+    },
+    {
+      "id": "basic",
+      "name": "Básico",
+      "price": "$449",
+      "period": "por mes (facturación anual)",
+      "description": "Ahorra 18% con facturación anual. Ideal para equipos medianos que buscan eficiencia constante.",
+      "features": [
+        "Reuniones ilimitadas",
+        "Transcripción avanzada con IA",
+        "Resúmenes inteligentes y tareas automáticas",
+        "Identificación de hablantes",
+        "Integraciones básicas",
+        "Soporte prioritario"
+      ],
+      "popular": true
+    },
+    {
+      "id": "business",
+      "name": "Negocios",
+      "price": "$899",
+      "period": "por mes (facturación anual)",
+      "description": "Para organizaciones que necesitan analítica profunda y alineación entre equipos.",
+      "features": [
+        "Todo lo del plan Básico",
+        "IA avanzada para análisis de conversaciones",
+        "Análisis de sentimientos y temas",
+        "Dashboards ejecutivos en tiempo real",
+        "Integraciones avanzadas",
+        "API personalizable",
+        "Capacitación incluida"
+      ]
+    },
+    {
+      "id": "enterprise",
+      "name": "Empresas",
+      "price": "$2,499",
+      "period": "por mes (facturación anual)",
+      "description": "La máxima personalización para grandes corporaciones con necesidades globales.",
+      "features": [
+        "Todo lo del plan Negocios",
+        "Implementación personalizada",
+        "Seguridad empresarial y cumplimiento",
+        "Análisis predictivo avanzado",
+        "Integraciones ilimitadas",
+        "Gerente de cuenta dedicado",
+        "SLA garantizado 99.9%"
+      ]
+    }
+  ],
+  "monthly": [
+    {
+      "id": "freemium",
+      "name": "Freemium",
+      "price": "$0",
+      "period": "por mes",
+      "description": "Mantén tus notas básicas y pruébalo sin compromiso.",
+      "features": [
+        "Hasta 3 reuniones por mes",
+        "Transcripción básica",
+        "Resúmenes automáticos de 30 minutos",
+        "Exportar como texto",
+        "Soporte por email"
+      ]
+    },
+    {
+      "id": "basic",
+      "name": "Básico",
+      "price": "$549",
+      "period": "por mes",
+      "description": "Flexibilidad mes a mes para equipos medianos que buscan mejorar sus reuniones.",
+      "features": [
+        "Reuniones ilimitadas",
+        "Transcripción avanzada con IA",
+        "Resúmenes inteligentes y tareas automáticas",
+        "Identificación de hablantes",
+        "Integraciones básicas",
+        "Soporte prioritario"
+      ],
+      "popular": true
+    },
+    {
+      "id": "business",
+      "name": "Negocios",
+      "price": "$1,099",
+      "period": "por mes",
+      "description": "Analítica avanzada y dashboards ejecutivos sin compromisos anuales.",
+      "features": [
+        "Todo lo del plan Básico",
+        "IA avanzada para análisis de conversaciones",
+        "Análisis de sentimientos y temas",
+        "Dashboards ejecutivos en tiempo real",
+        "Integraciones avanzadas",
+        "API personalizable",
+        "Capacitación incluida"
+      ]
+    },
+    {
+      "id": "enterprise",
+      "name": "Empresas",
+      "price": "$3,099",
+      "period": "por mes",
+      "description": "Control total, seguridad avanzada y soporte dedicado bajo demanda.",
+      "features": [
+        "Todo lo del plan Negocios",
+        "Implementación personalizada",
+        "Seguridad empresarial y cumplimiento",
+        "Análisis predictivo avanzado",
+        "Integraciones ilimitadas",
+        "Gerente de cuenta dedicado",
+        "SLA garantizado 99.9%"
+      ]
+    }
+  ],
+  "addons": [
+    {
+      "id": "starter-pack",
+      "name": "Paquete Inicial",
+      "price": "$99",
+      "period": "por paquete",
+      "description": "Amplía tu plan con reuniones puntuales para épocas de mayor demanda.",
+      "features": [
+        "5 reuniones adicionales",
+        "Validez de 90 días",
+        "Transcripción avanzada incluida",
+        "Compatible con cualquier plan de pago"
+      ]
+    },
+    {
+      "id": "growth-pack",
+      "name": "Paquete Crecimiento",
+      "price": "$249",
+      "period": "por paquete",
+      "description": "Ideal para equipos en expansión que necesitan más capacidad cada mes.",
+      "features": [
+        "15 reuniones adicionales",
+        "Validez de 180 días",
+        "Resúmenes inteligentes y analítica avanzada",
+        "Incluye soporte prioritario"
+      ],
+      "popular": true
+    },
+    {
+      "id": "scale-pack",
+      "name": "Paquete Escala",
+      "price": "$449",
+      "period": "por paquete",
+      "description": "Para organizaciones que gestionan proyectos simultáneos de gran tamaño.",
+      "features": [
+        "30 reuniones adicionales",
+        "Validez de 365 días",
+        "Incluye dashboards ejecutivos",
+        "Precio preferencial por volumen"
+      ]
+    }
+  ]
+}

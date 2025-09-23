@@ -50,6 +50,48 @@ function toggleMobileNavbar() {
   if (hamburger) hamburger.classList.toggle('active');
 }
 
+/**
+ * Configura los tabs de planes en el perfil
+ */
+function setupProfilePricingToggle() {
+  const pricingWrappers = document.querySelectorAll('#section-plans .pricing-wrapper');
+
+  pricingWrappers.forEach(wrapper => {
+    const buttons = wrapper.querySelectorAll('.toggle-btn');
+    const planGroups = wrapper.querySelectorAll('[data-plan-group]');
+
+    if (!buttons.length || !planGroups.length) {
+      return;
+    }
+
+    const showGroup = (target) => {
+      planGroups.forEach(group => {
+        if (group.dataset.planGroup === target) {
+          group.classList.remove('hidden');
+        } else {
+          group.classList.add('hidden');
+        }
+      });
+    };
+
+    buttons.forEach(button => {
+      const target = button.dataset.target;
+      if (!target) return;
+
+      button.addEventListener('click', () => {
+        buttons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        showGroup(target);
+      });
+    });
+
+    const activeBtn = wrapper.querySelector('.toggle-btn.active') || buttons[0];
+    if (activeBtn && activeBtn.dataset.target) {
+      showGroup(activeBtn.dataset.target);
+    }
+  });
+}
+
 // Cerrar sidebar si se hace click fuera en móvil
 document.addEventListener('click', e => {
   const sidebar = document.getElementById('sidebar');
@@ -329,13 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Toggle de botones (pricing u otros)
-  document.querySelectorAll('.toggle-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-      this.classList.add('active');
-    });
-  });
+  setupProfilePricingToggle();
 
   // Vincular botones de Drive
   const connectBtn    = document.getElementById('connect-drive-btn');
