@@ -1951,6 +1951,33 @@ class AiAssistantController extends Controller
                     'metadata' => [],
                 ];
 
+                // Lista consolidada de reuniones del contenedor (ayuda a respuestas "todas las reuniones")
+                try {
+                    $lines = [];
+                    foreach ($container->meetings as $m) {
+                        $date = optional($m->created_at)->toDateString() ?? 'sin fecha';
+                        $name = $m->meeting_name ?: ('Reunión #' . $m->id);
+                        $lines[] = sprintf('- %s (id %d, %s)%s%s',
+                            $name,
+                            (int)$m->id,
+                            $date,
+                            $m->transcript_drive_id ? ', con transcripción' : '',
+                            $m->audio_drive_id ? ', con audio' : ''
+                        );
+                    }
+                    if (!empty($lines)) {
+                        $fragments[] = [
+                            'text' => "Reuniones en el contenedor:\n" . implode("\n", $lines),
+                            'source_id' => 'container:' . $container->id . ':meetings_list',
+                            'content_type' => 'container_meetings_list',
+                            'location' => [ 'type' => 'container', 'container_id' => $container->id, 'name' => $container->name ],
+                            'similarity' => null,
+                            'citation' => 'container:' . $container->id . ' meetings',
+                            'metadata' => [ 'count' => count($lines) ],
+                        ];
+                    }
+                } catch (\Throwable $e) { /* ignore list build errors */ }
+
                 // Incluir fragmentos desde los .ju de TODAS las reuniones del contenedor
                 $totalLimit = 120; // límite de seguridad global de fragmentos
                 $perMeetingLimit = 10; // orientativo (buildFragmentsFromJu ya limita segmentos)
@@ -2009,6 +2036,36 @@ class AiAssistantController extends Controller
                             $count++;
                         }
                     }
+
+                    // Incluir tareas de la reunión desde tasks_laravel
+                    try {
+                        $tasks = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
+                            ->where('username', $session->username)
+                            ->orderByDesc('updated_at')
+                            ->limit(10)
+                            ->get();
+                        foreach ($tasks as $t) {
+                            $desc = $t->descripcion ? ("\n" . trim((string)$t->descripcion)) : '';
+                            $metaBits = [];
+                            if ($t->prioridad) { $metaBits[] = 'prioridad ' . $t->prioridad; }
+                            if ($t->fecha_inicio) { $metaBits[] = 'inicio ' . $t->fecha_inicio; }
+                            if ($t->fecha_limite) { $metaBits[] = 'vence ' . $t->fecha_limite; }
+                            if ($t->hora_limite) { $metaBits[] = 'hora ' . $t->hora_limite; }
+                            if ($t->asignado) { $metaBits[] = 'asignado a ' . $t->asignado; }
+                            $metaTxt = empty($metaBits) ? '' : (' (' . implode('; ', $metaBits) . ')');
+                            $fragments[] = [
+                                'text' => '- ' . trim((string)$t->tarea) . $metaTxt . $desc,
+                                'source_id' => 'meeting:' . $meeting->id . ':task:' . $t->id,
+                                'content_type' => 'meeting_task',
+                                'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'tasks', 'task_id' => $t->id]),
+                                'similarity' => null,
+                                'citation' => 'task:' . $t->id,
+                                'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['task_id' => $t->id]),
+                            ];
+                            $count++;
+                            if ($count >= $totalLimit) { break; }
+                        }
+                    } catch (\Throwable $e) { /* ignore tasks inclusion */ }
                 }
             }
         }
@@ -2098,6 +2155,34 @@ class AiAssistantController extends Controller
                     ]),
                 ];
             }
+
+            // 3) Include meeting tasks from tasks_laravel
+            try {
+                $tasks = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
+                    ->where('username', $session->username)
+                    ->orderByDesc('updated_at')
+                    ->limit(15)
+                    ->get();
+                foreach ($tasks as $t) {
+                    $desc = $t->descripcion ? ("\n" . trim((string)$t->descripcion)) : '';
+                    $metaBits = [];
+                    if ($t->prioridad) { $metaBits[] = 'prioridad ' . $t->prioridad; }
+                    if ($t->fecha_inicio) { $metaBits[] = 'inicio ' . $t->fecha_inicio; }
+                    if ($t->fecha_limite) { $metaBits[] = 'vence ' . $t->fecha_limite; }
+                    if ($t->hora_limite) { $metaBits[] = 'hora ' . $t->hora_limite; }
+                    if ($t->asignado) { $metaBits[] = 'asignado a ' . $t->asignado; }
+                    $metaTxt = empty($metaBits) ? '' : (' (' . implode('; ', $metaBits) . ')');
+                    $fragments[] = [
+                        'text' => '- ' . trim((string)$t->tarea) . $metaTxt . $desc,
+                        'source_id' => 'meeting:' . $meeting->id . ':task:' . $t->id,
+                        'content_type' => 'meeting_task',
+                        'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'tasks', 'task_id' => $t->id]),
+                        'similarity' => null,
+                        'citation' => 'task:' . $t->id,
+                        'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['task_id' => $t->id]),
+                    ];
+                }
+            } catch (\Throwable $e) { /* ignore tasks inclusion */ }
 
             return $fragments;
         }
