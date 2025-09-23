@@ -22,6 +22,7 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\SharedMeetingController;
 use App\Http\Controllers\PlanController;
+use App\Http\Controllers\PaymentController;
 use App\Services\AudioConversionService;
 use App\Exceptions\FfmpegUnavailableException;
 
@@ -47,6 +48,13 @@ Route::middleware('throttle:60,1')->group(function () {
 
 Route::middleware('auth')->get('/user', function (Request $request) {
     return $request->user();
+});
+
+Route::prefix('payments/mercado-pago')->name('payments.mercado-pago.')->group(function () {
+    Route::post('/preferences', [PaymentController::class, 'createPreference'])->name('preferences.create');
+    Route::get('/preferences/{externalReference}', [PaymentController::class, 'showPreference'])->name('preferences.show');
+    Route::get('/status/{externalReference}', [PaymentController::class, 'status'])->name('status');
+    Route::post('/webhook', [PaymentController::class, 'webhook'])->name('webhook');
 });
 
 // Endpoint de diagnóstico rápido de sesión
