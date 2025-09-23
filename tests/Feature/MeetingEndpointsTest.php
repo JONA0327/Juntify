@@ -7,7 +7,10 @@ use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 use App\Models\Container;
 use App\Models\GoogleToken;
+use App\Models\Organization;
+use App\Models\Group;
 use App\Services\GoogleDriveService;
+use App\Services\GoogleServiceAccount;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
 
@@ -401,6 +404,68 @@ test('shared meeting audio endpoint falls back to impersonation after initial se
 
     expect($serviceAccount->downloadAttempts)->toBe(2);
     expect($serviceAccount->impersonated)->toBe('owner@example.com');
+});
+
+test('container member can download ju file via service account', function () {
+    $owner = User::factory()->create([
+        'username' => 'owner-user',
+        'email' => 'owner@example.com',
+    ]);
+
+    $member = User::factory()->create([
+        'username' => 'member-user',
+    ]);
+
+    $meeting = createLegacyMeeting($owner, [
+        'transcript_drive_id' => 'drive-file-id',
+        'transcript_download_url' => '',
+    ]);
+
+    $organization = Organization::create([
+        'nombre_organizacion' => 'Org',
+        'descripcion' => 'Desc',
+        'num_miembros' => 0,
+        'admin_id' => $owner->id,
+    ]);
+
+    $group = Group::create([
+        'id_organizacion' => $organization->id,
+        'nombre_grupo' => 'Team',
+        'descripcion' => 'Group desc',
+    ]);
+
+    $group->users()->attach($member->id, ['rol' => Group::ROLE_COLABORADOR]);
+
+    $container = MeetingContentContainer::create([
+        'username' => $owner->username,
+        'name' => 'Container',
+        'description' => 'Container desc',
+        'group_id' => $group->id,
+        'is_active' => true,
+    ]);
+
+    MeetingContentRelation::create([
+        'container_id' => $container->id,
+        'meeting_id' => $meeting->id,
+    ]);
+
+    $serviceAccount = Mockery::mock(GoogleServiceAccount::class);
+    $serviceAccount->shouldReceive('impersonate')->once()->with('owner@example.com');
+    $serviceAccount->shouldReceive('downloadFile')
+        ->once()
+        ->with('drive-file-id')
+        ->andReturn('ju-content');
+
+    app()->instance(GoogleServiceAccount::class, $serviceAccount);
+
+    $response = $this->actingAs($member, 'sanctum')->get('/api/meetings/' . $meeting->id . '/download-ju');
+
+    $response->assertOk();
+    expect($response->headers->get('Content-Disposition'))
+        ->toContain('meeting_' . $meeting->id . '.ju');
+    expect($response->getContent())->toBe('ju-content');
+
+    app()->forgetInstance(GoogleServiceAccount::class);
 });
 
 
