@@ -777,7 +777,6 @@ function switchContextType(type) {
     document.querySelectorAll('.context-view').forEach(view => {
         view.classList.remove('active');
     });
-
     if (type === 'containers') {
         document.getElementById('containersView').classList.add('active');
         document.getElementById('contextSearchInput').placeholder = 'Buscar contenedores...';
@@ -1653,6 +1652,7 @@ async function openContactChatSelector() {
 function closeContactChatSelector() {
     const modal = document.getElementById('contactChatSelectorModal');
     modal.classList.remove('active');
+}
 }
 
 /**

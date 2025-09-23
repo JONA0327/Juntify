@@ -105,10 +105,10 @@ class AiAssistantController extends Controller
             try {
                 // Descargar + parsear y cachear permanentemente el .ju
                 $content = $this->tryDownloadJuContent($meeting);
-                // Si no hay fileId o falló, intentar localizar el .ju por nombre/ID en Drive
-                if ((!$content || $content === '') && empty($meeting->transcript_drive_id)) {
+                // Si falló la descarga, intentar localizar el .ju por nombre/ID en Drive incluso si transcript_drive_id ya estaba seteado
+                if (!is_string($content) || $content === '') {
                     $found = $this->locateJuForMeeting($meeting, $container);
-                    if ($found) {
+                    if ($found && $found !== $meeting->transcript_drive_id) {
                         $meeting->transcript_drive_id = $found;
                         $meeting->save();
                         $content = $this->tryDownloadJuContent($meeting);
@@ -190,9 +190,9 @@ class AiAssistantController extends Controller
             try {
                 // Garantizar .ju disponible y cacheado
                 $content = $this->tryDownloadJuContent($meeting);
-                if ((!$content || $content === '') && empty($meeting->transcript_drive_id)) {
+                if (!is_string($content) || $content === '') {
                     $found = $this->locateJuForMeeting($meeting, $container);
-                    if ($found) {
+                    if ($found && $found !== $meeting->transcript_drive_id) {
                         $meeting->transcript_drive_id = $found;
                         $meeting->save();
                         $content = $this->tryDownloadJuContent($meeting);
@@ -1657,33 +1657,45 @@ class AiAssistantController extends Controller
             $contextFragments = $meta->search($session->username, $query, $metaOptions);
         }
 
-    $additional = [];
+        // Si hay doc_ids explícitos, garantizamos incluir fragmentos de documentos de forma directa
+        $additional = [];
+        if (!empty($explicitDocIds)) {
+            try {
+                $docSession = $this->createVirtualSession($session, 'documents', null, $explicitDocIds);
+                $docFrags = $this->buildDocumentContextFragments($docSession);
+                if (!empty($docFrags)) {
+                    $additional = array_merge($additional, $docFrags);
+                }
+            } catch (\Throwable $e) {
+                Log::info('gatherContext: no se pudieron agregar fragmentos directos de documentos', ['error' => $e->getMessage()]);
+            }
+        }
 
         // Mezcla de fragmentos según el tipo de contexto y doc_ids explícitos
         // Regla: si hay doc_ids explícitos y el contexto es 'mixed', priorizamos documentos
         // pero también añadimos fragmentos de reuniones/contenedores seleccionados para no perder cobertura.
         if (!empty($explicitDocIds) && $session->context_type === 'mixed') {
-            $additional = $this->buildMixedContextFragments($session, $query);
+            $additional = array_merge($additional, $this->buildMixedContextFragments($session, $query));
         } elseif (empty($explicitDocIds)) {
             switch ($session->context_type) {
                 case 'container':
-                    $additional = $this->buildContainerContextFragments($session, $query);
+                    $additional = array_merge($additional, $this->buildContainerContextFragments($session, $query));
                     break;
 
                 case 'meeting':
-                    $additional = $this->buildMeetingContextFragments($session, $query);
+                    $additional = array_merge($additional, $this->buildMeetingContextFragments($session, $query));
                     break;
 
                 case 'documents':
-                    $additional = $this->buildDocumentContextFragments($session);
+                    $additional = array_merge($additional, $this->buildDocumentContextFragments($session));
                     break;
 
                 case 'contact_chat':
-                    $additional = $this->buildChatContextFragments($session);
+                    $additional = array_merge($additional, $this->buildChatContextFragments($session));
                     break;
 
                 case 'mixed':
-                    $additional = $this->buildMixedContextFragments($session, $query);
+                    $additional = array_merge($additional, $this->buildMixedContextFragments($session, $query));
                     break;
             }
         }

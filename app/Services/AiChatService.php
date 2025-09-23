@@ -89,6 +89,21 @@ class AiChatService
         ];
 
         $citations = $this->extractCitations($content, $context);
+        // Fallback: si el modelo no incluyó marcadores [..], adjuntar algunas citas derivadas del contexto (no intrusivo)
+        if (empty($citations) && !empty($context)) {
+            $fallback = [];
+            $max = min(5, count($context));
+            for ($i = 0; $i < $max; $i++) {
+                $frag = $context[$i];
+                $marker = $frag['citation'] ?? ($frag['source_id'] ?? null);
+                if (!$marker) { continue; }
+                $fallback[] = [
+                    'marker' => $marker,
+                    'fragment' => $frag,
+                ];
+            }
+            if (!empty($fallback)) { $citations = $fallback; }
+        }
 
         return [
             'content' => $content,
