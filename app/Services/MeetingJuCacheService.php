@@ -34,6 +34,9 @@ class MeetingJuCacheService
             Log::warning('MeetingJuCacheService:getCachedParsed exception, using file fallback', [
                 'meeting_id' => $meetingId,
                 'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace_top' => collect(explode("\n", $e->getTraceAsString()))->take(5)->implode(" | "),
             ]);
         }
 
@@ -83,6 +86,9 @@ class MeetingJuCacheService
             Log::warning('MeetingJuCacheService:setCachedParsed DB path failed, using file fallback', [
                 'meeting_id' => $meetingId,
                 'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace_top' => collect(explode("\n", $e->getTraceAsString()))->take(5)->implode(" | "),
             ]);
             // fallback to file cache to avoid losing data
             try {
