@@ -1,6 +1,7 @@
 // resources/js/profile.js
 
 import { showError } from './utils/alerts.js';
+import { initMercadoPagoStatusPolling } from './payments/status-modal';
 
 // Configura Axios para incluir el token CSRF en cada petición
 axios.defaults.headers.common['X-CSRF-TOKEN'] = document
@@ -372,6 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   setupProfilePricingToggle();
+  initMercadoPagoStatusPolling();
 
   // Vincular botones de Drive
   const connectBtn    = document.getElementById('connect-drive-btn');

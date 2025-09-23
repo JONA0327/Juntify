@@ -1,3 +1,5 @@
+import { initMercadoPagoStatusPolling } from './payments/status-modal';
+
         // Create animated particles
         function createParticles() {
             const particlesContainer = document.getElementById('particles');
@@ -125,6 +127,7 @@
             createParticles();
             handleScrollAnimations();
             setupPricingToggle();
+            initMercadoPagoStatusPolling();
         });
 
         window.addEventListener('scroll', function() {

@@ -55,4 +55,12 @@ return [
         'chat_model' => env('AI_ASSISTANT_MODEL', 'gpt-4o-mini'),
         'embedding_model' => env('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small'),
     ],
+
+    'mercado_pago' => [
+        'access_token' => env('MERCADO_PAGO_ACCESS_TOKEN'),
+        'public_key' => env('MERCADO_PAGO_PUBLIC_KEY'),
+        'integrator_id' => env('MERCADO_PAGO_INTEGRATOR_ID'),
+        'webhook_secret' => env('MERCADO_PAGO_WEBHOOK_SECRET'),
+        'notification_url' => env('MERCADO_PAGO_NOTIFICATION_URL'),
+    ],
 ];
