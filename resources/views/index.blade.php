@@ -20,7 +20,7 @@
 <body class="smooth-scroll">
     <!-- Animated particles background -->
     <div class="particles" id="particles"></div>
-    
+
     <!-- Botón hamburguesa para navbar (móvil) -->
     <button class="mobile-navbar-btn" onclick="toggleMobileNavbar()" id="mobile-navbar-btn">
         <div class="hamburger-navbar">
@@ -29,7 +29,7 @@
             <span></span>
         </div>
     </button>
-    
+
     @if (Auth::check())
         <!-- Include the navbar partial if the user is authenticated -->
         @include('partials.navbar')
@@ -220,14 +220,14 @@
 
             <div class="pricing-wrapper">
                 <div class="pricing-toggle">
-                    <button class="toggle-btn active" data-target="annual">Anual</button>
-                    <button class="toggle-btn" data-target="monthly">Mensual</button>
+                    <button class="toggle-btn active" data-target="monthly">Mensual</button>
+                    <button class="toggle-btn" data-target="annual">Anual</button>
                     <button class="toggle-btn" data-target="addons">Reuniones adicionales</button>
                 </div>
 
                 <div class="pricing-groups">
-                    @foreach (['annual', 'monthly', 'addons'] as $group)
-                        <div class="pricing-grid {{ $group === 'annual' ? '' : 'hidden' }}" data-plan-group="{{ $group }}">
+                    @foreach (["monthly", "annual", "addons"] as $group)
+                        <div class="pricing-grid {{ $group === 'monthly' ? '' : 'hidden' }}" data-plan-group="{{ $group }}">
                             @foreach ($pricing[$group] as $plan)
                                 @php
                                     $ctaLabel = 'Seleccionar plan';

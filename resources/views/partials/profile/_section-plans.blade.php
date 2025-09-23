@@ -6,14 +6,14 @@
 <div class="content-section" id="section-plans" style="display: none;">
     <div class="pricing-wrapper">
         <div class="pricing-toggle">
-            <button class="toggle-btn active" data-target="annual">Anual</button>
-            <button class="toggle-btn" data-target="monthly">Mensual</button>
+            <button class="toggle-btn active" data-target="monthly">Mensual</button>
+            <button class="toggle-btn" data-target="annual">Anual</button>
             <button class="toggle-btn" data-target="addons">Reuniones adicionales</button>
         </div>
 
         <div class="pricing-groups">
-            @foreach (['annual', 'monthly', 'addons'] as $group)
-                <div class="pricing-grid {{ $group === 'annual' ? '' : 'hidden' }}" data-plan-group="{{ $group }}">
+            @foreach (['monthly', 'annual', 'addons'] as $group)
+                <div class="pricing-grid {{ $group === 'monthly' ? '' : 'hidden' }}" data-plan-group="{{ $group }}">
                     @foreach ($pricing[$group] as $plan)
                         @php
                             $ctaLabel = 'Actualizar plan';
