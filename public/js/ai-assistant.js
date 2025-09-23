@@ -1317,8 +1317,15 @@ async function loadSelectedContext() {
                 }
             };
         } else if (serializedItems.length === 1 && serializedItems[0].type === 'meeting') {
-            // Mantener compatibilidad para un único meeting seleccionado
+            // Precargar .ju antes de fijar el contexto de una reunión
             const meetingId = serializedItems[0].id;
+            try {
+                const csrf = document.querySelector('meta[name="csrf-token"]').content;
+                await fetch(`/api/ai-assistant/meetings/${meetingId}/preload`, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrf }
+                }).then(r => r.json()).catch(() => ({}));
+            } catch (_) { /* ignore */ }
             const meeting = allMeetings.find(m => m.id === meetingId);
             currentContext = {
                 type: 'meeting',
@@ -1336,12 +1343,76 @@ async function loadSelectedContext() {
             await attachDriveDocsAndSetContext(driveIds);
             return;
         } else {
-            // Contexto mixto para múltiples elementos
+            // Contexto mixto: precargar .ju y adjuntar documentos antes de fijar el contexto
+            const meetings = serializedItems.filter(it => it.type === 'meeting').map(it => it.id);
+            const containers = serializedItems.filter(it => it.type === 'container').map(it => it.id);
+            const driveDocs = serializedItems.filter(it => it.type === 'document').map(it => String(it.id));
+
+            // 1) Preload containers (server will iterate their meetings)
+            for (const containerId of containers) {
+                try {
+                    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+                    await fetch(`/api/ai-assistant/containers/${containerId}/preload`, {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrf }
+                    }).then(r => r.json()).catch(() => ({}));
+                } catch (_) { /* ignore */ }
+            }
+
+            // 2) Preload individual meetings
+            for (const meetingId of meetings) {
+                try {
+                    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+                    await fetch(`/api/ai-assistant/meetings/${meetingId}/preload`, {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrf }
+                    }).then(r => r.json()).catch(() => ({}));
+                } catch (_) { /* ignore */ }
+            }
+
+            // 3) Adjuntar documentos de Drive (crear AiDocument y disparar procesamiento)
+            if (driveDocs.length > 0) {
+                try {
+                    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+                    const resp = await fetch('/api/ai-assistant/documents/drive/attach', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+                        body: JSON.stringify({ drive_file_ids: driveDocs, drive_type: 'personal', session_id: currentSessionId || null })
+                    });
+                    const data = await resp.json();
+                    if (data && data.success) {
+                        const docs = Array.isArray(data.documents) ? data.documents : [];
+                        docs.forEach(d => { if (d && d.id && d.name) documentNameById.set(Number(d.id), String(d.name)); });
+                        // Añadir al contexto explícito
+                        const ids = docs.map(d => Number(d.id)).filter(Boolean);
+                        selectedDocuments = Array.from(new Set([...(selectedDocuments || []), ...ids]));
+                        // Esperar hasta 20s a que terminen de procesar antes de fijar el contexto mixto
+                        if (ids.length > 0) {
+                            try {
+                                const waitResp = await fetch('/api/ai-assistant/documents/wait', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+                                    body: JSON.stringify({ ids, timeout_ms: 20000 })
+                                });
+                                const waitData = await waitResp.json().catch(() => ({ success: false }));
+                                const finished = (waitData && waitData.success ? waitData.documents : docs) || [];
+                                finished.forEach(doc => {
+                                    if (doc && doc.id && doc.name) documentNameById.set(Number(doc.id), String(doc.name));
+                                });
+                            } catch (_) { /* ignore */ }
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+            }
+
+            // 4) Ahora sí, fijar el contexto mixto (items se mantienen) y persistir
             currentContext = {
                 type: 'mixed',
                 id: null,
                 data: {
-                    items: serializedItems
+                    items: serializedItems,
+                    // También empujamos doc_ids explícitos si adjuntamos algo
+                    doc_ids: Array.isArray(selectedDocuments) ? selectedDocuments : []
                 }
             };
         }
@@ -1379,12 +1450,27 @@ async function attachDriveDocsAndSetContext(driveIds) {
             showNotification(data && data.message ? data.message : 'No se pudieron adjuntar documentos de Drive', 'error');
             return;
         }
-        // Registrar nombres y doc_ids
+        // Registrar nombres y doc_ids, y esperar procesamiento antes de fijar contexto
         const docs = Array.isArray(data.documents) ? data.documents : [];
         const ids = [];
         docs.forEach(d => { if (d && d.id) { ids.push(Number(d.id)); if (d.name) documentNameById.set(Number(d.id), String(d.name)); } });
+        if (ids.length > 0) {
+            try {
+                // Esperar hasta 20s a que terminen (poll interno en backend)
+                const waitResp = await fetch('/api/ai-assistant/documents/wait', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+                    body: JSON.stringify({ ids, timeout_ms: 20000 })
+                });
+                const waitData = await waitResp.json().catch(() => ({ success: false }));
+                const finished = (waitData && waitData.success ? waitData.documents : docs) || [];
+                finished.forEach(doc => {
+                    if (doc && doc.id && doc.name) documentNameById.set(Number(doc.id), String(doc.name));
+                });
+            } catch (_) { /* ignore */ }
+        }
         selectedDocuments = Array.from(new Set([...(selectedDocuments || []), ...ids]));
-        // Establecer contexto de documentos con esos IDs
+        // Establecer contexto de documentos con esos IDs SOLO después de esperar
         currentContext = { type: 'documents', id: 'selected', data: { doc_ids: selectedDocuments } };
         await updateCurrentSessionContext();
         closeContextSelector();

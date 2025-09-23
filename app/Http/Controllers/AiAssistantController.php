@@ -237,6 +237,66 @@ class AiAssistantController extends Controller
         ]);
     }
 
+    /**
+     * Pre-cargar .ju para una reunión específica (cachear contenido procesado)
+     */
+    public function preloadMeeting(Request $request, int $meetingId): JsonResponse
+    {
+        $user = Auth::user();
+
+        // Cargar reunión; preferimos por username del solicitante, pero el flujo de tryDownloadJuContent
+        // intentará usar distintos credenciales si aplica (org token, service account, owner token, etc.).
+        $meeting = TranscriptionLaravel::where('id', $meetingId)->first();
+        if (! $meeting) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Reunión no encontrada',
+            ], 404);
+        }
+
+        $preloaded = false;
+        $error = null;
+
+        try {
+            // Descargar + parsear y cachear permanentemente el .ju
+            $content = $this->tryDownloadJuContent($meeting);
+            if ((!$content || $content === '') && empty($meeting->transcript_drive_id)) {
+                // Intentar localizar .ju por contenedores relacionados
+                $containers = $meeting->containers()->with(['group', 'group.organization'])->get();
+                foreach ($containers as $container) {
+                    $found = $this->locateJuForMeeting($meeting, $container);
+                    if ($found) {
+                        $meeting->transcript_drive_id = $found;
+                        $meeting->save();
+                        $content = $this->tryDownloadJuContent($meeting);
+                        break;
+                    }
+                }
+            }
+
+            if (is_string($content) && $content !== '') {
+                $parsed = $this->decryptJuFile($content);
+                $normalized = $this->processTranscriptData($parsed['data'] ?? []);
+
+                /** @var MeetingJuCacheService $cache */
+                $cache = app(MeetingJuCacheService::class);
+                $cache->setCachedParsed((int)$meeting->id, $normalized, (string)$meeting->transcript_drive_id);
+                $preloaded = true;
+            } else {
+                // Construir al menos fragmentos (puede ser vacío si no hay fuentes)
+                $this->buildFragmentsFromJu($meeting, '');
+            }
+        } catch (\Throwable $e) {
+            $error = $e->getMessage();
+        }
+
+        return response()->json([
+            'success' => $preloaded,
+            'meeting_id' => (int) $meeting->id,
+            'message' => $preloaded ? 'Reunión precargada correctamente.' : ($error ? ('No se pudo precargar: ' . $error) : 'No se pudo precargar el .ju.'),
+        ], $preloaded ? 200 : 500);
+    }
+
     private function upsertTasksForMeeting(string $username, TranscriptionLaravel $meeting, $rawTasks): array
     {
         $created = 0; $updated = 0;
