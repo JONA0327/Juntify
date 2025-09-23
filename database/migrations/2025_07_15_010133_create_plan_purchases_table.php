@@ -6,19 +6,30 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    public function up()
+    public function up(): void
     {
         Schema::create('plan_purchases', function (Blueprint $table) {
-            $table->increments('id');
-            $table->string('username', 255);
-            $table->string('plan_name', 255);
-            $table->string('billing_cycle', 50);
-            $table->decimal('price', 10, 2);
-            $table->timestamp('purchased_at')->useCurrent();
-            $table->dateTime('expires_at')->nullable();
+            $table->bigIncrements('id');
+            $table->uuid('user_id');
+            $table->unsignedBigInteger('user_plan_id');
+            $table->string('provider', 50)->default('mercado_pago');
+            $table->string('payment_id', 100)->nullable();
+            $table->string('external_reference', 100)->nullable();
+            $table->string('status', 50);
+            $table->decimal('amount', 10, 2)->nullable();
+            $table->string('currency', 10)->nullable();
+            $table->timestamp('paid_at')->nullable();
+            $table->json('metadata')->nullable();
+            $table->timestamps();
+
+            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
+            $table->foreign('user_plan_id')->references('id')->on('user_plans')->cascadeOnDelete();
+            $table->index(['user_id', 'status']);
+            $table->unique(['provider', 'payment_id']);
         });
     }
-    public function down()
+
+    public function down(): void
     {
         Schema::dropIfExists('plan_purchases');
     }
