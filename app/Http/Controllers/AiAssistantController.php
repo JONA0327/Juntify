@@ -1659,29 +1659,33 @@ class AiAssistantController extends Controller
 
     $additional = [];
 
-        // Si hay documentos explícitos en el contexto, evitamos mezclar con otros fragmentos
-        if (empty($explicitDocIds)) {
-        switch ($session->context_type) {
-            case 'container':
-                $additional = $this->buildContainerContextFragments($session, $query);
-                break;
+        // Mezcla de fragmentos según el tipo de contexto y doc_ids explícitos
+        // Regla: si hay doc_ids explícitos y el contexto es 'mixed', priorizamos documentos
+        // pero también añadimos fragmentos de reuniones/contenedores seleccionados para no perder cobertura.
+        if (!empty($explicitDocIds) && $session->context_type === 'mixed') {
+            $additional = $this->buildMixedContextFragments($session, $query);
+        } elseif (empty($explicitDocIds)) {
+            switch ($session->context_type) {
+                case 'container':
+                    $additional = $this->buildContainerContextFragments($session, $query);
+                    break;
 
-            case 'meeting':
-                $additional = $this->buildMeetingContextFragments($session, $query);
-                break;
+                case 'meeting':
+                    $additional = $this->buildMeetingContextFragments($session, $query);
+                    break;
 
-            case 'documents':
-                $additional = $this->buildDocumentContextFragments($session);
-                break;
+                case 'documents':
+                    $additional = $this->buildDocumentContextFragments($session);
+                    break;
 
-            case 'contact_chat':
-                $additional = $this->buildChatContextFragments($session);
-                break;
+                case 'contact_chat':
+                    $additional = $this->buildChatContextFragments($session);
+                    break;
 
-            case 'mixed':
-                $additional = $this->buildMixedContextFragments($session, $query);
-                break;
-        }
+                case 'mixed':
+                    $additional = $this->buildMixedContextFragments($session, $query);
+                    break;
+            }
         }
 
         // Si hay documentos explícitos, no añadimos resúmenes/overviews para evitar ruido.
