@@ -258,9 +258,12 @@ class GoogleServiceAccount
 
             return (string) $response;
         } catch (\Exception $e) {
-            Log::error('Error downloading file from Google Drive', [
+            $msg = $e->getMessage();
+            // Permission/auth errors are expected in some flows; log as warning to reduce noise
+            $level = (str_contains($msg, 'unauthorized') || str_contains($msg, 'PERMISSION_DENIED') || str_contains($msg, 'forbidden')) ? 'warning' : 'error';
+            Log::{$level}('Error downloading file from Google Drive', [
                 'file_id' => $fileId,
-                'error' => $e->getMessage()
+                'error' => $msg
             ]);
             throw new RuntimeException('Error al descargar archivo: ' . $e->getMessage());
         }

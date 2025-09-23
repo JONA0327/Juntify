@@ -14,6 +14,13 @@ trait GoogleDriveHelpers
      */
     protected static array $invalidFileCache = [];
 
+    /**
+     * Cache of parent folder IDs that failed to resolve to reduce log noise.
+     *
+     * @var array<string, bool>
+     */
+    protected static array $invalidParentCache = [];
+
     protected function isInvalidFileId(string $fileId): bool
     {
         return isset(self::$invalidFileCache[$fileId]);
@@ -22,6 +29,16 @@ trait GoogleDriveHelpers
     protected function markInvalidFileId(string $fileId): void
     {
         self::$invalidFileCache[$fileId] = true;
+    }
+
+    protected function isInvalidParentId(string $parentId): bool
+    {
+        return isset(self::$invalidParentCache[$parentId]);
+    }
+
+    protected function markInvalidParentId(string $parentId): void
+    {
+        self::$invalidParentCache[$parentId] = true;
     }
 
     protected function setGoogleDriveToken($userOrRequest)
@@ -90,21 +107,37 @@ trait GoogleDriveHelpers
             if ($file->getParents()) {
                 $parentId = $file->getParents()[0];
                 try {
+                    if ($this->isInvalidParentId($parentId)) {
+                        return 'Carpeta no disponible';
+                    }
                     $parent = $this->googleDriveService->getFileInfo($parentId);
                     return $parent->getName() ?: 'Carpeta sin nombre';
                 } catch (\Exception $parentException) {
-                    Log::notice('getFolderName: Error getting parent folder name', [
+                    // Lower severity to debug to avoid noisy logs when parent is missing/forbidden
+                    Log::debug('getFolderName: Error getting parent folder name', [
                         'parent_id' => $parentId,
                         'error' => $parentException->getMessage()
                     ]);
+
+                    // If parent not found or forbidden, mark as invalid to suppress future lookups
+                    $msg = $parentException->getMessage();
+                    if (str_contains($msg, 'File not found') ||
+                        str_contains($msg, '404') ||
+                        str_contains($msg, 'notFound') ||
+                        str_contains($msg, 'forbidden') ||
+                        str_contains($msg, 'PERMISSION_DENIED') ||
+                        str_contains($msg, 'unauthorized')) {
+                        $this->markInvalidParentId($parentId);
+                    }
                     return 'Carpeta no disponible';
                 }
             }
 
             return 'Carpeta raíz';
         } catch (\Exception $e) {
+            // Lower severity to debug; only log first time per fileId
             if (!$this->isInvalidFileId($fileId)) {
-                Log::notice('getFolderName: Error getting folder name', [
+                Log::debug('getFolderName: Error getting folder name', [
                     'file_id' => $fileId,
                     'error' => $e->getMessage()
                 ]);
