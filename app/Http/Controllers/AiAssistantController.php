@@ -9,6 +9,8 @@ use App\Models\AiMeetingDocument;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 use App\Models\TranscriptionLaravel;
+use App\Models\SharedMeeting;
+use App\Models\User;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\Contact;
@@ -2382,10 +2384,13 @@ class AiAssistantController extends Controller
             $withRelations['keyPoints'] = fn ($relation) => $relation->ordered()->limit(5);
         }
 
-        $meeting = TranscriptionLaravel::with($withRelations)
-            ->where('username', $session->username)
-            ->where('id', $session->context_id)
-            ->first();
+        $user = Auth::user();
+
+        if (! $user) {
+            return [];
+        }
+
+        $meeting = $this->getMeetingIfAccessible((int) $session->context_id, $withRelations, $user);
 
         $fragments = [];
 
@@ -2452,9 +2457,7 @@ class AiAssistantController extends Controller
             return $fragments;
         }
 
-        $legacy = TranscriptionLaravel::where('username', $session->username)
-            ->where('id', $session->context_id)
-            ->first();
+        $legacy = $this->getMeetingIfAccessible((int) $session->context_id, [], $user);
         if ($legacy) {
             if (! empty($legacy->transcript_download_url)) {
                 $fragments[] = [
@@ -2482,6 +2485,79 @@ class AiAssistantController extends Controller
         }
 
         return $fragments;
+    }
+
+    private function getMeetingIfAccessible(int $meetingId, array $withRelations, User $user): ?TranscriptionLaravel
+    {
+        $query = TranscriptionLaravel::query();
+
+        if (! empty($withRelations)) {
+            $query->with($withRelations);
+        }
+
+        $meeting = $query->where('id', $meetingId)->first();
+
+        if (! $meeting) {
+            return null;
+        }
+
+        return $this->userCanAccessMeeting($meeting, $user) ? $meeting : null;
+    }
+
+    private function userCanAccessMeeting(TranscriptionLaravel $meeting, User $user): bool
+    {
+        if ($meeting->username === $user->username) {
+            return true;
+        }
+
+        try {
+            if (Schema::hasTable('shared_meetings')) {
+                $hasShare = SharedMeeting::query()
+                    ->where('meeting_id', $meeting->id)
+                    ->where('shared_with', $user->id)
+                    ->where('status', 'accepted')
+                    ->exists();
+
+                if ($hasShare) {
+                    return true;
+                }
+            }
+        } catch (\Throwable $e) {
+            // ignore share table issues
+        }
+
+        try {
+            if (
+                Schema::hasTable('meeting_content_relations') &&
+                Schema::hasTable('meeting_content_containers')
+            ) {
+                $hasContainerAccess = MeetingContentRelation::query()
+                    ->where('meeting_id', $meeting->id)
+                    ->whereHas('container', function ($containerQuery) use ($user) {
+                        $containerQuery->where('is_active', true)
+                            ->where(function ($accessQuery) use ($user) {
+                                $accessQuery->where('username', $user->username)
+                                    ->orWhereIn('group_id', function ($sub) use ($user) {
+                                        $sub->select('id_grupo')
+                                            ->from('group_user')
+                                            ->where('user_id', $user->id);
+                                    })
+                                    ->orWhereHas('group.organization', function ($orgQuery) use ($user) {
+                                        $orgQuery->where('admin_id', $user->id);
+                                    });
+                            });
+                    })
+                    ->exists();
+
+                if ($hasContainerAccess) {
+                    return true;
+                }
+            }
+        } catch (\Throwable $e) {
+            // ignore container table issues
+        }
+
+        return false;
     }
 
     /**
