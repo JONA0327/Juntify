@@ -96,11 +96,11 @@ import { initMercadoPagoStatusPolling } from './payments/status-modal';
 
                 const showGroup = (target) => {
                     planGroups.forEach(group => {
-                        if (group.dataset.planGroup === target) {
-                            group.classList.remove('hidden');
-                        } else {
-                            group.classList.add('hidden');
-                        }
+                        const isTarget = group.dataset.planGroup === target;
+                        // Toggle class for styling frameworks
+                        group.classList.toggle('hidden', !isTarget);
+                        // Also force display to avoid CSS specificity issues overriding .hidden
+                        group.style.display = isTarget ? '' : 'none';
                     });
                 };
 
@@ -141,7 +141,12 @@ import { initMercadoPagoStatusPolling } from './payments/status-modal';
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
                 e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
+                const href = this.getAttribute('href');
+                // Guard against bare '#', which is not a valid selector and causes errors
+                if (!href || href.trim() === '#' ) {
+                    return; // do nothing
+                }
+                const target = document.querySelector(href);
                 if (target) {
                     target.scrollIntoView({
                         behavior: 'smooth',

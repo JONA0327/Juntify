@@ -67,11 +67,10 @@ function setupProfilePricingToggle() {
 
     const showGroup = (target) => {
       planGroups.forEach(group => {
-        if (group.dataset.planGroup === target) {
-          group.classList.remove('hidden');
-        } else {
-          group.classList.add('hidden');
-        }
+        const isTarget = group.dataset.planGroup === target;
+        group.classList.toggle('hidden', !isTarget);
+        // Force display to avoid style collisions overriding .hidden
+        group.style.display = isTarget ? '' : 'none';
       });
     };
 

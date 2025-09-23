@@ -1280,6 +1280,9 @@ body {
     margin: 0 auto;
 }
 
+/* Ensure pricing groups can be hidden reliably */
+.pricing-wrapper [data-plan-group].hidden { display: none !important; }
+
 .pricing-card {
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(10px);
