@@ -34,6 +34,7 @@ use Google\Service\Exception as GoogleServiceException;
 use RuntimeException;
 use App\Support\OpenAiConfig;
 use App\Traits\MeetingContentParsing;
+use Illuminate\Support\Facades\Storage;
 
 class AiAssistantController extends Controller
 {
@@ -2585,6 +2586,7 @@ class AiAssistantController extends Controller
                         $this->googleDriveService->setAccessToken($tokenData);
                         $content = $this->googleDriveService->downloadFileContent($fileId);
                         if (is_string($content) && $content !== '') {
+                            $this->debugJuDownloadSample((int)$meeting->id, 'org_token', $content);
                             return $content;
                         }
                     } catch (\Throwable $eOrg) {
@@ -2613,7 +2615,7 @@ class AiAssistantController extends Controller
                 }
             }
             $content = $sa->downloadFile($fileId);
-            if (is_string($content) && $content !== '') { return $content; }
+            if (is_string($content) && $content !== '') { $this->debugJuDownloadSample((int)$meeting->id, 'sa_impersonate', $content); return $content; }
         } catch (\Throwable $eSaImp) {
             // continuar
         }
@@ -2623,7 +2625,7 @@ class AiAssistantController extends Controller
             /** @var GoogleServiceAccount $saNo */
             $saNo = app(GoogleServiceAccount::class);
             $content = $saNo->downloadFile($fileId);
-            if (is_string($content) && $content !== '') { return $content; }
+            if (is_string($content) && $content !== '') { $this->debugJuDownloadSample((int)$meeting->id, 'sa_direct', $content); return $content; }
         } catch (\Throwable $eSa) {
             // continuar
         }
@@ -2635,7 +2637,7 @@ class AiAssistantController extends Controller
             if ($ownerToken && method_exists($ownerToken, 'getTokenArray')) {
                 $this->googleDriveService->setAccessToken($ownerToken->getTokenArray());
                 $content = $this->googleDriveService->downloadFileContent($fileId);
-                if (is_string($content) && $content !== '') { return $content; }
+                if (is_string($content) && $content !== '') { $this->debugJuDownloadSample((int)$meeting->id, 'owner_token', $content); return $content; }
             }
         } catch (\Throwable $eOwner) {
             // continuar
@@ -2648,13 +2650,50 @@ class AiAssistantController extends Controller
             if ($userToken && method_exists($userToken, 'getTokenArray')) {
                 $this->googleDriveService->setAccessToken($userToken->getTokenArray());
                 $content = $this->googleDriveService->downloadFileContent($fileId);
-                if (is_string($content) && $content !== '') { return $content; }
+                if (is_string($content) && $content !== '') { $this->debugJuDownloadSample((int)$meeting->id, 'user_token', $content); return $content; }
             }
         } catch (\Throwable $eUser) {
             // continuar
         }
 
         return null;
+    }
+
+    /**
+     * Debug helper to preview downloaded .ju content safely.
+     * Logs length, a short prefix, and JSON keys if parseable. In non-production, optionally
+     * writes a tiny sample file when JU_DEBUG_SAMPLES=true.
+     */
+    private function debugJuDownloadSample(int $meetingId, string $accessPath, string $content): void
+    {
+        try {
+            $prefix = substr($content, 0, 200);
+            $isJson = false; $jsonKeys = [];
+            $decoded = json_decode($content, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $isJson = true;
+                $jsonKeys = array_slice(array_keys($decoded), 0, 10);
+            }
+
+            Log::info('ju-download: preview', [
+                'meeting_id' => $meetingId,
+                'path' => $accessPath,
+                'length' => strlen($content),
+                'is_json' => $isJson,
+                'json_keys' => $jsonKeys,
+                'first_200' => $prefix,
+            ]);
+
+            $shouldPersist = (bool) (env('JU_DEBUG_SAMPLES', false) && ! app()->environment('production'));
+            if ($shouldPersist) {
+                $dir = storage_path('logs/ju_samples');
+                if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+                $file = $dir . DIRECTORY_SEPARATOR . 'meeting_' . $meetingId . '_' . date('Ymd_His') . '_' . $accessPath . '.txt';
+                @file_put_contents($file, $prefix);
+            }
+        } catch (\Throwable $e) {
+            // Swallow any debug-time errors
+        }
     }
 
     private function buildDocumentContextFragments(AiChatSession $session): array
