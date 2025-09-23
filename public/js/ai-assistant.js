@@ -1307,21 +1307,45 @@ async function loadSelectedContext() {
             const containerId = serializedItems[0].id;
             const container = allContainers.find(c => c.id === containerId);
 
-            // Preload all .ju files for meetings in this container before creating the session
+            // Importar tareas y forzar descarga/parsing de .ju de TODAS las reuniones del contenedor
+            // Bloqueamos hasta que termine (servidor recorre todas las reuniones)
             try {
                 const csrf = document.querySelector('meta[name="csrf-token"]').content;
-                const preloadResp = await fetch(`/api/ai-assistant/containers/${containerId}/preload`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': csrf
-                    },
-                    body: JSON.stringify({})
-                });
-                // Ignore result intentionally; just warming cache and verifying availability
-                await preloadResp.json().catch(() => ({}));
+                const importOnce = async () => {
+                    const resp = await fetch(`/api/ai-assistant/containers/${containerId}/import-tasks`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+                        body: JSON.stringify({})
+                    });
+                    return resp.json().catch(() => ({ success: false, meetings: [], errors: [{ error: 'JSON parse error' }] }));
+                };
+
+                let result = await importOnce();
+                let expected = container?.meetings_count ?? null;
+                let processed = Array.isArray(result.meetings) ? result.meetings.length : 0;
+                const hadErrors = Array.isArray(result.errors) && result.errors.length > 0;
+                // Si procesó menos de lo esperado o hubo errores, reintentar una vez
+                if (expected && processed < expected || hadErrors) {
+                    console.warn('Reintentando importación de tareas/.ju para contenedor', { containerId, processed, expected });
+                    const retry = await importOnce();
+                    // combinar errores para informar
+                    if (Array.isArray(retry.errors) && retry.errors.length) {
+                        result.errors = [...(result.errors || []), ...retry.errors];
+                    }
+                    result.meetings = retry.meetings || result.meetings;
+                }
+                // Mostrar aviso si faltan reuniones o hubo errores
+                expected = container?.meetings_count ?? expected;
+                processed = Array.isArray(result.meetings) ? result.meetings.length : processed;
+                if (expected && processed < expected) {
+                    showNotification(`Precarga incompleta: ${processed}/${expected} reuniones procesadas. Intentaré continuar igualmente.`, 'warning');
+                }
+                if (Array.isArray(result.errors) && result.errors.length) {
+                    showNotification(`Algunas reuniones no pudieron precargarse (${result.errors.length}).`, 'warning');
+                    console.warn('Errores import-tasks', result.errors);
+                }
             } catch (e) {
-                console.warn('Preload contenedor falló, continúo de todos modos', e);
+                console.warn('Importación de tareas/.ju falló; continuaré de todos modos', e);
             }
             currentContext = {
                 type: 'container',
@@ -1362,14 +1386,37 @@ async function loadSelectedContext() {
             const containers = serializedItems.filter(it => it.type === 'container').map(it => it.id);
             const driveDocs = serializedItems.filter(it => it.type === 'document').map(it => String(it.id));
 
-            // 1) Preload containers (server will iterate their meetings)
+            // 1) Preload containers (server will iterate their meetings) usando import-tasks y esperando
             for (const containerId of containers) {
                 try {
                     const csrf = document.querySelector('meta[name="csrf-token"]').content;
-                    await fetch(`/api/ai-assistant/containers/${containerId}/preload`, {
-                        method: 'POST',
-                        headers: { 'X-CSRF-TOKEN': csrf }
-                    }).then(r => r.json()).catch(() => ({}));
+                    const containerInfo = allContainers.find(c => c.id === containerId);
+                    const expected = containerInfo?.meetings_count ?? null;
+                    const importOnce = async () => {
+                        const r = await fetch(`/api/ai-assistant/containers/${containerId}/import-tasks`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+                            body: JSON.stringify({})
+                        });
+                        return r.json().catch(() => ({ success: false, meetings: [], errors: [{ error: 'JSON parse error' }] }));
+                    };
+                    let result = await importOnce();
+                    let processed = Array.isArray(result.meetings) ? result.meetings.length : 0;
+                    const hadErrors = Array.isArray(result.errors) && result.errors.length > 0;
+                    if ((expected && processed < expected) || hadErrors) {
+                        const retry = await importOnce();
+                        if (Array.isArray(retry.errors) && retry.errors.length) {
+                            result.errors = [...(result.errors || []), ...retry.errors];
+                        }
+                        result.meetings = retry.meetings || result.meetings;
+                        processed = Array.isArray(result.meetings) ? result.meetings.length : processed;
+                    }
+                    if (expected && processed < expected) {
+                        showNotification(`Precarga de contenedor ${containerInfo?.name || containerId}: ${processed}/${expected} reuniones.`, 'warning');
+                    }
+                    if (Array.isArray(result.errors) && result.errors.length) {
+                        console.warn('Errores import-tasks (mixto)', result.errors);
+                    }
                 } catch (_) { /* ignore */ }
             }
 
@@ -1578,41 +1625,7 @@ function addContainerToContext(containerId) {
     showNotification('Contenedor agregado al contexto', 'success');
 }
 
-/**
- * Seleccionar todas las reuniones
- */
-async function selectAllMeetings() {
-    try {
-        const response = await fetch('/api/ai-assistant/meetings');
-        const data = await response.json();
-
-        if (data.success) {
-            const meetings = Array.isArray(data.meetings) ? data.meetings : [];
-            const items = meetings
-                .filter(meeting => meeting && meeting.id !== undefined && meeting.id !== null)
-                .map(meeting => ({
-                    type: 'meeting',
-                    id: meeting.id
-                }));
-
-            currentContext = {
-                type: 'mixed',
-                id: null,
-                data: {
-                    items: items,
-                    label: 'Todas las reuniones'
-                }
-            };
-
-            await updateCurrentSessionContext();
-            closeContextSelector();
-            updateContextIndicator();
-        }
-    } catch (error) {
-        console.error('Error selecting all meetings:', error);
-        showNotification('Error al cargar reuniones', 'error');
-    }
-}
+// Eliminado: opción "Todas las reuniones" ya no está disponible en el selector
 
 /**
  * Abrir selector de conversaciones con contactos
@@ -2337,18 +2350,7 @@ function loadDetailsForContainer(containerId) {
 /**
  * Cargar detalles para todas las reuniones
  */
-function loadDetailsForAllMeetings() {
-    document.getElementById('detailsTabs').style.display = 'flex';
-    document.getElementById('tabContent').style.display = 'block';
-    document.querySelector('.empty-details').style.display = 'none';
-
-    document.getElementById('summaryContent').innerHTML = `
-        <div class="detail-section">
-            <h4>Resumen General</h4>
-            <p>Análisis completo de todas tus reuniones...</p>
-        </div>
-    `;
-}
+// Eliminado: detalles para "todas las reuniones" (ya no se usa)
 
 /**
  * Formatear contenido del mensaje
