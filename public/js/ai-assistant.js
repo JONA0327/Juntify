@@ -1653,7 +1653,6 @@ function closeContactChatSelector() {
     const modal = document.getElementById('contactChatSelectorModal');
     modal.classList.remove('active');
 }
-}
 
 /**
  * Renderizar conversaciones con contactos
