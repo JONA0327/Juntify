@@ -1388,13 +1388,16 @@ class AiAssistantController extends Controller
                         'original_filename' => $name,
                         'document_type' => $this->getDocumentType($mime, $name),
                         'mime_type' => $mime,
-                        'file_size' => $size ? (int) $size : null,
+                        // file_size es NOT NULL en la tabla; usar 0 si Drive no reporta tamaño (p.ej. algunos tipos)
+                        'file_size' => $size !== null ? (int) $size : 0,
                         'drive_file_id' => $fileId,
                         'drive_folder_id' => null,
                         'drive_type' => $driveType,
                         'processing_status' => 'pending',
                         'document_metadata' => [
                             'attached_from_drive' => true,
+                            'created_in_session' => $sessionId ? (string) $sessionId : null,
+                            'created_via' => 'assistant_attach',
                         ],
                     ]);
 
