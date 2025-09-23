@@ -2176,10 +2176,11 @@ class AiAssistantController extends Controller
                 $qLower = Str::lower($query);
                 $tasksWanted = Str::contains($qLower, ['tarea', 'tareas', 'task', 'tasks', 'pendiente', 'pendientes', 'asignado']);
                 $tasksPerMeetingLimit = $tasksWanted ? 10 : 3; // si no piden tareas, incluir como máximo 3 por reunión
-                $count = 0;
                 foreach ($container->meetings as $meeting) {
+                    $meetingFragments = [];
+
                     // Breve ficha de la reunión como contexto estructural
-                    $fragments[] = [
+                    $meetingFragments[] = [
                         'text' => sprintf(
                             'Reunión "%s" (%s). Recursos: %s transcripción, %s audio.',
                             $meeting->meeting_name,
@@ -2195,18 +2196,15 @@ class AiAssistantController extends Controller
                         'metadata' => $this->buildLegacyMeetingMetadata($meeting),
                     ];
 
-                    if ($count >= $totalLimit) continue;
                     $juFragments = $this->buildFragmentsFromJu($meeting, $query);
                     if (!empty($juFragments)) {
                         // Recortar por reunión si fuera necesario
                         $slice = array_slice($juFragments, 0, $perMeetingLimit);
-                        $fragments = array_merge($fragments, $slice);
-                        $count += count($slice);
-                        if ($count >= $totalLimit) continue;
+                        $meetingFragments = array_merge($meetingFragments, $slice);
                     } else {
                         // Fallback mínimo cuando no hay .ju utilizable
                         if (! empty($meeting->transcript_download_url)) {
-                            $fragments[] = [
+                            $meetingFragments[] = [
                                 'text' => sprintf('Transcripción disponible en: %s', $meeting->transcript_download_url),
                                 'source_id' => 'meeting:' . $meeting->id . ':transcript',
                                 'content_type' => 'meeting_transcript_link',
@@ -2215,11 +2213,9 @@ class AiAssistantController extends Controller
                                 'citation' => 'meeting:' . $meeting->id . ' transcript',
                                 'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['resource' => 'transcript']),
                             ];
-                            $count++;
-                            if ($count >= $totalLimit) continue;
                         }
-                        if (! empty($meeting->audio_download_url) && $count < $totalLimit) {
-                            $fragments[] = [
+                        if (! empty($meeting->audio_download_url)) {
+                            $meetingFragments[] = [
                                 'text' => sprintf('Audio disponible en: %s', $meeting->audio_download_url),
                                 'source_id' => 'meeting:' . $meeting->id . ':audio',
                                 'content_type' => 'meeting_audio_link',
@@ -2228,13 +2224,12 @@ class AiAssistantController extends Controller
                                 'citation' => 'meeting:' . $meeting->id . ' audio',
                                 'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['resource' => 'audio']),
                             ];
-                            $count++;
                         }
                     }
 
                     // Incluir tareas de la reunión desde tasks_laravel (limitadas si el usuario no las pide explícitamente)
                     try {
-                        if ($tasksPerMeetingLimit > 0 && $count < $totalLimit) {
+                        if ($tasksPerMeetingLimit > 0) {
                             $tasks = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
                             ->where('username', $session->username)
                                 ->orderByDesc('updated_at')
@@ -2249,7 +2244,7 @@ class AiAssistantController extends Controller
                                 if ($t->hora_limite) { $metaBits[] = 'hora ' . $t->hora_limite; }
                                 if ($t->asignado) { $metaBits[] = 'asignado a ' . $t->asignado; }
                                 $metaTxt = empty($metaBits) ? '' : (' (' . implode('; ', $metaBits) . ')');
-                                $fragments[] = [
+                                $meetingFragments[] = [
                                     'text' => '- ' . trim((string)$t->tarea) . $metaTxt . $desc,
                                     'source_id' => 'meeting:' . $meeting->id . ':task:' . $t->id,
                                     'content_type' => 'meeting_task',
@@ -2258,11 +2253,14 @@ class AiAssistantController extends Controller
                                     'citation' => 'task:' . $t->id,
                                     'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['task_id' => $t->id]),
                                 ];
-                                $count++;
-                                if ($count >= $totalLimit) { break; }
                             }
                         }
                     } catch (\Throwable $e) { /* ignore tasks inclusion */ }
+
+                    $fragments = array_merge($fragments, $meetingFragments);
+                    if (count($fragments) > $totalLimit) {
+                        $fragments = array_slice($fragments, 0, $totalLimit);
+                    }
                 }
             }
         }
