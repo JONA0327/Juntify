@@ -688,6 +688,12 @@
             margin-bottom: 2rem;
         }
 
+        .pricing-description {
+            color: #cbd5e1;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
         .pricing-features {
             list-style: none;
             margin-bottom: 2rem;

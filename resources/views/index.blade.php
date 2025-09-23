@@ -204,6 +204,9 @@
     </section>
 
     <!-- Pricing Section -->
+    @php
+        $pricing = json_decode(file_get_contents(resource_path('data/pricing.json')), true);
+    @endphp
     <section class="pricing-section fade-in">
         <div class="content-section">
             <h2 class="section-title">Planes de Reuniones</h2>
@@ -215,87 +218,48 @@
                 Elige tu plan de facturación preferida
             </p>
 
-            <div class="pricing-toggle">
-                <button class="toggle-btn active">Anual</button>
-                <button class="toggle-btn">Mensual</button>
-                <button class="toggle-btn">Reuniones Individuales</button>
-            </div>
-
-            <div class="pricing-grid">
-                <div class="pricing-card">
-                    <h3 class="pricing-title">Freemium</h3>
-                    <div class="pricing-price">$0</div>
-                    <div class="pricing-period">mes</div>
-                    <p style="color: #cbd5e1; margin-bottom: 2rem; font-size: 0.9rem;">
-                        Ideal para uso personal y equipos pequeños que buscan optimizar sus reuniones básicas.
-                    </p>
-                    <ul class="pricing-features">
-                        <li>Hasta 3 reuniones por mes</li>
-                        <li>Transcripción básica</li>
-                        <li>Resúmenes automáticos (30 minutos)</li>
-                        <li>Exportar como texto</li>
-                        <li>Soporte por email</li>
-                    </ul>
-                    <a href="#" class="pricing-btn secondary">Empezar gratis</a>
+            <div class="pricing-wrapper">
+                <div class="pricing-toggle">
+                    <button class="toggle-btn active" data-target="annual">Anual</button>
+                    <button class="toggle-btn" data-target="monthly">Mensual</button>
+                    <button class="toggle-btn" data-target="addons">Reuniones adicionales</button>
                 </div>
 
-                <div class="pricing-card popular">
-                    <h3 class="pricing-title">Básico</h3>
-                    <div class="pricing-price">$499</div>
-                    <div class="pricing-period">mes</div>
-                    <p style="color: #cbd5e1; margin-bottom: 2rem; font-size: 0.9rem;">
-                        Ideal para equipos medianos que buscan optimizar sus reuniones y aumentar la productividad.
-                    </p>
-                    <ul class="pricing-features">
-                        <li>Reuniones ilimitadas</li>
-                        <li>Transcripción avanzada</li>
-                        <li>Resúmenes inteligentes</li>
-                        <li>Identificación de hablantes</li>
-                        <li>Exportar múltiples formatos</li>
-                        <li>Integraciones básicas</li>
-                        <li>Soporte prioritario</li>
-                    </ul>
-                    <a href="#" class="pricing-btn">Seleccionar Plan</a>
-                </div>
-
-                <div class="pricing-card">
-                    <h3 class="pricing-title">Negocios</h3>
-                    <div class="pricing-price">$999</div>
-                    <div class="pricing-period">mes</div>
-                    <p style="color: #cbd5e1; margin-bottom: 2rem; font-size: 0.9rem;">
-                        Ideal para empresas que buscan una solución completa para optimizar todas sus reuniones.
-                    </p>
-                    <ul class="pricing-features">
-                        <li>Todo lo del plan Básico</li>
-                        <li>IA avanzada para análisis</li>
-                        <li>Análisis de sentimientos</li>
-                        <li>Dashboards ejecutivos</li>
-                        <li>Integraciones avanzadas</li>
-                        <li>API personalizada</li>
-                        <li>Soporte 24/7</li>
-                        <li>Capacitación incluida</li>
-                    </ul>
-                    <a href="#" class="pricing-btn">Seleccionar Plan</a>
-                </div>
-
-                <div class="pricing-card">
-                    <h3 class="pricing-title">Empresas</h3>
-                    <div class="pricing-price">$2999</div>
-                    <div class="pricing-period">mes</div>
-                    <p style="color: #cbd5e1; margin-bottom: 2rem; font-size: 0.9rem;">
-                        Ideal para grandes empresas y corporaciones que necesitan máxima personalización y control.
-                    </p>
-                    <ul class="pricing-features">
-                        <li>Todo lo del plan Negocios</li>
-                        <li>Implementación personalizada</li>
-                        <li>Seguridad empresarial</li>
-                        <li>Cumplimiento normativo</li>
-                        <li>Análisis predictivo avanzado</li>
-                        <li>Integraciones ilimitadas</li>
-                        <li>Gerente de cuenta dedicado</li>
-                        <li>SLA garantizado</li>
-                    </ul>
-                    <a href="#" class="pricing-btn">Contactar Ventas</a>
+                <div class="pricing-groups">
+                    @foreach (['annual', 'monthly', 'addons'] as $group)
+                        <div class="pricing-grid {{ $group === 'annual' ? '' : 'hidden' }}" data-plan-group="{{ $group }}">
+                            @foreach ($pricing[$group] as $plan)
+                                @php
+                                    $ctaLabel = 'Seleccionar plan';
+                                    $ctaClass = '';
+                                    if ($group === 'addons') {
+                                        $ctaLabel = 'Comprar paquete';
+                                    }
+                                    if ($plan['id'] === 'freemium') {
+                                        $ctaLabel = 'Empezar gratis';
+                                        $ctaClass = 'secondary';
+                                    }
+                                    if ($plan['id'] === 'enterprise' && $group !== 'addons') {
+                                        $ctaLabel = 'Contactar ventas';
+                                    }
+                                @endphp
+                                <div class="pricing-card {{ !empty($plan['popular']) ? 'popular' : '' }}">
+                                    <h3 class="pricing-title">{{ $plan['name'] }}</h3>
+                                    <div class="pricing-price">{{ $plan['price'] }}</div>
+                                    <div class="pricing-period">{{ $plan['period'] }}</div>
+                                    @if (!empty($plan['description']))
+                                        <p class="pricing-description">{{ $plan['description'] }}</p>
+                                    @endif
+                                    <ul class="pricing-features">
+                                        @foreach ($plan['features'] as $feature)
+                                            <li>{{ $feature }}</li>
+                                        @endforeach
+                                    </ul>
+                                    <a href="#" class="pricing-btn {{ $ctaClass }}">{{ $ctaLabel }}</a>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endforeach
                 </div>
             </div>
 

@@ -83,13 +83,40 @@
 
         // Pricing toggle functionality
         function setupPricingToggle() {
-            const toggleBtns = document.querySelectorAll('.toggle-btn');
+            const pricingWrappers = document.querySelectorAll('.pricing-wrapper');
 
-            toggleBtns.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    toggleBtns.forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
+            pricingWrappers.forEach(wrapper => {
+                const toggleBtns = wrapper.querySelectorAll('.toggle-btn');
+                const planGroups = wrapper.querySelectorAll('[data-plan-group]');
+                if (!toggleBtns.length || !planGroups.length) {
+                    return;
+                }
+
+                const showGroup = (target) => {
+                    planGroups.forEach(group => {
+                        if (group.dataset.planGroup === target) {
+                            group.classList.remove('hidden');
+                        } else {
+                            group.classList.add('hidden');
+                        }
+                    });
+                };
+
+                toggleBtns.forEach(btn => {
+                    const target = btn.dataset.target;
+                    if (!target) return;
+
+                    btn.addEventListener('click', function() {
+                        toggleBtns.forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        showGroup(target);
+                    });
                 });
+
+                const activeBtn = wrapper.querySelector('.toggle-btn.active') || toggleBtns[0];
+                if (activeBtn && activeBtn.dataset.target) {
+                    showGroup(activeBtn.dataset.target);
+                }
             });
         }
 
