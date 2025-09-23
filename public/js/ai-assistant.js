@@ -455,10 +455,14 @@ function updateSessionInfo(session) {
         sessionTitle.textContent = session.title;
     }
 
-    // Actualizar cualquier otra información de la sesión
-    if (session.context_info) {
-        updateContextIndicator(session.context_info);
-    }
+    // Sincronizar el contexto global con el de la sesión actual
+    currentContext = {
+        type: session.context_type || 'general',
+        id: session.context_id || null,
+        data: (session.context_data && typeof session.context_data === 'object') ? session.context_data : {}
+    };
+    // Refrescar indicador visual del contexto
+    updateContextIndicator();
 
     // Si el backend devuelve context_data, mantener doc_ids sincronizados
     if (session.context_data && typeof session.context_data === 'object') {
@@ -2859,16 +2863,29 @@ function updateContextIndicator() {
 
     let contextText = '';
 
-    if (currentContext.type === 'container') {
-        contextText = `Contenedor: ${currentContext.data.container_name || 'Seleccionado'}`;
-    } else if (currentContext.type === 'meeting') {
-        contextText = `Reunión: ${currentContext.data.meeting_name || 'Seleccionada'}`;
-    } else if (currentContext.type === 'mixed') {
-        const items = currentContext.data && Array.isArray(currentContext.data.items) ? currentContext.data.items.length : 0;
-        const label = currentContext.data && currentContext.data.label ? currentContext.data.label : 'Contexto mixto';
-        contextText = items > 0 ? `${label} (${items} elementos)` : label;
-    } else {
-        contextText = '';
+    switch (currentContext.type) {
+        case 'container':
+            contextText = `Contenedor: ${currentContext.data?.container_name || 'Seleccionado'}`;
+            break;
+        case 'meeting':
+            contextText = `Reunión: ${currentContext.data?.meeting_name || 'Seleccionada'}`;
+            break;
+        case 'documents':
+            contextText = 'Documentos seleccionados';
+            break;
+        case 'contact_chat':
+            contextText = 'Conversación seleccionada';
+            break;
+        case 'mixed': {
+            const items = currentContext.data && Array.isArray(currentContext.data.items) ? currentContext.data.items.length : 0;
+            const label = currentContext.data && currentContext.data.label ? currentContext.data.label : 'Contexto mixto';
+            contextText = items > 0 ? `${label} (${items} elementos)` : label;
+            break;
+        }
+        case 'general':
+        default:
+            contextText = '';
+            break;
     }
 
     indicator.textContent = contextText;
