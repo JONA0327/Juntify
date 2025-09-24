@@ -713,8 +713,8 @@ function discardRecording() {
     recordedChunks = [];
 
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        try { mediaRecorder.stop(); } catch(_) {}
+        try { mediaRecorder.stream.getTracks().forEach(track => track.stop()); } catch(_) {}
     }
     recordingStream = null;
     try {
@@ -769,6 +769,29 @@ function stopRecording() {
 
 // Unir todos los segmentos y subir en segundo plano
 async function finalizeRecording() {
+    // Si fue descartada, no procesar ni descargar
+    try {
+        const discardedFlag = sessionStorage.getItem('audioDiscarded') === 'true';
+        if (discardRequested || discardedFlag) {
+            console.log('🛑 [finalizeRecording] Cancelado por descarte del usuario');
+            discardRequested = false;
+            try { sessionStorage.removeItem('audioDiscarded'); } catch (_) {}
+            // Limpieza mínima de UI/estado
+            updateRecordingUI(false);
+            resetAudioVisualizer();
+            resetRecordingControls();
+            return;
+        }
+    } catch (_) {
+        if (discardRequested) {
+            console.log('🛑 [finalizeRecording] Cancelado por descarte (sin sessionStorage)');
+            discardRequested = false;
+            updateRecordingUI(false);
+            resetAudioVisualizer();
+            resetRecordingControls();
+            return;
+        }
+    }
     if (recordingStream) {
         recordingStream.getTracks().forEach(track => track.stop());
         recordingStream = null;
@@ -2016,6 +2039,21 @@ async function startMeetingRecording() {
         };
 
         mediaRecorder.onstop = () => {
+            // Si se descartó, no finalizar ni descargar
+            try {
+                const discardedFlag = sessionStorage.getItem('audioDiscarded') === 'true';
+                if (discardRequested || discardedFlag) {
+                    console.log('🗑️ [Meeting] Grabación descartada, se omite finalizeRecording');
+                    discardRequested = false;
+                    return;
+                }
+            } catch (_) {
+                if (discardRequested) {
+                    console.log('🗑️ [Meeting] Grabación descartada (no sessionStorage)');
+                    discardRequested = false;
+                    return;
+                }
+            }
             // Dar tiempo a que llegue el último dataavailable antes de finalizar
             setTimeout(() => finalizeRecording(), 50);
         };

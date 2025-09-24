@@ -185,13 +185,7 @@ class GoogleDriveService
             ]
         );
     }
-    public function deleteFile(string $id): void
-    {
-        $this->drive->files->delete($id, [
-            'supportsAllDrives' => true,
-        ]);
-    }
-        /**
+    /**
      * Sube un archivo a Google Drive y devuelve su ID.
      */
     public function uploadFile(
@@ -416,6 +410,23 @@ class GoogleDriveService
                 $e->getCode(),
                 $e
             );
+        }
+    }
+
+    /**
+     * Elimina un archivo o carpeta en Google Drive (best-effort).
+     */
+    public function deleteFile(string $fileId): void
+    {
+        try {
+            $this->drive->files->delete($fileId, [
+                'supportsAllDrives' => true,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('GoogleDriveService: fallo al borrar archivo/carpeta', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

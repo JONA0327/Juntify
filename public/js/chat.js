@@ -6,6 +6,8 @@ let isChatLoading = false;
 let lastConversationUpdate = null;
 let autoRefreshInterval = null;
 let lastMessageIds = new Set(); // Para trackear qué mensajes ya hemos visto
+let contactsCache = [];
+let pendingFile = null; // Archivo seleccionado para enviar
 
 // Función para inicializar auto-refresh de conversaciones
 function startAutoRefresh() {
@@ -476,23 +478,49 @@ function createMessageElement(message, currentUserId, isNewMessage = false) {
         currentUserId: currentUserId,
         isMyMessage: isMyMessage,
         body: message.body,
-        isNewMessage: isNewMessage
+        isNewMessage: isNewMessage,
+        hasAttachment: !!(message.original_name || message.drive_file_id || message.file_path)
     });
 
     div.className = `flex ${isMyMessage ? 'justify-end' : 'justify-start'} mb-3 ${isNewMessage ? 'message-fade-in' : ''}`;
 
+    const bubbleClasses = isMyMessage
+        ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-br-none'
+        : 'bg-slate-700/50 text-slate-200 rounded-bl-none';
+
+    // Construcción de adjunto
+    let attachmentHtml = '';
+    if (message.original_name || message.file_path || message.preview_url) {
+        const fileName = escapeHtml(message.original_name || message.originalName || 'Archivo');
+        const mime = message.mime_type || '';
+        const driveLink = message.drive_file_id ? `https://drive.google.com/file/d/${message.drive_file_id}/view` : null;
+        const localPath = message.file_path ? `/storage/${message.file_path}` : null;
+        const downloadLink = driveLink || localPath || '#';
+        let preview = '';
+        if (message.preview_url && mime.startsWith('image/')) {
+            preview = `<img src="${message.preview_url}" alt="${fileName}" class="mt-2 rounded shadow max-h-48">`;
+        } else if (message.preview_url && mime === 'application/pdf') {
+            preview = `<iframe src="${message.preview_url}" class="mt-2 w-60 h-40 rounded" loading="lazy"></iframe>`;
+        } else if (message.preview_url && mime.startsWith('audio/')) {
+            preview = `<audio controls class="mt-2 w-52"><source src="${message.preview_url}"></audio>`;
+        } else if (message.preview_url && mime.startsWith('video/')) {
+            preview = `<iframe src="${message.preview_url}" class="mt-2 w-60 h-40 rounded" loading="lazy"></iframe>`;
+        } else if (downloadLink && downloadLink !== '#') {
+            preview = `<div class="mt-2 px-3 py-2 bg-slate-800/40 rounded text-xs">Adjunto listo para descargar</div>`;
+        }
+        attachmentHtml = `
+            <div class="mt-2 text-xs ${isMyMessage ? 'text-slate-800' : 'text-slate-300'}">
+                <a href="${downloadLink}" target="_blank" class="underline break-all">${fileName}</a>
+                ${preview}
+            </div>`;
+    }
+
     div.innerHTML = `
-        <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-            isMyMessage
-                ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-br-none'
-                : 'bg-slate-700/50 text-slate-200 rounded-bl-none'
-        }">
-            <p class="text-sm">${escapeHtml(message.body)}</p>
-            <p class="text-xs mt-1 ${isMyMessage ? 'text-slate-800' : 'text-slate-400'}">
-                ${formatMessageTime(message.created_at)}
-            </p>
-        </div>
-    `;
+        <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${bubbleClasses}">
+            ${message.body ? `<p class="text-sm whitespace-pre-line">${escapeHtml(message.body)}</p>` : ''}
+            ${attachmentHtml}
+            <p class="text-xs mt-1 ${isMyMessage ? 'text-slate-800' : 'text-slate-400'}">${formatMessageTime(message.created_at)}</p>
+        </div>`;
 
     return div;
 }
@@ -507,8 +535,8 @@ async function sendMessage() {
     const messageInput = document.getElementById('active-chat-input');
     const messageText = messageInput.value.trim();
 
-    if (!messageText) {
-        console.warn('⚠️ Mensaje vacío, no se envía');
+    if (!messageText && !pendingFile) {
+        console.warn('⚠️ Nada que enviar');
         return;
     }
 
@@ -516,6 +544,8 @@ async function sendMessage() {
 
     // Limpiar input inmediatamente
     messageInput.value = '';
+    const fileToSend = pendingFile; // snapshot
+    pendingFile = null;
 
     // Crear mensaje optimista (mostrar inmediatamente)
     const currentUserId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
@@ -524,7 +554,9 @@ async function sendMessage() {
         body: messageText,
         sender_id: currentUserId,
         created_at: new Date().toISOString(),
-        is_temp: true // Marcar como temporal
+        is_temp: true,
+        original_name: fileToSend ? fileToSend.name : null,
+        mime_type: fileToSend ? fileToSend.type : null
     };
 
     // Agregar mensaje optimista al array y actualizar UI inmediatamente
@@ -536,18 +568,28 @@ async function sendMessage() {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
         // Enviar mensaje al servidor en background
-        const response = await fetch(`/api/chats/${currentChatId}/messages`, {
-            method: 'POST',
-            headers: {
+        let fetchOptions = { method: 'POST' };
+        if (fileToSend) {
+            const formData = new FormData();
+            formData.append('body', messageText);
+            formData.append('file', fileToSend);
+            fetchOptions.body = formData;
+            fetchOptions.headers = {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
+            };
+        } else {
+            fetchOptions.body = JSON.stringify({ body: messageText });
+            fetchOptions.headers = {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
-            },
-            body: JSON.stringify({
-                body: messageText
-            })
-        });
+            };
+        }
+
+        const response = await fetch(`/api/chats/${currentChatId}/messages`, fetchOptions);
 
         console.log('📤 Send message response status:', response.status);
 
@@ -560,9 +602,11 @@ async function sendMessage() {
         const result = await response.json();
         console.log('📤 Mensaje enviado exitosamente:', result);
 
-        // Remover mensaje optimista y agregar el real
+        // Remover mensaje optimista y agregar el real (que incluye metadata de adjunto)
         chatMessages = chatMessages.filter(msg => msg.id !== optimisticMessage.id);
-        chatMessages.push(result.message);
+        if (result.message) {
+            chatMessages.push(result.message);
+        }
         updateChatMessagesDisplay();
 
         // Actualizar conversaciones sin recargar todo (solo la actual)
@@ -575,8 +619,9 @@ async function sendMessage() {
         chatMessages = chatMessages.filter(msg => msg.id !== optimisticMessage.id);
         updateChatMessagesDisplay();
 
-        // Restaurar texto en el input
+        // Restaurar texto en el input y archivo si existía
         messageInput.value = messageText;
+        pendingFile = fileToSend; // permitir reintento
         alert('Error al enviar el mensaje. Inténtalo de nuevo.');
     }
 }
@@ -692,7 +737,94 @@ document.addEventListener('DOMContentLoaded', function() {
     if (sendButton) {
         sendButton.addEventListener('click', sendMessage);
     }
+
+    // Botón y input para adjuntar archivo (si existen en la vista)
+    const fileBtn = document.getElementById('active-chat-file-btn');
+    const fileInput = document.getElementById('active-chat-file-input');
+    if (fileBtn && fileInput) {
+        fileBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            pendingFile = e.target.files[0];
+            if (pendingFile) {
+                fileBtn.classList.add('text-yellow-400');
+            } else {
+                fileBtn.classList.remove('text-yellow-400');
+            }
+        });
+    }
+
+    // Cargar contactos y listeners para crear chats
+    loadContacts();
+    const refreshContacts = document.getElementById('refresh-contacts');
+    if (refreshContacts) refreshContacts.addEventListener('click', loadContacts);
+    const startChatBtn = document.getElementById('start-chat-btn');
+    const startChatUser = document.getElementById('start-chat-user');
+    if (startChatBtn && startChatUser) {
+        startChatBtn.addEventListener('click', async () => {
+            const query = startChatUser.value.trim();
+            if (!query) return;
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const formData = new FormData();
+            formData.append('user_query', query);
+            const resp = await fetch('/api/chats/create-or-find', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }) },
+                body: formData
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                await loadConversations();
+                setTimeout(() => {
+                    const el = document.querySelector(`[data-chat-id="${data.chat_id}"]`);
+                    if (el) el.click();
+                }, 400);
+            } else {
+                alert('No se pudo crear el chat');
+            }
+        });
+    }
 });
+
+// Cargar contactos desde API
+async function loadContacts() {
+    try {
+        const resp = await fetch('/api/chats/contacts');
+        if (!resp.ok) throw new Error('Error al cargar contactos');
+        contactsCache = await resp.json();
+        const list = document.getElementById('contacts-list');
+        if (!list) return;
+        if (!contactsCache.length) {
+            list.innerHTML = '<div class="p-3 text-xs text-slate-500">Sin contactos</div>';
+            return;
+        }
+        list.innerHTML = contactsCache.map(c => `
+            <button data-user-id="${c.id}" class="w-full text-left px-3 py-2 hover:bg-slate-700/40 flex items-center gap-2 text-xs">
+                <span class="w-6 h-6 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-slate-900 font-semibold">${c.avatar || (c.name ? c.name.charAt(0).toUpperCase() : '?')}</span>
+                <span class="truncate">${c.name || 'Usuario'}</span>
+            </button>`).join('');
+        list.querySelectorAll('button').forEach(btn => btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-user-id');
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const formData = new FormData();
+            formData.append('contact_id', id);
+            const resp2 = await fetch('/api/chats/create-or-find', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }) },
+                body: formData
+            });
+            if (resp2.ok) {
+                const data = await resp2.json();
+                await loadConversations();
+                setTimeout(() => {
+                    const el = document.querySelector(`[data-chat-id="${data.chat_id}"]`);
+                    if (el) el.click();
+                }, 300);
+            }
+        }));
+    } catch (e) {
+        console.error(e);
+    }
+}
 
 // Detener auto-refresh cuando la ventana se cierra o cambia de pestaña
 window.addEventListener('beforeunload', stopAutoRefresh);

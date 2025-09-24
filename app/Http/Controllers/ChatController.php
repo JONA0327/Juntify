@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\Contact;
+use App\Models\User;
+use App\Models\GoogleToken;
+use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -121,8 +124,26 @@ class ChatController extends Controller
 
         return response()->json($messages);
     }
+    /**
+     * Lista contactos del usuario autenticado para iniciar chats rápidos
+     */
+    public function contacts(): JsonResponse
+    {
+        $userId = Auth::id();
+        if (!$userId) { return response()->json([], 200); }
+        $contacts = Contact::where('user_id', $userId)
+            ->with(['contact:id,full_name,email'])
+            ->get()
+            ->map(fn($c) => [
+                'id' => $c->contact->id,
+                'name' => $c->contact->full_name,
+                'email' => $c->contact->email,
+                'avatar' => strtoupper(substr($c->contact->full_name,0,1))
+            ]);
+        return response()->json($contacts);
+    }
 
-    public function store(Request $request, Chat $chat): JsonResponse
+    public function store(Request $request, Chat $chat, GoogleDriveService $driveService): JsonResponse
     {
         $user = Auth::user();
         abort_unless($chat->user_one_id === $user->id || $chat->user_two_id === $user->id, 403);
@@ -132,14 +153,59 @@ class ChatController extends Controller
             'file' => 'nullable|file',
             'voice' => 'nullable|file',
         ]);
-
-        $filePath = $request->file('file') ? $request->file('file')->store('chat_files') : null;
+        $uploadedFile = $request->file('file');
+        $filePath = $uploadedFile ? $uploadedFile->store('chat_files') : null; // local fallback
         $voicePath = $request->file('voice') ? $request->file('voice')->store('chat_files') : null;
+
+        $driveFileId = null; $previewUrl = null; $mime = null; $origName = null; $size = null;
+        if ($uploadedFile) {
+            $mime = $uploadedFile->getClientMimeType();
+            $origName = $uploadedFile->getClientOriginalName();
+            $size = $uploadedFile->getSize();
+
+            // Intentar subir a carpeta raíz del remitente para compartir
+            try {
+                $token = GoogleToken::where('username', $user->username)->first();
+                if ($token && $token->recordings_folder_id) {
+                    $driveService->setAccessToken($token->getTokenArray());
+                    $contents = file_get_contents($uploadedFile->getRealPath());
+                    $driveFileId = $driveService->uploadFile(
+                        $origName,
+                        $mime ?: 'application/octet-stream',
+                        $token->recordings_folder_id,
+                        $contents
+                    );
+                    // Compartir con el otro usuario
+                    $otherUser = $chat->user_one_id === $user->id ? $chat->userTwo : $chat->userOne;
+                    if ($otherUser?->email) {
+                        try { $driveService->shareItem($driveFileId, $otherUser->email, 'reader'); } catch (\Throwable $e) { /* ignore */ }
+                    }
+                    // Construir preview según MIME
+                    if (str_starts_with($mime, 'image/')) {
+                        $previewUrl = 'https://drive.google.com/uc?export=view&id=' . $driveFileId;
+                    } elseif (in_array($mime, ['application/pdf'])) {
+                        $previewUrl = 'https://drive.google.com/file/d/' . $driveFileId . '/preview';
+                    } elseif (str_starts_with($mime, 'audio/')) {
+                        $previewUrl = 'https://drive.google.com/uc?export=download&id=' . $driveFileId;
+                    } elseif (str_starts_with($mime, 'video/')) {
+                        $previewUrl = 'https://drive.google.com/file/d/' . $driveFileId . '/preview';
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Mantener solo filePath local si falla Drive
+                \Log::warning('Chat file upload Drive failed', ['error' => $e->getMessage()]);
+            }
+        }
 
         $message = $chat->messages()->create([
             'sender_id' => $user->id,
             'body' => $data['body'] ?? null,
             'file_path' => $filePath,
+            'drive_file_id' => $driveFileId,
+            'original_name' => $origName,
+            'mime_type' => $mime,
+            'file_size' => $size,
+            'preview_url' => $previewUrl,
             'voice_path' => $voicePath,
             'created_at' => now(),
         ]);
@@ -189,20 +255,21 @@ class ChatController extends Controller
     public function createOrFind(Request $request): JsonResponse
     {
         $request->validate([
-            'contact_id' => 'required|exists:users,id'
+            'contact_id' => 'nullable|exists:users,id',
+            'user_query' => 'nullable|string'
         ]);
-
         $userId = Auth::id();
         $contactId = $request->contact_id;
-
-        // Verificar que son contactos
-        $isContact = Contact::where('user_id', $userId)
-            ->where('contact_id', $contactId)
-            ->exists();
-
-        if (!$isContact) {
-            return response()->json(['error' => 'No son contactos'], 403);
+        // Si no viene contact_id, permitir búsqueda por username/email para iniciar chat con no-contacto
+        if (!$contactId && $request->filled('user_query')) {
+            $query = trim($request->input('user_query'));
+            $target = User::where('username', $query)->orWhere('email', $query)->first();
+            if (!$target) {
+                return response()->json(['error' => 'Usuario no encontrado'], 404);
+            }
+            $contactId = $target->id;
         }
+        if (!$contactId) { return response()->json(['error' => 'Sin destino'], 422); }
 
         // Buscar chat existente
         $chat = Chat::where(function($query) use ($userId, $contactId) {

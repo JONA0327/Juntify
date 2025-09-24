@@ -125,7 +125,7 @@ class GoogleAuthController extends Controller
                     }
 
                     $parentRootId = (string) (config('drive.root_folder_id') ?: '');
-                    $defaultRootName = 'Grabaciones';
+                    $defaultRootName = config('drive.default_root_folder_name', 'Juntify_Recordings');
 
                     $folderId = null;
                     $impersonated = false;
@@ -167,13 +167,13 @@ class GoogleAuthController extends Controller
                         $googleToken->recordings_folder_id = $folderId;
                         $googleToken->save();
 
-                        // Ensure standard subfolders (Audios, Transcripciones, Audios Pospuestos, Documentos)
+                        // Ensure standard subfolders from config (includes Audios, Transcripciones, etc.)
                         try {
                             /** @var \App\Http\Controllers\DriveController $driveController */
                             $driveController = app(\App\Http\Controllers\DriveController::class);
                             // Call private-like helper via reflection is not ideal; reuse logic inline:
                             $serviceEmail = config('services.google.service_account_email');
-                            $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos', 'Documentos'];
+                            $needed = config('drive.default_subfolders', ['Audios', 'Transcripciones']);
                             foreach ($needed as $name) {
                                 try {
                                     $subId = $serviceAccount->createFolder($name, $folderId);

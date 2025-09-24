@@ -86,6 +86,22 @@
                         <p class="text-slate-400">Cargando conversaciones...</p>
                     </div>
                 </div>
+
+                <!-- Contactos y nuevo chat -->
+                <div class="border-t border-slate-700/50">
+                    <div class="p-3 flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-slate-300">Contactos</h3>
+                        <button id="refresh-contacts" class="text-xs text-slate-400 hover:text-slate-200">Refrescar</button>
+                    </div>
+                    <div class="max-h-52 overflow-y-auto" id="contacts-list">
+                        <div class="p-4 text-center text-slate-500 text-xs">Cargando...</div>
+                    </div>
+                    <div class="p-3 border-t border-slate-700/50">
+                        <input id="start-chat-user" type="text" placeholder="Usuario o email..." class="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded text-xs focus:ring-2 focus:ring-yellow-500/50" />
+                        <button id="start-chat-btn" class="mt-2 w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 text-xs font-semibold py-2 rounded transition">Iniciar chat</button>
+                        <p class="mt-2 text-[10px] text-slate-500">Puedes chatear con usuarios no agregados. Se creará el chat automáticamente.</p>
+                    </div>
+                </div>
             </div>
 
             <!-- Área de Chat -->

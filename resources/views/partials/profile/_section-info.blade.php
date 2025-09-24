@@ -77,5 +77,14 @@
                 <span class="info-value">{{ $user->created_at->format('d/m/Y') }}</span>
             </div>
         </div>
+
+        <div class="info-card danger-zone">
+            <h2 class="card-title">
+                <span class="card-icon">⚠️</span>
+                Zona Peligrosa
+            </h2>
+            <p class="text-sm mb-4">Eliminar tu cuenta borrará permanentemente todas tus reuniones, tareas, documentos y datos asociados. Esta acción no se puede deshacer.</p>
+            <button class="btn btn-danger w-full" onclick="openModal('delete-account-modal')">Eliminar Cuenta</button>
+        </div>
     </div>
 </div>

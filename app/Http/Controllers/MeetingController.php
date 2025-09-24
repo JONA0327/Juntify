@@ -1678,7 +1678,7 @@ class MeetingController extends Controller
             // Buscar token del usuario para obtener recordings_folder_id
             $token = GoogleToken::where('username', $username)->first();
             if (!$token || empty($token->recordings_folder_id)) {
-                return 'Grabaciones';
+                return config('drive.default_root_folder_name', 'Juntify_Recordings');
             }
 
             // Buscar en la tabla folders el nombre de esa carpeta
@@ -1687,13 +1687,13 @@ class MeetingController extends Controller
                 return $folder->name;
             }
 
-            return 'Grabaciones';
+            return config('drive.default_root_folder_name', 'Juntify_Recordings');
         } catch (\Exception $e) {
             Log::warning('getRecordingsFolderName: error fetching folder name', [
                 'username' => $username,
                 'error' => $e->getMessage(),
             ]);
-            return 'Grabaciones';
+            return config('drive.default_root_folder_name', 'Juntify_Recordings');
         }
     }
 

@@ -623,8 +623,8 @@ class DriveController extends Controller
                     ]);
 
                     try {
-                        // Create a default "Grabaciones" folder in user's Drive using existing service
-                        $defaultFolderName = 'Grabaciones';
+                        // Create a default recordings root folder (configurable)
+                        $defaultFolderName = config('drive.default_root_folder_name', 'Juntify_Recordings');
 
                         // Use the existing drive service to create folder
                         $driveService = app(\App\Services\GoogleDriveService::class);
@@ -825,9 +825,9 @@ class DriveController extends Controller
                 'subfolder_created'  => $subfolderCreated,
                 'drive_type'         => $useOrgDrive ? 'organization' : 'personal', // Información del tipo de drive usado
                 'folder_info'        => [
-                    'root_folder' => $rootFolder->name ?? 'Grabaciones',
+                    'root_folder' => $rootFolder->name ?? config('drive.default_root_folder_name', 'Juntify_Recordings'),
                     'subfolder'   => $pendingSubfolderName,
-                    'full_path'   => ($rootFolder->name ?? 'Grabaciones') . '/' . $pendingSubfolderName,
+                    'full_path'   => ($rootFolder->name ?? config('drive.default_root_folder_name', 'Juntify_Recordings')) . '/' . $pendingSubfolderName,
                     'drive_type'  => $useOrgDrive ? 'organization' : 'personal'
                 ],
             ];
