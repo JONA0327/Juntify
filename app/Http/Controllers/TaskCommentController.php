@@ -8,6 +8,7 @@ use App\Models\TaskLaravel;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
 class TaskCommentController extends Controller
@@ -15,8 +16,10 @@ class TaskCommentController extends Controller
     public function index(int $taskId): JsonResponse
     {
         $user = Auth::user();
-        // Ensure task belongs to user
-        TaskLaravel::where('id', $taskId)->where('username', $user->username)->firstOrFail();
+        $task = TaskLaravel::findOrFail($taskId);
+        if ($task->username !== $user->username && $task->assigned_user_id !== $user->id) {
+            abort(403, 'No tienes permisos para ver esta tarea');
+        }
 
         $comments = TaskComment::where('task_id', $taskId)
             ->whereNull('parent_id')
@@ -24,14 +27,19 @@ class TaskCommentController extends Controller
             ->orderBy('date', 'asc')
             ->get();
 
-        return response()->json(['success' => true, 'comments' => $comments]);
+        $userMap = $this->resolveAuthorsMap($comments);
+        $formatted = $comments->map(fn (TaskComment $comment) => $this->transformComment($comment, $userMap))->values();
+
+        return response()->json(['success' => true, 'comments' => $formatted]);
     }
 
     public function store(Request $request, int $taskId): JsonResponse
     {
         $user = Auth::user();
-        // Ensure task belongs to user
-        TaskLaravel::where('id', $taskId)->where('username', $user->username)->firstOrFail();
+        $task = TaskLaravel::findOrFail($taskId);
+        if ($task->username !== $user->username && $task->assigned_user_id !== $user->id) {
+            abort(403, 'No tienes permisos para comentar esta tarea');
+        }
 
         $data = $request->validate([
             'text' => 'required|string|max:5000',
@@ -70,7 +78,78 @@ class TaskCommentController extends Controller
             }
         }
 
-        return response()->json(['success' => true, 'comment' => $comment]);
+        $comment->setRelation('children', collect());
+        $userMap = $this->resolveAuthorsMap(collect([$comment]));
+
+        return response()->json([
+            'success' => true,
+            'comment' => $this->transformComment($comment, $userMap),
+        ]);
+    }
+
+    private function resolveAuthorsMap(Collection $comments): Collection
+    {
+        $usernames = $this->collectAuthorUsernames($comments)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($usernames->isEmpty()) {
+            return collect();
+        }
+
+        return User::whereIn('username', $usernames)->get()->keyBy('username');
+    }
+
+    private function collectAuthorUsernames(Collection $comments): Collection
+    {
+        $accumulator = collect();
+
+        foreach ($comments as $comment) {
+            if (!empty($comment->author)) {
+                $accumulator->push($comment->author);
+            }
+
+            if ($comment->relationLoaded('children') && $comment->children instanceof Collection && $comment->children->isNotEmpty()) {
+                $accumulator = $accumulator->merge($this->collectAuthorUsernames($comment->children));
+            }
+        }
+
+        return $accumulator;
+    }
+
+    private function transformComment(TaskComment $comment, Collection $userMap): array
+    {
+        $children = [];
+        if ($comment->relationLoaded('children') && $comment->children instanceof Collection && $comment->children->isNotEmpty()) {
+            $children = $comment->children
+                ->map(fn (TaskComment $child) => $this->transformComment($child, $userMap))
+                ->values()
+                ->all();
+        }
+
+        return [
+            'id' => $comment->id,
+            'text' => $comment->text,
+            'user' => $this->displayNameFor($comment->author, $userMap),
+            'author_username' => $comment->author,
+            'created_at' => optional($comment->date)->toIso8601String(),
+            'children' => $children,
+        ];
+    }
+
+    private function displayNameFor(?string $username, Collection $userMap): string
+    {
+        if (empty($username)) {
+            return 'Usuario';
+        }
+
+        $user = $userMap->get($username);
+        if ($user) {
+            return $user->full_name ?: ($user->email ?: $username);
+        }
+
+        return $username;
     }
 }
 

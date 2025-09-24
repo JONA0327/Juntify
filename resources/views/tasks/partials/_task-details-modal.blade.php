@@ -55,6 +55,12 @@
                                         <p id="detailsTaskAssignee" class="text-slate-100 mt-1"></p>
                                     </div>
                                     <div>
+                                        <label class="text-sm font-medium text-slate-300">Estado de asignación:</label>
+                                        <span id="detailsAssignmentStatus" class="inline-block mt-1 px-2 py-1 rounded text-xs bg-slate-600/40 text-slate-200">Sin asignar</span>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 mt-4">
+                                    <div>
                                         <label class="text-sm font-medium text-slate-300">Progreso:</label>
                                         <div class="mt-1">
                                             <div class="w-full bg-slate-600 rounded-full h-2">
@@ -62,6 +68,10 @@
                                             </div>
                                             <span id="detailsTaskProgress" class="text-sm text-slate-300"></span>
                                         </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-sm font-medium text-slate-300">Reunión:</label>
+                                        <p id="detailsMeetingName" class="text-slate-100 mt-1"></p>
                                     </div>
                                 </div>
                             </div>
@@ -74,11 +84,14 @@
                                 <button id="completeTaskBtn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
                                     Marcar Completada
                                 </button>
-                                <div class="flex items-center gap-2 ml-auto">
+                                <div id="assignControls" class="flex flex-col sm:flex-row sm:items-center gap-2 ml-auto">
+                                    <select id="assigneeSelector" class="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm min-w-[180px]">
+                                        <option value="">Selecciona contacto o miembro</option>
+                                    </select>
                                     <input id="assigneeInput" type="text" placeholder="usuario o email" class="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm" />
                                     <button id="assignTaskBtn" class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm">Asignar</button>
                                 </div>
-                                <div class="flex items-center gap-2">
+                                <div id="assignmentResponseControls" class="flex items-center gap-2">
                                     <button id="acceptTaskBtn" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm">Aceptar</button>
                                     <button id="rejectTaskBtn" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm">Rechazar</button>
                                     <button id="reactivateTaskBtn" class="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm hidden">Reactivar</button>
@@ -121,12 +134,18 @@
                             <!-- Subir archivo -->
                             <div class="border-t border-slate-600 pt-4">
                                 <input type="file" id="fileInput" class="hidden" multiple>
-                                <button id="uploadFileBtn" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors border-2 border-dashed border-green-500/50 hover:border-green-500">
-                                    <svg class="w-5 h-5 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                                    </svg>
-                                    Subir Archivo
-                                </button>
+                                <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                                    <select id="driveDestination" class="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm min-w-[180px]">
+                                        <option value="personal">Drive personal</option>
+                                    </select>
+                                    <button id="uploadFileBtn" class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors border-2 border-dashed border-green-500/50 hover:border-green-500">
+                                        <svg class="w-5 h-5 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                        </svg>
+                                        Subir Archivo
+                                    </button>
+                                </div>
+                                <p class="text-xs text-slate-400 mt-2">Puedes elegir entre tu Drive personal o el de tu organización. Si la carpeta Documentos no existe se creará automáticamente.</p>
                             </div>
                         </div>
                     </div>
@@ -138,6 +157,126 @@
 
 <script>
 let currentTaskDetailsId = null;
+let cachedAssignableUsers = null;
+
+const assignmentStatusStyles = {
+    pending: { text: 'Pendiente de aceptación', class: 'bg-yellow-500/20 text-yellow-300' },
+    accepted: { text: 'Aceptada', class: 'bg-blue-500/20 text-blue-300' },
+    completed: { text: 'Completada', class: 'bg-green-500/20 text-green-300' },
+    rejected: { text: 'Rechazada', class: 'bg-rose-500/20 text-rose-300' },
+};
+
+async function loadAssignableUsers() {
+    if (cachedAssignableUsers) {
+        return cachedAssignableUsers;
+    }
+    try {
+        const response = await fetch(new URL('/api/tasks-laravel/assignable-users', window.location.origin), {
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]')?.content || '')
+            }
+        });
+        const data = await response.json();
+        cachedAssignableUsers = Array.isArray(data.users) ? data.users : [];
+    } catch (error) {
+        console.error('Error loading assignable users:', error);
+        cachedAssignableUsers = [];
+    }
+    return cachedAssignableUsers;
+}
+
+function populateAssigneeSelector(users, currentId) {
+    const select = document.getElementById('assigneeSelector');
+    if (!select) return;
+
+    const previousValue = currentId ? String(currentId) : '';
+    select.innerHTML = '<option value="">Selecciona contacto o miembro</option>';
+
+    users.forEach(user => {
+        if (!user || !user.id) return;
+        const option = document.createElement('option');
+        option.value = user.id;
+        const sourceLabel = user.source === 'organization' ? 'Organización' : 'Contacto';
+        option.textContent = `${user.name || user.email} (${sourceLabel})`;
+        option.dataset.email = user.email || '';
+        option.dataset.source = user.source || '';
+        select.appendChild(option);
+    });
+
+    if (previousValue && Array.from(select.options).some(opt => opt.value === previousValue)) {
+        select.value = previousValue;
+    } else {
+        select.value = '';
+    }
+
+    select.disabled = users.length <= 0;
+}
+
+async function setupAssignableControls(task) {
+    const assignWrapper = document.getElementById('assignControls');
+    const responseControls = document.getElementById('assignmentResponseControls');
+    const assigneeSelector = document.getElementById('assigneeSelector');
+    const assigneeInput = document.getElementById('assigneeInput');
+    const assignBtn = document.getElementById('assignTaskBtn');
+    const acceptBtn = document.getElementById('acceptTaskBtn');
+    const rejectBtn = document.getElementById('rejectTaskBtn');
+    const reactivateBtn = document.getElementById('reactivateTaskBtn');
+
+    const isOwner = task.owner_username && window.authUsername && task.owner_username === window.authUsername;
+    const isAssignee = task.assigned_user && window.authUserId && String(task.assigned_user.id) === String(window.authUserId);
+
+    if (assignWrapper) {
+        assignWrapper.classList.toggle('hidden', !isOwner);
+    }
+    if (assigneeSelector) assigneeSelector.disabled = !isOwner;
+    if (assigneeInput) assigneeInput.disabled = !isOwner;
+    if (assignBtn) assignBtn.disabled = !isOwner;
+
+    if (responseControls) {
+        responseControls.classList.toggle('hidden', !isAssignee);
+    }
+    if (acceptBtn) {
+        acceptBtn.classList.toggle('hidden', !(isAssignee && task.assignment_status === 'pending'));
+    }
+    if (rejectBtn) {
+        rejectBtn.classList.toggle('hidden', !(isAssignee && task.assignment_status === 'pending'));
+    }
+    if (reactivateBtn) {
+        if (isOwner && (task.progreso || 0) >= 100) {
+            reactivateBtn.classList.remove('hidden');
+        } else {
+            reactivateBtn.classList.add('hidden');
+        }
+    }
+
+    if (assigneeSelector && isOwner) {
+        const users = await loadAssignableUsers();
+        populateAssigneeSelector(users, task.assigned_user_id);
+    }
+}
+
+function populateDriveDestination(options) {
+    const select = document.getElementById('driveDestination');
+    if (!select) return;
+
+    const available = Array.isArray(options) && options.length > 0 ? options : [{ value: 'personal', label: 'Drive personal' }];
+    const previousValue = select.value;
+    select.innerHTML = '';
+
+    available.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt.value || 'personal';
+        option.textContent = opt.organization_name ? `${opt.label} (${opt.organization_name})` : (opt.label || 'Drive personal');
+        select.appendChild(option);
+    });
+
+    if (previousValue && available.some(opt => opt.value === previousValue)) {
+        select.value = previousValue;
+    }
+
+    select.disabled = available.length <= 1;
+}
 
 function openTaskDetailsModal(taskId) {
     currentTaskDetailsId = taskId;
@@ -187,15 +326,15 @@ function populateTaskDetails(task) {
     priorityEl.textContent = priority.text;
     priorityEl.className = `inline-block mt-1 px-2 py-1 rounded text-xs ${priority.class}`;
 
-    // Estado
+    // Estado general de la tarea (progreso)
     const statusEl = document.getElementById('detailsTaskStatus');
     let status = 'Pendiente';
     let statusClass = 'bg-yellow-500/20 text-yellow-300';
 
-    if (task.progreso >= 100) {
+    if ((task.progreso || 0) >= 100) {
         status = 'Completada';
         statusClass = 'bg-green-500/20 text-green-300';
-    } else if (task.progreso > 0) {
+    } else if ((task.progreso || 0) > 0) {
         status = 'En progreso';
         statusClass = 'bg-blue-500/20 text-blue-300';
     }
@@ -203,123 +342,177 @@ function populateTaskDetails(task) {
     statusEl.textContent = status;
     statusEl.className = `inline-block mt-1 px-2 py-1 rounded text-xs ${statusClass}`;
 
-    // Fechas
+    // Fechas y reunión
     document.getElementById('detailsTaskDueDate').textContent = task.fecha_limite || 'No definida';
     document.getElementById('detailsTaskDueTime').textContent = task.hora_limite || 'No definida';
+    document.getElementById('detailsMeetingName').textContent = task.meeting_name || 'Sin reunión';
 
-    // Asignado
-    document.getElementById('detailsTaskAssignee').textContent = task.asignado || 'No asignado';
+    // Asignación
+    const assigneeName = (task.assigned_user && task.assigned_user.name) || task.asignado || 'No asignado';
+    document.getElementById('detailsTaskAssignee').textContent = assigneeName;
+    const assignmentStatusEl = document.getElementById('detailsAssignmentStatus');
+    const statusKey = task.assignment_status || (task.assigned_user_id ? 'accepted' : null);
+    const assignmentStatus = assignmentStatusStyles[statusKey] || { text: 'Sin asignar', class: 'bg-slate-600/40 text-slate-200' };
+    assignmentStatusEl.textContent = assignmentStatus.text;
+    assignmentStatusEl.className = `inline-block mt-1 px-2 py-1 rounded text-xs ${assignmentStatus.class}`;
 
     // Progreso
-    const progress = task.progreso || 0;
+    const progress = Number(task.progreso) || 0;
     document.getElementById('detailsTaskProgress').textContent = `${progress}%`;
-    document.getElementById('detailsTaskProgressBar').style.width = `${progress}%`;
+    document.getElementById('detailsTaskProgressBar').style.width = `${Math.min(Math.max(progress, 0), 100)}%`;
 
-    // Configurar botones
-    document.getElementById('editTaskBtn').onclick = () => {
-        closeTaskDetailsModal();
-        if (typeof openTaskModal === 'function') {
-            openTaskModal(task.id, 'transcriptions_laravel');
-        }
-    };
+    // Botones principales
+    const editBtn = document.getElementById('editTaskBtn');
+    if (editBtn) {
+        editBtn.onclick = () => {
+            closeTaskDetailsModal();
+            if (typeof openTaskModal === 'function') {
+                openTaskModal(task.id, 'transcriptions_laravel');
+            }
+        };
+    }
 
-    document.getElementById('completeTaskBtn').onclick = () => completeTask(task.id);
-    // Mostrar botón Reactivar si está completa
-    const reactivateBtn = document.getElementById('reactivateTaskBtn');
-    if (progress >= 100) { reactivateBtn.classList.remove('hidden'); } else { reactivateBtn.classList.add('hidden'); }
+    const completeBtn = document.getElementById('completeTaskBtn');
+    if (completeBtn) {
+        completeBtn.onclick = () => completeTask(task.id);
+    }
 
-    // Asignación: permite escribir username o email
-    const assignBtn = document.getElementById('assignTaskBtn');
+    const assigneeSelector = document.getElementById('assigneeSelector');
     const assigneeInput = document.getElementById('assigneeInput');
-    assignBtn.onclick = async () => {
-        const val = (assigneeInput.value || '').trim();
-        if (!val) return;
-        try {
+    const assignBtn = document.getElementById('assignTaskBtn');
+    if (assignBtn) {
+        assignBtn.onclick = async () => {
+            const selectedId = assigneeSelector ? assigneeSelector.value : '';
+            const manualValue = (assigneeInput?.value || '').trim();
             const payload = {};
-            if (val.includes('@')) { payload.email = val; } else { payload.username = val; }
-            const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/assign`, window.location.origin), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
-                },
-                body: JSON.stringify(payload)
-            });
-            const data = await response.json();
-            if (data.success) {
-                assigneeInput.value = '';
-                alert('Solicitud de asignación enviada');
-            } else {
-                alert(data.message || 'No se pudo enviar la asignación');
-            }
-        } catch (e) {
-            console.error('Error assigning task:', e);
-            alert('Error al asignar la tarea');
-        }
-    };
 
-    // Aceptar/Rechazar (sin notification_id)
-    const acceptBtn = document.getElementById('acceptTaskBtn');
-    const rejectBtn = document.getElementById('rejectTaskBtn');
-    acceptBtn.onclick = async () => {
-        try {
-            const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/respond`, window.location.origin), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
-                },
-                body: JSON.stringify({ action: 'accept' })
-            });
-            const data = await response.json();
-            if (data.success) {
-                alert('Has aceptado la tarea');
-                loadTaskDetails(task.id);
-                if (typeof loadAndRender === 'function') loadAndRender();
-            } else {
-                alert(data.message || 'No se pudo aceptar');
-            }
-        } catch (e) { console.error(e); alert('Error al aceptar'); }
-    };
-    rejectBtn.onclick = async () => {
-        try {
-            const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/respond`, window.location.origin), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
-                },
-                body: JSON.stringify({ action: 'reject' })
-            });
-            const data = await response.json();
-            if (data.success) {
-                alert('Has rechazado la tarea');
-            } else {
-                alert(data.message || 'No se pudo rechazar');
-            }
-        } catch (e) { console.error(e); alert('Error al rechazar'); }
-    };
-
-    // Reactivar
-    reactivateBtn.onclick = async () => {
-        try {
-            const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/reactivate`, window.location.origin), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
+            if (selectedId) {
+                payload.user_id = selectedId;
+            } else if (manualValue) {
+                if (manualValue.includes('@')) {
+                    payload.email = manualValue;
+                } else {
+                    payload.username = manualValue;
                 }
-            });
-            const data = await response.json();
-            if (data.success) {
-                alert('Tarea reactivada');
-                loadTaskDetails(task.id);
-                if (typeof loadAndRender === 'function') loadAndRender();
             } else {
-                alert(data.message || 'No se pudo reactivar');
+                alert('Selecciona o escribe un usuario para asignar.');
+                return;
             }
-        } catch (e) { console.error(e); alert('Error al reactivar'); }
-    };
+
+            try {
+                const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/assign`, window.location.origin), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (data.success) {
+                    if (assigneeInput) assigneeInput.value = '';
+                    if (assigneeSelector) assigneeSelector.value = '';
+                    alert('Solicitud de asignación enviada');
+                    loadTaskDetails(task.id);
+                    if (typeof kanbanReload === 'function') kanbanReload();
+                } else {
+                    alert(data.message || 'No se pudo enviar la asignación');
+                }
+            } catch (error) {
+                console.error('Error assigning task:', error);
+                alert('Error al asignar la tarea');
+            }
+        };
+    }
+
+    const acceptBtn = document.getElementById('acceptTaskBtn');
+    if (acceptBtn) {
+        acceptBtn.onclick = async () => {
+            try {
+                const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/respond`, window.location.origin), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
+                    },
+                    body: JSON.stringify({ action: 'accept' })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('Has aceptado la tarea');
+                    loadTaskDetails(task.id);
+                    if (typeof kanbanReload === 'function') kanbanReload();
+                    if (typeof loadAndRender === 'function') loadAndRender();
+                } else {
+                    alert(data.message || 'No se pudo aceptar la tarea');
+                }
+            } catch (error) {
+                console.error('Error al aceptar la tarea', error);
+                alert('Error al aceptar la tarea');
+            }
+        };
+    }
+
+    const rejectBtn = document.getElementById('rejectTaskBtn');
+    if (rejectBtn) {
+        rejectBtn.onclick = async () => {
+            try {
+                const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/respond`, window.location.origin), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
+                    },
+                    body: JSON.stringify({ action: 'reject' })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('Has rechazado la tarea');
+                    loadTaskDetails(task.id);
+                    if (typeof kanbanReload === 'function') kanbanReload();
+                } else {
+                    alert(data.message || 'No se pudo rechazar la tarea');
+                }
+            } catch (error) {
+                console.error('Error al rechazar la tarea', error);
+                alert('Error al rechazar la tarea');
+            }
+        };
+    }
+
+    const reactivateBtn = document.getElementById('reactivateTaskBtn');
+    if (reactivateBtn) {
+        reactivateBtn.onclick = async () => {
+            const reasonPrompt = window.prompt('Describe el motivo de la reactivación (opcional):', '');
+            if (reasonPrompt === null) {
+                return;
+            }
+            try {
+                const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/reactivate`, window.location.origin), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
+                    },
+                    body: JSON.stringify({ reason: reasonPrompt?.trim() || undefined })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('Tarea reactivada');
+                    loadTaskDetails(task.id);
+                    if (typeof kanbanReload === 'function') kanbanReload();
+                    if (typeof loadAndRender === 'function') loadAndRender();
+                } else {
+                    alert(data.message || 'No se pudo reactivar la tarea');
+                }
+            } catch (error) {
+                console.error('Error al reactivar la tarea', error);
+                alert('Error al reactivar la tarea');
+            }
+        };
+    }
+
+    setupAssignableControls(task).catch(err => console.error('setupAssignableControls error', err));
 }
 
 async function loadTaskComments(taskId) {
@@ -335,19 +528,8 @@ async function loadTaskComments(taskId) {
         const commentsList = document.getElementById('commentsList');
         commentsList.innerHTML = '';
 
-        if (data.success && data.comments) {
-            data.comments.forEach(comment => {
-                const commentEl = document.createElement('div');
-                commentEl.className = 'bg-slate-600/50 rounded-lg p-3';
-                commentEl.innerHTML = `
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="text-sm font-medium text-slate-300">${comment.user || 'Usuario'}</span>
-                        <span class="text-xs text-slate-400">${formatDate(comment.created_at)}</span>
-                    </div>
-                    <p class="text-slate-100 text-sm">${comment.text}</p>
-                `;
-                commentsList.appendChild(commentEl);
-            });
+        if (data.success && Array.isArray(data.comments)) {
+            data.comments.forEach(comment => renderCommentNode(comment, commentsList));
         }
 
         if (commentsList.children.length === 0) {
@@ -371,23 +553,44 @@ async function loadTaskFiles(taskId) {
         const filesList = document.getElementById('filesList');
         filesList.innerHTML = '';
 
-        if (data.success && data.files) {
+        if (data.success && Array.isArray(data.files)) {
             data.files.forEach(file => {
                 const fileEl = document.createElement('div');
                 fileEl.className = 'bg-slate-600/50 rounded-lg p-3 flex items-center justify-between';
-                fileEl.innerHTML = `
-                    <div class="flex items-center gap-2">
-                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                        <span class="text-sm text-slate-200">${file.filename}</span>
-                    </div>
-                    <button onclick="downloadFile('${file.id}')" class="text-blue-400 hover:text-blue-300 text-xs">
-                        Descargar
-                    </button>
+
+                const infoWrapper = document.createElement('div');
+                infoWrapper.className = 'flex items-center gap-2';
+                infoWrapper.innerHTML = `
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
                 `;
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'text-sm text-slate-200';
+                nameSpan.textContent = file.name || file.filename || 'Documento';
+                infoWrapper.appendChild(nameSpan);
+
+                if (file.drive_type === 'organization') {
+                    const badge = document.createElement('span');
+                    badge.className = 'ml-2 text-[11px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300';
+                    badge.textContent = 'Organización';
+                    infoWrapper.appendChild(badge);
+                }
+
+                const downloadBtn = document.createElement('button');
+                downloadBtn.className = 'text-blue-400 hover:text-blue-300 text-xs';
+                downloadBtn.textContent = 'Descargar';
+                downloadBtn.addEventListener('click', () => downloadFile(file.id));
+
+                fileEl.appendChild(infoWrapper);
+                fileEl.appendChild(downloadBtn);
                 filesList.appendChild(fileEl);
             });
+        }
+
+        if (data.success && data.drive_options) {
+            populateDriveDestination(data.drive_options);
         }
 
         if (filesList.children.length === 0) {
@@ -395,6 +598,7 @@ async function loadTaskFiles(taskId) {
         }
     } catch (error) {
         console.error('Error loading files:', error);
+        populateDriveDestination([]);
     }
 }
 
@@ -436,6 +640,11 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
         formData.append('files[]', file);
     }
 
+    const destination = document.getElementById('driveDestination');
+    if (destination) {
+        formData.append('drive_type', destination.value || 'personal');
+    }
+
     try {
         const response = await fetch(new URL(`/api/tasks-laravel/tasks/${currentTaskDetailsId}/files`, window.location.origin), {
             method: 'POST',
@@ -468,7 +677,7 @@ async function completeTask(taskId) {
         const data = await response.json();
         if (data.success) {
             loadTaskDetails(taskId);
-            // Recargar calendario si existe
+            if (typeof kanbanReload === 'function') kanbanReload();
             if (typeof loadAndRender === 'function') {
                 loadAndRender();
             }
@@ -480,6 +689,34 @@ async function completeTask(taskId) {
 
 function downloadFile(fileId) {
     window.open(new URL(`/api/tasks-laravel/files/${fileId}/download`, window.location.origin), '_blank');
+}
+
+function renderCommentNode(comment, container, depth = 0) {
+    if (!comment) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bg-slate-600/50 rounded-lg p-3';
+    if (depth > 0) {
+        wrapper.classList.add('mt-2', 'ml-4', 'border-l', 'border-slate-500/60', 'pl-4');
+    }
+
+    const author = escapeHtml(comment.user || 'Usuario');
+    const createdAt = comment.created_at ? formatDate(comment.created_at) : '';
+    const text = escapeHtml(comment.text || '');
+
+    wrapper.innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+            <span class="text-sm font-medium text-slate-300">${author}</span>
+            <span class="text-xs text-slate-400">${createdAt}</span>
+        </div>
+        <p class="text-slate-100 text-sm whitespace-pre-line">${text}</p>
+    `;
+
+    container.appendChild(wrapper);
+
+    if (Array.isArray(comment.children)) {
+        comment.children.forEach(child => renderCommentNode(child, container, depth + 1));
+    }
 }
 
 function formatDate(dateString) {

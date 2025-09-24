@@ -17,10 +17,13 @@ class ArchivoReunion extends Model
         'drive_file_id',
         'drive_folder_id',
         'drive_web_link',
+        'drive_type',
+        'organization_id',
     ];
 
     protected $casts = [
         'size' => 'integer',
+        'organization_id' => 'integer',
     ];
 
     public function task()

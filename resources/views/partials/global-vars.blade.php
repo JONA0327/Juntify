@@ -28,6 +28,13 @@
                 window.authUserId = null;
             @endif
         }
+        if (typeof window.authUsername === 'undefined') {
+            @if(auth()->check())
+                window.authUsername = @json(auth()->user()->username);
+            @else
+                window.authUsername = null;
+            @endif
+        }
         // Provide dataset fallbacks for scripts that look at body dataset
         if (document && document.body) {
             if (!document.body.dataset.userRole && window.userRole) {
