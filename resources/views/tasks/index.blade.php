@@ -46,6 +46,27 @@
                             </div>
                         </div>
                         @include('tasks.partials._tabs-reuniones')
+                        <!-- Kanban simple por reunión -->
+                        <div id="kanban-board" class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 hidden">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-lg font-semibold">Kanban</h3>
+                                <div class="text-slate-400 text-sm">Arrastra tareas entre columnas para actualizar progreso</div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="kanban-col" data-status="pending">
+                                    <div class="px-3 py-2 bg-slate-900/60 rounded border border-slate-700/50 font-medium mb-2">Pendientes</div>
+                                    <div class="kanban-list min-h-[200px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'pending')"></div>
+                                </div>
+                                <div class="kanban-col" data-status="in_progress">
+                                    <div class="px-3 py-2 bg-slate-900/60 rounded border border-slate-700/50 font-medium mb-2">En progreso</div>
+                                    <div class="kanban-list min-h-[200px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'in_progress')"></div>
+                                </div>
+                                <div class="kanban-col" data-status="completed">
+                                    <div class="px-3 py-2 bg-slate-900/60 rounded border border-slate-700/50 font-medium mb-2">Completadas</div>
+                                    <div class="kanban-list min-h-[200px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'completed')"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <aside class="col-span-1 w-full">
@@ -77,7 +98,16 @@
     @include('tasks.partials._task-details-modal')
 
     <script>
-        // ... (tu script existente)
+        // Extensión Kanban mínima: actualiza progreso al arrastrar
+        const csrfToken = (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '');
+        function showKanban(show){ document.getElementById('kanban-board').classList.toggle('hidden', !show); }
+        function kanbanAllowDrop(ev){ ev.preventDefault(); }
+        async function kanbanDrop(ev, status){ ev.preventDefault(); const id = ev.dataTransfer.getData('text/plain'); const prog = status==='completed'?100:(status==='in_progress'?50:0); try{ const res = await fetch(new URL(`/api/tasks-laravel/tasks/${id}`, window.location.origin), { method:'PUT', headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN': csrfToken }, body: JSON.stringify({ progreso: prog }) }); const data = await res.json(); if (data.success){ await kanbanReload(); } }catch(e){ console.error(e); } }
+        async function kanbanReload(){ if (!window.lastSelectedMeetingId) return; try{ const url = new URL('/api/tasks-laravel/tasks', window.location.origin); url.searchParams.set('meeting_id', window.lastSelectedMeetingId); const res = await fetch(url); const json = await res.json(); if (!json.success) return; const tasks = json.tasks||[]; const cols = { pending: [], in_progress: [], completed: [] }; tasks.forEach(t=>{ const p = typeof t.progreso==='number'?t.progreso:0; const st = p>=100?'completed':(p>0?'in_progress':'pending'); cols[st].push(t); }); document.querySelectorAll('#kanban-board .kanban-list').forEach(el=>el.innerHTML=''); Object.entries(cols).forEach(([st,list])=>{ const target = document.querySelector(`#kanban-board .kanban-col[data-status="${st}"] .kanban-list`); list.forEach(t=>{ const card = document.createElement('div'); card.className='bg-slate-800/60 border border-slate-700 rounded p-2 mb-2 cursor-move'; card.draggable=true; card.dataset.id=t.id; card.addEventListener('dragstart', ev=>{ ev.dataTransfer.setData('text/plain', String(t.id)); }); card.innerHTML = `<div class="text-sm text-slate-200">${escapeHtml(t.tarea||'Sin nombre')}</div><div class="text-[11px] text-slate-400">${(t.prioridad||'-')} • ${pct(t.progreso)}%</div>`; card.addEventListener('dblclick', ()=>{ if (typeof openTaskDetailsModal==='function') openTaskDetailsModal(t.id); }); target.appendChild(card); }); }); showKanban(true); }catch(e){ console.error('kanban reload', e); }}
+        function pct(v){ return typeof v==='number'?v:0; }
+        function escapeHtml(s){ return String(s||'').replace(/[&<>"]+/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+        // Hook carga desde tabs script: renderTasksAfterFetch llama window.loadTasksForMeeting, que invocamos aquí para refrescar kanban también
+        const _origLoadTasks = window.loadTasksForMeeting; window.loadTasksForMeeting = async function(id, src){ if (_origLoadTasks) await _origLoadTasks(id, src); await kanbanReload(); };
     </script>
 </body>
 </html>

@@ -67,13 +67,22 @@
                             </div>
 
                             <!-- Botones de acción -->
-                            <div class="mt-4 flex gap-2">
+                            <div class="mt-4 flex flex-wrap gap-2 items-center">
                                 <button id="editTaskBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
                                     Editar Tarea
                                 </button>
                                 <button id="completeTaskBtn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
                                     Marcar Completada
                                 </button>
+                                <div class="flex items-center gap-2 ml-auto">
+                                    <input id="assigneeInput" type="text" placeholder="usuario o email" class="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm" />
+                                    <button id="assignTaskBtn" class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm">Asignar</button>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button id="acceptTaskBtn" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm">Aceptar</button>
+                                    <button id="rejectTaskBtn" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm">Rechazar</button>
+                                    <button id="reactivateTaskBtn" class="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm hidden">Reactivar</button>
+                                </div>
                             </div>
                         </div>
 
@@ -215,6 +224,102 @@ function populateTaskDetails(task) {
     };
 
     document.getElementById('completeTaskBtn').onclick = () => completeTask(task.id);
+    // Mostrar botón Reactivar si está completa
+    const reactivateBtn = document.getElementById('reactivateTaskBtn');
+    if (progress >= 100) { reactivateBtn.classList.remove('hidden'); } else { reactivateBtn.classList.add('hidden'); }
+
+    // Asignación: permite escribir username o email
+    const assignBtn = document.getElementById('assignTaskBtn');
+    const assigneeInput = document.getElementById('assigneeInput');
+    assignBtn.onclick = async () => {
+        const val = (assigneeInput.value || '').trim();
+        if (!val) return;
+        try {
+            const payload = {};
+            if (val.includes('@')) { payload.email = val; } else { payload.username = val; }
+            const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/assign`, window.location.origin), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (data.success) {
+                assigneeInput.value = '';
+                alert('Solicitud de asignación enviada');
+            } else {
+                alert(data.message || 'No se pudo enviar la asignación');
+            }
+        } catch (e) {
+            console.error('Error assigning task:', e);
+            alert('Error al asignar la tarea');
+        }
+    };
+
+    // Aceptar/Rechazar (sin notification_id)
+    const acceptBtn = document.getElementById('acceptTaskBtn');
+    const rejectBtn = document.getElementById('rejectTaskBtn');
+    acceptBtn.onclick = async () => {
+        try {
+            const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/respond`, window.location.origin), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
+                },
+                body: JSON.stringify({ action: 'accept' })
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert('Has aceptado la tarea');
+                loadTaskDetails(task.id);
+                if (typeof loadAndRender === 'function') loadAndRender();
+            } else {
+                alert(data.message || 'No se pudo aceptar');
+            }
+        } catch (e) { console.error(e); alert('Error al aceptar'); }
+    };
+    rejectBtn.onclick = async () => {
+        try {
+            const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/respond`, window.location.origin), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
+                },
+                body: JSON.stringify({ action: 'reject' })
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert('Has rechazado la tarea');
+            } else {
+                alert(data.message || 'No se pudo rechazar');
+            }
+        } catch (e) { console.error(e); alert('Error al rechazar'); }
+    };
+
+    // Reactivar
+    reactivateBtn.onclick = async () => {
+        try {
+            const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/reactivate`, window.location.origin), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert('Tarea reactivada');
+                loadTaskDetails(task.id);
+                if (typeof loadAndRender === 'function') loadAndRender();
+            } else {
+                alert(data.message || 'No se pudo reactivar');
+            }
+        } catch (e) { console.error(e); alert('Error al reactivar'); }
+    };
 }
 
 async function loadTaskComments(taskId) {

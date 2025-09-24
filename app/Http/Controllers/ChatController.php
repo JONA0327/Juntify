@@ -193,7 +193,7 @@ class ChatController extends Controller
                 }
             } catch (\Throwable $e) {
                 // Mantener solo filePath local si falla Drive
-                \Log::warning('Chat file upload Drive failed', ['error' => $e->getMessage()]);
+                Log::warning('Chat file upload Drive failed', ['error' => $e->getMessage()]);
             }
         }
 

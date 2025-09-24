@@ -436,6 +436,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+/**
+ * Abre un modal genérico por id (agrega la clase .show)
+ */
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('show');
+}
+
+/**
+ * Cierra un modal genérico por id (remueve la clase .show)
+ */
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('show');
+}
+
 // Exponer funciones para handlers inline (si aún usas onclick en HTML)
 window.toggleSidebar       = toggleSidebar;
 window.closeSidebar        = closeSidebar;
@@ -446,3 +464,5 @@ window.closeCreateSubfolderModal = closeCreateSubfolderModal;
 window.confirmCreateSubfolder = confirmCreateSubfolder;
 window.setMainFolder       = setMainFolder;
 window.addSubfolderToList = addSubfolderToList;
+window.openModal          = openModal;
+window.closeModal         = closeModal;

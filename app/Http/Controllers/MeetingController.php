@@ -793,7 +793,7 @@ class MeetingController extends Controller
                 try {
                     $this->googleDriveService->renameFile(
                         $meeting->transcript_drive_id,
-                        $newName . '.ju'
+                            $newName . '.ju'
                     );
                     Log::info("Archivo .ju renombrado en Drive", [
                         'file_id' => $meeting->transcript_drive_id,
@@ -818,7 +818,7 @@ class MeetingController extends Controller
 
                     $this->googleDriveService->renameFile(
                         $meeting->audio_drive_id,
-                        $newName . '.' . $extension
+                            $newName . '.' . $extension
                     );
                     Log::info("Archivo de audio renombrado en Drive", [
                         'file_id' => $meeting->audio_drive_id,
@@ -1678,7 +1678,7 @@ class MeetingController extends Controller
             // Buscar token del usuario para obtener recordings_folder_id
             $token = GoogleToken::where('username', $username)->first();
             if (!$token || empty($token->recordings_folder_id)) {
-                return config('drive.default_root_folder_name', 'Juntify_Recordings');
+                return config('drive.default_root_folder_name', 'Juntify Recordings');
             }
 
             // Buscar en la tabla folders el nombre de esa carpeta
@@ -1687,13 +1687,13 @@ class MeetingController extends Controller
                 return $folder->name;
             }
 
-            return config('drive.default_root_folder_name', 'Juntify_Recordings');
+            return config('drive.default_root_folder_name', 'Juntify Recordings');
         } catch (\Exception $e) {
             Log::warning('getRecordingsFolderName: error fetching folder name', [
                 'username' => $username,
                 'error' => $e->getMessage(),
             ]);
-            return config('drive.default_root_folder_name', 'Juntify_Recordings');
+            return config('drive.default_root_folder_name', 'Juntify Recordings');
         }
     }
 

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\TaskLaravel;
 use App\Models\TranscriptionLaravel;
+use App\Models\User;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -400,7 +402,8 @@ class TaskLaravelController extends Controller
         $task = TaskLaravel::where('id', $id)->where('username', $user->username)->firstOrFail();
 
         $data = $request->validate([
-            'tarea' => 'required|string|max:255',
+            // Permitir actualizaciones parciales (para Kanban / progreso)
+            'tarea' => 'sometimes|required|string|max:255',
             'descripcion' => 'nullable|string',
             'prioridad' => 'nullable|in:baja,media,alta',
             'fecha_inicio' => 'nullable|date',
@@ -472,6 +475,169 @@ class TaskLaravelController extends Controller
         $user = Auth::user();
         $task = TaskLaravel::where('id', $id)->where('username', $user->username)->firstOrFail();
         $task->update(['progreso' => 100]);
+        return response()->json(['success' => true, 'task' => $task]);
+    }
+
+    /**
+     * Enviar solicitud de asignación de tarea a un usuario (contacto/miembro de organización).
+     * Crea una notificación para que el usuario acepte o rechace.
+     * Request: { user_id?: int, email?: string, username?: string }
+     */
+    public function assign(Request $request, int $id): JsonResponse
+    {
+        $owner = Auth::user();
+        $task = TaskLaravel::where('id', $id)->where('username', $owner->username)->firstOrFail();
+
+        $data = $request->validate([
+            'user_id' => 'nullable|integer|exists:users,id',
+            'email' => 'nullable|email',
+            'username' => 'nullable|string'
+        ]);
+
+        // Resolver destinatario
+        $target = null;
+        if (!empty($data['user_id'])) {
+            $target = User::find($data['user_id']);
+        } elseif (!empty($data['email'])) {
+            $target = User::where('email', $data['email'])->first();
+        } elseif (!empty($data['username'])) {
+            $target = User::where('username', $data['username'])->first();
+        }
+        if (!$target) {
+            return response()->json(['success' => false, 'message' => 'Destinatario no encontrado'], 404);
+        }
+
+        // Crear notificación (compatibilidad legacy y nueva)
+        $notif = Notification::create([
+            'remitente' => $owner->id,          // legacy sender
+            'emisor'    => $target->id,         // legacy receiver
+            'user_id'   => $target->id,         // new schema
+            'from_user_id' => $owner->id,       // new schema
+            'type'      => 'task_assign_request',
+            'title'     => 'Solicitud de asignación de tarea',
+            'message'   => 'Te asignaron una tarea: ' . ($task->tarea ?? 'Sin título'),
+            'status'    => 'pending',
+            'data'      => [
+                'task_id' => $task->id,
+                'meeting_id' => $task->meeting_id,
+                'task_title' => $task->tarea,
+                'owner_username' => $owner->username,
+            ],
+            'read' => false,
+        ]);
+
+        return response()->json(['success' => true, 'notification_id' => $notif->id]);
+    }
+
+    /**
+     * Responder a una solicitud de asignación: accept | reject.
+     * Request: { action: 'accept'|'reject', notification_id?: int }
+     */
+    public function respond(Request $request, int $id, GoogleCalendarService $calendar): JsonResponse
+    {
+        $user = Auth::user();
+        $task = TaskLaravel::findOrFail($id);
+        // Permitir respuesta si el usuario es dueño de la tarea o el destinatario
+        if ($task->username !== $user->username) {
+            // Si no es dueño, aceptar solo si hay notificación pendiente para él
+            // (best-effort sin forzar notificación obligatoria)
+        }
+
+        $data = $request->validate([
+            'action' => 'required|in:accept,reject',
+            'notification_id' => 'nullable|integer'
+        ]);
+
+        // Marcar notificación como resuelta si viene
+        if (!empty($data['notification_id'])) {
+            try {
+                $n = Notification::find($data['notification_id']);
+                if ($n && $n->type === 'task_assign_request' && ($n->emisor == $user->id || $n->user_id == $user->id)) {
+                    $n->status = $data['action'] === 'accept' ? 'accepted' : 'rejected';
+                    $n->read = true; $n->read_at = now();
+                    $n->save();
+                }
+            } catch (\Throwable $e) { /* ignore */ }
+        }
+
+        // Notificar al dueño
+        $owner = User::where('username', $task->username)->first();
+
+        if ($data['action'] === 'accept') {
+            // Guardar asignación con un texto visible (nombre público)
+            $task->asignado = $user->full_name ?: ($user->username ?: $user->email);
+            // Si estaba completada y se re-asigna, reiniciar progreso a 0 si no se indicó lo contrario
+            if ($task->progreso >= 100) { $task->progreso = 0; }
+            $task->save();
+
+            // Intentar crear evento en Calendar si hay fecha/hora
+            $this->maybeSyncToCalendar($task, $calendar);
+
+            if ($owner) {
+                Notification::create([
+                    'remitente' => $user->id,
+                    'emisor'    => $owner->id,
+                    'user_id'   => $owner->id,
+                    'from_user_id' => $user->id,
+                    'type'      => 'task_assign_response',
+                    'title'     => 'Asignación aceptada',
+                    'message'   => 'Acepté la tarea: ' . ($task->tarea ?? ''),
+                    'status'    => 'accepted',
+                    'data'      => [ 'task_id' => $task->id ],
+                    'read'      => false,
+                ]);
+            }
+        } else {
+            // Rechazada
+            if ($owner) {
+                Notification::create([
+                    'remitente' => $user->id,
+                    'emisor'    => $owner->id,
+                    'user_id'   => $owner->id,
+                    'from_user_id' => $user->id,
+                    'type'      => 'task_assign_response',
+                    'title'     => 'Asignación rechazada',
+                    'message'   => 'Rechacé la tarea: ' . ($task->tarea ?? ''),
+                    'status'    => 'rejected',
+                    'data'      => [ 'task_id' => $task->id ],
+                    'read'      => false,
+                ]);
+            }
+        }
+
+        return response()->json(['success' => true, 'task' => $task]);
+    }
+
+    /** Reactivar una tarea (dueño la reabre y notifica al asignado) */
+    public function reactivate(int $id): JsonResponse
+    {
+        $owner = Auth::user();
+        $task = TaskLaravel::where('id', $id)->where('username', $owner->username)->firstOrFail();
+        $task->progreso = 0;
+        $task->save();
+
+        if (!empty($task->asignado)) {
+            // Buscar usuario potencial por nombre/username/email (best-effort)
+            $assignee = User::where('full_name', $task->asignado)
+                ->orWhere('username', $task->asignado)
+                ->orWhere('email', $task->asignado)
+                ->first();
+            if ($assignee) {
+                Notification::create([
+                    'remitente' => $owner->id,
+                    'emisor'    => $assignee->id,
+                    'user_id'   => $assignee->id,
+                    'from_user_id' => $owner->id,
+                    'type'      => 'task_reactivated',
+                    'title'     => 'Tarea reactivada',
+                    'message'   => 'Han reactivado la tarea: ' . ($task->tarea ?? ''),
+                    'status'    => 'pending',
+                    'data'      => [ 'task_id' => $task->id ],
+                    'read'      => false,
+                ]);
+            }
+        }
+
         return response()->json(['success' => true, 'task' => $task]);
     }
 }

@@ -492,9 +492,48 @@ class DriveController extends Controller
     }
     public function status()
     {
-        $connected = GoogleToken::where('username', Auth::user()->username)->exists();
+        $username = Auth::user()->username;
+        $token = GoogleToken::where('username', $username)->first();
+        if (! $token) {
+            return response()->json([
+                'connected' => false,
+                'message'   => 'No hay token de Google Drive vinculado a tu cuenta.',
+            ], 200);
+        }
 
-        return response()->json(['connected' => $connected]);
+        $rootFolder = null;
+        if (!empty($token->recordings_folder_id)) {
+            $rootFolder = Folder::where('google_token_id', $token->id)
+                ->whereNull('parent_id')
+                ->where('google_id', $token->recordings_folder_id)
+                ->first();
+        }
+        if (! $rootFolder) {
+            // fallback: primer folder raíz asociado al token
+            $rootFolder = Folder::where('google_token_id', $token->id)
+                ->whereNull('parent_id')
+                ->first();
+        }
+
+        $defaultRootName = config('drive.default_root_folder_name', 'Juntify Recordings');
+        $missing = [];
+        if ($rootFolder) {
+            $have = Subfolder::where('folder_id', $rootFolder->id)->pluck('name')->map(fn ($n) => strtolower($n))->all();
+            $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos', 'Documentos'];
+            foreach ($needed as $name) {
+                if (! in_array(strtolower($name), $have, true)) {
+                    $missing[] = $name;
+                }
+            }
+        }
+
+        return response()->json([
+            'connected'          => true,
+            'root_folder'        => $rootFolder?->name,
+            'root_folder_id'     => $rootFolder?->google_id,
+            'default_root_name'  => $defaultRootName,
+            'missing_subfolders' => $missing,
+        ], 200);
     }
 
     public function deleteSubfolder(string $id)
@@ -624,7 +663,7 @@ class DriveController extends Controller
 
                     try {
                         // Create a default recordings root folder (configurable)
-                        $defaultFolderName = config('drive.default_root_folder_name', 'Juntify_Recordings');
+                        $defaultFolderName = config('drive.default_root_folder_name', 'Juntify Recordings');
 
                         // Use the existing drive service to create folder
                         $driveService = app(\App\Services\GoogleDriveService::class);
@@ -825,9 +864,9 @@ class DriveController extends Controller
                 'subfolder_created'  => $subfolderCreated,
                 'drive_type'         => $useOrgDrive ? 'organization' : 'personal', // Información del tipo de drive usado
                 'folder_info'        => [
-                    'root_folder' => $rootFolder->name ?? config('drive.default_root_folder_name', 'Juntify_Recordings'),
+                    'root_folder' => $rootFolder->name ?? config('drive.default_root_folder_name', 'Juntify Recordings'),
                     'subfolder'   => $pendingSubfolderName,
-                    'full_path'   => ($rootFolder->name ?? config('drive.default_root_folder_name', 'Juntify_Recordings')) . '/' . $pendingSubfolderName,
+                    'full_path'   => ($rootFolder->name ?? config('drive.default_root_folder_name', 'Juntify Recordings')) . '/' . $pendingSubfolderName,
                     'drive_type'  => $useOrgDrive ? 'organization' : 'personal'
                 ],
             ];

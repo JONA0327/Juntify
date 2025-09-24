@@ -125,7 +125,7 @@ class GoogleAuthController extends Controller
                     }
 
                     $parentRootId = (string) (config('drive.root_folder_id') ?: '');
-                    $defaultRootName = config('drive.default_root_folder_name', 'Juntify_Recordings');
+                    $defaultRootName = config('drive.default_root_folder_name', 'Juntify Recordings');
 
                     $folderId = null;
                     $impersonated = false;

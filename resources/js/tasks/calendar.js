@@ -192,7 +192,13 @@ document.addEventListener('DOMContentLoaded', () => {
       row.appendChild(info);
       row.appendChild(meta);
 
-      row.addEventListener('click', ()=> openTaskDetailsModal(ev.id));
+      row.addEventListener('click', ()=> {
+        if (typeof window.openTaskDetailsModal === 'function') {
+          window.openTaskDetailsModal(ev.id);
+        } else {
+          openTaskDetailsModal(ev.id);
+        }
+      });
       list.appendChild(row);
     }
     panel.classList.remove('hidden');

@@ -205,6 +205,10 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/tasks-laravel/tasks/{id}', [TaskLaravelController::class, 'update'])->name('api.tasks-laravel.tasks.update');
         Route::delete('/tasks-laravel/tasks/{id}', [TaskLaravelController::class, 'destroy'])->name('api.tasks-laravel.tasks.destroy');
         Route::post('/tasks-laravel/tasks/{id}/complete', [TaskLaravelController::class, 'complete'])->name('api.tasks-laravel.tasks.complete');
+    // Asignaciones y respuestas
+    Route::post('/tasks-laravel/tasks/{id}/assign', [TaskLaravelController::class, 'assign'])->name('api.tasks-laravel.tasks.assign');
+    Route::post('/tasks-laravel/tasks/{id}/respond', [TaskLaravelController::class, 'respond'])->name('api.tasks-laravel.tasks.respond');
+    Route::post('/tasks-laravel/tasks/{id}/reactivate', [TaskLaravelController::class, 'reactivate'])->name('api.tasks-laravel.tasks.reactivate');
         Route::get('/tasks-laravel/calendar', [TaskLaravelController::class, 'calendar'])->name('api.tasks-laravel.calendar');
 
         // Comentarios de tareas

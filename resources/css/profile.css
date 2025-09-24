@@ -812,6 +812,19 @@ body {
     color: #3b82f6;
 }
 
+/* Danger button (Perfil) */
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 40px rgba(239, 68, 68, 0.4);
+}
+
 /* Mobile Responsive */
 /* Barra de navegación móvil exclusiva */
 .mobile-bottom-nav {
