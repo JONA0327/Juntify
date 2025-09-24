@@ -2880,6 +2880,18 @@ class AiAssistantController extends Controller
             // -------------------------------------------------
             $segmentsAll = is_array($data['segments'] ?? null) ? $data['segments'] : [];
             $segmentsSelected = [];
+            // Derivar lista de participantes potenciales (speakers distintos)
+            $participantsSet = [];
+            foreach ($segmentsAll as $segP) {
+                if (!is_array($segP)) continue;
+                $sp = $segP['speaker'] ?? $segP['display_speaker'] ?? null;
+                if (is_string($sp) && $sp !== '') {
+                    $normSp = trim(preg_replace('/\s+/', ' ', $sp));
+                    if ($normSp !== '' && mb_strlen($normSp) <= 60) {
+                        $participantsSet[$normSp] = true;
+                    }
+                }
+            }
 
             // Detección simple de speaker (nombres capitalizados en query) y tema (resto de palabras)
             $speakerCandidate = null;
@@ -2939,6 +2951,24 @@ class AiAssistantController extends Controller
                         'speaker' => $speaker,
                         'source' => 'ju',
                         'focused_speaker' => (bool)$speakerCandidate,
+                    ]),
+                ];
+            }
+
+            // Agregar fragmento de participantes si se detectan
+            if (!empty($participantsSet)) {
+                $participantsList = array_keys($participantsSet);
+                sort($participantsList);
+                $fragments[] = [
+                    'text' => 'Participantes detectados: ' . implode(', ', $participantsList),
+                    'source_id' => 'meeting:' . $meeting->id . ':participants',
+                    'content_type' => 'meeting_participants',
+                    'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'participants']),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' participantes',
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                        'participants_count' => count($participantsList),
+                        'participants' => $participantsList,
                     ]),
                 ];
             }
