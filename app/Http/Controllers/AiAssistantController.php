@@ -2271,8 +2271,8 @@ class AiAssistantController extends Controller
                 // -------------------------------------------------------------
                 //  CONFIGURACIÓN DE LÍMITES
                 // -------------------------------------------------------------
-                $totalLimit = 240; // límite global
-                $perMeetingLimit = 8; // por reunión (summary + key points + segmentos)
+                $totalLimit = (int) config('ai_assistant.context.container.max_total_fragments', 240); // límite global
+                $perMeetingLimit = (int) config('ai_assistant.context.container.per_meeting_limit', 8); // por reunión
                 $detailQuery = Str::contains($qLower, ['detalles', 'detalle', 'de que se hablo', 'de qué se habló', 'de que se habló', 'que se hablo', 'qué se habló']);
                 if (count($focusedMeetingIds) === 1) {
                     // Cuando solo preguntan por una reunión específica
@@ -2282,7 +2282,7 @@ class AiAssistantController extends Controller
                 $tasksPerMeetingLimit = $tasksWanted ? 10 : 3;
 
                 // Selección de conjunto de reuniones a iterar
-                $meetingsToIterate = $container->meetings;
+                $meetingsToIterate = $container->meetings; // por defecto TODAS las reuniones del contenedor
                 if (!empty($focusedMeetingIds)) {
                     $meetingsToIterate = $container->meetings->filter(fn($m) => in_array((int)$m->id, $focusedMeetingIds))->values();
                 }
@@ -2294,7 +2294,7 @@ class AiAssistantController extends Controller
                 $wantsGlobal = empty($focusedMeetingIds) && (
                     Str::contains($qLower, ['de que se hablo', 'de qué se habló', 'todas las reuniones', 'resumen general', 'que se hablo en el contenedor'])
                 );
-                if ($wantsGlobal) {
+                if ($wantsGlobal || config('ai_assistant.context.container.always_aggregate_all_meetings', true)) {
                     // Construir bloques agregados usando el cache de TODAS las reuniones
                     try {
                         /** @var MeetingJuCacheService $cache */
@@ -2400,6 +2400,9 @@ class AiAssistantController extends Controller
                 // -------------------------------------------------------------
                 //  RECORRER REUNIONES SELECCIONADAS
                 // -------------------------------------------------------------
+                // Si se indica distribución equitativa, recolectar por reunión y luego mezclar round-robin
+                $distribute = (bool) config('ai_assistant.context.container.distribute_evenly_across_meetings', true);
+                $perMeetingBatches = [];
                 foreach ($meetingsToIterate as $meeting) {
                     $meetingFragments = [];
 
@@ -2542,9 +2545,34 @@ class AiAssistantController extends Controller
                         }
                     } catch (\Throwable $e) { /* ignore tasks inclusion */ }
 
-                    $fragments = array_merge($fragments, $meetingFragments);
-                    if (count($fragments) > $totalLimit) {
-                        $fragments = array_slice($fragments, 0, $totalLimit);
+                    if ($distribute) {
+                        $perMeetingBatches[] = $meetingFragments;
+                    } else {
+                        $fragments = array_merge($fragments, $meetingFragments);
+                        if (count($fragments) > $totalLimit) {
+                            $fragments = array_slice($fragments, 0, $totalLimit);
+                        }
+                    }
+                }
+
+                // Interleaving round-robin para distribuir los fragmentos entre todas las reuniones
+                if ($distribute && !empty($perMeetingBatches)) {
+                    $indexes = array_fill(0, count($perMeetingBatches), 0);
+                    $added = 0;
+                    $maxAdded = $totalLimit;
+                    while ($added < $maxAdded) {
+                        $progress = false;
+                        for ($i = 0; $i < count($perMeetingBatches) && $added < $maxAdded; $i++) {
+                            $batch = $perMeetingBatches[$i] ?? [];
+                            $idx = $indexes[$i] ?? 0;
+                            if ($idx < count($batch)) {
+                                $fragments[] = $batch[$idx];
+                                $indexes[$i] = $idx + 1;
+                                $added++;
+                                $progress = true;
+                            }
+                        }
+                        if (!$progress) break; // no hay más elementos
                     }
                 }
             }
