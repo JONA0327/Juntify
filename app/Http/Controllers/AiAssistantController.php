@@ -2273,9 +2273,10 @@ class AiAssistantController extends Controller
                 // -------------------------------------------------------------
                 $totalLimit = 240; // límite global
                 $perMeetingLimit = 8; // por reunión (summary + key points + segmentos)
+                $detailQuery = Str::contains($qLower, ['detalles', 'detalle', 'de que se hablo', 'de qué se habló', 'de que se habló', 'que se hablo', 'qué se habló']);
                 if (count($focusedMeetingIds) === 1) {
-                    // Cuando solo preguntan por una reunión específica, ampliamos un poco los segmentos
-                    $perMeetingLimit = 20; // summary + key points + más segmentos
+                    // Cuando solo preguntan por una reunión específica
+                    $perMeetingLimit = $detailQuery ? 40 : 20; // más amplio si pide detalles
                 }
                 $tasksWanted = Str::contains($qLower, ['tarea', 'tareas', 'task', 'tasks', 'pendiente', 'pendientes', 'asignado']);
                 $tasksPerMeetingLimit = $tasksWanted ? 10 : 3;
@@ -2419,13 +2420,22 @@ class AiAssistantController extends Controller
                         'metadata' => $this->buildLegacyMeetingMetadata($meeting),
                     ];
 
-                    // Si estamos enfocados a una sola reunión, permitimos query vacío para no filtrar segmentos por palabras clave.
-                    $effectiveQuery = (count($focusedMeetingIds) === 1) ? '' : $query;
+                    // Si estamos enfocados a una sola reunión, o la consulta pide detalles explícitos, usamos query vacío (sin filtrado)
+                    $effectiveQuery = (count($focusedMeetingIds) === 1 || $detailQuery) ? '' : $query;
                     $juFragments = $this->buildFragmentsFromJu($meeting, $effectiveQuery);
                     if (!empty($juFragments)) {
                         // Recortar por reunión si fuera necesario
                         $slice = array_slice($juFragments, 0, $perMeetingLimit);
                         $meetingFragments = array_merge($meetingFragments, $slice);
+                        // Si pidió detalles y existe un summary completo no truncado disponible, asegurar que esté incluido primero
+                        if ($detailQuery) {
+                            $fullSummary = collect($juFragments)->firstWhere('content_type', 'meeting_summary_full');
+                            if ($fullSummary) {
+                                // Reordenar para ponerlo al inicio detrás de la ficha
+                                // Mantener única aparición
+                                $meetingFragments = array_values(array_unique($meetingFragments, SORT_REGULAR));
+                            }
+                        }
                     } else {
                         // Intentar Fallback: traer al menos los primeros 5 segmentos crudos del cache si existen
                         try {
