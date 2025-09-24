@@ -2238,31 +2238,31 @@ class AiAssistantController extends Controller
                 } catch (\Throwable $e) { /* ignore list build errors */ }
 
                 // -------------------------------------------------------------
-                //  DETECCIÓN DE ENFOQUE ESPECÍFICO A UNA REUNIÓN
-                //  Ejemplos capturados: "[#Kualifin #1]", "Kualifin #3", "reunion Kualifin 2"
+                //  DETECCIÓN DE ENFOQUE ESPECÍFICO A UNA REUNIÓN (robustecida)
+                //  Patrones soportados:
+                //  [#Kualifin #1] | Kualifin #1 | Kualifin 1 | reunion 72 | reunión 72 | #Kualifin #1 (sin corchetes)
+                //  Implementamos normalización y búsqueda flexible.
                 // -------------------------------------------------------------
                 $focusedMeetingIds = [];
                 $qLower = Str::lower($query);
                 if ($query !== '') {
+                    $normalizedQuery = Str::of($qLower)
+                        ->replace(['[',']','(',')'], ' ')
+                        ->replace('#', ' #') // separar hashes
+                        ->replaceMatches('/\s+/', ' ')
+                        ->trim();
                     foreach ($container->meetings as $m) {
                         $nameLower = Str::lower((string)$m->meeting_name);
-                        // Normalizar: quitar acentos simples (si llegan) y comparar.
-                        if (preg_match('/kualifin/i', $query)) { /* ejemplo concreto dado */ }
-                        // Patrón: nombre completo dentro del query
-                        if ($nameLower !== '' && Str::contains($qLower, $nameLower)) {
-                            $focusedMeetingIds[] = (int)$m->id; continue;
-                        }
-                        // Patrón: Nombre base + # + número
-                        if (preg_match('/kualifin\s*[#\- ]{0,2}' . preg_quote((string)$m->id, '/') . '\b/i', $query)) {
-                            $focusedMeetingIds[] = (int)$m->id; continue;
-                        }
-                        // Patrón con corchetes [#Kualifin #N]
-                        if (preg_match('/\[#?\s*' . preg_quote(explode('#', $nameLower)[0], '/') . '\s*#?' . preg_quote((string)$m->id, '/') . '\]/i', $qLower)) {
-                            $focusedMeetingIds[] = (int)$m->id; continue;
-                        }
-                        // Patrón genérico: "reunion 72" o "reunión 72"
-                        if (preg_match('/reuni[oó]n\s*' . (int)$m->id . '\b/i', $qLower)) {
-                            $focusedMeetingIds[] = (int)$m->id; continue;
+                        $baseName = trim(Str::of($nameLower)->replace('#','')->replaceMatches('/\s+/', ' '));
+                        $idPattern = (int)$m->id;
+                        $patterns = [
+                            '/'+preg_quote($nameLower,'/')+'\s*#'+preg_quote((string)$m->id,'/')+'\b/u',
+                            '/'+preg_quote($baseName,'/')+'\s*#?'+preg_quote((string)$m->id,'/')+'\b/u',
+                            '/#'+preg_quote($baseName,'/')+'\s*#?'+preg_quote((string)$m->id,'/')+'\b/u',
+                            '/reuni[oó]n\s*'+preg_quote((string)$m->id,'/')+'\b/u',
+                        ];
+                        foreach ($patterns as $p) {
+                            if (preg_match($p, $normalizedQuery)) { $focusedMeetingIds[] = (int)$m->id; break; }
                         }
                     }
                     $focusedMeetingIds = array_values(array_unique($focusedMeetingIds));
@@ -2427,6 +2427,56 @@ class AiAssistantController extends Controller
                         $slice = array_slice($juFragments, 0, $perMeetingLimit);
                         $meetingFragments = array_merge($meetingFragments, $slice);
                     } else {
+                        // Intentar Fallback: traer al menos los primeros 5 segmentos crudos del cache si existen
+                        try {
+                            /** @var \App\Services\MeetingJuCacheService $cache */
+                            $cache = app(\App\Services\MeetingJuCacheService::class);
+                            $cached = $cache->getCachedParsed((int)$meeting->id);
+                            if (is_array($cached) && !empty($cached['segments']) && is_array($cached['segments'])) {
+                                $rawSegs = array_slice($cached['segments'], 0, 5);
+                                foreach ($rawSegs as $seg) {
+                                    $txt = (string)($seg['text'] ?? '');
+                                    if ($txt === '') continue;
+                                    $speaker = $seg['speaker'] ?? $seg['display_speaker'] ?? 'Participante';
+                                    $time = $seg['start'] ?? $seg['time'] ?? null;
+                                    $meetingFragments[] = [
+                                        'text' => $speaker . ': ' . $txt,
+                                        'source_id' => 'meeting:' . $meeting->id . ':segment:fallback:' . ($time ?? uniqid()),
+                                        'content_type' => 'meeting_transcription_segment_fallback',
+                                        'location' => $this->buildLegacyMeetingLocation($meeting, [
+                                            'section' => 'transcription',
+                                            'speaker' => $speaker,
+                                            'timestamp' => $time,
+                                            'fallback' => true,
+                                        ]),
+                                        'similarity' => null,
+                                        'citation' => 'meeting:' . $meeting->id . ' t.' . ($time ? $this->formatTimeForCitation($time) : '—'),
+                                        'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                                            'transcription_segment' => true,
+                                            'timestamp' => $time,
+                                            'speaker' => $speaker,
+                                            'source' => 'ju',
+                                            'fallback' => true,
+                                        ]),
+                                    ];
+                                }
+                            } else {
+                                // Agregar fragmento diagnóstico si sabemos que hay cache meta (summary length o counts) pero no se generaron fragmentos
+                                if (is_array($cached) && (isset($cached['summary']) || isset($cached['segments']))) {
+                                    $meetingFragments[] = [
+                                        'text' => 'Diagnóstico: Se encontró cache .ju para la reunión pero no se pudieron generar fragmentos filtrados (posible filtrado por keywords o formato inesperado).',
+                                        'source_id' => 'meeting:' . $meeting->id . ':diagnostic:ju',
+                                        'content_type' => 'diagnostic',
+                                        'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'diagnostic']),
+                                        'similarity' => null,
+                                        'citation' => 'meeting:' . $meeting->id . ' diag',
+                                        'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['diagnostic' => true]),
+                                    ];
+                                }
+                            }
+                        } catch (\Throwable $e) {
+                            // ignorar
+                        }
                         // Fallback mínimo cuando no hay .ju utilizable
                         if (! empty($meeting->transcript_download_url)) {
                             $meetingFragments[] = [
@@ -3163,16 +3213,30 @@ class AiAssistantController extends Controller
 
     private function extractQueryKeywords(string $query, int $limit = 5): array
     {
-        $tokens = preg_split('/\s+/u', Str::lower($query));
-        if (! is_array($tokens)) {
-            return [];
+        $normalized = Str::of($query)
+            ->lower()
+            ->replaceMatches('/[\p{P}\p{S}]+/u', ' ')
+            ->replace(['á','é','í','ó','ú','ñ'], ['a','e','i','o','u','n']);
+
+        $tokens = preg_split('/\s+/u', (string)$normalized);
+        if (!is_array($tokens)) { return []; }
+
+        // Stopwords básicas español + genéricas
+        $stop = [
+            'de','la','el','los','las','un','una','unos','unas','que','en','y','o','u','del','al','se','lo','por','con','para','a','su','sus','sobre','sin','mas','más','es','fue','son','eran','ser','como','qué','que','donde','dónde','cuando','cuándo','cual','cuál',' cuales','con','este','esta','esto','estos','estas','hay','hubo','han','todas','toda','todos','todo','reunion','reunión','hablo','habló','dice','dijo','dime','pregunta','pregunto','acerca','sobre','de','las','los','al','del','por','que','quiero','ver','mostrar','muestra','dame','dame','resumen','completo','detallado'
+        ];
+        $stop = array_unique($stop);
+
+        $filtered = [];
+        foreach ($tokens as $t) {
+            $t = trim($t);
+            if ($t === '' || mb_strlen($t) < 3) { continue; }
+            if (in_array($t, $stop, true)) { continue; }
+            $filtered[] = $t;
         }
 
-        $keywords = array_values(array_unique(array_filter($tokens, function ($token) {
-            return mb_strlen($token) >= 3;
-        })));
-
-        return array_slice($keywords, 0, $limit);
+        $filtered = array_values(array_unique($filtered));
+        return array_slice($filtered, 0, $limit);
     }
 
     private function formatTimeForCitation($time): string
