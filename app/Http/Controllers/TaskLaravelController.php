@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\TaskReactivatedMail;
+use App\Models\Contact;
+use App\Models\Notification;
 use App\Models\TaskLaravel;
 use App\Models\TranscriptionLaravel;
 use App\Models\User;
-use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\JsonResponse;
 use App\Services\GoogleDriveService;
 use App\Traits\GoogleDriveHelpers;
@@ -26,6 +29,46 @@ class TaskLaravelController extends Controller
     public function __construct(GoogleDriveService $googleDriveService)
     {
         $this->googleDriveService = $googleDriveService;
+    }
+
+    protected function scopeVisibleTasks($query, User $user)
+    {
+        return $query->where(function ($q) use ($user) {
+            $q->where('username', $user->username)
+              ->orWhere('assigned_user_id', $user->id);
+        });
+    }
+
+    protected function ensureTaskAccess(TaskLaravel $task, User $user): void
+    {
+        if ($task->username !== $user->username && $task->assigned_user_id !== $user->id) {
+            abort(403, 'No tienes permisos para ver esta tarea');
+        }
+    }
+
+    protected function normalizeAssignmentStatus(TaskLaravel $task): void
+    {
+        if (!$task->assigned_user_id) {
+            if (!is_null($task->assignment_status)) {
+                $task->assignment_status = null;
+                $task->save();
+            }
+            return;
+        }
+
+        $desired = $task->progreso >= 100
+            ? 'completed'
+            : ($task->assignment_status === 'pending' ? 'pending' : 'accepted');
+
+        if ($task->assignment_status !== $desired) {
+            $task->assignment_status = $desired;
+            $task->save();
+        }
+    }
+
+    protected function withTaskRelations(TaskLaravel $task): TaskLaravel
+    {
+        return $task->loadMissing(['assignedUser:id,full_name,email', 'meeting:id,meeting_name']);
     }
     /**
      * Lista reuniones para importar tareas (misma lógica que reuniones_v2: getMeetings)
@@ -64,11 +107,11 @@ class TaskLaravelController extends Controller
             return response()->json(['success' => false, 'message' => 'La reunión no tiene archivo .ju'], 404);
         }
 
-    // Configurar Drive y descargar/decodificar con traits compartidos
-    $this->setGoogleDriveToken($user);
-    $content = $this->downloadFromDrive($meeting->transcript_drive_id);
-    $res = $this->decryptJuFile($content);
-    $data = $this->extractMeetingDataFromJson($res['data'] ?? []);
+        // Configurar Drive y descargar/decodificar con traits compartidos
+        $this->setGoogleDriveToken($user);
+        $content = $this->downloadFromDrive($meeting->transcript_drive_id);
+        $res = $this->decryptJuFile($content);
+        $data = $this->extractMeetingDataFromJson($res['data'] ?? []);
 
         $rawTasks = $data['tasks'] ?? [];
         if (!$rawTasks || (is_array($rawTasks) && count($rawTasks) === 0)) {
@@ -189,27 +232,73 @@ class TaskLaravelController extends Controller
         $user = Auth::user();
         $meetingId = $request->query('meeting_id');
 
-        $query = TaskLaravel::query()->where('username', $user->username);
+        $query = TaskLaravel::query();
+        $this->scopeVisibleTasks($query, $user);
         if (!empty($meetingId)) {
             $query->where('meeting_id', (int) $meetingId);
         }
 
-        // Obtener tareas
-            $tasks = $query->orderBy('fecha_limite', 'asc')
-                ->orderBy('prioridad', 'asc')
-                ->get(['id','username','meeting_id','tarea','prioridad','fecha_inicio','fecha_limite','hora_limite','descripcion','asignado','progreso','created_at','updated_at']);
+        $tasksQuery = (clone $query)
+            ->with(['assignedUser:id,full_name,email', 'meeting:id,meeting_name'])
+            ->orderBy('fecha_limite', 'asc')
+            ->orderBy('prioridad', 'asc');
+
+        $tasks = $tasksQuery->get([
+            'id',
+            'username',
+            'meeting_id',
+            'tarea',
+            'prioridad',
+            'fecha_inicio',
+            'fecha_limite',
+            'hora_limite',
+            'descripcion',
+            'asignado',
+            'assigned_user_id',
+            'assignment_status',
+            'progreso',
+            'created_at',
+            'updated_at',
+        ]);
 
         $today = Carbon::today();
-        $total = (clone $query)->count();
-        $pending = (clone $query)->where(function($q){ $q->whereNull('progreso')->orWhere('progreso', 0); })->count();
-        $inProgress = (clone $query)->where('progreso', '>', 0)->where('progreso', '<', 100)->count();
-        $completed = (clone $query)->where('progreso', '>=', 100)->count();
-        $overdue = (clone $query)->where(function($q){ $q->whereNull('progreso')->orWhere('progreso', '<', 100); })
+        $statsQuery = clone $query;
+        $total = (clone $statsQuery)->count();
+        $pending = (clone $statsQuery)->where(function($q){ $q->whereNull('progreso')->orWhere('progreso', 0); })->count();
+        $inProgress = (clone $statsQuery)->where('progreso', '>', 0)->where('progreso', '<', 100)->count();
+        $completed = (clone $statsQuery)->where('progreso', '>=', 100)->count();
+        $overdue = (clone $statsQuery)->where(function($q){ $q->whereNull('progreso')->orWhere('progreso', '<', 100); })
             ->whereDate('fecha_limite', '<', $today)->count();
+
+        $tasksPayload = $tasks->map(function ($task) {
+            return [
+                'id' => $task->id,
+                'username' => $task->username,
+                'meeting_id' => $task->meeting_id,
+                'meeting_name' => $task->meeting->meeting_name ?? null,
+                'tarea' => $task->tarea,
+                'prioridad' => $task->prioridad,
+                'fecha_inicio' => optional($task->fecha_inicio)->toDateString(),
+                'fecha_limite' => optional($task->fecha_limite)->toDateString(),
+                'hora_limite' => $task->hora_limite,
+                'descripcion' => $task->descripcion,
+                'asignado' => $task->asignado,
+                'assigned_user_id' => $task->assigned_user_id,
+                'assignment_status' => $task->assignment_status,
+                'assigned_user' => $task->assignedUser ? [
+                    'id' => $task->assignedUser->id,
+                    'name' => $task->assignedUser->full_name ?? $task->assignedUser->email,
+                    'email' => $task->assignedUser->email,
+                ] : null,
+                'progreso' => $task->progreso,
+                'created_at' => optional($task->created_at)->toDateTimeString(),
+                'updated_at' => optional($task->updated_at)->toDateTimeString(),
+            ];
+        })->values();
 
         return response()->json([
             'success' => true,
-            'tasks' => $tasks,
+            'tasks' => $tasksPayload,
             'stats' => [
                 'total' => $total,
                 'pending' => $pending,
@@ -237,7 +326,7 @@ class TaskLaravelController extends Controller
             return response()->json([], 200);
         }
 
-        $q = TaskLaravel::query()->where('username', $user->username);
+        $q = $this->scopeVisibleTasks(TaskLaravel::query(), $user);
         if ($start && $end) {
             $q->where(function($query) use ($start, $end) {
                 // fecha_limite dentro del rango
@@ -247,7 +336,7 @@ class TaskLaravelController extends Controller
             });
         }
 
-        $tasks = $q->get();
+        $tasks = $q->with('assignedUser:id,full_name,email')->get();
         $today = Carbon::today();
         $events = $tasks->map(function ($t) use ($today) {
             $base = $t->fecha_limite ?: $t->fecha_inicio ?: null;
@@ -279,7 +368,7 @@ class TaskLaravelController extends Controller
                     'status' => $status,
                     'priority' => $t->prioridad,
                     'asignado' => $t->asignado,
-                    'assignee' => null,
+                    'assignee' => $t->assignedUser ? ($t->assignedUser->full_name ?? $t->assignedUser->email) : null,
                     'progress' => $t->progreso,
                     'meeting_id' => $t->meeting_id,
                     'hora_limite' => $t->hora_limite,
@@ -296,10 +385,11 @@ class TaskLaravelController extends Controller
     public function show(int $id): JsonResponse
     {
         $user = Auth::user();
-        $task = TaskLaravel::with('meeting:id,meeting_name')
+        $task = TaskLaravel::with(['meeting:id,meeting_name', 'assignedUser:id,full_name,email'])
             ->where('id', $id)
-            ->where('username', $user->username)
             ->firstOrFail();
+
+        $this->ensureTaskAccess($task, $user);
 
         $taskArr = $task->only([
             'id',
@@ -310,6 +400,8 @@ class TaskLaravelController extends Controller
             'fecha_limite',
             'hora_limite',
             'asignado',
+            'assigned_user_id',
+            'assignment_status',
             'progreso',
         ]);
 
@@ -319,6 +411,12 @@ class TaskLaravelController extends Controller
         }
 
         $taskArr['meeting_name'] = $task->meeting->meeting_name ?? null;
+        $taskArr['assigned_user'] = $task->assignedUser ? [
+            'id' => $task->assignedUser->id,
+            'name' => $task->assignedUser->full_name ?? $task->assignedUser->email,
+            'email' => $task->assignedUser->email,
+        ] : null;
+        $taskArr['owner_username'] = $task->username;
 
         return response()->json(['success' => true, 'task' => $taskArr]);
     }
@@ -392,14 +490,19 @@ class TaskLaravelController extends Controller
         // Intentar sincronizar con Google Calendar si hay fecha
         $this->maybeSyncToCalendar($task, $calendar);
 
-        return response()->json(['success' => true, 'created' => $created, 'task' => $task]);
+        return response()->json([
+            'success' => true,
+            'created' => $created,
+            'task' => $this->withTaskRelations($task),
+        ]);
     }
 
     /** Actualizar una tarea en tasks_laravel */
     public function update(Request $request, int $id, GoogleCalendarService $calendar): JsonResponse
     {
         $user = Auth::user();
-        $task = TaskLaravel::where('id', $id)->where('username', $user->username)->firstOrFail();
+        $task = TaskLaravel::findOrFail($id);
+        $this->ensureTaskAccess($task, $user);
 
         $data = $request->validate([
             // Permitir actualizaciones parciales (para Kanban / progreso)
@@ -412,19 +515,37 @@ class TaskLaravelController extends Controller
             'progreso' => 'nullable|integer|min:0|max:100',
         ]);
 
+        if ($task->username !== $user->username) {
+            if ($task->assignment_status === 'pending') {
+                return response()->json(['success' => false, 'message' => 'Debes aceptar la tarea antes de actualizarla'], 403);
+            }
+            $data = array_intersect_key($data, ['progreso' => true]);
+            if (!array_key_exists('progreso', $data)) {
+                return response()->json(['success' => false, 'message' => 'Solo puedes actualizar el progreso de la tarea asignada'], 403);
+            }
+        }
+
         $task->update($data);
 
         // Sincronizar con Google Calendar en actualizaciones
         $this->maybeSyncToCalendar($task, $calendar);
 
-        return response()->json(['success' => true, 'task' => $task]);
+        $this->normalizeAssignmentStatus($task);
+
+        return response()->json([
+            'success' => true,
+            'task' => $this->withTaskRelations($task),
+        ]);
     }
 
     /** Eliminar una tarea en tasks_laravel */
     public function destroy(int $id): JsonResponse
     {
         $user = Auth::user();
-        $task = TaskLaravel::where('id', $id)->where('username', $user->username)->firstOrFail();
+        $task = TaskLaravel::findOrFail($id);
+        if ($task->username !== $user->username) {
+            abort(403, 'Solo el creador puede eliminar la tarea');
+        }
         $task->delete();
         return response()->json(['success' => true]);
     }
@@ -473,9 +594,14 @@ class TaskLaravelController extends Controller
     public function complete(int $id): JsonResponse
     {
         $user = Auth::user();
-        $task = TaskLaravel::where('id', $id)->where('username', $user->username)->firstOrFail();
+        $task = TaskLaravel::findOrFail($id);
+        $this->ensureTaskAccess($task, $user);
         $task->update(['progreso' => 100]);
-        return response()->json(['success' => true, 'task' => $task]);
+        $this->normalizeAssignmentStatus($task);
+        return response()->json([
+            'success' => true,
+            'task' => $this->withTaskRelations($task),
+        ]);
     }
 
     /**
@@ -487,6 +613,7 @@ class TaskLaravelController extends Controller
     {
         $owner = Auth::user();
         $task = TaskLaravel::where('id', $id)->where('username', $owner->username)->firstOrFail();
+        $task->loadMissing('meeting');
 
         $data = $request->validate([
             'user_id' => 'nullable|integer|exists:users,id',
@@ -507,6 +634,15 @@ class TaskLaravelController extends Controller
             return response()->json(['success' => false, 'message' => 'Destinatario no encontrado'], 404);
         }
 
+        $displayName = $target->full_name ?: ($target->username ?: $target->email);
+        $task->asignado = $displayName;
+        $task->assigned_user_id = $target->id;
+        $task->assignment_status = 'pending';
+        if ($task->progreso >= 100) {
+            $task->progreso = 0;
+        }
+        $task->save();
+
         // Crear notificación (compatibilidad legacy y nueva)
         $notif = Notification::create([
             'remitente' => $owner->id,          // legacy sender
@@ -515,18 +651,72 @@ class TaskLaravelController extends Controller
             'from_user_id' => $owner->id,       // new schema
             'type'      => 'task_assign_request',
             'title'     => 'Solicitud de asignación de tarea',
-            'message'   => 'Te asignaron una tarea: ' . ($task->tarea ?? 'Sin título'),
+            'message'   => sprintf('Te asignaron la tarea "%s" de la reunión "%s".',
+                $task->tarea ?? 'Sin título',
+                $task->meeting->meeting_name ?? 'Sin nombre'
+            ),
             'status'    => 'pending',
             'data'      => [
                 'task_id' => $task->id,
                 'meeting_id' => $task->meeting_id,
                 'task_title' => $task->tarea,
                 'owner_username' => $owner->username,
+                'meeting_name' => $task->meeting->meeting_name ?? null,
             ],
             'read' => false,
         ]);
 
-        return response()->json(['success' => true, 'notification_id' => $notif->id]);
+        return response()->json([
+            'success' => true,
+            'notification_id' => $notif->id,
+            'task' => $this->withTaskRelations($task),
+        ]);
+    }
+
+    /** Lista contactos y miembros de organización disponibles para asignar tareas */
+    public function assignableUsers(): JsonResponse
+    {
+        $user = Auth::user();
+
+        $contacts = Contact::with('contact:id,full_name,email')
+            ->where('user_id', $user->id)
+            ->get()
+            ->filter(fn ($c) => $c->contact)
+            ->map(function ($c) {
+                return [
+                    'id' => $c->contact->id,
+                    'name' => $c->contact->full_name ?? $c->contact->email,
+                    'email' => $c->contact->email,
+                    'source' => 'contact',
+                ];
+            });
+
+        $organizationUsers = collect();
+        if (!empty($user->current_organization_id)) {
+            $organizationUsers = User::query()
+                ->where('id', '!=', $user->id)
+                ->where('current_organization_id', $user->current_organization_id)
+                ->select('id', 'full_name', 'email')
+                ->get()
+                ->map(function ($orgUser) {
+                    return [
+                        'id' => $orgUser->id,
+                        'name' => $orgUser->full_name ?? $orgUser->email,
+                        'email' => $orgUser->email,
+                        'source' => 'organization',
+                    ];
+                });
+        }
+
+        $combined = $contacts->concat($organizationUsers)
+            ->unique('id')
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'users' => $combined,
+        ]);
     }
 
     /**
@@ -537,11 +727,10 @@ class TaskLaravelController extends Controller
     {
         $user = Auth::user();
         $task = TaskLaravel::findOrFail($id);
-        // Permitir respuesta si el usuario es dueño de la tarea o el destinatario
-        if ($task->username !== $user->username) {
-            // Si no es dueño, aceptar solo si hay notificación pendiente para él
-            // (best-effort sin forzar notificación obligatoria)
+        if ($task->assigned_user_id !== $user->id) {
+            abort(403, 'No puedes responder esta asignación');
         }
+        $task->loadMissing('meeting');
 
         $data = $request->validate([
             'action' => 'required|in:accept,reject',
@@ -564,10 +753,12 @@ class TaskLaravelController extends Controller
         $owner = User::where('username', $task->username)->first();
 
         if ($data['action'] === 'accept') {
-            // Guardar asignación con un texto visible (nombre público)
+            $task->assignment_status = 'accepted';
+            $task->assigned_user_id = $user->id;
             $task->asignado = $user->full_name ?: ($user->username ?: $user->email);
-            // Si estaba completada y se re-asigna, reiniciar progreso a 0 si no se indicó lo contrario
-            if ($task->progreso >= 100) { $task->progreso = 0; }
+            if ($task->progreso >= 100) {
+                $task->progreso = 0;
+            }
             $task->save();
 
             // Intentar crear evento en Calendar si hay fecha/hora
@@ -581,7 +772,10 @@ class TaskLaravelController extends Controller
                     'from_user_id' => $user->id,
                     'type'      => 'task_assign_response',
                     'title'     => 'Asignación aceptada',
-                    'message'   => 'Acepté la tarea: ' . ($task->tarea ?? ''),
+                    'message'   => sprintf('Acepté la tarea "%s" de la reunión "%s".',
+                        $task->tarea ?? '',
+                        $task->meeting->meeting_name ?? 'Sin nombre'
+                    ),
                     'status'    => 'accepted',
                     'data'      => [ 'task_id' => $task->id ],
                     'read'      => false,
@@ -589,6 +783,11 @@ class TaskLaravelController extends Controller
             }
         } else {
             // Rechazada
+            $task->assignment_status = 'rejected';
+            $task->assigned_user_id = null;
+            $task->asignado = null;
+            $task->save();
+
             if ($owner) {
                 Notification::create([
                     'remitente' => $user->id,
@@ -597,7 +796,10 @@ class TaskLaravelController extends Controller
                     'from_user_id' => $user->id,
                     'type'      => 'task_assign_response',
                     'title'     => 'Asignación rechazada',
-                    'message'   => 'Rechacé la tarea: ' . ($task->tarea ?? ''),
+                    'message'   => sprintf('Rechacé la tarea "%s" de la reunión "%s".',
+                        $task->tarea ?? '',
+                        $task->meeting->meeting_name ?? 'Sin nombre'
+                    ),
                     'status'    => 'rejected',
                     'data'      => [ 'task_id' => $task->id ],
                     'read'      => false,
@@ -605,23 +807,41 @@ class TaskLaravelController extends Controller
             }
         }
 
-        return response()->json(['success' => true, 'task' => $task]);
+        $this->normalizeAssignmentStatus($task);
+
+        return response()->json([
+            'success' => true,
+            'task' => $this->withTaskRelations($task),
+        ]);
     }
 
     /** Reactivar una tarea (dueño la reabre y notifica al asignado) */
-    public function reactivate(int $id): JsonResponse
+    public function reactivate(Request $request, int $id): JsonResponse
     {
         $owner = Auth::user();
         $task = TaskLaravel::where('id', $id)->where('username', $owner->username)->firstOrFail();
+        $task->loadMissing('meeting');
+
+        $data = $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+        $reason = $data['reason'] ?? null;
+
         $task->progreso = 0;
+        if ($task->assignment_status === 'completed') {
+            $task->assignment_status = 'accepted';
+        }
         $task->save();
 
-        if (!empty($task->asignado)) {
-            // Buscar usuario potencial por nombre/username/email (best-effort)
-            $assignee = User::where('full_name', $task->asignado)
-                ->orWhere('username', $task->asignado)
-                ->orWhere('email', $task->asignado)
-                ->first();
+        $this->normalizeAssignmentStatus($task);
+
+        if (!empty($task->assigned_user_id) || !empty($task->asignado)) {
+            $assignee = $task->assigned_user_id
+                ? User::find($task->assigned_user_id)
+                : User::where('full_name', $task->asignado)
+                    ->orWhere('username', $task->asignado)
+                    ->orWhere('email', $task->asignado)
+                    ->first();
             if ($assignee) {
                 Notification::create([
                     'remitente' => $owner->id,
@@ -630,14 +850,34 @@ class TaskLaravelController extends Controller
                     'from_user_id' => $owner->id,
                     'type'      => 'task_reactivated',
                     'title'     => 'Tarea reactivada',
-                    'message'   => 'Han reactivado la tarea: ' . ($task->tarea ?? ''),
+                    'message'   => sprintf('Se reactivó la tarea "%s" de la reunión "%s".',
+                        $task->tarea ?? '',
+                        $task->meeting->meeting_name ?? 'Sin nombre'
+                    ),
                     'status'    => 'pending',
-                    'data'      => [ 'task_id' => $task->id ],
+                    'data'      => [
+                        'task_id' => $task->id,
+                        'reason' => $reason,
+                    ],
                     'read'      => false,
                 ]);
+
+                if (!empty($assignee->email)) {
+                    try {
+                        Mail::to($assignee->email)->send(new TaskReactivatedMail($task, $owner, $reason));
+                    } catch (\Throwable $mailException) {
+                        Log::warning('No se pudo enviar correo de tarea reactivada', [
+                            'task_id' => $task->id,
+                            'error' => $mailException->getMessage(),
+                        ]);
+                    }
+                }
             }
         }
 
-        return response()->json(['success' => true, 'task' => $task]);
+        return response()->json([
+            'success' => true,
+            'task' => $this->withTaskRelations($task),
+        ]);
     }
 }

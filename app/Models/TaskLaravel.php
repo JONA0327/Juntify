@@ -18,9 +18,11 @@ class TaskLaravel extends Model
         'prioridad',
         'fecha_inicio',
         'fecha_limite',
-    'hora_limite',
+        'hora_limite',
         'descripcion',
-    'asignado',
+        'asignado',
+        'assigned_user_id',
+        'assignment_status',
         'progreso',
         'google_event_id',
         'google_calendar_id',
@@ -30,8 +32,10 @@ class TaskLaravel extends Model
     protected $casts = [
         'fecha_inicio' => 'date',
         'fecha_limite' => 'date',
-    'hora_limite' => 'string',
-    'asignado' => 'string',
+        'hora_limite' => 'string',
+        'asignado' => 'string',
+        'assigned_user_id' => 'string',
+        'assignment_status' => 'string',
         'progreso' => 'integer',
         'calendar_synced_at' => 'datetime',
     ];
@@ -44,5 +48,10 @@ class TaskLaravel extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'username', 'username');
+    }
+
+    public function assignedUser()
+    {
+        return $this->belongsTo(User::class, 'assigned_user_id');
     }
 }

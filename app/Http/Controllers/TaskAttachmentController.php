@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessAiDocumentJob;
 use App\Models\ArchivoReunion;
 use App\Models\AiDocument;
 use App\Models\AiTaskDocument;
 use App\Models\AiMeetingDocument;
+use App\Models\Organization;
+use App\Models\OrganizationSubfolder;
 use App\Models\TaskLaravel;
 use App\Services\GoogleDriveService;
 use App\Traits\GoogleDriveHelpers;
@@ -28,11 +31,20 @@ class TaskAttachmentController extends Controller
     public function index(int $taskId): JsonResponse
     {
         $user = Auth::user();
-        TaskLaravel::where('id', $taskId)->where('username', $user->username)->firstOrFail();
+        $task = TaskLaravel::findOrFail($taskId);
+        if ($task->username !== $user->username && $task->assigned_user_id !== $user->id) {
+            abort(403, 'No tienes permisos para ver los archivos de esta tarea');
+        }
 
         $files = ArchivoReunion::where('task_id', $taskId)->orderBy('created_at', 'desc')->get();
 
-        return response()->json(['success' => true, 'files' => $files]);
+        $driveOptions = $this->driveOptionsForUser($user);
+
+        return response()->json([
+            'success' => true,
+            'files' => $files,
+            'drive_options' => $driveOptions,
+        ]);
     }
 
     public function folders(Request $request): JsonResponse
@@ -51,92 +63,177 @@ class TaskAttachmentController extends Controller
     public function store(Request $request, int $taskId): JsonResponse
     {
         $user = Auth::user();
-        $task = TaskLaravel::where('id', $taskId)->where('username', $user->username)->firstOrFail();
-        $this->setGoogleDriveToken($request);
+        $task = TaskLaravel::findOrFail($taskId);
+        if ($task->username !== $user->username && $task->assigned_user_id !== $user->id) {
+            abort(403, 'No tienes permisos para subir archivos a esta tarea');
+        }
+
+        $user->loadMissing('googleToken', 'organization.googleToken', 'organization.folder');
 
         $data = $request->validate([
             'folder_id' => 'nullable|string',
-            'file' => 'required|file|max:102400', // 100MB
+            'drive_type' => 'nullable|in:personal,organization',
+            'file' => 'nullable|file|max:102400',
+            'files' => 'nullable',
+            'files.*' => 'file|max:102400',
         ]);
 
-        $uploadedFile = $data['file'];
-        $name = $uploadedFile->getClientOriginalName();
-        $mime = $uploadedFile->getMimeType();
-        $bytes = file_get_contents($uploadedFile->getRealPath());
+        $driveType = $data['drive_type'] ?? 'personal';
 
-        // Si no se especifica carpeta, usar/crear 'Documentos' bajo la carpeta raíz del usuario
-        $folderId = $data['folder_id'] ?? $this->ensureDocumentsFolderForUser($user);
-
-        $fileId = $this->googleDriveService->uploadFile($name, $mime, $folderId, $bytes);
-        $webLink = $this->googleDriveService->getFileLink($fileId);
-
-        $rec = ArchivoReunion::create([
-            'task_id' => $task->id,
-            'username' => $user->username,
-            'name' => $name,
-            'mime_type' => $mime,
-            'size' => $uploadedFile->getSize(),
-            'drive_file_id' => $fileId,
-            'drive_folder_id' => $folderId,
-            'drive_web_link' => $webLink,
-        ]);
-
-        // Registrar como AiDocument y asociar a la tarea y la reunión
-        try {
-            $docType = $this->guessDocumentType($mime, $name);
-            $aiDoc = AiDocument::create([
-                'username' => $user->username,
-                'name' => pathinfo($name, PATHINFO_FILENAME),
-                'original_filename' => $name,
-                'document_type' => $docType,
-                'mime_type' => $mime,
-                'file_size' => $uploadedFile->getSize(),
-                'drive_file_id' => $fileId,
-                'drive_folder_id' => $folderId,
-                'drive_type' => 'personal',
-                'processing_status' => 'pending',
-                'document_metadata' => ['web_link' => $webLink],
-            ]);
-
-            // Asociar a tarea
-            AiTaskDocument::create([
-                'document_id' => $aiDoc->id,
-                'task_id' => (string) $task->id,
-                'assigned_by_username' => $user->username,
-                'assignment_note' => 'Subido desde tareas',
-            ]);
-
-            // Asociar a reunión (si existe en la tarea)
-            if (!empty($task->meeting_id)) {
-                AiMeetingDocument::create([
-                    'document_id' => $aiDoc->id,
-                    'meeting_id' => (string) $task->meeting_id,
-                    'meeting_type' => AiMeetingDocument::MEETING_TYPE_LEGACY,
-                    'assigned_by_username' => $user->username,
-                    'assignment_note' => 'Archivo de tarea asociado a reunión',
-                ]);
+        $uploaded = collect();
+        if ($request->hasFile('file') && $request->file('file')) {
+            $uploaded->push($request->file('file'));
+        }
+        if ($request->hasFile('files')) {
+            $filesInput = $request->file('files');
+            if (is_array($filesInput)) {
+                foreach ($filesInput as $fileCandidate) {
+                    if ($fileCandidate) {
+                        $uploaded->push($fileCandidate);
+                    }
+                }
+            } elseif ($filesInput) {
+                $uploaded->push($filesInput);
             }
+        }
+        $uploadedFiles = $uploaded->filter()->values();
 
-            // Procesamiento en background (OCR/extracción)
-            \App\Jobs\ProcessAiDocumentJob::dispatch($aiDoc->id);
-        } catch (\Throwable $e) {
-            Log::warning('No se pudo registrar AiDocument para archivo de tarea', [
-                'task_id' => $task->id,
-                'error' => $e->getMessage(),
-            ]);
+        if ($uploadedFiles->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'Selecciona un archivo para subir'], 422);
         }
 
-        return response()->json(['success' => true, 'file' => $rec]);
+        $availableOptions = collect($this->driveOptionsForUser($user))->pluck('value')->all();
+        if (!in_array($driveType, $availableOptions, true)) {
+            return response()->json(['success' => false, 'message' => 'No tienes permisos para subir a este Drive'], 403);
+        }
+
+        $folderId = $data['folder_id'] ?? null;
+        $organizationId = null;
+
+        try {
+            if ($driveType === 'organization') {
+                $organization = $user->organization;
+                if (!$organization) {
+                    return response()->json(['success' => false, 'message' => 'No tienes una organización activa configurada'], 422);
+                }
+                $this->setOrganizationDriveToken($organization);
+                $folderId = $folderId ?: $this->ensureOrganizationDocumentsFolder($organization);
+                $organizationId = $organization->id;
+            } else {
+                $this->setGoogleDriveToken($user);
+                $folderId = $folderId ?: $this->ensureDocumentsFolderForUser($user);
+            }
+        } catch (\Throwable $exception) {
+            Log::error('No se pudo preparar el entorno de Drive para subir archivos de tarea', [
+                'user_id' => $user->id,
+                'drive_type' => $driveType,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No fue posible conectar con Google Drive. Verifica tu integración e inténtalo nuevamente.',
+            ], 500);
+        }
+
+        $createdFiles = [];
+
+        foreach ($uploadedFiles as $uploadedFile) {
+            $name = $uploadedFile->getClientOriginalName();
+            $mime = $uploadedFile->getMimeType();
+            $bytes = file_get_contents($uploadedFile->getRealPath());
+
+            $fileId = $this->googleDriveService->uploadFile($name, $mime, $folderId, $bytes);
+            $webLink = $this->googleDriveService->getFileLink($fileId);
+
+            $record = ArchivoReunion::create([
+                'task_id' => $task->id,
+                'username' => $user->username,
+                'name' => $name,
+                'mime_type' => $mime,
+                'size' => $uploadedFile->getSize(),
+                'drive_file_id' => $fileId,
+                'drive_folder_id' => $folderId,
+                'drive_web_link' => $webLink,
+                'drive_type' => $driveType,
+                'organization_id' => $organizationId,
+            ]);
+
+            $createdFiles[] = $record;
+
+            try {
+                $docType = $this->guessDocumentType($mime, $name);
+                $aiDoc = AiDocument::create([
+                    'username' => $user->username,
+                    'name' => pathinfo($name, PATHINFO_FILENAME),
+                    'original_filename' => $name,
+                    'document_type' => $docType,
+                    'mime_type' => $mime,
+                    'file_size' => $uploadedFile->getSize(),
+                    'drive_file_id' => $fileId,
+                    'drive_folder_id' => $folderId,
+                    'drive_type' => $driveType,
+                    'processing_status' => 'pending',
+                    'document_metadata' => [
+                        'web_link' => $webLink,
+                        'drive_type' => $driveType,
+                        'organization_id' => $organizationId,
+                    ],
+                ]);
+
+                AiTaskDocument::create([
+                    'document_id' => $aiDoc->id,
+                    'task_id' => (string) $task->id,
+                    'assigned_by_username' => $user->username,
+                    'assignment_note' => 'Subido desde tareas',
+                ]);
+
+                if (!empty($task->meeting_id)) {
+                    AiMeetingDocument::create([
+                        'document_id' => $aiDoc->id,
+                        'meeting_id' => (string) $task->meeting_id,
+                        'meeting_type' => AiMeetingDocument::MEETING_TYPE_LEGACY,
+                        'assigned_by_username' => $user->username,
+                        'assignment_note' => 'Archivo de tarea asociado a reunión',
+                    ]);
+                }
+
+                ProcessAiDocumentJob::dispatch($aiDoc->id);
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo registrar AiDocument para archivo de tarea', [
+                    'task_id' => $task->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'files' => $createdFiles,
+        ]);
     }
 
     public function download(Request $request, int $fileId)
     {
         $user = Auth::user();
         $file = ArchivoReunion::findOrFail($fileId);
-        // Ensure the owner can access
-        TaskLaravel::where('id', $file->task_id)->where('username', $user->username)->firstOrFail();
+        $task = TaskLaravel::with('user')->findOrFail($file->task_id);
+        if ($task->username !== $user->username && $task->assigned_user_id !== $user->id) {
+            abort(403, 'No tienes permisos para descargar este archivo');
+        }
 
-        $this->setGoogleDriveToken($request);
+        if (($file->drive_type ?? 'personal') === 'organization') {
+            $organization = $this->resolveOrganizationForFile($file, $user, $task);
+            if (!$organization) {
+                abort(403, 'No se encontró la organización del archivo');
+            }
+            if ($task->username !== $user->username && $user->current_organization_id !== $organization->id) {
+                abort(403, 'No perteneces a la organización propietaria de este archivo');
+            }
+            $this->setOrganizationDriveToken($organization);
+        } else {
+            $this->setGoogleDriveToken($user);
+        }
         $contents = $this->googleDriveService->downloadFileContent($file->drive_file_id);
         if ($contents === null) {
             return response()->json(['success' => false, 'message' => 'Archivo no encontrado en Drive'], 404);
@@ -161,6 +258,108 @@ class TaskAttachmentController extends Controller
         }
         // Si no existe, crearla en la raíz por defecto
         return $this->googleDriveService->createFolder('Documentos', null);
+    }
+
+    private function ensureOrganizationDocumentsFolder(Organization $organization): string
+    {
+        $organization->loadMissing('folder');
+        $root = $organization->folder;
+        if (!$root || empty($root->google_id)) {
+            throw new \RuntimeException('La organización no tiene una carpeta raíz configurada en Drive.');
+        }
+
+        $existing = OrganizationSubfolder::where('organization_folder_id', $root->id)
+            ->where('name', 'Documentos')
+            ->first();
+        if ($existing) {
+            return $existing->google_id;
+        }
+
+        $folderId = $this->googleDriveService->createFolder('Documentos', $root->google_id);
+        OrganizationSubfolder::create([
+            'organization_folder_id' => $root->id,
+            'google_id' => $folderId,
+            'name' => 'Documentos',
+        ]);
+
+        return $folderId;
+    }
+
+    private function driveOptionsForUser($user): array
+    {
+        $user->loadMissing('googleToken', 'organization.googleToken', 'organization.folder');
+
+        $options = [];
+        if (!empty(optional($user->googleToken)->access_token)) {
+            $options[] = [
+                'value' => 'personal',
+                'label' => 'Drive personal',
+            ];
+        }
+
+        $organization = $user->organization;
+        if ($organization && $organization->googleToken && $organization->googleToken->isConnected() && optional($organization->folder)->google_id) {
+            $options[] = [
+                'value' => 'organization',
+                'label' => 'Drive de la organización',
+                'organization_id' => $organization->id,
+                'organization_name' => $organization->nombre_organizacion,
+            ];
+        }
+
+        return $options;
+    }
+
+    private function setOrganizationDriveToken(Organization $organization): void
+    {
+        $token = $organization->googleToken;
+        if (!$token || !$token->isConnected()) {
+            throw new \RuntimeException('La organización no tiene Google Drive conectado.');
+        }
+
+        $tokenData = $token->access_token;
+        if (is_array($tokenData)) {
+            $accessPayload = $tokenData;
+        } elseif (is_string($tokenData) && !empty($tokenData)) {
+            $accessPayload = ['access_token' => $tokenData];
+        } else {
+            $accessPayload = ['access_token' => $tokenData];
+        }
+
+        $client = $this->googleDriveService->getClient();
+        $client->setAccessToken(array_merge($accessPayload, [
+            'refresh_token' => $token->refresh_token,
+            'expiry_date' => optional($token->expiry_date)?->timestamp,
+        ]));
+
+        if ($client->isAccessTokenExpired()) {
+            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+            if (!isset($new['error'])) {
+                $token->update([
+                    'access_token' => $new,
+                    'expiry_date' => now()->addSeconds($new['expires_in'] ?? 3600),
+                ]);
+                $client->setAccessToken($new);
+            } else {
+                throw new \RuntimeException('No se pudo renovar el token de Google Drive de la organización.');
+            }
+        }
+    }
+
+    private function resolveOrganizationForFile(ArchivoReunion $file, $user, TaskLaravel $task): ?Organization
+    {
+        if (!empty($file->organization_id)) {
+            return Organization::find($file->organization_id);
+        }
+
+        if ($task->relationLoaded('user')) {
+            $task->user->loadMissing('organization');
+            if ($task->user->organization) {
+                return $task->user->organization;
+            }
+        }
+
+        return $user->organization;
     }
 
     private function guessDocumentType(string $mime, string $filename): string
