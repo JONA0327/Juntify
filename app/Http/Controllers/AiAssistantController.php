@@ -2455,8 +2455,8 @@ class AiAssistantController extends Controller
                     // Incluir tareas de la reunión desde tasks_laravel (limitadas si el usuario no las pide explícitamente)
                     try {
                         if ($tasksPerMeetingLimit > 0) {
+                            // Traer TODAS las tareas de la reunión (ya que el usuario tiene acceso a la reunión)
                             $tasks = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
-                            ->where('username', $session->username)
                                 ->orderByDesc('updated_at')
                                 ->limit($tasksPerMeetingLimit)
                                 ->get();
@@ -2581,10 +2581,10 @@ class AiAssistantController extends Controller
 
             // 3) Include meeting tasks from tasks_laravel
             try {
+                // Todas las tareas de la reunión, no solo las del usuario
                 $tasks = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
-                    ->where('username', $session->username)
                     ->orderByDesc('updated_at')
-                    ->limit(15)
+                    ->limit(30)
                     ->get();
                 foreach ($tasks as $t) {
                     $desc = $t->descripcion ? ("\n" . trim((string)$t->descripcion)) : '';
