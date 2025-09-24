@@ -1616,7 +1616,9 @@ body {
 
 /* 1) Apunta al contenedor que hace scroll (aquí .modal-body) */
 .modal-body {
-  overflow-y: auto;           /* mantiene el scroll funcional */
+  padding: 1.25rem 1.5rem;     /* espacio estándar del contenido del modal */
+  color: #d0d7de;              /* texto legible en fondo oscuro */
+  overflow-y: auto;            /* mantiene el scroll funcional */
   -ms-overflow-style: none;    /* IE y Edge */
   scrollbar-width: none;       /* Firefox */
 }
@@ -1629,7 +1631,7 @@ body {
 
 
 
-.modal-input {
+.modal-input, .modal .input {
   width: 100%;
   padding: 0.85rem 1rem;
   background: rgba(255, 255, 255, 0.07);
@@ -1641,18 +1643,18 @@ body {
   backdrop-filter: blur(8px);
 }
 
-.modal-input:focus {
+.modal-input:focus, .modal .input:focus {
   outline: none;
   border-color: #82c7ff;
   background: rgba(130, 199, 255, 0.1);
   box-shadow: 0 0 8px rgba(130, 199, 255, 0.4);
 }
 
-.modal-input::placeholder {
+.modal-input::placeholder, .modal .input::placeholder {
   color: #8093a2;
 }
 
-.modal-input option {
+.modal-input option, .modal .input option {
   background: #0f172a;
   color: #eee;
 }
@@ -1772,4 +1774,18 @@ body {
   .modal-footer .btn {
     width: 100%;
   }
+}
+
+/* Tipografía y elementos dentro del modal */
+.modal-description {
+  color: #c7d2fe; /* violeta suave para diferenciar descripciones */
+  line-height: 1.6;
+}
+
+.warning-box {
+  background: rgba(245, 158, 11, 0.08); /* ámbar tenue */
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fde68a; /* texto ámbar claro */
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
 }

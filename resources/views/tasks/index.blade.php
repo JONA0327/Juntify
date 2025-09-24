@@ -9,6 +9,27 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
+    <script>
+        // Configuración global para scripts de tareas (usada por _tabs-reuniones y otros)
+        window.taskLaravel = {
+            csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
+            apiTasks: '/api/tasks-laravel/tasks',
+            apiTasksShow: (id) => `/api/tasks-laravel/tasks/${id}`,
+            apiTasksUpdate: (id) => `/api/tasks-laravel/tasks/${id}`,
+            apiTasksDestroy: (id) => `/api/tasks-laravel/tasks/${id}`,
+            apiExists: '/api/tasks-laravel/exists',
+            apiImport: (meetingId) => `/api/tasks-laravel/import/${meetingId}`
+        };
+
+        // Helper opcional para mostrar/ocultar el panel de tareas lateral
+        window.showTasksPanel = function(show){
+            const empty = document.getElementById('tasks-empty');
+            const panel = document.getElementById('tasks-panel');
+            if (empty) empty.classList.toggle('hidden', !!show);
+            if (panel) panel.classList.toggle('hidden', !show);
+        };
+    </script>
+
         <!-- Vite Assets -->
     @vite([
         'resources/css/app.css',

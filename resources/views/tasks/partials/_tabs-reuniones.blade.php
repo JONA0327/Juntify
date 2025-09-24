@@ -201,12 +201,13 @@
 
             async function existsTasksForMeeting(meetingId) {
                 try {
-                    const url = new URL(window.taskLaravel.apiExists, window.location.origin);
+                    const base = (window.taskLaravel?.apiExists || '/api/tasks-laravel/exists');
+                    const url = new URL(base, window.location.origin);
                     const res = await fetch(url, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': window.taskLaravel.csrf
+                            'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]')?.content || '')
                         },
                         body: JSON.stringify({ ids: [meetingId] })
                     });
@@ -221,10 +222,11 @@
 
         async function importTasks(meetingId) {
             try {
-                const url = new URL(window.taskLaravel.apiImport(meetingId), window.location.origin);
+                const base = (window.taskLaravel?.apiImport?.(meetingId) || `/api/tasks-laravel/import/${meetingId}`);
+                const url = new URL(base, window.location.origin);
                 const res = await fetch(url, {
                     method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': window.taskLaravel.csrf }
+                    headers: { 'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]')?.content || '') }
                 });
                 const json = await res.json();
                 if (!json.success) {
@@ -241,7 +243,8 @@
 
     async function fetchTasksForMeeting(meetingId, source){
         // Para todas las reuniones (tanto meetings como transcriptions_laravel), usar tasks_laravel
-        let url = new URL(window.taskLaravel.apiTasks, window.location.origin);
+        const base = (window.taskLaravel?.apiTasks || '/api/tasks-laravel/tasks');
+        let url = new URL(base, window.location.origin);
         url.searchParams.set('meeting_id', meetingId);
         const res = await fetch(url);
         return await res.json();

@@ -34,7 +34,7 @@
                     Esta acción eliminará <strong>definitivamente</strong> tu cuenta y todos tus datos asociados.
                     Escribe tu nombre de usuario <strong>{{ auth()->user()->username }}</strong> para confirmar.
                 </p>
-                <input type="text" name="confirmation" class="input w-full" placeholder="{{ auth()->user()->username }}" required />
+                <input type="text" name="confirmation" class="modal-input" placeholder="{{ auth()->user()->username }}" required />
                 <label class="flex items-center gap-2 mt-4 text-sm">
                     <input type="checkbox" name="delete_drive" value="1" checked />
                     Borrar carpeta raíz de Drive (si existe)
@@ -43,9 +43,9 @@
                     Al continuar, se borrarán reuniones, tareas, tokens, documentos AI, contactos y compartidos.
                 </div>
             </div>
-            <div class="modal-footer flex gap-3">
-                <button type="button" class="btn btn-secondary flex-1" onclick="closeModal('delete-account-modal')">Cancelar</button>
-                <button type="submit" class="btn btn-danger flex-1">Sí, eliminar</button>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('delete-account-modal')">Cancelar</button>
+                <button type="submit" class="btn btn-danger">Sí, eliminar</button>
             </div>
         </form>
     </div>
