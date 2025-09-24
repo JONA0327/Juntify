@@ -2256,10 +2256,10 @@ class AiAssistantController extends Controller
                         $baseName = trim(Str::of($nameLower)->replace('#','')->replaceMatches('/\s+/', ' '));
                         $idPattern = (int)$m->id;
                         $patterns = [
-                            '/'+preg_quote($nameLower,'/')+'\s*#'+preg_quote((string)$m->id,'/')+'\b/u',
-                            '/'+preg_quote($baseName,'/')+'\s*#?'+preg_quote((string)$m->id,'/')+'\b/u',
-                            '/#'+preg_quote($baseName,'/')+'\s*#?'+preg_quote((string)$m->id,'/')+'\b/u',
-                            '/reuni[oó]n\s*'+preg_quote((string)$m->id,'/')+'\b/u',
+                            '/' . preg_quote($nameLower,'/') . '\\s*#' . preg_quote((string)$m->id,'/') . '\\b/u',
+                            '/' . preg_quote($baseName,'/') . '\\s*#?' . preg_quote((string)$m->id,'/') . '\\b/u',
+                            '/#' . preg_quote($baseName,'/') . '\\s*#?' . preg_quote((string)$m->id,'/') . '\\b/u',
+                            '/reuni[oó]n\\s*' . preg_quote((string)$m->id,'/') . '\\b/u',
                         ];
                         foreach ($patterns as $p) {
                             if (preg_match($p, $normalizedQuery)) { $focusedMeetingIds[] = (int)$m->id; break; }
