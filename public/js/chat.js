@@ -8,6 +8,7 @@ let autoRefreshInterval = null;
 let lastMessageIds = new Set(); // Para trackear qué mensajes ya hemos visto
 let contactsCache = [];
 let pendingFile = null; // Archivo seleccionado para enviar
+let conversationsCache = []; // Cache de conversaciones para búsqueda local
 
 // Función para inicializar auto-refresh de conversaciones
 function startAutoRefresh() {
@@ -161,6 +162,9 @@ async function loadConversations() {
             return;
         }
 
+        // Guardar en cache para búsqueda local
+        conversationsCache = conversations;
+
         conversationsList.innerHTML = '';
 
         conversations.forEach((conversation, index) => {
@@ -224,6 +228,9 @@ function updateConversationsList(conversations) {
         `;
         return;
     }
+
+    // Actualizar cache para que el buscador se mantenga consistente
+    conversationsCache = conversations;
 
     conversationsList.innerHTML = '';
 
@@ -738,6 +745,17 @@ document.addEventListener('DOMContentLoaded', function() {
         sendButton.addEventListener('click', sendMessage);
     }
 
+    // Búsqueda local de conversaciones
+    const searchInput = document.getElementById('chat-search');
+    if (searchInput) {
+        let searchTimer = null;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            const q = searchInput.value.trim().toLowerCase();
+            searchTimer = setTimeout(() => filterConversations(q), 150);
+        });
+    }
+
     // Botón y input para adjuntar archivo (si existen en la vista)
     const fileBtn = document.getElementById('active-chat-file-btn');
     const fileInput = document.getElementById('active-chat-file-input');
@@ -760,6 +778,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const startChatBtn = document.getElementById('start-chat-btn');
     const startChatUser = document.getElementById('start-chat-user');
     if (startChatBtn && startChatUser) {
+        // Iniciar con Enter desde el input
+        startChatUser.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                startChatBtn.click();
+            }
+        });
         startChatBtn.addEventListener('click', async () => {
             const query = startChatUser.value.trim();
             if (!query) return;
@@ -778,17 +803,43 @@ document.addEventListener('DOMContentLoaded', function() {
                     const el = document.querySelector(`[data-chat-id="${data.chat_id}"]`);
                     if (el) el.click();
                 }, 400);
+                startChatUser.value = '';
             } else {
+                try {
+                    const errText = await resp.text();
+                    console.error('Start chat error:', errText);
+                } catch {}
                 alert('No se pudo crear el chat');
             }
         });
     }
 });
 
+// Filtrar conversaciones por nombre de usuario o último mensaje
+function filterConversations(query) {
+    const list = document.getElementById('conversations-list');
+    if (!list) return;
+
+    if (!query) {
+        // Restaurar lista completa
+        updateConversationsList(conversationsCache);
+        return;
+    }
+
+    const filtered = (conversationsCache || []).filter(c => {
+        const name = (c.other_user?.name || '').toLowerCase();
+        const email = (c.other_user?.email || '').toLowerCase();
+        const last = (c.last_message?.body || '').toLowerCase();
+        return name.includes(query) || email.includes(query) || last.includes(query);
+    });
+
+    updateConversationsList(filtered);
+}
+
 // Cargar contactos desde API
 async function loadContacts() {
     try {
-        const resp = await fetch('/api/chats/contacts');
+        const resp = await fetch('/api/chats/contacts', { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
         if (!resp.ok) throw new Error('Error al cargar contactos');
         contactsCache = await resp.json();
         const list = document.getElementById('contacts-list');
@@ -799,7 +850,7 @@ async function loadContacts() {
         }
         list.innerHTML = contactsCache.map(c => `
             <button data-user-id="${c.id}" class="w-full text-left px-3 py-2 hover:bg-slate-700/40 flex items-center gap-2 text-xs">
-                <span class="w-6 h-6 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-slate-900 font-semibold">${c.avatar || (c.name ? c.name.charAt(0).toUpperCase() : '?')}</span>
+                <span class="w-6 h-6 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-slate-900 font-semibold">${(c.avatar || (c.name ? c.name.charAt(0).toUpperCase() : '?'))}</span>
                 <span class="truncate">${c.name || 'Usuario'}</span>
             </button>`).join('');
         list.querySelectorAll('button').forEach(btn => btn.addEventListener('click', async () => {
@@ -819,10 +870,20 @@ async function loadContacts() {
                     const el = document.querySelector(`[data-chat-id="${data.chat_id}"]`);
                     if (el) el.click();
                 }, 300);
+            } else {
+                try {
+                    const errText = await resp2.text();
+                    console.error('Create/find chat error:', errText);
+                } catch {}
+                alert('No se pudo crear el chat');
             }
         }));
     } catch (e) {
-        console.error(e);
+        console.error('Error cargando contactos:', e);
+        const list = document.getElementById('contacts-list');
+        if (list) {
+            list.innerHTML = '<div class="p-3 text-xs text-red-400">Error al cargar contactos</div>';
+        }
     }
 }
 

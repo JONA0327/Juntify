@@ -263,13 +263,30 @@ class ChatController extends Controller
         // Si no viene contact_id, permitir búsqueda por username/email para iniciar chat con no-contacto
         if (!$contactId && $request->filled('user_query')) {
             $query = trim($request->input('user_query'));
-            $target = User::where('username', $query)->orWhere('email', $query)->first();
+            // Priorizar coincidencias exactas por username o email
+            $target = User::where('username', $query)
+                ->orWhere('email', $query)
+                ->first();
+            // Si no hay coincidencia exacta, buscar por aproximación (full_name, username o email LIKE)
+            if (!$target && mb_strlen($query) >= 2) {
+                $like = '%'.str_replace(['%','_'], ['\%','\_'], $query).'%';
+                $target = User::where('full_name', 'like', $like)
+                    ->orWhere('username', 'like', $like)
+                    ->orWhere('email', 'like', $like)
+                    ->orderByRaw("CASE WHEN username = ? THEN 0 WHEN email = ? THEN 1 ELSE 2 END", [$query, $query])
+                    ->first();
+            }
             if (!$target) {
                 return response()->json(['error' => 'Usuario no encontrado'], 404);
             }
             $contactId = $target->id;
         }
         if (!$contactId) { return response()->json(['error' => 'Sin destino'], 422); }
+
+        // Evitar crear chat contra sí mismo
+        if ((string)$contactId === (string)$userId) {
+            return response()->json(['error' => 'No puedes chatear contigo mismo'], 422);
+        }
 
         // Buscar chat existente
         $chat = Chat::where(function($query) use ($userId, $contactId) {
