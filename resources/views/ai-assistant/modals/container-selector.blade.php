@@ -82,6 +82,7 @@
 
                 <!-- Vista de documentos (Drive) -->
                 <div id="documentsView" class="context-view">
+                    <div class="drive-folder-meta" id="driveFolderMeta" style="display:none;margin-bottom:12px;"></div>
                     <div class="context-grid" id="documentsGrid">
                         <div class="loading-state">
                             <div class="spinner"></div>

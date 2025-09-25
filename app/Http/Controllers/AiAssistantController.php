@@ -27,6 +27,7 @@ use Illuminate\Support\Str;
 use App\Services\AiChatService;
 use App\Services\GoogleDriveService;
 use App\Services\GoogleTokenRefreshService;
+use App\Services\OrganizationDriveHelper;
 use App\Jobs\ProcessAiDocumentJob;
 use App\Services\EmbeddingSearch;
 use App\Services\GoogleServiceAccount;
@@ -47,13 +48,16 @@ class AiAssistantController extends Controller
 
     private GoogleDriveService $googleDriveService;
     private GoogleTokenRefreshService $googleTokenRefreshService;
+    private OrganizationDriveHelper $organizationDriveHelper;
 
     public function __construct(
         GoogleDriveService $googleDriveService,
-        GoogleTokenRefreshService $googleTokenRefreshService
+        GoogleTokenRefreshService $googleTokenRefreshService,
+        OrganizationDriveHelper $organizationDriveHelper
     ) {
         $this->googleDriveService = $googleDriveService;
         $this->googleTokenRefreshService = $googleTokenRefreshService;
+        $this->organizationDriveHelper = $organizationDriveHelper;
     }
     public function index()
     {
@@ -1707,12 +1711,123 @@ class AiAssistantController extends Controller
         $user = Auth::user();
         $driveType = (string) $request->query('drive_type', 'personal'); // personal | organization
         $search = trim((string) $request->query('search', ''));
+        $containerId = $request->query('container_id');
 
         try {
-            $context = $this->resolveDriveContext($driveType, $user);
-            $this->ensureValidAccessToken($driveType, $context);
+            $container = null;
+            $context = null;
+            $folderId = null;
+            $folderMetadata = [
+                'scope' => 'personal',
+                'drive_type' => $driveType,
+                'label' => self::DOCUMENTS_FOLDER_NAME,
+            ];
 
-            $folderId = $this->ensureDocumentsFolder($driveType, $context);
+            if ($containerId) {
+                $container = MeetingContentContainer::with(['group.organization', 'group.organization.googleToken', 'group.organization.folder'])
+                    ->where('id', $containerId)
+                    ->where('is_active', true)
+                    ->first();
+
+                if (! $container) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Contenedor no encontrado',
+                    ], 404);
+                }
+
+                if (! $this->userCanAccessContainer($user, $container)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No tienes permisos para ver los documentos de este contenedor',
+                    ], 403);
+                }
+
+                $folderMetadata['scope'] = 'container';
+                $folderMetadata['container_id'] = (int) $container->id;
+                $folderMetadata['container_name'] = $container->name;
+
+                if ($container->group_id && $container->group && $container->group->organization) {
+                    $driveType = 'organization';
+                    $organization = $container->group->organization;
+                    $folderMetadata['drive_type'] = $driveType;
+                    $folderMetadata['group_name'] = $container->group->nombre_grupo;
+
+                    $token = $organization->googleToken;
+                    if (! $token) {
+                        throw new RuntimeException('La organización no tiene configurado Google Drive.');
+                    }
+
+                    $context = [
+                        'token' => $this->normalizeOrganizationToken($token),
+                        'token_model' => $token,
+                        'organization' => $organization,
+                        'root_folder_id' => $organization->folder?->google_id,
+                        'username' => $user->username,
+                    ];
+
+                    $this->ensureValidAccessToken($driveType, $context);
+
+                    if (! empty($container->drive_folder_id)) {
+                        $folderId = $container->drive_folder_id;
+                        if (is_array($container->metadata)) {
+                            $folderMetadata['metadata'] = $container->metadata;
+                        }
+                    } else {
+                        $folderData = $this->organizationDriveHelper->ensureContainerFolder($container->group, $container);
+                        $folderId = $folderData['id'] ?? null;
+                        $metadata = $folderData['metadata'] ?? null;
+
+                        if ($folderId) {
+                            $container->forceFill([
+                                'drive_folder_id' => $folderId,
+                                'metadata' => $metadata,
+                            ])->save();
+                        }
+
+                        if (is_array($metadata)) {
+                            $folderMetadata['metadata'] = $metadata;
+                        }
+                    }
+                } else {
+                    // Contenedor personal: reutilizar Drive personal del usuario
+                    $driveType = 'personal';
+                    $context = $this->resolveDriveContext($driveType, $user);
+                    $this->ensureValidAccessToken($driveType, $context);
+
+                    if (! empty($container->drive_folder_id)) {
+                        $folderId = $container->drive_folder_id;
+                        if (is_array($container->metadata)) {
+                            $folderMetadata['metadata'] = $container->metadata;
+                        }
+                    }
+                }
+
+                if ($folderId) {
+                    $folderMetadata['label'] = $container->name ?: self::DOCUMENTS_FOLDER_NAME;
+                }
+            }
+
+            if (! $context) {
+                $context = $this->resolveDriveContext($driveType, $user);
+                $this->ensureValidAccessToken($driveType, $context);
+            }
+
+            if (! $folderId) {
+                if ($folderMetadata['scope'] === 'container') {
+                    $driveType = 'personal';
+                    $context = $this->resolveDriveContext($driveType, $user);
+                    $this->ensureValidAccessToken($driveType, $context);
+                    $folderId = $this->ensureDocumentsFolder($driveType, $context);
+
+                    $folderMetadata['scope'] = 'personal';
+                    $folderMetadata['fallback'] = true;
+                    $folderMetadata['drive_type'] = $driveType;
+                    $folderMetadata['label'] = self::DOCUMENTS_FOLDER_NAME;
+                } else {
+                    $folderId = $this->ensureDocumentsFolder($driveType, $context);
+                }
+            }
 
             // Construir query para listar archivos dentro de la carpeta
             $q = sprintf("'%s' in parents and trashed=false", $folderId);
@@ -1746,12 +1861,14 @@ class AiAssistantController extends Controller
                 'success' => true,
                 'folder_id' => $folderId,
                 'drive_type' => $driveType,
+                'folder' => $folderMetadata,
                 'files' => $files,
             ]);
         } catch (\Throwable $e) {
             Log::error('Error listing Drive documents for assistant', [
                 'drive_type' => $driveType,
                 'user' => $user?->username,
+                'container_id' => $containerId,
                 'error' => $e->getMessage(),
             ]);
             return response()->json([
@@ -3512,6 +3629,33 @@ class AiAssistantController extends Controller
         }
 
         throw new RuntimeException('No se pudo subir el archivo a Google Drive después de reintentos.');
+    }
+
+    private function userCanAccessContainer($user, MeetingContentContainer $container): bool
+    {
+        if ($container->username === $user->username) {
+            return true;
+        }
+
+        if (! $container->group_id) {
+            return false;
+        }
+
+        $isMember = DB::table('group_user')
+            ->where('id_grupo', $container->group_id)
+            ->where('user_id', $user->id)
+            ->exists();
+
+        if ($isMember) {
+            return true;
+        }
+
+        $group = $container->group;
+        if ($group && $group->organization && $group->organization->admin_id === $user->id) {
+            return true;
+        }
+
+        return false;
     }
 
     private function resolveDriveContext(string $driveType, $user): array
