@@ -470,10 +470,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         const files = event?.target?.files || [];
         const file = files.length ? files[0] : null;
         if (!file) { this.documentUploadFile = null; return; }
-        // Optional validation: size <= 25MB
-        const maxBytes = 25 * 1024 * 1024;
+        // Optional validation: size <= 150MB (backend limit)
+        const maxBytes = 150 * 1024 * 1024;
         if (file.size > maxBytes) {
-            this.showStatus('El archivo supera los 25 MB permitidos', 'error');
+            this.showStatus('El archivo supera los 150 MB permitidos', 'error');
             this.documentUploadFile = null;
             return;
         }

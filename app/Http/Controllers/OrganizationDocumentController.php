@@ -88,7 +88,8 @@ class OrganizationDocumentController extends Controller
         }
 
         $validated = $request->validate([
-            'file' => 'required|file|max:51200', // 50 MB
+            // Laravel's max for files is in kilobytes: 150 MB = 150 * 1024 = 153600 KB
+            'file' => 'required|file|max:153600', // 150 MB
         ]);
 
         $uploaded = $validated['file'];

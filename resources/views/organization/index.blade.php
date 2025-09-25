@@ -482,7 +482,7 @@
                                         <span class="text-slate-400"> o arrástralo y suéltalo aquí</span>
                                     </div>
                                     <input x-ref="hiddenFileInput" id="group-document-file" type="file" @change="handleDocumentFileChange($event)" class="sr-only" />
-                                    <p class="text-xs text-slate-500">Formatos comunes y hasta 25 MB</p>
+                                    <p class="text-xs text-slate-500">Formatos comunes y hasta 150 MB</p>
                                 </div>
                             </div>
 
