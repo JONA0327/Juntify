@@ -91,6 +91,53 @@
                     </button>
                 </div>
 
+                <!-- Modal: Confirmar eliminación de organización -->
+                <div x-show="showConfirmDeleteOrg" @keydown.escape.window="closeConfirmDeleteOrg()" @click.self="closeConfirmDeleteOrg()" class="fixed inset-0 bg-black/60 flex items-center justify-center z-[70]" x-cloak>
+                    <div class="organization-modal p-0 w-full max-w-xl text-slate-200 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-slate-700/50 bg-slate-900/50 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg bg-red-500 text-white flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.007v.007H12v-.007zM3.375 7.5l1.5 12.75A2.25 2.25 0 007.11 22.5h9.78a2.25 2.25 0 002.235-2.25L20.625 7.5M8.25 7.5V4.875A1.875 1.875 0 0110.125 3h3.75A1.875 1.875 0 0115.75 4.875V7.5M4.5 7.5h15" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h2 class="text-lg font-semibold">Eliminar organización</h2>
+                                    <p class="text-xs text-slate-400">Esta acción no se puede deshacer</p>
+                                </div>
+                            </div>
+                            <button @click="closeConfirmDeleteOrg()" class="text-slate-400 hover:text-slate-200 p-2" aria-label="Cerrar">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <div class="px-6 py-5 space-y-4">
+                            <p class="text-sm text-slate-300">
+                                Estás a punto de eliminar la organización <span class="text-yellow-400 font-semibold" x-text="orgToDelete?.nombre_organizacion"></span>. Al continuar, se eliminará en cascada todo lo relacionado a esta organización:
+                            </p>
+                            <ul class="text-sm text-slate-400 list-disc pl-6">
+                                <li>Grupos y membresías</li>
+                                <li>Permisos y asociaciones de usuarios</li>
+                                <li>Contenedores y relaciones</li>
+                                <li>Vinculaciones y metadatos internos</li>
+                            </ul>
+                            <div class="bg-slate-800/50 border border-slate-700/60 rounded-lg p-4">
+                                <label class="block text-sm font-medium mb-1">Confirma el nombre de la organización</label>
+                                <p class="text-xs text-slate-400 mb-2">Escribe <span class="font-semibold text-slate-200" x-text="orgToDelete?.nombre_organizacion"></span> para confirmar.</p>
+                                <input type="text" x-model="confirmOrgName" placeholder="Nombre exacto de la organización" class="w-full bg-slate-900/60 border border-slate-700/60 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/60" />
+                            </div>
+                        </div>
+                        <div class="px-6 py-4 border-t border-slate-700/50 bg-slate-900/30 flex items-center justify-end gap-2">
+                            <button @click="closeConfirmDeleteOrg()" class="px-4 py-2 bg-slate-800/60 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/60">Cancelar</button>
+                            <button @click="confirmDeleteOrganization()" :disabled="confirmOrgName !== (orgToDelete?.nombre_organizacion || '') || isDeletingOrganization" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span x-show="!isDeletingOrganization">Eliminar definitivamente</span>
+                                <span x-show="isDeletingOrganization" class="flex items-center gap-2">
+                                    <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+                                    Eliminando...
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 <!-- Interfaz principal cuando hay organizaciones -->
                 <div x-show="organizations.length > 0" class="mb-8">
                     <!-- Título y header -->
@@ -151,7 +198,7 @@
                                                                                                                 <!-- Botones de administración (owner o admin) -->
                                                                                                                 <div class="flex space-x-3 items-center" x-show="org.is_owner || org.user_role === 'administrador'">
                                                                                                                     <button @click="openEditOrgModal(org)" class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Editar Organización</button>
-                                                                                                                    <button x-show="org.is_owner" @click="deleteOrganization(org)" class="bg-red-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200">Eliminar</button>
+                                                                                                                    <button x-show="org.is_owner" @click="openConfirmDeleteOrg(org)" class="bg-red-600 px-4 py-2 rounded-lg font-medium text-white hover:bg-red-700 transition-colors duration-200">Eliminar</button>
                                                                                                                 </div>
                                                                                                                 <!-- Botón salir (colaborador e invitado) -->
                                                                                                                 <div x-show="org.user_role === 'colaborador' || org.user_role === 'invitado'" class="mt-0">

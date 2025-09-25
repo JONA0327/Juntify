@@ -124,6 +124,12 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     alertTimeout: null,
     containerModalRestoreContext: null,
 
+    // Delete organization modal state
+    showConfirmDeleteOrg: false,
+    orgToDelete: null,
+    confirmOrgName: '',
+    isDeletingOrganization: false,
+
     // NUEVO: contactos invitables para el modal
     invitableContacts: [],
     isLoadingInvitableContacts: false,
@@ -202,6 +208,52 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.inviteEmail = contact.email;
         this.userExists = true; // Es usuario existente
         this.userExistsMessage = '✓ Este usuario existe en Juntify';
+    },
+
+    // Organization delete flow
+    openConfirmDeleteOrg(org) {
+        if (!org) return;
+        this.orgToDelete = org;
+        this.confirmOrgName = '';
+        this.isDeletingOrganization = false;
+        this.showConfirmDeleteOrg = true;
+    },
+    closeConfirmDeleteOrg() {
+        this.showConfirmDeleteOrg = false;
+        this.orgToDelete = null;
+        this.confirmOrgName = '';
+        this.isDeletingOrganization = false;
+    },
+    async confirmDeleteOrganization() {
+        if (!this.orgToDelete) return;
+        const expected = this.orgToDelete.nombre_organizacion || '';
+        if (this.confirmOrgName !== expected) return;
+        if (this.isDeletingOrganization) return;
+        this.isDeletingOrganization = true;
+        try {
+            const res = await fetch(`/api/organizations/${this.orgToDelete.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json'
+                }
+            });
+            if (!res.ok) {
+                let msg = 'No se pudo eliminar la organización';
+                try { const err = await res.json(); msg = err.message || msg; } catch {}
+                this.showStatus(msg, 'error');
+                return;
+            }
+            this.showStatus('Organización eliminada correctamente');
+            // Remove from local list if present
+            this.organizations = (this.organizations || []).filter(o => o.id !== this.orgToDelete.id);
+            this.closeConfirmDeleteOrg();
+        } catch (e) {
+            console.error('Error deleting organization', e);
+            this.showStatus('Error al eliminar la organización', 'error');
+        } finally {
+            this.isDeletingOrganization = false;
+        }
     },
 
     canManageContainers() {

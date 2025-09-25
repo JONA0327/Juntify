@@ -9,6 +9,8 @@ use App\Models\OrganizationActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
+use Illuminate\Support\Facades\DB;
+
 class OrganizationController extends Controller
 {
     public function driveSettings(Organization $organization)
@@ -199,8 +201,7 @@ class OrganizationController extends Controller
                     'user_id' => $user->id,
                     'stale_org_id' => $user->current_organization_id
                 ]);
-                $user->current_organization_id = null;
-                $user->save();
+                \App\Models\User::where('id', $user->id)->update(['current_organization_id' => null]);
             } else {
                 Log::info('[OrganizationController@store] Usuario mantiene current_organization_id válido', [
                     'user_id' => $user->id,
@@ -454,18 +455,33 @@ class OrganizationController extends Controller
             abort(403);
         }
 
-        // Detach usuarios de grupos y organizacion
-        foreach ($organization->groups as $group) {
-            $group->users()->detach();
-        }
-        $organization->users()->detach();
-
-        // Reset current_organization_id de usuarios que apuntan a esta organización
-        \App\Models\User::where('current_organization_id', $organization->id)
-            ->update(['current_organization_id' => null]);
-
+        // Eliminación en cascada segura
         $orgId = $organization->id;
-        $organization->delete();
+    DB::transaction(function () use ($organization) {
+            $organization->loadMissing(['groups.users']);
+
+            // Quitar relaciones de grupos con usuarios
+            foreach ($organization->groups as $group) {
+                $group->users()->detach();
+            }
+
+            // Quitar relaciones de organización con usuarios
+            $organization->users()->detach();
+
+            // Reset current_organization_id de usuarios que apuntan a esta organización
+            \App\Models\User::where('current_organization_id', $organization->id)
+                ->update(['current_organization_id' => null]);
+
+            // Eliminar grupos y cualquier relación/metadata asociada definida con cascada
+            foreach ($organization->groups as $group) {
+                // Si hay contenedores o metadatos asociados, sus migraciones/tablas deben usar onDelete('cascade')
+                try { $group->delete(); } catch (\Throwable $e) { Log::warning('Fallo al eliminar grupo durante cascada', ['group_id' => $group->id, 'error' => $e->getMessage()]); }
+            }
+
+            // Finalmente eliminar la organización
+            $organization->delete();
+        });
+
         Log::info('[OrganizationController@destroy] Organización eliminada', ['org_id' => $orgId, 'by_user' => $user->id]);
 
         return response()->json(['deleted' => true, 'organization_id' => $orgId]);
