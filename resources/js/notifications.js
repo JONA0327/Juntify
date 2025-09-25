@@ -16,7 +16,7 @@ const Notifications = (() => {
 
             notifications.forEach(n => {
                 const li = document.createElement('li');
-        if (n.type === 'group_invitation') {
+                if (n.type === 'group_invitation') {
                     li.className = 'invitation-item p-3 bg-slate-700/50 rounded-lg mb-2';
                     li.innerHTML = `
                         <div class="message text-sm text-slate-200">${n.message}</div>
@@ -24,6 +24,21 @@ const Notifications = (() => {
                         <div class="actions">
                             <button class="accept-btn" data-id="${n.id}">Aceptar</button>
                             <button class="reject-btn" data-id="${n.id}">Rechazar</button>
+                        </div>
+                    `;
+                } else if (n.type === 'contact_request') {
+                    const from = n.from_user || {};
+                    li.className = 'contact-request-item p-3 bg-slate-700/50 rounded-lg mb-2';
+                    li.innerHTML = `
+                        <div class="flex items-start gap-3">
+                            <div class="flex-grow">
+                                <div class="message text-sm text-slate-200 font-medium">Solicitud de contacto</div>
+                                <div class="meta text-xs text-slate-400 mt-1">${from.name || from.username || 'Usuario'}${from.email ? ` (${from.email})` : ''}</div>
+                            </div>
+                            <div class="actions flex flex-col gap-2">
+                                <button class="accept-contact-btn bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded-md transition-colors" data-id="${n.id}">Aceptar</button>
+                                <button class="reject-contact-btn bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded-md transition-colors" data-id="${n.id}">Rechazar</button>
+                            </div>
                         </div>
                     `;
                 } else if (n.type === 'meeting_share_request') {
@@ -124,6 +139,18 @@ const Notifications = (() => {
                 respondToMeetingShareInvitation(sharedMeetingId, 'reject', notificationId);
             });
         });
+        document.querySelectorAll('.accept-contact-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = e.target.dataset.id;
+                respondToContactRequest(id, 'accept');
+            });
+        });
+        document.querySelectorAll('.reject-contact-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = e.target.dataset.id;
+                respondToContactRequest(id, 'reject');
+            });
+        });
         document.querySelectorAll('.dismiss-btn').forEach(btn => {
             btn.addEventListener('click', e => {
                 const id = e.target.dataset.id;
@@ -162,6 +189,49 @@ const Notifications = (() => {
                 console.debug('Error responding to invitation:', error);
             }
             showError('Error de conexión al responder la invitación.');
+        }
+    }
+
+    async function respondToContactRequest(id, action) {
+        try {
+            const response = await fetch(`/api/contacts/requests/${id}/respond`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ action })
+            });
+
+            if (response.status === 401) {
+                showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
+                return;
+            }
+
+            if (!response.ok) {
+                let message = 'Error al responder la solicitud de contacto.';
+                try {
+                    const data = await response.json();
+                    if (data.message) message = data.message;
+                } catch (_) { /* ignore */ }
+                showError(message);
+                return;
+            }
+
+            notifications = notifications.filter(n => n.id != id);
+            render();
+
+            if (action === 'accept') {
+                showSuccess('Solicitud de contacto aceptada.');
+                window.loadContacts?.();
+            } else {
+                showSuccess('Solicitud de contacto rechazada.');
+            }
+        } catch (error) {
+            if (import.meta.env.DEV) {
+                console.debug('Error responding to contact request:', error);
+            }
+            showError('Error de conexión al responder la solicitud de contacto.');
         }
     }
 
