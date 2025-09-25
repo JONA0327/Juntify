@@ -442,28 +442,80 @@
                 </div>
 
                 <div x-show="showUploadDocumentsModal" @keydown.escape.window="closeUploadDocumentsModal()" @click.self="closeUploadDocumentsModal()" class="fixed inset-0 bg-black/60 flex items-center justify-center z-[62]" x-cloak>
-                    <div class="organization-modal w-full max-w-lg text-slate-200">
-                        <h2 class="text-lg font-semibold mb-3">Subir documento</h2>
-                        <p class="text-sm text-slate-400 mb-4">El archivo se guardará en la carpeta del grupo <span class="text-yellow-400 font-medium" x-text="uploadDocumentGroup?.nombre_grupo"></span>.</p>
-                        <div class="space-y-4">
-                            <div>
-                                <label for="group-document-file" class="block text-sm font-medium mb-2">Selecciona un archivo</label>
-                                <input id="group-document-file" type="file" @change="handleDocumentFileChange($event)" class="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-yellow-500 file:text-slate-900 hover:file:bg-yellow-400 file:cursor-pointer" />
-                                <p class="text-xs text-slate-500 mt-2" x-show="documentUploadFile" x-text="documentUploadFile ? documentUploadFile.name : ''"></p>
+                    <div class="organization-modal w-full max-w-lg text-slate-200 p-0 overflow-hidden">
+                        <!-- Header -->
+                        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700/50 bg-slate-900/50">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg bg-yellow-400 text-slate-900 flex items-center justify-center shadow">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                                        <path d="M14.25 6.087c0-.355.186-.686.494-.864l2.3-1.32a.993.993 0 01.994.008c.31.18.5.512.5.875v15.426a1 1 0 01-.5.875.994.994 0 01-.994.008l-2.3-1.32a.993.993 0 01-.494-.864V6.087z" />
+                                        <path d="M3 7.5A2.25 2.25 0 015.25 5.25h5.25a.75.75 0 01.53.22l3 3a.75.75 0 01.22.53v9.75A2.25 2.25 0 0112 21H5.25A2.25 2.25 0 013 18.75V7.5z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h2 class="text-lg font-semibold leading-tight">Subir documento</h2>
+                                    <p class="text-xs text-slate-400">Se guardará en la carpeta del grupo <span class="text-yellow-400 font-medium" x-text="uploadDocumentGroup?.nombre_grupo"></span></p>
+                                </div>
                             </div>
-                            <div class="flex justify-end gap-2">
-                                <button @click="closeUploadDocumentsModal()" class="px-4 py-2 bg-slate-800/60 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/60 transition-colors duration-200">Cancelar</button>
-                                <button @click="uploadGroupDocument()" :disabled="!documentUploadFile || isUploadingDocument" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <span x-show="!isUploadingDocument">Subir</span>
-                                    <span x-show="isUploadingDocument" class="flex items-center gap-2">
-                                        <svg class="animate-spin h-4 w-4 text-slate-900" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                            <button @click="closeUploadDocumentsModal()" class="text-slate-400 hover:text-slate-200 transition-colors duration-150 p-2" aria-label="Cerrar">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+
+                        <!-- Body -->
+                        <div class="px-6 py-5 space-y-4">
+                            <!-- Dropzone -->
+                            <div
+                                @dragover.prevent="isDraggingFile = true"
+                                @dragleave.prevent="isDraggingFile = false"
+                                @drop.prevent="isDraggingFile = false; const f=$event.dataTransfer?.files?.[0]; if(f){ documentUploadFile=f }"
+                                :class="{'ring-2 ring-yellow-400 ring-offset-2 ring-offset-slate-900/0': isDraggingFile}"
+                                class="rounded-xl border border-dashed border-slate-600/70 bg-slate-900/40 p-5 text-center transition-all">
+                                <div class="flex flex-col items-center gap-3">
+                                    <div class="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center text-slate-300">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5V18a2.25 2.25 0 002.25 2.25h13.5A2.25 2.25 0 0021 18v-1.5M16.5 12L12 7.5m0 0L7.5 12M12 7.5V18" />
                                         </svg>
-                                        Subiendo...
-                                    </span>
+                                    </div>
+                                    <div class="text-sm">
+                                        <button type="button" class="text-yellow-400 font-semibold hover:underline" @click="$refs.hiddenFileInput.click()">Selecciona un archivo</button>
+                                        <span class="text-slate-400"> o arrástralo y suéltalo aquí</span>
+                                    </div>
+                                    <input x-ref="hiddenFileInput" id="group-document-file" type="file" @change="handleDocumentFileChange($event)" class="sr-only" />
+                                    <p class="text-xs text-slate-500">Formatos comunes y hasta 25 MB</p>
+                                </div>
+                            </div>
+
+                            <!-- Selected file info -->
+                            <div x-show="documentUploadFile" class="bg-slate-800/50 border border-slate-700/60 rounded-lg p-3 flex items-center justify-between">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-medium truncate" x-text="documentUploadFile?.name"></div>
+                                    <div class="text-xs text-slate-400" x-text="formatFileSize(documentUploadFile?.size)"></div>
+                                </div>
+                                <button type="button" @click="documentUploadFile=null" class="text-slate-400 hover:text-red-400 transition-colors" aria-label="Quitar archivo">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                                 </button>
                             </div>
+
+                            <!-- Progress (placeholder bound to isUploadingDocument) -->
+                            <div x-show="isUploadingDocument" class="w-full h-2 bg-slate-800/60 rounded-full overflow-hidden">
+                                <div class="h-full bg-yellow-400 animate-pulse" style="width: 60%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="px-6 py-4 border-t border-slate-700/50 bg-slate-900/30 flex items-center justify-end gap-2">
+                            <button @click="closeUploadDocumentsModal()" class="px-4 py-2 bg-slate-800/60 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/60 transition-colors duration-200">Cancelar</button>
+                            <button @click="uploadGroupDocument()" :disabled="!documentUploadFile || isUploadingDocument" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span x-show="!isUploadingDocument">Subir</span>
+                                <span x-show="isUploadingDocument" class="flex items-center gap-2">
+                                    <svg class="animate-spin h-4 w-4 text-slate-900" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                    </svg>
+                                    Subiendo...
+                                </span>
+                            </button>
                         </div>
                     </div>
                 </div>

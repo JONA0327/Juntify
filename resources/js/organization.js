@@ -452,6 +452,8 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     openUploadDocumentsModal(group) {
         this.uploadDocumentGroup = group;
         this.documentUploadFile = null;
+        this.isDraggingFile = false;
+        this.uploadProgress = 0;
         this.showUploadDocumentsModal = true;
     },
 
@@ -463,7 +465,16 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
     handleDocumentFileChange(event) {
         const files = event?.target?.files || [];
-        this.documentUploadFile = files.length ? files[0] : null;
+        const file = files.length ? files[0] : null;
+        if (!file) { this.documentUploadFile = null; return; }
+        // Optional validation: size <= 25MB
+        const maxBytes = 25 * 1024 * 1024;
+        if (file.size > maxBytes) {
+            this.showStatus('El archivo supera los 25 MB permitidos', 'error');
+            this.documentUploadFile = null;
+            return;
+        }
+        this.documentUploadFile = file;
     },
 
     async uploadGroupDocument() {
@@ -472,30 +483,39 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
 
         this.isUploadingDocument = true;
+        this.uploadProgress = 0;
         const group = this.uploadDocumentGroup;
         const formData = new FormData();
         formData.append('file', this.documentUploadFile);
 
         try {
-            const response = await fetch(`/api/groups/${group.id}/documents`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                },
-                body: formData,
+            // Use XHR to track upload progress
+            await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', `/api/groups/${group.id}/documents`);
+                xhr.setRequestHeader('X-CSRF-TOKEN', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
+
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        this.uploadProgress = Math.round((e.loaded / e.total) * 100);
+                    }
+                };
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve();
+                    } else {
+                        try {
+                            const err = JSON.parse(xhr.responseText);
+                            reject(new Error(err.message || 'No se pudo subir el documento'));
+                        } catch {
+                            reject(new Error('No se pudo subir el documento'));
+                        }
+                    }
+                };
+                xhr.onerror = () => reject(new Error('Fallo de red durante la subida'));
+                xhr.send(formData);
             });
 
-            if (!response.ok) {
-                let msg = 'No se pudo subir el documento';
-                try {
-                    const error = await response.json();
-                    msg = error.message || msg;
-                } catch {}
-                this.showStatus(msg, 'error');
-                return;
-            }
-
-            await response.json();
             this.showStatus('Documento subido correctamente');
             if (this.viewDocumentsGroup && this.viewDocumentsGroup.id === group.id) {
                 await this.loadGroupDocuments(group.id);
@@ -503,9 +523,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             this.closeUploadDocumentsModal();
         } catch (error) {
             console.error('Error al subir documento', error);
-            this.showStatus('Error al subir el documento', 'error');
+            this.showStatus(error?.message || 'Error al subir el documento', 'error');
         } finally {
             this.isUploadingDocument = false;
+            this.uploadProgress = 0;
         }
     },
 
