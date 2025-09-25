@@ -1000,23 +1000,34 @@ function renderGlobalSearchResults(users, container, query) {
         return;
     }
 
-    container.innerHTML = users.map(user => {
+    const items = users.map(user => {
         const label = user.name || user.username || user.email || 'Usuario';
-        const email = user.email ? `<span class="block text-[11px] text-slate-500">${escapeHtml(user.email)}</span>` : '';
+        const email = user.email ? String(user.email) : '';
+        const initial = (label && label.trim().charAt(0).toUpperCase()) || 'U';
+        const emailRow = email ? `<div class="text-[11px] text-slate-400 truncate">${escapeHtml(email)}</div>` : '';
         return `
-            <div data-user-id="${user.id}" data-user-label="${escapeHtml(label)}" class="w-full px-3 py-2 hover:bg-slate-700/50 transition flex items-center justify-between gap-3 cursor-pointer">
-                <div class="min-w-0">
-                    <span class="text-sm text-slate-100 block truncate">${escapeHtml(label)}</span>
-                    ${email}
+            <div data-user-id="${user.id}" data-user-label="${escapeHtml(label)}" class="user-search-item flex items-center justify-between p-3 bg-slate-700/30 border border-slate-600/50 rounded-lg hover:bg-slate-700/50 transition-all cursor-pointer">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 text-slate-900 font-semibold flex items-center justify-center">${initial}</div>
+                    <div class="min-w-0">
+                        <div class="text-sm text-slate-100 truncate">${escapeHtml(label)}</div>
+                        ${emailRow}
+                        <div class="text-[10px] text-slate-500">Usuario de Juntify</div>
+                    </div>
                 </div>
-                <button type="button" title="Iniciar conversación" data-user-id="${user.id}" class="shrink-0 p-2 rounded hover:bg-slate-700/60 focus:outline-none focus:ring-2 focus:ring-yellow-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-yellow-400">
-                        <path d="M20 2H4a2 2 0 00-2 2v16l4-4h14a2 2 0 002-2V4a2 2 0 00-2-2zM6 9h12v2H6V9zm0-3h12v2H6V6zm0 6h8v2H6v-2z" />
-                    </svg>
-                </button>
+                <div class="shrink-0 text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </div>
             </div>
         `;
     }).join('');
+
+    container.innerHTML = `
+        <div class="bg-slate-800/70 border border-slate-700/50 rounded-lg p-3">
+            <div class="text-[12px] font-medium text-slate-300 mb-2">Resultados de búsqueda</div>
+            <div class="space-y-2">${items}</div>
+        </div>
+    `;
 
     container.classList.remove('hidden');
     try { container.style.zIndex = 50; } catch (_) {}

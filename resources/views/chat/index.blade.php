@@ -55,8 +55,8 @@
             </div>
         </div>
 
-        <!-- Chat Container -->
-        <div class="flex-1 bg-slate-800/30 backdrop-blur-sm border border-slate-700/50 rounded-lg overflow-hidden flex">
+    <!-- Chat Container -->
+    <div class="flex-1 bg-slate-800/30 backdrop-blur-sm border border-slate-700/50 rounded-lg overflow-visible flex">
             <!-- Lista de Conversaciones -->
             <div class="w-1/3 border-r border-slate-700/50 flex flex-col">
                 <!-- Buscador global para iniciar chats -->
@@ -178,6 +178,6 @@
         </main>
     </div>
 
-    <script src="{{ asset('js/chat.js') }}"></script>
+    <script src="{{ asset('js/chat.js') }}?v={{ filemtime(public_path('js/chat.js')) }}"></script>
 </body>
 </html>
