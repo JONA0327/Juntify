@@ -43,11 +43,18 @@ class OrganizationDocumentController extends Controller
 
             $files = $this->driveHelper->getDrive()->listFilesInFolder($folder->google_id);
 
+            $canManage = $this->userCanManageGroupDocuments($user->id, $group);
+            $canView = true; // ya pasó el guard anterior
+
             return response()->json([
                 'folder' => [
                     'id' => $folder->id,
                     'google_id' => $folder->google_id,
                     'name' => $folder->name,
+                ],
+                'permissions' => [
+                    'can_view' => $canView,
+                    'can_manage' => $canManage,
                 ],
                 'files' => array_map(fn(DriveFile $file) => $this->formatDriveFile($file), $files),
             ]);
@@ -125,6 +132,7 @@ class OrganizationDocumentController extends Controller
             abort(401);
         }
 
+        // Permitir administradores y colaboradores de la organización
         if (!$this->userIsOrganizationAdmin($user->id, $organization)) {
             abort(403);
         }
@@ -167,11 +175,20 @@ class OrganizationDocumentController extends Controller
                 ];
             }, $folders);
 
+            // Calcular flags de permisos (gestión sólo para administradores; vista permitida por el guard)
+            $canManage = ($organization->admin_id === $user->id) || $organization->users()
+                ->where('users.id', $user->id)
+                ->wherePivot('rol', 'administrador')
+                ->exists();
             return response()->json([
                 'root' => [
                     'id' => $root->id,
                     'google_id' => $root->google_id,
                     'name' => $root->name,
+                ],
+                'permissions' => [
+                    'can_view' => true,
+                    'can_manage' => (bool) $canManage,
                 ],
                 'folders' => $mapped,
             ]);
@@ -214,8 +231,17 @@ class OrganizationDocumentController extends Controller
             }
 
             $files = $this->driveHelper->getDrive()->listFilesInFolder($folderId);
+            // Determinar si el usuario puede gestionar (administrar) a nivel de organización
+            $canManage = ($organization->admin_id === $user->id) || $organization->users()
+                ->where('users.id', $user->id)
+                ->wherePivot('rol', 'administrador')
+                ->exists();
 
             return response()->json([
+                'permissions' => [
+                    'can_view' => true,
+                    'can_manage' => (bool) $canManage,
+                ],
                 'files' => array_map(fn(DriveFile $file) => $this->formatDriveFile($file), $files),
             ]);
         } catch (\Throwable $e) {
@@ -231,7 +257,7 @@ class OrganizationDocumentController extends Controller
         }
     }
 
-    protected function userCanViewGroupDocuments(int $userId, Group $group): bool
+    protected function userCanViewGroupDocuments(string $userId, Group $group): bool
     {
         $organization = $group->organization;
         if ($organization && $organization->admin_id === $userId) {
@@ -252,7 +278,7 @@ class OrganizationDocumentController extends Controller
             ->exists();
     }
 
-    protected function userCanManageGroupDocuments(int $userId, Group $group): bool
+    protected function userCanManageGroupDocuments(string $userId, Group $group): bool
     {
         $organization = $group->organization;
         if ($organization && $organization->admin_id === $userId) {
@@ -277,16 +303,30 @@ class OrganizationDocumentController extends Controller
         return in_array($role, ['colaborador', 'administrador'], true);
     }
 
-    protected function userIsOrganizationAdmin(int $userId, Organization $organization): bool
+    protected function userIsOrganizationAdmin(string $userId, Organization $organization): bool
     {
+        // Admin directo
         if ($organization->admin_id === $userId) {
             return true;
         }
 
-        return $organization->users()
+        // Colaboradores y administradores (enlace de usuarios a organización)
+        $isPrivileged = $organization->users()
             ->where('users.id', $userId)
             ->wherePivotIn('rol', ['colaborador', 'administrador'])
             ->exists();
+        if ($isPrivileged) {
+            return true;
+        }
+
+        // Permitir miembros de grupos de esta organización como lectores
+        $hasGroupMembership = Group::where('organization_id', $organization->id)
+            ->whereHas('users', function($q) use ($userId) {
+                $q->where('users.id', $userId);
+            })
+            ->exists();
+
+        return $hasGroupMembership;
     }
 
     protected function formatDriveFile(DriveFile $file): array
