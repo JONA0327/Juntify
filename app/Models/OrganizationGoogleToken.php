@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Crypt;
 
 class OrganizationGoogleToken extends Model
 {
@@ -34,12 +36,51 @@ class OrganizationGoogleToken extends Model
 
     public function getAccessTokenAttribute($value)
     {
+        if (is_null($value)) {
+            return $value;
+        }
+
+        try {
+            $value = Crypt::decryptString($value);
+        } catch (DecryptException $exception) {
+            // Valor legacy sin cifrar
+        }
+
         $decoded = json_decode($value, true);
         return json_last_error() === JSON_ERROR_NONE ? $decoded : $value;
     }
 
     public function setAccessTokenAttribute($value)
     {
-        $this->attributes['access_token'] = is_array($value) ? json_encode($value) : $value;
+        if (is_null($value)) {
+            $this->attributes['access_token'] = null;
+            return;
+        }
+
+        $rawValue = is_array($value) ? json_encode($value) : (string) $value;
+        $this->attributes['access_token'] = Crypt::encryptString($rawValue);
+    }
+
+    public function getRefreshTokenAttribute($value)
+    {
+        if (is_null($value)) {
+            return $value;
+        }
+
+        try {
+            return Crypt::decryptString($value);
+        } catch (DecryptException $exception) {
+            return $value;
+        }
+    }
+
+    public function setRefreshTokenAttribute($value)
+    {
+        if (is_null($value)) {
+            $this->attributes['refresh_token'] = null;
+            return;
+        }
+
+        $this->attributes['refresh_token'] = Crypt::encryptString((string) $value);
     }
 }

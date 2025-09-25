@@ -33,6 +33,10 @@ it('returns root and subfolders for collaborator', function () {
         'expiry_date'   => now()->addHour(),
     ]);
 
+    $freshToken = $token->fresh();
+    expect($freshToken->access_token)->toBe('access');
+    expect($freshToken->refresh_token)->toBe('refresh');
+
     $root = OrganizationFolder::create([
         'organization_id' => $organization->id,
         'organization_google_token_id' => $token->id,
