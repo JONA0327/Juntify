@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use App\Models\Notification;
 
 class ChatController extends Controller
 {
@@ -209,6 +210,36 @@ class ChatController extends Controller
             'voice_path' => $voicePath,
             'created_at' => now(),
         ]);
+
+        // Crear notificación para el receptor: "recibiste un mensaje de <nombre>"
+        try {
+            $recipientId = $chat->user_one_id === $user->id ? $chat->user_two_id : $chat->user_one_id;
+            if ($recipientId && (string)$recipientId !== (string)$user->id) {
+                $senderName = $user->full_name ?: ($user->username ?: ($user->email ?: 'Usuario'));
+                Notification::create([
+                    // Nuevo esquema
+                    'user_id' => $recipientId,
+                    'from_user_id' => $user->id,
+                    'type' => 'chat_message',
+                    'title' => 'Nuevo mensaje',
+                    'message' => 'Recibiste un mensaje de ' . $senderName,
+                    'data' => json_encode([
+                        'chat_id' => $chat->id,
+                        'sender_id' => $user->id,
+                        'sender_name' => $senderName,
+                        'preview' => $data['body'] ?? ($origName ?: null),
+                        'created_at' => now()->toIso8601String(),
+                    ]),
+                    'read' => false,
+                    // Compatibilidad legacy
+                    'remitente' => $user->id,
+                    'emisor' => $recipientId,
+                    'status' => 'pending',
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo crear notificación de chat', ['error' => $e->getMessage()]);
+        }
 
         return response()->json($message->load('sender'));
     }

@@ -852,7 +852,7 @@ function setupGlobalChatSearch() {
 
         event.preventDefault();
         const userId = button.getAttribute('data-user-id');
-        const label = button.getAttribute('data-user-label') || 'usuario';
+        const label = button.getAttribute('data-user-label') || button.getAttribute('title') || 'usuario';
 
         try {
             setGlobalSearchFeedback(`Creando chat con ${label}...`, 'loading');
@@ -954,10 +954,17 @@ function renderGlobalSearchResults(users, container, query) {
         const label = user.name || user.username || user.email || 'Usuario';
         const email = user.email ? `<span class="block text-[11px] text-slate-500">${escapeHtml(user.email)}</span>` : '';
         return `
-            <button type="button" data-user-id="${user.id}" data-user-label="${escapeHtml(label)}" class="w-full text-left px-4 py-2 hover:bg-slate-700/50 transition flex flex-col">
-                <span class="text-sm text-slate-100">${escapeHtml(label)}</span>
-                ${email}
-            </button>
+            <div data-user-id="${user.id}" data-user-label="${escapeHtml(label)}" class="w-full px-3 py-2 hover:bg-slate-700/50 transition flex items-center justify-between gap-3 cursor-pointer">
+                <div class="min-w-0">
+                    <span class="text-sm text-slate-100 block truncate">${escapeHtml(label)}</span>
+                    ${email}
+                </div>
+                <button type="button" title="Iniciar conversación" data-user-id="${user.id}" class="shrink-0 p-2 rounded hover:bg-slate-700/60 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-yellow-400">
+                        <path d="M20 2H4a2 2 0 00-2 2v16l4-4h14a2 2 0 002-2V4a2 2 0 00-2-2zM6 9h12v2H6V9zm0-3h12v2H6V6zm0 6h8v2H6v-2z" />
+                    </svg>
+                </button>
+            </div>
         `;
     }).join('');
 
