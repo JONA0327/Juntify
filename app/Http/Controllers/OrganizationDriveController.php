@@ -4,19 +4,21 @@ namespace App\Http\Controllers;
 
 use App\Models\Organization;
 use App\Models\OrganizationFolder;
-use App\Models\OrganizationGoogleToken;
 use App\Models\OrganizationSubfolder;
 use App\Services\GoogleDriveService;
+use App\Services\OrganizationDriveHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class OrganizationDriveController extends Controller
 {
     protected GoogleDriveService $drive;
+    protected OrganizationDriveHelper $driveHelper;
 
-    public function __construct(GoogleDriveService $drive)
+    public function __construct(OrganizationDriveHelper $driveHelper)
     {
-        $this->drive = $drive;
+        $this->driveHelper = $driveHelper;
+        $this->drive = $driveHelper->getDrive();
     }
 
     protected function userCanManage(Organization $organization): bool
@@ -50,41 +52,6 @@ class OrganizationDriveController extends Controller
         return $inOrg || $inGroup;
     }
 
-    protected function initDrive(Organization $organization): OrganizationGoogleToken
-    {
-        $token = $organization->googleToken;
-
-        if (!$token) {
-            throw new \Exception("La organización no tiene configurado un token de Google Drive");
-        }
-
-        if (!$token->isConnected()) {
-            throw new \Exception("El token de Google Drive no está configurado correctamente");
-        }
-
-        $client = $this->drive->getClient();
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expiry_date'   => $token->expiry_date,
-        ]);
-
-        if ($client->isAccessTokenExpired()) {
-            $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
-            if (!isset($new['error'])) {
-                $token->update([
-                    'access_token' => $new['access_token'],
-                    'expiry_date'  => now()->addSeconds($new['expires_in']),
-                ]);
-                $client->setAccessToken($new);
-            } else {
-                throw new \Exception("No se pudo renovar el token de Google Drive: " . ($new['error'] ?? 'Error desconocido'));
-            }
-        }
-
-        return $token;
-    }
-
     public function createRootFolder(Organization $organization)
     {
         if (!$this->userCanManage($organization)) {
@@ -98,7 +65,7 @@ class OrganizationDriveController extends Controller
         } else {
             Log::info('Organization createRootFolder: no parent provided; will create at admin My Drive root via impersonation', ['org' => $organization->id]);
         }
-        $token = $this->initDrive($organization);
+        $token = $this->driveHelper->initDrive($organization);
 
         // Create using Service Account for homogeneity; impersonate org admin if needed
         $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
@@ -253,7 +220,7 @@ class OrganizationDriveController extends Controller
             return response()->json(['message' => 'Root folder not found'], 404);
         }
 
-        $this->initDrive($organization);
+        $this->driveHelper->initDrive($organization);
 
         $folderId = $this->drive->createFolder($request->input('name'), $root->google_id);
 
@@ -281,7 +248,7 @@ class OrganizationDriveController extends Controller
             return response()->json(['message' => 'Root folder not found'], 404);
         }
 
-        $this->initDrive($organization);
+        $this->driveHelper->initDrive($organization);
 
         $files = $this->drive->listSubfolders($root->google_id);
         $subfolders = [];
@@ -315,7 +282,7 @@ class OrganizationDriveController extends Controller
             'name' => 'required|string|max:255'
         ]);
 
-        $this->initDrive($organization);
+        $this->driveHelper->initDrive($organization);
         $this->drive->renameFile($subfolder->google_id, $validated['name']);
 
         $subfolder->update(['name' => $validated['name']]);
@@ -361,7 +328,7 @@ class OrganizationDriveController extends Controller
         if ($connected && $root) {
             try {
                 // Initialize drive client and list subfolders
-                $this->initDrive($organization);
+                $this->driveHelper->initDrive($organization);
                 $files = $this->drive->listSubfolders($root->google_id);
                 foreach ($files as $file) {
                     $subfolders[] = OrganizationSubfolder::updateOrCreate(

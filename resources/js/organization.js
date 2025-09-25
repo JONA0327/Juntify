@@ -30,6 +30,15 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     subfolderToDelete: null,
     orgOfSubfolderToDelete: null,
     isDeletingSubfolder: false,
+    showUploadDocumentsModal: false,
+    showViewDocumentsModal: false,
+    uploadDocumentGroup: null,
+    viewDocumentsGroup: null,
+    groupDocuments: [],
+    isLoadingGroupDocuments: false,
+    groupDocumentsError: null,
+    documentUploadFile: null,
+    isUploadingDocument: false,
     // Confirmación de expulsión de miembro
     showConfirmRemoveMemberModal: false,
     memberToRemove: null,
@@ -224,6 +233,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 isCreatingRoot: false,
                 isCreatingSubfolder: false,
                 newSubfolderName: '',
+                selectedFolderId: null,
+                folderFiles: [],
+                isLoadingFolderFiles: false,
+                folderError: null,
             };
         }
         return this.driveData[orgId];
@@ -313,8 +326,22 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                 const status = await statusRes.json();
                 state.connected = !!status.connected;
                 state.rootFolder = status.root_folder || null;
-                // subfolders ignoradas intencionalmente
-                state.subfolders = [];
+                state.subfolders = Array.isArray(status.subfolders) ? status.subfolders : [];
+                if (state.connected && (org.is_owner || org.user_role === 'administrador')) {
+                    try {
+                        const foldersRes = await fetch(`/api/organizations/${org.id}/documents/folders`);
+                        if (foldersRes.ok) {
+                            const foldersData = await foldersRes.json();
+                            state.subfolders = Array.isArray(foldersData.folders) ? foldersData.folders : state.subfolders;
+                        }
+                    } catch (error) {
+                        console.error('Error cargando carpetas de la organización', error);
+                    }
+                }
+                if (!state.connected) {
+                    state.folderFiles = [];
+                    state.selectedFolderId = null;
+                }
             }
         } catch (e) {
             console.error('Error loading drive status:', e);
@@ -413,6 +440,167 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.isDeletingSubfolder = false;
         if (ok) {
             this.closeConfirmDeleteSubfolder();
+        }
+    },
+
+    canUploadDocuments(org, group) {
+        if (!org || !group) return false;
+        if (org.is_owner || org.user_role === 'administrador') return true;
+        return ['administrador', 'colaborador'].includes(group.user_role || '');
+    },
+
+    openUploadDocumentsModal(group) {
+        this.uploadDocumentGroup = group;
+        this.documentUploadFile = null;
+        this.showUploadDocumentsModal = true;
+    },
+
+    closeUploadDocumentsModal() {
+        this.showUploadDocumentsModal = false;
+        this.uploadDocumentGroup = null;
+        this.documentUploadFile = null;
+    },
+
+    handleDocumentFileChange(event) {
+        const files = event?.target?.files || [];
+        this.documentUploadFile = files.length ? files[0] : null;
+    },
+
+    async uploadGroupDocument() {
+        if (!this.uploadDocumentGroup || !this.documentUploadFile || this.isUploadingDocument) {
+            return;
+        }
+
+        this.isUploadingDocument = true;
+        const group = this.uploadDocumentGroup;
+        const formData = new FormData();
+        formData.append('file', this.documentUploadFile);
+
+        try {
+            const response = await fetch(`/api/groups/${group.id}/documents`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                body: formData,
+            });
+
+            if (!response.ok) {
+                let msg = 'No se pudo subir el documento';
+                try {
+                    const error = await response.json();
+                    msg = error.message || msg;
+                } catch {}
+                this.showStatus(msg, 'error');
+                return;
+            }
+
+            await response.json();
+            this.showStatus('Documento subido correctamente');
+            if (this.viewDocumentsGroup && this.viewDocumentsGroup.id === group.id) {
+                await this.loadGroupDocuments(group.id);
+            }
+            this.closeUploadDocumentsModal();
+        } catch (error) {
+            console.error('Error al subir documento', error);
+            this.showStatus('Error al subir el documento', 'error');
+        } finally {
+            this.isUploadingDocument = false;
+        }
+    },
+
+    openViewDocumentsModal(group) {
+        this.viewDocumentsGroup = group;
+        this.groupDocuments = [];
+        this.groupDocumentsError = null;
+        this.showViewDocumentsModal = true;
+        this.loadGroupDocuments(group.id);
+    },
+
+    closeViewDocumentsModal() {
+        this.showViewDocumentsModal = false;
+        this.viewDocumentsGroup = null;
+        this.groupDocuments = [];
+        this.groupDocumentsError = null;
+        this.isLoadingGroupDocuments = false;
+    },
+
+    async loadGroupDocuments(groupId) {
+        if (!groupId) return;
+        this.isLoadingGroupDocuments = true;
+        this.groupDocumentsError = null;
+        try {
+            const response = await fetch(`/api/groups/${groupId}/documents`);
+            if (!response.ok) {
+                let msg = 'No se pudieron cargar los documentos';
+                try {
+                    const err = await response.json();
+                    msg = err.message || msg;
+                } catch {}
+                this.groupDocumentsError = msg;
+                this.groupDocuments = [];
+                return;
+            }
+            const data = await response.json();
+            this.groupDocuments = Array.isArray(data.files) ? data.files : [];
+        } catch (error) {
+            console.error('Error loading group documents', error);
+            this.groupDocumentsError = 'Error al cargar los documentos del grupo';
+            this.groupDocuments = [];
+        } finally {
+            this.isLoadingGroupDocuments = false;
+        }
+    },
+
+    formatFileSize(bytes) {
+        const size = Number(bytes || 0);
+        if (!size) return '—';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let value = size;
+        let unit = 0;
+        while (value >= 1024 && unit < units.length - 1) {
+            value /= 1024;
+            unit += 1;
+        }
+        return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+    },
+
+    formatDateTime(dateString) {
+        if (!dateString) return '';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        } catch {
+            return dateString;
+        }
+    },
+
+    async viewOrganizationFolder(org, folder) {
+        if (!org || !folder) return;
+        const state = this.getDriveState(org.id);
+        state.selectedFolderId = folder.google_id;
+        state.isLoadingFolderFiles = true;
+        state.folderError = null;
+        try {
+            const response = await fetch(`/api/organizations/${org.id}/documents/folders/${folder.google_id}`);
+            if (!response.ok) {
+                let msg = 'No se pudo obtener el contenido de la carpeta';
+                try {
+                    const err = await response.json();
+                    msg = err.message || msg;
+                } catch {}
+                state.folderError = msg;
+                state.folderFiles = [];
+                return;
+            }
+            const data = await response.json();
+            state.folderFiles = Array.isArray(data.files) ? data.files : [];
+        } catch (error) {
+            console.error('Error loading organization folder', error);
+            state.folderError = 'Error al cargar el contenido de la carpeta';
+            state.folderFiles = [];
+        } finally {
+            state.isLoadingFolderFiles = false;
         }
     },
 

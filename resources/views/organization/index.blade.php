@@ -234,6 +234,49 @@
                                                 Las subcarpetas se gestionan automáticamente. El sistema usa las carpetas fijas <strong>Audios</strong>, <strong>Transcripciones</strong>, <strong>Audios Pospuestos</strong> y <strong>Documentos</strong> dentro de la carpeta raíz de la organización. No necesitas crear subcarpetas manualmente.
                                             </p>
                                         </div>
+                                        <div x-show="(org.is_owner || org.user_role === 'administrador') && getDriveState(org.id).connected" class="mt-6">
+                                            <h4 class="font-semibold mb-3">Carpetas de la organización</h4>
+                                            <p class="text-slate-400 text-sm mb-4">Explora las carpetas de la organización y revisa su contenido directamente desde aquí.</p>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                <template x-for="folder in getDriveState(org.id).subfolders" :key="folder.id">
+                                                    <div class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 flex flex-col gap-2">
+                                                        <div class="flex items-center justify-between gap-3">
+                                                            <div>
+                                                                <h5 class="text-sm font-semibold text-slate-100" x-text="folder.name"></h5>
+                                                                <p class="text-xs text-slate-500" x-show="folder.group">
+                                                                    Grupo: <span class="text-yellow-400" x-text="folder.group?.nombre_grupo"></span>
+                                                                </p>
+                                                            </div>
+                                                            <button @click="viewOrganizationFolder(org, folder)" class="px-3 py-1 text-xs bg-slate-700/60 hover:bg-slate-700 transition-colors duration-200 rounded">
+                                                                Ver contenido
+                                                            </button>
+                                                        </div>
+                                                        <p class="text-xs text-slate-500 break-all" x-text="folder.google_id"></p>
+                                                    </div>
+                                                </template>
+                                                <p x-show="!getDriveState(org.id).subfolders.length" class="text-sm text-slate-400 col-span-full">No hay subcarpetas disponibles.</p>
+                                            </div>
+                                            <div class="mt-4 bg-slate-900/40 border border-slate-700/60 rounded-lg p-4" x-show="getDriveState(org.id).selectedFolderId">
+                                                <div class="flex items-center justify-between mb-3">
+                                                    <h5 class="text-sm font-semibold text-slate-100">Contenido de la carpeta</h5>
+                                                    <span class="text-xs text-slate-500" x-text="getDriveState(org.id).selectedFolderId"></span>
+                                                </div>
+                                                <div x-show="getDriveState(org.id).isLoadingFolderFiles" class="text-sm text-slate-400">Cargando archivos...</div>
+                                                <div x-show="!getDriveState(org.id).isLoadingFolderFiles && getDriveState(org.id).folderError" class="text-sm text-red-400" x-text="getDriveState(org.id).folderError"></div>
+                                                <ul x-show="!getDriveState(org.id).isLoadingFolderFiles && !getDriveState(org.id).folderError && getDriveState(org.id).folderFiles.length" class="space-y-2">
+                                                    <template x-for="file in getDriveState(org.id).folderFiles" :key="file.id">
+                                                        <li class="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-slate-800/40 border border-slate-700/50 rounded-md px-3 py-2 gap-2">
+                                                            <div>
+                                                                <a :href="file.webViewLink" target="_blank" rel="noopener" class="text-sm font-medium text-yellow-400 hover:underline" x-text="file.name"></a>
+                                                                <div class="text-xs text-slate-500" x-text="formatDateTime(file.modifiedTime)"></div>
+                                                            </div>
+                                                            <div class="text-xs text-slate-400" x-text="formatFileSize(file.size)"></div>
+                                                        </li>
+                                                    </template>
+                                                </ul>
+                                                <p x-show="!getDriveState(org.id).isLoadingFolderFiles && !getDriveState(org.id).folderError && !getDriveState(org.id).folderFiles.length" class="text-sm text-slate-400">La carpeta no tiene archivos.</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -282,6 +325,14 @@
                                                         Eliminar
                                                     </button>
                                                 </div>
+                                            </div>
+                                            <div class="mt-3 flex flex-wrap gap-2">
+                                                <button @click.stop="openViewDocumentsModal(group)" class="px-3 py-1.5 bg-slate-800/70 border border-slate-600/60 text-slate-200 rounded text-xs hover:bg-slate-700/70 transition-colors duration-200">
+                                                    Ver documentos
+                                                </button>
+                                                <button x-show="canUploadDocuments(org, group)" @click.stop="openUploadDocumentsModal(group)" class="px-3 py-1.5 bg-yellow-500 text-slate-900 rounded text-xs hover:bg-yellow-400 transition-colors duration-200">
+                                                    Subir documento
+                                                </button>
                                             </div>
                                         </div>
                                     </template>
@@ -388,6 +439,67 @@
 
                         </div>
                     </template>
+                </div>
+
+                <div x-show="showUploadDocumentsModal" @keydown.escape.window="closeUploadDocumentsModal()" @click.self="closeUploadDocumentsModal()" class="fixed inset-0 bg-black/60 flex items-center justify-center z-[62]" x-cloak>
+                    <div class="organization-modal w-full max-w-lg text-slate-200">
+                        <h2 class="text-lg font-semibold mb-3">Subir documento</h2>
+                        <p class="text-sm text-slate-400 mb-4">El archivo se guardará en la carpeta del grupo <span class="text-yellow-400 font-medium" x-text="uploadDocumentGroup?.nombre_grupo"></span>.</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="group-document-file" class="block text-sm font-medium mb-2">Selecciona un archivo</label>
+                                <input id="group-document-file" type="file" @change="handleDocumentFileChange($event)" class="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-yellow-500 file:text-slate-900 hover:file:bg-yellow-400 file:cursor-pointer" />
+                                <p class="text-xs text-slate-500 mt-2" x-show="documentUploadFile" x-text="documentUploadFile ? documentUploadFile.name : ''"></p>
+                            </div>
+                            <div class="flex justify-end gap-2">
+                                <button @click="closeUploadDocumentsModal()" class="px-4 py-2 bg-slate-800/60 text-slate-200 rounded-lg border border-slate-700/50 hover:bg-slate-700/60 transition-colors duration-200">Cancelar</button>
+                                <button @click="uploadGroupDocument()" :disabled="!documentUploadFile || isUploadingDocument" class="px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <span x-show="!isUploadingDocument">Subir</span>
+                                    <span x-show="isUploadingDocument" class="flex items-center gap-2">
+                                        <svg class="animate-spin h-4 w-4 text-slate-900" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                        </svg>
+                                        Subiendo...
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div x-show="showViewDocumentsModal" @keydown.escape.window="closeViewDocumentsModal()" @click.self="closeViewDocumentsModal()" class="fixed inset-0 bg-black/60 flex items-center justify-center z-[62]" x-cloak>
+                    <div class="organization-modal w-full max-w-3xl text-slate-200 max-h-[80vh] overflow-hidden">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 class="text-lg font-semibold">Documentos del grupo</h2>
+                                <p class="text-sm text-slate-400" x-text="viewDocumentsGroup?.nombre_grupo"></p>
+                            </div>
+                            <button @click="closeViewDocumentsModal()" class="text-slate-400 hover:text-slate-200 transition-colors duration-150">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="bg-slate-900/40 border border-slate-700/60 rounded-lg p-4 max-h-[60vh] overflow-y-auto">
+                            <div x-show="isLoadingGroupDocuments" class="text-sm text-slate-400">Cargando documentos...</div>
+                            <div x-show="!isLoadingGroupDocuments && groupDocumentsError" class="text-sm text-red-400" x-text="groupDocumentsError"></div>
+                            <ul x-show="!isLoadingGroupDocuments && !groupDocumentsError && groupDocuments.length" class="space-y-3">
+                                <template x-for="file in groupDocuments" :key="file.id">
+                                    <li class="bg-slate-800/50 border border-slate-700/60 rounded-lg p-3">
+                                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                            <div>
+                                                <a :href="file.webViewLink" target="_blank" rel="noopener" class="text-sm font-semibold text-yellow-400 hover:underline" x-text="file.name"></a>
+                                                <div class="text-xs text-slate-500" x-text="formatDateTime(file.modifiedTime)"></div>
+                                            </div>
+                                            <div class="text-xs text-slate-400" x-text="formatFileSize(file.size)"></div>
+                                        </div>
+                                    </li>
+                                </template>
+                            </ul>
+                            <p x-show="!isLoadingGroupDocuments && !groupDocumentsError && !groupDocuments.length" class="text-sm text-slate-400">El grupo no tiene documentos aún.</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Modal confirmación eliminar subcarpeta (Drive) -->
