@@ -82,13 +82,7 @@
                     <h2 class="text-lg font-semibold text-slate-200">Conversaciones</h2>
                 </div>
 
-                <!-- Buscador de conversaciones -->
-                <div class="p-4 border-b border-slate-700/50">
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0114 0z"></path>
-                <!-- Se eliminó la sección de Contactos y Refresh según solicitud -->
+                <!-- Solo lista de conversaciones -->
                 <div class="flex-1 overflow-y-auto" id="conversations-list">
                     <div class="p-8 text-center">
                         <div class="loading-spinner w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
@@ -96,16 +90,7 @@
                     </div>
                 </div>
 
-                <!-- Contactos -->
-                <div id="contacts-section" class="border-t border-slate-700/50">
-                    <div class="p-3 flex items-center justify-between">
-                        <h3 class="text-sm font-semibold text-slate-300">Contactos</h3>
-                        <button id="refresh-contacts" class="text-xs text-slate-400 hover:text-slate-200">Refrescar</button>
-                    </div>
-                    <div class="max-h-52 overflow-y-auto" id="contacts-list">
-                        <div class="p-4 text-center text-slate-500 text-xs">Cargando...</div>
-                    </div>
-                </div>
+                <!-- Se removió la sección de contactos -->
             </div>
             <!-- Área de Chat -->
             <div class="flex-1 flex flex-col" id="chat-area">

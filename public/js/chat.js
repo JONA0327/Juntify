@@ -12,7 +12,6 @@ let conversationsCache = []; // Cache de conversaciones para búsqueda local
 let userSearchResultsCache = [];
 let userSearchAbortController = null;
 let globalSearchFeedbackTimer = null;
-let hideContactsAfterGlobalChat = false;
 
 // Función para inicializar auto-refresh de conversaciones
 function startAutoRefresh() {
@@ -774,16 +773,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Cargar contactos, refresco manual y buscador global
-    loadContacts();
-    const refreshContacts = document.getElementById('refresh-contacts');
-    if (refreshContacts) {
-        refreshContacts.addEventListener('click', () => {
-            hideContactsAfterGlobalChat = false;
-            setContactsListHidden(false);
-            loadContacts();
-        });
-    }
+    // Solo buscador global (usuarios fuera de contactos)
     setupGlobalChatSearch();
 });
 
@@ -804,8 +794,6 @@ function setupGlobalChatSearch() {
             results.classList.add('hidden');
             userSearchResultsCache = [];
             setGlobalSearchFeedback('', 'clear');
-            hideContactsAfterGlobalChat = false;
-            setContactsListHidden(false);
             return;
         }
 
@@ -1018,164 +1006,71 @@ function setGlobalSearchFeedback(message, type = 'info', persist = false) {
     }
 }
 
-function setContactsListHidden(hidden) {
-    const list = document.getElementById('contacts-list');
-    if (!list) return;
-
-    if (hidden) {
-        list.classList.add('hidden');
-    } else {
-        list.classList.remove('hidden');
-    }
-}
-
-async function createChatAndOpen({ contactId = null, userQuery = null, hideContactsList = false }) {
+// Crear u abrir un chat con un usuario y enfocarlo
+async function createChatAndOpen({ contactId = null, userQuery = null }) {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    const formData = new FormData();
-    if (contactId) formData.append('contact_id', contactId);
-    if (userQuery) formData.append('user_query', userQuery);
 
-    const response = await fetch('/api/chats/create-or-find', {
-        method: 'POST',
-        headers: { 'X-Requested-With': 'XMLHttpRequest', ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }) },
-        body: formData
-    });
+    // Construir payload
+    const payload = {};
+    if (contactId) payload.contact_id = contactId;
+    if (userQuery) payload.user_query = userQuery;
 
-    const contentType = response.headers.get('content-type') || '';
-    let payload = null;
-
-    if (contentType.includes('application/json')) {
-        payload = await response.json();
-    } else {
-        const text = await response.text();
-        if (!response.ok) {
-            throw new Error(text || 'No se pudo crear el chat');
-        }
-        try {
-            payload = text ? JSON.parse(text) : null;
-        } catch (parseError) {
-            console.warn('Respuesta no JSON al crear chat:', parseError);
-        }
-    }
-
-    if (!response.ok) {
-        const message = payload?.error || payload?.message || 'No se pudo crear el chat';
-        throw new Error(message);
-    }
-
-    if (!payload?.chat_id) {
-        throw new Error('La conversación no está disponible.');
-    }
-
-    await loadConversations();
-    if (hideContactsList) {
-        hideContactsAfterGlobalChat = true;
-        setContactsListHidden(true);
-    }
-    focusChat(payload.chat_id);
-    return payload;
-}
-
-function focusChat(chatId) {
-    if (!chatId) return;
-    setTimeout(() => {
-        const element = document.querySelector(`[data-chat-id="${chatId}"]`);
-        if (element) {
-            element.click();
-        }
-    }, 300);
-}
-
-// Filtrar conversaciones por nombre de usuario o último mensaje
-function filterConversations(query) {
-    const list = document.getElementById('conversations-list');
-    if (!list) return;
-
-    if (!query) {
-        // Restaurar lista completa
-        updateConversationsList(conversationsCache);
-        return;
-    }
-
-    const filtered = (conversationsCache || []).filter(c => {
-        const name = (c.other_user?.name || '').toLowerCase();
-        const email = (c.other_user?.email || '').toLowerCase();
-        const last = (c.last_message?.body || '').toLowerCase();
-        return name.includes(query) || email.includes(query) || last.includes(query);
-    });
-
-    updateConversationsList(filtered);
-}
-
-// Cargar contactos desde API
-async function loadContacts() {
     try {
-        const list = document.getElementById('contacts-list');
-        if (list) list.innerHTML = '<div class="p-3 text-xs text-slate-500">Cargando…</div>';
+        const response = await fetch('/api/chats/create-or-find', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
+            },
+            body: JSON.stringify(payload)
+        });
 
-        let resp = await fetch('/api/chats/contacts', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
-        let data;
-        if (resp.ok) {
-            const ct = resp.headers.get('content-type') || '';
-            if (ct.includes('application/json')) {
-                data = await resp.json();
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok) {
+            // Intentar extraer mensaje de error
+            let errorMsg = `HTTP ${response.status}`;
+            if (contentType.includes('application/json')) {
+                try {
+                    const err = await response.json();
+                    errorMsg = err?.message || err?.error || errorMsg;
+                } catch (_) {}
             } else {
-                // Probable sesión expirada o redirección al login
-                console.warn('Contacts endpoint devolvió contenido no-JSON; intentando fallback /api/contacts');
+                try {
+                    const txt = await response.text();
+                    if (txt) errorMsg = txt;
+                } catch (_) {}
             }
+            throw new Error(errorMsg || 'No se pudo crear/abrir el chat');
         }
 
-        // Fallback: usar /api/contacts si el endpoint anterior falla o no es JSON
-        if (!Array.isArray(data)) {
-            const resp2 = await fetch('/api/contacts', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
-            if (resp2.ok && (resp2.headers.get('content-type') || '').includes('application/json')) {
-                const payload = await resp2.json();
-                if (payload && payload.success) {
-                    const a = Array.isArray(payload.contacts) ? payload.contacts : [];
-                    const b = Array.isArray(payload.users) ? payload.users : [];
-                    data = [...a, ...b].map(u => ({ id: u.id, name: u.name || u.full_name || u.email, email: u.email }));
-                }
-            }
+        if (!contentType.includes('application/json')) {
+            throw new Error('Respuesta inválida del servidor (posible sesión expirada).');
         }
 
-        if (!Array.isArray(data)) {
-            throw new Error('No se pudieron obtener contactos (verifica tu sesión)');
+        const data = await response.json();
+        const chatId = data?.chat_id || data?.chat?.id || data?.id;
+        if (!chatId) {
+            throw new Error('No se pudo determinar el chat creado.');
         }
-        contactsCache = data;
-        setContactsListHidden(hideContactsAfterGlobalChat);
-        if (!list) return;
-        if (!contactsCache.length) {
-            list.innerHTML = '<div class="p-3 text-xs text-slate-500">Sin contactos</div>';
-            return;
-        }
-        list.innerHTML = contactsCache.map(c => `
-            <button data-user-id="${c.id}" class="w-full text-left px-3 py-2 hover:bg-slate-700/40 flex items-center gap-2 text-xs">
-                <span class="w-6 h-6 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-slate-900 font-semibold">${(c.avatar || (c.name ? c.name.charAt(0).toUpperCase() : '?'))}</span>
-                <span class="truncate">${c.name || 'Usuario'}</span>
-            </button>`).join('');
-        list.querySelectorAll('button').forEach(btn => btn.addEventListener('click', async () => {
-            const id = btn.getAttribute('data-user-id');
-            if (!id) return;
 
-            btn.disabled = true;
-            btn.classList.add('opacity-60');
+        // Actualizar la URL con el chat_id para que loadConversations lo auto-seleccione
+        const url = new URL(window.location.href);
+        url.searchParams.set('chat_id', chatId);
+        window.history.replaceState({}, '', url.toString());
 
-            try {
-                await createChatAndOpen({ contactId: id });
-            } catch (error) {
-                console.error('Error creando chat desde contactos:', error);
-                alert(error.message || 'No se pudo crear el chat');
-            } finally {
-                btn.disabled = false;
-                btn.classList.remove('opacity-60');
-            }
-        }));
-    } catch (e) {
-        console.error('Error cargando contactos:', e);
-        const list = document.getElementById('contacts-list');
-        if (list) {
-            list.innerHTML = '<div class="p-3 text-xs text-red-400">Error al cargar contactos. Revisa tu conexión o vuelve a iniciar sesión.</div>';
+        // Recargar conversaciones y seleccionar el chat
+        await loadConversations();
+        const el = document.querySelector(`[data-chat-id="${chatId}"]`);
+        if (el) {
+            el.click();
         }
+
+        return chatId;
+    } catch (error) {
+        console.error('Error en createChatAndOpen:', error);
+        throw error;
     }
 }
 
