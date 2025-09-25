@@ -36,6 +36,23 @@ test('user can create container', function () {
     ]);
 });
 
+test('personal containers are listed with null group name', function () {
+    $user = User::factory()->create(['username' => 'eve']);
+
+    $container = MeetingContentContainer::create([
+        'username' => $user->username,
+        'name' => 'Personal Notes',
+        'is_active' => true,
+    ]);
+
+    $response = $this->actingAs($user, 'sanctum')->getJson('/api/content-containers');
+
+    $response->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('containers.0.id', $container->id)
+        ->assertJsonPath('containers.0.group_name', null);
+});
+
 test('user can add meeting to container and list meetings', function () {
     $user = User::factory()->create(['username' => 'bob']);
 

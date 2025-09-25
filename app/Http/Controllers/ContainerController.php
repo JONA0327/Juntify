@@ -122,7 +122,7 @@ class ContainerController extends Controller
                         'created_at' => $container->created_at->format('d/m/Y H:i'),
                         'meetings_count' => $container->meetingRelations()->count(),
                         'is_company' => $container->group_id !== null,
-                        'group_name' => $container->group->nombre_grupo ?? null,
+                        'group_name' => optional($container->group)->nombre_grupo,
                         'drive_folder_id' => $container->drive_folder_id,
                         'metadata' => $container->metadata,
                     ];
