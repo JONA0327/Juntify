@@ -64,4 +64,9 @@ class Group extends Model
     {
         return $this->hasOne(GroupCode::class, 'group_id');
     }
+
+    public function driveFolder(): HasOne
+    {
+        return $this->hasOne(GroupDriveFolder::class);
+    }
 }

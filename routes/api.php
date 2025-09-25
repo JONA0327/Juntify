@@ -8,6 +8,7 @@ use App\Http\Controllers\PendingRecordingController;
 use App\Http\Controllers\OrganizationActivityController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\OrganizationDriveController;
+use App\Http\Controllers\OrganizationDocumentController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\NotificationController;
@@ -237,6 +238,11 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/organizations/{organization}/drive/status', [OrganizationDriveController::class, 'status'])->name('api.organizations.drive.status');
     Route::patch('/organizations/{organization}/drive/subfolders/{subfolder}', [OrganizationDriveController::class, 'renameSubfolder'])->name('api.organizations.drive.subfolders.update');
     Route::delete('/organizations/{organization}/drive/subfolders/{subfolder}', [OrganizationDriveController::class, 'deleteSubfolder'])->name('api.organizations.drive.subfolders.destroy');
+
+    Route::get('/groups/{group}/documents', [OrganizationDocumentController::class, 'listGroupDocuments'])->name('api.groups.documents.index');
+    Route::post('/groups/{group}/documents', [OrganizationDocumentController::class, 'uploadGroupDocument'])->name('api.groups.documents.store');
+    Route::get('/organizations/{organization}/documents/folders', [OrganizationDocumentController::class, 'listOrganizationFolders'])->name('api.organizations.documents.folders.index');
+    Route::get('/organizations/{organization}/documents/folders/{folderId}', [OrganizationDocumentController::class, 'showOrganizationFolder'])->name('api.organizations.documents.folders.show');
 });
 
     // Rutas de Usuarios

@@ -147,6 +147,18 @@ class GoogleDriveService
 
         return $response->getFiles();
     }
+
+    public function listFilesInFolder(string $parentId): array
+    {
+        $response = $this->drive->files->listFiles([
+            'q'      => sprintf("'%s' in parents and trashed=false", $parentId),
+            'fields' => 'files(id,name,mimeType,webViewLink,iconLink,size,modifiedTime,createdTime)',
+            'supportsAllDrives' => true,
+            'includeItemsFromAllDrives' => true,
+        ]);
+
+        return $response->getFiles();
+    }
     public function shareFolder(string $folderId, string $email): void
     {
         $permission = new Permission([

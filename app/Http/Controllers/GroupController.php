@@ -14,9 +14,17 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use App\Models\GroupCode;
+use App\Services\OrganizationDriveHelper;
 
 class GroupController extends Controller
 {
+    protected OrganizationDriveHelper $driveHelper;
+
+    public function __construct(OrganizationDriveHelper $driveHelper)
+    {
+        $this->driveHelper = $driveHelper;
+    }
+
     public function publicIndex(Request $request)
     {
         $query = Group::query()
@@ -67,14 +75,26 @@ class GroupController extends Controller
             abort(403, 'No tienes permisos para crear grupos en esta organización');
         }
 
-    $group = Group::create($validated + ['miembros' => 1]);
+        $group = Group::create($validated + ['miembros' => 1]);
+
+        try {
+            if ($group->organization && $group->organization->googleToken && $group->organization->googleToken->isConnected()) {
+                $this->driveHelper->ensureGroupFolder($group);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo crear la carpeta del grupo en Drive', [
+                'group_id' => $group->id,
+                'organization_id' => $group->id_organizacion,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         // El creador queda como administrador si es owner de la org, sino como colaborador
         $creatorRole = $isOwner ? 'administrador' : 'colaborador';
-    $group->users()->attach($user->id, ['rol' => $creatorRole]);
-    // Asegurar pertenencia en la organización y refrescar contador
-    $group->organization->users()->syncWithoutDetaching([$user->id => ['rol' => $creatorRole]]);
-    $group->organization->refreshMemberCount();
+        $group->users()->attach($user->id, ['rol' => $creatorRole]);
+        // Asegurar pertenencia en la organización y refrescar contador
+        $group->organization->users()->syncWithoutDetaching([$user->id => ['rol' => $creatorRole]]);
+        $group->organization->refreshMemberCount();
 
         if (in_array($creatorRole, ['administrador', 'colaborador'])) {
             OrganizationActivity::create([
@@ -146,6 +166,18 @@ class GroupController extends Controller
         ]);
 
         $group->update($validated);
+
+        try {
+            if ($group->organization && $group->organization->googleToken && $group->organization->googleToken->isConnected()) {
+                $this->driveHelper->renameGroupFolder($group->fresh(), $group->nombre_grupo);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo actualizar el nombre de la carpeta del grupo en Drive', [
+                'group_id' => $group->id,
+                'organization_id' => $group->id_organizacion,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $membership = $group->users()->where('users.id', $user->id)->first();
         $userRole = $membership ? $membership->pivot->rol : null;
