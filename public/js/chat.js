@@ -229,8 +229,7 @@ function updateConversationsList(conversations) {
         return;
     }
 
-    // Actualizar cache para que el buscador se mantenga consistente
-    conversationsCache = conversations;
+    // Nota: no actualizamos conversationsCache aquí para no romper el buscador
 
     conversationsList.innerHTML = '';
 
@@ -788,6 +787,10 @@ document.addEventListener('DOMContentLoaded', function() {
         startChatBtn.addEventListener('click', async () => {
             const query = startChatUser.value.trim();
             if (!query) return;
+            // Loading UI
+            const originalLabel = startChatBtn.textContent;
+            startChatBtn.disabled = true;
+            startChatBtn.textContent = 'Creando…';
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const formData = new FormData();
             formData.append('user_query', query);
@@ -811,6 +814,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 } catch {}
                 alert('No se pudo crear el chat');
             }
+            // Restore UI
+            startChatBtn.disabled = false;
+            startChatBtn.textContent = originalLabel;
         });
     }
 });
@@ -839,10 +845,38 @@ function filterConversations(query) {
 // Cargar contactos desde API
 async function loadContacts() {
     try {
-        const resp = await fetch('/api/chats/contacts', { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
-        if (!resp.ok) throw new Error('Error al cargar contactos');
-        contactsCache = await resp.json();
         const list = document.getElementById('contacts-list');
+        if (list) list.innerHTML = '<div class="p-3 text-xs text-slate-500">Cargando…</div>';
+
+        let resp = await fetch('/api/chats/contacts', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+        let data;
+        if (resp.ok) {
+            const ct = resp.headers.get('content-type') || '';
+            if (ct.includes('application/json')) {
+                data = await resp.json();
+            } else {
+                // Probable sesión expirada o redirección al login
+                console.warn('Contacts endpoint devolvió contenido no-JSON; intentando fallback /api/contacts');
+            }
+        }
+
+        // Fallback: usar /api/contacts si el endpoint anterior falla o no es JSON
+        if (!Array.isArray(data)) {
+            const resp2 = await fetch('/api/contacts', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+            if (resp2.ok && (resp2.headers.get('content-type') || '').includes('application/json')) {
+                const payload = await resp2.json();
+                if (payload && payload.success) {
+                    const a = Array.isArray(payload.contacts) ? payload.contacts : [];
+                    const b = Array.isArray(payload.users) ? payload.users : [];
+                    data = [...a, ...b].map(u => ({ id: u.id, name: u.name || u.full_name || u.email, email: u.email }));
+                }
+            }
+        }
+
+        if (!Array.isArray(data)) {
+            throw new Error('No se pudieron obtener contactos (verifica tu sesión)');
+        }
+        contactsCache = data;
         if (!list) return;
         if (!contactsCache.length) {
             list.innerHTML = '<div class="p-3 text-xs text-slate-500">Sin contactos</div>';
@@ -882,7 +916,7 @@ async function loadContacts() {
         console.error('Error cargando contactos:', e);
         const list = document.getElementById('contacts-list');
         if (list) {
-            list.innerHTML = '<div class="p-3 text-xs text-red-400">Error al cargar contactos</div>';
+            list.innerHTML = '<div class="p-3 text-xs text-red-400">Error al cargar contactos. Revisa tu conexión o vuelve a iniciar sesión.</div>';
         }
     }
 }
