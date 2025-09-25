@@ -899,25 +899,26 @@ async function performGlobalUserSearch(query, { results }) {
                 'X-Requested-With': 'XMLHttpRequest',
                 ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
             },
+            credentials: 'same-origin',
             body: JSON.stringify({ query }),
             signal: controller.signal
         });
 
-        if (!response.ok) {
-            let errorMessage = 'No se pudo buscar usuarios.';
-            try {
-                const payload = await response.json();
-                errorMessage = payload?.message || payload?.error || errorMessage;
-            } catch (parseError) {
-                console.warn('No se pudo interpretar el error de búsqueda de usuarios:', parseError);
-            }
-            throw new Error(errorMessage);
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok || !contentType.includes('application/json')) {
+            // Fallback al flujo de contactos si la sesión redirige a login o el endpoint no responde JSON
+            throw new Error('SEARCH_ENDPOINT_FAILED');
         }
 
         const payload = await response.json();
-        const users = Array.isArray(payload?.users) ? payload.users : [];
-        userSearchResultsCache = users;
+        let users = Array.isArray(payload?.users) ? payload.users : [];
 
+        // Si no hay resultados, intentar fallback a /api/contacts y filtrar localmente
+        if (!users.length) {
+            users = await fallbackSearchViaContacts(query, csrfToken);
+        }
+
+        userSearchResultsCache = users;
         renderGlobalSearchResults(users, results, query);
 
         if (users.length === 0) {
@@ -929,15 +930,64 @@ async function performGlobalUserSearch(query, { results }) {
         if (error.name === 'AbortError') {
             return;
         }
-        console.error('Error buscando usuarios:', error);
-        setGlobalSearchFeedback(error.message || 'No se pudo buscar usuarios.', 'error', true);
-        results.innerHTML = '';
-        results.classList.add('hidden');
-        userSearchResultsCache = [];
+        console.warn('Fallo búsqueda principal, intentando fallback contactos...', error);
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const users = await fallbackSearchViaContacts(query, csrfToken);
+            userSearchResultsCache = users;
+            renderGlobalSearchResults(users, results, query);
+            if (users.length === 0) {
+                setGlobalSearchFeedback('No se encontraron usuarios con ese criterio.', 'muted', true);
+            } else {
+                setGlobalSearchFeedback(`${users.length} usuario${users.length === 1 ? '' : 's'} encontrado${users.length === 1 ? '' : 's'}.`, 'success');
+            }
+        } catch (fbErr) {
+            console.error('Error buscando usuarios (incl. fallback):', fbErr);
+            setGlobalSearchFeedback('No se pudo buscar usuarios. Verifica tu sesión.', 'error', true);
+            results.innerHTML = '';
+            results.classList.add('hidden');
+            userSearchResultsCache = [];
+        }
     } finally {
         if (userSearchAbortController === controller) {
             userSearchAbortController = null;
         }
+    }
+}
+
+// Fallback: usa /api/contacts (como en añadir contactos) y filtra localmente
+async function fallbackSearchViaContacts(query, csrfToken) {
+    try {
+        const resp = await fetch('/api/contacts', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
+            },
+            credentials: 'same-origin'
+        });
+        const ct = resp.headers.get('content-type') || '';
+        if (!resp.ok || !ct.includes('application/json')) {
+            return [];
+        }
+        const payload = await resp.json();
+        const raw = [
+            ...(Array.isArray(payload?.users) ? payload.users : []),
+            ...(Array.isArray(payload?.contacts) ? payload.contacts : [])
+        ];
+        const q = (query || '').toLowerCase();
+        const filtered = raw
+            .map(u => ({ id: u.id, name: u.name || u.full_name || u.email || 'Usuario', email: u.email || '', username: u.username || '' }))
+            .filter(u => (
+                (u.name && u.name.toLowerCase().includes(q)) ||
+                (u.email && u.email.toLowerCase().includes(q)) ||
+                (u.username && u.username.toLowerCase().includes(q))
+            ));
+        // limitar a 25
+        return filtered.slice(0, 25);
+    } catch (e) {
+        return [];
     }
 }
 
@@ -969,6 +1019,7 @@ function renderGlobalSearchResults(users, container, query) {
     }).join('');
 
     container.classList.remove('hidden');
+    try { container.style.zIndex = 50; } catch (_) {}
 }
 
 function setGlobalSearchFeedback(message, type = 'info', persist = false) {
