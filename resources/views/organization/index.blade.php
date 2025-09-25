@@ -501,7 +501,14 @@
                                 </div>
                                 <div>
                                     <h2 class="text-lg font-semibold leading-tight">Subir documento</h2>
-                                    <p class="text-xs text-slate-400">Se guardará en la carpeta del grupo <span class="text-yellow-400 font-medium" x-text="uploadDocumentGroup?.nombre_grupo"></span></p>
+                                    <p class="text-xs text-slate-400">
+                                        <template x-if="uploadDocumentContainer">
+                                            <span>Se guardará en la carpeta del contenedor <span class="text-yellow-400 font-medium" x-text="uploadDocumentContainer?.name"></span></span>
+                                        </template>
+                                        <template x-if="!uploadDocumentContainer">
+                                            <span>Se guardará en la carpeta del grupo <span class="text-yellow-400 font-medium" x-text="uploadDocumentGroup?.nombre_grupo"></span></span>
+                                        </template>
+                                    </p>
                                 </div>
                             </div>
                             <button @click="closeUploadDocumentsModal()" class="text-slate-400 hover:text-slate-200 transition-colors duration-150 p-2" aria-label="Cerrar">
@@ -578,12 +585,12 @@
                                     </svg>
                                 </div>
                                 <div class="min-w-0">
-                                    <h2 class="text-lg font-semibold leading-tight truncate">Documentos del grupo</h2>
-                                    <p class="text-xs text-slate-400 truncate" x-text="viewDocumentsGroup?.nombre_grupo"></p>
+                                    <h2 class="text-lg font-semibold leading-tight truncate" x-text="viewDocumentsContainer ? 'Documentos del contenedor' : 'Documentos del grupo'"></h2>
+                                    <p class="text-xs text-slate-400 truncate" x-text="viewDocumentsContainer ? viewDocumentsContainer?.name : viewDocumentsGroup?.nombre_grupo"></p>
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
-                                <button @click="viewDocumentsGroup && loadGroupDocuments(viewDocumentsGroup.id)" class="px-2 py-2 text-slate-300 hover:text-yellow-400 transition-colors" title="Refrescar lista" aria-label="Refrescar lista">
+                                <button @click="viewDocumentsContainer ? loadContainerDocuments(viewDocumentsContainer.id) : (viewDocumentsGroup && loadGroupDocuments(viewDocumentsGroup.id))" class="px-2 py-2 text-slate-300 hover:text-yellow-400 transition-colors" title="Refrescar lista" aria-label="Refrescar lista">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M16 8a4 4 0 10-8 0m8 0a4 4 0 11-8 0m8 0v5a2 2 0 01-2 2H9m3 0H9m3 0a2 2 0 002-2v-3" />
                                     </svg>
@@ -633,7 +640,7 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
                                     </svg>
                                 </div>
-                                <div class="text-sm text-slate-400">El grupo no tiene documentos aún.</div>
+                                <div class="text-sm text-slate-400" x-text="viewDocumentsContainer ? 'El contenedor no tiene documentos aún.' : 'El grupo no tiene documentos aún.'"></div>
                             </div>
                         </div>
                     </div>
@@ -1076,12 +1083,18 @@
                                             <span x-text="'Reuniones: ' + (container.meetings_count || 0)"></span>
                                             <span x-text="formatDate(container.created_at)"></span>
                                         </div>
-                                        <div class="flex space-x-2">
+                                        <div class="flex flex-wrap gap-2">
                                             <button @click.stop="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition-colors">
                                                 Editar
                                             </button>
                                             <button x-show="canManageContainers()" @click.stop="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors">
                                                 Eliminar
+                                            </button>
+                                            <button x-show="canViewContainerDocuments(container)" @click.stop="openContainerDocumentsModal(container)" class="px-3 py-1 bg-slate-800/70 border border-slate-600/60 text-slate-200 rounded text-xs hover:bg-slate-700/70 transition-colors">
+                                                Ver documentos
+                                            </button>
+                                            <button x-show="canUploadContainerDocuments(container)" @click.stop="openContainerUploadModal(container)" class="px-3 py-1 bg-yellow-500 text-slate-900 rounded text-xs hover:bg-yellow-400 transition-colors">
+                                                Subir documento
                                             </button>
                                         </div>
                                     </div>
