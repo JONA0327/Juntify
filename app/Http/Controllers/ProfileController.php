@@ -34,7 +34,7 @@ class ProfileController extends Controller
         $folder = null;
         if ($token && $token->recordings_folder_id) {
             $folder = Folder::where('google_token_id', $token->id)
-                           ->where('google_id', $token->recordings_folder_id)
+                           ->where('google_id_hash', hash('sha256', $token->recordings_folder_id))
                            ->first();
             if ($folder) {
                 $subfolders = Subfolder::where('folder_id', $folder->id)->get();
@@ -78,16 +78,14 @@ class ProfileController extends Controller
                 );
                 $folderName = $file->getName() ?? "recordings_{$user->username}";
 
-                $folder = Folder::updateOrCreate(
-                    [
-                        'google_token_id' => $token->id,
-                        'google_id'       => $token->recordings_folder_id,
-                    ],
-                    [
-                        'name'      => $folderName,
-                        'parent_id' => null,
-                    ]
-                );
+                $folder = Folder::firstOrNew([
+                    'google_token_id' => $token->id,
+                    'google_id_hash'  => hash('sha256', $token->recordings_folder_id),
+                ]);
+                $folder->google_id = $token->recordings_folder_id; // setter will encrypt + hash
+                $folder->name = $folderName;
+                $folder->parent_id = null;
+                $folder->save();
 
                 $subfolders = Subfolder::where('folder_id', $folder->id)->get();
             } catch (\Throwable $e) {
@@ -106,16 +104,14 @@ class ProfileController extends Controller
                         $sa->shareItem($token->recordings_folder_id, $user->email, 'writer');
                     }
                     if ($folderName) {
-                        $folder = Folder::updateOrCreate(
-                            [
-                                'google_token_id' => $token->id,
-                                'google_id'       => $token->recordings_folder_id,
-                            ],
-                            [
-                                'name'      => $folderName,
-                                'parent_id' => null,
-                            ]
-                        );
+                        $folder = Folder::firstOrNew([
+                            'google_token_id' => $token->id,
+                            'google_id_hash'  => hash('sha256', $token->recordings_folder_id),
+                        ]);
+                        $folder->google_id = $token->recordings_folder_id;
+                        $folder->name = $folderName;
+                        $folder->parent_id = null;
+                        $folder->save();
                         $subfolders = Subfolder::where('folder_id', $folder->id)->get();
                         $folderMessage = null;
                     } else {

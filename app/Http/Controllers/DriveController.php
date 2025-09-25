@@ -83,10 +83,13 @@ class DriveController extends Controller
                             // First, try to find an existing subfolder in Drive with same name under the root
                             $existingId = $this->findExistingSubfolderIdInDrive($serviceAccount, $parentId, $folderName);
                             if ($existingId) {
-                                $model = OrganizationSubfolder::firstOrCreate([
+                                $model = OrganizationSubfolder::firstOrNew([
                                     'organization_folder_id' => $rootFolder->id,
-                                    'google_id'              => $existingId,
-                                ], ['name' => $folderName]);
+                                    'google_id_hash'         => hash('sha256', $existingId),
+                                ]);
+                                $model->google_id = $existingId;
+                                $model->name = $folderName;
+                                $model->save();
                                 try { if ($serviceEmail) { $serviceAccount->shareFolder($existingId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
                                 $result[$key] = $model;
                                 continue;
@@ -112,11 +115,12 @@ class DriveController extends Controller
                                     throw $e;
                                 }
                             }
-                            $model = OrganizationSubfolder::create([
+                            $model = new OrganizationSubfolder([
                                 'organization_folder_id' => $rootFolder->id,
-                                'google_id'              => $googleId,
                                 'name'                   => $folderName,
                             ]);
+                            $model->google_id = $googleId;
+                            $model->save();
                             try { $serviceAccount->shareFolder($googleId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
                         }
                     } else {
@@ -130,10 +134,13 @@ class DriveController extends Controller
                                 // Try to find an existing subfolder in Drive with same name under the root
                                 $existingId = $this->findExistingSubfolderIdInDrive($serviceAccount, $parentId, $folderName);
                                 if ($existingId) {
-                                    $model = Subfolder::firstOrCreate([
-                                        'folder_id' => $rootFolder->id,
-                                        'google_id' => $existingId,
-                                    ], ['name' => $folderName]);
+                                    $model = Subfolder::firstOrNew([
+                                        'folder_id'      => $rootFolder->id,
+                                        'google_id_hash' => hash('sha256', $existingId),
+                                    ]);
+                                    $model->google_id = $existingId;
+                                    $model->name = $folderName;
+                                    $model->save();
                                     try { if ($serviceEmail) { $serviceAccount->shareFolder($existingId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
                                     $result[$key] = $model;
                                     continue;
@@ -168,11 +175,12 @@ class DriveController extends Controller
                                     }
                                 }
 
-                                $model = Subfolder::create([
+                                $model = new Subfolder([
                                     'folder_id' => $rootFolder->id,
-                                    'google_id' => $googleId,
                                     'name'      => $folderName,
                                 ]);
+                                $model->google_id = $googleId;
+                                $model->save();
                                 try { $serviceAccount->shareFolder($googleId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
                             } finally {
                                 if ($impersonatedForFolder) {

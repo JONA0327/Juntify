@@ -51,4 +51,47 @@ class TranscriptionLaravel extends Model
     {
         return $this->hasMany(Transcription::class, 'meeting_id');
     }
+
+    // Drive IDs encryption (transparent)
+    public function getAudioDriveIdAttribute($value)
+    {
+        if (!empty($value)) { return $value; }
+        $enc = $this->attributes['audio_drive_id_enc'] ?? null;
+        if (empty($enc)) { return null; }
+        try { return \Illuminate\Support\Facades\Crypt::decryptString($enc); }
+        catch (\Throwable $e) { return $enc; }
+    }
+
+    public function setAudioDriveIdAttribute($value): void
+    {
+        if ($value === null) {
+            $this->attributes['audio_drive_id_enc'] = null;
+            $this->attributes['audio_drive_id'] = null;
+            return;
+        }
+        $plain = (string) $value;
+        $this->attributes['audio_drive_id_enc'] = \Illuminate\Support\Facades\Crypt::encryptString($plain);
+        $this->attributes['audio_drive_id'] = null;
+    }
+
+    public function getTranscriptDriveIdAttribute($value)
+    {
+        if (!empty($value)) { return $value; }
+        $enc = $this->attributes['transcript_drive_id_enc'] ?? null;
+        if (empty($enc)) { return null; }
+        try { return \Illuminate\Support\Facades\Crypt::decryptString($enc); }
+        catch (\Throwable $e) { return $enc; }
+    }
+
+    public function setTranscriptDriveIdAttribute($value): void
+    {
+        if ($value === null) {
+            $this->attributes['transcript_drive_id_enc'] = null;
+            $this->attributes['transcript_drive_id'] = null;
+            return;
+        }
+        $plain = (string) $value;
+        $this->attributes['transcript_drive_id_enc'] = \Illuminate\Support\Facades\Crypt::encryptString($plain);
+        $this->attributes['transcript_drive_id'] = null;
+    }
 }
