@@ -427,20 +427,38 @@ class ContactController extends Controller
         ]);
 
         $query = $data['query'];
+        $normalizedQuery = mb_strtolower($query, 'UTF-8');
+        $terms = array_filter(preg_split('/\s+/', $normalizedQuery));
 
-        // Buscar usuarios que coincidan con el email o nombre
-        $users = User::where(function ($q) use ($query) {
-                $q->where('email', 'LIKE', "%{$query}%")
-                  ->orWhere('full_name', 'LIKE', "%{$query}%")
-                  ->orWhere('username', 'LIKE', "%{$query}%");
+        $users = User::query()
+            ->where('id', '!=', $user->id)
+            ->where(function ($builder) use ($normalizedQuery, $terms) {
+                $builder
+                    ->whereRaw('LOWER(full_name) LIKE ?', ["%{$normalizedQuery}%"])
+                    ->orWhereRaw('LOWER(username) LIKE ?', ["%{$normalizedQuery}%"])
+                    ->orWhereRaw('LOWER(email) LIKE ?', ["%{$normalizedQuery}%"]);
+
+                foreach ($terms as $term) {
+                    $builder->orWhereRaw('LOWER(full_name) LIKE ?', ["%{$term}%"]);
+                    $builder->orWhereRaw('LOWER(username) LIKE ?', ["%{$term}%"]);
+                    $builder->orWhereRaw('LOWER(email) LIKE ?', ["%{$term}%"]);
+                }
             })
-            ->where('id', '!=', $user->id) // Excluir al usuario actual
-            ->limit(10) // Limitar resultados
+            ->orderByRaw(
+                'CASE '
+                . 'WHEN LOWER(full_name) LIKE ? THEN 0 '
+                . 'WHEN LOWER(username) LIKE ? THEN 1 '
+                . 'WHEN LOWER(email) LIKE ? THEN 2 '
+                . 'ELSE 3 END',
+                ["{$normalizedQuery}%", "{$normalizedQuery}%", "{$normalizedQuery}%"]
+            )
+            ->orderBy('full_name')
+            ->limit(25)
             ->get(['id', 'full_name as name', 'email', 'username'])
             ->map(function ($foundUser) {
                 return [
                     'id' => $foundUser->id,
-                    'name' => $foundUser->name,
+                    'name' => $foundUser->name ?? $foundUser->username ?? $foundUser->email,
                     'email' => $foundUser->email,
                     'username' => $foundUser->username,
                     'exists_in_juntify' => true,
