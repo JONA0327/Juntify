@@ -20,6 +20,7 @@ const documentNameById = new Map();
 // Seguimiento de documentos en procesamiento para actualizar UI cuando terminen
 const pendingDocIds = new Set();
 let pendingDocWatcher = null;
+let currentDriveFolderInfo = { scope: 'personal', driveType: 'personal', label: 'Documentos' };
 
 function addPendingDoc(id) {
     if (!Number.isFinite(Number(id))) return;
@@ -202,6 +203,8 @@ function resetContextToGeneral(clearLoaded = false) {
         selectedDocuments = [];
         updateLoadedContextUI();
     }
+    currentDriveFolderInfo = { scope: 'personal', driveType: 'personal', label: 'Documentos' };
+    updateDriveFolderMeta(null);
     updateContextIndicator();
     renderContextDocs();
 }
@@ -808,27 +811,112 @@ async function loadContextData() {
 /**
  * Cargar documentos desde la carpeta de Drive "Documentos"
  */
-async function loadDriveDocuments(searchTerm = '') {
+async function loadDriveDocuments(searchTerm = '', options = {}) {
     const grid = document.getElementById('documentsGrid');
     if (!grid) return;
-    grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Cargando documentos de Drive...</p></div>';
+
+    const metaEl = document.getElementById('driveFolderMeta');
+    if (metaEl) {
+        metaEl.style.display = 'none';
+        metaEl.innerHTML = '';
+    }
+
+    if (!options.skipLoader) {
+        grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Cargando documentos de Drive...</p></div>';
+    }
+
+    const forcePersonal = options.forcePersonal === true;
+    const hasContainerContext = !forcePersonal && currentContext && currentContext.type === 'container' && currentContext.id;
+    const params = new URLSearchParams();
+    const requestedDriveType = forcePersonal ? 'personal' : (hasContainerContext ? 'organization' : 'personal');
+
+    params.set('drive_type', requestedDriveType);
+    if (hasContainerContext) {
+        params.set('container_id', currentContext.id);
+    }
+    if (searchTerm) params.set('search', searchTerm);
 
     try {
-        const params = new URLSearchParams();
-        // En esta primera versión usamos siempre personal; luego podríamos agregar un selector
-        params.set('drive_type', 'personal');
-        if (searchTerm) params.set('search', searchTerm);
         const resp = await fetch(`/api/ai-assistant/documents/drive?${params.toString()}`);
-        const data = await resp.json();
-        if (data && data.success) {
-            renderDriveDocuments(data.files || []);
-        } else {
-            grid.innerHTML = '<div class="empty-state"><p>No se pudieron cargar los documentos de Drive</p></div>';
+
+        if (!resp.ok) {
+            if (hasContainerContext && !forcePersonal && resp.status >= 400 && resp.status < 500) {
+                showNotification('No se pudo cargar la carpeta del contenedor. Mostrando tus documentos personales.', 'warning');
+                return await loadDriveDocuments(searchTerm, { forcePersonal: true });
+            }
+            throw new Error(`HTTP ${resp.status}`);
         }
+
+        const data = await resp.json();
+
+        if (!data || !data.success) {
+            if (hasContainerContext && !forcePersonal) {
+                const message = data && data.message ? data.message : 'No se pudo cargar la carpeta del contenedor. Se mostrarán tus documentos personales.';
+                showNotification(message, 'warning');
+                return await loadDriveDocuments(searchTerm, { forcePersonal: true });
+            }
+            grid.innerHTML = '<div class="empty-state"><p>No se pudieron cargar los documentos de Drive</p></div>';
+            updateDriveFolderMeta(data && data.folder ? data.folder : null);
+            return;
+        }
+
+        const folder = data.folder || null;
+        currentDriveFolderInfo = {
+            scope: folder?.scope || (hasContainerContext ? 'container' : 'personal'),
+            driveType: folder?.drive_type || requestedDriveType,
+            label: folder?.label || (hasContainerContext ? 'Contenedor' : 'Documentos'),
+            containerId: folder?.container_id || null,
+            containerName: folder?.container_name || null,
+            fallback: folder?.fallback || false,
+            groupName: folder?.group_name || null,
+        };
+
+        if (currentDriveFolderInfo.fallback && !forcePersonal) {
+            showNotification('La carpeta del contenedor no está disponible. Mostrando documentos personales.', 'warning');
+        }
+
+        updateDriveFolderMeta(folder);
+        renderDriveDocuments(data.files || []);
     } catch (e) {
         console.error('Error loading Drive documents', e);
         grid.innerHTML = '<div class="empty-state"><p>Error al cargar documentos de Drive</p></div>';
+        updateDriveFolderMeta(null);
     }
+}
+
+function updateDriveFolderMeta(folder) {
+    const metaEl = document.getElementById('driveFolderMeta');
+    if (!metaEl) return;
+
+    if (!folder) {
+        metaEl.style.display = 'none';
+        metaEl.innerHTML = '';
+        return;
+    }
+
+    const scopeLabel = folder.scope === 'container'
+        ? 'Carpeta del contenedor'
+        : 'Documentos personales';
+    const displayName = folder.container_name || folder.label || 'Documentos';
+    const driveLabel = folder.drive_type === 'organization' ? 'Drive organizacional' : 'Mi Drive';
+    const groupLabel = folder.group_name ? ` • ${escapeHtml(String(folder.group_name))}` : '';
+    const fallbackMessage = folder.fallback
+        ? '<div style="font-size:13px;color:#facc15;">Mostrando documentos personales porque la carpeta del contenedor no está disponible.</div>'
+        : '';
+
+    metaEl.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:6px;padding:8px 12px;border-radius:12px;background:rgba(15,23,42,0.05);">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span style="padding:4px 10px;border-radius:999px;background:rgba(59,130,246,0.15);color:#1d4ed8;font-weight:600;font-size:12px;">${escapeHtml(scopeLabel)}</span>
+                <span style="font-weight:600;font-size:15px;color:#0f172a;">${escapeHtml(String(displayName))}</span>
+            </div>
+            <div style="font-size:13px;color:#64748b;">
+                ${escapeHtml(driveLabel)}${groupLabel}
+            </div>
+            ${fallbackMessage}
+        </div>
+    `;
+    metaEl.style.display = 'block';
 }
 
 /**
@@ -1485,6 +1573,14 @@ async function loadSelectedContext() {
     await updateCurrentSessionContext();
         closeContextSelector();
         updateContextIndicator();
+
+        if (currentContext && currentContext.type === 'container') {
+            try {
+                await loadDriveDocuments('', { skipLoader: currentContextType !== 'documents' });
+            } catch (err) {
+                console.warn('No se pudo cargar la carpeta del contenedor al fijar el contexto', err);
+            }
+        }
 
         // Limpiar contexto cargado
         loadedContextItems = [];
