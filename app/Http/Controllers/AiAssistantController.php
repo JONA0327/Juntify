@@ -3698,29 +3698,10 @@ class AiAssistantController extends Controller
 
     private function normalizeOrganizationToken(OrganizationGoogleToken $token): array
     {
-        $rawAccessToken = $token->access_token;
-        $accessToken = null;
+        $tokenData = $token->getTokenArray();
 
-        if (is_array($rawAccessToken)) {
-            $accessToken = $rawAccessToken['access_token'] ?? null;
-        } elseif (is_string($rawAccessToken)) {
-            $accessToken = $rawAccessToken;
-        }
-
-        if (! is_string($accessToken) || $accessToken === '') {
+        if (! isset($tokenData['access_token']) || ! is_string($tokenData['access_token']) || $tokenData['access_token'] === '') {
             throw new RuntimeException('El token de acceso de la organización no es válido.');
-        }
-
-        $tokenData = [
-            'access_token' => $accessToken,
-        ];
-
-        if (! empty($token->refresh_token)) {
-            $tokenData['refresh_token'] = $token->refresh_token;
-        }
-
-        if ($token->expiry_date) {
-            $tokenData['expiry_date'] = $token->expiry_date->timestamp;
         }
 
         return $tokenData;

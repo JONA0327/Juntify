@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Support\Facades\Crypt;
 
 class GoogleToken extends Model
 {
@@ -26,23 +28,15 @@ class GoogleToken extends Model
         'token_created_at' => 'datetime',
     ];
 
-    public function getAccessTokenAttribute($value)
-    {
-        // Si ya tenemos el access_token en un campo separado, no necesitamos decodificar JSON
-        if (!empty($value) && !is_null($this->attributes['expires_in'] ?? null)) {
-            return $value; // Retornar como string simple si tenemos los campos separados
-        }
-
-        // Lógica legacy para tokens guardados como JSON
-        $decoded = json_decode($value, true);
-        return json_last_error() === JSON_ERROR_NONE ? $decoded : $value;
-    }
-
     public function setAccessTokenAttribute($value)
     {
         // Si es un array (token completo de Google), extraer componentes a campos separados
         if (is_array($value)) {
-            $this->attributes['access_token'] = $value['access_token'] ?? $value;
+            $plainToken = $value['access_token'] ?? null;
+            if ($plainToken === null) {
+                $plainToken = json_encode($value);
+            }
+            $this->attributes['access_token'] = $this->encryptValue($plainToken);
 
             // Guardar componentes en campos separados si están disponibles
             if (isset($value['expires_in'])) {
@@ -62,8 +56,40 @@ class GoogleToken extends Model
             }
         } else {
             // String simple
-            $this->attributes['access_token'] = $value;
+            $this->attributes['access_token'] = $this->encryptValue($value);
         }
+    }
+
+    public function getAccessTokenAttribute($value)
+    {
+        if ($value === null) {
+            return $value;
+        }
+
+        $decrypted = $this->decryptValue($value);
+
+        // Si ya tenemos el access_token en un campo separado, retornarlo directamente como string
+        if (!empty($decrypted) && !is_null($this->attributes['expires_in'] ?? null)) {
+            return $decrypted;
+        }
+
+        // Lógica legacy para tokens guardados como JSON
+        $decoded = json_decode($decrypted, true);
+        return json_last_error() === JSON_ERROR_NONE ? $decoded : $decrypted;
+    }
+
+    public function setRefreshTokenAttribute($value): void
+    {
+        $this->attributes['refresh_token'] = $this->encryptValue($value);
+    }
+
+    public function getRefreshTokenAttribute($value)
+    {
+        if ($value === null) {
+            return $value;
+        }
+
+        return $this->decryptValue($value);
     }
 
     /**
@@ -157,5 +183,47 @@ class GoogleToken extends Model
         }
 
         $this->update($updateData);
+    }
+
+    protected function encryptValue($value)
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        $stringValue = is_string($value) ? $value : (string) $value;
+
+        if ($this->isEncrypted($stringValue)) {
+            return $stringValue;
+        }
+
+        return Crypt::encryptString($stringValue);
+    }
+
+    protected function decryptValue($value)
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        try {
+            return Crypt::decryptString($value);
+        } catch (DecryptException $exception) {
+            return $value;
+        } catch (\Throwable $exception) {
+            return $value;
+        }
+    }
+
+    protected function isEncrypted(string $value): bool
+    {
+        try {
+            Crypt::decryptString($value);
+            return true;
+        } catch (DecryptException $exception) {
+            return false;
+        } catch (\Throwable $exception) {
+            return false;
+        }
     }
 }

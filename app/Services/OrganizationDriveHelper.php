@@ -43,11 +43,13 @@ class OrganizationDriveHelper
         }
 
         $client = $this->drive->getClient();
-        $client->setAccessToken([
-            'access_token'  => $token->access_token,
-            'refresh_token' => $token->refresh_token,
-            'expiry_date'   => $token->expiry_date,
-        ]);
+
+        $tokenPayload = $token->getTokenArray();
+        if (empty($tokenPayload['access_token'])) {
+            throw new \Exception('El token de Google Drive no contiene un access token válido');
+        }
+
+        $client->setAccessToken($tokenPayload);
 
         if ($client->isAccessTokenExpired()) {
             $new = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);

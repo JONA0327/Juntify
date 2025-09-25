@@ -191,19 +191,13 @@ class ProcessAiDocumentJob implements ShouldQueue
             $token = $organization?->googleToken;
 
             if ($token) {
-                $accessToken = $token->access_token;
-                if (is_array($accessToken)) {
-                    $accessToken = $accessToken['access_token'] ?? null;
-                }
+                $tokenArray = $token->getTokenArray();
 
-                if (! $accessToken) {
+                if (empty($tokenArray['access_token'])) {
                     return null;
                 }
 
-                return [
-                    'access_token' => $accessToken,
-                    'refresh_token' => $token->refresh_token,
-                ];
+                return $tokenArray;
             }
         }
 
