@@ -59,6 +59,24 @@
         <div class="flex-1 bg-slate-800/30 backdrop-blur-sm border border-slate-700/50 rounded-lg overflow-hidden flex">
             <!-- Lista de Conversaciones -->
             <div class="w-1/3 border-r border-slate-700/50 flex flex-col">
+                <!-- Buscador global para iniciar chats -->
+                <div class="p-4 border-b border-slate-700/50 space-y-2">
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <input type="text"
+                               id="global-chat-search"
+                               placeholder="Buscar usuarios para iniciar chat..."
+                               class="w-full pl-10 pr-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500/50 transition-all text-sm">
+                        <div id="global-chat-search-results" class="absolute left-0 right-0 mt-2 bg-slate-900/95 border border-slate-700/80 rounded-lg shadow-xl max-h-60 overflow-y-auto hidden z-20"></div>
+                    </div>
+                    <p class="text-[11px] text-slate-400">Escribe el nombre, usuario o email. Puedes chatear con usuarios aunque no estén en tus contactos.</p>
+                    <div id="global-chat-search-feedback" class="text-[11px] hidden"></div>
+                </div>
+
                 <!-- Header de conversaciones -->
                 <div class="p-4 border-b border-slate-700/50">
                     <h2 class="text-lg font-semibold text-slate-200">Conversaciones</h2>
@@ -69,7 +87,7 @@
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0114 0z"></path>
                             </svg>
                         </div>
                         <input type="text"
@@ -87,7 +105,7 @@
                     </div>
                 </div>
 
-                <!-- Contactos y nuevo chat -->
+                <!-- Contactos -->
                 <div class="border-t border-slate-700/50">
                     <div class="p-3 flex items-center justify-between">
                         <h3 class="text-sm font-semibold text-slate-300">Contactos</h3>
@@ -96,14 +114,8 @@
                     <div class="max-h-52 overflow-y-auto" id="contacts-list">
                         <div class="p-4 text-center text-slate-500 text-xs">Cargando...</div>
                     </div>
-                    <div class="p-3 border-t border-slate-700/50">
-                        <input id="start-chat-user" type="text" placeholder="Usuario o email..." class="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded text-xs focus:ring-2 focus:ring-yellow-500/50" />
-                        <button id="start-chat-btn" class="mt-2 w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 text-xs font-semibold py-2 rounded transition">Iniciar chat</button>
-                        <p class="mt-2 text-[10px] text-slate-500">Puedes chatear con usuarios no agregados. Se creará el chat automáticamente.</p>
-                    </div>
                 </div>
             </div>
-
             <!-- Área de Chat -->
             <div class="flex-1 flex flex-col" id="chat-area">
                 <!-- Estado inicial cuando no hay chat seleccionado -->
