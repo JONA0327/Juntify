@@ -37,11 +37,12 @@ it('reconnects without losing folders', function () {
 
     $this->assertDatabaseHas('google_tokens', [
         'id' => $token->id,
-        'recordings_folder_id' => 'folder123',
         'access_token' => null,
         'refresh_token' => null,
         'expiry_date' => null,
     ]);
+
+    expect($token->fresh()->recordings_folder_id)->toBe('folder123');
     $this->assertDatabaseCount('google_tokens', 1);
     $this->assertDatabaseHas('folders', ['id' => $folder->id]);
     $this->assertDatabaseHas('subfolders', ['id' => $sub->id]);
@@ -67,14 +68,13 @@ it('reconnects without losing folders', function () {
 
     $this->assertDatabaseHas('google_tokens', [
         'id' => $token->id,
-        'access_token' => 'new-token',
-        'refresh_token' => 'new-refresh',
     ]);
     $this->assertDatabaseCount('google_tokens', 1);
     $this->assertDatabaseHas('folders', ['id' => $folder->id]);
     $this->assertDatabaseHas('subfolders', ['id' => $sub->id]);
-    $this->assertDatabaseHas('google_tokens', [
-        'id' => $token->id,
-        'recordings_folder_id' => 'folder123',
-    ]);
+
+    $updatedToken = $token->fresh();
+    expect($updatedToken->access_token)->toBe('new-token');
+    expect($updatedToken->refresh_token)->toBe('new-refresh');
+    expect($updatedToken->recordings_folder_id)->toBe('folder123');
 });
