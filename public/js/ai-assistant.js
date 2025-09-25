@@ -1306,45 +1306,44 @@ async function loadSelectedContext() {
             const containerId = serializedItems[0].id;
             const container = allContainers.find(c => c.id === containerId);
 
-            // Importar tareas y forzar descarga/parsing de .ju de TODAS las reuniones del contenedor
-            // Bloqueamos hasta que termine (servidor recorre todas las reuniones)
             try {
                 const csrf = document.querySelector('meta[name="csrf-token"]').content;
-                const importOnce = async () => {
-                    const resp = await fetch(`/api/ai-assistant/containers/${containerId}/import-tasks`, {
+                const preloadOnce = async () => {
+                    const resp = await fetch(`/api/ai-assistant/containers/${containerId}/preload`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
                         body: JSON.stringify({})
                     });
-                    return resp.json().catch(() => ({ success: false, meetings: [], errors: [{ error: 'JSON parse error' }] }));
+                    return resp.json().catch(() => ({ success: false, meetings_preloaded: [], errors: [{ error: 'JSON parse error' }] }));
                 };
 
-                let result = await importOnce();
-                let expected = container?.meetings_count ?? null;
-                let processed = Array.isArray(result.meetings) ? result.meetings.length : 0;
+                let result = await preloadOnce();
+                const expected = container?.meetings_count ?? null;
+                let processed = Array.isArray(result.meetings_preloaded) ? result.meetings_preloaded.length : 0;
                 const hadErrors = Array.isArray(result.errors) && result.errors.length > 0;
-                // Si procesó menos de lo esperado o hubo errores, reintentar una vez
-                if (expected && processed < expected || hadErrors) {
-                    console.warn('Reintentando importación de tareas/.ju para contenedor', { containerId, processed, expected });
-                    const retry = await importOnce();
-                    // combinar errores para informar
+                if ((expected && processed < expected) || hadErrors) {
+                    const retry = await preloadOnce();
                     if (Array.isArray(retry.errors) && retry.errors.length) {
                         result.errors = [...(result.errors || []), ...retry.errors];
                     }
-                    result.meetings = retry.meetings || result.meetings;
+                    if (Array.isArray(retry.meetings_preloaded)) {
+                        result.meetings_preloaded = retry.meetings_preloaded;
+                        processed = result.meetings_preloaded.length;
+                    }
                 }
-                // Mostrar aviso si faltan reuniones o hubo errores
-                expected = container?.meetings_count ?? expected;
-                processed = Array.isArray(result.meetings) ? result.meetings.length : processed;
                 if (expected && processed < expected) {
                     showNotification(`Precarga incompleta: ${processed}/${expected} reuniones procesadas. Intentaré continuar igualmente.`, 'warning');
                 }
                 if (Array.isArray(result.errors) && result.errors.length) {
                     showNotification(`Algunas reuniones no pudieron precargarse (${result.errors.length}).`, 'warning');
-                    console.warn('Errores import-tasks', result.errors);
+                    console.warn('Errores preload contenedor', result.errors);
+                }
+                if (result && result.payload) {
+                    window.cachedContainerPayloads = window.cachedContainerPayloads || {};
+                    window.cachedContainerPayloads[containerId] = result.payload;
                 }
             } catch (e) {
-                console.warn('Importación de tareas/.ju falló; continuaré de todos modos', e);
+                console.warn('Precarga de contenedor falló; continuaré de todos modos', e);
             }
             currentContext = {
                 type: 'container',
@@ -1385,36 +1384,42 @@ async function loadSelectedContext() {
             const containers = serializedItems.filter(it => it.type === 'container').map(it => it.id);
             const driveDocs = serializedItems.filter(it => it.type === 'document').map(it => String(it.id));
 
-            // 1) Preload containers (server will iterate their meetings) usando import-tasks y esperando
+            // 1) Preload containers (server will iterate their meetings) usando preload consolidado
             for (const containerId of containers) {
                 try {
                     const csrf = document.querySelector('meta[name="csrf-token"]').content;
                     const containerInfo = allContainers.find(c => c.id === containerId);
                     const expected = containerInfo?.meetings_count ?? null;
-                    const importOnce = async () => {
-                        const r = await fetch(`/api/ai-assistant/containers/${containerId}/import-tasks`, {
+                    const preloadOnce = async () => {
+                        const r = await fetch(`/api/ai-assistant/containers/${containerId}/preload`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
                             body: JSON.stringify({})
                         });
-                        return r.json().catch(() => ({ success: false, meetings: [], errors: [{ error: 'JSON parse error' }] }));
+                        return r.json().catch(() => ({ success: false, meetings_preloaded: [], errors: [{ error: 'JSON parse error' }] }));
                     };
-                    let result = await importOnce();
-                    let processed = Array.isArray(result.meetings) ? result.meetings.length : 0;
+                    let result = await preloadOnce();
+                    let processed = Array.isArray(result.meetings_preloaded) ? result.meetings_preloaded.length : 0;
                     const hadErrors = Array.isArray(result.errors) && result.errors.length > 0;
                     if ((expected && processed < expected) || hadErrors) {
-                        const retry = await importOnce();
+                        const retry = await preloadOnce();
                         if (Array.isArray(retry.errors) && retry.errors.length) {
                             result.errors = [...(result.errors || []), ...retry.errors];
                         }
-                        result.meetings = retry.meetings || result.meetings;
-                        processed = Array.isArray(result.meetings) ? result.meetings.length : processed;
+                        if (Array.isArray(retry.meetings_preloaded)) {
+                            result.meetings_preloaded = retry.meetings_preloaded;
+                            processed = result.meetings_preloaded.length;
+                        }
                     }
                     if (expected && processed < expected) {
                         showNotification(`Precarga de contenedor ${containerInfo?.name || containerId}: ${processed}/${expected} reuniones.`, 'warning');
                     }
                     if (Array.isArray(result.errors) && result.errors.length) {
-                        console.warn('Errores import-tasks (mixto)', result.errors);
+                        console.warn('Errores preload contenedor (mixto)', result.errors);
+                    }
+                    if (result && result.payload) {
+                        window.cachedContainerPayloads = window.cachedContainerPayloads || {};
+                        window.cachedContainerPayloads[containerId] = result.payload;
                     }
                 } catch (_) { /* ignore */ }
             }

@@ -2,72 +2,58 @@
 
 use App\Http\Controllers\AiAssistantController;
 use App\Models\AiChatSession;
-use App\Models\AiMeetingJuCache;
+use App\Models\AiContainerJuCache;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 use App\Models\User;
+use App\Services\ContainerJuCacheService;
 use App\Services\MeetingJuCacheService;
 
-it('caches ju data for every meeting when container fragments exceed the global limit', function () {
-    $user = User::factory()->create(['username' => 'ju-cache-user']);
+it('stores a unified container payload when preloading a container', function () {
+    $user = User::factory()->create(['username' => 'cache-user']);
 
     $container = MeetingContentContainer::query()->create([
-        'name' => 'Container con muchas reuniones',
-        'description' => 'Usado para probar cache de ju',
+        'name' => 'Contenedor Demo',
+        'description' => 'Contenedor para pruebas de payload',
         'username' => $user->username,
         'is_active' => true,
     ]);
 
-    $meetingCount = 35; // 35 reuniones * 8 fragmentos por reunión > límite global 240
-    $meetings = collect();
-    for ($i = 0; $i < $meetingCount; $i++) {
-        $meetings->push(createLegacyMeeting($user, [
-            'meeting_name' => 'Reunión ' . ($i + 1),
-            'created_at' => now()->subDays($i),
-            'updated_at' => now()->subDays($i),
-        ]));
-    }
+    $meetingA = createLegacyMeeting($user, ['meeting_name' => 'Reunión Alfa']);
+    $meetingB = createLegacyMeeting($user, ['meeting_name' => 'Reunión Beta']);
 
-    foreach ($meetings as $meeting) {
-        MeetingContentRelation::query()->create([
-            'container_id' => $container->id,
-            'meeting_id' => $meeting->id,
-        ]);
-    }
+    MeetingContentRelation::query()->create(['container_id' => $container->id, 'meeting_id' => $meetingA->id]);
+    MeetingContentRelation::query()->create(['container_id' => $container->id, 'meeting_id' => $meetingB->id]);
 
-    $session = AiChatSession::query()->create([
-        'username' => $user->username,
-        'title' => 'Sesión con contexto de contenedor',
-        'context_type' => 'container',
-        'context_id' => $container->id,
-        'context_data' => [],
-        'is_active' => true,
-        'last_activity' => now(),
-    ]);
+    $normalizedPayloads = [
+        $meetingA->id => [
+            'summary' => 'Resumen Alfa',
+            'key_points' => [['text' => 'KP Alfa']],
+            'tasks' => [['tarea' => 'Tarea Alfa']],
+            'segments' => [
+                ['speaker' => 'Ana', 'text' => 'Segmento Alfa 1'],
+                ['speaker' => 'Luis', 'text' => 'Segmento Alfa 2'],
+            ],
+        ],
+        $meetingB->id => [
+            'summary' => 'Resumen Beta',
+            'key_points' => [['text' => 'KP Beta']],
+            'tasks' => [['tarea' => 'Tarea Beta']],
+            'segments' => [
+                ['speaker' => 'Carlos', 'text' => 'Segmento Beta 1'],
+            ],
+        ],
+    ];
 
-    $fakeCache = new class extends MeetingJuCacheService {
-        public array $called = [];
+    $fakeCache = new class($normalizedPayloads) extends MeetingJuCacheService {
+        public function __construct(private array $payloads) {}
 
         public function getCachedParsed(int $meetingId): ?array
         {
-            $this->called[] = $meetingId;
-
-            $row = AiMeetingJuCache::firstOrNew(['meeting_id' => $meetingId]);
-            $row->transcript_drive_id = 'fake-drive-' . $meetingId;
-            $row->data = [
-                'summary' => 'Resumen ' . $meetingId,
-                'key_points' => ['Punto clave ' . $meetingId],
-                'tasks' => [],
-                'transcription' => '',
-                'speakers' => [],
-                'segments' => [],
-            ];
-            $row->save();
-
-            return $row->data;
+            return $this->payloads[$meetingId] ?? null;
         }
 
-        public function setCachedParsed(int $meetingId, array $parsed, ?string $transcriptDriveId = null): bool
+        public function setCachedParsed(int $meetingId, array $parsed, ?string $transcriptDriveId = null, ?array $rawFull = null): bool
         {
             return true;
         }
@@ -77,74 +63,100 @@ it('caches ju data for every meeting when container fragments exceed the global 
 
     $this->actingAs($user);
 
+    $response = $this->postJson(route('api.ai-assistant.containers.preload', $container->id));
+    $response->assertStatus(200)->assertJson(['success' => true, 'container_id' => $container->id]);
+
+    $this->assertDatabaseCount('ai_container_ju_caches', 1);
+
+    $cacheRow = AiContainerJuCache::where('container_id', $container->id)->firstOrFail();
+    $payload = $cacheRow->payload;
+
+    expect($payload['meetings'][strval($meetingA->id)]['data']['summary'] ?? null)->toBe('Resumen Alfa');
+    expect($payload['meetings'][strval($meetingB->id)]['data']['key_points'][0]['text'] ?? null)->toBe('KP Beta');
+    expect($response->json('checksum'))->toBe($cacheRow->checksum);
+});
+
+it('returns focused meeting fragments from consolidated payload', function () {
+    $user = User::factory()->create(['username' => 'focus-user']);
+
+    $container = MeetingContentContainer::query()->create([
+        'name' => 'Contenedor Foco',
+        'username' => $user->username,
+        'is_active' => true,
+    ]);
+
+    $meeting = createLegacyMeeting($user, ['meeting_name' => 'Reunión Objetivo']);
+    MeetingContentRelation::query()->create(['container_id' => $container->id, 'meeting_id' => $meeting->id]);
+
+    $payload = [
+        'version' => 1,
+        'generated_at' => now()->toIso8601String(),
+        'container' => [
+            'id' => $container->id,
+            'name' => $container->name,
+            'meetings_count' => 1,
+        ],
+        'meetings_order' => [$meeting->id],
+        'aggregated' => [
+            'summary_lines' => ['Reunión Objetivo: Resumen demo'],
+            'summary_text' => 'Resumen agregado de reuniones (1 reuniones):\nReunión Objetivo: Resumen demo',
+            'key_points' => ['Reunión Objetivo: Punto clave'],
+            'tasks' => [],
+            'stats' => [
+                'total_meetings' => 1,
+                'total_segments' => 1,
+                'total_key_points' => 1,
+                'total_tasks' => 0,
+            ],
+        ],
+        'meetings' => [
+            strval($meeting->id) => [
+                'meta' => [
+                    'id' => $meeting->id,
+                    'name' => $meeting->meeting_name,
+                ],
+                'data' => [
+                    'summary' => 'Resumen demo del meeting',
+                    'key_points' => [['text' => 'Punto clave']],
+                    'segments' => [
+                        ['speaker' => 'Ana', 'text' => 'Inicio del proyecto'],
+                    ],
+                ],
+                'stats' => [
+                    'segments' => 1,
+                    'key_points' => 1,
+                    'tasks' => 0,
+                    'summary_length' => 24,
+                ],
+            ],
+        ],
+    ];
+
+    /** @var ContainerJuCacheService $containerCache */
+    $containerCache = app(ContainerJuCacheService::class);
+    $containerCache->setCachedPayload($container->id, $payload);
+
+    $session = AiChatSession::query()->create([
+        'username' => $user->username,
+        'title' => 'Sesión contenedor',
+        'context_type' => 'container',
+        'context_id' => $container->id,
+        'context_data' => [],
+        'is_active' => true,
+        'last_activity' => now(),
+    ]);
+
+    $this->actingAs($user);
     $controller = app(AiAssistantController::class);
     $method = new \ReflectionMethod($controller, 'buildContainerContextFragments');
     $method->setAccessible(true);
-    $method->invoke($controller, $session, '');
 
-    foreach ($meetings as $meeting) {
-        $this->assertDatabaseHas('ai_meeting_ju_caches', [
-            'meeting_id' => $meeting->id,
-        ]);
-    }
+    $fragments = $method->invoke($controller, $session, 'Detallame la reunión ' . $meeting->id);
 
-    expect(array_unique($fakeCache->called))->toHaveCount($meetingCount);
-});
+    expect($fragments)->not()->toBeEmpty();
+    $summaryFragment = collect($fragments)->firstWhere('content_type', 'meeting_summary');
+    expect($summaryFragment['text'] ?? '')->toContain('Resumen demo del meeting');
 
-it('persists generated transcript when ju payload only includes segments', function () {
-    $user = User::factory()->create();
-    $meeting = createLegacyMeeting($user);
-
-    $segments = [
-        [
-            'timestamp' => '00:00 - 00:05',
-            'speaker' => 'Ana',
-            'text' => 'Bienvenidos al proyecto',
-        ],
-        [
-            'start' => 5,
-            'end' => 12,
-            'speaker' => 'Luis',
-            'text' => 'Gracias Ana',
-        ],
-        [
-            'start' => 12,
-            'speaker' => 'Ana',
-            'text' => 'Continuemos con la agenda',
-        ],
-    ];
-
-    $payload = [
-        'summary' => 'Resumen breve',
-        'key_points' => ['Introducción'],
-        'tasks' => [],
-        'speakers' => ['Ana', 'Luis'],
-        'segments' => $segments,
-    ];
-
-    $parser = new class {
-        use \App\Traits\MeetingContentParsing;
-
-        public function normalize(array $data): array
-        {
-            return $this->processTranscriptData($data);
-        }
-    };
-
-    $normalized = $parser->normalize($payload);
-
-    $expectedTranscript = implode("\n", [
-        '[00:00 - 00:05] Ana: Bienvenidos al proyecto',
-        '[00:05 - 00:12] Luis: Gracias Ana',
-        '[00:12] Ana: Continuemos con la agenda',
-    ]);
-
-    expect($normalized['transcription'])->toBe($expectedTranscript);
-
-    /** @var MeetingJuCacheService $service */
-    $service = app(MeetingJuCacheService::class);
-    $service->setCachedParsed((int) $meeting->id, $normalized, (string) $meeting->transcript_drive_id);
-
-    $cached = AiMeetingJuCache::where('meeting_id', $meeting->id)->firstOrFail();
-    expect($cached->data['transcription'])->toBe($expectedTranscript);
+    $segmentFragment = collect($fragments)->firstWhere('content_type', 'meeting_transcription_segment');
+    expect($segmentFragment['text'] ?? '')->toContain('Ana: Inicio del proyecto');
 });

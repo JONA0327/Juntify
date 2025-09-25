@@ -31,6 +31,7 @@ use App\Jobs\ProcessAiDocumentJob;
 use App\Services\EmbeddingSearch;
 use App\Services\GoogleServiceAccount;
 use App\Services\MeetingJuCacheService;
+use App\Services\ContainerJuCacheService;
 use App\Models\AiMeetingJuCache;
 use App\Models\TaskLaravel;
 use Google\Service\Exception as GoogleServiceException;
@@ -99,47 +100,16 @@ class AiAssistantController extends Controller
             ], 403);
         }
 
-        $preloaded = [];
-        $errors = [];
-
-        /** @var MeetingJuCacheService $cache */
-        $cache = app(MeetingJuCacheService::class);
-
-        foreach ($container->meetings as $meeting) {
-            try {
-                // Descargar + parsear y cachear permanentemente el .ju
-                $content = $this->tryDownloadJuContent($meeting);
-                // Si falló la descarga, intentar localizar el .ju por nombre/ID en Drive incluso si transcript_drive_id ya estaba seteado
-                if (!is_string($content) || $content === '') {
-                    $found = $this->locateJuForMeeting($meeting, $container);
-                    if ($found && $found !== $meeting->transcript_drive_id) {
-                        $meeting->transcript_drive_id = $found;
-                        $meeting->save();
-                        $content = $this->tryDownloadJuContent($meeting);
-                    }
-                }
-                if (is_string($content) && $content !== '') {
-                    $parsed = $this->decryptJuFile($content);
-                    $normalized = $this->processTranscriptData($parsed['data'] ?? []);
-                    $cache->setCachedParsed((int)$meeting->id, $normalized, (string)$meeting->transcript_drive_id, $parsed['raw'] ?? null);
-                } else {
-                    // Intentar al menos construir fragmentos (por si hay otra fuente)
-                    $this->buildFragmentsFromJu($meeting, '');
-                }
-                $preloaded[] = (int) $meeting->id;
-            } catch (\Throwable $e) {
-                $errors[] = [
-                    'meeting_id' => (int) $meeting->id,
-                    'error' => $e->getMessage(),
-                ];
-            }
-        }
+        $result = $this->collectContainerJuPayload($container, false, $user->username);
 
         return response()->json([
             'success' => true,
             'container_id' => (int) $container->id,
-            'meetings_preloaded' => $preloaded,
-            'errors' => $errors,
+            'meetings_preloaded' => $result['meetings_preloaded'] ?? [],
+            'meetings' => $result['meetings'] ?? [],
+            'errors' => $result['errors'] ?? [],
+            'payload' => $result['payload'] ?? null,
+            'checksum' => $result['checksum'] ?? null,
         ]);
     }
 
@@ -175,70 +145,211 @@ class AiAssistantController extends Controller
             ], 403);
         }
 
-        $results = [];
-        $errors = [];
+        $result = $this->collectContainerJuPayload($container, true, $user->username);
 
-        /** @var MeetingJuCacheService $cache */
-        $cache = app(MeetingJuCacheService::class);
+        return response()->json([
+            'success' => true,
+            'container_id' => (int)$container->id,
+            'meetings' => $result['meetings'] ?? [],
+            'errors' => $result['errors'] ?? [],
+            'payload' => $result['payload'] ?? null,
+            'checksum' => $result['checksum'] ?? null,
+        ]);
+    }
+
+    private function collectContainerJuPayload(MeetingContentContainer $container, bool $importTasks, string $username): array
+    {
+        $meetingsPreloaded = [];
+        $errors = [];
+        $meetingResults = [];
+        $payloadMeetings = [];
+        $summaryLines = [];
+        $aggregatedKeyPoints = [];
+        $aggregatedTasks = [];
+        $stats = [
+            'total_meetings' => 0,
+            'total_segments' => 0,
+            'total_key_points' => 0,
+            'total_tasks' => 0,
+        ];
+
+        /** @var MeetingJuCacheService $meetingCache */
+        $meetingCache = app(MeetingJuCacheService::class);
+        /** @var ContainerJuCacheService $containerCache */
+        $containerCache = app(ContainerJuCacheService::class);
 
         foreach ($container->meetings as $meeting) {
             $meetingInfo = [
-                'id' => (int)$meeting->id,
-                'name' => (string)$meeting->meeting_name,
-                'has_transcript' => !empty($meeting->transcript_drive_id),
+                'id' => (int) $meeting->id,
+                'name' => (string) $meeting->meeting_name,
+                'has_transcript' => ! empty($meeting->transcript_drive_id),
                 'summary' => null,
                 'key_points' => [],
                 'tasks_imported' => ['created' => 0, 'updated' => 0],
             ];
 
             try {
-                // Garantizar .ju disponible y cacheado
-                $content = $this->tryDownloadJuContent($meeting);
-                if (!is_string($content) || $content === '') {
-                    $found = $this->locateJuForMeeting($meeting, $container);
-                    if ($found && $found !== $meeting->transcript_drive_id) {
-                        $meeting->transcript_drive_id = $found;
-                        $meeting->save();
-                        $content = $this->tryDownloadJuContent($meeting);
-                    }
-                }
+                $data = $this->resolveMeetingJuData($meeting, $container, $meetingCache);
 
-                $data = null;
-                if (is_string($content) && $content !== '') {
-                    $parsed = $this->decryptJuFile($content);
-                    $data = $this->processTranscriptData($parsed['data'] ?? []);
-                    $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id, $parsed['raw'] ?? null);
-                } else {
-                    // Última oportunidad: intentar leer cache previa
-                    $cached = $cache->getCachedParsed((int)$meeting->id);
-                    if (is_array($cached)) { $data = $cached; }
-                }
-
-                if ($data) {
+                if (is_array($data)) {
                     $meetingInfo['summary'] = $data['summary'] ?? null;
-                    $meetingInfo['key_points'] = $data['key_points'] ?? [];
+                    $meetingInfo['key_points'] = is_array($data['key_points'] ?? null) ? $data['key_points'] : [];
 
-                    // Importar tareas
-                    $rawTasks = $data['tasks'] ?? [];
-                    $tuple = $this->upsertTasksForMeeting($user->username, $meeting, $rawTasks);
-                    $meetingInfo['tasks_imported'] = $tuple;
+                    if ($importTasks) {
+                        try {
+                            $rawTasks = is_array($data['tasks'] ?? null) ? $data['tasks'] : [];
+                            $meetingInfo['tasks_imported'] = $this->upsertTasksForMeeting($username, $meeting, $rawTasks);
+                        } catch (\Throwable $taskError) {
+                            $meetingInfo['error'] = $taskError->getMessage();
+                            $errors[] = [
+                                'meeting_id' => (int) $meeting->id,
+                                'error' => $taskError->getMessage(),
+                            ];
+                        }
+                    }
+
+                    $meetingsPreloaded[] = (int) $meeting->id;
+
+                    $segments = is_array($data['segments'] ?? null) ? $data['segments'] : [];
+                    $keyPoints = is_array($data['key_points'] ?? null) ? $data['key_points'] : [];
+                    $tasks = is_array($data['tasks'] ?? null) ? $data['tasks'] : [];
+
+                    $stats['total_meetings']++;
+                    $stats['total_segments'] += count($segments);
+                    $stats['total_key_points'] += count($keyPoints);
+                    $stats['total_tasks'] += count($tasks);
+
+                    if (!empty($data['summary'])) {
+                        $summaryLines[] = $meeting->meeting_name . ': ' . Str::limit(trim((string) $data['summary']), 800);
+                    }
+
+                    if (!empty($keyPoints)) {
+                        foreach (array_slice($keyPoints, 0, 5) as $kp) {
+                            $kpTxt = is_array($kp) ? ($kp['text'] ?? ($kp['point'] ?? json_encode($kp))) : (string) $kp;
+                            $kpTxt = Str::limit(trim($kpTxt), 300);
+                            if ($kpTxt !== '') {
+                                $aggregatedKeyPoints[] = $meeting->meeting_name . ': ' . $kpTxt;
+                            }
+                        }
+                    }
+
+                    if (!empty($tasks)) {
+                        foreach (array_slice($tasks, 0, 5) as $task) {
+                            if (is_array($task)) {
+                                $title = $task['tarea'] ?? $task['title'] ?? $task['name'] ?? json_encode($task);
+                            } else {
+                                $title = (string) $task;
+                            }
+                            $title = Str::limit(trim((string) $title), 200);
+                            if ($title !== '') {
+                                $aggregatedTasks[] = $meeting->meeting_name . ': ' . $title;
+                            }
+                        }
+                    }
+
+                    $payloadMeetings[(int) $meeting->id] = [
+                        'meta' => [
+                            'id' => (int) $meeting->id,
+                            'name' => (string) $meeting->meeting_name,
+                            'date' => optional($meeting->created_at)->toIso8601String(),
+                            'transcript_drive_id' => $meeting->transcript_drive_id,
+                            'audio_drive_id' => $meeting->audio_drive_id,
+                            'created_at' => optional($meeting->created_at)->toIso8601String(),
+                            'updated_at' => optional($meeting->updated_at)->toIso8601String(),
+                        ],
+                        'data' => $data,
+                        'stats' => [
+                            'summary_length' => mb_strlen((string) ($data['summary'] ?? '')),
+                            'segments' => count($segments),
+                            'key_points' => count($keyPoints),
+                            'tasks' => count($tasks),
+                        ],
+                        'checksum' => hash('sha256', json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+                    ];
+                } else {
+                    $meetingInfo['error'] = 'ju_not_available';
+                    $errors[] = [
+                        'meeting_id' => (int) $meeting->id,
+                        'error' => 'ju_not_available',
+                    ];
                 }
-
-                $results[] = $meetingInfo;
             } catch (\Throwable $e) {
+                $meetingInfo['error'] = $e->getMessage();
                 $errors[] = [
                     'meeting_id' => (int) $meeting->id,
                     'error' => $e->getMessage(),
                 ];
             }
+
+            $meetingResults[] = $meetingInfo;
         }
 
-        return response()->json([
-            'success' => true,
-            'container_id' => (int)$container->id,
-            'meetings' => $results,
+        $summaryText = null;
+        if (!empty($summaryLines)) {
+            $summaryText = 'Resumen agregado de reuniones (' . $stats['total_meetings'] . ' reuniones):' . "\n" . implode("\n\n", $summaryLines);
+        }
+
+        $payload = [
+            'version' => 1,
+            'generated_at' => now()->toIso8601String(),
+            'container' => [
+                'id' => (int) $container->id,
+                'name' => $container->name,
+                'description' => $container->description,
+                'meetings_count' => $container->meetings->count(),
+            ],
+            'meetings_order' => $container->meetings->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            'aggregated' => [
+                'summary_lines' => $summaryLines,
+                'summary_text' => $summaryText,
+                'key_points' => $aggregatedKeyPoints,
+                'tasks' => $aggregatedTasks,
+                'stats' => $stats,
+            ],
+            'meetings' => $payloadMeetings,
+        ];
+
+        $checksum = $containerCache->setCachedPayload((int) $container->id, $payload);
+
+        return [
+            'payload' => $payload,
+            'checksum' => $checksum,
+            'meetings' => $meetingResults,
+            'meetings_preloaded' => $meetingsPreloaded,
             'errors' => $errors,
-        ]);
+        ];
+    }
+
+    private function resolveMeetingJuData(TranscriptionLaravel $meeting, MeetingContentContainer $container, MeetingJuCacheService $cache): ?array
+    {
+        try {
+            $cached = $cache->getCachedParsed((int) $meeting->id);
+            if (is_array($cached)) {
+                return $cached;
+            }
+
+            $content = $this->tryDownloadJuContent($meeting);
+            if (!is_string($content) || $content === '') {
+                $found = $this->locateJuForMeeting($meeting, $container);
+                if ($found && $found !== $meeting->transcript_drive_id) {
+                    $meeting->transcript_drive_id = $found;
+                    $meeting->save();
+                    $content = $this->tryDownloadJuContent($meeting);
+                }
+            }
+
+            if (!is_string($content) || $content === '') {
+                return null;
+            }
+
+            $parsed = $this->decryptJuFile($content);
+            $data = $this->processTranscriptData($parsed['data'] ?? []);
+            $cache->setCachedParsed((int) $meeting->id, $data, (string) $meeting->transcript_drive_id, $parsed['raw'] ?? null);
+
+            return $data;
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /**
@@ -2237,6 +2348,21 @@ class AiAssistantController extends Controller
                     }
                 } catch (\Throwable $e) { /* ignore list build errors */ }
 
+                /** @var ContainerJuCacheService $containerCache */
+                $containerCache = app(ContainerJuCacheService::class);
+                $containerPayload = $containerCache->getCachedPayload((int) $container->id);
+                if (!is_array($containerPayload)) {
+                    $rebuild = $this->collectContainerJuPayload($container, false, $session->username);
+                    $containerPayload = $rebuild['payload'] ?? null;
+                }
+                $aggregatedPayload = is_array($containerPayload['aggregated'] ?? null) ? $containerPayload['aggregated'] : [];
+                $meetingsPayload = [];
+                if (is_array($containerPayload['meetings'] ?? null)) {
+                    foreach ($containerPayload['meetings'] as $payloadMeetingId => $payloadMeeting) {
+                        $meetingsPayload[(int) $payloadMeetingId] = $payloadMeeting;
+                    }
+                }
+
                 // -------------------------------------------------------------
                 //  DETECCIÓN DE ENFOQUE ESPECÍFICO A UNA REUNIÓN (robustecida)
                 //  Patrones soportados:
@@ -2295,96 +2421,53 @@ class AiAssistantController extends Controller
                     Str::contains($qLower, ['de que se hablo', 'de qué se habló', 'todas las reuniones', 'resumen general', 'que se hablo en el contenedor'])
                 );
                 if ($wantsGlobal || config('ai_assistant.context.container.always_aggregate_all_meetings', true)) {
-                    // Construir bloques agregados usando el cache de TODAS las reuniones
-                    try {
-                        /** @var MeetingJuCacheService $cache */
-                        $cache = app(MeetingJuCacheService::class);
-                        $summaryLines = [];
-                        $allKeyPoints = [];
-                        $allTasks = [];
-                        $stats = [
-                            'total_meetings' => 0,
-                            'total_segments' => 0,
-                            'total_key_points' => 0,
-                            'total_tasks' => 0,
-                        ];
-
-                        foreach ($container->meetings as $m) {
-                            $cached = $cache->getCachedParsed((int)$m->id);
-                            if (!is_array($cached)) { continue; }
-                            $stats['total_meetings']++;
-                            $segmentsCount = is_countable($cached['segments'] ?? null) ? count($cached['segments']) : 0;
-                            $kpCount = is_countable($cached['key_points'] ?? null) ? count($cached['key_points']) : 0;
-                            $tasksCount = is_countable($cached['tasks'] ?? null) ? count($cached['tasks']) : 0;
-                            $stats['total_segments'] += $segmentsCount;
-                            $stats['total_key_points'] += $kpCount;
-                            $stats['total_tasks'] += $tasksCount;
-
-                            if (!empty($cached['summary'])) {
-                                $summaryLines[] = $m->meeting_name . ': ' . Str::limit(trim((string)$cached['summary']), 800);
-                            }
-                            // Agregar key points (limitados) con prefijo del nombre de la reunión
-                            if ($kpCount) {
-                                $take = min(5, $kpCount); // limitar por reunión
-                                foreach (array_slice($cached['key_points'], 0, $take) as $kp) {
-                                    $kpTxt = is_array($kp) ? ($kp['text'] ?? ($kp['point'] ?? json_encode($kp))) : (string)$kp;
-                                    $kpTxt = Str::limit(trim($kpTxt), 300);
-                                    if ($kpTxt !== '') {
-                                        $allKeyPoints[] = $m->meeting_name . ': ' . $kpTxt;
-                                    }
-                                }
-                            }
-                            // Agregar tasks (si existen) — tareas vienen vacías en tu dataset actual pero dejamos la lógica
-                            if ($tasksCount) {
-                                $takeT = min(5, $tasksCount);
-                                foreach (array_slice($cached['tasks'], 0, $takeT) as $task) {
-                                    if (is_array($task)) {
-                                        $title = $task['tarea'] ?? $task['title'] ?? $task['name'] ?? json_encode($task);
-                                    } else { $title = (string)$task; }
-                                    $title = Str::limit(trim((string)$title), 160);
-                                    if ($title !== '') { $allTasks[] = $m->meeting_name . ': ' . $title; }
-                                }
-                            }
-                        }
-
-                        if (!empty($summaryLines)) {
+                    if (!empty($aggregatedPayload)) {
+                        if (!empty($aggregatedPayload['summary_text'])) {
                             $fragments[] = [
-                                'text' => "Resumen agregado de reuniones (" . $stats['total_meetings'] . " reuniones):\n" . implode("\n\n", $summaryLines),
+                                'text' => (string) $aggregatedPayload['summary_text'],
                                 'source_id' => 'container:' . $container->id . ':aggregated_summaries',
                                 'content_type' => 'container_meetings_aggregated',
                                 'location' => ['type' => 'container', 'container_id' => $container->id, 'aggregated' => true],
                                 'similarity' => null,
                                 'citation' => 'container:' . $container->id . ' resumenes',
-                                'metadata' => ['aggregated' => true, 'count' => count($summaryLines), 'stats' => $stats],
+                                'metadata' => [
+                                    'aggregated' => true,
+                                    'count' => is_countable($aggregatedPayload['summary_lines'] ?? null) ? count($aggregatedPayload['summary_lines']) : null,
+                                    'stats' => $aggregatedPayload['stats'] ?? [],
+                                ],
                             ];
                         }
-                        if (!empty($allKeyPoints)) {
+                        if (!empty($aggregatedPayload['key_points'])) {
                             $fragments[] = [
-                                'text' => "Puntos clave destacados (primeros por reunión):\n" . implode("\n", $allKeyPoints),
+                                'text' => "Puntos clave destacados (primeros por reunión):\n" . implode("\n", $aggregatedPayload['key_points']),
                                 'source_id' => 'container:' . $container->id . ':aggregated_key_points',
                                 'content_type' => 'container_key_points_aggregated',
                                 'location' => ['type' => 'container', 'container_id' => $container->id, 'aggregated' => true],
                                 'similarity' => null,
                                 'citation' => 'container:' . $container->id . ' keypoints',
-                                'metadata' => ['aggregated' => true, 'count' => count($allKeyPoints)],
+                                'metadata' => ['aggregated' => true, 'count' => count($aggregatedPayload['key_points'])],
                             ];
                         }
-                        if (!empty($allTasks)) {
+                        if (!empty($aggregatedPayload['tasks'])) {
                             $fragments[] = [
-                                'text' => "Tareas detectadas (limitadas):\n" . implode("\n", $allTasks),
+                                'text' => "Tareas detectadas (limitadas):\n" . implode("\n", $aggregatedPayload['tasks']),
                                 'source_id' => 'container:' . $container->id . ':aggregated_tasks',
                                 'content_type' => 'container_tasks_aggregated',
                                 'location' => ['type' => 'container', 'container_id' => $container->id, 'aggregated' => true],
                                 'similarity' => null,
                                 'citation' => 'container:' . $container->id . ' tareas',
-                                'metadata' => ['aggregated' => true, 'count' => count($allTasks)],
+                                'metadata' => ['aggregated' => true, 'count' => count($aggregatedPayload['tasks'])],
                             ];
                         }
-                        // Estadísticas compactas
-                        if ($stats['total_meetings'] > 0) {
+                        if (!empty($aggregatedPayload['stats'])) {
+                            $stats = $aggregatedPayload['stats'];
                             $fragments[] = [
-                                'text' => sprintf('Estadísticas: %d reuniones, %d segmentos, %d puntos clave, %d tareas.',
-                                    $stats['total_meetings'], $stats['total_segments'], $stats['total_key_points'], $stats['total_tasks']
+                                'text' => sprintf(
+                                    'Estadísticas: %d reuniones, %d segmentos, %d puntos clave, %d tareas.',
+                                    $stats['total_meetings'] ?? 0,
+                                    $stats['total_segments'] ?? 0,
+                                    $stats['total_key_points'] ?? 0,
+                                    $stats['total_tasks'] ?? 0,
                                 ),
                                 'source_id' => 'container:' . $container->id . ':aggregated_stats',
                                 'content_type' => 'container_stats',
@@ -2394,9 +2477,8 @@ class AiAssistantController extends Controller
                                 'metadata' => $stats,
                             ];
                         }
-                    } catch (\Throwable $e) { /* silencioso */ }
+                    }
                 }
-
                 // -------------------------------------------------------------
                 //  RECORRER REUNIONES SELECCIONADAS
                 // -------------------------------------------------------------
@@ -2425,7 +2507,10 @@ class AiAssistantController extends Controller
 
                     // Si estamos enfocados a una sola reunión, o la consulta pide detalles explícitos, usamos query vacío (sin filtrado)
                     $effectiveQuery = (count($focusedMeetingIds) === 1 || $detailQuery) ? '' : $query;
-                    $juFragments = $this->buildFragmentsFromJu($meeting, $effectiveQuery);
+                    $normalizedData = $meetingsPayload[(int) $meeting->id]['data'] ?? null;
+                    $juFragments = is_array($normalizedData)
+                        ? $this->buildFragmentsFromNormalizedJu($meeting, $normalizedData, $effectiveQuery)
+                        : [];
                     if (!empty($juFragments)) {
                         // Recortar por reunión si fuera necesario
                         $slice = array_slice($juFragments, 0, $perMeetingLimit);
@@ -2434,63 +2519,49 @@ class AiAssistantController extends Controller
                         if ($detailQuery) {
                             $fullSummary = collect($juFragments)->firstWhere('content_type', 'meeting_summary_full');
                             if ($fullSummary) {
-                                // Reordenar para ponerlo al inicio detrás de la ficha
-                                // Mantener única aparición
                                 $meetingFragments = array_values(array_unique($meetingFragments, SORT_REGULAR));
                             }
                         }
                     } else {
-                        // Intentar Fallback: traer al menos los primeros 5 segmentos crudos del cache si existen
-                        try {
-                            /** @var \App\Services\MeetingJuCacheService $cache */
-                            $cache = app(\App\Services\MeetingJuCacheService::class);
-                            $cached = $cache->getCachedParsed((int)$meeting->id);
-                            if (is_array($cached) && !empty($cached['segments']) && is_array($cached['segments'])) {
-                                $rawSegs = array_slice($cached['segments'], 0, 5);
-                                foreach ($rawSegs as $seg) {
-                                    $txt = (string)($seg['text'] ?? '');
-                                    if ($txt === '') continue;
-                                    $speaker = $seg['speaker'] ?? $seg['display_speaker'] ?? 'Participante';
-                                    $time = $seg['start'] ?? $seg['time'] ?? null;
-                                    $meetingFragments[] = [
-                                        'text' => $speaker . ': ' . $txt,
-                                        'source_id' => 'meeting:' . $meeting->id . ':segment:fallback:' . ($time ?? uniqid()),
-                                        'content_type' => 'meeting_transcription_segment_fallback',
-                                        'location' => $this->buildLegacyMeetingLocation($meeting, [
-                                            'section' => 'transcription',
-                                            'speaker' => $speaker,
-                                            'timestamp' => $time,
-                                            'fallback' => true,
-                                        ]),
-                                        'similarity' => null,
-                                        'citation' => 'meeting:' . $meeting->id . ' t.' . ($time ? $this->formatTimeForCitation($time) : '—'),
-                                        'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
-                                            'transcription_segment' => true,
-                                            'timestamp' => $time,
-                                            'speaker' => $speaker,
-                                            'source' => 'ju',
-                                            'fallback' => true,
-                                        ]),
-                                    ];
-                                }
-                            } else {
-                                // Agregar fragmento diagnóstico si sabemos que hay cache meta (summary length o counts) pero no se generaron fragmentos
-                                if (is_array($cached) && (isset($cached['summary']) || isset($cached['segments']))) {
-                                    $meetingFragments[] = [
-                                        'text' => 'Diagnóstico: Se encontró cache .ju para la reunión pero no se pudieron generar fragmentos filtrados (posible filtrado por keywords o formato inesperado).',
-                                        'source_id' => 'meeting:' . $meeting->id . ':diagnostic:ju',
-                                        'content_type' => 'diagnostic',
-                                        'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'diagnostic']),
-                                        'similarity' => null,
-                                        'citation' => 'meeting:' . $meeting->id . ' diag',
-                                        'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['diagnostic' => true]),
-                                    ];
-                                }
+                        if (is_array($normalizedData) && !empty($normalizedData['segments']) && is_array($normalizedData['segments'])) {
+                            $rawSegs = array_slice($normalizedData['segments'], 0, 5);
+                            foreach ($rawSegs as $seg) {
+                                $txt = (string) ($seg['text'] ?? '');
+                                if ($txt === '') { continue; }
+                                $speaker = $seg['speaker'] ?? $seg['display_speaker'] ?? 'Participante';
+                                $time = $seg['start'] ?? $seg['time'] ?? null;
+                                $meetingFragments[] = [
+                                    'text' => $speaker . ': ' . $txt,
+                                    'source_id' => 'meeting:' . $meeting->id . ':segment:fallback:' . ($time ?? uniqid()),
+                                    'content_type' => 'meeting_transcription_segment_fallback',
+                                    'location' => $this->buildLegacyMeetingLocation($meeting, [
+                                        'section' => 'transcription',
+                                        'speaker' => $speaker,
+                                        'timestamp' => $time,
+                                        'fallback' => true,
+                                    ]),
+                                    'similarity' => null,
+                                    'citation' => 'meeting:' . $meeting->id . ' t.' . ($time ? $this->formatTimeForCitation($time) : '—'),
+                                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                                        'transcription_segment' => true,
+                                        'timestamp' => $time,
+                                        'speaker' => $speaker,
+                                        'source' => 'ju',
+                                        'fallback' => true,
+                                    ]),
+                                ];
                             }
-                        } catch (\Throwable $e) {
-                            // ignorar
+                        } elseif (isset($meetingsPayload[(int) $meeting->id])) {
+                            $meetingFragments[] = [
+                                'text' => 'Diagnóstico: Se encontró payload consolidado para la reunión pero no se pudieron generar fragmentos filtrados (posible filtrado por keywords o formato inesperado).',
+                                'source_id' => 'meeting:' . $meeting->id . ':diagnostic:ju',
+                                'content_type' => 'diagnostic',
+                                'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'diagnostic']),
+                                'similarity' => null,
+                                'citation' => 'meeting:' . $meeting->id . ' diag',
+                                'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['diagnostic' => true]),
+                            ];
                         }
-                        // Fallback mínimo cuando no hay .ju utilizable
                         if (! empty($meeting->transcript_download_url)) {
                             $meetingFragments[] = [
                                 'text' => sprintf('Transcripción disponible en: %s', $meeting->transcript_download_url),
@@ -2602,7 +2673,10 @@ class AiAssistantController extends Controller
                 ];
 
                 // Añadir también algo de contenido .ju cuando sea posible
-                $juFragments = $this->buildFragmentsFromJu($meeting, $query);
+                $normalized = $meetingsPayload[(int) $meeting->id]['data'] ?? null;
+                $juFragments = is_array($normalized)
+                    ? $this->buildFragmentsFromNormalizedJu($meeting, $normalized, $query)
+                    : $this->buildFragmentsFromJu($meeting, $query);
                 if (!empty($juFragments)) {
                     $fragments = array_merge($fragments, array_slice($juFragments, 0, 8));
                 }
@@ -2801,6 +2875,156 @@ class AiAssistantController extends Controller
         return false;
     }
 
+    private function buildFragmentsFromNormalizedJu(TranscriptionLaravel $meeting, array $data, string $query): array
+    {
+        $fragments = [];
+
+        try {
+            $qLower = Str::lower($query);
+            $wantsFullSummary = Str::contains($qLower, ['resumen completo', 'resumen detallado', 'resumen extendido', 'summary full', 'full summary']);
+            if (! empty($data['summary'])) {
+                $summaryText = (string) $data['summary'];
+                $fragments[] = [
+                    'text' => $wantsFullSummary ? $summaryText : Str::limit($summaryText, 800),
+                    'source_id' => 'meeting:' . $meeting->id . ':summary' . ($wantsFullSummary ? ':full' : ''),
+                    'content_type' => $wantsFullSummary ? 'meeting_summary_full' : 'meeting_summary',
+                    'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'summary', 'full' => $wantsFullSummary]),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' resumen',
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['summary' => true, 'full' => $wantsFullSummary]),
+                ];
+            }
+
+            foreach (($data['key_points'] ?? []) as $idx => $kp) {
+                $text = is_array($kp) ? ($kp['text'] ?? ($kp['point'] ?? json_encode($kp))) : (string) $kp;
+                if (trim($text) === '') { continue; }
+                $fragments[] = [
+                    'text' => $text,
+                    'source_id' => 'meeting:' . $meeting->id . ':keypoint:ju:' . ($idx + 1),
+                    'content_type' => 'meeting_key_point',
+                    'location' => $this->buildLegacyMeetingLocation($meeting, [
+                        'section' => 'key_point',
+                        'order' => $idx + 1,
+                    ]),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' punto ' . ($idx + 1),
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                        'key_point' => true,
+                        'order' => $idx + 1,
+                        'source' => 'ju',
+                    ]),
+                ];
+            }
+
+            $segmentsAll = is_array($data['segments'] ?? null) ? $data['segments'] : [];
+            $segmentsSelected = [];
+            $participantsSet = [];
+            foreach ($segmentsAll as $segP) {
+                if (!is_array($segP)) { continue; }
+                $sp = $segP['speaker'] ?? $segP['display_speaker'] ?? null;
+                if (is_string($sp) && $sp !== '') {
+                    $normSp = trim(preg_replace('/\s+/', ' ', $sp));
+                    if ($normSp !== '' && mb_strlen($normSp) <= 60) {
+                        $participantsSet[$normSp] = true;
+                    }
+                }
+            }
+
+            $keywords = [];
+            if ($query !== '') {
+                $tokens = preg_split('/\s+/u', Str::lower($query));
+                if (is_array($tokens)) {
+                    foreach ($tokens as $token) {
+                        $token = trim($token);
+                        if ($token !== '' && mb_strlen($token) >= 3) {
+                            $keywords[] = $token;
+                        }
+                    }
+                }
+            }
+
+            $speakerCandidate = null;
+            if (!empty($participantsSet)) {
+                foreach (array_keys($participantsSet) as $p) {
+                    $pLower = Str::lower($p);
+                    if (Str::contains($qLower, $pLower)) {
+                        $speakerCandidate = $p;
+                        break;
+                    }
+                }
+            }
+
+            if ($speakerCandidate) {
+                $segmentsSelected = array_values(array_filter($segmentsAll, function ($seg) use ($speakerCandidate) {
+                    $speaker = is_array($seg) ? ($seg['speaker'] ?? $seg['display_speaker'] ?? '') : '';
+                    return Str::lower((string) $speaker) === Str::lower($speakerCandidate);
+                }));
+                $segmentsSelected = array_slice($segmentsSelected, 0, 80);
+            } else {
+                $segmentsSelected = array_values(array_filter($segmentsAll, function ($seg) use ($keywords) {
+                    $txt = is_array($seg) ? ($seg['text'] ?? '') : '';
+                    if (trim($txt) === '') { return false; }
+                    if (empty($keywords)) { return true; }
+                    foreach ($keywords as $kw) {
+                        if (stripos($txt, $kw) !== false) { return true; }
+                    }
+                    return false;
+                }));
+                $segmentsSelected = array_slice($segmentsSelected, 0, 5);
+            }
+
+            foreach ($segmentsSelected as $seg) {
+                $txt = (string) ($seg['text'] ?? '');
+                $speaker = $seg['speaker'] ?? $seg['display_speaker'] ?? 'Participante';
+                $time = $seg['start'] ?? $seg['time'] ?? null;
+                $fragments[] = [
+                    'text' => trim($speaker . ': ' . $txt),
+                    'source_id' => 'meeting:' . $meeting->id . ':segment:ju:' . ($time ?? uniqid()),
+                    'content_type' => 'meeting_transcription_segment',
+                    'location' => $this->buildLegacyMeetingLocation($meeting, [
+                        'section' => 'transcription',
+                        'speaker' => $speaker,
+                        'timestamp' => $time,
+                        'focused_speaker' => (bool) $speakerCandidate,
+                    ]),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' t.' . ($time ? $this->formatTimeForCitation($time) : '—'),
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                        'transcription_segment' => true,
+                        'timestamp' => $time,
+                        'speaker' => $speaker,
+                        'source' => 'ju',
+                        'focused_speaker' => (bool) $speakerCandidate,
+                    ]),
+                ];
+            }
+
+            if (!empty($participantsSet)) {
+                $participantsList = array_keys($participantsSet);
+                sort($participantsList);
+                $fragments[] = [
+                    'text' => 'Participantes detectados: ' . implode(', ', $participantsList),
+                    'source_id' => 'meeting:' . $meeting->id . ':participants',
+                    'content_type' => 'meeting_participants',
+                    'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'participants']),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' participantes',
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                        'participants_count' => count($participantsList),
+                        'participants' => $participantsList,
+                    ]),
+                ];
+            }
+        } catch (\Throwable $e) {
+            Log::warning('buildFragmentsFromNormalizedJu failed', [
+                'meeting_id' => $meeting->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $fragments;
+    }
+
     /**
      * Construye fragmentos en memoria a partir del archivo .ju (en Drive) sin usar la tabla transcriptions
      */
@@ -2863,143 +3087,7 @@ class AiAssistantController extends Controller
                 $cache->setCachedParsed((int)$meeting->id, $data, (string)$meeting->transcript_drive_id, $parsed['raw'] ?? null);
             }
 
-            // -------------------------------------------------
-            // Resumen (modo truncado o completo según query)
-            // -------------------------------------------------
-            $qLower = Str::lower($query);
-            $wantsFullSummary = Str::contains($qLower, ['resumen completo', 'resumen detallado', 'resumen extendido', 'summary full', 'full summary']);
-            if (! empty($data['summary'])) {
-                $summaryText = (string)$data['summary'];
-                $fragments[] = [
-                    'text' => $wantsFullSummary ? $summaryText : Str::limit($summaryText, 800),
-                    'source_id' => 'meeting:' . $meeting->id . ':summary' . ($wantsFullSummary ? ':full' : ''),
-                    'content_type' => $wantsFullSummary ? 'meeting_summary_full' : 'meeting_summary',
-                    'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'summary', 'full' => $wantsFullSummary]),
-                    'similarity' => null,
-                    'citation' => 'meeting:' . $meeting->id . ' resumen',
-                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['summary' => true, 'full' => $wantsFullSummary]),
-                ];
-            }
-
-            // Puntos clave
-            foreach (($data['key_points'] ?? []) as $idx => $kp) {
-                $text = is_array($kp) ? ($kp['text'] ?? ($kp['point'] ?? json_encode($kp))) : (string)$kp;
-                if (trim($text) === '') continue;
-                $fragments[] = [
-                    'text' => $text,
-                    'source_id' => 'meeting:' . $meeting->id . ':keypoint:ju:' . ($idx+1),
-                    'content_type' => 'meeting_key_point',
-                    'location' => $this->buildLegacyMeetingLocation($meeting, [
-                        'section' => 'key_point',
-                        'order' => $idx + 1,
-                    ]),
-                    'similarity' => null,
-                    'citation' => 'meeting:' . $meeting->id . ' punto ' . ($idx + 1),
-                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
-                        'key_point' => true,
-                        'order' => $idx + 1,
-                        'source' => 'ju',
-                    ]),
-                ];
-            }
-
-            // -------------------------------------------------
-            // Segmentos (modo focalizado por speaker/tema o estándar)
-            // -------------------------------------------------
-            $segmentsAll = is_array($data['segments'] ?? null) ? $data['segments'] : [];
-            $segmentsSelected = [];
-            // Derivar lista de participantes potenciales (speakers distintos)
-            $participantsSet = [];
-            foreach ($segmentsAll as $segP) {
-                if (!is_array($segP)) continue;
-                $sp = $segP['speaker'] ?? $segP['display_speaker'] ?? null;
-                if (is_string($sp) && $sp !== '') {
-                    $normSp = trim(preg_replace('/\s+/', ' ', $sp));
-                    if ($normSp !== '' && mb_strlen($normSp) <= 60) {
-                        $participantsSet[$normSp] = true;
-                    }
-                }
-            }
-
-            // Detección simple de speaker (nombres capitalizados en query) y tema (resto de palabras)
-            $speakerCandidate = null;
-            if (preg_match('/\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,})\b/u', $query, $mSp)) {
-                $speakerCandidate = $mSp[1];
-            }
-            $keywords = $this->extractQueryKeywords($query);
-
-            if ($speakerCandidate) {
-                // Filtrar segmentos del speaker y, si hay keywords adicionales, que coincidan
-                foreach ($segmentsAll as $seg) {
-                    $txt = is_array($seg) ? ($seg['text'] ?? '') : '';
-                    if (trim($txt) === '') continue;
-                    $speaker = $seg['speaker'] ?? $seg['display_speaker'] ?? '';
-                    if ($speaker && stripos($speaker, $speakerCandidate) === false) continue;
-                    $ok = true;
-                    foreach ($keywords as $kw) {
-                        if (stripos($txt, $kw) === false && stripos((string)$speaker, $kw) === false) { $ok = false; break; }
-                    }
-                    if ($ok) { $segmentsSelected[] = $seg; }
-                }
-                // En modo focalizado no limitamos a 5, pero ponemos un máximo alto para evitar excesos
-                $segmentsSelected = array_slice($segmentsSelected, 0, 80);
-            } else {
-                // Modo estándar previo
-                $segmentsSelected = array_values(array_filter($segmentsAll, function($seg) use ($keywords) {
-                    $txt = is_array($seg) ? ($seg['text'] ?? '') : '';
-                    if (trim($txt) === '') return false;
-                    if (empty($keywords)) return true;
-                    foreach ($keywords as $kw) {
-                        if (stripos($txt, $kw) !== false) return true;
-                    }
-                    return false;
-                }));
-                $segmentsSelected = array_slice($segmentsSelected, 0, 5);
-            }
-
-            foreach ($segmentsSelected as $seg) {
-                $txt = (string)($seg['text'] ?? '');
-                $speaker = $seg['speaker'] ?? $seg['display_speaker'] ?? 'Participante';
-                $time = $seg['start'] ?? $seg['time'] ?? null;
-                $fragments[] = [
-                    'text' => trim($speaker . ': ' . $txt),
-                    'source_id' => 'meeting:' . $meeting->id . ':segment:ju:' . ($time ?? uniqid()),
-                    'content_type' => 'meeting_transcription_segment',
-                    'location' => $this->buildLegacyMeetingLocation($meeting, [
-                        'section' => 'transcription',
-                        'speaker' => $speaker,
-                        'timestamp' => $time,
-                        'focused_speaker' => (bool)$speakerCandidate,
-                    ]),
-                    'similarity' => null,
-                    'citation' => 'meeting:' . $meeting->id . ' t.' . ($time ? $this->formatTimeForCitation($time) : '—'),
-                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
-                        'transcription_segment' => true,
-                        'timestamp' => $time,
-                        'speaker' => $speaker,
-                        'source' => 'ju',
-                        'focused_speaker' => (bool)$speakerCandidate,
-                    ]),
-                ];
-            }
-
-            // Agregar fragmento de participantes si se detectan
-            if (!empty($participantsSet)) {
-                $participantsList = array_keys($participantsSet);
-                sort($participantsList);
-                $fragments[] = [
-                    'text' => 'Participantes detectados: ' . implode(', ', $participantsList),
-                    'source_id' => 'meeting:' . $meeting->id . ':participants',
-                    'content_type' => 'meeting_participants',
-                    'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'participants']),
-                    'similarity' => null,
-                    'citation' => 'meeting:' . $meeting->id . ' participantes',
-                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
-                        'participants_count' => count($participantsList),
-                        'participants' => $participantsList,
-                    ]),
-                ];
-            }
+            return $this->buildFragmentsFromNormalizedJu($meeting, $data, $query);
 
         } catch (\Throwable $e) {
             Log::warning('buildFragmentsFromJu failed', [
