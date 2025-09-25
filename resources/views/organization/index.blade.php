@@ -521,35 +521,73 @@
                 </div>
 
                 <div x-show="showViewDocumentsModal" @keydown.escape.window="closeViewDocumentsModal()" @click.self="closeViewDocumentsModal()" class="fixed inset-0 bg-black/60 flex items-center justify-center z-[62]" x-cloak>
-                    <div class="organization-modal w-full max-w-3xl text-slate-200 max-h-[80vh] overflow-hidden">
-                        <div class="flex items-center justify-between mb-4">
-                            <div>
-                                <h2 class="text-lg font-semibold">Documentos del grupo</h2>
-                                <p class="text-sm text-slate-400" x-text="viewDocumentsGroup?.nombre_grupo"></p>
+                    <div class="organization-modal w-full max-w-3xl text-slate-200 max-h-[80vh] overflow-hidden p-0">
+                        <!-- Header -->
+                        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700/50 bg-slate-900/50">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-9 h-9 rounded-lg bg-yellow-400 text-slate-900 flex items-center justify-center shadow">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                                        <path fill-rule="evenodd" d="M2.25 4.5A2.25 2.25 0 014.5 2.25h6a.75.75 0 01.53.22l3 3a.75.75 0 01.22.53v.75h4.5A2.25 2.25 0 0121.75 9v10.5A2.25 2.25 0 0119.5 21.75h-15A2.25 2.25 0 012.25 19.5V4.5zm6 9a.75.75 0 01.75-.75h6a.75.75 0 010 1.5h-6A.75.75 0 018.25 13.5zm0 3a.75.75 0 01.75-.75h6a.75.75 0 010 1.5h-6a.75.75 0 01-.75-.75z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="min-w-0">
+                                    <h2 class="text-lg font-semibold leading-tight truncate">Documentos del grupo</h2>
+                                    <p class="text-xs text-slate-400 truncate" x-text="viewDocumentsGroup?.nombre_grupo"></p>
+                                </div>
                             </div>
-                            <button @click="closeViewDocumentsModal()" class="text-slate-400 hover:text-slate-200 transition-colors duration-150">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                </svg>
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button @click="viewDocumentsGroup && loadGroupDocuments(viewDocumentsGroup.id)" class="px-2 py-2 text-slate-300 hover:text-yellow-400 transition-colors" title="Refrescar lista" aria-label="Refrescar lista">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16 8a4 4 0 10-8 0m8 0a4 4 0 11-8 0m8 0v5a2 2 0 01-2 2H9m3 0H9m3 0a2 2 0 002-2v-3" />
+                                    </svg>
+                                </button>
+                                <button @click="closeViewDocumentsModal()" class="text-slate-400 hover:text-slate-200 transition-colors duration-150 p-2" aria-label="Cerrar">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
                         </div>
-                        <div class="bg-slate-900/40 border border-slate-700/60 rounded-lg p-4 max-h-[60vh] overflow-y-auto">
+
+                        <!-- Body -->
+                        <div class="p-4 max-h-[60vh] overflow-y-auto bg-slate-900/40 border-t border-slate-800/40">
                             <div x-show="isLoadingGroupDocuments" class="text-sm text-slate-400">Cargando documentos...</div>
                             <div x-show="!isLoadingGroupDocuments && groupDocumentsError" class="text-sm text-red-400" x-text="groupDocumentsError"></div>
+
+                            <!-- List -->
                             <ul x-show="!isLoadingGroupDocuments && !groupDocumentsError && groupDocuments.length" class="space-y-3">
                                 <template x-for="file in groupDocuments" :key="file.id">
                                     <li class="bg-slate-800/50 border border-slate-700/60 rounded-lg p-3">
-                                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                            <div>
-                                                <a :href="file.webViewLink" target="_blank" rel="noopener" class="text-sm font-semibold text-yellow-400 hover:underline" x-text="file.name"></a>
-                                                <div class="text-xs text-slate-500" x-text="formatDateTime(file.modifiedTime)"></div>
+                                        <div class="flex items-start gap-3">
+                                            <div class="w-10 h-10 rounded-md bg-slate-800 flex items-center justify-center text-slate-300 flex-shrink-0">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5A3.375 3.375 0 0010.125 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V15.375a1.125 1.125 0 00-1.125-1.125h-5.25" />
+                                                </svg>
                                             </div>
-                                            <div class="text-xs text-slate-400" x-text="formatFileSize(file.size)"></div>
+                                            <div class="min-w-0 flex-1">
+                                                <a :href="file.webViewLink" target="_blank" rel="noopener" class="text-sm font-semibold text-yellow-400 hover:underline truncate block" x-text="file.name"></a>
+                                                <div class="text-xs text-slate-500 flex items-center gap-2">
+                                                    <span x-text="formatDateTime(file.modifiedTime)"></span>
+                                                    <span>•</span>
+                                                    <span x-text="formatFileSize(file.size)"></span>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <a :href="file.webViewLink" target="_blank" rel="noopener" class="px-2 py-1 text-xs bg-slate-800/60 border border-slate-700/50 rounded-md hover:bg-slate-700/60 transition-colors">Abrir</a>
+                                                <a :href="file.webContentLink" target="_blank" rel="noopener" class="px-2 py-1 text-xs bg-slate-800/60 border border-slate-700/50 rounded-md hover:bg-slate-700/60 transition-colors" x-show="file.webContentLink">Descargar</a>
+                                            </div>
                                         </div>
                                     </li>
                                 </template>
                             </ul>
-                            <p x-show="!isLoadingGroupDocuments && !groupDocumentsError && !groupDocuments.length" class="text-sm text-slate-400">El grupo no tiene documentos aún.</p>
+
+                            <!-- Empty state -->
+                            <div x-show="!isLoadingGroupDocuments && !groupDocumentsError && !groupDocuments.length" class="bg-slate-800/40 border border-slate-700/60 rounded-lg p-6 flex items-center gap-4">
+                                <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+                                    </svg>
+                                </div>
+                                <div class="text-sm text-slate-400">El grupo no tiene documentos aún.</div>
+                            </div>
                         </div>
                     </div>
                 </div>
