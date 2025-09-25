@@ -55,7 +55,69 @@ class OrganizationDocumentController extends Controller
                 ]);
             }
 
-            $files = $this->driveHelper->getDrive()->listFilesInFolder($folder->google_id);
+            $drive = $this->driveHelper->getDrive();
+            $files = $drive->listFilesInFolder($folder->google_id);
+            $subfolders = $drive->listSubfolders($folder->google_id);
+
+            $containers = $group->containers()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get();
+
+            $containersPayload = [];
+
+            foreach ($containers as $container) {
+                $containerFolderId = $container->drive_folder_id;
+                $containerMetadata = $container->metadata;
+
+                if (empty($containerFolderId)) {
+                    try {
+                        $folderData = $this->driveHelper->ensureContainerFolder($group, $container);
+                        $containerFolderId = $folderData['id'] ?? null;
+                        $containerMetadata = $folderData['metadata'] ?? null;
+
+                        if (!empty($containerFolderId)) {
+                            $container->forceFill([
+                                'drive_folder_id' => $containerFolderId,
+                                'metadata' => $containerMetadata,
+                            ])->save();
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('No se pudo garantizar la carpeta de Drive del contenedor', [
+                            'group_id' => $group->id,
+                            'container_id' => $container->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                $containerFiles = [];
+                $containerSubfolders = [];
+
+                if (!empty($containerFolderId)) {
+                    try {
+                        $containerFiles = $drive->listFilesInFolder($containerFolderId);
+                        $containerSubfolders = $drive->listSubfolders($containerFolderId);
+                    } catch (\Throwable $e) {
+                        Log::warning('No se pudieron listar los elementos del contenedor en Drive', [
+                            'group_id' => $group->id,
+                            'container_id' => $container->id,
+                            'folder_id' => $containerFolderId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                $containersPayload[] = [
+                    'id' => $container->id,
+                    'name' => $container->name,
+                    'description' => $container->description,
+                    'folder_id' => $containerFolderId,
+                    'metadata' => $containerMetadata,
+                    'files' => array_map(fn(DriveFile $file) => $this->formatDriveFile($file), $containerFiles),
+                    'subfolders' => array_map(fn(DriveFile $subfolder) => $this->formatDriveFolder($subfolder), $containerSubfolders),
+                ];
+            }
 
             $canManage = $this->userCanManageGroupDocuments($user->id, $group);
             $canView = true; // ya pasó el guard anterior
@@ -71,6 +133,8 @@ class OrganizationDocumentController extends Controller
                     'can_manage' => $canManage,
                 ],
                 'files' => array_map(fn(DriveFile $file) => $this->formatDriveFile($file), $files),
+                'subfolders' => array_map(fn(DriveFile $subfolder) => $this->formatDriveFolder($subfolder), $subfolders),
+                'containers' => $containersPayload,
             ]);
         } catch (\Throwable $e) {
             Log::error('No se pudieron listar los documentos del grupo', [
@@ -392,6 +456,14 @@ class OrganizationDocumentController extends Controller
             'size' => $file->getSize(),
             'createdTime' => $file->getCreatedTime(),
             'modifiedTime' => $file->getModifiedTime(),
+        ];
+    }
+
+    protected function formatDriveFolder(DriveFile $folder): array
+    {
+        return [
+            'id' => $folder->getId(),
+            'name' => $folder->getName(),
         ];
     }
 }
