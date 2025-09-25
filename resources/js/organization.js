@@ -39,6 +39,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     groupDocumentsError: null,
     documentUploadFile: null,
     isUploadingDocument: false,
+    // Drag & upload UI state
+    isDraggingFile: false,
+    uploadProgress: 0,
     // Confirmación de expulsión de miembro
     showConfirmRemoveMemberModal: false,
     memberToRemove: null,
