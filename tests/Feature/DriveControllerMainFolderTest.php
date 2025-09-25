@@ -63,8 +63,9 @@ it('creates main folder', function () {
 
     $this->assertDatabaseHas('google_tokens', [
         'id' => $token->id,
-        'recordings_folder_id' => 'folder123',
     ]);
+
+    expect($token->fresh()->recordings_folder_id)->toBe('folder123');
 
     $this->assertDatabaseHas('folders', [
         'google_token_id' => $token->id,
@@ -223,8 +224,9 @@ it('falls back to oauth client when service account cannot create main folder', 
 
     $this->assertDatabaseHas('google_tokens', [
         'id' => $token->id,
-        'recordings_folder_id' => 'folder123',
     ]);
+
+    expect($token->fresh()->recordings_folder_id)->toBe('folder123');
 });
 
 // Test Google OAuth callback does not create folders
@@ -252,8 +254,12 @@ it('does not create folders on oauth callback', function () {
 
     $this->assertDatabaseHas('google_tokens', [
         'username' => $user->username,
-        'access_token' => 'token',
     ]);
+
+    $createdToken = GoogleToken::where('username', $user->username)->first();
+    expect($createdToken)->not->toBeNull();
+    expect($createdToken->access_token)->toBe('token');
+    expect($createdToken->refresh_token)->toBe('refresh');
 
     $this->assertDatabaseCount('folders', 0);
 });

@@ -52,8 +52,9 @@ it('updates the existing token with the provided folder id', function () {
 
     $this->assertDatabaseHas('google_tokens', [
         'id' => $token->id,
-        'recordings_folder_id' => 'new-folder',
     ]);
+
+    expect($token->fresh()->recordings_folder_id)->toBe('new-folder');
 
     $this->assertDatabaseHas('folders', [
         'google_token_id' => $token->id,

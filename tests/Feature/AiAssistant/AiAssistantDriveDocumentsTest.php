@@ -33,6 +33,10 @@ test('user can list Drive documents for an accessible container', function () {
         'expiry_date' => now()->addHour(),
     ]);
 
+    $organizationToken = OrganizationGoogleToken::first();
+    expect($organizationToken->access_token)->toBe(['access_token' => 'token-abc']);
+    expect($organizationToken->refresh_token)->toBe('refresh-123');
+
     $group = Group::create([
         'id_organizacion' => $organization->id,
         'nombre_grupo' => 'Equipo Legal',
@@ -161,6 +165,10 @@ test('user without container access receives forbidden response', function () {
         'refresh_token' => 'refresh-xyz',
         'expiry_date' => now()->addHour(),
     ]);
+
+    $orgToken = OrganizationGoogleToken::first();
+    expect($orgToken->access_token)->toBe(['access_token' => 'token-xyz']);
+    expect($orgToken->refresh_token)->toBe('refresh-xyz');
 
     $group = Group::create([
         'id_organizacion' => $organization->id,
