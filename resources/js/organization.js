@@ -36,7 +36,16 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     uploadDocumentContainer: null,
     viewDocumentsGroup: null,
     viewDocumentsContainer: null,
-    groupDocuments: [],
+    groupDocuments: {
+        folder: null,
+        permissions: {
+            can_view: false,
+            can_manage: false,
+        },
+        files: [],
+        subfolders: [],
+        containers: [],
+    },
     isLoadingGroupDocuments: false,
     groupDocumentsError: null,
     documentUploadFile: null,
@@ -210,6 +219,27 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.inviteEmail = contact.email;
         this.userExists = true; // Es usuario existente
         this.userExistsMessage = '✓ Este usuario existe en Juntify';
+    },
+
+    defaultGroupDocumentsState() {
+        return {
+            folder: null,
+            permissions: {
+                can_view: false,
+                can_manage: false,
+            },
+            files: [],
+            subfolders: [],
+            containers: [],
+        };
+    },
+
+    get hasGroupDocumentsContent() {
+        const docs = this.groupDocuments || {};
+        const filesCount = Array.isArray(docs.files) ? docs.files.length : 0;
+        const subfoldersCount = Array.isArray(docs.subfolders) ? docs.subfolders.length : 0;
+        const containersCount = Array.isArray(docs.containers) ? docs.containers.length : 0;
+        return filesCount > 0 || subfoldersCount > 0 || containersCount > 0;
     },
 
     // Organization delete flow
@@ -727,7 +757,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     openViewDocumentsModal(group) {
         this.viewDocumentsGroup = group;
         this.viewDocumentsContainer = null;
-        this.groupDocuments = [];
+        this.groupDocuments = this.defaultGroupDocumentsState();
         this.groupDocumentsError = null;
         this.showViewDocumentsModal = true;
         this.loadGroupDocuments(group.id);
@@ -744,7 +774,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
         this.viewDocumentsContainer = container;
         this.viewDocumentsGroup = null;
-        this.groupDocuments = [];
+        this.groupDocuments = this.defaultGroupDocumentsState();
         this.groupDocumentsError = null;
         this.showViewDocumentsModal = true;
         this.loadContainerDocuments(container.id);
@@ -754,7 +784,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         this.showViewDocumentsModal = false;
         this.viewDocumentsGroup = null;
         this.viewDocumentsContainer = null;
-        this.groupDocuments = [];
+        this.groupDocuments = this.defaultGroupDocumentsState();
         this.groupDocumentsError = null;
         this.isLoadingGroupDocuments = false;
     },
@@ -772,15 +802,31 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     msg = err.message || msg;
                 } catch {}
                 this.groupDocumentsError = msg;
-                this.groupDocuments = [];
+                this.groupDocuments = this.defaultGroupDocumentsState();
                 return;
             }
             const data = await response.json();
-            this.groupDocuments = Array.isArray(data.files) ? data.files : [];
+            const containers = Array.isArray(data.containers) ? data.containers.map((container) => ({
+                id: container.id,
+                name: container.name,
+                description: container.description,
+                folder_id: container.folder_id || null,
+                metadata: container.metadata || null,
+                files: Array.isArray(container.files) ? container.files : [],
+                subfolders: Array.isArray(container.subfolders) ? container.subfolders : [],
+            })) : [];
+
+            this.groupDocuments = {
+                folder: data.folder || null,
+                permissions: data.permissions || { can_view: false, can_manage: false },
+                files: Array.isArray(data.files) ? data.files : [],
+                subfolders: Array.isArray(data.subfolders) ? data.subfolders : [],
+                containers,
+            };
         } catch (error) {
             console.error('Error loading group documents', error);
             this.groupDocumentsError = 'Error al cargar los documentos del grupo';
-            this.groupDocuments = [];
+            this.groupDocuments = this.defaultGroupDocumentsState();
         } finally {
             this.isLoadingGroupDocuments = false;
         }
@@ -799,15 +845,21 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     msg = err.message || msg;
                 } catch {}
                 this.groupDocumentsError = msg;
-                this.groupDocuments = [];
+                this.groupDocuments = this.defaultGroupDocumentsState();
                 return;
             }
             const data = await response.json();
-            this.groupDocuments = Array.isArray(data.files) ? data.files : [];
+            this.groupDocuments = {
+                folder: data.folder || null,
+                permissions: data.permissions || { can_view: false, can_manage: false },
+                files: Array.isArray(data.files) ? data.files : [],
+                subfolders: Array.isArray(data.subfolders) ? data.subfolders : [],
+                containers: [],
+            };
         } catch (error) {
             console.error('Error loading container documents', error);
             this.groupDocumentsError = 'Error al cargar los documentos del contenedor';
-            this.groupDocuments = [];
+            this.groupDocuments = this.defaultGroupDocumentsState();
         } finally {
             this.isLoadingGroupDocuments = false;
         }

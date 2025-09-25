@@ -606,41 +606,145 @@
                             <div x-show="isLoadingGroupDocuments" class="text-sm text-slate-400">Cargando documentos...</div>
                             <div x-show="!isLoadingGroupDocuments && groupDocumentsError" class="text-sm text-red-400" x-text="groupDocumentsError"></div>
 
-                            <!-- List -->
-                            <ul x-show="!isLoadingGroupDocuments && !groupDocumentsError && groupDocuments.length" class="space-y-3">
-                                <template x-for="file in groupDocuments" :key="file.id">
-                                    <li class="bg-slate-800/50 border border-slate-700/60 rounded-lg p-3">
-                                        <div class="flex items-start gap-3">
-                                            <div class="w-10 h-10 rounded-md bg-slate-800 flex items-center justify-center text-slate-300 flex-shrink-0">
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5A3.375 3.375 0 0010.125 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V15.375a1.125 1.125 0 00-1.125-1.125h-5.25" />
-                                                </svg>
-                                            </div>
-                                            <div class="min-w-0 flex-1">
-                                                <a :href="file.webViewLink" target="_blank" rel="noopener" class="text-sm font-semibold text-yellow-400 hover:underline truncate block" x-text="file.name"></a>
-                                                <div class="text-xs text-slate-500 flex items-center gap-2">
-                                                    <span x-text="formatDateTime(file.modifiedTime)"></span>
-                                                    <span>•</span>
-                                                    <span x-text="formatFileSize(file.size)"></span>
+                            <div x-show="!isLoadingGroupDocuments && !groupDocumentsError && hasGroupDocumentsContent" class="space-y-5">
+                                <template x-if="groupDocuments.subfolders && groupDocuments.subfolders.length">
+                                    <div class="space-y-2">
+                                        <h3 class="text-xs font-semibold tracking-wide uppercase text-slate-400">Subcarpetas del grupo</h3>
+                                        <ul class="space-y-2">
+                                            <template x-for="subfolder in groupDocuments.subfolders" :key="subfolder.id">
+                                                <li class="bg-slate-800/40 border border-slate-700/60 rounded-lg p-3">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="w-10 h-10 rounded-md bg-slate-800 flex items-center justify-center text-slate-300">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75A2.25 2.25 0 014.5 4.5h3.879a1.5 1.5 0 011.06.44l1.122 1.12a1.5 1.5 0 001.06.44H19.5A2.25 2.25 0 0121.75 8.25v9a2.25 2.25 0 01-2.25 2.25h-15A2.25 2.25 0 012.25 17.25v-10.5z" />
+                                                            </svg>
+                                                        </div>
+                                                        <div class="min-w-0 flex-1">
+                                                            <a :href="`https://drive.google.com/drive/folders/${subfolder.id}`" target="_blank" rel="noopener" class="text-sm font-semibold text-yellow-400 hover:underline truncate block" x-text="subfolder.name"></a>
+                                                        </div>
+                                                        <div>
+                                                            <a :href="`https://drive.google.com/drive/folders/${subfolder.id}`" target="_blank" rel="noopener" class="px-2 py-1 text-xs bg-slate-800/60 border border-slate-700/50 rounded-md hover:bg-slate-700/60 transition-colors">Abrir</a>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </template>
+
+                                <template x-if="groupDocuments.files && groupDocuments.files.length">
+                                    <div class="space-y-2">
+                                        <h3 class="text-xs font-semibold tracking-wide uppercase text-slate-400">Archivos del grupo</h3>
+                                        <ul class="space-y-3">
+                                            <template x-for="file in groupDocuments.files" :key="file.id">
+                                                <li class="bg-slate-800/50 border border-slate-700/60 rounded-lg p-3">
+                                                    <div class="flex items-start gap-3">
+                                                        <div class="w-10 h-10 rounded-md bg-slate-800 flex items-center justify-center text-slate-300 flex-shrink-0">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5A3.375 3.375 0 0010.125 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V15.375a1.125 1.125 0 00-1.125-1.125h-5.25" />
+                                                            </svg>
+                                                        </div>
+                                                        <div class="min-w-0 flex-1">
+                                                            <a :href="file.webViewLink" target="_blank" rel="noopener" class="text-sm font-semibold text-yellow-400 hover:underline truncate block" x-text="file.name"></a>
+                                                            <div class="text-xs text-slate-500 flex items-center gap-2">
+                                                                <span x-text="formatDateTime(file.modifiedTime)"></span>
+                                                                <span>•</span>
+                                                                <span x-text="formatFileSize(file.size)"></span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex items-center gap-2">
+                                                            <a :href="file.webViewLink" target="_blank" rel="noopener" class="px-2 py-1 text-xs bg-slate-800/60 border border-slate-700/50 rounded-md hover:bg-slate-700/60 transition-colors">Abrir</a>
+                                                            <a :href="file.webContentLink" target="_blank" rel="noopener" class="px-2 py-1 text-xs bg-slate-800/60 border border-slate-700/50 rounded-md hover:bg-slate-700/60 transition-colors" x-show="file.webContentLink">Descargar</a>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </template>
+
+                                <template x-if="groupDocuments.containers && groupDocuments.containers.length">
+                                    <div class="space-y-4">
+                                        <template x-for="container in groupDocuments.containers" :key="container.id">
+                                            <div class="bg-slate-800/40 border border-slate-700/60 rounded-lg p-4 space-y-3">
+                                                <div class="flex items-start justify-between gap-3">
+                                                    <div class="min-w-0">
+                                                        <h3 class="text-sm font-semibold text-yellow-300" x-text="container.name || 'Contenedor sin nombre'"></h3>
+                                                        <p class="text-xs text-slate-400 mt-1" x-show="container.description" x-text="container.description"></p>
+                                                    </div>
+                                                    <div class="flex items-center gap-2" x-show="container.folder_id">
+                                                        <a :href="`https://drive.google.com/drive/folders/${container.folder_id}`" target="_blank" rel="noopener" class="px-2 py-1 text-xs bg-slate-800/60 border border-slate-700/50 rounded-md hover:bg-slate-700/60 transition-colors">Abrir carpeta</a>
+                                                    </div>
+                                                </div>
+
+                                                <template x-if="container.subfolders && container.subfolders.length">
+                                                    <div class="space-y-2">
+                                                        <h4 class="text-xs font-semibold tracking-wide uppercase text-slate-400">Subcarpetas</h4>
+                                                        <ul class="space-y-2">
+                                                            <template x-for="subfolder in container.subfolders" :key="subfolder.id">
+                                                                <li class="bg-slate-900/40 border border-slate-700/50 rounded-lg p-3 flex items-center justify-between gap-3">
+                                                                    <div class="flex items-center gap-3 min-w-0">
+                                                                        <div class="w-8 h-8 rounded-md bg-slate-800 flex items-center justify-center text-slate-300">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75A2.25 2.25 0 014.5 4.5h3.879a1.5 1.5 0 011.06.44l1.122 1.12a1.5 1.5 0 001.06.44H19.5A2.25 2.25 0 0121.75 8.25v9a2.25 2.25 0 01-2.25 2.25h-15A2.25 2.25 0 012.25 17.25v-10.5z" />
+                                                                            </svg>
+                                                                        </div>
+                                                                        <a :href="`https://drive.google.com/drive/folders/${subfolder.id}`" target="_blank" rel="noopener" class="text-sm font-medium text-yellow-300 hover:underline truncate block" x-text="subfolder.name"></a>
+                                                                    </div>
+                                                                    <a :href="`https://drive.google.com/drive/folders/${subfolder.id}`" target="_blank" rel="noopener" class="px-2 py-1 text-xs bg-slate-800/60 border border-slate-700/50 rounded-md hover:bg-slate-700/60 transition-colors">Abrir</a>
+                                                                </li>
+                                                            </template>
+                                                        </ul>
+                                                    </div>
+                                                </template>
+
+                                                <template x-if="container.files && container.files.length">
+                                                    <div class="space-y-2">
+                                                        <h4 class="text-xs font-semibold tracking-wide uppercase text-slate-400">Archivos</h4>
+                                                        <ul class="space-y-2">
+                                                            <template x-for="file in container.files" :key="file.id">
+                                                                <li class="bg-slate-900/40 border border-slate-700/50 rounded-lg p-3">
+                                                                    <div class="flex items-start gap-3">
+                                                                        <div class="w-8 h-8 rounded-md bg-slate-800 flex items-center justify-center text-slate-300 flex-shrink-0">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5A3.375 3.375 0 0010.125 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V15.375a1.125 1.125 0 00-1.125-1.125h-5.25" />
+                                                                            </svg>
+                                                                        </div>
+                                                                        <div class="min-w-0 flex-1">
+                                                                            <a :href="file.webViewLink" target="_blank" rel="noopener" class="text-sm font-medium text-yellow-300 hover:underline truncate block" x-text="file.name"></a>
+                                                                            <div class="text-xs text-slate-500 flex items-center gap-2">
+                                                                                <span x-text="formatDateTime(file.modifiedTime)"></span>
+                                                                                <span>•</span>
+                                                                                <span x-text="formatFileSize(file.size)"></span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="flex items-center gap-2">
+                                                                            <a :href="file.webViewLink" target="_blank" rel="noopener" class="px-2 py-1 text-xs bg-slate-800/60 border border-slate-700/50 rounded-md hover:bg-slate-700/60 transition-colors">Abrir</a>
+                                                                            <a :href="file.webContentLink" target="_blank" rel="noopener" class="px-2 py-1 text-xs bg-slate-800/60 border border-slate-700/50 rounded-md hover:bg-slate-700/60 transition-colors" x-show="file.webContentLink">Descargar</a>
+                                                                        </div>
+                                                                    </div>
+                                                                </li>
+                                                            </template>
+                                                        </ul>
+                                                    </div>
+                                                </template>
+
+                                                <div x-show="(!container.files || !container.files.length) && (!container.subfolders || !container.subfolders.length)" class="text-xs text-slate-500 bg-slate-900/30 border border-slate-700/40 rounded-lg p-3">
+                                                    Este contenedor no tiene documentos ni subcarpetas todavía.
                                                 </div>
                                             </div>
-                                            <div class="flex items-center gap-2">
-                                                <a :href="file.webViewLink" target="_blank" rel="noopener" class="px-2 py-1 text-xs bg-slate-800/60 border border-slate-700/50 rounded-md hover:bg-slate-700/60 transition-colors">Abrir</a>
-                                                <a :href="file.webContentLink" target="_blank" rel="noopener" class="px-2 py-1 text-xs bg-slate-800/60 border border-slate-700/50 rounded-md hover:bg-slate-700/60 transition-colors" x-show="file.webContentLink">Descargar</a>
-                                            </div>
-                                        </div>
-                                    </li>
+                                        </template>
+                                    </div>
                                 </template>
-                            </ul>
+                            </div>
 
-                            <!-- Empty state -->
-                            <div x-show="!isLoadingGroupDocuments && !groupDocumentsError && !groupDocuments.length" class="bg-slate-800/40 border border-slate-700/60 rounded-lg p-6 flex items-center gap-4">
+                            <div x-show="!isLoadingGroupDocuments && !groupDocumentsError && !hasGroupDocumentsContent" class="bg-slate-800/40 border border-slate-700/60 rounded-lg p-6 flex items-center gap-4">
                                 <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
                                     </svg>
                                 </div>
-                                <div class="text-sm text-slate-400" x-text="viewDocumentsContainer ? 'El contenedor no tiene documentos aún.' : 'El grupo no tiene documentos aún.'"></div>
+                                <div class="text-sm text-slate-400" x-text="viewDocumentsContainer ? 'El contenedor no tiene documentos disponibles aún.' : 'Este grupo no tiene documentos ni subcarpetas disponibles.'"></div>
                             </div>
                         </div>
                     </div>
