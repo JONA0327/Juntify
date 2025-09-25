@@ -41,6 +41,20 @@ class OrganizationDocumentController extends Controller
             $this->driveHelper->initDrive($organization);
             $folder = $this->driveHelper->ensureGroupFolder($group);
 
+            // Ensure current user has Drive access on the group's folder based on role
+            try {
+                $role = $this->userCanManageGroupDocuments($user->id, $group) ? 'writer' : 'reader';
+                if (!empty($user->email)) {
+                    $this->driveHelper->getDrive()->shareItem($folder->google_id, $user->email, $role);
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('Could not ensure Drive permission for user on group folder', [
+                    'group_id' => $group->id,
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             $files = $this->driveHelper->getDrive()->listFilesInFolder($folder->google_id);
 
             $canManage = $this->userCanManageGroupDocuments($user->id, $group);
@@ -181,6 +195,18 @@ class OrganizationDocumentController extends Controller
                 ->where('users.id', $user->id)
                 ->wherePivot('rol', 'administrador')
                 ->exists();
+            // Ensure current user has at least reader access to the organization's root folder
+            try {
+                if (!empty($user->email)) {
+                    $this->driveHelper->getDrive()->shareItem($root->google_id, $user->email, $canManage ? 'writer' : 'reader');
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('Could not ensure Drive permission for user on org root', [
+                    'organization_id' => $organization->id,
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
             return response()->json([
                 'root' => [
                     'id' => $root->id,
@@ -232,6 +258,23 @@ class OrganizationDocumentController extends Controller
             }
 
             $files = $this->driveHelper->getDrive()->listFilesInFolder($folderId);
+            // Share this specific folder with current user according to role
+            try {
+                $canManage = ($organization->admin_id === $user->id) || $organization->users()
+                    ->where('users.id', $user->id)
+                    ->wherePivot('rol', 'administrador')
+                    ->exists();
+                if (!empty($user->email)) {
+                    $this->driveHelper->getDrive()->shareItem($folderId, $user->email, $canManage ? 'writer' : 'reader');
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('Could not ensure Drive permission for user on subfolder', [
+                    'organization_id' => $organization->id,
+                    'folder_id' => $folderId,
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
             // Determinar si el usuario puede gestionar (administrar) a nivel de organización
             $canManage = ($organization->admin_id === $user->id) || $organization->users()
                 ->where('users.id', $user->id)
@@ -332,11 +375,19 @@ class OrganizationDocumentController extends Controller
 
     protected function formatDriveFile(DriveFile $file): array
     {
+        // Try to get a webContentLink as a fallback download URL
+        $webContentLink = null;
+        try {
+            $webContentLink = $this->driveHelper->getDrive()->getWebContentLink($file->getId());
+        } catch (\Throwable $e) {
+            // ignore
+        }
         return [
             'id' => $file->getId(),
             'name' => $file->getName(),
             'mimeType' => $file->getMimeType(),
             'webViewLink' => $file->getWebViewLink(),
+            'webContentLink' => $webContentLink,
             'iconLink' => $file->getIconLink(),
             'size' => $file->getSize(),
             'createdTime' => $file->getCreatedTime(),
