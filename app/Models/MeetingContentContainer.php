@@ -24,6 +24,8 @@ class MeetingContentContainer extends Model
         'description',
         'username',
         'group_id',
+        'drive_folder_id',
+        'metadata',
         'is_active',
     ];
 
@@ -32,6 +34,7 @@ class MeetingContentContainer extends Model
      */
     protected $casts = [
         'is_active' => 'boolean',
+        'metadata' => 'array',
     ];
 
     /**

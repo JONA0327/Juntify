@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Group;
 use App\Models\GroupDriveFolder;
+use App\Models\MeetingContentContainer;
 use App\Models\Organization;
 use App\Models\OrganizationFolder;
 use App\Models\OrganizationGoogleToken;
@@ -177,6 +178,74 @@ class OrganizationDriveHelper
         }
 
         return $record;
+    }
+
+    /**
+     * Ensure the Drive folder exists for a container inside the group folder.
+     */
+    public function ensureContainerFolder(Group $group, MeetingContentContainer $container): array
+    {
+        $group->loadMissing('organization');
+        $organization = $group->organization;
+
+        if (!$organization) {
+            throw new \RuntimeException('El grupo no está asociado a ninguna organización.');
+        }
+
+        $this->initDrive($organization);
+
+        $groupFolder = $this->ensureGroupFolder($group);
+
+        if (!empty($container->drive_folder_id)) {
+            return [
+                'id' => $container->drive_folder_id,
+                'metadata' => $container->metadata ?? [
+                    'group_drive_folder_id' => $groupFolder->id,
+                    'parent_google_id' => $groupFolder->google_id,
+                    'name' => $container->name,
+                ],
+            ];
+        }
+
+        $folderName = $container->name ?? ('Contenedor ' . $container->id);
+
+        $folderId = $this->drive->createFolder($folderName, $groupFolder->google_id);
+
+        $serviceEmail = config('services.google.service_account_email');
+        if ($serviceEmail) {
+            try {
+                $this->drive->shareFolder($folderId, $serviceEmail);
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo compartir la carpeta del contenedor con la service account', [
+                    'container_id' => $container->id,
+                    'group_id' => $group->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if ($adminEmail = optional($organization->admin)->email) {
+            try {
+                $this->drive->shareItem($folderId, $adminEmail, 'writer');
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo compartir la carpeta del contenedor con el administrador de la organización', [
+                    'container_id' => $container->id,
+                    'group_id' => $group->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $metadata = [
+            'group_drive_folder_id' => $groupFolder->id,
+            'parent_google_id' => $groupFolder->google_id,
+            'name' => $folderName,
+        ];
+
+        return [
+            'id' => $folderId,
+            'metadata' => $metadata,
+        ];
     }
 
     /**

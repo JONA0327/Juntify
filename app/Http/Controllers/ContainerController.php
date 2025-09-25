@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use App\Services\GoogleDriveService;
+use App\Services\OrganizationDriveHelper;
 use App\Traits\GoogleDriveHelpers;
 
 class ContainerController extends Controller
@@ -21,10 +22,12 @@ class ContainerController extends Controller
     use GoogleDriveHelpers;
 
     protected $googleDriveService;
+    protected OrganizationDriveHelper $organizationDriveHelper;
 
-    public function __construct(GoogleDriveService $googleDriveService)
+    public function __construct(GoogleDriveService $googleDriveService, OrganizationDriveHelper $organizationDriveHelper)
     {
         $this->googleDriveService = $googleDriveService;
+        $this->organizationDriveHelper = $organizationDriveHelper;
     }
 
     private function userHasContainerPrivileges($user, $groupId = null, $containerUsername = null): bool
@@ -120,6 +123,8 @@ class ContainerController extends Controller
                         'meetings_count' => $container->meetingRelations()->count(),
                         'is_company' => $container->group_id !== null,
                         'group_name' => $container->group->nombre_grupo ?? null,
+                        'drive_folder_id' => $container->drive_folder_id,
+                        'metadata' => $container->metadata,
                     ];
                 });
 
@@ -166,19 +171,58 @@ class ContainerController extends Controller
 
             Log::info("User {$user->username} authorized to create container");
 
-            $container = MeetingContentContainer::create([
-                'name' => $validated['name'],
-                'description' => $validated['description'] ?? null,
-                'username' => $user->username,
-                'group_id' => $groupId,
-                'is_active' => true,
-            ]);
-
+            $driveFolderId = null;
+            $metadata = null;
             $group = null;
             $organizationId = null;
-            if ($container->group_id) {
-                $group = Group::find($container->group_id);
-                $organizationId = $group ? $group->id_organizacion : null;
+
+            try {
+                [$container, $group, $driveFolderId, $metadata, $organizationId] = DB::transaction(function () use ($validated, $user, $groupId) {
+                    $container = MeetingContentContainer::create([
+                        'name' => $validated['name'],
+                        'description' => $validated['description'] ?? null,
+                        'username' => $user->username,
+                        'group_id' => $groupId,
+                        'is_active' => true,
+                    ]);
+
+                    $group = null;
+                    $driveFolderId = null;
+                    $metadata = null;
+                    $organizationId = null;
+
+                    if ($container->group_id) {
+                        $group = Group::find($container->group_id);
+                        if (!$group) {
+                            throw new \RuntimeException('El grupo indicado no existe.');
+                        }
+
+                        $organizationId = $group->id_organizacion;
+                        $folderData = $this->organizationDriveHelper->ensureContainerFolder($group, $container);
+                        $driveFolderId = $folderData['id'] ?? null;
+                        $metadata = $folderData['metadata'] ?? null;
+
+                        if ($driveFolderId) {
+                            $container->forceFill([
+                                'drive_folder_id' => $driveFolderId,
+                                'metadata' => $metadata,
+                            ])->save();
+                        }
+                    }
+
+                    return [$container, $group, $driveFolderId, $metadata, $organizationId];
+                });
+            } catch (\Throwable $e) {
+                Log::error('Error al crear la carpeta de Drive para el contenedor', [
+                    'user_id' => $user->id,
+                    'group_id' => $groupId,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo crear la carpeta del contenedor en Drive. Inténtalo nuevamente más tarde.',
+                ], 502);
             }
 
             OrganizationActivity::create([
@@ -201,6 +245,8 @@ class ContainerController extends Controller
                     'meetings_count' => 0,
                     'is_company' => $container->group_id !== null,
                     'group_name' => $group->nombre_grupo ?? null,
+                    'drive_folder_id' => $driveFolderId,
+                    'metadata' => $metadata,
                 ]
             ]);
 
@@ -271,6 +317,8 @@ class ContainerController extends Controller
                     'meetings_count' => $container->meetingRelations()->count(),
                     'is_company' => $container->group_id !== null,
                     'group_name' => $group->nombre_grupo ?? null,
+                    'drive_folder_id' => $container->drive_folder_id,
+                    'metadata' => $container->metadata,
                 ]
             ]);
 
