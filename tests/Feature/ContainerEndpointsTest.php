@@ -1,11 +1,19 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use App\Models\User;
+use App\Models\Group;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
+use App\Models\Organization;
+use App\Models\User;
+use App\Services\OrganizationDriveHelper;
+use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
+
+uses()->afterEach(function () {
+    \Mockery::close();
+});
 
 test('user can create container', function () {
     $user = User::factory()->create(['username' => 'alice']);
@@ -91,5 +99,56 @@ test('user can remove meeting from container', function () {
     $this->assertDatabaseMissing('meeting_content_relations', [
         'container_id' => $container->id,
         'meeting_id' => $meeting->id,
+    ]);
+});
+
+test('creating a group container stores drive folder information', function () {
+    $user = User::factory()->create(['username' => 'diana']);
+    $organization = Organization::create([
+        'nombre_organizacion' => 'Acme',
+        'descripcion' => 'Test org',
+        'admin_id' => $user->id,
+    ]);
+
+    $group = Group::create([
+        'id_organizacion' => $organization->id,
+        'nombre_grupo' => 'Equipo A',
+        'descripcion' => 'Grupo de prueba',
+    ]);
+
+    DB::table('group_user')->insert([
+        'id_grupo' => $group->id,
+        'user_id' => $user->id,
+        'rol' => 'colaborador',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $helper = \Mockery::mock(OrganizationDriveHelper::class);
+    $helper->shouldReceive('ensureContainerFolder')
+        ->once()
+        ->andReturn([
+            'id' => 'drive-folder-123',
+            'metadata' => ['parent_google_id' => 'group-folder-1'],
+        ]);
+
+    $this->instance(OrganizationDriveHelper::class, $helper);
+
+    $response = $this->actingAs($user, 'sanctum')->postJson('/api/content-containers', [
+        'name' => 'Documentos',
+        'group_id' => $group->id,
+    ]);
+
+    $response->assertStatus(200)
+        ->assertJsonPath('container.drive_folder_id', 'drive-folder-123');
+
+    $this->assertDatabaseHas('meeting_content_containers', [
+        'group_id' => $group->id,
+        'drive_folder_id' => 'drive-folder-123',
+    ]);
+
+    $this->assertDatabaseHas('meeting_content_containers', [
+        'id' => $response['container']['id'],
+        'metadata->parent_google_id' => 'group-folder-1',
     ]);
 });
