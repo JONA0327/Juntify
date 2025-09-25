@@ -181,6 +181,62 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         return '';
     },
 
+    extractRolesFromSources(...sources) {
+        const roles = [];
+        sources.forEach((value) => {
+            if (!value) return;
+            if (Array.isArray(value)) {
+                value.forEach((item) => {
+                    const role = String(item || '').trim().toLowerCase();
+                    if (role) roles.push(role);
+                });
+                return;
+            }
+            if (typeof value === 'string') {
+                value.split(',').forEach((part) => {
+                    const role = part.trim().toLowerCase();
+                    if (role) roles.push(role);
+                });
+                return;
+            }
+            if (typeof value === 'object' && value !== null) {
+                const possible = value.role || value.name || value.tipo;
+                if (possible) {
+                    const role = String(possible || '').trim().toLowerCase();
+                    if (role) roles.push(role);
+                }
+            }
+        });
+        return Array.from(new Set(roles));
+    },
+
+    getGroupRoles(group) {
+        if (!group) return [];
+        return this.extractRolesFromSources(
+            group.user_role,
+            group.current_user_role,
+            group.roles,
+            group.role
+        );
+    },
+
+    hasOrganizationMembership(org) {
+        if (!org) return false;
+        if (org.is_owner) return true;
+        const roles = this.extractRolesFromSources(
+            org.user_role,
+            org.current_user_role,
+            org.roles,
+            org.organization_roles,
+            org.organization_role,
+            org.org_roles
+        );
+        if (roles.length > 0) {
+            return true;
+        }
+        return !!org.is_member;
+    },
+
     get filteredInvitableContacts() {
         const term = (this.inviteContactSearch || '').toLowerCase();
         if (!term) return this.invitableContacts;
@@ -297,30 +353,14 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
     getCurrentOrganizationRoles() {
         if (!this.currentGroup) return [];
-        const sources = [
+        return this.extractRolesFromSources(
             this.currentGroup.organization_roles,
             this.currentGroup.organization_role,
             this.currentGroup.organization_user_role,
             this.currentGroup.org_user_role,
             this.currentGroup.current_organization_role,
             this.currentGroup.org_roles,
-        ];
-        const roles = [];
-        sources.forEach((value) => {
-            if (!value) return;
-            if (Array.isArray(value)) {
-                value.forEach((item) => {
-                    const role = String(item || '').trim().toLowerCase();
-                    if (role) roles.push(role);
-                });
-            } else if (typeof value === 'string') {
-                value.split(',').forEach((part) => {
-                    const role = part.trim().toLowerCase();
-                    if (role) roles.push(role);
-                });
-            }
-        });
-        return Array.from(new Set(roles));
+        );
     },
 
     getCurrentGroupRole() {
@@ -625,6 +665,22 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
 
+    canViewGroupDocuments(org, group) {
+        if (!org || !group) return false;
+
+        if (org.is_owner) return true;
+
+        if (this.hasOrganizationMembership(org)) return true;
+
+        const groupRoles = this.getGroupRoles(group);
+        if (!groupRoles.length) {
+            return false;
+        }
+
+        const deniedRoles = ['suspendido', 'bloqueado'];
+        return groupRoles.some(role => !deniedRoles.includes(role));
+    },
+
     canUploadDocuments(org, group) {
         if (!org || !group) return false;
         if (org.is_owner || org.user_role === 'administrador') return true;
@@ -796,11 +852,16 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         try {
             const response = await fetch(`/api/groups/${groupId}/documents`);
             if (!response.ok) {
-                let msg = 'No se pudieron cargar los documentos';
+                let msg = response.status === 403
+                    ? 'No tienes permisos para ver los documentos de este grupo'
+                    : 'No se pudieron cargar los documentos';
                 try {
                     const err = await response.json();
                     msg = err.message || msg;
                 } catch {}
+                if (response.status === 403) {
+                    this.showStatus(msg, 'error');
+                }
                 this.groupDocumentsError = msg;
                 this.groupDocuments = this.defaultGroupDocumentsState();
                 return;

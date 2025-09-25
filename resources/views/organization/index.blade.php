@@ -374,7 +374,7 @@
                                                 </div>
                                             </div>
                                             <div class="mt-3 flex flex-wrap gap-2">
-                                                <button @click.stop="openViewDocumentsModal(group)" class="px-3 py-1.5 bg-slate-800/70 border border-slate-600/60 text-slate-200 rounded text-xs hover:bg-slate-700/70 transition-colors duration-200">
+                                                <button x-show="canViewGroupDocuments(org, group)" @click.stop="openViewDocumentsModal(group)" class="px-3 py-1.5 bg-slate-800/70 border border-slate-600/60 text-slate-200 rounded text-xs hover:bg-slate-700/70 transition-colors duration-200">
                                                     Ver documentos
                                                 </button>
                                                 <button x-show="canUploadDocuments(org, group)" @click.stop="openUploadDocumentsModal(group)" class="px-3 py-1.5 bg-yellow-500 text-slate-900 rounded text-xs hover:bg-yellow-400 transition-colors duration-200">
