@@ -33,7 +33,9 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     showUploadDocumentsModal: false,
     showViewDocumentsModal: false,
     uploadDocumentGroup: null,
+    uploadDocumentContainer: null,
     viewDocumentsGroup: null,
+    viewDocumentsContainer: null,
     groupDocuments: [],
     isLoadingGroupDocuments: false,
     groupDocumentsError: null,
@@ -261,6 +263,101 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         const role = this.currentGroup?.user_role || this.currentGroup?.current_user_role;
         const isOwner = !!this.currentGroup?.organization_is_owner;
         return isOwner || ['administrador', 'colaborador'].includes(role);
+    },
+
+    getCurrentOrganizationRoles() {
+        if (!this.currentGroup) return [];
+        const sources = [
+            this.currentGroup.organization_roles,
+            this.currentGroup.organization_role,
+            this.currentGroup.organization_user_role,
+            this.currentGroup.org_user_role,
+            this.currentGroup.current_organization_role,
+            this.currentGroup.org_roles,
+        ];
+        const roles = [];
+        sources.forEach((value) => {
+            if (!value) return;
+            if (Array.isArray(value)) {
+                value.forEach((item) => {
+                    const role = String(item || '').trim().toLowerCase();
+                    if (role) roles.push(role);
+                });
+            } else if (typeof value === 'string') {
+                value.split(',').forEach((part) => {
+                    const role = part.trim().toLowerCase();
+                    if (role) roles.push(role);
+                });
+            }
+        });
+        return Array.from(new Set(roles));
+    },
+
+    getCurrentGroupRole() {
+        const role = this.currentGroup?.user_role ?? this.currentGroup?.current_user_role ?? '';
+        return String(role || '').trim().toLowerCase();
+    },
+
+    getContainerPermissions(container) {
+        if (!container) return null;
+        if (container.permissions) return container.permissions;
+        if (container.drive_permissions) return container.drive_permissions;
+        return null;
+    },
+
+    canViewContainerDocuments(container) {
+        if (!container || !this.currentGroup) return false;
+
+        const permissions = this.getContainerPermissions(container);
+        if (permissions && typeof permissions.can_view_documents === 'boolean') {
+            return permissions.can_view_documents;
+        }
+        if (permissions && typeof permissions.can_manage_documents === 'boolean' && permissions.can_manage_documents) {
+            return true;
+        }
+
+        if (this.currentGroup.organization_is_owner) {
+            return true;
+        }
+
+        const orgRoles = this.getCurrentOrganizationRoles();
+        if (orgRoles.some(role => ['administrador', 'colaborador'].includes(role))) {
+            return true;
+        }
+
+        const groupRole = this.getCurrentGroupRole();
+        if (!groupRole) return false;
+        if (['suspendido', 'bloqueado'].includes(groupRole)) return false;
+        return true;
+    },
+
+    canUploadContainerDocuments(container) {
+        if (!container || !this.currentGroup) return false;
+
+        const permissions = this.getContainerPermissions(container);
+        if (permissions && typeof permissions.can_upload_documents === 'boolean') {
+            return permissions.can_upload_documents;
+        }
+        if (permissions && typeof permissions.can_manage_documents === 'boolean') {
+            if (permissions.can_manage_documents) {
+                return true;
+            }
+            if (!permissions.can_manage_documents) {
+                return false;
+            }
+        }
+
+        if (this.currentGroup.organization_is_owner) {
+            return true;
+        }
+
+        const orgRoles = this.getCurrentOrganizationRoles();
+        if (orgRoles.some(role => ['administrador', 'colaborador'].includes(role))) {
+            return true;
+        }
+
+        const groupRole = this.getCurrentGroupRole();
+        return ['administrador', 'colaborador', 'owner', 'propietario'].includes(groupRole);
     },
 
     async loadActivities(orgId) {
@@ -506,6 +603,24 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
     openUploadDocumentsModal(group) {
         this.uploadDocumentGroup = group;
+        this.uploadDocumentContainer = null;
+        this.documentUploadFile = null;
+        this.isDraggingFile = false;
+        this.uploadProgress = 0;
+        this.showUploadDocumentsModal = true;
+    },
+
+    openContainerUploadModal(container) {
+        if (!container || !container.id) {
+            this.showStatus('No se pudo identificar el contenedor seleccionado', 'error');
+            return;
+        }
+        if (!this.canUploadContainerDocuments(container)) {
+            this.showStatus('No tienes permisos para subir documentos en este contenedor', 'error');
+            return;
+        }
+        this.uploadDocumentContainer = container;
+        this.uploadDocumentGroup = null;
         this.documentUploadFile = null;
         this.isDraggingFile = false;
         this.uploadProgress = 0;
@@ -515,6 +630,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     closeUploadDocumentsModal() {
         this.showUploadDocumentsModal = false;
         this.uploadDocumentGroup = null;
+        this.uploadDocumentContainer = null;
         this.documentUploadFile = null;
     },
 
@@ -533,21 +649,41 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     },
 
     async uploadGroupDocument() {
-        if (!this.uploadDocumentGroup || !this.documentUploadFile || this.isUploadingDocument) {
+        if (this.isUploadingDocument || !this.documentUploadFile) {
+            return;
+        }
+
+        const context = this.uploadDocumentContainer
+            ? { type: 'container', entity: this.uploadDocumentContainer }
+            : this.uploadDocumentGroup
+                ? { type: 'group', entity: this.uploadDocumentGroup }
+                : null;
+
+        if (!context || !context.entity || !context.entity.id) {
+            this.showStatus('No se pudo determinar el destino del documento', 'error');
+            return;
+        }
+
+        if (context.type === 'container' && !this.canUploadContainerDocuments(context.entity)) {
+            this.showStatus('No tienes permisos para subir documentos en este contenedor', 'error');
             return;
         }
 
         this.isUploadingDocument = true;
         this.uploadProgress = 0;
-        const group = this.uploadDocumentGroup;
+
         const formData = new FormData();
         formData.append('file', this.documentUploadFile);
+
+        const uploadUrl = context.type === 'container'
+            ? `/api/content-containers/${context.entity.id}/documents`
+            : `/api/groups/${context.entity.id}/documents`;
 
         try {
             // Use XHR to track upload progress
             await new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
-                xhr.open('POST', `/api/groups/${group.id}/documents`);
+                xhr.open('POST', uploadUrl);
                 xhr.setRequestHeader('X-CSRF-TOKEN', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
 
                 xhr.upload.onprogress = (e) => {
@@ -572,8 +708,11 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             });
 
             this.showStatus('Documento subido correctamente');
-            if (this.viewDocumentsGroup && this.viewDocumentsGroup.id === group.id) {
-                await this.loadGroupDocuments(group.id);
+            if (context.type === 'group' && this.viewDocumentsGroup && this.viewDocumentsGroup.id === context.entity.id) {
+                await this.loadGroupDocuments(context.entity.id);
+            }
+            if (context.type === 'container' && this.viewDocumentsContainer && this.viewDocumentsContainer.id === context.entity.id) {
+                await this.loadContainerDocuments(context.entity.id);
             }
             this.closeUploadDocumentsModal();
         } catch (error) {
@@ -587,15 +726,34 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
     openViewDocumentsModal(group) {
         this.viewDocumentsGroup = group;
+        this.viewDocumentsContainer = null;
         this.groupDocuments = [];
         this.groupDocumentsError = null;
         this.showViewDocumentsModal = true;
         this.loadGroupDocuments(group.id);
     },
 
+    openContainerDocumentsModal(container) {
+        if (!container || !container.id) {
+            this.showStatus('No se pudo identificar el contenedor seleccionado', 'error');
+            return;
+        }
+        if (!this.canViewContainerDocuments(container)) {
+            this.showStatus('No tienes permisos para ver los documentos de este contenedor', 'error');
+            return;
+        }
+        this.viewDocumentsContainer = container;
+        this.viewDocumentsGroup = null;
+        this.groupDocuments = [];
+        this.groupDocumentsError = null;
+        this.showViewDocumentsModal = true;
+        this.loadContainerDocuments(container.id);
+    },
+
     closeViewDocumentsModal() {
         this.showViewDocumentsModal = false;
         this.viewDocumentsGroup = null;
+        this.viewDocumentsContainer = null;
         this.groupDocuments = [];
         this.groupDocumentsError = null;
         this.isLoadingGroupDocuments = false;
@@ -622,6 +780,33 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         } catch (error) {
             console.error('Error loading group documents', error);
             this.groupDocumentsError = 'Error al cargar los documentos del grupo';
+            this.groupDocuments = [];
+        } finally {
+            this.isLoadingGroupDocuments = false;
+        }
+    },
+
+    async loadContainerDocuments(containerId) {
+        if (!containerId) return;
+        this.isLoadingGroupDocuments = true;
+        this.groupDocumentsError = null;
+        try {
+            const response = await fetch(`/api/content-containers/${containerId}/documents`);
+            if (!response.ok) {
+                let msg = 'No se pudieron cargar los documentos del contenedor';
+                try {
+                    const err = await response.json();
+                    msg = err.message || msg;
+                } catch {}
+                this.groupDocumentsError = msg;
+                this.groupDocuments = [];
+                return;
+            }
+            const data = await response.json();
+            this.groupDocuments = Array.isArray(data.files) ? data.files : [];
+        } catch (error) {
+            console.error('Error loading container documents', error);
+            this.groupDocumentsError = 'Error al cargar los documentos del contenedor';
             this.groupDocuments = [];
         } finally {
             this.isLoadingGroupDocuments = false;
