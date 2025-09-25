@@ -106,7 +106,7 @@
                 </div>
 
                 <!-- Contactos -->
-                <div class="border-t border-slate-700/50">
+                <div id="contacts-section" class="border-t border-slate-700/50">
                     <div class="p-3 flex items-center justify-between">
                         <h3 class="text-sm font-semibold text-slate-300">Contactos</h3>
                         <button id="refresh-contacts" class="text-xs text-slate-400 hover:text-slate-200">Refrescar</button>

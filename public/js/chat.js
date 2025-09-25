@@ -12,6 +12,7 @@ let conversationsCache = []; // Cache de conversaciones para búsqueda local
 let userSearchResultsCache = [];
 let userSearchAbortController = null;
 let globalSearchFeedbackTimer = null;
+let hideContactsAfterGlobalChat = false;
 
 // Función para inicializar auto-refresh de conversaciones
 function startAutoRefresh() {
@@ -776,7 +777,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Cargar contactos, refresco manual y buscador global
     loadContacts();
     const refreshContacts = document.getElementById('refresh-contacts');
-    if (refreshContacts) refreshContacts.addEventListener('click', loadContacts);
+    if (refreshContacts) {
+        refreshContacts.addEventListener('click', () => {
+            hideContactsAfterGlobalChat = false;
+            setContactsListHidden(false);
+            loadContacts();
+        });
+    }
     setupGlobalChatSearch();
 });
 
@@ -797,6 +804,8 @@ function setupGlobalChatSearch() {
             results.classList.add('hidden');
             userSearchResultsCache = [];
             setGlobalSearchFeedback('', 'clear');
+            hideContactsAfterGlobalChat = false;
+            setContactsListHidden(false);
             return;
         }
 
@@ -832,11 +841,11 @@ function setupGlobalChatSearch() {
                 const user = userSearchResultsCache[0];
                 const label = user.name || user.username || user.email || 'usuario';
                 setGlobalSearchFeedback(`Creando chat con ${label}...`, 'loading');
-                await createChatAndOpen({ contactId: user.id });
+                await createChatAndOpen({ contactId: user.id, hideContactsList: true });
                 setGlobalSearchFeedback(`Chat abierto con ${label}.`, 'success');
             } else {
                 setGlobalSearchFeedback('Buscando usuario...', 'loading');
-                await createChatAndOpen({ userQuery: query });
+                await createChatAndOpen({ userQuery: query, hideContactsList: true });
                 setGlobalSearchFeedback(`Chat abierto con ${query}.`, 'success');
             }
             input.value = '';
@@ -859,7 +868,7 @@ function setupGlobalChatSearch() {
 
         try {
             setGlobalSearchFeedback(`Creando chat con ${label}...`, 'loading');
-            await createChatAndOpen({ contactId: userId });
+            await createChatAndOpen({ contactId: userId, hideContactsList: true });
             setGlobalSearchFeedback(`Chat abierto con ${label}.`, 'success');
             input.value = '';
             results.classList.add('hidden');
@@ -1009,7 +1018,18 @@ function setGlobalSearchFeedback(message, type = 'info', persist = false) {
     }
 }
 
-async function createChatAndOpen({ contactId = null, userQuery = null }) {
+function setContactsListHidden(hidden) {
+    const list = document.getElementById('contacts-list');
+    if (!list) return;
+
+    if (hidden) {
+        list.classList.add('hidden');
+    } else {
+        list.classList.remove('hidden');
+    }
+}
+
+async function createChatAndOpen({ contactId = null, userQuery = null, hideContactsList = false }) {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
     const formData = new FormData();
     if (contactId) formData.append('contact_id', contactId);
@@ -1048,6 +1068,10 @@ async function createChatAndOpen({ contactId = null, userQuery = null }) {
     }
 
     await loadConversations();
+    if (hideContactsList) {
+        hideContactsAfterGlobalChat = true;
+        setContactsListHidden(true);
+    }
     focusChat(payload.chat_id);
     return payload;
 }
@@ -1118,6 +1142,7 @@ async function loadContacts() {
             throw new Error('No se pudieron obtener contactos (verifica tu sesión)');
         }
         contactsCache = data;
+        setContactsListHidden(hideContactsAfterGlobalChat);
         if (!list) return;
         if (!contactsCache.length) {
             list.innerHTML = '<div class="p-3 text-xs text-slate-500">Sin contactos</div>';
