@@ -9,6 +9,9 @@ let lastMessageIds = new Set(); // Para trackear qué mensajes ya hemos visto
 let contactsCache = [];
 let pendingFile = null; // Archivo seleccionado para enviar
 let conversationsCache = []; // Cache de conversaciones para búsqueda local
+let userSearchResultsCache = [];
+let userSearchAbortController = null;
+let globalSearchFeedbackTimer = null;
 
 // Función para inicializar auto-refresh de conversaciones
 function startAutoRefresh() {
@@ -770,56 +773,294 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Cargar contactos y listeners para crear chats
+    // Cargar contactos, refresco manual y buscador global
     loadContacts();
     const refreshContacts = document.getElementById('refresh-contacts');
     if (refreshContacts) refreshContacts.addEventListener('click', loadContacts);
-    const startChatBtn = document.getElementById('start-chat-btn');
-    const startChatUser = document.getElementById('start-chat-user');
-    if (startChatBtn && startChatUser) {
-        // Iniciar con Enter desde el input
-        startChatUser.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                startChatBtn.click();
-            }
-        });
-        startChatBtn.addEventListener('click', async () => {
-            const query = startChatUser.value.trim();
-            if (!query) return;
-            // Loading UI
-            const originalLabel = startChatBtn.textContent;
-            startChatBtn.disabled = true;
-            startChatBtn.textContent = 'Creando…';
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            const formData = new FormData();
-            formData.append('user_query', query);
-            const resp = await fetch('/api/chats/create-or-find', {
-                method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest', ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }) },
-                body: formData
-            });
-            if (resp.ok) {
-                const data = await resp.json();
-                await loadConversations();
-                setTimeout(() => {
-                    const el = document.querySelector(`[data-chat-id="${data.chat_id}"]`);
-                    if (el) el.click();
-                }, 400);
-                startChatUser.value = '';
-            } else {
-                try {
-                    const errText = await resp.text();
-                    console.error('Start chat error:', errText);
-                } catch {}
-                alert('No se pudo crear el chat');
-            }
-            // Restore UI
-            startChatBtn.disabled = false;
-            startChatBtn.textContent = originalLabel;
-        });
-    }
+    setupGlobalChatSearch();
 });
+
+function setupGlobalChatSearch() {
+    const input = document.getElementById('global-chat-search');
+    const results = document.getElementById('global-chat-search-results');
+    const feedback = document.getElementById('global-chat-search-feedback');
+    if (!input || !results || !feedback) return;
+
+    let debounceTimer = null;
+
+    input.addEventListener('input', () => {
+        const query = input.value.trim();
+        clearTimeout(debounceTimer);
+
+        if (query.length === 0) {
+            results.innerHTML = '';
+            results.classList.add('hidden');
+            userSearchResultsCache = [];
+            setGlobalSearchFeedback('', 'clear');
+            return;
+        }
+
+        if (query.length < 3) {
+            results.innerHTML = '';
+            results.classList.add('hidden');
+            userSearchResultsCache = [];
+            setGlobalSearchFeedback('Escribe al menos 3 caracteres para buscar.', 'muted');
+            return;
+        }
+
+        setGlobalSearchFeedback('Buscando usuarios...', 'loading');
+        debounceTimer = setTimeout(() => {
+            performGlobalUserSearch(query, { results });
+        }, 300);
+    });
+
+    input.addEventListener('focus', () => {
+        if (results.innerHTML.trim()) {
+            results.classList.remove('hidden');
+        }
+    });
+
+    input.addEventListener('keydown', async (event) => {
+        if (event.key !== 'Enter') return;
+
+        event.preventDefault();
+        const query = input.value.trim();
+        if (!query) return;
+
+        try {
+            if (userSearchResultsCache.length > 0) {
+                const user = userSearchResultsCache[0];
+                const label = user.name || user.username || user.email || 'usuario';
+                setGlobalSearchFeedback(`Creando chat con ${label}...`, 'loading');
+                await createChatAndOpen({ contactId: user.id });
+                setGlobalSearchFeedback(`Chat abierto con ${label}.`, 'success');
+            } else {
+                setGlobalSearchFeedback('Buscando usuario...', 'loading');
+                await createChatAndOpen({ userQuery: query });
+                setGlobalSearchFeedback(`Chat abierto con ${query}.`, 'success');
+            }
+            input.value = '';
+            results.classList.add('hidden');
+            results.innerHTML = '';
+            userSearchResultsCache = [];
+        } catch (error) {
+            console.error('Error iniciando chat desde buscador global:', error);
+            setGlobalSearchFeedback(error.message || 'No se pudo iniciar el chat.', 'error', true);
+        }
+    });
+
+    results.addEventListener('click', async (event) => {
+        const button = event.target.closest('[data-user-id]');
+        if (!button) return;
+
+        event.preventDefault();
+        const userId = button.getAttribute('data-user-id');
+        const label = button.getAttribute('data-user-label') || 'usuario';
+
+        try {
+            setGlobalSearchFeedback(`Creando chat con ${label}...`, 'loading');
+            await createChatAndOpen({ contactId: userId });
+            setGlobalSearchFeedback(`Chat abierto con ${label}.`, 'success');
+            input.value = '';
+            results.classList.add('hidden');
+            results.innerHTML = '';
+            userSearchResultsCache = [];
+        } catch (error) {
+            console.error('Error iniciando chat desde resultados:', error);
+            setGlobalSearchFeedback(error.message || 'No se pudo iniciar el chat.', 'error', true);
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!results.contains(event.target) && event.target !== input) {
+            results.classList.add('hidden');
+        }
+    });
+}
+
+async function performGlobalUserSearch(query, { results }) {
+    if (!results) return;
+
+    try {
+        if (userSearchAbortController) {
+            userSearchAbortController.abort();
+        }
+    } catch (e) {
+        console.warn('Abort controller cleanup error:', e);
+    }
+
+    const controller = new AbortController();
+    userSearchAbortController = controller;
+
+    try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const response = await fetch('/api/users/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
+            },
+            body: JSON.stringify({ query }),
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            let errorMessage = 'No se pudo buscar usuarios.';
+            try {
+                const payload = await response.json();
+                errorMessage = payload?.message || payload?.error || errorMessage;
+            } catch (parseError) {
+                console.warn('No se pudo interpretar el error de búsqueda de usuarios:', parseError);
+            }
+            throw new Error(errorMessage);
+        }
+
+        const payload = await response.json();
+        const users = Array.isArray(payload?.users) ? payload.users : [];
+        userSearchResultsCache = users;
+
+        renderGlobalSearchResults(users, results, query);
+
+        if (users.length === 0) {
+            setGlobalSearchFeedback('No se encontraron usuarios con ese criterio.', 'muted', true);
+        } else {
+            setGlobalSearchFeedback(`${users.length} usuario${users.length === 1 ? '' : 's'} encontrado${users.length === 1 ? '' : 's'}.`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            return;
+        }
+        console.error('Error buscando usuarios:', error);
+        setGlobalSearchFeedback(error.message || 'No se pudo buscar usuarios.', 'error', true);
+        results.innerHTML = '';
+        results.classList.add('hidden');
+        userSearchResultsCache = [];
+    } finally {
+        if (userSearchAbortController === controller) {
+            userSearchAbortController = null;
+        }
+    }
+}
+
+function renderGlobalSearchResults(users, container, query) {
+    if (!container) return;
+
+    if (!users.length) {
+        container.innerHTML = `<div class="px-3 py-2 text-xs text-slate-400">No encontramos coincidencias para "${escapeHtml(query)}".</div>`;
+        container.classList.remove('hidden');
+        return;
+    }
+
+    container.innerHTML = users.map(user => {
+        const label = user.name || user.username || user.email || 'Usuario';
+        const email = user.email ? `<span class="block text-[11px] text-slate-500">${escapeHtml(user.email)}</span>` : '';
+        return `
+            <button type="button" data-user-id="${user.id}" data-user-label="${escapeHtml(label)}" class="w-full text-left px-4 py-2 hover:bg-slate-700/50 transition flex flex-col">
+                <span class="text-sm text-slate-100">${escapeHtml(label)}</span>
+                ${email}
+            </button>
+        `;
+    }).join('');
+
+    container.classList.remove('hidden');
+}
+
+function setGlobalSearchFeedback(message, type = 'info', persist = false) {
+    const feedback = document.getElementById('global-chat-search-feedback');
+    if (!feedback) return;
+
+    feedback.classList.remove('text-slate-400', 'text-slate-500', 'text-yellow-400', 'text-emerald-400', 'text-red-400', 'hidden');
+
+    if (!message) {
+        feedback.classList.add('hidden');
+        return;
+    }
+
+    switch (type) {
+        case 'loading':
+            feedback.classList.add('text-yellow-400');
+            break;
+        case 'success':
+            feedback.classList.add('text-emerald-400');
+            break;
+        case 'error':
+            feedback.classList.add('text-red-400');
+            break;
+        case 'muted':
+            feedback.classList.add('text-slate-500');
+            break;
+        default:
+            feedback.classList.add('text-slate-400');
+    }
+
+    feedback.textContent = message;
+
+    if (globalSearchFeedbackTimer) {
+        clearTimeout(globalSearchFeedbackTimer);
+        globalSearchFeedbackTimer = null;
+    }
+
+    if (!persist && type !== 'error') {
+        globalSearchFeedbackTimer = setTimeout(() => {
+            feedback.classList.add('hidden');
+        }, 3500);
+    }
+}
+
+async function createChatAndOpen({ contactId = null, userQuery = null }) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const formData = new FormData();
+    if (contactId) formData.append('contact_id', contactId);
+    if (userQuery) formData.append('user_query', userQuery);
+
+    const response = await fetch('/api/chats/create-or-find', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }) },
+        body: formData
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    let payload = null;
+
+    if (contentType.includes('application/json')) {
+        payload = await response.json();
+    } else {
+        const text = await response.text();
+        if (!response.ok) {
+            throw new Error(text || 'No se pudo crear el chat');
+        }
+        try {
+            payload = text ? JSON.parse(text) : null;
+        } catch (parseError) {
+            console.warn('Respuesta no JSON al crear chat:', parseError);
+        }
+    }
+
+    if (!response.ok) {
+        const message = payload?.error || payload?.message || 'No se pudo crear el chat';
+        throw new Error(message);
+    }
+
+    if (!payload?.chat_id) {
+        throw new Error('La conversación no está disponible.');
+    }
+
+    await loadConversations();
+    focusChat(payload.chat_id);
+    return payload;
+}
+
+function focusChat(chatId) {
+    if (!chatId) return;
+    setTimeout(() => {
+        const element = document.querySelector(`[data-chat-id="${chatId}"]`);
+        if (element) {
+            element.click();
+        }
+    }, 300);
+}
 
 // Filtrar conversaciones por nombre de usuario o último mensaje
 function filterConversations(query) {
@@ -889,27 +1130,19 @@ async function loadContacts() {
             </button>`).join('');
         list.querySelectorAll('button').forEach(btn => btn.addEventListener('click', async () => {
             const id = btn.getAttribute('data-user-id');
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            const formData = new FormData();
-            formData.append('contact_id', id);
-            const resp2 = await fetch('/api/chats/create-or-find', {
-                method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest', ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }) },
-                body: formData
-            });
-            if (resp2.ok) {
-                const data = await resp2.json();
-                await loadConversations();
-                setTimeout(() => {
-                    const el = document.querySelector(`[data-chat-id="${data.chat_id}"]`);
-                    if (el) el.click();
-                }, 300);
-            } else {
-                try {
-                    const errText = await resp2.text();
-                    console.error('Create/find chat error:', errText);
-                } catch {}
-                alert('No se pudo crear el chat');
+            if (!id) return;
+
+            btn.disabled = true;
+            btn.classList.add('opacity-60');
+
+            try {
+                await createChatAndOpen({ contactId: id });
+            } catch (error) {
+                console.error('Error creando chat desde contactos:', error);
+                alert(error.message || 'No se pudo crear el chat');
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-60');
             }
         }));
     } catch (e) {
