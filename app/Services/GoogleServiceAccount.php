@@ -16,6 +16,7 @@ class GoogleServiceAccount
 {
     protected Client $client;
     protected Drive $drive;
+    protected static bool $impersonationDisabled = false;
 
     public function __construct()
     {
@@ -46,7 +47,33 @@ class GoogleServiceAccount
 
     public function impersonate(?string $email): void
     {
-        $this->client->setSubject($email ?: null);
+        if ($email === null) {
+            $this->client->setSubject(null);
+            return;
+        }
+        if (self::$impersonationDisabled) {
+            Log::debug('Impersonation skipped (disabled flag set)', ['email' => $email]);
+            return; // Evitar reintentos costosos
+        }
+        try {
+            $this->client->setSubject($email);
+        } catch (\Throwable $e) {
+            $msg = strtolower($e->getMessage());
+            if (str_contains($msg, 'unauthorized_client')) {
+                self::$impersonationDisabled = true;
+                Log::warning('Disabling impersonation after unauthorized_client', [
+                    'email' => $email,
+                    'error' => $e->getMessage(),
+                ]);
+                return; // No relanzamos para permitir fallback
+            }
+            throw $e;
+        }
+    }
+
+    public static function impersonationDisabled(): bool
+    {
+        return self::$impersonationDisabled;
     }
 
     public function getClient(): Client

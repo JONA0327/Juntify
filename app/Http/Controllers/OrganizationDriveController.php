@@ -78,6 +78,12 @@ class OrganizationDriveController extends Controller
                 ]);
                 $client->setAccessToken($new);
             } else {
+                $err = strtolower($new['error'] ?? '');
+                if (str_contains($err, 'invalid_grant')) {
+                    // Marcar en memoria para status
+                    $token->forceFill(['access_token' => null])->save();
+                    throw new \Exception('invalid_grant');
+                }
                 throw new \Exception("No se pudo renovar el token de Google Drive: " . ($new['error'] ?? 'Error desconocido'));
             }
         }
@@ -213,29 +219,61 @@ class OrganizationDriveController extends Controller
                 try { if ($adminEmail) { $serviceAccount->shareItem($folderId, $adminEmail, 'writer'); } } catch (\Throwable $e) { /* ignore */ }
             }
         }
-        // Ensure standard subfolders exist for organization root
+        // Ensure standard subfolders exist for organization root (multi strategy)
         try {
             $serviceEmail = config('services.google.service_account_email');
             $needed = ['Audios', 'Transcripciones', 'Audios Pospuestos', 'Documentos'];
             foreach ($needed as $name) {
-                try {
-                    $subId = $serviceAccount->createFolder($name, $folderId);
-                    \App\Models\OrganizationSubfolder::firstOrCreate([
-                        'organization_folder_id' => $folder->id,
-                        'google_id'              => $subId,
-                    ], ['name' => $name]);
-                    try { if ($serviceEmail) { $serviceAccount->shareFolder($subId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
-                    try { if ($adminEmail) { $serviceAccount->shareItem($subId, $adminEmail, 'writer'); } } catch (\Throwable $e) { /* ignore */ }
-                } catch (\Throwable $e) {
-                    Log::warning('OrganizationDriveController: failed to create standard subfolder', [
-                        'name' => $name,
-                        'parent' => $folderId,
-                        'error' => $e->getMessage(),
-                    ]);
+                $subId = null;
+                // Strategy 1: direct Service Account
+                try { $subId = $serviceAccount->createFolder($name, $folderId); }
+                catch (\Throwable $e1) {
+                    Log::debug('Org std subfolder SA direct failed', ['org' => $organization->id, 'name' => $name, 'error' => $e1->getMessage()]);
+                    // Strategy 2: impersonation (if not already impersonated and admin email available and impersonation not disabled)
+                    if (!$impersonated && $adminEmail && !\App\Services\GoogleServiceAccount::impersonationDisabled()) {
+                        try {
+                            $serviceAccount->impersonate($adminEmail);
+                            $impersonated = true; // mark so final cleanup resets
+                            $subId = $serviceAccount->createFolder($name, $folderId);
+                        } catch (\Throwable $eImp) {
+                            Log::debug('Org std subfolder SA impersonation failed', ['org' => $organization->id, 'name' => $name, 'error' => $eImp->getMessage()]);
+                        } finally {
+                            try { $serviceAccount->impersonate(null); } catch (\Throwable $eR) { /* ignore */ }
+                        }
+                    }
+                }
+                // Strategy 3: OAuth fallback
+                if (!$subId) {
+                    try { $subId = $this->drive->createFolder($name, $folderId); }
+                    catch (\Throwable $eOauth) {
+                        Log::warning('OrganizationDriveController: failed to create standard subfolder (all strategies)', [
+                            'org' => $organization->id,
+                            'name' => $name,
+                            'parent' => $folderId,
+                            'error' => $eOauth->getMessage(),
+                        ]);
+                    }
+                }
+                if ($subId) {
+                    try {
+                        \App\Models\OrganizationSubfolder::firstOrCreate([
+                            'organization_folder_id' => $folder->id,
+                            'google_id'              => $subId,
+                        ], ['name' => $name]);
+                        // Share with SA (if created via OAuth or impersonation) and admin
+                        if ($serviceEmail) { try { $serviceAccount->shareFolder($subId, $serviceEmail); } catch (\Throwable $eS) { /* ignore */ } }
+                        if ($adminEmail) { try { $serviceAccount->shareItem($subId, $adminEmail, 'writer'); } catch (\Throwable $eU) { /* ignore */ } }
+                    } catch (\Throwable $persistE) {
+                        Log::warning('OrganizationDriveController: failed to persist standard subfolder', [
+                            'org' => $organization->id,
+                            'name' => $name,
+                            'error' => $persistE->getMessage(),
+                        ]);
+                    }
                 }
             }
         } catch (\Throwable $e) {
-            Log::warning('OrganizationDriveController: ensure standard subfolders failed', ['error' => $e->getMessage()]);
+            Log::warning('OrganizationDriveController: ensure standard subfolders failed (wrapper)', ['error' => $e->getMessage()]);
         }
 
         return response()->json(['id' => $folderId, 'folder' => $folder], 201);
@@ -357,12 +395,30 @@ class OrganizationDriveController extends Controller
 
         $root = $organization->folder;
         $subfolders = [];
+        $needsReconnect = false;
+        $impersonationDisabled = \App\Services\GoogleServiceAccount::impersonationDisabled();
 
         if ($connected && $root) {
             try {
-                // Initialize drive client and list subfolders
-                $this->initDrive($organization);
-                $files = $this->drive->listSubfolders($root->google_id);
+                try {
+                    $this->initDrive($organization);
+                } catch (\Exception $eInit) {
+                    if ($eInit->getMessage() === 'invalid_grant') {
+                        $needsReconnect = true;
+                        $connected = false;
+                        goto response_block;
+                    }
+                    throw $eInit;
+                }
+                $files = [];
+                try {
+                    $files = $this->drive->listSubfolders($root->google_id);
+                } catch (\Throwable $eList) {
+                    Log::warning('Organization status: listSubfolders failed', [
+                        'org' => $organization->id,
+                        'error' => $eList->getMessage(),
+                    ]);
+                }
                 foreach ($files as $file) {
                     $subfolders[] = OrganizationSubfolder::updateOrCreate(
                         [
@@ -379,10 +435,14 @@ class OrganizationDriveController extends Controller
             }
         }
 
+        response_block:
         return response()->json([
             'connected'   => $connected,
             'root_folder' => $root,
             'subfolders'  => $subfolders,
+            'needs_reconnect' => $needsReconnect,
+            'impersonation_disabled' => $impersonationDisabled,
+            'root_missing' => $root && !$root->google_id,
         ]);
     }
 }

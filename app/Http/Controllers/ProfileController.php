@@ -15,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
@@ -67,13 +68,23 @@ class ProfileController extends Controller
                 }
 
                 $client->setAccessToken($tokenArray);
+                // Asegurar que el servicio compartido de Drive también tenga token (para crear carpetas fallback)
+                try {
+                    if (method_exists($drive, 'setAccessToken')) {
+                        $drive->setAccessToken($tokenArray);
+                    }
+                } catch (\Throwable $eSet) {
+                    Log::debug('No se pudo establecer access token en GoogleDriveService', [
+                        'error' => $eSet->getMessage(),
+                    ]);
+                }
 
+                // Nota: includeItemsFromAllDrives no es válido en files->get y causaba '(get) unknown parameter' en algunas libs
                 $file = $drive->getDrive()->files->get(
                     $token->recordings_folder_id,
                     [
-                        'fields' => 'name',
+                        'fields' => 'id,name,parents',
                         'supportsAllDrives' => true,
-                        'includeItemsFromAllDrives' => true,
                     ]
                 );
                 $folderName = $file->getName() ?? "recordings_{$user->username}";
@@ -90,8 +101,96 @@ class ProfileController extends Controller
                 );
 
                 $subfolders = Subfolder::where('folder_id', $folder->id)->get();
+
+                // Asegurar subcarpetas default si faltan
+                try {
+                    $expected = collect(config('drive.default_subfolders', []));
+                    if ($expected->count()) {
+                        $have = $subfolders->pluck('name')->map(fn($n) => mb_strtolower($n))->all();
+                        $missing = $expected->filter(fn($name) => !in_array(mb_strtolower($name), $have));
+                        if ($missing->count()) {
+                            Log::info('Creando subcarpetas faltantes (ProfileController flujo token directo)', [
+                                'missing' => $missing->values(),
+                                'root_folder_id' => $folder->google_id,
+                                'token_id' => $token->id,
+                            ]);
+                            try {
+                                $sa = app(\App\Services\GoogleServiceAccount::class);
+                            } catch (\Throwable $eSa) {
+                                Log::warning('No se pudo inicializar ServiceAccount para crear subcarpetas faltantes', [
+                                    'error' => $eSa->getMessage(),
+                                ]);
+                                $sa = null;
+                            }
+                            foreach ($missing as $name) {
+                                $newId = null;
+                                // Intentar en este orden: Service Account directa -> Service Account impersonada -> OAuth token
+                                try {
+                                    if ($sa) {
+                                        $newId = $sa->createFolder($name, $folder->google_id);
+                                    }
+                                } catch (\Throwable $eSaDirect) {
+                                    Log::debug('Fallo SA directa creando subcarpeta, intentando impersonación', [
+                                        'name' => $name,
+                                        'error' => $eSaDirect->getMessage(),
+                                    ]);
+                                    // Impersonar y reintentar si hay email
+                                    if ($sa && $user->email) {
+                                        try {
+                                            $sa->impersonate($user->email);
+                                            $newId = $sa->createFolder($name, $folder->google_id);
+                                        } catch (\Throwable $eSaImp) {
+                                            Log::debug('Fallo SA impersonada, fallback a OAuth', [
+                                                'name' => $name,
+                                                'error' => $eSaImp->getMessage(),
+                                            ]);
+                                        } finally {
+                                            try { $sa->impersonate(null); } catch (\Throwable $eReset) { /* ignore */ }
+                                        }
+                                    }
+                                }
+                                if (!$newId) {
+                                    try {
+                                        $newId = $drive->createFolder($name, $folder->google_id);
+                                    } catch (\Throwable $eOauth) {
+                                        Log::warning('No se pudo crear subcarpeta (todas las estrategias fallaron)', [
+                                            'name' => $name,
+                                            'error' => $eOauth->getMessage(),
+                                        ]);
+                                    }
+                                }
+                                if ($newId) {
+                                    try {
+                                        if ($sa && $user->email) {
+                                            try { $sa->shareItem($newId, $user->email, 'writer'); } catch (\Throwable $eShare) { /* ignore */ }
+                                        }
+                                        $model = Subfolder::firstOrCreate([
+                                            'folder_id' => $folder->id,
+                                            'google_id' => $newId,
+                                        ], ['name' => $name]);
+                                        $subfolders->push($model);
+                                    } catch (\Throwable $ePersist) {
+                                        Log::warning('Fallo persistiendo subcarpeta creada', [
+                                            'name' => $name,
+                                            'error' => $ePersist->getMessage(),
+                                        ]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (\Throwable $eEnsure) {
+                    Log::warning('Error asegurando subcarpetas default', [
+                        'error' => $eEnsure->getMessage(),
+                    ]);
+                }
             } catch (\Throwable $e) {
                 // Fallback: try with Service Account to fetch info and share with the user
+                Log::warning('Fallo acceso carpeta raíz con token OAuth, intentando ServiceAccount', [
+                    'token_id' => $token->id ?? null,
+                    'folder_id' => $token->recordings_folder_id ?? null,
+                    'error' => $e->getMessage(),
+                ]);
                 try {
                     $sa = app(\App\Services\GoogleServiceAccount::class);
 
@@ -124,6 +223,46 @@ class ProfileController extends Controller
                             );
                             $subfolders = Subfolder::where('folder_id', $folder->id)->get();
                             $folderMessage = null;
+                            // Asegurar subcarpetas faltantes también en este flujo
+                            try {
+                                $expected = collect(config('drive.default_subfolders', []));
+                                $have = $subfolders->pluck('name')->map(fn($n) => mb_strtolower($n))->all();
+                                $missing = $expected->filter(fn($name) => !in_array(mb_strtolower($name), $have));
+                                if ($missing->count()) {
+                                    foreach ($missing as $name) {
+                                        $newId = null;
+                                        try { $newId = $sa->createFolder($name, $folder->google_id); } catch (\Throwable $mf) {
+                                            Log::debug('Fallo SA directa en fallback, intentando impersonación', [ 'name' => $name, 'error' => $mf->getMessage() ]);
+                                            if ($user->email) {
+                                                try { $sa->impersonate($user->email); $newId = $sa->createFolder($name, $folder->google_id); } catch (\Throwable $mf2) {
+                                                    Log::debug('Fallo SA impersonada en fallback, intentando OAuth', [ 'name' => $name, 'error' => $mf2->getMessage() ]);
+                                                } finally { try { $sa->impersonate(null); } catch (\Throwable $eR) { /* ignore */ } }
+                                            }
+                                        }
+                                        if (!$newId) {
+                                            try { if (method_exists($drive, 'createFolder')) { $newId = $drive->createFolder($name, $folder->google_id); } } catch (\Throwable $mf3) {
+                                                Log::warning('Fallo total creando subcarpeta en fallback', [ 'name' => $name, 'error' => $mf3->getMessage() ]);
+                                            }
+                                        }
+                                        if ($newId) {
+                                            try {
+                                                if ($user->email) { try { $sa->shareItem($newId, $user->email, 'writer'); } catch (\Throwable $se) { /* ignore */ } }
+                                                $model = Subfolder::firstOrCreate([
+                                                    'folder_id' => $folder->id,
+                                                    'google_id' => $newId,
+                                                ], ['name' => $name]);
+                                                $subfolders->push($model);
+                                            } catch (\Throwable $persistE) {
+                                                Log::warning('Fallo persistiendo subcarpeta en fallback', [ 'name' => $name, 'error' => $persistE->getMessage() ]);
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (\Throwable $eMissing) {
+                                Log::warning('Error asegurando subcarpetas default en fallback', [
+                                    'error' => $eMissing->getMessage(),
+                                ]);
+                            }
                         } else {
                             $folderMessage = 'No se pudo acceder a la carpeta principal. El token se renovó automáticamente pero hay problemas de permisos.';
                         }
@@ -131,6 +270,12 @@ class ProfileController extends Controller
                         $sa->impersonate(null);
                     }
                 } catch (\Throwable $e2) {
+                    Log::error('ServiceAccount fallback también falló', [
+                        'token_id' => $token->id ?? null,
+                        'folder_id' => $token->recordings_folder_id ?? null,
+                        'error_primary' => $e->getMessage(),
+                        'error_fallback' => $e2->getMessage(),
+                    ]);
                     $folderMessage = 'No se pudo acceder a la carpeta principal. El token se renovó automáticamente pero hay problemas de permisos.';
                 }
             }

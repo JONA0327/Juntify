@@ -9,6 +9,7 @@ use Google\Service\Drive;
 use Google\Service\Calendar;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use App\Models\GoogleToken;
 use App\Models\OrganizationGoogleToken;
 
@@ -167,6 +168,20 @@ class GoogleAuthController extends Controller
                         $googleToken->recordings_folder_id = $folderId;
                         $googleToken->save();
 
+                        // Asegurar que el usuario tenga permisos sobre la carpeta raíz si la creó el Service Account sin impersonación
+                        try {
+                            if (!$impersonated && $user->email) {
+                                // Compartir la carpeta raíz con el usuario para evitar errores de acceso posteriores en ProfileController
+                                $serviceAccount->shareItem($folderId, $user->email, 'writer');
+                            }
+                        } catch (\Throwable $e) {
+                            Log::warning('No se pudo compartir la carpeta raíz con el usuario', [
+                                'folder_id' => $folderId,
+                                'user_email' => $user->email,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+
                         // Ensure standard subfolders from config (includes Audios, Transcripciones, etc.)
                         try {
                             /** @var \App\Http\Controllers\DriveController $driveController */
@@ -175,16 +190,36 @@ class GoogleAuthController extends Controller
                             $serviceEmail = config('services.google.service_account_email');
                             $needed = config('drive.default_subfolders', ['Audios', 'Transcripciones']);
                             foreach ($needed as $name) {
-                                try {
-                                    $subId = $serviceAccount->createFolder($name, $folderId);
-                                    \App\Models\Subfolder::firstOrCreate([
-                                        'folder_id' => $folderModel->id,
-                                        'google_id' => $subId,
-                                    ], ['name' => $name]);
-                                    try { if ($serviceEmail) { $serviceAccount->shareFolder($subId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
-                                    // Share with user for OAuth access
-                                    try { if ($user->email) { $serviceAccount->shareItem($subId, $user->email, 'writer'); } } catch (\Throwable $e) { /* ignore */ }
-                                } catch (\Throwable $e) { /* ignore individual failures */ }
+                                $subId = null;
+                                // Estrategia en cascada: ServiceAccount directa -> SA impersonada -> OAuth
+                                try { $subId = $serviceAccount->createFolder($name, $folderId); }
+                                catch (\Throwable $e1) {
+                                    Log::debug('Fallo SA directa creando subcarpeta callback', ['name' => $name, 'error' => $e1->getMessage()]);
+                                    if ($user->email) {
+                                        try { $serviceAccount->impersonate($user->email); $subId = $serviceAccount->createFolder($name, $folderId); }
+                                        catch (\Throwable $e2) {
+                                            Log::debug('Fallo SA impersonada creando subcarpeta callback, intentando OAuth', ['name' => $name, 'error' => $e2->getMessage()]);
+                                        } finally { try { $serviceAccount->impersonate(null); } catch (\Throwable $eR) { /* ignore */ } }
+                                    }
+                                }
+                                if (!$subId) {
+                                    try { $subId = $driveService->createFolder($name, $folderId); }
+                                    catch (\Throwable $e3) {
+                                        Log::warning('Fallo total creando subcarpeta default en callback', ['name' => $name, 'error' => $e3->getMessage()]);
+                                    }
+                                }
+                                if ($subId) {
+                                    try {
+                                        \App\Models\Subfolder::firstOrCreate([
+                                            'folder_id' => $folderModel->id,
+                                            'google_id' => $subId,
+                                        ], ['name' => $name]);
+                                        try { if ($serviceEmail) { $serviceAccount->shareFolder($subId, $serviceEmail); } } catch (\Throwable $eShareSa) { /* ignore */ }
+                                        try { if ($user->email) { $serviceAccount->shareItem($subId, $user->email, 'writer'); } } catch (\Throwable $eShareUser) { /* ignore */ }
+                                    } catch (\Throwable $persistE) {
+                                        Log::warning('Fallo persistiendo subcarpeta default en callback', ['name' => $name, 'error' => $persistE->getMessage()]);
+                                    }
+                                }
                             }
                         } catch (\Throwable $e) { /* ignore subfolder ensure failures */ }
                     }
