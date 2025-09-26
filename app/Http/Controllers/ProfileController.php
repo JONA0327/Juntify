@@ -94,32 +94,41 @@ class ProfileController extends Controller
                 // Fallback: try with Service Account to fetch info and share with the user
                 try {
                     $sa = app(\App\Services\GoogleServiceAccount::class);
-                    $file = $sa->getDrive()->files->get(
-                        $token->recordings_folder_id,
-                        [
-                            'fields' => 'name',
-                            'supportsAllDrives' => true,
-                        ]
-                    );
-                    $folderName = $file?->getName() ?: null;
-                    if ($user->email) {
-                        $sa->shareItem($token->recordings_folder_id, $user->email, 'writer');
-                    }
-                    if ($folderName) {
-                        $folder = Folder::updateOrCreate(
+
+                    try {
+                        if ($user->email) {
+                            $sa->impersonate($user->email);
+                        }
+
+                        $file = $sa->getDrive()->files->get(
+                            $token->recordings_folder_id,
                             [
-                                'google_token_id' => $token->id,
-                                'google_id'       => $token->recordings_folder_id,
-                            ],
-                            [
-                                'name'      => $folderName,
-                                'parent_id' => null,
+                                'fields' => 'name',
+                                'supportsAllDrives' => true,
                             ]
                         );
-                        $subfolders = Subfolder::where('folder_id', $folder->id)->get();
-                        $folderMessage = null;
-                    } else {
-                        $folderMessage = 'No se pudo acceder a la carpeta principal. El token se renovó automáticamente pero hay problemas de permisos.';
+                        $folderName = $file?->getName() ?: null;
+                        if ($user->email) {
+                            $sa->shareItem($token->recordings_folder_id, $user->email, 'writer');
+                        }
+                        if ($folderName) {
+                            $folder = Folder::updateOrCreate(
+                                [
+                                    'google_token_id' => $token->id,
+                                    'google_id'       => $token->recordings_folder_id,
+                                ],
+                                [
+                                    'name'      => $folderName,
+                                    'parent_id' => null,
+                                ]
+                            );
+                            $subfolders = Subfolder::where('folder_id', $folder->id)->get();
+                            $folderMessage = null;
+                        } else {
+                            $folderMessage = 'No se pudo acceder a la carpeta principal. El token se renovó automáticamente pero hay problemas de permisos.';
+                        }
+                    } finally {
+                        $sa->impersonate(null);
                     }
                 } catch (\Throwable $e2) {
                     $folderMessage = 'No se pudo acceder a la carpeta principal. El token se renovó automáticamente pero hay problemas de permisos.';
