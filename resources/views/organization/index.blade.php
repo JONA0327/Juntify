@@ -878,13 +878,23 @@
                                 <div class="text-center py-12 text-slate-500 text-sm">No hay documentos</div>
                             </template>
                             <template x-for="file in containerDocs.files" :key="file.id">
-                                <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/50 rounded-md px-3 py-2">
-                                    <div class="min-w-0 mr-4">
-                                        <p class="text-sm font-medium text-slate-200 truncate" x-text="file.name"></p>
-                                        <p class="text-[11px] text-slate-400" x-text="formatFileMeta(file)"></p>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <a :href="file.url" target="_blank" class="px-2 py-1 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded">Descargar</a>
+                                <div class="flex flex-col bg-slate-800/60 border border-slate-700/50 rounded-md px-3 py-2 mb-2">
+                                    <div class="flex items-center justify-between">
+                                        <div class="min-w-0 mr-4">
+                                            <p class="text-sm font-medium text-slate-200 truncate" x-text="file.name"></p>
+                                            <p class="text-[11px] text-slate-400" x-text="formatFileMeta(file)"></p>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <template x-if="file.webViewLink">
+                                                <a :href="file.webViewLink" target="_blank" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded">Ver en Drive</a>
+                                            </template>
+                                            <template x-if="file.webContentLink">
+                                                <a :href="file.webContentLink" target="_blank" class="px-2 py-1 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded">Descargar</a>
+                                            </template>
+                                            <template x-if="!file.webContentLink">
+                                                <a :href="file.url" target="_blank" class="px-2 py-1 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded">Descargar</a>
+                                            </template>
+                                        </div>
                                     </div>
                                 </div>
                             </template>

@@ -47,7 +47,7 @@ class ContainerFileController extends Controller
             $drive = $this->driveService->getDrive();
             $resp = $drive->files->listFiles([
                 'q' => sprintf("'%s' in parents and trashed=false", $folder->google_id),
-                'fields' => 'files(id,name,mimeType,size,createdTime)',
+                'fields' => 'files(id,name,mimeType,size,createdTime,webViewLink,webContentLink)',
                 'supportsAllDrives' => true,
                 'includeItemsFromAllDrives' => true,
             ]);
@@ -58,7 +58,9 @@ class ContainerFileController extends Controller
                     'size' => (int)($f->getSize() ?? 0),
                     'mime' => $f->getMimeType(),
                     'uploaded_at' => $f->getCreatedTime(),
-                    'url' => route('containers.files.download', [$container->id, $f->getId()])
+                    'url' => route('containers.files.download', [$container->id, $f->getId()]),
+                    'webViewLink' => method_exists($f, 'getWebViewLink') ? $f->getWebViewLink() : null,
+                    'webContentLink' => method_exists($f, 'getWebContentLink') ? $f->getWebContentLink() : null
                 ];
             }
         } catch (\Throwable $e) {
@@ -101,6 +103,20 @@ class ContainerFileController extends Controller
         try {
             $contents = file_get_contents($uploaded->getRealPath());
             $driveFileId = $this->driveService->uploadFile($originalName, $mimeType, $folder->google_id, $contents);
+
+            // Compartir el archivo con "anyone" como lector para previsualización pública
+            try {
+                $permission = new \Google\Service\Drive\Permission([
+                    'type' => 'anyone',
+                    'role' => 'reader',
+                ]);
+                $this->driveService->getDrive()->permissions->create($driveFileId, $permission, [
+                    'supportsAllDrives' => true,
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo compartir el archivo como público', ['file_id' => $driveFileId, 'error' => $e->getMessage()]);
+            }
+
             // Recuperar metadata del archivo recién subido
             $meta = $this->driveService->getDrive()->files->get($driveFileId, [
                 'fields' => 'id,name,mimeType,size,createdTime'

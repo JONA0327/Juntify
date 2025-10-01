@@ -14,7 +14,7 @@ use App\Models\TaskLaravel;
 use App\Models\SharedMeeting;
 use App\Models\User;
 use App\Models\KeyPoint;
-use App\Models\Transcription;
+
 use App\Models\Task;
 use Carbon\Carbon;
 use App\Services\GoogleDriveService;
@@ -426,23 +426,11 @@ class MeetingController extends Controller
                         ->pluck('key_points.point_text')
                         ->toArray();
 
-                    $segmentsData = DB::table('transcriptions')
-                        ->join('transcriptions_laravel', 'transcriptions.meeting_id', '=', 'transcriptions_laravel.id')
-                        ->where('transcriptions.meeting_id', $legacyMeeting->id)
-                        ->where('transcriptions_laravel.username', $ownerUsername)
-                        ->orderBy('transcriptions.id')
-                        ->get(['transcriptions.time', 'transcriptions.speaker', 'transcriptions.text', 'transcriptions.display_speaker']);
-
-                    // Construir segmentos con tiempos de inicio/fin a partir del campo 'time' (formato mm:ss o hh:mm:ss)
-                    $segments = $this->buildLegacySegmentsFromDb($segmentsData);
-
-                    $transcriptionText = $segmentsData->pluck('text')->implode(' ');
-                    $speakers = collect($segments)
-                        ->map(function ($s) { return $s['display_speaker'] ?: $s['speaker']; })
-                        ->filter()
-                        ->unique()
-                        ->values()
-                        ->toArray();
+                    // No usar transcriptions, solo dejar keyPoints y summary
+                    $segmentsData = collect();
+                    $segments = [];
+                    $transcriptionText = '';
+                    $speakers = [];
 
                     $tasks = TaskLaravel::where('meeting_id', $legacyMeeting->id)
                         ->where('username', $ownerUsername)
@@ -662,22 +650,12 @@ class MeetingController extends Controller
                 } catch (\Throwable $e) { /* ignore */ }
 
                 if ($looksEncrypted || (empty($processedData['segments']) && empty($processedData['key_points']))) {
-                    $ownerUsernameForDb = $ownerUsername;
-                    $segmentsData = DB::table('transcriptions')
-                        ->join('transcriptions_laravel', 'transcriptions.meeting_id', '=', 'transcriptions_laravel.id')
-                        ->where('transcriptions.meeting_id', $legacyMeeting->id)
-                        ->where('transcriptions_laravel.username', $ownerUsernameForDb)
-                        ->orderBy('transcriptions.id')
-                        ->get(['transcriptions.time', 'transcriptions.speaker', 'transcriptions.text', 'transcriptions.display_speaker']);
-
-                    $rebuiltSegments = $this->buildLegacySegmentsFromDb($segmentsData);
-                    $rebuiltTranscription = $segmentsData->pluck('text')->implode(' ');
-                    $rebuiltSpeakers = collect($rebuiltSegments)
-                        ->map(function ($s) { return $s['display_speaker'] ?: $s['speaker']; })
-                        ->filter()
-                        ->unique()
-                        ->values()
-                        ->toArray();
+                    // No usar transcriptions, dejar vacío
+                    $segmentsData = collect();
+                    $rebuiltSegments = [];
+                    $rebuiltTranscription = '';
+                    $rebuiltSpeakers = [];
+                    // No fallback a base de datos, solo dejar vacío si no hay .ju
 
                     Log::info('show(): fallback reconstrucción desde DB activado', [
                         'meeting_id' => $legacyMeeting->id,
@@ -2072,13 +2050,8 @@ class MeetingController extends Controller
         }
 
         if (in_array('transcription', $sections)) {
-            $transcription = DB::table('transcriptions')
-                ->join('transcriptions_laravel', 'transcriptions.meeting_id', '=', 'transcriptions_laravel.id')
-                ->where('transcriptions.meeting_id', $meeting->id)
-                ->where('transcriptions_laravel.username', $user->username)
-                ->orderBy('transcriptions.id')
-                ->pluck('transcriptions.text')
-                ->implode("\n");
+            // No usar transcriptions, dejar vacío
+            $transcription = '';
         }
 
         if (in_array('tasks', $sections)) {
