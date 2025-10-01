@@ -1,4 +1,6 @@
 <?php
+// Container files upload & listing (moved inside PHP tag to avoid accidental output)
+use App\Http\Controllers\ContainerFileController;
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
@@ -22,6 +24,13 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\AiAssistantController;
+
+// Rutas de archivos de contenedor (deben ir antes de otros grupos pero dentro de PHP)
+Route::middleware(['web','auth'])->group(function() {
+    Route::get('/containers/{container}/files', [ContainerFileController::class, 'index'])->name('containers.files.index');
+    Route::post('/containers/{container}/files', [ContainerFileController::class, 'store'])->name('containers.files.store');
+    Route::get('/containers/{container}/files/{file}', [ContainerFileController::class, 'download'])->name('containers.files.download');
+});
 
 
 Route::get('/', function () {

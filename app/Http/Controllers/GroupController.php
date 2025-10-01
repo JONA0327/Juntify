@@ -678,7 +678,6 @@ class GroupController extends Controller
 
         try {
             $organization = $group->organization;
-            // Sólo owner o miembros con rol colaborador/administrador pueden eliminar el grupo
             $isOwner = $organization->admin_id === $user->id;
             $actorMembership = $group->users()->where('users.id', $user->id)->first();
             $actorRole = $actorMembership ? $actorMembership->pivot->rol : null;
@@ -691,18 +690,26 @@ class GroupController extends Controller
             $organizationId = $group->id_organizacion;
 
             DB::transaction(function () use ($group, $organization, $groupName, $groupId, $organizationId, $user, $isOwner, $actorRole) {
+                // Registrar actividad ANTES de borrar el grupo para no violar FK group_id
+                if ($isOwner || in_array($actorRole, ['colaborador', 'administrador'])) {
+                    try {
+                        OrganizationActivity::create([
+                            'organization_id' => $organizationId,
+                            'group_id' => $groupId,
+                            'user_id' => $user->id,
+                            'action' => 'group_delete',
+                            'description' => $user->full_name . ' eliminó el grupo ' . $groupName,
+                        ]);
+                    } catch (\Throwable $activityE) {
+                        Log::warning('Failed to log group_delete activity before deletion', [
+                            'group_id' => $groupId,
+                            'error' => $activityE->getMessage(),
+                        ]);
+                    }
+                }
+
                 $group->delete();
                 $organization->refreshMemberCount();
-
-                if ($isOwner || in_array($actorRole, ['colaborador', 'administrador'])) {
-                    OrganizationActivity::create([
-                        'organization_id' => $organizationId,
-                        'group_id' => $groupId,
-                        'user_id' => $user->id,
-                        'action' => 'group_delete',
-                        'description' => $user->full_name . ' eliminó el grupo ' . $groupName,
-                    ]);
-                }
             });
 
             return response()->json(['deleted' => true]);

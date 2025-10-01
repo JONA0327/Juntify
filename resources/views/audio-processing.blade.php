@@ -506,11 +506,6 @@
                     </div>
 
                     <div class="completion-actions">
-                        <button class="btn btn-secondary" onclick="viewMeetingDetails()">
-                            <x-icon name="eye" class="btn-icon" />
-                            <span class="sr-only">Ver detalles completos</span>
-                            Ver detalles completos
-                        </button>
                         <button class="btn btn-primary" onclick="goToMeetings()">
                             <x-icon name="clipboard" class="btn-icon" />
                             <span class="sr-only">Ir a mis reuniones</span>

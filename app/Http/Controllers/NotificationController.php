@@ -304,4 +304,22 @@ class NotificationController extends Controller
             return response()->json(['error' => 'Notificación no encontrada'], 404);
         }
     }
+
+    /**
+     * Eliminar todas las notificaciones del usuario
+     */
+    public function clearAll(): JsonResponse
+    {
+        if (!auth()->check()) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+        try {
+            Notification::where('user_id', Auth::id())->delete();
+            // Invalidar cache usado en index
+            try { Cache::forget('notifications_user_' . Auth::id()); } catch (\Throwable $e) { /* ignore */ }
+            return response()->json(['success' => true, 'message' => 'Todas las notificaciones eliminadas']);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Error al eliminar notificaciones'], 500);
+        }
+    }
 }

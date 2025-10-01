@@ -70,5 +70,6 @@ class Kernel extends HttpKernel
         'organization.role' => \App\Http\Middleware\CheckOrganizationRole::class,
         'google.refresh' => \App\Http\Middleware\RefreshGoogleToken::class,
         'cors.ffmpeg' => \App\Http\Middleware\CrossOriginIsolation::class,
+        'upload.max150' => \App\Http\Middleware\EnforceMaxUploadSize150MB::class,
     ];
 }

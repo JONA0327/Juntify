@@ -1,22 +1,12 @@
 <?php
+
 namespace App\Http\Controllers;
-use App\Models\GoogleToken;
-use App\Models\Folder;
-use App\Models\Subfolder;
-use App\Models\OrganizationFolder;
-use App\Models\OrganizationSubfolder;
-use App\Services\GoogleDriveService;
-use App\Services\GoogleServiceAccount;
-use RuntimeException;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Crypt;
-use App\Models\TranscriptionLaravel;
-use App\Models\PendingRecording;
-use App\Models\Notification;
-use App\Models\TaskLaravel;
+
+// (El bloque que estaba antes de <?php generaba salida cruda y rompía JSON; se ha movido dentro de la clase)
+
 use App\Traits\MeetingContentParsing;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 use Google\Service\Drive as DriveService;
 use Google\Service\Exception as GoogleServiceException;
 use App\Http\Controllers\Auth\GoogleAuthController;
@@ -26,6 +16,20 @@ use App\Models\OrganizationActivity;
 use App\Models\User;
 use App\Services\PlanLimitService;
 use Illuminate\Http\UploadedFile;
+use App\Services\GoogleDriveService;
+use App\Services\GoogleServiceAccount;
+use App\Models\Folder;
+use App\Models\Subfolder;
+use App\Models\OrganizationFolder;
+use App\Models\OrganizationSubfolder;
+use App\Models\GoogleToken;
+use Illuminate\Http\Request;
+use App\Models\PendingRecording;
+use App\Models\Notification;
+use Illuminate\Support\Facades\Crypt;
+use RuntimeException;
+use App\Models\TranscriptionLaravel;
+use App\Models\TaskLaravel;
 
 class DriveController extends Controller
 {
@@ -238,6 +242,149 @@ class DriveController extends Controller
             ]);
         }
         return null;
+    }
+
+    /**
+     * Intenta asegurar que una subcarpeta esté compartida con la service account.
+     * Estrategia:
+     *  1. Intentar directamente con la service account.
+     *  2. Si 403/404 (not found / no permission) y es drive personal:
+     *     a) Si tenemos token OAuth del usuario: usar GoogleDriveService->ensureSharedWithServiceAccount
+     *     b) Como alternativa final: impersonar ownerEmail y compartir.
+     *  3. Si 404 real (carpeta eliminada) intentar recrearla (solo si tenemos rootFolder y nombre esperado opcional).
+     * Devuelve true si quedó compartida.
+     */
+    private function attemptShareSubfolder(
+        string $folderId,
+        bool $useOrgDrive,
+        GoogleServiceAccount $serviceAccount,
+        string $serviceEmail,
+        ?User $user,
+        ?\App\Models\GoogleToken $userToken,
+        $rootFolder,
+        ?string $expectedName = null
+    ): bool {
+        try {
+            $serviceAccount->shareFolder($folderId, $serviceEmail);
+            return true;
+        } catch (GoogleServiceException $e) {
+            $code = (int)$e->getCode();
+            $msg  = strtolower($e->getMessage());
+            $permissionIssue = in_array($code, [403, 404]) || str_contains($msg, 'file not found') || str_contains($msg, 'not have permission');
+            if (!$permissionIssue) {
+                Log::error('attemptShareSubfolder: unexpected share error', [
+                    'folder_id' => $folderId,
+                    'code' => $code,
+                    'error' => $e->getMessage(),
+                ]);
+                return false;
+            }
+
+            if ($useOrgDrive) {
+                // Para drive organizacional, normalmente la service account debería ver el folder.
+                Log::warning('attemptShareSubfolder: permission issue in org drive', [
+                    'folder_id' => $folderId,
+                    'code' => $code,
+                    'error' => $e->getMessage(),
+                ]);
+                return false;
+            }
+
+            // Drive personal: intentar con token OAuth
+            if ($userToken) {
+                try {
+                    /** @var \App\Services\GoogleDriveService $driveOAuth */
+                    $driveOAuth = app(\App\Services\GoogleDriveService::class);
+                    $driveOAuth->setAccessToken($userToken->access_token_json ?? $userToken->access_token);
+                    if ($driveOAuth->ensureSharedWithServiceAccount($folderId, $serviceEmail)) {
+                        Log::info('attemptShareSubfolder: shared via OAuth fallback', [
+                            'folder_id' => $folderId,
+                        ]);
+                        return true;
+                    }
+                } catch (\Throwable $e2) {
+                    Log::warning('attemptShareSubfolder: OAuth fallback failed', [
+                        'folder_id' => $folderId,
+                        'error' => $e2->getMessage(),
+                    ]);
+                }
+            }
+
+            // Intentar impersonation si conocemos el email del owner
+            $ownerEmail = $this->resolveRootOwnerEmail($rootFolder, false);
+            if ($ownerEmail && !GoogleServiceAccount::impersonationDisabled()) {
+                try {
+                    $serviceAccount->impersonate($ownerEmail);
+                    $serviceAccount->shareFolder($folderId, $serviceEmail);
+                    Log::info('attemptShareSubfolder: shared via impersonation', [
+                        'folder_id' => $folderId,
+                        'owner' => $ownerEmail,
+                    ]);
+                    // Reset impersonation
+                    $serviceAccount->impersonate(null);
+                    return true;
+                } catch (\Throwable $e3) {
+                    Log::warning('attemptShareSubfolder: impersonation share failed', [
+                        'folder_id' => $folderId,
+                        'owner' => $ownerEmail,
+                        'error' => $e3->getMessage(),
+                    ]);
+                    $serviceAccount->impersonate(null);
+                }
+            }
+
+            // Verificar si la carpeta realmente existe usando impersonation (si posible) o recrear
+            try {
+                $exists = false;
+                try {
+                    $serviceAccount->impersonate($ownerEmail);
+                    $serviceAccount->getFileInfo($folderId);
+                    $exists = true;
+                } catch (\Throwable $ff) {
+                    $exists = false;
+                } finally {
+                    $serviceAccount->impersonate(null);
+                }
+                if (!$exists && $expectedName && $rootFolder && !empty($rootFolder->google_id)) {
+                    try {
+                        $serviceAccount->impersonate($ownerEmail);
+                        $newId = $serviceAccount->createFolder($expectedName, $rootFolder->google_id);
+                        $serviceAccount->shareFolder($newId, $serviceEmail); // comparte mientras impersona
+                        $serviceAccount->impersonate(null);
+                        // Actualizar modelo BD para reflejar nuevo ID
+                        if (!$useOrgDrive) {
+                            \App\Models\Subfolder::where('google_id', $folderId)->update(['google_id' => $newId]);
+                        } else {
+                            \App\Models\OrganizationSubfolder::where('google_id', $folderId)->update(['google_id' => $newId]);
+                        }
+                        Log::info('attemptShareSubfolder: recreated missing folder', [
+                            'old_id' => $folderId,
+                            'new_id' => $newId,
+                            'expected_name' => $expectedName,
+                        ]);
+                        return true;
+                    } catch (\Throwable $re) {
+                        Log::error('attemptShareSubfolder: recreation failed', [
+                            'old_id' => $folderId,
+                            'expected_name' => $expectedName,
+                            'error' => $re->getMessage(),
+                        ]);
+                        $serviceAccount->impersonate(null);
+                    }
+                }
+            } catch (\Throwable $final) {
+                Log::debug('attemptShareSubfolder: existence check/recreate step failed', [
+                    'folder_id' => $folderId,
+                    'error' => $final->getMessage(),
+                ]);
+            }
+        } catch (\Throwable $generic) {
+            Log::error('attemptShareSubfolder: unexpected throwable', [
+                'folder_id' => $folderId,
+                'error' => $generic->getMessage(),
+            ]);
+        }
+        return false;
     }
 
     private function shouldRetryWithImpersonation(\Throwable $exception): bool
@@ -1171,16 +1318,43 @@ class DriveController extends Controller
         try {
             $serviceAccount->shareFolder($rootFolder->google_id, $serviceEmail);
         } catch (GoogleServiceException $e) {
-            if (
+            $needsShare = (
                 $e->getCode() === 404 ||
                 $e->getCode() === 403 ||
                 str_contains($e->getMessage(), 'File not found') ||
                 str_contains($e->getMessage(), 'The caller does not have permission')
-            ) {
-                return response()->json([
-                    'code'    => 'FOLDER_NOT_SHARED',
-                    'message' => "La carpeta principal no está compartida con la cuenta de servicio. Comparte la carpeta con {$serviceEmail}",
-                ], 403);
+            );
+            if ($needsShare) {
+                // Fallback: intentar compartir con token del usuario
+                try {
+                    /** @var \App\Services\GoogleDriveService $driveOAuth */
+                    $driveOAuth = app(\App\Services\GoogleDriveService::class);
+                    $userToken = \App\Models\GoogleToken::where('username', $user->username)->first();
+                    if ($userToken) {
+                        $driveOAuth->setAccessToken($userToken->access_token_json ?? $userToken->access_token);
+                        if ($driveOAuth->ensureSharedWithServiceAccount($rootFolder->google_id, $serviceEmail)) {
+                            Log::info('saveResults: folder auto-shared with service account via OAuth fallback');
+                        } else {
+                            return response()->json([
+                                'code'    => 'FOLDER_NOT_SHARED',
+                                'message' => "La carpeta principal no está compartida con la cuenta de servicio. Comparte la carpeta con {$serviceEmail}",
+                            ], 403);
+                        }
+                    } else {
+                        return response()->json([
+                            'code'    => 'FOLDER_NOT_SHARED',
+                            'message' => "La carpeta principal no está compartida con la cuenta de servicio. Comparte la carpeta con {$serviceEmail}",
+                        ], 403);
+                    }
+                } catch (\Throwable $e2) {
+                    Log::error('saveResults: auto-share fallback failed', [
+                        'error' => $e2->getMessage(),
+                    ]);
+                    return response()->json([
+                        'code'    => 'FOLDER_NOT_SHARED',
+                        'message' => "La carpeta principal no está compartida con la cuenta de servicio. Comparte la carpeta con {$serviceEmail}",
+                    ], 403);
+                }
             }
         }
 
@@ -1198,38 +1372,19 @@ class DriveController extends Controller
 
         $accountEmail = $serviceEmail;
 
-        try {
-            $serviceAccount->shareFolder($transcriptionFolderId, $accountEmail);
-        } catch (GoogleServiceException $e) {
-            if (! str_contains(strtolower($e->getMessage()), 'already')) {
-                Log::error('saveResults share failure', [
-                    'error'                 => $e->getMessage(),
-                    'transcription_folder'  => $transcriptionFolderId,
-                    'audio_folder'          => $audioFolderId,
-                    'service_account_email' => $accountEmail,
-                ]);
-
-                return response()->json([
-                    'message' => 'Error de Drive: ' . $e->getMessage(),
-                ], 502);
-            }
+        // Compartir subcarpetas con fallback robusto
+        $userTokenModel = isset($token) ? $token : (isset($user) ? GoogleToken::where('username', $user->username)->first() : null);
+        if (!$this->attemptShareSubfolder($transcriptionFolderId, $useOrgDrive, $serviceAccount, $accountEmail, $user, $userTokenModel, $rootFolder, 'Transcripciones')) {
+            return response()->json([
+                'code' => 'FOLDER_NOT_SHARED',
+                'message' => "No se pudo compartir la carpeta de transcripciones con la cuenta de servicio. Comparte manualmente con {$accountEmail}",
+            ], 403);
         }
-
-        try {
-            $serviceAccount->shareFolder($audioFolderId, $accountEmail);
-        } catch (GoogleServiceException $e) {
-            if (! str_contains(strtolower($e->getMessage()), 'already')) {
-                Log::error('saveResults share failure', [
-                    'error'                 => $e->getMessage(),
-                    'transcription_folder'  => $transcriptionFolderId,
-                    'audio_folder'          => $audioFolderId,
-                    'service_account_email' => $accountEmail,
-                ]);
-
-                return response()->json([
-                    'message' => 'Error de Drive: ' . $e->getMessage(),
-                ], 502);
-            }
+        if (!$this->attemptShareSubfolder($audioFolderId, $useOrgDrive, $serviceAccount, $accountEmail, $user, $userTokenModel, $rootFolder, 'Audios')) {
+            return response()->json([
+                'code' => 'FOLDER_NOT_SHARED',
+                'message' => "No se pudo compartir la carpeta de audios con la cuenta de servicio. Comparte manualmente con {$accountEmail}",
+            ], 403);
         }
 
         try {

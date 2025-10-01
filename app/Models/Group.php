@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Log;
 
 class Group extends Model
 {
@@ -40,6 +41,36 @@ class Group extends Model
             }
             $group->code()->delete();
             $group->users()->detach();
+        });
+
+        static::created(function ($group) {
+            try {
+                $organization = $group->organization;
+                if (!$organization) {
+                    Log::warning('Group created without organization relation loaded', ['group_id' => $group->id]);
+                    return;
+                }
+                // Resolver servicio vía container para no acoplar directamente
+                $service = app(\App\Services\OrganizationDriveHierarchyService::class);
+                $folder = $service->ensureGroupFolder($organization, $group);
+                if ($folder && $folder->google_id) {
+                    Log::info('Auto-created group drive folder', [
+                        'group_id' => $group->id,
+                        'org_id' => $organization->id,
+                        'google_id' => $folder->google_id,
+                    ]);
+                } else {
+                    Log::warning('Failed auto-create group folder after group creation', [
+                        'group_id' => $group->id,
+                        'org_id' => $organization->id,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::error('Exception auto-creating group folder', [
+                    'group_id' => $group->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         });
     }
 

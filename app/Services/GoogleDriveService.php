@@ -155,14 +155,62 @@ class GoogleDriveService
             'emailAddress' => $email,
         ]);
 
-        $this->drive->permissions->create(
-            $folderId,
-            $permission,
-            [
-                'sendNotificationEmail' => false,
-                'supportsAllDrives' => true,
-            ]
-        );
+        try {
+            $this->drive->permissions->create(
+                $folderId,
+                $permission,
+                [
+                    'sendNotificationEmail' => false,
+                    'supportsAllDrives' => true,
+                ]
+            );
+        } catch (GoogleServiceException $e) {
+            // Silenciar errores comunes de duplicado/permisos ya existentes
+            $msg = strtolower($e->getMessage());
+            if (str_contains($msg, 'already') || str_contains($msg, 'duplicate')) {
+                Log::info('shareFolder: permiso ya existente', [
+                    'folder_id' => $folderId,
+                    'email' => $email,
+                ]);
+                return;
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Intenta asegurar que un folder esté compartido con la service account usando primero la service account
+     * y si falla por permisos, reintenta con el token OAuth (cliente actual) – pensado para carpetas personales.
+     * Devuelve true si queda compartido, false si no se pudo.
+     */
+    public function ensureSharedWithServiceAccount(string $folderId, string $serviceEmail): bool
+    {
+        try {
+            $this->shareFolder($folderId, $serviceEmail);
+            return true; // funcionó directamente
+        } catch (GoogleServiceException $e) {
+            $code = (int)$e->getCode();
+            $msg  = strtolower($e->getMessage());
+            if (!in_array($code, [403, 404]) && !str_contains($msg, 'not have permission')) {
+                // Error distinto, re-lanzar
+                throw $e;
+            }
+            Log::warning('ensureSharedWithServiceAccount: directo falló, intentando vía token usuario', [
+                'folder_id' => $folderId,
+                'error' => $e->getMessage(),
+            ]);
+            // En este punto asumimos que el cliente ya está configurado con el token OAuth del usuario.
+            try {
+                $this->shareFolder($folderId, $serviceEmail);
+                return true;
+            } catch (GoogleServiceException $e2) {
+                Log::error('ensureSharedWithServiceAccount: fallback OAuth también falló', [
+                    'folder_id' => $folderId,
+                    'error' => $e2->getMessage(),
+                ]);
+                return false;
+            }
+        }
     }
 
     /**

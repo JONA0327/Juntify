@@ -183,7 +183,7 @@ class ContainerController extends Controller
 
             OrganizationActivity::create([
                 'organization_id' => $organizationId,
-                'group_id' => $container->group_id,
+                'group_id' => $group ? $group->id : null,
                 'container_id' => $container->id,
                 'user_id' => $user->id,
                 'action' => 'create',
@@ -324,6 +324,15 @@ class ContainerController extends Controller
             'meeting_id' => $meeting->id,
         ]);
 
+        // Notificaciones
+        $this->notifyContainerMeetingAction(
+            action: 'added',
+            actor: $user,
+            container: $container,
+            meeting: $meeting,
+            group: isset($group) ? $group : ($container->group_id ? Group::find($container->group_id) : null)
+        );
+
         $organizationId = null;
         if ($container->group_id) {
             $group = Group::find($container->group_id);
@@ -332,7 +341,7 @@ class ContainerController extends Controller
 
         OrganizationActivity::create([
             'organization_id' => $organizationId,
-            'group_id' => $container->group_id,
+            'group_id' => $group ? $group->id : null,
             'container_id' => $container->id,
             'user_id' => $user->id,
             'action' => 'add_meeting_to_container',
@@ -372,12 +381,21 @@ class ContainerController extends Controller
 
             OrganizationActivity::create([
                 'organization_id' => $organizationId,
-                'group_id' => $container->group_id,
+                'group_id' => $group ? $group->id : null,
                 'container_id' => $container->id,
                 'user_id' => $user->id,
                 'action' => 'remove_meeting_from_container',
                 'description' => $user->full_name . ' eliminó la reunión ' . $meeting->meeting_name . ' del contenedor ' . $container->name,
             ]);
+
+            // Notificaciones
+            $this->notifyContainerMeetingAction(
+                action: 'removed',
+                actor: $user,
+                container: $container,
+                meeting: $meeting,
+                group: $group ?? null
+            );
 
             return response()->json([
                 'success' => true,
@@ -609,8 +627,9 @@ class ContainerController extends Controller
             }
 
             OrganizationActivity::create([
+                // Solo registrar group_id si el grupo realmente existe para evitar violaciones de FK
                 'organization_id' => $organizationId,
-                'group_id' => $container->group_id,
+                'group_id' => isset($group) && $group ? $group->id : null,
                 'container_id' => $container->id,
                 'user_id' => $user->id,
                 'action' => 'delete',
@@ -629,4 +648,71 @@ class ContainerController extends Controller
             ], 500);
         }
     }
+
+    // --------------------------------------------------
+    // Helpers
+    // --------------------------------------------------
+
+    /**
+     * Crea notificaciones para actor y miembros del grupo (si aplica) al añadir o remover una reunión.
+     */
+    protected function notifyContainerMeetingAction(string $action, $actor, $container, $meeting, $group = null): void
+    {
+        try {
+            $verb = $action === 'added' ? 'Moviste' : 'Removiste';
+            $type = $action === 'added' ? 'container_meeting_added' : 'container_meeting_removed';
+            $title = $action === 'added' ? 'Reunión añadida al contenedor' : 'Reunión removida del contenedor';
+            $message = $verb . ' la reunión "' . $meeting->meeting_name . '" ' . ($action === 'added' ? 'al' : 'del') . ' contenedor "' . $container->name . '"';
+
+            // Notificación para el actor (historial propio)
+            \App\Models\Notification::create([
+                'user_id' => $actor->id,
+                'from_user_id' => $actor->id,
+                'type' => $type,
+                'title' => $title,
+                'message' => $message,
+                'data' => [
+                    'meeting_id' => $meeting->id,
+                    'container_id' => $container->id,
+                    'container_name' => $container->name,
+                    'action' => $action,
+                ],
+                'read' => false,
+            ]);
+
+            // Notificar a miembros del grupo (excluyendo actor) si es contenedor de grupo
+            if ($group) {
+                $memberIds = DB::table('group_user')
+                    ->where('id_grupo', $group->id)
+                    ->pluck('user_id')
+                    ->filter(fn($id) => $id != $actor->id)
+                    ->values();
+                foreach ($memberIds as $uid) {
+                    \App\Models\Notification::create([
+                        'user_id' => $uid,
+                        'from_user_id' => $actor->id,
+                        'type' => $type,
+                        'title' => $title,
+                        'message' => $actor->full_name . ' ' . strtolower($message),
+                        'data' => [
+                            'meeting_id' => $meeting->id,
+                            'container_id' => $container->id,
+                            'container_name' => $container->name,
+                            'action' => $action,
+                            'actor' => $actor->username,
+                        ],
+                        'read' => false,
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('notifyContainerMeetingAction failed', [
+                'action' => $action,
+                'container_id' => $container->id ?? null,
+                'meeting_id' => $meeting->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
 }

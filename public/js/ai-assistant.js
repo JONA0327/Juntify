@@ -1951,6 +1951,11 @@ async function uploadDocuments() {
             updateFileDisplay();
             closeDocumentUploader();
 
+            // Refuerzo: cerrar modal también tras la notificación de éxito
+            setTimeout(() => {
+                try { closeDocumentUploader(); } catch (e) {}
+            }, 100);
+
             // Esperar a que terminen de procesarse y confirmar en el chat
             if (docIds.length > 0) {
                 try {

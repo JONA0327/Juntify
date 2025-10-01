@@ -13,6 +13,12 @@ const Notifications = (() => {
                 list.appendChild(li);
                 return;
             }
+                const header = document.createElement('div');
+                header.className = 'notifications-header flex items-center justify-between mb-2 px-1';
+                header.innerHTML = '<span class="text-xs uppercase tracking-wide text-slate-400">Notificaciones</span>' +
+                    '<button type="button" class="notif-clear-all text-[10px] font-medium text-slate-500 hover:text-red-400 transition ml-auto px-2 py-1 rounded-md hover:bg-red-500/10" title="Eliminar todas">Limpiar</button>';
+                list.appendChild(header);
+
 
             notifications.forEach(n => {
                 const li = document.createElement('li');
@@ -77,10 +83,10 @@ const Notifications = (() => {
                         <button class="dismiss-btn text-green-400 hover:text-white" data-id="${n.id}">&times;</button>
                     `;
                 } else {
-                    li.className = 'p-3 bg-slate-700/50 rounded-lg mb-2 flex justify-between items-center';
+                    li.className = 'relative p-3 bg-slate-700/60 backdrop-blur rounded-lg mb-2 pr-8 overflow-hidden';
                     li.innerHTML = `
-                        <span class="text-sm text-slate-200">${n.message}</span>
-                        <button class="dismiss-btn text-slate-400 hover:text-white" data-id="${n.id}">&times;</button>
+                        <span class="block text-sm text-slate-200 leading-snug">${n.message}</span>
+                        <button class="dismiss-btn absolute top-1.5 right-1.5 h-6 w-6 flex items-center justify-center rounded-md text-slate-400 hover:text-white hover:bg-slate-600/60 transition-colors" data-id="${n.id}" aria-label="Cerrar notificación">&times;</button>
                     `;
                 }
                 list.appendChild(li);
@@ -130,6 +136,18 @@ const Notifications = (() => {
                 dismissNotification(id);
             });
         });
+            document.querySelectorAll('.notifications-list .notif-clear-all').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    try {
+                        const res = await fetch('/api/notifications/clear-all', { method: 'DELETE', headers: { 'Accept': 'application/json' } });
+                        if (!res.ok) throw new Error('Error limpiando');
+                        notifications = [];
+                        render();
+                    } catch (err) {
+                        console.error('Error al limpiar todas las notificaciones', err);
+                    }
+                });
+            });
     }
 
     async function respondToInvitation(id, action) {
@@ -152,6 +170,10 @@ const Notifications = (() => {
                     const data = await response.json();
                     if (data.message) message = data.message;
                 } catch (_) { /* ignore */ }
+                            const header = document.createElement('div');
+                            header.className = 'notifications-header flex items-center justify-between';
+                            header.innerHTML = '<span>Notificaciones</span><button type="button" class="notif-clear-all text-[11px] font-medium text-slate-400 hover:text-red-400 transition" title="Eliminar todas">Limpiar</button>';
+                            list.appendChild(header);
                 showError(message);
                 return;
             }
@@ -371,7 +393,8 @@ function positionNotificationsPanel(panel, toggle) {
         // Asegurar estilos base
         panel.style.position = 'fixed';
         panel.style.zIndex = panel.style.zIndex || '5000';
-        panel.style.maxWidth = '360px';
+    panel.style.maxWidth = '360px';
+    panel.classList.add('notifications-panel--styled');
 
         // Calcular ancho disponible
         const viewportWidth = window.innerWidth;

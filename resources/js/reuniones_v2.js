@@ -4940,7 +4940,37 @@ async function openContainerMeetingsModal(containerId) {
     currentContainerForMeetings = containerId;
 
     // Mostrar modal
-    const el = document.getElementById('container-meetings-modal');
+        let el = document.getElementById('container-meetings-modal');
+        if (!el) {
+                // Inyectar estructura mínima del modal si no existe
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = `
+                <div id="container-meetings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center px-4" aria-hidden="true" style="background: rgba(0,0,0,0.45);">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-4xl p-6 relative transform transition-all">
+        <div class="flex items-start justify-between mb-4">
+            <div>
+                <h2 id="container-meetings-title" class="text-xl font-semibold text-gray-800 dark:text-gray-100">Reuniones del Contenedor</h2>
+                <p id="container-meetings-subtitle" class="text-sm text-gray-500 dark:text-gray-400"></p>
+            </div>
+            <button type="button" onclick="closeContainerMeetingsModal()" class="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white">&times;</button>
+        </div>
+        <div id="container-meetings-loading" class="py-10 text-center">
+            <div class="animate-spin h-8 w-8 mx-auto mb-3 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+            <p class="text-sm text-gray-600 dark:text-gray-300">Cargando reuniones...</p>
+        </div>
+        <div id="container-meetings-error" class="hidden py-10 text-center">
+            <p id="container-meetings-error-message" class="text-red-600 dark:text-red-400 font-medium mb-4">Error</p>
+            <button onclick="retryLoadContainerMeetings()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Reintentar</button>
+        </div>
+        <div id="container-meetings-empty" class="hidden py-10 text-center">
+            <p class="text-gray-600 dark:text-gray-300">No hay reuniones en este contenedor todavía.</p>
+        </div>
+        <div id="container-meetings-list" class="hidden grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3"></div>
+    </div>
+</div>`;
+                document.body.appendChild(wrapper.firstElementChild);
+                el = document.getElementById('container-meetings-modal');
+        }
     if (el) {
         el.classList.remove('hidden');
         el.removeAttribute('aria-hidden');
@@ -4969,32 +4999,56 @@ function closeContainerMeetingsModal() {
 }
 
 function showContainerMeetingsLoading() {
-    document.getElementById('container-meetings-loading').classList.remove('hidden');
-    document.getElementById('container-meetings-list').classList.add('hidden');
-    document.getElementById('container-meetings-empty').classList.add('hidden');
-    document.getElementById('container-meetings-error').classList.add('hidden');
+    const loading = document.getElementById('container-meetings-loading');
+    const list = document.getElementById('container-meetings-list');
+    const empty = document.getElementById('container-meetings-empty');
+    const error = document.getElementById('container-meetings-error');
+    if (!loading || !list || !empty || !error) {
+        console.warn('[container-meetings] Missing one or more DOM nodes for loading state', { hasLoading: !!loading, hasList: !!list, hasEmpty: !!empty, hasError: !!error });
+        return;
+    }
+    loading.classList.remove('hidden');
+    list.classList.add('hidden');
+    empty.classList.add('hidden');
+    error.classList.add('hidden');
 }
 
 function showContainerMeetingsList() {
-    document.getElementById('container-meetings-loading').classList.add('hidden');
-    document.getElementById('container-meetings-list').classList.remove('hidden');
-    document.getElementById('container-meetings-empty').classList.add('hidden');
-    document.getElementById('container-meetings-error').classList.add('hidden');
+    const loading = document.getElementById('container-meetings-loading');
+    const list = document.getElementById('container-meetings-list');
+    const empty = document.getElementById('container-meetings-empty');
+    const error = document.getElementById('container-meetings-error');
+    if (!loading || !list || !empty || !error) return;
+    loading.classList.add('hidden');
+    list.classList.remove('hidden');
+    empty.classList.add('hidden');
+    error.classList.add('hidden');
 }
 
 function showContainerMeetingsEmpty() {
-    document.getElementById('container-meetings-loading').classList.add('hidden');
-    document.getElementById('container-meetings-list').classList.add('hidden');
-    document.getElementById('container-meetings-empty').classList.remove('hidden');
-    document.getElementById('container-meetings-error').classList.add('hidden');
+    const loading = document.getElementById('container-meetings-loading');
+    const list = document.getElementById('container-meetings-list');
+    const empty = document.getElementById('container-meetings-empty');
+    const error = document.getElementById('container-meetings-error');
+    if (!loading || !list || !empty || !error) return;
+    loading.classList.add('hidden');
+    list.classList.add('hidden');
+    empty.classList.remove('hidden');
+    error.classList.add('hidden');
 }
 
 function showContainerMeetingsError(message) {
-    document.getElementById('container-meetings-loading').classList.add('hidden');
-    document.getElementById('container-meetings-list').classList.add('hidden');
-    document.getElementById('container-meetings-empty').classList.add('hidden');
-    document.getElementById('container-meetings-error').classList.remove('hidden');
-    document.getElementById('container-meetings-error-message').textContent = message;
+    const loading = document.getElementById('container-meetings-loading');
+    const list = document.getElementById('container-meetings-list');
+    const empty = document.getElementById('container-meetings-empty');
+    const error = document.getElementById('container-meetings-error');
+    const msgEl = document.getElementById('container-meetings-error-message');
+    if (!loading || !list || !empty || !error) return;
+    loading.classList.add('hidden');
+    list.classList.add('hidden');
+    empty.classList.add('hidden');
+    error.classList.remove('hidden');
+    if (msgEl) msgEl.textContent = message;
 }
 
 async function loadContainerMeetings(containerId) {
@@ -5014,12 +5068,16 @@ async function loadContainerMeetings(containerId) {
             // Verificar que container existe en la respuesta
             if (data.container && data.container.name) {
                 // Actualizar título del modal
-                document.getElementById('container-meetings-title').textContent = `Reuniones en "${data.container.name}"`;
-                document.getElementById('container-meetings-subtitle').textContent = data.container.description || '';
+                const titleEl = document.getElementById('container-meetings-title');
+                const subtitleEl = document.getElementById('container-meetings-subtitle');
+                if (titleEl) titleEl.textContent = `Reuniones en "${data.container.name}"`;
+                if (subtitleEl) subtitleEl.textContent = data.container.description || '';
             } else {
                 // Fallback si no hay información del contenedor
-                document.getElementById('container-meetings-title').textContent = 'Reuniones del Contenedor';
-                document.getElementById('container-meetings-subtitle').textContent = '';
+                const titleEl = document.getElementById('container-meetings-title');
+                const subtitleEl = document.getElementById('container-meetings-subtitle');
+                if (titleEl) titleEl.textContent = 'Reuniones del Contenedor';
+                if (subtitleEl) subtitleEl.textContent = '';
                 console.warn('Container information missing in response:', data);
             }
 

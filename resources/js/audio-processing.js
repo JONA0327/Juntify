@@ -1431,10 +1431,24 @@ async function loadDriveOptions() {
             console.log('🔍 [loadDriveOptions] Personal drive response status:', personalRes.status);
 
             if (personalRes.ok) {
-                const personalData = await personalRes.json();
+                let personalData;
+                let rawText;
+                try {
+                    rawText = await personalRes.text();
+                    try {
+                        personalData = JSON.parse(rawText);
+                    } catch (jsonErr) {
+                        console.warn('⚠️ [loadDriveOptions] JSON parse failed, raw response snippet:', rawText.slice(0, 300));
+                        throw jsonErr;
+                    }
+                } catch (inner) {
+                    console.warn('⚠️ [loadDriveOptions] Could not load personal drive name (parse stage):', inner);
+                    throw inner; // fallback handled below
+                }
+
                 console.log('🔍 [loadDriveOptions] Personal drive data:', personalData);
 
-                if (personalData.root_folder) {
+                if (personalData && personalData.root_folder) {
                     const personalOpt = document.createElement('option');
                     personalOpt.value = 'personal';
                     personalOpt.textContent = `🏠 ${personalData.root_folder.name}`;
@@ -1442,7 +1456,8 @@ async function loadDriveOptions() {
                     console.log('✅ [loadDriveOptions] Added personal option:', personalData.root_folder.name);
                 }
             } else {
-                console.warn('⚠️ [loadDriveOptions] Personal drive request failed:', await personalRes.text());
+                const failText = await personalRes.text();
+                console.warn('⚠️ [loadDriveOptions] Personal drive request failed (non-200):', failText.slice(0, 300));
             }
         } catch (e) {
             console.warn('⚠️ [loadDriveOptions] Could not load personal drive name:', e);
@@ -1573,7 +1588,14 @@ async function loadDriveFolders() {
             } else {
                 const r = await fetch('/drive/sync-subfolders');
                 if (!r.ok) return null;
-                const data = await r.json();
+                let raw = await r.text();
+                let data;
+                try {
+                    data = JSON.parse(raw);
+                } catch (err) {
+                    console.warn('⚠️ [loadDriveFolders] JSON parse failed for personal root. Raw snippet:', raw.slice(0, 300));
+                    throw err;
+                }
                 return data.root_folder || null;
             }
         })();

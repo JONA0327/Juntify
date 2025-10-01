@@ -11,3 +11,44 @@
         <ul class="notifications-list"></ul>
     </div>
 </div>
+
+<style>
+/* Panel styling */
+.notifications-panel.notifications-panel--styled {
+    background: rgba(15,23,42,0.92); /* slate-900 with opacity */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(100,116,139,0.25); /* slate-500/25 */
+    border-radius: 0.75rem; /* rounded-xl */
+    padding: 0.75rem 0.75rem 0.5rem 0.75rem;
+    box-shadow: 0 8px 24px -4px rgba(0,0,0,0.4), 0 2px 6px -1px rgba(0,0,0,0.3);
+    max-height: 70vh;
+    overflow-y: auto;
+}
+.notifications-panel.notifications-panel--styled .notifications-header {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #f1f5f9; /* slate-100 */
+    padding: 0 0.25rem 0.5rem 0.25rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid rgba(100,116,139,0.25);
+}
+.notifications-panel.notifications-panel--styled .notifications-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+/* Hide scrollbar (Firefox) */
+.notifications-panel.notifications-panel--styled { scrollbar-width: none; }
+/* Hide scrollbar (WebKit) */
+.notifications-panel.notifications-panel--styled::-webkit-scrollbar { width: 0; height: 0; }
+/* Smooth scrolling */
+.notifications-panel.notifications-panel--styled { scroll-behavior: smooth; }
+
+/* Scrollbar still accessible for accessibility if user forces it */
+@media (prefers-reduced-transparency: reduce) {
+  .notifications-panel.notifications-panel--styled {
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+}
+</style>

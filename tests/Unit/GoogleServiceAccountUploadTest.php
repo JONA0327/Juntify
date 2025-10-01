@@ -16,10 +16,17 @@ class FakeFiles
 
 class FakeDrive extends Drive
 {
-    public FakeFiles $files;
+    /**
+     * Usamos propiedad sin tipo para evitar el error de compatibilidad con la clase base
+     * (el padre la declara sin tipo; en PHP no se puede añadir tipado más estricto en hijo).
+     * Sólo necesitamos que exista ->files->create().
+     * @var FakeFiles
+     */
+    public $files;
 
     public function __construct()
     {
+        // No llamamos al constructor padre para no requerir Client real.
         $this->files = new FakeFiles();
     }
 }

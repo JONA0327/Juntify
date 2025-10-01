@@ -345,8 +345,17 @@ Route::middleware(['web', 'auth'])->group(function () {
           Route::get('/notifications/count', [NotificationController::class, 'getUnreadCount'])->name('api.notifications.count');
           Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('api.notifications.read');
           Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('api.notifications.read-all');
+          Route::delete('/notifications/clear-all', [NotificationController::class, 'clearAll'])->name('api.notifications.clear-all');
           // Usar {notification} para binding automático
           Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('api.notifications.destroy');
+
+          // Documentos organizacionales por grupo / contenedor
+          Route::get('/organizations/{organization}/documents/groups', [\App\Http\Controllers\OrganizationDocumentsController::class, 'listGroups']);
+          Route::post('/organizations/{organization}/documents/groups/{group}/ensure', [\App\Http\Controllers\OrganizationDocumentsController::class, 'ensureGroupFolder']);
+          Route::get('/organizations/{organization}/documents/groups/{group}/containers', [\App\Http\Controllers\OrganizationDocumentsController::class, 'listContainers']);
+          Route::post('/organizations/{organization}/documents/groups/{group}/containers/{container}/ensure', [\App\Http\Controllers\OrganizationDocumentsController::class, 'ensureContainerFolder']);
+          Route::get('/organizations/{organization}/documents/groups/{group}/containers/{container}/files', [\App\Http\Controllers\OrganizationDocumentsController::class, 'listContainerFiles']);
+          Route::post('/organizations/{organization}/documents/groups/{group}/containers/{container}/upload', [\App\Http\Controllers\OrganizationDocumentsController::class, 'uploadToContainer'])->middleware('upload.max150');
 
           // API para reuniones pendientes
           Route::get('/pending-meetings', [MeetingController::class, 'getPendingMeetings']);

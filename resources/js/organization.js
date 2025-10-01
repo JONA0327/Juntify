@@ -1,47 +1,38 @@
-import Alpine from 'alpinejs';
-
 const DEBUG = import.meta.env.DEV;
 
-function debugLog(...args) {
-    if (DEBUG) {
-        console.log(...args);
-    }
-}
+function debugLog(...args) { /* debug deshabilitado en producción: if (DEBUG) console.log(...args); */ }
 
-Alpine.data('organizationPage', (initialOrganizations = []) => ({
-    organizations: initialOrganizations,
-    showOrgModal: false,
-    showGroupModal: false,
-    showGroupInfoModal: false,
-    showInviteOptions: false,
-    showEditOrgModal: false,
-    showEditGroupModal: false,
-    showInviteModal: false,
-    showCreateContainerModal: false, // Nueva variable para modal crear contenedor
-    showEditContainerModal: false, // Nueva variable para modal editar contenedor
-    showContainerMeetingsModal: false, // Nueva variable para modal ver reuniones del contenedor
-    // Confirmación de borrado de grupo
-    showConfirmDeleteGroupModal: false,
-    groupToDelete: null,
-    orgOfGroupToDelete: null,
-    isDeletingGroup: false,
-    // Confirmación de borrado de subcarpeta (Drive)
-    showConfirmDeleteSubfolderModal: false,
-    subfolderToDelete: null,
-    orgOfSubfolderToDelete: null,
-    isDeletingSubfolder: false,
-    // Confirmación de expulsión de miembro
-    showConfirmRemoveMemberModal: false,
-    memberToRemove: null,
-    groupIdForMemberRemoval: null,
-    isRemovingMember: false,
-    selectedContainer: null, // Nueva variable para el contenedor seleccionado
-    mainTab: 'organization', // Nueva variable para las pestañas principales
-    newOrg: {
-        nombre_organizacion: '',
-        descripcion: ''
-    },
-    preview: null,
+function registerOrganizationComponent() {
+  const initDefinition = () => {
+    if (window.Alpine._orgComponentRegistered) return;
+    window.Alpine.data('organizationPage', (initialOrganizations = []) => ({
+        organizations: initialOrganizations,
+        showOrgModal: false,
+        showGroupModal: false,
+        showGroupInfoModal: false,
+        showInviteOptions: false,
+        showEditOrgModal: false,
+        showEditGroupModal: false,
+        showInviteModal: false,
+        showCreateContainerModal: false,
+        showEditContainerModal: false,
+        showContainerMeetingsModal: false,
+        showConfirmDeleteGroupModal: false,
+        groupToDelete: null,
+        orgOfGroupToDelete: null,
+        isDeletingGroup: false,
+        showConfirmDeleteSubfolderModal: false,
+        subfolderToDelete: null,
+        orgOfSubfolderToDelete: null,
+        isDeletingSubfolder: false,
+        showConfirmRemoveMemberModal: false,
+        memberToRemove: null,
+        groupIdForMemberRemoval: null,
+        isRemovingMember: false,
+        selectedContainer: null,
+        mainTab: 'organization',
+        newOrg: { nombre_organizacion: '', descripcion: '' },
+        preview: null,
     editOrg: {
         id: null,
         nombre_organizacion: '',
@@ -111,6 +102,119 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
     alertType: 'success',
     alertTimeout: null,
     containerModalRestoreContext: null,
+
+    // Método de inicialización principal (antes estaba mal ubicado fuera del objeto)
+    init() {
+        if (!window.__orgPage) {
+            window.__orgPage = this;
+            debugLog('[organizationPage:init] instancia disponible en window.__orgPage');
+        }
+
+        // Obtener el userId (UUID string) del meta tag sin convertir
+        this.userId = document
+            .querySelector('meta[name="user-id"]')
+            .getAttribute('content');
+
+        // Asegurar que ciertos modales estén cerrados al iniciar
+        this.showGroupInfoModal = false;
+        this.showSuccessModal = false;
+        this.successMessage = '';
+        this.isErrorModal = false;
+        this.isSavingGroup = false;
+        this.isSavingOrganization = false;
+        this.isSendingInvitation = false;
+        this.isCreatingOrg = false;
+        this.isCreatingGroup = false;
+        this.isCreatingContainer = false;
+        this.isLoadingGroup = false;
+        this.isJoining = false;
+        this.isDeletingGroup = false;
+
+        if (DEBUG) console.log('Estado de organización reiniciado');
+
+        // Filtrar solo grupos donde el usuario pertenece (backend entrega users filtrado)
+        if (Array.isArray(this.organizations)) {
+            this.organizations = this.organizations.map(org => ({
+                ...org,
+                groups: (org.groups || []).filter(g => Array.isArray(g.users) && g.users.length > 0)
+            }));
+        } else {
+            this.organizations = [];
+        }
+
+        // Bind de eventos para modal de reuniones de contenedor (solo una vez)
+        if (!this._containerModalEventsBound) {
+            const closeHandler = (event) => {
+                const detail = event.detail || {};
+                const containerFromDetail = detail.container ? { ...detail.container } : null;
+                const containerId = detail.containerId
+                    ?? containerFromDetail?.id
+                    ?? this.selectedContainer?.id
+                    ?? null;
+
+                this.containerModalRestoreContext = {
+                    containerId,
+                    detail,
+                    container: containerFromDetail
+                        || (this.selectedContainer ? { ...this.selectedContainer } : null)
+                };
+
+                this.showContainerMeetingsModal = false;
+            };
+
+            const reopenHandler = (event) => {
+                const detail = event.detail || {};
+                const context = this.containerModalRestoreContext;
+                if (!context) return;
+                const contextId = context.container?.id ?? context.containerId;
+                if (!contextId) return;
+                const shouldReload = typeof detail.shouldReload === 'boolean'
+                    ? detail.shouldReload
+                    : (typeof context.detail?.shouldReload === 'boolean'
+                        ? context.detail.shouldReload
+                        : true);
+                if (context.container && (!this.selectedContainer || this.selectedContainer.id !== context.container.id)) {
+                    this.selectedContainer = context.container;
+                } else if (!this.selectedContainer) {
+                    this.selectedContainer = { id: contextId };
+                }
+                const modalEl = document.getElementById('container-meetings-modal');
+                if (modalEl) {
+                    modalEl.classList.remove('hidden');
+                    ['pointerEvents','visibility','opacity'].forEach(p => modalEl.style[p] = '');
+                    if (modalEl.getAttribute('aria-hidden') === 'true') modalEl.removeAttribute('aria-hidden');
+                }
+                this.showContainerMeetingsModal = true;
+                if (shouldReload && this.selectedContainer.id) {
+                    this.$nextTick(() => this.openContainerMeetingsModal(this.selectedContainer));
+                }
+                this.containerModalRestoreContext = null;
+            };
+
+            document.addEventListener('organization:container-meetings:temporarily-close', closeHandler);
+            document.addEventListener('organization:container-meetings:restore', reopenHandler);
+            this._containerModalEventsBound = true;
+        }
+
+        // Watch de pestaña de permisos
+        this.$watch('mainTab', (tab) => {
+            if (tab === 'permissions') this.loadPermissionsMembers();
+        });
+
+        // Inicializar listeners auxiliares
+        this.postInit();
+    },
+
+    // Lógica secundaria previamente duplicada en una segunda init
+    postInit() {
+        debugLog('[organizationPage:postInit] listeners auxiliares registrados');
+        window.addEventListener('juntify:open-container-meetings', (e) => {
+            const id = e?.detail?.containerId;
+            if (!id) return;
+            const container = this.findContainerById(id);
+            if (container) this.viewContainerMeetings(container);
+        });
+    },
 
     // NUEVO: contactos invitables para el modal
     invitableContacts: [],
@@ -418,6 +522,10 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
 
     // Método de inicialización para resetear estados
     init() {
+        if (!window.__orgPage) {
+            window.__orgPage = this;
+            debugLog('[organizationPage:init] instancia disponible en window.__orgPage');
+        }
         // Obtener el userId (UUID string) del meta tag sin convertir
         this.userId = document
             .querySelector('meta[name="user-id"]')
@@ -578,7 +686,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
     openConfirmDeleteGroup(org, group) {
-        thisorgOfGroupToDelete = org;
+        this.orgOfGroupToDelete = org;
         this.groupToDelete = group;
         this.showConfirmDeleteGroupModal = true;
     },
@@ -1643,7 +1751,7 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
                     debugLog('Organización actualizada exitosamente');
 
                     // Mostrar modal de éxito
-                    this.showSuccess('Organización actualizada exitosamente');
+                    this.showStatus('Organización actualizada exitosamente');
 
                     // Recargar datos desde el servidor para asegurar sincronización
                     await this.refreshOrganizations();
@@ -1885,28 +1993,206 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
         }
     },
 
-    init() {
-        // Escuchar evento global para reabrir modal de contenedor desde reuniones_v2
-        window.addEventListener('juntify:open-container-meetings', (e) => {
-            const id = e?.detail?.containerId;
-            if (!id) return;
-            // Si ya tenemos currentGroup, buscar el contenedor por id
-            const container = (this.currentGroup?.containers || []).find(c => String(c.id) === String(id));
-            if (container) {
-                // Mostrar loading rápido para feedback
-                this.selectedContainer = { ...container, meetings: [], _isLoading: true };
-                this.showContainerMeetingsModal = true;
-                // Abrir con fetch
-                this.openContainerMeetingsModal(container);
-            } else {
-                // Fallback: construir objeto mínimo
-                this.selectedContainer = { id, name: 'Contenedor', description: '', meetings: [], _isLoading: true };
-                this.showContainerMeetingsModal = true;
-                // Intentar cargar igualmente
-                this.openContainerMeetingsModal({ id, name: 'Contenedor', description: '' });
+    // -----------------------------
+    // Documentos de Contenedor
+    // -----------------------------
+    containerDocs: { files: [], loading: false, container: null },
+    showContainerDocsModal: false,
+    uploadingDocument: false,
+    showUploadDocModal: false,
+    uploadTargetContainer: null,
+    selectedUploadFile: null,
+    uploadProgress: 0,
+    dragActive: false,
+
+    openContainerDocuments(container) {
+        this.containerDocs = { files: [], loading: true, container };
+        this.showContainerDocsModal = true;
+        this.fetchContainerDocuments(container.id);
+    },
+
+    async fetchContainerDocuments(containerId) {
+        try {
+            const res = await fetch(`/containers/${containerId}/files`);
+            if (!res.ok) throw new Error('Error al listar documentos');
+            const data = await res.json();
+            this.containerDocs.files = data.data || [];
+        } catch (e) {
+            console.error(e);
+            this.showError('No se pudieron cargar los documentos');
+        } finally {
+            this.containerDocs.loading = false;
+        }
+    },
+
+    openUploadDocument(container) {
+        // Abrir modal drag & drop
+        debugLog('[upload-modal] openUploadDocument called', { containerId: container?.id, name: container?.name, ts: Date.now() });
+        if (!container) {
+            console.warn('[upload-modal] Se llamó openUploadDocument sin contenedor');
+            return;
+        }
+        // Cerrar modal de info de grupo si está abierto para evitar stacking confuso
+        this.showGroupInfoModal = false;
+        this.showContainerDocsModal = false;
+        this.uploadTargetContainer = container;
+        this.selectedUploadFile = null;
+        this.uploadProgress = 0;
+        this.showUploadDocModal = true;
+        // Para depuración rápida en consola
+        window.__lastUploadModalState = {
+            containerId: container.id,
+            showUploadDocModal: this.showUploadDocModal,
+            time: new Date().toISOString()
+        };
+        // Forzar verificación DOM tras el tick para diagnosticar por qué no aparece
+        this.$nextTick(() => {
+            const modalEl = document.querySelector('[x-show="showUploadDocModal"]');
+            if (!modalEl) return;
+            const computed = window.getComputedStyle(modalEl);
+            debugLog('[upload-modal] post-tick modal styles', { display: computed.display, visibility: computed.visibility, opacity: computed.opacity, classes: modalEl.className });
+            // Con z-index elevado debería mostrarse; fallback suave sin warning
+            if (computed.display === 'none') {
+                modalEl.style.display = 'flex';
             }
         });
     },
+
+    closeUploadDocModal() {
+        if (this.uploadingDocument) return; // no cerrar durante subida
+        this.showUploadDocModal = false;
+        this.uploadTargetContainer = null;
+        this.selectedUploadFile = null;
+        this.uploadProgress = 0;
+        this.dragActive = false;
+    },
+
+    triggerFileSelect() {
+        const input = document.getElementById('hidden-upload-input');
+        if (input) input.click();
+    },
+
+    onFileChosen(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        this.selectedUploadFile = file;
+        this.uploadProgress = 0;
+    },
+
+    handleDrop(evt) {
+        this.dragActive = false;
+        if (this.uploadingDocument) return;
+        const dt = evt.dataTransfer;
+        if (!dt || !dt.files || !dt.files.length) return;
+        const file = dt.files[0];
+        this.selectedUploadFile = file;
+        this.uploadProgress = 0;
+    },
+
+    resetSelectedFile() {
+        if (this.uploadingDocument) return;
+        this.selectedUploadFile = null;
+        this.uploadProgress = 0;
+        const input = document.getElementById('hidden-upload-input');
+        if (input) input.value = '';
+    },
+
+    startUpload() {
+        if (!this.selectedUploadFile || !this.uploadTargetContainer) return;
+        this.uploadContainerDocument(this.uploadTargetContainer, this.selectedUploadFile, {
+            onProgress: (p) => { this.uploadProgress = p; }
+        });
+    },
+
+    async uploadContainerDocument(container, file, opts = {}) {
+        if (this.uploadingDocument) return;
+        this.uploadingDocument = true;
+        try {
+            // Usamos XMLHttpRequest para poder monitorear progreso
+            const form = new FormData();
+            form.append('file', file);
+            const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+            const uploadPromise = () => new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', `/containers/${container.id}/files`, true);
+                xhr.setRequestHeader('X-CSRF-TOKEN', csrf);
+                xhr.onreadystatechange = () => {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try { resolve(JSON.parse(xhr.responseText)); } catch (e) { reject(e); }
+                        } else {
+                            try {
+                                const err = JSON.parse(xhr.responseText);
+                                reject(new Error(err.message || 'Error al subir el archivo'));
+                            } catch {
+                                reject(new Error('Error al subir el archivo'));
+                            }
+                        }
+                    }
+                };
+                if (xhr.upload && typeof opts.onProgress === 'function') {
+                    xhr.upload.onprogress = (ev) => {
+                        if (ev.lengthComputable) {
+                            const pct = Math.round((ev.loaded / ev.total) * 100);
+                            opts.onProgress(pct);
+                        }
+                    };
+                }
+                xhr.onerror = () => reject(new Error('Error de red durante la subida'));
+                xhr.send(form);
+            });
+
+            const data = await uploadPromise();
+            // Si el modal de docs está abierto y corresponde a este contenedor refrescar lista
+            if (this.showContainerDocsModal && this.containerDocs.container?.id === container.id) {
+                this.containerDocs.files.unshift(data.file);
+            }
+            // Cerrar modal de upload si abierto
+            if (this.showUploadDocModal) {
+                this.closeUploadDocModal();
+            }
+            // Refuerzo: cerrar modal también tras la notificación de éxito
+            setTimeout(() => {
+                try { this.closeUploadDocModal(); } catch (e) {}
+            }, 100);
+            // Notificación visual de éxito
+            if (typeof this.showStatus === 'function') {
+                this.showStatus(`Archivo "${file.name}" subido correctamente`);
+            } else {
+                console.log('[upload] Archivo subido correctamente');
+            }
+        } catch (e) {
+            console.error(e);
+            this.showError(e.message || 'Error al subir');
+        } finally {
+            this.uploadingDocument = false;
+            if (typeof opts.onProgress === 'function' && this.uploadProgress < 100) {
+                // si falló antes de completar
+                opts.onProgress(0);
+            }
+        }
+    },
+    closeContainerDocsModal() {
+        this.showContainerDocsModal = false;
+        this.containerDocs = { files: [], loading: false, container: null };
+    },
+
+    formatFileMeta(file) {
+        if (!file) return '';
+        const size = this.formatBytes(file.size || 0);
+        return size + (file.mime ? ' · ' + file.mime : '');
+    },
+
+    formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B','KB','MB','GB','TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    },
+
+    // (init principal ya definido arriba; eliminada duplicación)
 
     editContainer(container) {
         // Abrir modal de edición con los datos del contenedor
@@ -2000,5 +2286,16 @@ Alpine.data('organizationPage', (initialOrganizations = []) => ({
             console.error('Error deleting container:', error);
             alert('Error al eliminar el contenedor');
         }
+        } // <- cierre del método deleteContainer
+    // FIN objeto principal organizationPage
+    }));
+        window.Alpine._orgComponentRegistered = true;
+    }; // fin initDefinition
+    if (typeof window.Alpine === 'undefined') {
+        document.addEventListener('alpine:init', initDefinition, { once: true });
+    } else {
+        initDefinition();
     }
-}));
+}
+
+registerOrganizationComponent();

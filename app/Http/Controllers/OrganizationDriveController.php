@@ -411,22 +411,30 @@ class OrganizationDriveController extends Controller
                     throw $eInit;
                 }
                 $files = [];
-                try {
-                    $files = $this->drive->listSubfolders($root->google_id);
-                } catch (\Throwable $eList) {
-                    Log::warning('Organization status: listSubfolders failed', [
+                if ($root->google_id) {
+                    try {
+                        $files = $this->drive->listSubfolders($root->google_id);
+                    } catch (\Throwable $eList) {
+                        Log::warning('Organization status: listSubfolders failed', [
+                            'org' => $organization->id,
+                            'root_google_id' => $root->google_id,
+                            'error' => $eList->getMessage(),
+                        ]);
+                    }
+                    foreach ($files as $file) {
+                        $subfolders[] = OrganizationSubfolder::updateOrCreate(
+                            [
+                                'organization_folder_id' => $root->id,
+                                'google_id'              => $file->getId(),
+                            ],
+                            ['name' => $file->getName()]
+                        );
+                    }
+                } else {
+                    Log::warning('Organization status: root folder has null google_id; skipping listSubfolders', [
                         'org' => $organization->id,
-                        'error' => $eList->getMessage(),
+                        'root_id' => $root->id,
                     ]);
-                }
-                foreach ($files as $file) {
-                    $subfolders[] = OrganizationSubfolder::updateOrCreate(
-                        [
-                            'organization_folder_id' => $root->id,
-                            'google_id'              => $file->getId(),
-                        ],
-                        ['name' => $file->getName()]
-                    );
                 }
             } catch (\Exception $e) {
                 // Si hay problemas con Drive, marcar como desconectado

@@ -19,7 +19,6 @@
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
         'resources/css/organization.css',
-        'resources/js/organization.js',
         'resources/css/audio-processing.css',
         'resources/js/reuniones_v2.js'
     ])
@@ -817,7 +816,7 @@
                             <!-- Lista de contenedores -->
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <template x-for="container in currentGroup?.containers || []" :key="container.id">
-                                    <div @click="viewContainerMeetings(container)" role="button" class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 hover:bg-slate-700/50 transition-colors cursor-pointer">
+                                    <div @click="viewContainerMeetings(container)" role="button" class="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 hover:bg-slate-700/50 transition-colors cursor-pointer group relative">
                                         <h4 class="font-semibold text-yellow-400 mb-2">
                                             <span x-text="container.name"></span>
                                             <span class="company-badge ml-2" x-show="container.group_name" x-text="container.group_name"></span>
@@ -827,13 +826,11 @@
                                             <span x-text="'Reuniones: ' + (container.meetings_count || 0)"></span>
                                             <span x-text="formatDate(container.created_at)"></span>
                                         </div>
-                                        <div class="flex space-x-2">
-                                            <button @click.stop="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition-colors">
-                                                Editar
-                                            </button>
-                                            <button x-show="canManageContainers()" @click.stop="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors">
-                                                Eliminar
-                                            </button>
+                                        <div class="flex flex-wrap gap-2">
+                                            <button @click.stop="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition-colors">Editar</button>
+                                            <button x-show="canManageContainers()" @click.stop="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors">Eliminar</button>
+                                            <button @click.stop="openUploadDocument(container)" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors">Subir Doc</button>
+                                            <button @click.stop="openContainerDocuments(container)" class="px-3 py-1 bg-slate-600 text-white rounded text-xs hover:bg-slate-500 transition-colors">Ver Docs</button>
                                         </div>
                                     </div>
                                 </template>
@@ -856,11 +853,118 @@
                     </div>
                 </div>
 
+                <!-- Modales (reposicionados dentro del scope Alpine) -->
+                <!-- Modal Documentos del Contenedor -->
+                <div x-show="showContainerDocsModal" x-transition.opacity class="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4" x-cloak>
+                    <div class="bg-slate-900 w-full max-w-2xl rounded-lg border border-slate-700 shadow-xl flex flex-col max-h-[80vh] relative">
+                        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-700">
+                            <div>
+                                <h3 class="text-lg font-semibold text-white">Documentos del Contenedor</h3>
+                                <p class="text-xs text-slate-400 mt-1" x-text="containerDocs.container ? containerDocs.container.name : ''"></p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <button @click="containerDocs.container && openUploadDocument(containerDocs.container)" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs disabled:opacity-50 flex items-center gap-1" :disabled="uploadingDocument">
+                                    <svg x-show="!uploadingDocument" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 8l-3.5-3.5M12 12l3.5-3.5" /></svg>
+                                    <svg x-show="uploadingDocument" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+                                    <span x-text="uploadingDocument ? 'Subiendo...' : 'Subir'"></span>
+                                </button>
+                                <button @click="closeContainerDocsModal()" class="text-slate-400 hover:text-white">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-3" x-show="!containerDocs.loading">
+                            <template x-if="containerDocs.files.length === 0">
+                                <div class="text-center py-12 text-slate-500 text-sm">No hay documentos</div>
+                            </template>
+                            <template x-for="file in containerDocs.files" :key="file.id">
+                                <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/50 rounded-md px-3 py-2">
+                                    <div class="min-w-0 mr-4">
+                                        <p class="text-sm font-medium text-slate-200 truncate" x-text="file.name"></p>
+                                        <p class="text-[11px] text-slate-400" x-text="formatFileMeta(file)"></p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <a :href="file.url" target="_blank" class="px-2 py-1 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded">Descargar</a>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        <div x-show="containerDocs.loading" class="flex-1 flex items-center justify-center py-16">
+                            <div class="flex flex-col items-center">
+                                <div class="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+                                <p class="text-slate-400 text-sm">Cargando documentos...</p>
+                            </div>
+                        </div>
+                        <div x-show="uploadingDocument" x-transition.opacity class="absolute inset-0 bg-slate-900/80 backdrop-blur flex flex-col items-center justify-center gap-4" style="display:none;">
+                            <div class="w-12 h-12 border-4 border-blue-500/30 border-t-blue-400 rounded-full animate-spin"></div>
+                            <p class="text-sm text-slate-300">Subiendo documento...</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Modal Subir Documento -->
+                <div x-show="showUploadDocModal" x-transition.opacity class="fixed inset-0 bg-black/70 z-[130] flex items-center justify-center p-4" x-cloak>
+                    <div class="bg-slate-900 w-full max-w-lg rounded-xl border border-slate-700 shadow-2xl flex flex-col relative overflow-hidden">
+                        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-700">
+                            <div>
+                                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 8l-3.5-3.5M12 12l3.5-3.5" /></svg>
+                                    Subir Documento
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-1" x-text="uploadTargetContainer ? uploadTargetContainer.name : ''"></p>
+                            </div>
+                            <button @click="closeUploadDocModal()" class="text-slate-400 hover:text-white" :disabled="uploadingDocument" :class="uploadingDocument ? 'opacity-50 cursor-not-allowed' : ''">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <div class="p-6 flex-1">
+                            <div @dragenter.prevent="dragActive = true"
+                                 @dragover.prevent="dragActive = true"
+                                 @dragleave.prevent="dragActive = false"
+                                 @drop.prevent="handleDrop($event)"
+                                 :class="['relative border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center p-10 transition-colors', dragActive ? 'border-blue-400 bg-blue-500/10' : 'border-slate-600 bg-slate-800/40']">
+                                <template x-if="!selectedUploadFile">
+                                    <div class="space-y-4">
+                                        <svg class="w-12 h-12 mx-auto text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4a1 1 0 011-1h8a1 1 0 011 1v12m-4-6l-3 3m0 0l3 3m-3-3h12" /></svg>
+                                        <div class="text-slate-300 text-sm font-medium">Arrastra el archivo aquí</div>
+                                        <div class="text-slate-500 text-xs">o</div>
+                                        <button type="button" @click="triggerFileSelect()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium">Seleccionar archivo</button>
+                                        <p class="text-[11px] text-slate-500">Máx 150MB</p>
+                                    </div>
+                                </template>
+                                <template x-if="selectedUploadFile">
+                                    <div class="w-full">
+                                        <p class="text-sm text-slate-200 font-medium truncate" x-text="selectedUploadFile.name"></p>
+                                        <p class="text-xs text-slate-400 mt-1" x-text="formatBytes(selectedUploadFile.size)"></p>
+                                        <div class="mt-4 w-full bg-slate-700 rounded h-2 overflow-hidden">
+                                            <div class="h-2 bg-blue-500 transition-all" :style="'width:' + uploadProgress + '%'"></div>
+                                        </div>
+                                        <div class="flex items-center justify-between mt-4">
+                                            <button type="button" @click="resetSelectedFile()" class="text-xs text-slate-400 hover:text-slate-200" :disabled="uploadingDocument">Cambiar archivo</button>
+                                            <button type="button" @click="startUpload()" class="px-4 py-2 rounded text-xs font-semibold flex items-center gap-2" :class="uploadingDocument ? 'bg-blue-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'" :disabled="uploadingDocument">
+                                                <svg x-show="!uploadingDocument" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 8l-3.5-3.5M12 12l3.5-3.5" /></svg>
+                                                <svg x-show="uploadingDocument" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+                                                <span x-text="uploadingDocument ? 'Subiendo...' : 'Subir' "></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                                <input id="hidden-upload-input" type="file" class="hidden" @change="onFileChosen($event)" />
+                            </div>
+                        </div>
+                        <div class="px-5 py-3 border-t border-slate-700 flex justify-end bg-slate-800/40">
+                            <button @click="closeUploadDocModal()" class="px-3 py-1.5 text-xs rounded bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50" :disabled="uploadingDocument">Cerrar</button>
+                        </div>
+                        <div x-show="uploadingDocument" class="absolute inset-0 bg-slate-900/60 backdrop-blur flex items-center justify-center" style="display:none;">
+                            <div class="flex flex-col items-center gap-3">
+                                <div class="w-10 h-10 border-4 border-blue-500/30 border-t-blue-400 rounded-full animate-spin"></div>
+                                <p class="text-xs text-slate-300" x-text="'Subiendo ('+uploadProgress+'%)' "></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
-
-<!-- Removed Blade download modal to avoid duplicate with dynamic JS modal -->
 
 <!-- Modal para ver reunión -->
 <div id="meeting-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[80] hidden">

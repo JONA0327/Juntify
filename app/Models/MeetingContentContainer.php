@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Log;
 
 class MeetingContentContainer extends Model
 {
@@ -38,6 +39,45 @@ class MeetingContentContainer extends Model
      * Indicates if the model should be timestamped.
      */
     public $timestamps = true;
+
+    protected static function booted()
+    {
+        static::created(function ($container) {
+            try {
+                $group = $container->group;
+                if (!$group) {
+                    Log::warning('Container created without group relation', ['container_id' => $container->id]);
+                    return;
+                }
+                $organization = $group->organization;
+                if (!$organization) {
+                    Log::warning('Container group without organization', ['container_id' => $container->id, 'group_id' => $group->id]);
+                    return;
+                }
+                $service = app(\App\Services\OrganizationDriveHierarchyService::class);
+                $folder = $service->ensureContainerFolder($organization, $group, $container);
+                if ($folder && $folder->google_id) {
+                    Log::info('Auto-created container drive folder', [
+                        'container_id' => $container->id,
+                        'group_id' => $group->id,
+                        'org_id' => $organization->id,
+                        'google_id' => $folder->google_id,
+                    ]);
+                } else {
+                    Log::warning('Failed auto-create container folder', [
+                        'container_id' => $container->id,
+                        'group_id' => $group->id,
+                        'org_id' => $organization->id,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::error('Exception auto-creating container folder', [
+                    'container_id' => $container->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
+    }
 
     /**
      * Get the user that owns the container.
