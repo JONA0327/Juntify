@@ -44,8 +44,17 @@ class PlanLimitService
         // Calculate used this month (personal by default)
         $startOfMonth = Carbon::now()->startOfMonth();
         $endOfMonth   = Carbon::now()->endOfMonth();
+        // Contar reuniones del usuario este mes, estén o no en contenedores propios
         $used = TranscriptionLaravel::where('username', $user->username)
             ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
+            ->where(function($q) use ($user) {
+                // Reuniones que NO están en ningún contenedor (inbox)
+                $q->whereDoesntHave('containers')
+                  // O reuniones que están en contenedores cuyo owner es el usuario
+                  ->orWhereHas('containers', function($c) use ($user) {
+                      $c->where('username', $user->username);
+                  });
+            })
             ->count();
 
         // Organization-shared monthly quota for collaborators/administrators (non-owner)

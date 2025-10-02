@@ -181,11 +181,23 @@
                                 <!-- Gestión de Google Drive -->
                                 <div class="mt-8 p-6 bg-slate-700/30 rounded-lg" x-init="loadDriveSubfolders(org)">
                                     <!-- Conectar / Desconectar - solo visible cuando no está conectado -->
+
                                     <div x-show="!getDriveState(org.id).connected" class="mb-4">
+                                        <div class="p-4 rounded-lg bg-red-700/80 text-white flex items-center gap-3 mb-3">
+                                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" /></svg>
+                                            <span><b>Parece que aún no has conectado Drive.</b> Conéctalo para guardar tus reuniones. Si no, el sistema no podrá procesar la reunión correctamente.</span>
+                                        </div>
                                         <button @click="connectDrive(org)"
                                                 class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">
                                             Conectar Google Drive
                                         </button>
+                                    </div>
+
+                                    <div x-show="getDriveState(org.id).connected" class="mb-4">
+                                        <div class="p-4 rounded-lg bg-green-700/80 text-white flex items-center gap-3 mb-3">
+                                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                                            <span>Tu carpeta de Drive está conectada correctamente.</span>
+                                        </div>
                                     </div>
 
                                     <!-- Estado de carpeta raíz -->
@@ -827,7 +839,7 @@
                                             <span x-text="formatDate(container.created_at)"></span>
                                         </div>
                                         <div class="flex flex-wrap gap-2">
-                                            <button @click.stop="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition-colors">Editar</button>
+                                            <button x-show="currentGroup.user_role !== 'invitado'" @click.stop="editContainer(container)" class="px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition-colors">Editar</button>
                                             <button x-show="canManageContainers()" @click.stop="deleteContainer(container)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors">Eliminar</button>
                                             <button @click.stop="openUploadDocument(container)" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors">Subir Doc</button>
                                             <button @click.stop="openContainerDocuments(container)" class="px-3 py-1 bg-slate-600 text-white rounded text-xs hover:bg-slate-500 transition-colors">Ver Docs</button>
@@ -888,10 +900,10 @@
                                             <template x-if="file.webViewLink">
                                                 <a :href="file.webViewLink" target="_blank" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded">Ver en Drive</a>
                                             </template>
-                                            <template x-if="file.webContentLink">
+                                            <template x-if="currentGroup.user_role !== 'invitado' && file.webContentLink">
                                                 <a :href="file.webContentLink" target="_blank" class="px-2 py-1 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded">Descargar</a>
                                             </template>
-                                            <template x-if="!file.webContentLink">
+                                            <template x-if="currentGroup.user_role !== 'invitado' && !file.webContentLink">
                                                 <a :href="file.url" target="_blank" class="px-2 py-1 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded">Descargar</a>
                                             </template>
                                         </div>

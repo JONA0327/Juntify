@@ -37,13 +37,29 @@
                 </div>
             </div>
 
-            <!-- Status Alert - Drive conectado -->
+            <!-- Status Alert - Drive dinámico -->
+            @php
+                $driveConnected = false;
+                if (auth()->check()) {
+                    $user = auth()->user();
+                    $driveConnected = $user->drive_token && $user->drive_root_folder_id;
+                }
+            @endphp
+            @if($driveConnected)
             <div class="status-alert success">
                 <x-icon name="check" class="alert-icon" />
                 <div class="alert-content">
                     <span>Tu carpeta de Drive está conectada correctamente.</span>
                 </div>
             </div>
+            @else
+            <div class="status-alert danger" style="border:2px solid #ef4444;background:#2a1515;">
+                <x-icon name="x-circle" class="alert-icon" style="color:#ef4444;" />
+                <div class="alert-content">
+                    <span style="color:#ef4444;"><b>Parece que aún no has conectado Drive.</b> Conéctalo para guardar tus reuniones. Si no, el sistema no podrá procesar la reunión correctamente.</span>
+                </div>
+            </div>
+            @endif
 
             <!-- Reuniones mensuales -->
             <div class="analysis-banner">

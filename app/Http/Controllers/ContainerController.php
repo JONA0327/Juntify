@@ -12,12 +12,56 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\View\View;
 use App\Services\GoogleDriveService;
 use App\Traits\GoogleDriveHelpers;
+use App\Traits\MeetingContentParsing;
 
 class ContainerController extends Controller
 {
+    use GoogleDriveHelpers;
+    use MeetingContentParsing;
+
+    /**
+     * Desencripta el contenido de un archivo .ju (igual que en MeetingController)
+     * @param string $content
+     * @return array{data: mixed, needs_encryption: bool}
+     */
+    private function decryptJuFile($content): array
+    {
+        $data = [];
+        $needsEncryption = false;
+        try {
+            $data = json_decode(Crypt::decryptString($content), true) ?: [];
+        } catch (\Exception $e) {
+            // Si falla la desencriptación, intentar decodificar como JSON plano
+            $data = json_decode($content, true) ?: [];
+            $needsEncryption = true;
+        }
+        return [
+            'data' => $data,
+            'needs_encryption' => $needsEncryption,
+        ];
+    }
+
+
+    /**
+     * Acepta un ID directo o una URL de Google Drive y devuelve el fileId.
+     */
+    private function normalizeDriveId(string $maybeId): string
+    {
+        // Si parece URL con /file/d/{id}/
+        if (preg_match('#/file/d/([^/]+)/#', $maybeId, $m)) {
+            return $m[1];
+        }
+        // URL tipo uc?export=download&id={id}
+        if (preg_match('#[?&]id=([a-zA-Z0-9_-]+)#', $maybeId, $m)) {
+            return $m[1];
+        }
+        // Ya es un ID
+        return $maybeId;
+    }
     use GoogleDriveHelpers;
 
     protected $googleDriveService;
@@ -534,9 +578,15 @@ class ContainerController extends Controller
             $meetings = $container->meetings()
                 ->orderBy('created_at', 'desc')
                 ->get()
-                ->map(function ($meeting) {
+                ->map(function ($meeting) use ($user) {
                     $audioFolder = null;
                     $transcriptFolder = null;
+                    $segments = [];
+                    $summary = null;
+                    $keyPoints = [];
+                    $transcription = '';
+                    $speakers = [];
+                    $needsEncryption = false;
 
                     // Obtener nombre de carpeta de audio de forma segura
                     if ($meeting->audio_drive_id) {
@@ -556,6 +606,85 @@ class ContainerController extends Controller
                             Log::warning("Error getting transcript folder name for meeting {$meeting->id}: {$e->getMessage()}");
                             $transcriptFolder = 'Error al cargar carpeta';
                         }
+
+                        // --- INICIO LÓGICA ROBUSTA DESCARGA .JU CON LOGS ---
+                        $transcriptContent = null;
+                        $normalizedJuId = $this->normalizeDriveId($meeting->transcript_drive_id);
+                        Log::info('getContainerMeetings(): Intentando descargar .ju', ['meeting_id' => $meeting->id, 'file_id' => $normalizedJuId]);
+                        // 1) Service Account impersonando al propietario (si existe)
+                        try {
+                            if (method_exists($this, 'getMeetingOwnerEmail')) {
+                                $ownerEmail = $this->getMeetingOwnerEmail($meeting);
+                                Log::info('getContainerMeetings(): Owner email detectado', ['meeting_id' => $meeting->id, 'owner_email' => $ownerEmail]);
+                            } else {
+                                $ownerEmail = null;
+                                Log::info('getContainerMeetings(): No se encontró método getMeetingOwnerEmail', ['meeting_id' => $meeting->id]);
+                            }
+                            /** @var \App\Services\GoogleServiceAccount $sa */
+                            $sa = app(\App\Services\GoogleServiceAccount::class);
+                            if ($ownerEmail) { $sa->impersonate($ownerEmail); }
+                            $transcriptContent = $sa->downloadFile($normalizedJuId);
+                            Log::info('getContainerMeetings(): .ju descargado con SA impersonate', ['meeting_id' => $meeting->id]);
+                        } catch (\Throwable $e) {
+                            Log::warning('getContainerMeetings(): fallo SA con impersonate al descargar .ju, intentando sin impersonate', [
+                                'meeting_id' => $meeting->id,
+                                'file_id' => $normalizedJuId,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                        // 2) SA sin impersonate
+                        if ($transcriptContent === null) {
+                            try {
+                                $sa = app(\App\Services\GoogleServiceAccount::class);
+                                $transcriptContent = $sa->downloadFile($normalizedJuId);
+                                Log::info('getContainerMeetings(): .ju descargado con SA sin impersonate', ['meeting_id' => $meeting->id]);
+                            } catch (\Throwable $e2) {
+                                Log::warning('getContainerMeetings(): fallo SA sin impersonate al descargar .ju, intentando token del usuario', [
+                                    'meeting_id' => $meeting->id,
+                                    'file_id' => $normalizedJuId,
+                                    'error' => $e2->getMessage(),
+                                ]);
+                            }
+                        }
+                        // 3) Token del usuario (último intento)
+                        if ($transcriptContent === null) {
+                            try {
+                                $this->setGoogleDriveToken($user);
+                                $transcriptContent = $this->downloadFromDrive($normalizedJuId);
+                                Log::info('getContainerMeetings(): .ju descargado con token del usuario', ['meeting_id' => $meeting->id]);
+                            } catch (\Throwable $e3) {
+                                Log::error('getContainerMeetings(): no fue posible descargar el .ju con ningún método', [
+                                    'meeting_id' => $meeting->id,
+                                    'file_id' => $normalizedJuId,
+                                    'error' => $e3->getMessage(),
+                                ]);
+                            }
+                        }
+
+                        // Si no se pudo obtener contenido, dejar vacío
+                        if ($transcriptContent) {
+                            Log::info('getContainerMeetings(): .ju descargado, procesando contenido', ['meeting_id' => $meeting->id, 'content_length' => strlen($transcriptContent)]);
+                            $transcriptResult = $this->decryptJuFile($transcriptContent);
+                        } else {
+                            Log::warning('getContainerMeetings(): No se pudo obtener contenido del .ju', ['meeting_id' => $meeting->id]);
+                            $transcriptResult = ['data' => [], 'needs_encryption' => false];
+                        }
+                        $transcriptData = $transcriptResult['data'];
+                        $needsEncryption = $transcriptResult['needs_encryption'];
+
+                        $processedData = $this->processTranscriptData($transcriptData);
+                        Log::info('getContainerMeetings(): Datos procesados del .ju', [
+                            'meeting_id' => $meeting->id,
+                            'segment_count' => is_array($processedData['segments'] ?? null) ? count($processedData['segments']) : 0,
+                            'summary' => $processedData['summary'] ?? null,
+                            'key_points_count' => is_array($processedData['key_points'] ?? null) ? count($processedData['key_points']) : 0
+                        ]);
+                        $segments = $processedData['segments'] ?? [];
+                        $summary = $processedData['summary'] ?? null;
+                        $keyPoints = $processedData['key_points'] ?? [];
+                        $transcription = $processedData['transcription'] ?? '';
+                        $speakers = $processedData['speakers'] ?? [];
+                        // --- FIN LÓGICA ROBUSTA DESCARGA .JU CON LOGS ---
                     }
 
                     return [
@@ -567,6 +696,12 @@ class ContainerController extends Controller
                         'audio_folder' => $audioFolder,
                         'transcript_folder' => $transcriptFolder,
                         'has_transcript' => !empty($meeting->transcript_drive_id),
+                        'segments' => $segments,
+                        'summary' => $summary,
+                        'key_points' => $keyPoints,
+                        'transcription' => $transcription,
+                        'speakers' => $speakers,
+                        'needs_encryption' => $needsEncryption,
                     ];
                 });
 

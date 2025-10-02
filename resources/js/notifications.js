@@ -373,6 +373,22 @@ const Notifications = (() => {
             });
         });
 
+
+    // Toggle panel al hacer clic en el botón
+    document.querySelectorAll('.notifications-toggle').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const panel = btn.closest('.notifications').querySelector('.notifications-panel');
+            if (panel.classList.contains('hidden')) {
+                document.querySelectorAll('.notifications-panel').forEach(p => p.classList.add('hidden'));
+                panel.classList.remove('hidden');
+                positionNotificationsPanel(panel, btn);
+            } else {
+                panel.classList.add('hidden');
+            }
+        });
+    });
+
     fetchNotifications();
     }
 

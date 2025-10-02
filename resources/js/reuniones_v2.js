@@ -2035,6 +2035,20 @@ async function unlinkSharedMeeting(sharedId) {
 window.unlinkSharedMeeting = unlinkSharedMeeting;
 
 function createContainerMeetingCard(meeting) {
+    // Mostrar resumen de los primeros 2-3 segmentos del .ju (si existen)
+    let segmentosHtml = '';
+    if (Array.isArray(meeting.segments) && meeting.segments.length > 0) {
+        const previewSegments = meeting.segments.slice(0, 3);
+        segmentosHtml = `
+            <div class="segments-preview mt-2">
+                <div class="text-xs text-yellow-300 font-semibold mb-1">Fragmentos de la reunión:</div>
+                <ul class="text-xs text-slate-300 space-y-1">
+                    ${previewSegments.map(seg => `<li><span class='font-bold'>${seg.speaker ? escapeHtml(seg.speaker) + ': ' : ''}</span>${escapeHtml(seg.text || '')}</li>`).join('')}
+                </ul>
+                ${meeting.segments.length > 3 ? `<div class="text-xs text-slate-400 mt-1">...y ${meeting.segments.length - 3} más</div>` : ''}
+            </div>
+        `;
+    }
     return `
         <div class="meeting-card" data-meeting-id="${meeting.id}" draggable="true">
             <div class="meeting-card-header">
@@ -2051,7 +2065,7 @@ function createContainerMeetingCard(meeting) {
                         </svg>
                         ${meeting.created_at}
                     </p>
-
+                    ${segmentosHtml}
                     <div class="meeting-folders">
                         <div class="folder-info">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2522,17 +2536,11 @@ async function openMeetingModal(meetingId, sharedMeetingId = null) {
         if (data.success) {
             const meeting = data.meeting || {};
 
-            // Construir segmentos y transcripción desde transcriptions si es necesario
-            if ((!meeting.segments || meeting.segments.length === 0) && Array.isArray(meeting.transcriptions)) {
-                meeting.segments = meeting.transcriptions.map((t, index) => ({
-                    speaker: t.speaker || t.display_speaker || `Hablante ${index + 1}`,
-                    time: t.time || t.timestamp,
-                    text: t.text || '',
-                    start: t.start ?? 0,
-                    end: t.end ?? 0,
-                }));
-            }
-            if (!meeting.transcription && Array.isArray(meeting.segments)) {
+            // Solo usar meeting.segments (proveniente del .ju). Si no existen segmentos, mostrar error o mensaje vacío.
+            if (!Array.isArray(meeting.segments) || meeting.segments.length === 0) {
+                meeting.segments = [];
+                meeting.transcription = '';
+            } else if (!meeting.transcription) {
                 meeting.transcription = meeting.segments.map(s => s.text).join(' ');
             }
 
@@ -2578,17 +2586,11 @@ function showMeetingModal(meeting) {
     meeting.key_points = Array.isArray(meeting.key_points) ? meeting.key_points : [];
     meeting.tasks = Array.isArray(meeting.tasks) ? meeting.tasks : [];
 
-    if ((!meeting.segments || meeting.segments.length === 0) && Array.isArray(meeting.transcriptions)) {
-        meeting.segments = meeting.transcriptions.map((t, index) => ({
-            speaker: t.speaker || t.display_speaker || `Hablante ${index + 1}`,
-            time: t.time || t.timestamp,
-            text: t.text || '',
-            start: t.start ?? 0,
-            end: t.end ?? 0,
-        }));
-    }
-
-    if (!meeting.transcription && Array.isArray(meeting.segments)) {
+    // Solo usar meeting.segments (proveniente del .ju). Si no existen segmentos, mostrar mensaje vacío.
+    if (!Array.isArray(meeting.segments) || meeting.segments.length === 0) {
+        meeting.segments = [];
+        meeting.transcription = '';
+    } else if (!meeting.transcription) {
         meeting.transcription = meeting.segments.map(s => s.text).join(' ');
     }
 

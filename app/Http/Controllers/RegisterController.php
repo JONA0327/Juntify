@@ -23,6 +23,23 @@ class RegisterController extends Controller
      */
     public function register(Request $request)
     {
+
+        $messages = [];
+        $existsUser = User::where('username', $request->username)->exists();
+        $existsEmail = User::where('email', $request->email)->exists();
+        if ($existsUser) {
+            $messages['username'] = 'El usuario ya existe.';
+        }
+        if ($existsEmail) {
+            $messages['email'] = 'El correo ya está registrado.';
+        }
+        if ($existsUser || $existsEmail) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['errors' => $messages], 422);
+            }
+            return back()->withErrors($messages)->withInput();
+        }
+
         $data = $request->validate([
             'username'                    => 'required|string|max:50|unique:users,username',
             'full_name'                   => 'required|string|max:255',
@@ -43,6 +60,9 @@ class RegisterController extends Controller
 
         auth()->login($user);
 
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['success' => true, 'redirect' => route('profile.show')]);
+        }
         // Redirigir al perfil después del registro exitoso
         return redirect()
             ->route('profile.show')

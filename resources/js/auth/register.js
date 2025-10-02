@@ -262,24 +262,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
     e.preventDefault();
     e.stopPropagation();
 
-    console.log('Formulario enviado, validando...');
-
     // Evitar múltiples envíos
-    if (formSubmitting) {
-      console.log('Formulario ya se está enviando, ignorando...');
-      return false;
-    }
-
-    if(!validateForm()) {
-      console.log('Validación fallida');
-      return false;
-    }
-
-    console.log('Validación exitosa, procesando...');
+    if (formSubmitting) return false;
+    if(!validateForm()) return false;
     formSubmitting = true;
-
     const btn = document.getElementById('submitBtn');
-
     btn.classList.add('loading');
     btn.textContent = 'Creando cuenta...';
     btn.disabled = true;
@@ -287,8 +274,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // hash con bcryptjs (cost 10)
     const pwdEl  = document.getElementById('password'),
           pcEl   = document.getElementById('passwordConfirmation'),
-          originalPwd = pwdEl.value,  // Guardar valor original
-          originalPc = pcEl.value,    // Guardar valor original
+          originalPwd = pwdEl.value,
           salt   = bcrypt.genSaltSync(10),
           hash   = bcrypt.hashSync(originalPwd, salt);
 
@@ -310,16 +296,117 @@ document.addEventListener('DOMContentLoaded', ()=>{
     pcEl.value = '';
     pwdEl.placeholder = 'Contraseña enviada...';
     pcEl.placeholder = 'Confirmación enviada...';
-
-    // Deshabilitar los campos originales para que no se envíen
     pwdEl.disabled = true;
     pcEl.disabled = true;
 
-    console.log('Hash generado, enviando formulario tradicional...');
-
-    // Usar setTimeout para permitir que el DOM se actualice antes del envío
-    setTimeout(() => {
+    // Enviar con fetch para capturar errores de usuario/correo
+    const formData = new FormData(this);
+    try {
+      const resp = await fetch(this.action, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+        body: formData
+      });
+      if (resp.status === 422) {
+        const data = await resp.json();
+        let msg = '';
+        if (data.errors) {
+          if (data.errors.username) msg += data.errors.username + '\n';
+          if (data.errors.email) msg += data.errors.email + '\n';
+        }
+        showRegisterModal(msg.trim() || 'El usuario o correo ya existen.');
+        // Limpiar campos del formulario
+        document.getElementById('username').value = '';
+        document.getElementById('fullName').value = '';
+        document.getElementById('email').value = '';
+        document.getElementById('password').value = '';
+        document.getElementById('passwordConfirmation').value = '';
+        btn.classList.remove('loading');
+        btn.textContent = 'Crear Cuenta';
+        btn.disabled = false;
+        formSubmitting = false;
+        pwdEl.disabled = false;
+        pcEl.disabled = false;
+        return;
+      }
+      // Si todo ok, mostrar modal de éxito y redirigir al perfil
+      const data = await resp.json();
+      if (data.success) {
+        showRegisterSuccessModal('¡Enhorabuena! Te has registrado a Juntify', data.redirect);
+        return;
+      }
+      // fallback: submit tradicional
       this.submit();
-    }, 100);
+  // Modal de éxito tras registro
+  function showRegisterSuccessModal(msg, redirectUrl) {
+    let modal = document.getElementById('registerSuccessModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'registerSuccessModal';
+      modal.style.position = 'fixed';
+      modal.style.top = '0';
+      modal.style.left = '0';
+      modal.style.width = '100vw';
+      modal.style.height = '100vh';
+      modal.style.background = 'rgba(0,0,0,0.5)';
+      modal.style.display = 'flex';
+      modal.style.alignItems = 'center';
+      modal.style.justifyContent = 'center';
+      modal.style.zIndex = '9999';
+      modal.innerHTML = `<div style="background:#1e293b;padding:2rem 2.5rem;border-radius:1rem;max-width:90vw;box-shadow:0 8px 32px #000a;min-width:300px;text-align:center;">
+        <h2 style='color:#4ade80;font-size:1.3rem;margin-bottom:1rem;'>¡Enhorabuena!</h2>
+        <div style='color:#fff;margin-bottom:1.5rem;white-space:pre-line;'>${msg}</div>
+        <button id='closeRegisterSuccessBtn' style='background:#4ade80;color:#222;padding:0.5rem 1.5rem;border:none;border-radius:0.5rem;font-size:1rem;cursor:pointer;'>Aceptar</button>
+      </div>`;
+      document.body.appendChild(modal);
+    } else {
+      modal.querySelector('div > div').innerHTML = msg;
+      modal.style.display = 'flex';
+    }
+    document.getElementById('closeRegisterSuccessBtn').onclick = ()=>{
+      modal.style.display = 'none';
+      if (redirectUrl) window.location.href = redirectUrl;
+    };
+  }
+    } catch (err) {
+      showRegisterModal('Error de red o servidor. Intenta de nuevo.');
+      btn.classList.remove('loading');
+      btn.textContent = 'Crear Cuenta';
+      btn.disabled = false;
+      formSubmitting = false;
+      pwdEl.disabled = false;
+      pcEl.disabled = false;
+    }
   });
+
+  // Modal simple para errores de registro
+  function showRegisterModal(msg) {
+    let modal = document.getElementById('registerErrorModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'registerErrorModal';
+      modal.style.position = 'fixed';
+      modal.style.top = '0';
+      modal.style.left = '0';
+      modal.style.width = '100vw';
+      modal.style.height = '100vh';
+      modal.style.background = 'rgba(0,0,0,0.5)';
+      modal.style.display = 'flex';
+      modal.style.alignItems = 'center';
+      modal.style.justifyContent = 'center';
+      modal.style.zIndex = '9999';
+      modal.innerHTML = `<div style="background:#1e293b;padding:2rem 2.5rem;border-radius:1rem;max-width:90vw;box-shadow:0 8px 32px #000a;min-width:300px;text-align:center;">
+        <h2 style='color:#f87171;font-size:1.3rem;margin-bottom:1rem;'>No se pudo registrar</h2>
+        <div style='color:#fff;margin-bottom:1.5rem;white-space:pre-line;'>${msg}</div>
+        <button id='closeRegisterModalBtn' style='background:#f87171;color:#fff;padding:0.5rem 1.5rem;border:none;border-radius:0.5rem;font-size:1rem;cursor:pointer;'>Cerrar</button>
+      </div>`;
+      document.body.appendChild(modal);
+    } else {
+      modal.querySelector('div > div').innerHTML = msg;
+      modal.style.display = 'flex';
+    }
+    document.getElementById('closeRegisterModalBtn').onclick = ()=>{
+      modal.style.display = 'none';
+    };
+  }
 });
