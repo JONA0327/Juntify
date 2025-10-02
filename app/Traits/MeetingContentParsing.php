@@ -192,24 +192,71 @@ trait MeetingContentParsing
                 ];
             }
 
-            // 2) Intentar descifrar string encriptado de Laravel Crypt (base64)
+            // 2) Intentar descifrar string encriptado de Laravel Crypt (base64) usando APP_KEY actual o claves legacy
             if (substr($content, 0, 3) === 'eyJ') {
                 Log::info('decryptJuFile: Attempting to decrypt Laravel Crypt format');
+                $legacyKeys = array_filter(array_map('trim', explode(',', (string) env('LEGACY_APP_KEYS', ''))));
+                $triedKeys = [];
+                $decrypted = null;
+
+                // Helper closure para desencriptar con una clave concreta
+                $attemptDecrypt = function(string $key) use (&$content) {
+                    $prevKey = config('app.key');
+                    // Ajustar key temporalmente
+                    config(['app.key' => $key]);
+                    try {
+                        return Crypt::decryptString($content);
+                    } finally {
+                        // Restaurar clave original
+                        config(['app.key' => $prevKey]);
+                    }
+                };
+
+                // Primero con la clave actual
                 try {
                     $decrypted = Crypt::decryptString($content);
+                    $triedKeys[] = 'current';
                     Log::info('decryptJuFile: Direct decryption successful');
+                } catch (\Exception $e) {
+                    $triedKeys[] = 'current(failed:' . $e->getMessage() . ')';
+                    Log::warning('decryptJuFile: Direct decryption failed', ['error' => $e->getMessage()]);
+                    // Intentar con legacy keys si error fue MAC invalid o similar
+                    if (!empty($legacyKeys)) {
+                        foreach ($legacyKeys as $idx => $legacyKey) {
+                            try {
+                                $legacyDecrypted = $attemptDecrypt($legacyKey);
+                                if ($legacyDecrypted) {
+                                    $decrypted = $legacyDecrypted;
+                                    $triedKeys[] = 'legacy[' . $idx . ']';
+                                    Log::info('decryptJuFile: Decryption successful with legacy key', ['legacy_index' => $idx]);
+                                    break;
+                                }
+                            } catch (\Exception $eL) {
+                                $triedKeys[] = 'legacy[' . $idx . '](failed:' . $eL->getMessage() . ')';
+                                Log::warning('decryptJuFile: Legacy key failed', ['index' => $idx, 'error' => $eL->getMessage()]);
+                            }
+                        }
+                    }
+                }
 
+                if ($decrypted !== null) {
                     $json_data = json_decode($decrypted, true);
                     if (json_last_error() === JSON_ERROR_NONE) {
-                        Log::info('decryptJuFile: JSON parsing after decryption successful', ['keys' => array_keys($json_data)]);
+                        Log::info('decryptJuFile: JSON parsing after decryption successful', [
+                            'keys' => array_keys($json_data),
+                            'attempts' => $triedKeys,
+                        ]);
                         return [
                             'data' => $this->extractMeetingDataFromJson($json_data),
                             'raw' => $json_data,
                             'needs_encryption' => false,
                         ];
+                    } else {
+                        Log::warning('decryptJuFile: JSON decode failed after decryption', [
+                            'attempts' => $triedKeys,
+                            'error' => json_last_error_msg(),
+                        ]);
                     }
-                } catch (\Exception $e) {
-                    Log::warning('decryptJuFile: Direct decryption failed', ['error' => $e->getMessage()]);
                 }
             }
 

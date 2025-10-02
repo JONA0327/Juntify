@@ -23,27 +23,7 @@ class ContainerController extends Controller
     use GoogleDriveHelpers;
     use MeetingContentParsing;
 
-    /**
-     * Desencripta el contenido de un archivo .ju (igual que en MeetingController)
-     * @param string $content
-     * @return array{data: mixed, needs_encryption: bool}
-     */
-    private function decryptJuFile($content): array
-    {
-        $data = [];
-        $needsEncryption = false;
-        try {
-            $data = json_decode(Crypt::decryptString($content), true) ?: [];
-        } catch (\Exception $e) {
-            // Si falla la desencriptación, intentar decodificar como JSON plano
-            $data = json_decode($content, true) ?: [];
-            $needsEncryption = true;
-        }
-        return [
-            'data' => $data,
-            'needs_encryption' => $needsEncryption,
-        ];
-    }
+    // Se elimina decryptJuFile duplicado; se usa el del trait MeetingContentParsing
 
 
     /**
