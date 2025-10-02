@@ -42,7 +42,8 @@
                 $driveConnected = false;
                 if (auth()->check()) {
                     $user = auth()->user();
-                    $driveConnected = $user->drive_token && $user->drive_root_folder_id;
+                    $token = $user->googleToken;
+                    $driveConnected = $token && $token->recordings_folder_id;
                 }
             @endphp
             @if($driveConnected)
