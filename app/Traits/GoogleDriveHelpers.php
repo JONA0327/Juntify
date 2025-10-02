@@ -93,74 +93,125 @@ trait GoogleDriveHelpers
 
     protected function getFolderName($fileId): string
     {
+        if (empty($fileId)) {
+            return 'Sin especificar';
+        }
+
+        if ($this->isInvalidFileId($fileId)) {
+            return 'Archivo no encontrado';
+        }
+
+        $attempts = [];
+
+        // 1) Primer intento: token OAuth del usuario (googleDriveService)
+        $attempts[] = 'oauth';
         try {
-            if (empty($fileId)) {
-                return 'Sin especificar';
-            }
-
-            if ($this->isInvalidFileId($fileId)) {
-                return 'Archivo no encontrado';
-            }
-
-            $file = $this->googleDriveService->getFileInfo($fileId);
-
-            if ($file->getParents()) {
-                $parentId = $file->getParents()[0];
-                try {
-                    if ($this->isInvalidParentId($parentId)) {
-                        return 'Carpeta no disponible';
-                    }
-                    $parent = $this->googleDriveService->getFileInfo($parentId);
-                    return $parent->getName() ?: 'Carpeta sin nombre';
-                } catch (\Exception $parentException) {
-                    // Lower severity to debug to avoid noisy logs when parent is missing/forbidden
-                    Log::debug('getFolderName: Error getting parent folder name', [
-                        'parent_id' => $parentId,
-                        'error' => $parentException->getMessage()
-                    ]);
-
-                    // If parent not found or forbidden, mark as invalid to suppress future lookups
-                    $msg = $parentException->getMessage();
-                    if (str_contains($msg, 'File not found') ||
-                        str_contains($msg, '404') ||
-                        str_contains($msg, 'notFound') ||
-                        str_contains($msg, 'forbidden') ||
-                        str_contains($msg, 'PERMISSION_DENIED') ||
-                        str_contains($msg, 'unauthorized')) {
-                        $this->markInvalidParentId($parentId);
-                    }
-                    return 'Carpeta no disponible';
-                }
-            }
-
-            return 'Carpeta raíz';
-        } catch (\Exception $e) {
-            // Lower severity to debug; only log first time per fileId
+            return $this->resolveFolderNameViaDrive($fileId, 'oauth');
+        } catch (\Exception $eFirst) {
+            $firstMsg = $eFirst->getMessage();
+            // Log sólo primera vez
             if (!$this->isInvalidFileId($fileId)) {
-                Log::debug('getFolderName: Error getting folder name', [
+                Log::debug('getFolderName: Primer intento fallido (oauth)', [
                     'file_id' => $fileId,
-                    'error' => $e->getMessage()
+                    'error' => $firstMsg
                 ]);
             }
 
-            // Handle specific error cases
-            if (str_contains($e->getMessage(), 'File not found') ||
-                str_contains($e->getMessage(), '404') ||
-                str_contains($e->getMessage(), 'notFound')) {
+            $isPermissionOrNotFound = str_contains($firstMsg, 'File not found') ||
+                str_contains($firstMsg, '404') ||
+                str_contains($firstMsg, 'notFound') ||
+                str_contains($firstMsg, 'PERMISSION') ||
+                str_contains($firstMsg, 'forbidden') ||
+                str_contains($firstMsg, 'unauthorized');
+
+            // 2) Fallback: Service Account (sin o con impersonation si luego se amplía)
+            if ($isPermissionOrNotFound) {
+                if (app()->bound(\App\Services\GoogleServiceAccount::class)) {
+                    $attempts[] = 'service_account';
+                    try {
+                        return $this->resolveFolderNameViaDrive($fileId, 'service_account');
+                    } catch (\Exception $eSa) {
+                        Log::debug('getFolderName: Fallback service account falló', [
+                            'file_id' => $fileId,
+                            'error' => $eSa->getMessage()
+                        ]);
+                        // Continuar hacia marcado inválido abajo
+                        $firstMsg = $eSa->getMessage(); // usar último mensaje para clasificación
+                    }
+                } else {
+                    Log::debug('getFolderName: ServiceAccount no está enlazado en el contenedor IoC');
+                }
+            }
+
+            // Clasificación final
+            if (str_contains($firstMsg, 'File not found') ||
+                str_contains($firstMsg, '404') ||
+                str_contains($firstMsg, 'notFound')) {
                 $this->markInvalidFileId($fileId);
                 return 'Archivo no encontrado';
             }
 
-            if (str_contains($e->getMessage(), 'API key') ||
-                str_contains($e->getMessage(), 'PERMISSION_DENIED') ||
-                str_contains($e->getMessage(), 'unauthorized') ||
-                str_contains($e->getMessage(), 'forbidden')) {
+            if (str_contains($firstMsg, 'API key') ||
+                str_contains($firstMsg, 'PERMISSION_DENIED') ||
+                str_contains($firstMsg, 'unauthorized') ||
+                str_contains($firstMsg, 'forbidden')) {
+                // Devolvemos nombre genérico para no romper UI
                 return 'Juntify Recordings';
             }
 
             $this->markInvalidFileId($fileId);
             return 'Error al obtener carpeta';
         }
+    }
+
+    /**
+     * Resuelve el nombre de la carpeta usando el tipo de driver indicado.
+     * @throws \Exception
+     */
+    protected function resolveFolderNameViaDrive(string $fileId, string $driverType): string
+    {
+        if ($driverType === 'service_account') {
+            /** @var \App\Services\GoogleServiceAccount $drv */
+            $drv = app(\App\Services\GoogleServiceAccount::class);
+            $file = $drv->getFileInfo($fileId);
+        } else { // oauth
+            $file = $this->googleDriveService->getFileInfo($fileId);
+        }
+
+        if ($file->getParents()) {
+            $parentId = $file->getParents()[0];
+            try {
+                if ($this->isInvalidParentId($parentId)) {
+                    return 'Carpeta no disponible';
+                }
+                if ($driverType === 'service_account') {
+                    /** @var \App\Services\GoogleServiceAccount $drv */
+                    $drv = app(\App\Services\GoogleServiceAccount::class);
+                    $parent = $drv->getFileInfo($parentId);
+                } else {
+                    $parent = $this->googleDriveService->getFileInfo($parentId);
+                }
+                return $parent->getName() ?: 'Carpeta sin nombre';
+            } catch (\Exception $parentException) {
+                Log::debug('getFolderName: Error getting parent folder name', [
+                    'parent_id' => $parentId,
+                    'driver' => $driverType,
+                    'error' => $parentException->getMessage()
+                ]);
+                $msg = $parentException->getMessage();
+                if (str_contains($msg, 'File not found') ||
+                    str_contains($msg, '404') ||
+                    str_contains($msg, 'notFound') ||
+                    str_contains($msg, 'forbidden') ||
+                    str_contains($msg, 'PERMISSION_DENIED') ||
+                    str_contains($msg, 'unauthorized')) {
+                    $this->markInvalidParentId($parentId);
+                }
+                return 'Carpeta no disponible';
+            }
+        }
+
+        return 'Carpeta raíz';
     }
 
     /**
