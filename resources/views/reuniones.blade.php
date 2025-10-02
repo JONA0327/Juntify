@@ -154,5 +154,73 @@
 
     {{-- Modal para compartir reuniones (necesario para que el botón de compartir funcione) --}}
     @include('components.share-modal')
+
+    {{-- Modal Crear/Editar Contenedor --}}
+    <div id="container-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center px-4 py-8 bg-black/60 backdrop-blur-sm">
+        <div class="w-full max-w-lg bg-slate-900/95 border border-slate-700/60 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden">
+            <form id="container-form" class="flex flex-col" autocomplete="off">
+                <div class="flex items-start justify-between px-6 pt-6 pb-4 border-b border-slate-700/50">
+                    <div>
+                        <h3 id="modal-title" class="text-xl font-semibold text-white">Crear Contenedor</h3>
+                        <p class="text-sm text-slate-400 mt-1">Organiza tus reuniones en grupos personalizados</p>
+                    </div>
+                    <button type="button" id="cancel-modal-btn" class="text-slate-400 hover:text-white transition-colors" aria-label="Cerrar">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                <div class="px-6 py-5 space-y-6">
+                    <div>
+                        <label for="container-name" class="block text-sm font-medium text-slate-300 mb-2">Nombre <span class="text-red-400">*</span></label>
+                        <input id="container-name" name="name" type="text" maxlength="60" required class="w-full rounded-lg bg-slate-800/70 border border-slate-600/50 focus:border-yellow-400/60 focus:ring-yellow-400/40 text-slate-100 placeholder-slate-500 px-4 py-3 text-sm outline-none transition" placeholder="Ej: Reuniones de Ventas" />
+                        <p id="error-name" class="mt-2 text-xs text-red-400 hidden"></p>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <label for="container-description" class="block text-sm font-medium text-slate-300">Descripción</label>
+                            <span id="description-count" class="text-[11px] text-slate-500">0/200</span>
+                        </div>
+                        <textarea id="container-description" name="description" maxlength="200" rows="4" class="w-full rounded-lg bg-slate-800/70 border border-slate-600/50 focus:border-yellow-400/60 focus:ring-yellow-400/40 text-slate-100 placeholder-slate-500 px-4 py-3 text-sm resize-none outline-none transition" placeholder="Opcional: explica para qué usarás este contenedor"></textarea>
+                        <p id="error-description" class="mt-2 text-xs text-red-400 hidden"></p>
+                    </div>
+                </div>
+
+                <div class="px-6 pb-6 pt-4 border-t border-slate-700/50 flex flex-col sm:flex-row gap-3 sm:justify-end bg-slate-900/60">
+                    <button type="button" id="cancel-modal-btn-duplicate" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-slate-800/60 hover:bg-slate-700/60 text-slate-200 text-sm font-medium border border-slate-600/40 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        Cancelar
+                    </button>
+                    <button type="submit" id="save-container-btn" class="relative w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-900 font-semibold text-sm shadow-lg shadow-yellow-400/25 hover:from-yellow-300 hover:to-amber-400 focus:outline-none focus:ring-2 focus:ring-yellow-400/40 transition">
+                        <span id="save-btn-loading" class="hidden animate-spin w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full"></span>
+                        <span id="save-btn-text">Guardar</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Helpers simples para errores y contador (usa funciones existentes si ya están en reuniones_v2.js)
+        function clearContainerErrors() {
+            const e1 = document.getElementById('error-name');
+            const e2 = document.getElementById('error-description');
+            if (e1) { e1.textContent=''; e1.classList.add('hidden'); }
+            if (e2) { e2.textContent=''; e2.classList.add('hidden'); }
+        }
+        function updateCharacterCount() {
+            const ta = document.getElementById('container-description');
+            const counter = document.getElementById('description-count');
+            if (ta && counter) counter.textContent = `${ta.value.length}/200`;
+        }
+        // Cerrar con ambos botones (principal y duplicado inferior)
+        document.addEventListener('DOMContentLoaded', () => {
+            const cancelDup = document.getElementById('cancel-modal-btn-duplicate');
+            const cancelMain = document.getElementById('cancel-modal-btn');
+            const modal = document.getElementById('container-modal');
+            function closeModalLocal(){ modal.classList.add('hidden'); }
+            if (cancelDup) cancelDup.addEventListener('click', closeModalLocal);
+            if (cancelMain) cancelMain.addEventListener('click', closeModalLocal);
+        });
+    </script>
     </body>
 </html>
