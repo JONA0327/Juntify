@@ -2035,20 +2035,7 @@ async function unlinkSharedMeeting(sharedId) {
 window.unlinkSharedMeeting = unlinkSharedMeeting;
 
 function createContainerMeetingCard(meeting) {
-    // Mostrar resumen de los primeros 2-3 segmentos del .ju (si existen)
-    let segmentosHtml = '';
-    if (Array.isArray(meeting.segments) && meeting.segments.length > 0) {
-        const previewSegments = meeting.segments.slice(0, 3);
-        segmentosHtml = `
-            <div class="segments-preview mt-2">
-                <div class="text-xs text-yellow-300 font-semibold mb-1">Fragmentos de la reunión:</div>
-                <ul class="text-xs text-slate-300 space-y-1">
-                    ${previewSegments.map(seg => `<li><span class='font-bold'>${seg.speaker ? escapeHtml(seg.speaker) + ': ' : ''}</span>${escapeHtml(seg.text || '')}</li>`).join('')}
-                </ul>
-                ${meeting.segments.length > 3 ? `<div class="text-xs text-slate-400 mt-1">...y ${meeting.segments.length - 3} más</div>` : ''}
-            </div>
-        `;
-    }
+
     return `
         <div class="meeting-card" data-meeting-id="${meeting.id}" draggable="true">
             <div class="meeting-card-header">
@@ -2065,7 +2052,6 @@ function createContainerMeetingCard(meeting) {
                         </svg>
                         ${meeting.created_at}
                     </p>
-                    ${segmentosHtml}
                     <div class="meeting-folders">
                         <div class="folder-info">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2084,7 +2070,7 @@ function createContainerMeetingCard(meeting) {
                     </div>
                 </div>
 
-                <div class="meeting-actions">
+                <div class="meeting-actions flex flex-row flex-wrap items-center justify-between gap-2 mt-4 w-full px-2">
                     <button class="icon-btn remove-btn" onclick="removeMeetingFromContainer(${meeting.id})" title="Quitar del contenedor">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2h3" />
@@ -2164,7 +2150,7 @@ function createOrgContainerMeetingCard(meeting) {
                     })()}
                 </div>
 
-                <div class="meeting-actions">
+                <div class="meeting-actions flex flex-row flex-wrap items-center justify-between gap-2 mt-4 w-full px-2">
                     <button class="download-btn icon-btn" onclick="openDownloadModal(${meeting.id})" title="Descargar reunión (PDF)">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
