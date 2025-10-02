@@ -126,20 +126,23 @@ trait GoogleDriveHelpers
 
             // 2) Fallback: Service Account (sin o con impersonation si luego se amplía)
             if ($isPermissionOrNotFound) {
-                if (app()->bound(\App\Services\GoogleServiceAccount::class)) {
-                    $attempts[] = 'service_account';
-                    try {
-                        return $this->resolveFolderNameViaDrive($fileId, 'service_account');
-                    } catch (\Exception $eSa) {
-                        Log::debug('getFolderName: Fallback service account falló', [
-                            'file_id' => $fileId,
-                            'error' => $eSa->getMessage()
-                        ]);
-                        // Continuar hacia marcado inválido abajo
-                        $firstMsg = $eSa->getMessage(); // usar último mensaje para clasificación
+                // Intentar obtener/crear instancia de ServiceAccount incluso si no está bound
+                try {
+                    if (!app()->bound(\App\Services\GoogleServiceAccount::class)) {
+                        app()->instance(\App\Services\GoogleServiceAccount::class, new \App\Services\GoogleServiceAccount());
+                        Log::debug('getFolderName: ServiceAccount instanciada manualmente');
                     }
-                } else {
-                    Log::debug('getFolderName: ServiceAccount no está enlazado en el contenedor IoC');
+                    $attempts[] = 'service_account';
+                    $result = $this->resolveFolderNameViaDrive($fileId, 'service_account');
+                    Log::debug('getFolderName: Resuelto con service_account', [ 'file_id' => $fileId ]);
+                    return $result;
+                } catch (\Exception $eSa) {
+                    Log::debug('getFolderName: Fallback service account falló', [
+                        'file_id' => $fileId,
+                        'error' => $eSa->getMessage()
+                    ]);
+                    // Continuar hacia clasificación final
+                    $firstMsg = $eSa->getMessage();
                 }
             }
 
