@@ -1,6 +1,4 @@
-const DEBUG = import.meta.env.DEV;
-
-function debugLog(...args) { /* debug deshabilitado en producción: if (DEBUG) console.log(...args); */ }
+import { debugLog, debugWarn, debugError, debugDebug, debugGroup, debugGroupEnd } from './utils/logger';
 
 function registerOrganizationComponent() {
   const initDefinition = () => {
@@ -130,7 +128,7 @@ function registerOrganizationComponent() {
         this.isJoining = false;
         this.isDeletingGroup = false;
 
-        if (DEBUG) console.log('Estado de organización reiniciado');
+        debugLog('Estado de organización reiniciado');
 
         // Filtrar solo grupos donde el usuario pertenece (backend entrega users filtrado)
         if (Array.isArray(this.organizations)) {
@@ -278,7 +276,7 @@ function registerOrganizationComponent() {
             const data = await res.json();
             this.invitableContacts = (data.contacts || []).sort((a,b) => a.name.localeCompare(b.name));
         } catch (e) {
-            console.error('Error loading invitable contacts', e);
+            debugError('Error loading invitable contacts', e);
             this.invitableContactsError = 'Error de red al cargar contactos';
             this.invitableContacts = [];
         } finally {
@@ -313,7 +311,7 @@ function registerOrganizationComponent() {
                 this.activities[orgId] = [];
             }
         } catch (error) {
-            console.error('Error loading activities:', error);
+            debugError('Error loading activities:', error);
             this.activities[orgId] = [];
         }
     },
@@ -369,7 +367,7 @@ function registerOrganizationComponent() {
                 this.showStatus('No se pudo desconectar', 'error');
             }
         } catch (e) {
-            console.error('Error disconnecting drive', e);
+            debugError('Error disconnecting drive', e);
             this.showStatus('Error al desconectar', 'error');
         }
     },
@@ -400,7 +398,7 @@ function registerOrganizationComponent() {
                 this.showStatus(msg, 'error');
             }
         } catch (e) {
-            console.error('Error creating organization folder:', e);
+            debugError('Error creating organization folder:', e);
             this.showStatus('Error al crear la carpeta de organización', 'error');
         } finally {
             state.isCreatingRoot = false;
@@ -421,7 +419,7 @@ function registerOrganizationComponent() {
                 state.subfolders = [];
             }
         } catch (e) {
-            console.error('Error loading drive status:', e);
+            debugError('Error loading drive status:', e);
             state.rootFolder = null;
         } finally {
             state.isLoading = false;
@@ -429,7 +427,7 @@ function registerOrganizationComponent() {
     },
 
     async createSubfolder(org) {
-        console.warn('Creación manual de subcarpetas deshabilitada (estructura automática).');
+        debugWarn('Creación manual de subcarpetas deshabilitada (estructura automática).');
         this.showStatus('Las subcarpetas se gestionan automáticamente', 'info');
     },
 
@@ -466,7 +464,7 @@ function registerOrganizationComponent() {
                 this.showStatus(msg, 'error');
             }
         } catch (e) {
-            console.error('rename subfolder error', e);
+            debugError('rename subfolder error', e);
             this.showStatus('Error al renombrar', 'error');
         }
     },
@@ -491,7 +489,7 @@ function registerOrganizationComponent() {
                 return false;
             }
         } catch (e) {
-            console.error('delete subfolder error', e);
+            debugError('delete subfolder error', e);
             this.showStatus('Error al eliminar', 'error');
             return false;
         }
@@ -548,7 +546,7 @@ function registerOrganizationComponent() {
     this.isDeletingGroup = false;
 
         if (import.meta.env.DEV) {
-            console.log('Estado de organización reiniciado');
+            debugLog('Estado de organización reiniciado');
         }
         // Restaurar comportamiento: mostrar solo los grupos donde el usuario pertenece
         // Nota: El backend carga cada grupo con 'users' filtrado al usuario actual,
@@ -676,13 +674,13 @@ function registerOrganizationComponent() {
                             group._membersLoaded = true;
                         }
                     } catch (e) {
-                        console.error('Error loading members for group', group.id, e);
+                        debugError('Error loading members for group', group.id, e);
                         group._membersLoaded = true;
                     }
                 }
             }
         } catch (e) {
-            console.error('Error loading permissions members', e);
+            debugError('Error loading permissions members', e);
         }
     },
     openConfirmDeleteGroup(org, group) {
@@ -757,13 +755,13 @@ function registerOrganizationComponent() {
         try {
             let response = await attempt('/api/organizations');
             if (response.status === 401 && !triedWebFallback) {
-                console.warn('[organization.js] 401 en /api/organizations, intentando fallback /organizations (web)');
+                debugWarn('[organization.js] 401 en /api/organizations, intentando fallback /organizations (web)');
                 triedWebFallback = true;
                 response = await attempt('/organizations');
-                console.log('[organization.js] Fallback /organizations status:', response.status, 'content-type:', response.headers.get('content-type'));
+                debugLog('[organization.js] Fallback /organizations status:', response.status, 'content-type:', response.headers.get('content-type'));
             }
             if (response.status === 401) {
-                console.warn('[organization.js] 401 aún después de fallback. Diagnosticando sesión...');
+                debugWarn('[organization.js] 401 aún después de fallback. Diagnosticando sesión...');
                 await this.debugAuth();
                 const data401 = await response.json().catch(() => ({}));
                 alert(data401.message || 'No autenticado');
@@ -772,15 +770,15 @@ function registerOrganizationComponent() {
             // Detectar caso de redirección HTML (login) u otra respuesta no JSON
             const contentType = response.headers.get('content-type') || '';
             if (response.ok && !contentType.includes('application/json')) {
-                console.warn('[organization.js] Respuesta OK pero no JSON (posible HTML de login). content-type:', contentType);
+                debugWarn('[organization.js] Respuesta OK pero no JSON (posible HTML de login). content-type:', contentType);
                 const textSample = await response.text().catch(()=> '');
-                console.debug('[organization.js] Primeros 120 chars de la respuesta:', textSample.substring(0,120));
+                debugDebug('[organization.js] Primeros 120 chars de la respuesta:', textSample.substring(0,120));
                 await this.debugAuth();
                 alert('La sesión no fue reconocida (respuesta no JSON). Reintenta después de refrescar la página o volver a iniciar sesión.');
                 return;
             }
             if (response.status === 419) { // CSRF / sesión expirada
-                console.warn('[organization.js] 419 (CSRF/session) creando organización');
+                debugWarn('[organization.js] 419 (CSRF/session) creando organización');
                 await this.debugAuth();
                 alert('La sesión expiró. Refresca la página e inténtalo de nuevo.');
                 return;
@@ -790,7 +788,7 @@ function registerOrganizationComponent() {
                 const reason = data.message || (window.userRole && ['free','basic'].includes(window.userRole)
                     ? 'Tu plan actual no permite crear organizaciones'
                     : 'Ya perteneces a una organización (solo se permite una)');
-                console.warn('[organization.js] 403 creating organization', { userRole: window.userRole, organizationsCount: this.organizations.length, response: data });
+                debugWarn('[organization.js] 403 creating organization', { userRole: window.userRole, organizationsCount: this.organizations.length, response: data });
                 alert(reason);
                 return;
             }
@@ -808,7 +806,7 @@ function registerOrganizationComponent() {
             const errorData = await response.json().catch(() => ({}));
             alert(errorData.message || 'Error al crear la organización');
         } catch (error) {
-            console.error('Error creating organization:', error);
+            debugError('Error creating organization:', error);
             alert('Error al crear la organización');
         } finally {
             this.isCreatingOrg = false;
@@ -822,26 +820,26 @@ function registerOrganizationComponent() {
                 fetch('/api/debug/session-info', { credentials:'same-origin' }).then(r=>r.json().catch(()=>({parse:false}))).catch(()=>({error:true})),
                 fetch('/api/debug/request-dump', { method:'POST', credentials:'same-origin', headers }).then(r=>r.json().catch(()=>({parse:false}))).catch(()=>({error:true}))
             ]);
-            console.group('[organization.js] quickSessionDiagnostics');
-            console.log('whoami ->', whoami);
-            console.log('session-info ->', sessionInfo);
-            console.log('request-dump ->', requestDump);
-            console.groupEnd();
+            debugGroup('[organization.js] quickSessionDiagnostics');
+            debugLog('whoami ->', whoami);
+            debugLog('session-info ->', sessionInfo);
+            debugLog('request-dump ->', requestDump);
+            debugGroupEnd();
             return { whoami, sessionInfo, requestDump };
         } catch(e) {
-            console.error('[organization.js] quickSessionDiagnostics error', e);
+            debugError('[organization.js] quickSessionDiagnostics error', e);
         }
     },
     async debugAuth() {
         try {
             // Ver cookies visibles (solo nombres por seguridad)
             const cookieNames = document.cookie.split(';').map(c=>c.split('=')[0].trim());
-            console.log('[organization.js][debugAuth] Cookies presentes:', cookieNames);
+            debugLog('[organization.js][debugAuth] Cookies presentes:', cookieNames);
             const userResp = await fetch('/api/user', {credentials:'same-origin', headers:{'Accept':'application/json'}});
             const userData = await userResp.json().catch(()=>({}));
-            console.log('[organization.js][debugAuth] /api/user status', userResp.status, userData);
+            debugLog('[organization.js][debugAuth] /api/user status', userResp.status, userData);
         } catch(e) {
-            console.error('[organization.js][debugAuth] Error diagnosticando auth', e);
+            debugError('[organization.js][debugAuth] Error diagnosticando auth', e);
         }
     },
     openGroupModal(org) {
@@ -899,7 +897,7 @@ function registerOrganizationComponent() {
                 }, 1500);
             }
         } catch (error) {
-            console.error('Error updating organization:', error);
+            debugError('Error updating organization:', error);
         }
     },
     async deleteOrganization(org) {
@@ -932,7 +930,7 @@ function registerOrganizationComponent() {
                 this.organizations.splice(idx, 1);
             }
         } catch (error) {
-            console.error('Error deleting organization:', error);
+            debugError('Error deleting organization:', error);
         }
     },
     openEditGroupModal(org, group) {
@@ -976,7 +974,7 @@ function registerOrganizationComponent() {
                 }, 1500);
             }
         } catch (error) {
-            console.error('Error updating group:', error);
+            debugError('Error updating group:', error);
         }
     },
     async deleteGroup(org, group) {
@@ -1010,20 +1008,20 @@ function registerOrganizationComponent() {
             this.showStatus('Grupo eliminado');
             this.closeConfirmDeleteGroup();
         } catch (error) {
-            console.error('Error deleting group:', error);
+            debugError('Error deleting group:', error);
             this.showStatus('Error al eliminar el grupo', 'error');
         } finally {
             this.isDeletingGroup = false;
         }
     },
     async viewGroup(group) {
-        console.log('Opening group modal for:', group.nombre_grupo);
-        console.log('Current showGroupInfoModal before:', this.showGroupInfoModal);
-        console.log('Current isLoadingGroup before:', this.isLoadingGroup);
+        debugLog('Opening group modal for:', group.nombre_grupo);
+        debugLog('Current showGroupInfoModal before:', this.showGroupInfoModal);
+        debugLog('Current isLoadingGroup before:', this.isLoadingGroup);
 
         // Evitar múltiples clicks
         if (this.isLoadingGroup) {
-            console.log('Already loading, returning');
+            debugLog('Already loading, returning');
             return;
         }
 
@@ -1031,9 +1029,9 @@ function registerOrganizationComponent() {
         this.currentGroup = group;
         this.showGroupInfoModal = true;
 
-        console.log('Set showGroupInfoModal to:', this.showGroupInfoModal);
-        console.log('Set isLoadingGroup to:', this.isLoadingGroup);
-        console.log('Set currentGroup to:', this.currentGroup.nombre_grupo);
+        debugLog('Set showGroupInfoModal to:', this.showGroupInfoModal);
+        debugLog('Set isLoadingGroup to:', this.isLoadingGroup);
+        debugLog('Set currentGroup to:', this.currentGroup.nombre_grupo);
 
         try {
             // Cargar detalles del grupo con contenedores
@@ -1050,17 +1048,17 @@ function registerOrganizationComponent() {
                     this.currentGroup.user_role = this.currentGroup.user_role || 'administrador';
                 }
                 await this.loadGroupContainers(group.id);
-                console.log('Group loaded with containers:', this.currentGroup.containers?.length || 0);
+                debugLog('Group loaded with containers:', this.currentGroup.containers?.length || 0);
             } else {
                 throw new Error('Error al cargar el grupo');
             }
         } catch (error) {
-            console.error('Error loading group:', error);
+            debugError('Error loading group:', error);
             this.currentGroup = group; // Fallback al grupo original
         } finally {
             this.isLoadingGroup = false;
-            console.log('Final showGroupInfoModal:', this.showGroupInfoModal);
-            console.log('Final isLoadingGroup:', this.isLoadingGroup);
+            debugLog('Final showGroupInfoModal:', this.showGroupInfoModal);
+            debugLog('Final isLoadingGroup:', this.isLoadingGroup);
         }
     },
 
@@ -1094,7 +1092,7 @@ function registerOrganizationComponent() {
             }));
             debugLog('Containers loaded:', this.currentGroup.containers);
         } catch (error) {
-            console.error('Error loading group containers:', error);
+            debugError('Error loading group containers:', error);
             this.currentGroup.containers = [];
         }
     },
@@ -1131,7 +1129,7 @@ function registerOrganizationComponent() {
                 alert(errorData.message || 'Error al crear el grupo');
             }
         } catch (error) {
-            console.error('Error creating group:', error);
+            debugError('Error creating group:', error);
             alert('Error al crear el grupo');
         } finally {
             this.isCreatingGroup = false;
@@ -1167,17 +1165,17 @@ function registerOrganizationComponent() {
                         ? '✓ Este usuario existe en Juntify'
                         : '○ Usuario no registrado, se enviará por email';
                 } else {
-                    console.error('Server returned non-JSON response');
+                    debugError('Server returned non-JSON response');
                     this.userExists = false;
                     this.userExistsMessage = '○ Usuario no registrado, se enviará por email';
                 }
             } else {
-                console.error('Error checking user, status:', response.status);
+                debugError('Error checking user, status:', response.status);
                 this.userExists = false;
                 this.userExistsMessage = '○ Usuario no registrado, se enviará por email';
             }
         } catch (error) {
-            console.error('Error checking user:', error);
+            debugError('Error checking user:', error);
             this.userExists = false;
             this.userExistsMessage = '○ Usuario no registrado, se enviará por email';
         }
@@ -1230,7 +1228,7 @@ function registerOrganizationComponent() {
                 this.showError(errorData.message || 'Error al enviar la invitación');
             }
         } catch (error) {
-            console.error('Error sending invitation:', error);
+            debugError('Error sending invitation:', error);
             this.showError('Error de conexión al enviar la invitación');
         } finally {
             this.isSendingInvitation = false; // Desactivar loading
@@ -1273,7 +1271,7 @@ function registerOrganizationComponent() {
                 this.showError(errorData.message || 'Error al enviar la invitación');
             }
         } catch (error) {
-            console.error('Error inviting member:', error);
+            debugError('Error inviting member:', error);
             this.showError('Error de conexión al enviar la invitación');
         } finally {
             this.isSendingInvitation = false; // Desactivar loading
@@ -1328,7 +1326,7 @@ function registerOrganizationComponent() {
 
             this.showStatus('Te has unido a la organización exitosamente');
         } catch (error) {
-            console.error('Error joining organization:', error);
+            debugError('Error joining organization:', error);
             alert('Hubo un problema al unirse a la organización');
         } finally {
             this.isJoining = false;
@@ -1366,7 +1364,7 @@ function registerOrganizationComponent() {
             this.currentOrganizationId = data.current_organization_id || null;
             window.location.href = this.currentOrganizationId ? '/organizacion' : '/';
         } catch (error) {
-            console.error('Error leaving organization:', error);
+            debugError('Error leaving organization:', error);
             this.showError('Error al salir de la organización');
         } finally {
             this.isLeaving = false;
@@ -1386,7 +1384,7 @@ function registerOrganizationComponent() {
                 this.currentGroup = data.group;
             }
         } catch (error) {
-            console.error('Error joining group:', error);
+            debugError('Error joining group:', error);
         }
     },
 
@@ -1466,7 +1464,7 @@ function registerOrganizationComponent() {
                         errorMessage = errorData.message || errorMessage;
                     }
                 } catch (parseError) {
-                    console.error('Error parsing error response:', parseError);
+                    debugError('Error parsing error response:', parseError);
                     if (response.status === 422) {
                         errorMessage = 'Datos de invitación inválidos';
                     } else if (response.status === 403) {
@@ -1481,7 +1479,7 @@ function registerOrganizationComponent() {
                 this.showError(errorMessage);
             }
         } catch (error) {
-            console.error('Error sending group invitation:', error);
+            debugError('Error sending group invitation:', error);
             this.showError('Error de conexión al enviar la invitación');
         } finally {
             this.isSendingInvitation = false; // Desactivar loading
@@ -1505,7 +1503,7 @@ function registerOrganizationComponent() {
                 });
             }
         } catch (error) {
-            console.error('Error refreshing group data:', error);
+            debugError('Error refreshing group data:', error);
         }
     },
 
@@ -1527,7 +1525,7 @@ function registerOrganizationComponent() {
                 throw new Error('Error al actualizar el rol');
             }
         } catch (error) {
-            console.error('Error updating member role:', error);
+            debugError('Error updating member role:', error);
             this.showError('Error al actualizar el rol del miembro');
         }
     },
@@ -1539,13 +1537,13 @@ function registerOrganizationComponent() {
         const groupId = this.groupIdForMemberRemoval;
         const userId = this.memberToRemove.id;
         if (!groupId || !userId) {
-            console.error('removeMember: invalid IDs', { groupId, userId });
+            debugError('removeMember: invalid IDs', { groupId, userId });
             this.closeConfirmRemoveMember();
             this.showError('Datos inválidos para remover miembro');
             return;
         }
 
-        console.log('removeMember request', { groupId, userId });
+        debugLog('removeMember request', { groupId, userId });
 
         this.isRemovingMember = true;
         try {
@@ -1556,7 +1554,7 @@ function registerOrganizationComponent() {
                 }
             });
 
-            console.log('removeMember response status', response.status);
+            debugLog('removeMember response status', response.status);
 
             if (response.ok) {
                 // Refrescar los datos del grupo
@@ -1567,13 +1565,13 @@ function registerOrganizationComponent() {
             } else {
                 const data = await response.json().catch(() => ({}));
                 if (response.status === 403 || response.status === 500) {
-                    console.error('removeMember error', response.status, data);
+                    debugError('removeMember error', response.status, data);
                 }
                 this.closeConfirmRemoveMember();
                 this.showError(data.message || 'Error al remover el miembro');
             }
         } catch (error) {
-            console.error('Error removing member:', error);
+            debugError('Error removing member:', error);
             this.closeConfirmRemoveMember();
             this.showError('Error al remover el miembro del grupo');
         } finally {
@@ -1644,13 +1642,13 @@ function registerOrganizationComponent() {
                     const data = await response.json();
 
                     this.organizations = this.filterOrgGroups(data.organizations || []);
-                    console.log('Organizaciones recargadas:', this.organizations);
+                    debugLog('Organizaciones recargadas:', this.organizations);
 
                 } else {
-                    console.error('Error al recargar organizaciones:', response.status);
+                    debugError('Error al recargar organizaciones:', response.status);
                 }
             } catch (error) {
-                console.error('Error de red al recargar organizaciones:', error);
+                debugError('Error de red al recargar organizaciones:', error);
             }
         },
 
@@ -1758,7 +1756,7 @@ function registerOrganizationComponent() {
                 } else {
                     // Manejar diferentes tipos de errores
                     const errorText = await response.text();
-                    console.error('Error del servidor:', response.status, errorText);
+                    debugError('Error del servidor:', response.status, errorText);
 
                     if (response.status === 403) {
                         this.showError('Error: No tienes permisos para editar esta organización. Verifica que seas el propietario.');
@@ -1771,7 +1769,7 @@ function registerOrganizationComponent() {
                     }
                 }
             } catch (error) {
-                console.error('Error de red o JavaScript:', error);
+                debugError('Error de red o JavaScript:', error);
                 this.showError('Error de conexión. Verifica tu conexión a internet e intenta nuevamente.');
             } finally {
                 this.isSavingOrganization = false; // Desactivar loading
@@ -1820,7 +1818,7 @@ function registerOrganizationComponent() {
                     throw new Error('Error al actualizar el grupo');
                 }
             } catch (error) {
-                console.error('Error updating group:', error);
+                debugError('Error updating group:', error);
                 this.showError('Error al actualizar el grupo');
             } finally {
                 this.isSavingGroup = false; // Desactivar loading
@@ -1917,7 +1915,7 @@ function registerOrganizationComponent() {
                 this.showError(msg);
             }
         } catch (error) {
-            console.error('Error creating container:', error);
+            debugError('Error creating container:', error);
             alert('Error al crear el contenedor');
         } finally {
             this.isCreatingContainer = false;
@@ -1988,7 +1986,7 @@ function registerOrganizationComponent() {
                 alert('Error al cargar las reuniones del contenedor');
             }
         } catch (error) {
-            console.error('Error loading container meetings:', error);
+            debugError('Error loading container meetings:', error);
             alert('Error al cargar las reuniones del contenedor');
         }
     },
@@ -2018,7 +2016,7 @@ function registerOrganizationComponent() {
             const data = await res.json();
             this.containerDocs.files = data.data || [];
         } catch (e) {
-            console.error(e);
+            debugError(e);
             this.showError('No se pudieron cargar los documentos');
         } finally {
             this.containerDocs.loading = false;
@@ -2029,7 +2027,7 @@ function registerOrganizationComponent() {
         // Abrir modal drag & drop
         debugLog('[upload-modal] openUploadDocument called', { containerId: container?.id, name: container?.name, ts: Date.now() });
         if (!container) {
-            console.warn('[upload-modal] Se llamó openUploadDocument sin contenedor');
+            debugWarn('[upload-modal] Se llamó openUploadDocument sin contenedor');
             return;
         }
         // Cerrar modal de info de grupo si está abierto para evitar stacking confuso
@@ -2160,10 +2158,10 @@ function registerOrganizationComponent() {
             if (typeof this.showStatus === 'function') {
                 this.showStatus(`Archivo "${file.name}" subido correctamente`);
             } else {
-                console.log('[upload] Archivo subido correctamente');
+                debugLog('[upload] Archivo subido correctamente');
             }
         } catch (e) {
-            console.error(e);
+            debugError(e);
             this.showError(e.message || 'Error al subir');
         } finally {
             this.uploadingDocument = false;
@@ -2247,7 +2245,7 @@ function registerOrganizationComponent() {
                 alert(errorData.message || 'Error al actualizar el contenedor');
             }
         } catch (error) {
-            console.error('Error updating container:', error);
+            debugError('Error updating container:', error);
             alert('Error al actualizar el contenedor');
         }
     },
@@ -2283,7 +2281,7 @@ function registerOrganizationComponent() {
                 alert(errorData.message || 'Error al eliminar el contenedor');
             }
         } catch (error) {
-            console.error('Error deleting container:', error);
+            debugError('Error deleting container:', error);
             alert('Error al eliminar el contenedor');
         }
         } // <- cierre del método deleteContainer

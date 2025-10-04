@@ -18,6 +18,28 @@ let recordingIntervalId = null;
 let recordingTimeoutId = null;
 let recordingStartAt = 0;
 
+const { debugLog, debugWarn, debugError } = (() => {
+    const globalLogger = (typeof window !== 'undefined' && window.juntifyLogger) ? window.juntifyLogger : null;
+    const createFallback = (method) => (...args) => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        const isDebug = Boolean(window.APP_DEBUG);
+        if (!isDebug || typeof console === 'undefined') {
+            return;
+        }
+        const fn = console[method];
+        if (typeof fn === 'function') {
+            fn.apply(console, args);
+        }
+    };
+    return {
+        debugLog: globalLogger?.debugLog ?? createFallback('log'),
+        debugWarn: globalLogger?.debugWarn ?? createFallback('warn'),
+        debugError: globalLogger?.debugError ?? createFallback('error'),
+    };
+})();
+
     // Botón y input para adjuntar archivo (si existen en la vista)
 function startAutoRefresh() {
     // Limpiar interval anterior si existe
@@ -89,7 +111,7 @@ async function toggleRecording() {
                     const input = document.getElementById('active-chat-input');
                     if (input) input.placeholder = 'Enviando audio...';
                     if (micBtn) micBtn.classList.remove('text-yellow-400','bg-slate-600/50');
-                    try { await sendMessage(); } catch (e) { console.error('Fallo al enviar audio:', e); }
+                    try { await sendMessage(); } catch (e) { debugError('Fallo al enviar audio:', e); }
                     if (input && !input.value) input.placeholder = 'Escribe un mensaje...';
                 } finally {
                     mediaRecorder = null;
@@ -108,10 +130,10 @@ async function toggleRecording() {
                 }
             }, 60000);
         } catch (err) {
-            console.error('No se pudo iniciar la grabación de voz:', err);
+            debugError('No se pudo iniciar la grabación de voz:', err);
         }
     } else if (mediaRecorder && mediaRecorder.state === 'recording') {
-        try { mediaRecorder.stop(); } catch (e) { console.error('No se pudo detener la grabación:', e); }
+        try { mediaRecorder.stop(); } catch (e) { debugError('No se pudo detener la grabación:', e); }
     }
 }
 
@@ -146,10 +168,10 @@ async function refreshConversationsIfNeeded() {
             }
         });
         if (needsConversationUpdate) {
-            console.log('🔄 Actualizando conversaciones...', { hasNewMessages });
+            debugLog('🔄 Actualizando conversaciones...', { hasNewMessages });
             updateConversationsList(conversations);
             if (hasNewMessages && currentChatId) {
-                console.log('📨 Nuevos mensajes detectados, actualizando...');
+                debugLog('📨 Nuevos mensajes detectados, actualizando...');
                 await loadChatMessages(true);
                 const messagesContainer = document.getElementById('active-chat-messages');
                 if (messagesContainer) {
@@ -160,7 +182,7 @@ async function refreshConversationsIfNeeded() {
             lastConversationUpdate = new Date();
         }
     } catch (error) {
-        console.error('❌ Error en auto-refresh:', error);
+        debugError('❌ Error en auto-refresh:', error);
     }
 }
 
@@ -168,7 +190,7 @@ async function refreshConversationsIfNeeded() {
 async function loadConversations() {
     const conversationsList = document.getElementById('conversations-list');
 
-    console.log('🔄 Iniciando carga de conversaciones...');
+    debugLog('🔄 Iniciando carga de conversaciones...');
 
     try {
         conversationsList.innerHTML = `
@@ -180,7 +202,7 @@ async function loadConversations() {
 
         const csrfMeta = document.querySelector('meta[name="csrf-token"]');
         const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : null;
-        console.log('📝 CSRF Token:', csrfToken ? 'Encontrado' : 'No encontrado');
+        debugLog('📝 CSRF Token:', csrfToken ? 'Encontrado' : 'No encontrado');
 
         const headers = {
             'Accept': 'application/json',
@@ -190,20 +212,20 @@ async function loadConversations() {
         if (csrfToken) headers['X-CSRF-TOKEN'] = csrfToken;
         const response = await fetch('/api/chats', { method: 'GET', headers });
 
-        console.log('📡 Response status:', response.status);
-        console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+        debugLog('📡 Response status:', response.status);
+        debugLog('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('❌ Error response:', errorText);
+            debugError('❌ Error response:', errorText);
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
 
         const conversations = await response.json();
-        console.log('💬 Conversaciones recibidas:', conversations);
+        debugLog('💬 Conversaciones recibidas:', conversations);
 
         if (!Array.isArray(conversations)) {
-            console.error('❌ La respuesta no es un array:', conversations);
+            debugError('❌ La respuesta no es un array:', conversations);
             throw new Error('Formato de respuesta inválido');
         }
 
@@ -225,12 +247,12 @@ async function loadConversations() {
         conversationsList.innerHTML = '';
 
         conversations.forEach((conversation, index) => {
-            console.log(`💬 Procesando conversación ${index + 1}:`, conversation);
+            debugLog(`💬 Procesando conversación ${index + 1}:`, conversation);
             const conversationElement = createConversationElement(conversation);
             conversationsList.appendChild(conversationElement);
         });
 
-        console.log('✅ Conversaciones cargadas exitosamente');
+        debugLog('✅ Conversaciones cargadas exitosamente');
 
         // Auto-seleccionar conversación si hay chat_id en la URL
         const urlParams = new URLSearchParams(window.location.search);
@@ -243,7 +265,7 @@ async function loadConversations() {
         }
 
     } catch (error) {
-        console.error('❌ Error loading conversations:', error);
+        debugError('❌ Error loading conversations:', error);
         conversationsList.innerHTML = `
             <div class="p-8 text-center">
                 <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -395,7 +417,7 @@ function createConversationElement(conversation) {
                 div.remove();
             } catch (err) {
                 alert('No se pudo eliminar la conversación.');
-                console.error('DELETE /api/chats failed', err);
+                debugError('DELETE /api/chats failed', err);
             }
         });
     }
@@ -405,7 +427,7 @@ function createConversationElement(conversation) {
 
 // Función para seleccionar una conversación
 async function selectConversation(conversation) {
-    console.log('🎯 Seleccionando conversación:', conversation);
+    debugLog('🎯 Seleccionando conversación:', conversation);
 
     // Remover selección anterior
     document.querySelectorAll('.conversation-item').forEach(item => {
@@ -481,12 +503,12 @@ async function selectConversation(conversation) {
 // Función para cargar mensajes del chat activo
 async function loadChatMessages(silent = false) {
     if (!currentChatId) {
-        console.warn('⚠️ No hay chat activo para cargar mensajes');
+        debugWarn('⚠️ No hay chat activo para cargar mensajes');
         return;
     }
 
     const messagesContainer = document.getElementById('active-chat-messages');
-    console.log('📨 Cargando mensajes para chat:', currentChatId);
+    debugLog('📨 Cargando mensajes para chat:', currentChatId);
 
     try {
         // Solo mostrar loading si no es modo silencioso
@@ -509,16 +531,16 @@ async function loadChatMessages(silent = false) {
         if (csrfToken) headers['X-CSRF-TOKEN'] = csrfToken;
         const response = await fetch(`/api/chats/${currentChatId}`, { method: 'GET', headers });
 
-        console.log('📨 Messages response status:', response.status);
+        debugLog('📨 Messages response status:', response.status);
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('❌ Error loading messages:', errorText);
+            debugError('❌ Error loading messages:', errorText);
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
 
         const messages = await response.json();
-        console.log('📨 Mensajes recibidos:', messages);
+        debugLog('📨 Mensajes recibidos:', messages);
 
         chatMessages = Array.isArray(messages) ? messages : [];
 
@@ -526,7 +548,7 @@ async function loadChatMessages(silent = false) {
     maybeScrollToBottom();
 
     } catch (error) {
-        console.error('❌ Error loading messages:', error);
+        debugError('❌ Error loading messages:', error);
         messagesContainer.innerHTML = `
             <div class="text-center py-8">
                 <p class="text-red-400">Error al cargar mensajes</p>
@@ -542,11 +564,11 @@ function updateChatMessagesDisplay() {
     const userMeta = document.querySelector('meta[name="user-id"]');
     const currentUserId = userMeta ? userMeta.getAttribute('content') : null;
 
-    console.log('🎨 Actualizando visualización de mensajes. Total:', chatMessages.length);
-    console.log('👤 Current user ID:', currentUserId);
+    debugLog('🎨 Actualizando visualización de mensajes. Total:', chatMessages.length);
+    debugLog('👤 Current user ID:', currentUserId);
 
     if (!messagesContainer) {
-        console.error('❌ No se encontró el contenedor de mensajes');
+        debugError('❌ No se encontró el contenedor de mensajes');
         return;
     }
 
@@ -564,7 +586,7 @@ function updateChatMessagesDisplay() {
     messagesContainer.innerHTML = '';
 
     chatMessages.forEach((message, index) => {
-        console.log(`💬 Procesando mensaje ${index + 1}:`, message);
+        debugLog(`💬 Procesando mensaje ${index + 1}:`, message);
 
         // Verificar si es un mensaje nuevo (no temporal y no visto antes)
         const isNewMessage = !message.is_temp && !lastMessageIds.has(message.id);
@@ -584,7 +606,7 @@ function createMessageElement(message, currentUserId, isNewMessage = false) {
     const div = document.createElement('div');
     const isMyMessage = message.sender_id == currentUserId || message.user_id == currentUserId;
 
-    console.log('💬 Creando mensaje:', {
+    debugLog('💬 Creando mensaje:', {
         messageId: message.id,
         senderId: message.sender_id || message.user_id,
         currentUserId: currentUserId,
@@ -682,7 +704,7 @@ function createMessageElement(message, currentUserId, isNewMessage = false) {
                 // Actualizar snippet de conversación
                 updateCurrentConversationLastMessage(chatMessages[chatMessages.length - 1] || null);
             } catch (err) {
-                console.error('Eliminar para mí falló', err);
+                debugError('Eliminar para mí falló', err);
                 // Modal fallback
                 showConfirmModal('No se pudo eliminar el mensaje para ti.').then(()=>{});
             }
@@ -711,7 +733,7 @@ function createMessageElement(message, currentUserId, isNewMessage = false) {
                 div.replaceWith(replacement);
                 updateCurrentConversationLastMessage(newMsg);
             } catch (err) {
-                console.error('Eliminar para todos falló', err);
+                debugError('Eliminar para todos falló', err);
                 showConfirmModal('No se pudo eliminar el mensaje para todos.').then(()=>{});
             }
         });
@@ -763,7 +785,7 @@ function initVoicePlayer(id){
 // Función para enviar mensaje
 async function sendMessage() {
     if (!currentChatId) {
-        console.warn('⚠️ No hay chat activo para enviar mensaje');
+        debugWarn('⚠️ No hay chat activo para enviar mensaje');
         return;
     }
 
@@ -771,11 +793,11 @@ async function sendMessage() {
     const messageText = messageInput.value.trim();
 
         if (!messageText && !pendingFile && !pendingVoiceBase64) {
-        console.warn('⚠️ Nada que enviar');
+        debugWarn('⚠️ Nada que enviar');
         return;
     }
 
-    console.log('📤 Enviando mensaje:', messageText);
+    debugLog('📤 Enviando mensaje:', messageText);
 
     // Limpiar input inmediatamente
     messageInput.value = '';
@@ -880,17 +902,17 @@ async function sendMessage() {
         let result = {};
         if (fetchOptions) {
             const response = await fetch(`/api/chats/${currentChatId}/messages`, fetchOptions);
-            console.log('📤 Send message response status:', response.status);
+            debugLog('📤 Send message response status:', response.status);
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('❌ Error sending message:', errorText);
+                debugError('❌ Error sending message:', errorText);
                 throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
             result = await response.json();
         } else {
             // En el flujo de XHR ya enviamos; leave result vacío y recarga fallback abajo
         }
-        console.log('📤 Mensaje enviado exitosamente:', result);
+        debugLog('📤 Mensaje enviado exitosamente:', result);
 
         // Remover mensaje optimista
         chatMessages = chatMessages.filter(msg => msg.id !== optimisticMessage.id);
@@ -923,7 +945,7 @@ async function sendMessage() {
         }
 
     } catch (error) {
-        console.error('❌ Error sending message:', error);
+        debugError('❌ Error sending message:', error);
 
         // Remover mensaje optimista si falló
         chatMessages = chatMessages.filter(msg => msg.id !== optimisticMessage.id);
@@ -1044,7 +1066,7 @@ function escapeHtml(text) {
 
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Inicializando chat...');
+    debugLog('🚀 Inicializando chat...');
 
     // Cargar conversaciones al cargar la página
     loadConversations();
@@ -1236,7 +1258,7 @@ async function loadContacts() {
             }
         }));
     } catch (e) {
-        console.error('Error: loadContacts()', e);
+        debugError('Error: loadContacts()', e);
     }
 }
 

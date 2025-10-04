@@ -1,4 +1,5 @@
 import './bootstrap';
+import './utils/logger';
 import './notifications';
 import './organization';
 import './utils/auth-interceptors';
