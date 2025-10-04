@@ -541,6 +541,8 @@
                     <label class="form-label">Nombre del hablante</label>
                     <input type="text" class="modal-input" id="speaker-name-input" placeholder="Ej: María González">
                     <div class="input-hint">Este cambio solo afectará a este segmento de la transcripción.</div>
+                    <div class="speaker-suggestions-help">Selecciona uno de tus contactos o escribe para buscar más personas.</div>
+                    <div id="speaker-suggestions" class="speaker-suggestions" aria-live="polite"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -575,6 +577,8 @@
                     <label class="form-label">Nuevo nombre</label>
                     <input type="text" class="modal-input" id="global-speaker-name-input" placeholder="Ej: María González">
                     <div class="input-hint">Este cambio afectará a todos los segmentos de este hablante.</div>
+                    <div class="speaker-suggestions-help">Comienza a escribir para buscar globalmente o elige de tus contactos.</div>
+                    <div id="global-speaker-suggestions" class="speaker-suggestions" aria-live="polite"></div>
                 </div>
             </div>
             <div class="modal-footer">
