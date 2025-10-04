@@ -72,12 +72,19 @@
 
                     <!-- Asignar a -->
                     <div class="mb-4">
-                        <label for="taskAssignee" class="block text-sm font-medium text-slate-300 mb-2">
+                        <label for="taskAssigneeSelector" class="block text-sm font-medium text-slate-300 mb-2">
                             Asignar a
                         </label>
-                        <input type="text" id="taskAssignee" name="assignee"
-                               class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                               placeholder="Username del usuario (opcional)">
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <select id="taskAssigneeSelector"
+                                    class="w-full sm:w-1/2 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">Selecciona contacto o miembro</option>
+                            </select>
+                            <input type="text" id="taskAssigneeInput" name="assignee"
+                                   class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="Usuario o correo (opcional)">
+                        </div>
+                        <input type="hidden" id="taskAssignedUserId" name="assigned_user_id">
                         <p class="text-xs text-slate-400 mt-1">Deja vacío para asignarte la tarea a ti mismo</p>
                     </div>
 
@@ -123,6 +130,79 @@
 
 <script>
 let editingTaskId = null;
+const taskAssigneeSelector = document.getElementById('taskAssigneeSelector');
+const taskAssigneeInput = document.getElementById('taskAssigneeInput');
+const taskAssignedUserIdInput = document.getElementById('taskAssignedUserId');
+let lastLoadedMeetingIdForTaskModal = null;
+
+function taskModalGetAssignableManager() {
+    return window.AssignableUsersManager;
+}
+
+function resetTaskAssigneeFields() {
+    if (taskAssigneeSelector) {
+        taskAssigneeSelector.value = '';
+    }
+    if (taskAssigneeInput) {
+        taskAssigneeInput.value = '';
+    }
+    if (taskAssignedUserIdInput) {
+        taskAssignedUserIdInput.value = '';
+    }
+}
+
+function handleTaskAssigneeChange() {
+    if (!taskAssigneeSelector || !taskAssignedUserIdInput) {
+        return;
+    }
+    const selectedValue = taskAssigneeSelector.value || '';
+    const selectedOption = taskAssigneeSelector.options[taskAssigneeSelector.selectedIndex];
+    taskAssignedUserIdInput.value = selectedValue;
+
+    if (!taskAssigneeInput) {
+        return;
+    }
+
+    if (selectedValue) {
+        const optionName = selectedOption?.dataset?.name || '';
+        const optionEmail = selectedOption?.dataset?.email || '';
+        const displayValue = optionName || optionEmail || selectedOption?.textContent || '';
+        taskAssigneeInput.value = displayValue;
+    } else {
+        taskAssigneeInput.value = '';
+    }
+}
+
+function handleTaskAssigneeInputChange() {
+    if (taskAssignedUserIdInput) {
+        taskAssignedUserIdInput.value = '';
+    }
+    if (taskAssigneeSelector) {
+        taskAssigneeSelector.value = '';
+    }
+}
+
+function refreshTaskAssigneeOptions(meetingId, selectedUserId = null, { forceRefresh = false } = {}) {
+    const manager = taskModalGetAssignableManager();
+    if (!manager || typeof manager.loadAssignableUsers !== 'function') {
+        lastLoadedMeetingIdForTaskModal = meetingId;
+        return Promise.resolve([]);
+    }
+    const shouldForceRefresh = forceRefresh || meetingId !== lastLoadedMeetingIdForTaskModal;
+    return manager
+        .loadAssignableUsers(meetingId, { forceRefresh: shouldForceRefresh })
+        .then(users => {
+            if (typeof manager.populateAssigneeSelector === 'function') {
+                manager.populateAssigneeSelector(taskAssigneeSelector, users, selectedUserId);
+            }
+            lastLoadedMeetingIdForTaskModal = meetingId;
+            return users;
+        })
+        .catch(error => {
+            console.error('Error loading assignable users for task modal:', error);
+            return [];
+        });
+}
 
 function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource || 'transcriptions_laravel')) {
     const modal = document.getElementById('taskModal');
@@ -135,12 +215,16 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
     editingTaskId = taskId;
     window.lastSelectedMeetingSource = source;
 
+    const baseMeetingId = window.lastSelectedMeetingId || null;
+    resetTaskAssigneeFields();
+
     if (taskId) {
         // Modo edición
         modalTitle.textContent = 'Editar Tarea';
         submitBtn.textContent = 'Actualizar Tarea';
         progressContainer.classList.remove('hidden');
         completedContainer.classList.remove('hidden');
+        refreshTaskAssigneeOptions(baseMeetingId);
 
         // Para todas las reuniones, usar tasks_laravel
         fetch(new URL(`/api/tasks-laravel/tasks/${taskId}`, window.location.origin))
@@ -173,10 +257,25 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
                 }
 
                 document.getElementById('taskPriority').value = (t.prioridad || 'media');
-                document.getElementById('taskAssignee').value = t.asignado || '';
+                if (taskAssigneeInput) {
+                    taskAssigneeInput.value = (t.assigned_user && t.assigned_user.name) || t.asignado || '';
+                }
+                if (taskAssignedUserIdInput) {
+                    taskAssignedUserIdInput.value = t.assigned_user_id ? String(t.assigned_user_id) : '';
+                }
                 document.getElementById('taskProgress').value = (typeof t.progreso === 'number' ? t.progreso : 0);
                 document.getElementById('taskCompleted').checked = (t.progreso >= 100);
                 updateProgressValue();
+
+                const meetingId = t.meeting_id || baseMeetingId || null;
+                const selectedUserId = t.assigned_user_id ? String(t.assigned_user_id) : null;
+                refreshTaskAssigneeOptions(meetingId, selectedUserId, { forceRefresh: meetingId !== lastLoadedMeetingIdForTaskModal })
+                    .then(() => {
+                        if (taskAssigneeSelector && selectedUserId) {
+                            taskAssigneeSelector.value = selectedUserId;
+                            handleTaskAssigneeChange();
+                        }
+                    });
             })
             .catch(error => {
                 console.error('Error cargando tarea:', error);
@@ -189,6 +288,8 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
         progressContainer.classList.add('hidden');
         completedContainer.classList.add('hidden');
         form.reset();
+        resetTaskAssigneeFields();
+        refreshTaskAssigneeOptions(baseMeetingId, null, { forceRefresh: baseMeetingId !== lastLoadedMeetingIdForTaskModal });
     }
 
     modal.classList.remove('hidden');
@@ -200,6 +301,7 @@ function closeTaskModal() {
     modal.classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
     editingTaskId = null;
+    resetTaskAssigneeFields();
 }
 
 function updateProgressValue() {
@@ -208,6 +310,12 @@ function updateProgressValue() {
 }
 
 // Event listeners
+if (taskAssigneeSelector) {
+    taskAssigneeSelector.addEventListener('change', handleTaskAssigneeChange);
+}
+if (taskAssigneeInput) {
+    taskAssigneeInput.addEventListener('input', handleTaskAssigneeInputChange);
+}
 document.getElementById('taskProgress').addEventListener('input', updateProgressValue);
 
 document.getElementById('taskForm').addEventListener('submit', function(e) {
@@ -228,6 +336,7 @@ document.getElementById('taskForm').addEventListener('submit', function(e) {
             fecha_limite: entries.due_date || null,
             hora_limite: entries.due_time || null,
             asignado: entries.assignee || null,
+            assigned_user_id: entries.assigned_user_id ? entries.assigned_user_id : null,
             progreso: parseInt(document.getElementById('taskProgress').value || '0', 10)
         };
         if (!isEdit) {

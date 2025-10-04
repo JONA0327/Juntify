@@ -157,8 +157,11 @@
 
 <script>
 let currentTaskDetailsId = null;
-let cachedAssignableUsers = new Map();
 let lastMeetingIdForAssignable = null;
+
+function taskDetailsGetAssignableManager() {
+    return window.AssignableUsersManager;
+}
 
 const assignmentStatusStyles = {
     pending: { text: 'Pendiente de aceptación', class: 'bg-yellow-500/20 text-yellow-300' },
@@ -166,62 +169,6 @@ const assignmentStatusStyles = {
     completed: { text: 'Completada', class: 'bg-green-500/20 text-green-300' },
     rejected: { text: 'Rechazada', class: 'bg-rose-500/20 text-rose-300' },
 };
-
-async function loadAssignableUsers(meetingId = null, { forceRefresh = false } = {}) {
-    const cacheKey = meetingId ? String(meetingId) : 'default';
-    if (!forceRefresh && cachedAssignableUsers.has(cacheKey)) {
-        return cachedAssignableUsers.get(cacheKey);
-    }
-    try {
-        const url = new URL('/api/tasks-laravel/assignable-users', window.location.origin);
-        if (meetingId) {
-            url.searchParams.set('meeting_id', meetingId);
-        }
-        const response = await fetch(url, {
-            headers: {
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]')?.content || '')
-            }
-        });
-        const data = await response.json();
-        const users = Array.isArray(data.users) ? data.users : [];
-        cachedAssignableUsers.set(cacheKey, users);
-        return users;
-    } catch (error) {
-        console.error('Error loading assignable users:', error);
-        cachedAssignableUsers.set(cacheKey, []);
-        return [];
-    }
-}
-
-function populateAssigneeSelector(users, currentId) {
-    const select = document.getElementById('assigneeSelector');
-    if (!select) return;
-
-    const previousValue = currentId ? String(currentId) : '';
-    select.innerHTML = '<option value="">Selecciona contacto o miembro</option>';
-
-    users.forEach(user => {
-        if (!user || !user.id) return;
-        const option = document.createElement('option');
-        option.value = user.id;
-        const helpers = window.AssignableUsersUtils;
-        const sourceLabel = helpers?.getSourceLabel(user.source) || (user.source === 'organization' ? 'Organización' : (user.source === 'shared' ? 'Compartidos' : 'Contacto'));
-        const optionText = helpers?.buildOptionLabel(user) || `${user.name || user.email} (${sourceLabel})`;
-        option.textContent = optionText;
-        option.dataset.email = user.email || '';
-        option.dataset.source = user.source || '';
-        select.appendChild(option);
-    });
-
-    if (previousValue && Array.from(select.options).some(opt => opt.value === previousValue)) {
-        select.value = previousValue;
-    } else {
-        select.value = '';
-    }
-
-    select.disabled = users.length <= 0;
-}
 
 async function setupAssignableControls(task) {
     const assignWrapper = document.getElementById('assignControls');
@@ -261,14 +208,18 @@ async function setupAssignableControls(task) {
     }
 
     if (assigneeSelector && isOwner) {
+        const assignableManager = taskDetailsGetAssignableManager();
         const meetingId = task.meeting_id || null;
         const forceRefresh = meetingId !== lastMeetingIdForAssignable;
-        if (forceRefresh) {
-            const cacheKey = meetingId ? String(meetingId) : 'default';
-            cachedAssignableUsers.delete(cacheKey);
+        if (forceRefresh && assignableManager && typeof assignableManager.clearAssignableUsersCache === 'function') {
+            assignableManager.clearAssignableUsersCache(meetingId);
         }
-        const users = await loadAssignableUsers(meetingId, { forceRefresh });
-        populateAssigneeSelector(users, task.assigned_user_id);
+        const users = assignableManager
+            ? await assignableManager.loadAssignableUsers(meetingId, { forceRefresh })
+            : [];
+        if (assignableManager && typeof assignableManager.populateAssigneeSelector === 'function') {
+            assignableManager.populateAssigneeSelector(assigneeSelector, users, task.assigned_user_id);
+        }
         lastMeetingIdForAssignable = meetingId;
     }
 }
