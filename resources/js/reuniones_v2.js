@@ -1,3 +1,5 @@
+import { debugLog, debugWarn, debugError } from './utils/logger';
+
 // ===============================================
 // VARIABLES Y CONFIGURACIÓN GLOBAL
 // ===============================================
@@ -65,7 +67,7 @@ async function updatePlanLimitsBanner() {
             progressBar.style.width = `${pct}%`;
         }
     } catch (e) {
-        console.warn('No se pudieron cargar los límites del plan en Reuniones:', e);
+        debugWarn('No se pudieron cargar los límites del plan en Reuniones:', e);
     }
 }
 
@@ -224,7 +226,7 @@ async function loadMyMeetings() {
         await loadPendingMeetingsStatus();
 
     } catch (error) {
-        console.error('Error loading meetings:', error);
+        debugError('Error loading meetings:', error);
         showErrorState(container, 'Error de conexión al cargar reuniones', loadMyMeetings);
     }
 }
@@ -254,7 +256,7 @@ async function loadSharedMeetings() {
         }
 
     } catch (error) {
-        console.error('Error loading shared meetings:', error);
+        debugError('Error loading shared meetings:', error);
         showErrorState(container, 'Error de conexión al cargar reuniones compartidas', loadSharedMeetings);
     }
 }
@@ -281,7 +283,7 @@ async function loadOutgoingSharedMeetings() {
             showErrorState(container, data.message || 'Error al cargar compartidas por mí', loadOutgoingSharedMeetings);
         }
     } catch (e) {
-        console.error('Error loadOutgoingSharedMeetings', e);
+        debugError('Error loadOutgoingSharedMeetings', e);
         showErrorState(container, 'Error de conexión', loadOutgoingSharedMeetings);
     }
 }
@@ -351,7 +353,7 @@ async function confirmRevokeShare(id) {
             alert(data.message || 'No se pudo revocar');
         }
     } catch (e) {
-        console.error('Error revoke share', e);
+        debugError('Error revoke share', e);
         alert('Error al revocar acceso');
     }
 }
@@ -409,7 +411,7 @@ async function loadContacts() {
         // Después de cargar los contactos, verificar mensajes no leídos
         await checkUnreadMessagesForContacts();
     } catch (error) {
-        console.error('Error loading contacts:', error);
+        debugError('Error loading contacts:', error);
         if (list) list.innerHTML = '<div class="text-center py-8 text-red-400">Error al cargar contactos</div>';
         // En caso de error, ocultar la sección de organización
         if (organizationSection) {
@@ -588,7 +590,7 @@ async function checkUnreadMessagesForContacts() {
                 }
             }
         } catch (error) {
-            console.error(`Error checking unread messages for contact ${contactId}:`, error);
+            debugError(`Error checking unread messages for contact ${contactId}:`, error);
         }
     }
 }
@@ -611,7 +613,7 @@ async function loadContactRequests() {
         const data = await response.json();
         renderContactRequests(data.received || [], data.sent || []);
     } catch (error) {
-        console.error('Error loading contact requests:', error);
+        debugError('Error loading contact requests:', error);
         if (receivedList) receivedList.innerHTML = '<p class="text-red-400">Error al cargar solicitudes</p>';
         if (sentList) sentList.innerHTML = '<p class="text-red-400">Error al cargar solicitudes</p>';
     }
@@ -752,14 +754,14 @@ async function searchUser(query) {
         if (!response.ok) {
             let info = null;
             try { info = await response.json(); } catch(_) {}
-            console.warn('[searchUser] fallo', response.status, info);
+            debugWarn('[searchUser] fallo', response.status, info);
             // 419 CSRF / 401 auth / 422 validation
             return renderSearchResults([]);
         }
         const data = await response.json().catch(() => ({ users: [] }));
         renderSearchResults(data.users || []);
     } catch (error) {
-        console.error('Error searching users:', error);
+        debugError('Error searching users:', error);
         renderSearchResults([]);
     }
 }
@@ -858,7 +860,7 @@ async function sendContactRequest(event) {
         showNotification('Solicitud enviada correctamente', 'success');
 
     } catch (error) {
-        console.error('Error sending contact request:', error);
+        debugError('Error sending contact request:', error);
         showNotification(error.message, 'error');
     } finally {
         submitBtn.disabled = false;
@@ -886,7 +888,7 @@ async function respondContactRequest(id, action) {
             'success'
         );
     } catch (error) {
-        console.error('Error responding to contact request:', error);
+        debugError('Error responding to contact request:', error);
         showNotification('Error al procesar la solicitud', 'error');
     }
 }
@@ -907,7 +909,7 @@ async function deleteContact(id) {
         }
         showNotification('Contacto eliminado correctamente', 'success');
     } catch (error) {
-        console.error('Error deleting contact:', error);
+        debugError('Error deleting contact:', error);
         showNotification('Error al eliminar contacto', 'error');
     }
 }
@@ -939,7 +941,7 @@ async function startChat(contactId) {
         window.location.href = `/chats?chat_id=${data.chat_id}`;
 
     } catch (error) {
-        console.error('Error starting chat:', error);
+        debugError('Error starting chat:', error);
         showNotification('Error al iniciar el chat', 'error');
     }
 }
@@ -1048,7 +1050,7 @@ async function openChatModal(chatId, contactId) {
             setupChatModalEventListeners();
         }
     } catch (error) {
-        console.error('Error opening chat modal:', error);
+        debugError('Error opening chat modal:', error);
         showNotification('Error al abrir el chat', 'error');
     }
 }
@@ -1149,7 +1151,7 @@ async function loadChatMessages() {
         updateChatMessagesDisplay();
         scrollChatToBottom();
     } catch (error) {
-        console.error('Error loading chat messages:', error);
+        debugError('Error loading chat messages:', error);
         showNotification('Error al cargar mensajes', 'error');
     } finally {
         isChatLoading = false;
@@ -1194,7 +1196,7 @@ async function sendChatMessage() {
         scrollChatToBottom();
 
     } catch (error) {
-        console.error('Error sending message:', error);
+        debugError('Error sending message:', error);
         showNotification('Error al enviar mensaje', 'error');
     } finally {
         document.getElementById('chat-send-btn').disabled = false;
@@ -1227,7 +1229,7 @@ async function sendChatFile(file) {
         document.getElementById('chat-file-input').value = '';
 
     } catch (error) {
-        console.error('Error sending file:', error);
+        debugError('Error sending file:', error);
         showNotification('Error al enviar archivo', 'error');
     }
 }
@@ -1449,7 +1451,7 @@ async function loadPendingMeetingsStatus() {
             updatePendingMeetingsButton(data.has_pending, data.pending_meetings?.length || 0);
         }
     } catch (error) {
-        console.error('Error loading pending meetings status:', error);
+        debugError('Error loading pending meetings status:', error);
     }
 }
 
@@ -1466,14 +1468,14 @@ function updatePendingMeetingsButton(hasPending, count = 0) {
     });
 
     if (!button) {
-        console.warn('Botón de reuniones pendientes no encontrado');
-        console.log('Botones disponibles:', buttons.map(b => b.textContent.trim()));
+        debugWarn('Botón de reuniones pendientes no encontrado');
+        debugLog('Botones disponibles:', buttons.map(b => b.textContent.trim()));
         return;
     }
 
     const span = button.querySelector('span');
     if (!span) {
-        console.warn('Span del botón no encontrado');
+        debugWarn('Span del botón no encontrado');
         return;
     }
 
@@ -1488,7 +1490,7 @@ function updatePendingMeetingsButton(hasPending, count = 0) {
             button.setAttribute('data-pending-listener', 'true');
         }
 
-        console.log(`Botón habilitado con ${count} reuniones pendientes`);
+        debugLog(`Botón habilitado con ${count} reuniones pendientes`);
     } else {
         button.disabled = true;
         button.classList.add('opacity-50', 'cursor-not-allowed');
@@ -1498,7 +1500,7 @@ function updatePendingMeetingsButton(hasPending, count = 0) {
         button.removeEventListener('click', openPendingMeetingsModal);
         button.removeAttribute('data-pending-listener');
 
-        console.log('Botón deshabilitado - no hay reuniones pendientes');
+        debugLog('Botón deshabilitado - no hay reuniones pendientes');
     }
 }
 
@@ -1523,7 +1525,7 @@ async function openPendingMeetingsModal() {
             alert('Error al cargar reuniones pendientes');
         }
     } catch (error) {
-        console.error('Error opening pending meetings modal:', error);
+        debugError('Error opening pending meetings modal:', error);
         alert('Error de conexión al cargar reuniones pendientes');
     }
 }
@@ -1642,7 +1644,7 @@ async function analyzePendingMeeting(meetingId) {
     try {
         const button = document.querySelector(`.analyze-btn[data-meeting-id="${meetingId}"]`);
         if (!button) {
-            console.error('Botón no encontrado para meeting ID:', meetingId);
+            debugError('Botón no encontrado para meeting ID:', meetingId);
             return;
         }
 
@@ -1708,7 +1710,7 @@ async function analyzePendingMeeting(meetingId) {
         }
 
     } catch (error) {
-        console.error('Error analyzing pending meeting:', error);
+        debugError('Error analyzing pending meeting:', error);
         showNotification('Error al procesar audio: ' + error.message, 'error');
 
         // Restaurar botón y tarjeta
@@ -2035,7 +2037,7 @@ async function unlinkSharedMeeting(sharedId) {
             throw new Error(data.message || 'No se pudo quitar de compartidas');
         }
     } catch (err) {
-        console.error('unlinkSharedMeeting error:', err);
+        debugError('unlinkSharedMeeting error:', err);
         showNotification(err.message || 'Error al quitar de compartidas', 'error');
     }
 }
@@ -2301,7 +2303,7 @@ async function addMeetingToContainer(meetingId, containerId) {
 
         return true;
     } catch (error) {
-        console.error('Error adding meeting to container:', error);
+        debugError('Error adding meeting to container:', error);
         showNotification('Error al agregar la reunión al contenedor', 'error');
         return false;
     }
@@ -2331,7 +2333,7 @@ async function removeMeetingFromContainer(meetingId) {
         loadContainerMeetings(currentContainerForMeetings);
         loadContainers();
     } catch (error) {
-        console.error('Error removing meeting from container:', error);
+        debugError('Error removing meeting from container:', error);
         showNotification('Error al quitar la reunión del contenedor', 'error');
     }
 }
@@ -2360,7 +2362,7 @@ async function toggleContainer(containerId, card) {
             attachMeetingEventListeners();
         }
     } catch (error) {
-        console.error('Error loading container meetings:', error);
+        debugError('Error loading container meetings:', error);
     }
 }
 
@@ -2456,7 +2458,7 @@ async function openContainerSelectModal(meetingId) {
         });
 
     } catch (error) {
-        console.error('Error loading containers:', error);
+        debugError('Error loading containers:', error);
         updateModalContent('Error', `
             <div class="text-center p-8">
                 <div class="mb-4">
@@ -2566,15 +2568,15 @@ async function openMeetingModal(meetingId, sharedMeetingId = null) {
         }
 
     } catch (error) {
-        console.error('Error loading meeting details:', error);
+        debugError('Error loading meeting details:', error);
         closeMeetingModal();
         alert('Error de conexión al cargar la reunión');
     }
 }
 
 function showMeetingModal(meeting) {
-    console.log('Datos de la reunión:', meeting);
-    console.log('Ruta de audio:', meeting.audio_path);
+    debugLog('Datos de la reunión:', meeting);
+    debugLog('Ruta de audio:', meeting.audio_path);
 
     // Asegurar que summary, key_points, tasks y segmentos estén en el formato correcto
     meeting.summary = meeting.summary || '';
@@ -2603,8 +2605,8 @@ function showMeetingModal(meeting) {
             }
         });
         participantCount = uniqueSpeakers.size;
-        console.log('Hablantes únicos encontrados:', Array.from(uniqueSpeakers));
-        console.log('Número de participantes calculado:', participantCount);
+        debugLog('Hablantes únicos encontrados:', Array.from(uniqueSpeakers));
+        debugLog('Número de participantes calculado:', participantCount);
     }
 
     // Si no se pudo calcular desde los segmentos, usar el valor original o 0
@@ -2764,7 +2766,7 @@ function showMeetingModal(meeting) {
             meetingAudioPlayer.addEventListener('error', () => {
                 if (!triedFallback && fallbackUrl && (!resolvedFallbackUrl || meetingAudioPlayer.src !== resolvedFallbackUrl)) {
                     triedFallback = true;
-                    console.warn('[audio] Fallback endpoint streaming:', fallbackUrl);
+                    debugWarn('[audio] Fallback endpoint streaming:', fallbackUrl);
                     meetingAudioPlayer.src = fallbackUrl;
                     try { meetingAudioPlayer.load(); } catch (_) {}
                 } else {
@@ -2811,7 +2813,7 @@ function showMeetingModal(meeting) {
                 meetingAudioPlayer.addEventListener('loadedmetadata', finalizePlayer, { once: true });
                 meetingAudioPlayer.load();
             } catch (e) {
-                console.error('[audio] Error descarga previa', e);
+                debugError('[audio] Error descarga previa', e);
                 meetingAudioPlayer.src = audioSrc; // fallback directo
                 attachError();
                 meetingAudioPlayer.addEventListener('loadedmetadata', finalizePlayer, { once: true });
@@ -3060,7 +3062,7 @@ function playSegmentAudio(segmentIndex) {
 
     // Verificar si el audio tiene una fuente válida
     if (!meetingAudioPlayer.src || meetingAudioPlayer.src === window.location.href) {
-        console.warn('No hay fuente de audio válida para reproducir segmentos');
+        debugWarn('No hay fuente de audio válida para reproducir segmentos');
         alert('Audio no disponible para esta reunión.');
         return;
     }
@@ -3116,7 +3118,7 @@ function playSegmentAudio(segmentIndex) {
         resetSegmentProgress(segmentIndex);
         meetingAudioPlayer.currentTime = startTime;
         meetingAudioPlayer.play().catch(error => {
-            console.warn('Error reproduciendo segmento de audio:', error);
+            debugWarn('Error reproduciendo segmento de audio:', error);
             alert('No se pudo reproducir este segmento de audio.');
             resetSegmentProgress(segmentIndex);
             updateSegmentButtons(null);
@@ -3235,14 +3237,14 @@ function seekAudio(segmentIndex, event) {
 
     // Verificar si el audio tiene una fuente válida antes de intentar cambiar currentTime
     if (!meetingAudioPlayer.src || meetingAudioPlayer.src === window.location.href) {
-        console.warn('No hay fuente de audio válida para hacer seek');
+        debugWarn('No hay fuente de audio válida para hacer seek');
         return;
     }
 
     try {
         meetingAudioPlayer.currentTime = targetTime;
     } catch (error) {
-        console.warn('Error al hacer seek en el audio:', error);
+        debugWarn('Error al hacer seek en el audio:', error);
     }
 }
 
@@ -3273,7 +3275,7 @@ async function closeMeetingModal() {
                 body: JSON.stringify({ segments: meetingSegments })
             });
         } catch (error) {
-            console.error('Error guardando segmentos:', error);
+            debugError('Error guardando segmentos:', error);
         }
         segmentsModified = false;
     }
@@ -3333,7 +3335,7 @@ async function closeMeetingModal() {
 
                         currentModalMeeting.needs_encryption = false;
                     } catch (error) {
-                        console.error('Error encrypting meeting:', error);
+                        debugError('Error encrypting meeting:', error);
                     }
                 }
 
@@ -3491,7 +3493,7 @@ async function cleanupModalFiles() {
             }
         });
     } catch (error) {
-        console.error('Error cleaning up files:', error);
+        debugError('Error cleaning up files:', error);
     }
 }
 
@@ -3537,7 +3539,7 @@ async function downloadJuFile(meetingId) {
     try {
         window.location.href = `/api/meetings/${meetingId}/download-ju`;
     } catch (error) {
-        console.error('Error downloading .ju file:', error);
+        debugError('Error downloading .ju file:', error);
         alert('Error al descargar el archivo .ju');
     }
 }
@@ -3546,7 +3548,7 @@ async function downloadAudioFile(meetingId) {
     try {
         window.location.href = `/api/meetings/${meetingId}/download-audio`;
     } catch (error) {
-        console.error('Error downloading audio file:', error);
+        debugError('Error downloading audio file:', error);
         alert('Error al descargar el archivo de audio');
     }
 }
@@ -3568,7 +3570,7 @@ async function saveMeetingTitle(meetingId, newTitle) {
 
         return await response.json();
     } catch (error) {
-        console.error('Error saving meeting title:', error);
+        debugError('Error saving meeting title:', error);
         throw error;
     }
 }
@@ -3724,7 +3726,7 @@ async function confirmEditMeetingName(meetingId) {
         }
 
     } catch (error) {
-        console.error('Error updating meeting name:', error);
+        debugError('Error updating meeting name:', error);
         showNotification('Error al actualizar el nombre: ' + error.message, 'error');
     }
 }
@@ -3865,7 +3867,7 @@ async function confirmDeleteMeeting(meetingId) {
         }
 
     } catch (error) {
-        console.error('Error deleting meeting:', error);
+        debugError('Error deleting meeting:', error);
         showNotification(error.message, 'error');
     }
 }
@@ -3956,7 +3958,7 @@ async function loadContainers() {
         }
 
     } catch (error) {
-        console.error('Error loading containers:', error);
+        debugError('Error loading containers:', error);
         showNotification('Error al cargar contenedores: ' + error.message, 'error');
     }
 }
@@ -4101,7 +4103,7 @@ async function saveContainer() {
         }
 
     } catch (error) {
-        console.error('Error saving container:', error);
+        debugError('Error saving container:', error);
         showNotification('Error al guardar: ' + error.message, 'error');
 
     } finally {
@@ -4224,7 +4226,7 @@ async function confirmDeleteContainer(containerId) {
         }
 
     } catch (error) {
-        console.error('Error deleting container:', error);
+        debugError('Error deleting container:', error);
         showNotification('Error al eliminar: ' + error.message, 'error');
     }
 }
@@ -4257,13 +4259,13 @@ function clearContainerErrors() {
 async function openDownloadModal(meetingId, sharedMeetingId = null) {
     // Prevenir ejecución múltiple
     if (window.downloadModalProcessing) {
-        console.log('Modal de descarga ya en proceso...');
+        debugLog('Modal de descarga ya en proceso...');
         return;
     }
 
     window.downloadModalProcessing = true;
 
-    console.log('Iniciando descarga para reunión:', meetingId);
+    debugLog('Iniciando descarga para reunión:', meetingId);
 
     try {
         // Cerrar el modal de contenedor si está abierto
@@ -4282,7 +4284,7 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
         showDownloadModalLoading(meetingId);
 
     // Paso 1: Descargar y desencriptar el archivo .ju desde Drive (con timeout y manejo de errores)
-        console.log('Descargando y desencriptando archivo .ju...');
+        debugLog('Descargando y desencriptando archivo .ju...');
         const controller = new AbortController();
         const timeoutMs = 15000; // 15s para evitar esperas largas
         const timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs);
@@ -4298,7 +4300,7 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
                 signal: controller.signal,
             });
         } catch (netErr) {
-            console.error('Fallo de red al obtener reunión:', netErr);
+            debugError('Fallo de red al obtener reunión:', netErr);
             clearTimeout(timeoutId);
             // Intentar resolver enlaces directos si es compartida
             if (sharedMeetingId) {
@@ -4317,7 +4319,7 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
         if (!response.ok) {
             let serverMsg = '';
             try { serverMsg = await response.text(); } catch(_) {}
-            console.error('Error HTTP al preparar descarga', response.status, serverMsg);
+            debugError('Error HTTP al preparar descarga', response.status, serverMsg);
             if (sharedMeetingId) {
                 const links = await tryResolveSharedDriveLinks(sharedMeetingId);
                 if (links) {
@@ -4332,7 +4334,7 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
         try {
             data = await response.json();
         } catch (parseErr) {
-            console.error('Error parseando JSON de la reunión:', parseErr);
+            debugError('Error parseando JSON de la reunión:', parseErr);
             if (sharedMeetingId) {
                 const links = await tryResolveSharedDriveLinks(sharedMeetingId);
                 if (links) {
@@ -4348,7 +4350,7 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
             throw new Error(data.message || 'Error al procesar el archivo de la reunión');
         }
 
-        console.log('Archivo descargado y desencriptado exitosamente');
+        debugLog('Archivo descargado y desencriptado exitosamente');
 
         // Paso 2: Crear y mostrar el modal de selección
         const modalElement = createDownloadModal();
@@ -4370,13 +4372,13 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
             // Mostrar el modal con las opciones (tras inicializar Alpine)
             showDownloadModalOptions(data.meeting);
 
-            console.log('Modal de selección mostrado para reunión:', meetingId);
+            debugLog('Modal de selección mostrado para reunión:', meetingId);
         } else {
             throw new Error('No se pudo crear el modal de descarga');
         }
 
     } catch (error) {
-        console.error('Error en el proceso de descarga:', error);
+        debugError('Error en el proceso de descarga:', error);
 
         // Cerrar loading modal si está abierto
         closeDownloadModal();
@@ -4459,7 +4461,7 @@ async function tryResolveSharedDriveLinks(sharedMeetingId) {
         if (!data?.success) return null;
         return { ju_link: data.ju_link || null, audio_link: data.audio_link || null };
     } catch (e) {
-        console.warn('tryResolveSharedDriveLinks failed', e);
+        debugWarn('tryResolveSharedDriveLinks failed', e);
         return null;
     }
 }
@@ -4843,7 +4845,7 @@ function initializeDownloadModal() {
                 `;
 
                 try {
-                    console.log('Generando PDF con secciones:', selectedItems);
+                    debugLog('Generando PDF con secciones:', selectedItems);
 
                     // Preparar los datos para enviar al servidor
                     const downloadData = {
@@ -4873,7 +4875,7 @@ function initializeDownloadModal() {
                     });
 
                     if (response.ok) {
-                        console.log('PDF generado exitosamente');
+                        debugLog('PDF generado exitosamente');
 
                         // Si la respuesta es un blob (PDF), descargarlo
                         const blob = await response.blob();
@@ -4898,12 +4900,12 @@ function initializeDownloadModal() {
 
                     } else {
                         const errorData = await response.json();
-                        console.error('Error del servidor:', errorData);
+                        debugError('Error del servidor:', errorData);
                         alert('Error al generar PDF: ' + (errorData.message || 'Error desconocido'));
                     }
 
                 } catch (error) {
-                    console.error('Error downloading PDF:', error);
+                    debugError('Error downloading PDF:', error);
                     alert('Error al descargar: ' + error.message);
                 } finally {
                     // Restaurar botón siempre
@@ -4913,7 +4915,7 @@ function initializeDownloadModal() {
                     }
                 }
             } catch (error) {
-                console.error('Error general en initializeDownloadModal:', error);
+                debugError('Error general en initializeDownloadModal:', error);
                 alert('Error inesperado: ' + error.message);
                 // Restaurar botón en caso de error general
                 if (confirm && originalContent) {
@@ -5001,7 +5003,7 @@ function showContainerMeetingsLoading() {
     const empty = document.getElementById('container-meetings-empty');
     const error = document.getElementById('container-meetings-error');
     if (!loading || !list || !empty || !error) {
-        console.warn('[container-meetings] Missing one or more DOM nodes for loading state', { hasLoading: !!loading, hasList: !!list, hasEmpty: !!empty, hasError: !!error });
+        debugWarn('[container-meetings] Missing one or more DOM nodes for loading state', { hasLoading: !!loading, hasList: !!list, hasEmpty: !!empty, hasError: !!error });
         return;
     }
     loading.classList.remove('hidden');
@@ -5059,7 +5061,7 @@ async function loadContainerMeetings(containerId) {
         });
 
         const data = await response.json();
-        console.log('Container meetings response:', data); // Debug
+        debugLog('Container meetings response:', data); // Debug
 
         if (data.success) {
             // Verificar que container existe en la respuesta
@@ -5075,7 +5077,7 @@ async function loadContainerMeetings(containerId) {
                 const subtitleEl = document.getElementById('container-meetings-subtitle');
                 if (titleEl) titleEl.textContent = 'Reuniones del Contenedor';
                 if (subtitleEl) subtitleEl.textContent = '';
-                console.warn('Container information missing in response:', data);
+                debugWarn('Container information missing in response:', data);
             }
 
             if (data.meetings && data.meetings.length > 0) {
@@ -5089,7 +5091,7 @@ async function loadContainerMeetings(containerId) {
         }
 
     } catch (error) {
-        console.error('Error loading container meetings:', error);
+        debugError('Error loading container meetings:', error);
         showContainerMeetingsError(error.message);
     }
 }
@@ -5135,76 +5137,76 @@ async function loadDriveOptions() {
     const driveSelect = document.getElementById('drive-select');
 
     if (!driveSelect) {
-        console.warn('🔍 [reuniones_v2 - loadDriveOptions] Drive select element not found');
+        debugWarn('🔍 [reuniones_v2 - loadDriveOptions] Drive select element not found');
         return;
     }
 
     // Allow both administrators and colaboradores to see drive options
-    console.log('🔍 [reuniones_v2 - loadDriveOptions] Loading drive options for role:', role);
+    debugLog('🔍 [reuniones_v2 - loadDriveOptions] Loading drive options for role:', role);
 
     try {
         // Clear existing options
         driveSelect.innerHTML = '';
 
         // Load personal drive name
-        console.log('🔍 [reuniones_v2 - loadDriveOptions] Fetching personal drive data...');
+        debugLog('🔍 [reuniones_v2 - loadDriveOptions] Fetching personal drive data...');
         try {
             const personalRes = await fetch('/drive/sync-subfolders');
-            console.log('🔍 [reuniones_v2 - loadDriveOptions] Personal drive response status:', personalRes.status);
+            debugLog('🔍 [reuniones_v2 - loadDriveOptions] Personal drive response status:', personalRes.status);
 
             if (personalRes.ok) {
                 const personalData = await personalRes.json();
-                console.log('🔍 [reuniones_v2 - loadDriveOptions] Personal drive data:', personalData);
+                debugLog('🔍 [reuniones_v2 - loadDriveOptions] Personal drive data:', personalData);
 
                 if (personalData.root_folder) {
                     const personalOpt = document.createElement('option');
                     personalOpt.value = 'personal';
                     personalOpt.textContent = `🏠 ${personalData.root_folder.name}`;
                     driveSelect.appendChild(personalOpt);
-                    console.log('✅ [reuniones_v2 - loadDriveOptions] Added personal option:', personalData.root_folder.name);
+                    debugLog('✅ [reuniones_v2 - loadDriveOptions] Added personal option:', personalData.root_folder.name);
                 }
             } else {
-                console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Personal drive request failed:', await personalRes.text());
+                debugWarn('⚠️ [reuniones_v2 - loadDriveOptions] Personal drive request failed:', await personalRes.text());
             }
         } catch (e) {
-            console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Could not load personal drive name:', e);
+            debugWarn('⚠️ [reuniones_v2 - loadDriveOptions] Could not load personal drive name:', e);
             // Fallback to default
             const personalOpt = document.createElement('option');
             personalOpt.value = 'personal';
             personalOpt.textContent = 'Personal';
             driveSelect.appendChild(personalOpt);
-            console.log('📝 [reuniones_v2 - loadDriveOptions] Added fallback personal option');
+            debugLog('📝 [reuniones_v2 - loadDriveOptions] Added fallback personal option');
         }
 
         // Load organization drive name (for both admin and colaborador)
         if (organizationId) {
-            console.log('🔍 [reuniones_v2 - loadDriveOptions] Fetching organization drive data...');
+            debugLog('🔍 [reuniones_v2 - loadDriveOptions] Fetching organization drive data...');
             try {
                 const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
-                console.log('🔍 [reuniones_v2 - loadDriveOptions] Organization drive response status:', orgRes.status);
+                debugLog('🔍 [reuniones_v2 - loadDriveOptions] Organization drive response status:', orgRes.status);
 
                 if (orgRes.ok) {
                     const orgData = await orgRes.json();
-                    console.log('🔍 [reuniones_v2 - loadDriveOptions] Organization drive data:', orgData);
+                    debugLog('🔍 [reuniones_v2 - loadDriveOptions] Organization drive data:', orgData);
 
                     if (orgData.root_folder) {
                         const orgOpt = document.createElement('option');
                         orgOpt.value = 'organization';
                         orgOpt.textContent = `🏢 ${orgData.root_folder.name}`;
                         driveSelect.appendChild(orgOpt);
-                        console.log('✅ [reuniones_v2 - loadDriveOptions] Added organization option:', orgData.root_folder.name);
+                        debugLog('✅ [reuniones_v2 - loadDriveOptions] Added organization option:', orgData.root_folder.name);
                     }
                 } else {
-                    console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Organization drive request failed:', await orgRes.text());
+                    debugWarn('⚠️ [reuniones_v2 - loadDriveOptions] Organization drive request failed:', await orgRes.text());
                 }
             } catch (e) {
-                console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Could not load organization drive name:', e);
+                debugWarn('⚠️ [reuniones_v2 - loadDriveOptions] Could not load organization drive name:', e);
                 // Fallback to default
                 const orgOpt = document.createElement('option');
                 orgOpt.value = 'organization';
                 orgOpt.textContent = 'Organization';
                 driveSelect.appendChild(orgOpt);
-                console.log('📝 [reuniones_v2 - loadDriveOptions] Added fallback organization option');
+                debugLog('📝 [reuniones_v2 - loadDriveOptions] Added fallback organization option');
             }
         }
 
@@ -5213,31 +5215,31 @@ async function loadDriveOptions() {
             const saved = sessionStorage.getItem('selectedDrive');
             if (saved && driveSelect.querySelector(`option[value="${saved}"]`)) {
                 driveSelect.value = saved;
-                console.log('📄 [reuniones_v2 - loadDriveOptions] Restored saved selection:', saved);
+                debugLog('📄 [reuniones_v2 - loadDriveOptions] Restored saved selection:', saved);
             } else {
                 // For colaboradores in organizations, default to organization
                 if (role === 'colaborador' && organizationId && driveSelect.querySelector('option[value="organization"]')) {
                     driveSelect.value = 'organization';
-                    console.log('👥 [reuniones_v2 - loadDriveOptions] Set default to organization for colaborador');
+                    debugLog('👥 [reuniones_v2 - loadDriveOptions] Set default to organization for colaborador');
                 } else {
                     driveSelect.selectedIndex = 0;
-                    console.log('🎯 [reuniones_v2 - loadDriveOptions] Set default to first option');
+                    debugLog('🎯 [reuniones_v2 - loadDriveOptions] Set default to first option');
                 }
             }
         }
 
         // Show the selector for both admin and colaborador
         driveSelect.style.display = 'block';
-        console.log('👁️ [reuniones_v2 - loadDriveOptions] Drive selector is now visible');
+        debugLog('👁️ [reuniones_v2 - loadDriveOptions] Drive selector is now visible');
 
     } catch (e) {
-        console.error('❌ [reuniones_v2 - loadDriveOptions] Error loading drive options:', e);
+        debugError('❌ [reuniones_v2 - loadDriveOptions] Error loading drive options:', e);
         // Fallback to original options
         driveSelect.innerHTML = `
             <option value="personal">Personal</option>
             <option value="organization">Organization</option>
         `;
-        console.log('🔄 [reuniones_v2 - loadDriveOptions] Fallback to default options');
+        debugLog('🔄 [reuniones_v2 - loadDriveOptions] Fallback to default options');
     }
 }
 
@@ -5250,7 +5252,7 @@ async function loadDriveFolders() {
     const transcriptionSelect = null;
     const audioSelect = null;
 
-    console.log('🔍 [reuniones_v2 - loadDriveFolders] Starting with debug info:', {
+    debugLog('🔍 [reuniones_v2 - loadDriveFolders] Starting with debug info:', {
         role,
         organizationId,
         driveSelectValue: driveSelect?.value,
@@ -5271,7 +5273,7 @@ async function loadDriveFolders() {
         useOrg = false; // default to personal
     }
 
-    console.log('🔍 [reuniones_v2 - loadDriveFolders] Drive selection logic:', {
+    debugLog('🔍 [reuniones_v2 - loadDriveFolders] Drive selection logic:', {
         role,
         useOrg,
         driveSelectValue: driveSelect?.value,
@@ -5279,21 +5281,21 @@ async function loadDriveFolders() {
     });
 
     const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';
-    console.log('🔍 [reuniones_v2 - loadDriveFolders] Using endpoint:', endpoint);
+    debugLog('🔍 [reuniones_v2 - loadDriveFolders] Using endpoint:', endpoint);
     try {
         const res = await fetch(endpoint);
-        console.log('🔍 [reuniones_v2 - loadDriveFolders] Fetch response status:', res.status);
+        debugLog('🔍 [reuniones_v2 - loadDriveFolders] Fetch response status:', res.status);
 
         if (!res.ok) {
-            console.error('🔍 [reuniones_v2 - loadDriveFolders] Request failed with status:', res.status);
+            debugError('🔍 [reuniones_v2 - loadDriveFolders] Request failed with status:', res.status);
             return;
         }
 
         const data = await res.json();
-        console.log('🔍 [reuniones_v2 - loadDriveFolders] Received data:', data);
+        debugLog('🔍 [reuniones_v2 - loadDriveFolders] Received data:', data);
 
         // Don't hide drive select for colaboradores anymore - they can choose
-        console.log('🔍 [reuniones_v2 - loadDriveFolders] Drive select visibility:', {
+        debugLog('🔍 [reuniones_v2 - loadDriveFolders] Drive select visibility:', {
             role,
             willHide: false, // Changed: don't hide for colaboradores
             driveSelectExists: !!driveSelect
@@ -5306,21 +5308,21 @@ async function loadDriveFolders() {
                 opt.value = data.root_folder.google_id;
                 opt.textContent = `📁 ${data.root_folder.name}`;
                 rootSelect.appendChild(opt);
-                console.log('✅ [reuniones_v2 - loadDriveFolders] Added root folder option:', {
+                debugLog('✅ [reuniones_v2 - loadDriveFolders] Added root folder option:', {
                     name: data.root_folder.name,
                     googleId: data.root_folder.google_id
                 });
             } else {
-                console.warn('⚠️ [reuniones_v2 - loadDriveFolders] No root folder found in response');
+                debugWarn('⚠️ [reuniones_v2 - loadDriveFolders] No root folder found in response');
             }
         }
 
         // No se requieren subcarpetas dinámicas; backend usa nombres fijos
 
-        console.log('✅ [reuniones_v2 - loadDriveFolders] Successfully loaded drive folders');
+        debugLog('✅ [reuniones_v2 - loadDriveFolders] Successfully loaded drive folders');
 
     } catch (e) {
-        console.error('❌ [reuniones_v2 - loadDriveFolders] Error loading drive folders:', e);
+        debugError('❌ [reuniones_v2 - loadDriveFolders] Error loading drive folders:', e);
     }
 }
 
@@ -5340,10 +5342,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (metaUser) window.userRole = metaUser.getAttribute('content');
         }
     } catch(e) {
-        console.error('[reuniones_v2] Error applying fallback globals', e);
+        debugError('[reuniones_v2] Error applying fallback globals', e);
     }
-    console.log('🚀 [reuniones_v2] Iniciando aplicación...');
-    console.log('🔍 [reuniones_v2] Variables globales:', {
+    debugLog('🚀 [reuniones_v2] Iniciando aplicación...');
+    debugLog('🔍 [reuniones_v2] Variables globales:', {
         userRole: window.userRole || document.body.dataset.userRole,
         organizationId: window.currentOrganizationId || document.body.dataset.organizationId,
         bodyDatasets: Object.keys(document.body.dataset),
@@ -5351,17 +5353,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const driveSelect = document.getElementById('drive-select');
-    console.log('🔍 [reuniones_v2] Drive select element found:', !!driveSelect);
+    debugLog('🔍 [reuniones_v2] Drive select element found:', !!driveSelect);
 
     if (driveSelect) {
         driveSelect.addEventListener('change', () => {
-            console.log('🔄 [reuniones_v2] Drive selection changed to:', driveSelect.value);
+            debugLog('🔄 [reuniones_v2] Drive selection changed to:', driveSelect.value);
             loadDriveFolders();
         });
     }
 
     if (document.getElementById('root-folder-select')) {
-        console.log('🔍 [reuniones_v2] About to call loadDriveFolders...');
+        debugLog('🔍 [reuniones_v2] About to call loadDriveFolders...');
         loadDriveFolders();
     }
 });
@@ -5424,7 +5426,7 @@ window.openShareModal = openShareModal;
 window.closeShareModal = closeShareModal;
 window.confirmShare = confirmShare;
 window.toggleContact = toggleContact;
-window.forceOpenShareModal = function(id){ console.log('[shareModal] forceOpenShareModal'); openShareModal(id||0); };
+window.forceOpenShareModal = function(id){ debugLog('[shareModal] forceOpenShareModal'); openShareModal(id||0); };
 
 // ===============================================
 // FUNCIONALIDAD DE COMPARTIR REUNIONES
@@ -5436,12 +5438,12 @@ let allContacts = [];
 
 // Abrir modal de compartir
 function openShareModal(meetingId) {
-    try { console.log('[shareModal] openShareModal called', { meetingId }); } catch(e){}
+    try { debugLog('[shareModal] openShareModal called', { meetingId }); } catch(e){}
     currentShareMeetingId = meetingId;
     selectedContacts.clear();
 
     const modal = document.getElementById('shareModal');
-    if (!modal) { console.warn('[shareModal] #shareModal not found'); return; }
+    if (!modal) { debugWarn('[shareModal] #shareModal not found'); return; }
 
     const selectedContactsContainer = document.getElementById('selectedContactsContainer');
     const confirmBtn = document.getElementById('confirmShare');
@@ -5449,7 +5451,7 @@ function openShareModal(meetingId) {
     // by adding the `.show` class and removing Tailwind's `hidden`.
     modal.classList.remove('hidden');
     modal.classList.add('show');
-    try { console.log('[shareModal] modal classes after show:', modal.className); } catch(e){}
+    try { debugLog('[shareModal] modal classes after show:', modal.className); } catch(e){}
 
     // Resetear estado
     const searchInput = document.getElementById('shareModal-contactSearch');
@@ -5518,7 +5520,7 @@ async function loadContactsForSharing() {
             `;
         }
     } catch (error) {
-        console.error('Error loading contacts:', error);
+        debugError('Error loading contacts:', error);
         contactsList.innerHTML = `
             <div class="p-4 text-center text-red-400">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -5703,7 +5705,7 @@ async function confirmShare() {
             showNotification((data && data.message) || 'Error al compartir reunión', 'error');
         }
     } catch (error) {
-        console.error('Error sharing meeting:', error);
+        debugError('Error sharing meeting:', error);
         showNotification('Error al compartir reunión', 'error');
     } finally {
         // Restaurar botón

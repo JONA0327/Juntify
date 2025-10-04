@@ -1,5 +1,6 @@
 import '../bootstrap';
 import bcrypt from 'bcryptjs';
+import { debugLog, debugWarn, debugError } from '../utils/logger';
 
 // ———————————————————
 //  Animación de partículas
@@ -21,7 +22,7 @@ function createParticles() {
 //  Comprobación de fuerza
 // ———————————————————
 function checkPasswordStrength(password) {
-  console.log('Checking password strength for:', password);
+  debugLog('Checking password strength for:', password);
   let strength = 0;
 
   // Test simple primero
@@ -30,7 +31,7 @@ function checkPasswordStrength(password) {
   const hasNumber = /\d/.test(password);
   const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
 
-  console.log('Tests:', {
+  debugLog('Tests:', {
     hasLength,
     hasLetter,
     hasNumber,
@@ -44,17 +45,17 @@ function checkPasswordStrength(password) {
     symbol: hasSymbol,
   };
 
-  console.log('Requirements:', reqs);
+  debugLog('Requirements:', reqs);
 
   Object.entries(reqs).forEach(([k,v])=>{
     const element = document.getElementById(k+'Req');
-    console.log(`Looking for element: ${k}Req`);
+    debugLog(`Looking for element: ${k}Req`);
     if (element) {
-      console.log(`Found element ${k}Req, setting class:`, v ? 'met' : 'not met');
+      debugLog(`Found element ${k}Req, setting class:`, v ? 'met' : 'not met');
       element.classList.toggle('met', v);
       if (v) strength++;
     } else {
-      console.warn(`Element ${k}Req not found`);
+      debugWarn(`Element ${k}Req not found`);
     }
   });
 
@@ -62,7 +63,7 @@ function checkPasswordStrength(password) {
         text = document.getElementById('strengthText'),
         pct  = (strength/4)*100;
 
-  console.log('Strength:', strength, 'Percentage:', pct);
+  debugLog('Strength:', strength, 'Percentage:', pct);
 
   if (fill) {
     fill.style.width = `${pct}%`;
@@ -70,9 +71,9 @@ function checkPasswordStrength(password) {
     if (strength <= 2) fill.classList.add('strength-weak');
     else if (strength === 3) fill.classList.add('strength-medium');
     else if (strength === 4) fill.classList.add('strength-strong');
-    console.log('Updated fill element');
+    debugLog('Updated fill element');
   } else {
-    console.warn('strengthFill element not found');
+    debugWarn('strengthFill element not found');
   }
 
   if (text) {
@@ -80,12 +81,12 @@ function checkPasswordStrength(password) {
     else if (strength<=2)   { text.textContent='Contraseña débil'; }
     else if (strength===3)  { text.textContent='Contraseña media'; }
     else                    { text.textContent='Contraseña fuerte'; }
-    console.log('Updated text element to:', text.textContent);
+    debugLog('Updated text element to:', text.textContent);
   } else {
-    console.warn('strengthText element not found');
+    debugWarn('strengthText element not found');
   }
 
-  console.log('Password strength:', strength);
+  debugLog('Password strength:', strength);
   return strength===4;
 }
 
@@ -143,7 +144,7 @@ function validateForm() {
 //  Inicialización
 // ———————————————————
 document.addEventListener('DOMContentLoaded', ()=>{
-  console.log('DOM Content Loaded, initializing registration form...');
+  debugLog('DOM Content Loaded, initializing registration form...');
 
   createParticles();
 
@@ -156,25 +157,25 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const registerForm = document.getElementById('registerForm');
 
   if (!passwordField) {
-    console.error('Password field not found');
+    debugError('Password field not found');
     return;
   }
 
   if (!passwordConfirmationField) {
-    console.error('Password confirmation field not found');
+    debugError('Password confirmation field not found');
     return;
   }
 
   if (!registerForm) {
-    console.error('Register form not found');
+    debugError('Register form not found');
     return;
   }
 
-  console.log('All required elements found, setting up event listeners...');
+  debugLog('All required elements found, setting up event listeners...');
 
   // Test inicial de la función de strength
   setTimeout(() => {
-    console.log('Testing password strength function...');
+    debugLog('Testing password strength function...');
 
     // Test básico: cambiar el color de los requirements manualmente
     const lengthReq = document.getElementById('lengthReq');
@@ -182,7 +183,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const numberReq = document.getElementById('numberReq');
     const symbolReq = document.getElementById('symbolReq');
 
-    console.log('Elements found:', {
+    debugLog('Elements found:', {
       lengthReq: !!lengthReq,
       letterReq: !!letterReq,
       numberReq: !!numberReq,
@@ -192,14 +193,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // Test visual directo
     if (lengthReq) {
       lengthReq.classList.add('met');
-      console.log('Added met class to lengthReq');
+      debugLog('Added met class to lengthReq');
     }
 
     checkPasswordStrength('');
   }, 500);
 
   passwordField.addEventListener('input', e=>{
-    console.log('Password input event triggered with value:', e.target.value);
+    debugLog('Password input event triggered with value:', e.target.value);
 
     // Test simple directo
     const password = e.target.value;
@@ -249,7 +250,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
 
   passwordConfirmationField.addEventListener('input', e=>{
-    console.log('Password confirmation input event triggered');
+    debugLog('Password confirmation input event triggered');
     const p = passwordField.value;
     if(e.target.value && p) {
       p===e.target.value
