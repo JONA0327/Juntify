@@ -89,4 +89,35 @@ class TaskAssignableUsersTest extends TestCase
         $this->assertFalse($users->contains(fn ($user) => $user['id'] === $pendingShared->id));
         $this->assertFalse($users->contains(fn ($user) => $user['id'] === $owner->id));
     }
+
+    /** @test */
+    public function it_uses_full_name_when_assigning_by_user_id_on_store(): void
+    {
+        $owner = User::factory()->create();
+        $meeting = TranscriptionLaravel::factory()
+            ->state(['username' => $owner->username])
+            ->create();
+
+        $assignee = User::factory()->create([
+            'full_name' => 'Assigned Person',
+        ]);
+
+        $response = $this->actingAs($owner)->postJson(route('api.tasks-laravel.tasks.store'), [
+            'tarea' => 'Nueva tarea',
+            'meeting_id' => $meeting->id,
+            'assigned_user_id' => $assignee->id,
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('task.assigned_user_id', (string) $assignee->id);
+        $response->assertJsonPath('task.asignado', $assignee->full_name);
+        $response->assertJsonPath('task.assignment_status', 'pending');
+
+        $this->assertDatabaseHas('tasks_laravel', [
+            'id' => $response->json('task.id'),
+            'assigned_user_id' => (string) $assignee->id,
+            'asignado' => $assignee->full_name,
+            'assignment_status' => 'pending',
+        ]);
+    }
 }
