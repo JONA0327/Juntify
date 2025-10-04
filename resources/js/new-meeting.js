@@ -154,7 +154,8 @@ function downloadBlob(blob, fileName) {
 }
 
 // Helper para convertir blobs a OGG (preferir Vorbis) usando MediaRecorder
-async function convertToOgg(blob) {
+async function convertToOgg(blob, options = {}) {
+    const { strict = false } = options;
     try {
         console.log(`🎵 [Convert] Iniciando conversión a OGG...`);
         console.log(`🎵 [Convert] Blob original: ${blob.type}, Tamaño: ${(blob.size / 1024).toFixed(1)} KB`);
@@ -169,14 +170,22 @@ async function convertToOgg(blob) {
         const vorbisSupported = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/ogg;codecs=vorbis');
         const oggSupported = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/ogg');
         if (!vorbisSupported && !oggSupported) {
-            console.warn('⚠️ [Convert] MediaRecorder no soporta audio/ogg. Ajustando MIME type como respaldo.');
+            console.warn('⚠️ [Convert] MediaRecorder no soporta audio/ogg.');
+            if (strict) {
+                throw new Error('MediaRecorder no soporta audio/ogg');
+            }
+            console.warn('⚠️ [Convert] Ajustando MIME type como respaldo.');
             const arrayBuffer = await blob.arrayBuffer();
             return new Blob([arrayBuffer], { type: 'audio/ogg' });
         }
 
         const ConversionAudioContext = window.AudioContext || window.webkitAudioContext;
         if (!ConversionAudioContext) {
-            console.warn('⚠️ [Convert] AudioContext no disponible. Ajustando MIME type como respaldo.');
+            console.warn('⚠️ [Convert] AudioContext no disponible.');
+            if (strict) {
+                throw new Error('AudioContext no disponible para convertir a OGG');
+            }
+            console.warn('⚠️ [Convert] Ajustando MIME type como respaldo.');
             const arrayBuffer = await blob.arrayBuffer();
             return new Blob([arrayBuffer], { type: 'audio/ogg' });
         }
@@ -246,6 +255,10 @@ async function convertToOgg(blob) {
     } catch (error) {
         console.error('❌ [Convert] Error en conversión a OGG:', error);
 
+        if (strict) {
+            throw error;
+        }
+
         // Último recurso: devolver blob original con MIME type OGG
         console.log(`🔄 [Convert] Aplicando MIME type OGG como último recurso...`);
         const arrayBuffer = await blob.arrayBuffer();
@@ -256,16 +269,23 @@ async function convertToOgg(blob) {
 }
 
 // Conversión simple a MP3 vía Web Audio + MediaRecorder si es posible; si no, devuelve el blob original con MIME mp3
-async function convertToMp3(blob) {
+async function convertToMp3(blob, options = {}) {
+    const { strict = false } = options;
     try {
         const mp3Supported = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/mpeg');
         if (!mp3Supported) {
+            if (strict) {
+                throw new Error('MediaRecorder no soporta audio/mpeg');
+            }
             const buf = await blob.arrayBuffer();
             return new Blob([buf], { type: 'audio/mpeg' });
         }
         const AC = window.AudioContext || window.webkitAudioContext;
         const ac = AC ? new AC() : null;
         if (!ac) {
+            if (strict) {
+                throw new Error('AudioContext no disponible para convertir a MP3');
+            }
             const buf = await blob.arrayBuffer();
             return new Blob([buf], { type: 'audio/mpeg' });
         }
@@ -278,21 +298,68 @@ async function convertToMp3(blob) {
         const chunks = [];
         const recorder = new MediaRecorder(dest.stream, { mimeType: 'audio/mpeg' });
         return await new Promise((resolve, reject) => {
+            let settled = false;
             recorder.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
-            recorder.onerror = e => reject(e.error || new Error('Error en MediaRecorder MP3'));
+            recorder.onerror = e => {
+                if (!settled) {
+                    settled = true;
+                    try { recorder.stop(); } catch (_) { ac.close().catch(() => {}); }
+                    reject(e.error || new Error('Error en MediaRecorder MP3'));
+                }
+            };
             recorder.onstop = () => {
-                const out = new Blob(chunks, { type: 'audio/mpeg' });
-                resolve(out);
+                if (!settled) {
+                    settled = true;
+                    const out = new Blob(chunks, { type: 'audio/mpeg' });
+                    resolve(out);
+                }
                 ac.close().catch(() => {});
             };
-            src.onended = () => { if (recorder.state !== 'inactive') recorder.stop(); };
+            src.onended = () => {
+                if (recorder.state !== 'inactive') {
+                    recorder.stop();
+                }
+            };
             recorder.start();
-            ac.resume().then(() => src.start(0)).catch(reject);
+            ac.resume()
+                .then(() => src.start(0))
+                .catch(err => {
+                    if (!settled) {
+                        settled = true;
+                        recorder.stop();
+                        reject(err);
+                    }
+                });
         });
     } catch (e) {
         console.warn('⚠️ [Convert] MP3 conversion failed, falling back to mime-only:', e);
+        if (strict) {
+            throw e;
+        }
         const buf = await blob.arrayBuffer();
         return new Blob([buf], { type: 'audio/mpeg' });
+    }
+}
+
+async function ensureAudioOnlyBlob(blob) {
+    if (!blob) {
+        throw new Error('Blob inválido para conversión de audio');
+    }
+    const blobType = blob.type || '';
+    if (blobType.startsWith('audio')) {
+        return blob;
+    }
+
+    try {
+        return await convertToOgg(blob, { strict: true });
+    } catch (oggError) {
+        console.warn('⚠️ [AudioOnly] Conversión estricta a OGG falló, intentando MP3...', oggError);
+        try {
+            return await convertToMp3(blob, { strict: true });
+        } catch (mp3Error) {
+            console.error('❌ [AudioOnly] Conversión a MP3 también falló', mp3Error);
+            throw mp3Error;
+        }
     }
 }
 
@@ -1429,26 +1496,61 @@ async function finalizeRecording() {
 
     let finalBlob;
 
-    // Usar directamente el blob de la grabación con el formato que se usó durante la grabación
-    const blobType = currentRecordingFormat || 'audio/mp4'; // Fallback a MP4 si no hay formato almacenado
-    finalBlob = new Blob(recordedChunks, { type: blobType });
-
-    // Determinar MIME real del primer chunk para registro
-    const realMime = recordedChunks[0]?.type || blobType;
+    const fallbackBlobType = currentRecordingFormat || 'audio/mp4';
+    const realMime = recordedChunks[0]?.type || fallbackBlobType;
     console.log('🎵 [finalizeRecording] Formato final detectado:', realMime);
-    currentRecordingFormat = realMime;
+
+    finalBlob = new Blob(recordedChunks, { type: realMime });
 
     console.log('🎵 [finalizeRecording] Preparando audio para procesamiento...');
     console.log('🎵 [finalizeRecording] Using blob for processing');
+    console.log('🎵 [finalizeRecording] Blob size (inicial):', (finalBlob.size / (1024 * 1024)).toFixed(2), 'MB');
+    console.log('🎵 [finalizeRecording] Blob type (inicial):', finalBlob.type);
+
+    // Determinar contexto de la grabación
+    const context = lastRecordingContext || (selectedMode === 'meeting' ? 'meeting' : 'recording');
+    const meetingRecording = context === 'meeting';
+
+    let effectiveMime = finalBlob.type || realMime;
+
+    if (meetingRecording && (!effectiveMime || effectiveMime.startsWith('video'))) {
+        console.log('🎵 [finalizeRecording] Grabación de reunión detectada con componente de video. Extrayendo solo audio...');
+        try {
+            finalBlob = await ensureAudioOnlyBlob(finalBlob);
+            effectiveMime = finalBlob.type || effectiveMime;
+            console.log('✅ [finalizeRecording] Audio aislado para reunión:', {
+                type: effectiveMime,
+                sizeMB: (finalBlob.size / (1024 * 1024)).toFixed(2)
+            });
+        } catch (conversionError) {
+            console.error('❌ [finalizeRecording] Error al extraer audio de la reunión:', conversionError);
+            showError('No se pudo extraer solo el audio de la reunión. Descarga la grabación y súbela manualmente.');
+            try { downloadAudioWithCorrectFormat(finalBlob, 'grabacion_reunion'); } catch (_) {}
+            handlePostActionCleanup();
+            return;
+        }
+    }
+
+    if (!effectiveMime || !effectiveMime.startsWith('audio')) {
+        const fallbackAudioType = effectiveMime && !effectiveMime.startsWith('video') ? effectiveMime : 'audio/ogg';
+        try {
+            const arrayBuffer = await finalBlob.arrayBuffer();
+            finalBlob = new Blob([arrayBuffer], { type: fallbackAudioType });
+            effectiveMime = fallbackAudioType;
+        } catch (wrapError) {
+            console.warn('⚠️ [finalizeRecording] No se pudo ajustar el MIME del blob final:', wrapError);
+        }
+    }
+
+    currentRecordingFormat = effectiveMime && effectiveMime.startsWith('audio') ? effectiveMime : 'audio/ogg';
+
     console.log('🎵 [finalizeRecording] Blob size:', (finalBlob.size / (1024 * 1024)).toFixed(2), 'MB');
-    console.log('🎵 [finalizeRecording] Blob type:', finalBlob.type);
+    console.log('🎵 [finalizeRecording] Blob type:', finalBlob.type || currentRecordingFormat);
     const sizeMB = finalBlob.size / (1024 * 1024);
 
     const now = new Date();
     const name = `grabacion-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
 
-    // Determinar contexto
-    const context = lastRecordingContext || (selectedMode === 'meeting' ? 'meeting' : 'recording');
     // Ya no descargamos automáticamente las grabaciones de reunión.
     // Se seguirá el mismo flujo que audio: subir en segundo plano si está "posponer",
     // o analizar ahora.
