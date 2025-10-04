@@ -327,6 +327,7 @@ let PLAN_LIMITS = {
     allow_postpone: true,
     warn_before_minutes: 5,
 };
+let MAX_DURATION_MS = PLAN_LIMITS.max_duration_minutes * 60 * 1000;
 
 
 // ===== FUNCIONES PRINCIPALES =====
@@ -558,6 +559,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                             showPostponeLockedModal();
                         });
                     }
+                }
+                if (limits.allow_postpone) {
+                    postponeToggle.disabled = false;
+                    setPostponeMode(postponeToggle.checked);
                 }
             }
 
