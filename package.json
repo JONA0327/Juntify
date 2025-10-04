@@ -4,7 +4,8 @@
     "type": "module",
     "scripts": {
         "dev": "vite",
-        "build": "vite build"
+        "build": "vite build",
+        "test": "node --test resources/js/tests"
     },
     "devDependencies": {
         "@tailwindcss/forms": "^0.5.2",

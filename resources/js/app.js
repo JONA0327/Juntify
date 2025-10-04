@@ -2,6 +2,7 @@ import './bootstrap';
 import './notifications';
 import './organization';
 import './utils/auth-interceptors';
+import './tasks/assignable-users';
 
 import Alpine from 'alpinejs';
 

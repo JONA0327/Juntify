@@ -157,7 +157,8 @@
 
 <script>
 let currentTaskDetailsId = null;
-let cachedAssignableUsers = null;
+let cachedAssignableUsers = new Map();
+let lastMeetingIdForAssignable = null;
 
 const assignmentStatusStyles = {
     pending: { text: 'Pendiente de aceptación', class: 'bg-yellow-500/20 text-yellow-300' },
@@ -166,24 +167,31 @@ const assignmentStatusStyles = {
     rejected: { text: 'Rechazada', class: 'bg-rose-500/20 text-rose-300' },
 };
 
-async function loadAssignableUsers() {
-    if (cachedAssignableUsers) {
-        return cachedAssignableUsers;
+async function loadAssignableUsers(meetingId = null, { forceRefresh = false } = {}) {
+    const cacheKey = meetingId ? String(meetingId) : 'default';
+    if (!forceRefresh && cachedAssignableUsers.has(cacheKey)) {
+        return cachedAssignableUsers.get(cacheKey);
     }
     try {
-        const response = await fetch(new URL('/api/tasks-laravel/assignable-users', window.location.origin), {
+        const url = new URL('/api/tasks-laravel/assignable-users', window.location.origin);
+        if (meetingId) {
+            url.searchParams.set('meeting_id', meetingId);
+        }
+        const response = await fetch(url, {
             headers: {
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]')?.content || '')
             }
         });
         const data = await response.json();
-        cachedAssignableUsers = Array.isArray(data.users) ? data.users : [];
+        const users = Array.isArray(data.users) ? data.users : [];
+        cachedAssignableUsers.set(cacheKey, users);
+        return users;
     } catch (error) {
         console.error('Error loading assignable users:', error);
-        cachedAssignableUsers = [];
+        cachedAssignableUsers.set(cacheKey, []);
+        return [];
     }
-    return cachedAssignableUsers;
 }
 
 function populateAssigneeSelector(users, currentId) {
@@ -197,8 +205,10 @@ function populateAssigneeSelector(users, currentId) {
         if (!user || !user.id) return;
         const option = document.createElement('option');
         option.value = user.id;
-        const sourceLabel = user.source === 'organization' ? 'Organización' : 'Contacto';
-        option.textContent = `${user.name || user.email} (${sourceLabel})`;
+        const helpers = window.AssignableUsersUtils;
+        const sourceLabel = helpers?.getSourceLabel(user.source) || (user.source === 'organization' ? 'Organización' : (user.source === 'shared' ? 'Compartidos' : 'Contacto'));
+        const optionText = helpers?.buildOptionLabel(user) || `${user.name || user.email} (${sourceLabel})`;
+        option.textContent = optionText;
         option.dataset.email = user.email || '';
         option.dataset.source = user.source || '';
         select.appendChild(option);
@@ -251,8 +261,15 @@ async function setupAssignableControls(task) {
     }
 
     if (assigneeSelector && isOwner) {
-        const users = await loadAssignableUsers();
+        const meetingId = task.meeting_id || null;
+        const forceRefresh = meetingId !== lastMeetingIdForAssignable;
+        if (forceRefresh) {
+            const cacheKey = meetingId ? String(meetingId) : 'default';
+            cachedAssignableUsers.delete(cacheKey);
+        }
+        const users = await loadAssignableUsers(meetingId, { forceRefresh });
         populateAssigneeSelector(users, task.assigned_user_id);
+        lastMeetingIdForAssignable = meetingId;
     }
 }
 
