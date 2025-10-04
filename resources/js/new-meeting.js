@@ -623,25 +623,82 @@ window.showRecordingInterface = showRecordingInterface;
 
 // Stubs seguros para los controles del grabador de reuniones (UI aún no implementada aquí)
 function toggleMeetingRecording() {
-    console.warn('[new-meeting] toggleMeetingRecording no implementado todavía');
-    showWarning('El grabador de reuniones aún no está disponible en esta versión.');
+    // Alterna la grabación de reunión (captura de pantalla + audio)
+    if (!isRecording) {
+        startMeetingRecording();
+    } else {
+        // Si estamos grabando una reunión, detén
+        stopRecording();
+    }
 }
 function toggleSystemAudio() {
-    console.warn('[new-meeting] toggleSystemAudio no implementado todavía');
-    showWarning('Control de audio del sistema no disponible por ahora.');
+    // Alterna estado y refleja en UI (sin captura avanzada todavía)
+    systemAudioEnabled = !systemAudioEnabled;
+    const btn = document.getElementById('system-audio-btn');
+    const text = btn?.querySelector('.source-text');
+    if (btn) btn.classList.toggle('active', systemAudioEnabled);
+    if (text) text.textContent = systemAudioEnabled ? 'Sistema activado' : 'Sistema desactivado';
+    // Aplicar al mezclador si existe
+    try {
+        if (systemGainNode) {
+            systemGainNode.gain.value = (systemAudioEnabled && !systemAudioMuted) ? 1 : 0;
+        }
+    } catch(_) {}
 }
 function toggleMicrophoneAudio() {
-    console.warn('[new-meeting] toggleMicrophoneAudio no implementado todavía');
-    showWarning('Control avanzado del micrófono no disponible por ahora.');
+    microphoneAudioEnabled = !microphoneAudioEnabled;
+    const btn = document.getElementById('microphone-audio-btn');
+    const text = btn?.querySelector('.source-text');
+    if (btn) btn.classList.toggle('active', microphoneAudioEnabled);
+    if (text) text.textContent = microphoneAudioEnabled ? 'Micrófono activado' : 'Micrófono desactivado';
+    // Aplicar al mezclador si existe
+    try {
+        if (microphoneGainNode) {
+            microphoneGainNode.gain.value = (microphoneAudioEnabled && !microphoneAudioMuted) ? 1 : 0;
+        }
+    } catch(_) {}
 }
 function muteSystemAudio() {
-    console.warn('[new-meeting] muteSystemAudio no implementado todavía');
+    systemAudioMuted = !systemAudioMuted;
+    const btn = document.getElementById('system-mute-btn');
+    const icon = btn?.querySelector('.mute-icon');
+    btn?.classList.toggle('muted', systemAudioMuted);
+    if (icon) icon.setAttribute('data-muted', systemAudioMuted ? 'true' : 'false');
+    try { if (systemGainNode) systemGainNode.gain.value = systemAudioMuted ? 0 : 1; } catch (_) {}
 }
 function muteMicrophoneAudio() {
-    console.warn('[new-meeting] muteMicrophoneAudio no implementado todavía');
+    microphoneAudioMuted = !microphoneAudioMuted;
+    const btn = document.getElementById('microphone-mute-btn');
+    const icon = btn?.querySelector('.mute-icon');
+    btn?.classList.toggle('muted', microphoneAudioMuted);
+    if (icon) icon.setAttribute('data-muted', microphoneAudioMuted ? 'true' : 'false');
+    try { if (microphoneGainNode) microphoneGainNode.gain.value = microphoneAudioMuted ? 0 : 1; } catch (_) {}
 }
 function setupMeetingRecorder() {
-    console.warn('[new-meeting] setupMeetingRecorder no implementado todavía');
+    // Inicializa UI del modo reunión
+    try {
+        lastRecordingContext = 'meeting';
+        // Activar sistema por defecto
+        systemAudioEnabled = true;
+        const recordBtn = document.getElementById('meeting-record-btn');
+        const pauseBtn = document.getElementById('meeting-pause');
+        const resumeBtn = document.getElementById('meeting-resume');
+        const discardBtn = document.getElementById('meeting-discard');
+        if (recordBtn) recordBtn.classList.toggle('recording', isRecording);
+        if (pauseBtn) pauseBtn.style.display = isRecording && !isPaused ? 'inline-block' : 'none';
+        if (resumeBtn) resumeBtn.style.display = isRecording && isPaused ? 'inline-block' : 'none';
+        if (discardBtn) discardBtn.style.display = isRecording ? 'inline-block' : 'none';
+        const label = document.getElementById('meeting-timer-label');
+        if (label) label.textContent = isRecording ? 'Grabando...' : 'Listo para grabar';
+        const sysBtn = document.getElementById('system-audio-btn');
+        const sysText = sysBtn?.querySelector('.source-text');
+        if (sysBtn) sysBtn.classList.toggle('active', systemAudioEnabled);
+        if (sysText) sysText.textContent = systemAudioEnabled ? 'Sistema activado' : 'Sistema desactivado';
+        const micBtn = document.getElementById('microphone-audio-btn');
+        const micText = micBtn?.querySelector('.source-text');
+        if (micBtn) micBtn.classList.toggle('active', microphoneAudioEnabled);
+        if (micText) micText.textContent = microphoneAudioEnabled ? 'Micrófono activado' : 'Micrófono desactivado';
+    } catch (_) {}
 }
 window.toggleMeetingRecording = toggleMeetingRecording;
 window.toggleSystemAudio = toggleSystemAudio;
@@ -796,6 +853,165 @@ async function populateMicrophoneDevices() {
 
 // ===== FUNCIONES DE GRABACIÓN =====
 
+// Selección de MIME para grabación de reunión (video)
+function getOptimalMeetingFormat() {
+    const candidates = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4' // poco fiable en navegadores, fallback tardío
+    ];
+    for (const mt of candidates) {
+        if (MediaRecorder.isTypeSupported?.(mt)) {
+            return mt;
+        }
+    }
+    return 'video/webm';
+}
+
+async function startMeetingRecording() {
+    try {
+        discardRequested = false;
+        await clearPreviousAudioData();
+
+        // 1) Captura de pantalla con audio del sistema si disponible
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { frameRate: 30 },
+            audio: true
+        });
+
+        // 2) Micrófono opcional (según toggle)
+        let micStream = null;
+        if (microphoneAudioEnabled) {
+            const audioConstraints = await getAudioConstraints();
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        }
+
+        // 3) Mezclar audios (sistema + mic) en un solo track
+        const AC = window.AudioContext || window.webkitAudioContext;
+        const ac = AC ? new AC() : null;
+        meetingDestination = ac ? ac.createMediaStreamDestination() : null;
+        systemGainNode = ac ? ac.createGain() : null;
+        microphoneGainNode = ac ? ac.createGain() : null;
+
+        const displayAudioTrack = displayStream.getAudioTracks()[0] || null;
+        const micAudioTrack = micStream ? micStream.getAudioTracks()[0] : null;
+
+        if (ac && meetingDestination) {
+            // Inicializar analizadores para visualizadores y espectrogramas
+            systemAnalyser = ac.createAnalyser();
+            microphoneAnalyser = ac.createAnalyser();
+            // Configuración de FFT y suavizado
+            systemAnalyser.fftSize = 256;
+            microphoneAnalyser.fftSize = 256;
+            systemAnalyser.smoothingTimeConstant = 0.8;
+            microphoneAnalyser.smoothingTimeConstant = 0.8;
+
+            // Buffers para datos de frecuencia
+            systemDataArray = new Uint8Array(systemAnalyser.frequencyBinCount);
+            microphoneDataArray = new Uint8Array(microphoneAnalyser.frequencyBinCount);
+
+            if (displayAudioTrack) {
+                const sysSource = ac.createMediaStreamSource(new MediaStream([displayAudioTrack]));
+                // Conectar a analizador y a la cadena de salida (ganancia -> destino)
+                sysSource.connect(systemAnalyser);
+                if (systemGainNode) {
+                    systemGainNode.gain.value = systemAudioMuted ? 0 : 1;
+                    sysSource.connect(systemGainNode).connect(meetingDestination);
+                } else {
+                    sysSource.connect(meetingDestination);
+                }
+            }
+            if (micAudioTrack) {
+                const micSource = ac.createMediaStreamSource(new MediaStream([micAudioTrack]));
+                // Conectar a analizador y a la cadena de salida (ganancia -> destino)
+                micSource.connect(microphoneAnalyser);
+                if (microphoneGainNode) {
+                    microphoneGainNode.gain.value = microphoneAudioMuted ? 0 : 1;
+                    micSource.connect(microphoneGainNode).connect(meetingDestination);
+                } else {
+                    micSource.connect(meetingDestination);
+                }
+            }
+        }
+
+        // 4) Construir stream final con video + audio mezclado (o alguno disponible)
+        const finalStream = new MediaStream();
+        const videoTrack = displayStream.getVideoTracks()[0];
+        if (videoTrack) finalStream.addTrack(videoTrack);
+        if (meetingDestination && meetingDestination.stream.getAudioTracks()[0]) {
+            finalStream.addTrack(meetingDestination.stream.getAudioTracks()[0]);
+        } else if (displayAudioTrack) {
+            finalStream.addTrack(displayAudioTrack);
+        } else if (micAudioTrack) {
+            finalStream.addTrack(micAudioTrack);
+        }
+
+        // Guardar refs para detener luego
+        systemAudioStream = displayStream;
+        microphoneAudioStream = micStream;
+        recordingStream = finalStream;
+
+        // Si el usuario deja de compartir, detener la grabación
+        try {
+            videoTrack?.addEventListener('ended', () => {
+                if (isRecording && mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    stopRecording();
+                }
+            });
+        } catch (_) {}
+
+        // 5) Preparar estados y MediaRecorder
+        audioContext = ac; // reutilizar ciclo de vida para cierre al finalizar
+        analyser = null; // no usamos el visualizador del modo audio aquí
+        recordedChunks = [];
+        currentRecordingId = crypto.randomUUID();
+        chunkIndex = 0;
+        startTime = Date.now();
+        limitWarningShown = false;
+        isRecording = true;
+        lastRecordingContext = 'meeting';
+
+        updateRecordingUI(true);
+        recordingTimer = setInterval(updateTimer, 100);
+
+        // Preparar espectrogramas
+        try {
+            systemSpectrogramCanvas = document.getElementById('system-spectrogram') || null;
+            microphoneSpectrogramCanvas = document.getElementById('microphone-spectrogram') || null;
+            systemSpectrogramCtx = systemSpectrogramCanvas ? systemSpectrogramCanvas.getContext('2d') : null;
+            microphoneSpectrogramCtx = microphoneSpectrogramCanvas ? microphoneSpectrogramCanvas.getContext('2d') : null;
+            initSpectrogramCanvas(systemSpectrogramCanvas, systemSpectrogramCtx);
+            initSpectrogramCanvas(microphoneSpectrogramCanvas, microphoneSpectrogramCtx);
+        } catch(_) {}
+
+        // Iniciar bucle de análisis de reunión
+        startMeetingAnalysis();
+
+        const mimeType = getOptimalMeetingFormat();
+        currentRecordingFormat = mimeType;
+        mediaRecorder = new MediaRecorder(finalStream, { mimeType });
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) {
+                recordedChunks.push(event.data);
+            }
+        };
+        mediaRecorder.onstop = () => {
+            if (discardRequested) {
+                discardRequested = false;
+                return;
+            }
+            finalizeRecording();
+        };
+        mediaRecorder.start(SEGMENT_MS);
+    } catch (err) {
+        console.error('[meeting] Error al iniciar grabación de reunión:', err);
+        showError('No se pudo iniciar la grabación de reunión. Verifica permisos de pantalla y micrófono.');
+        try { if (systemAudioStream) systemAudioStream.getTracks().forEach(t => t.stop()); } catch(_) {}
+        try { if (microphoneAudioStream) microphoneAudioStream.getTracks().forEach(t => t.stop()); } catch(_) {}
+    }
+}
+
 // Obtener las restricciones de audio basadas en las opciones avanzadas
 async function getAudioConstraints() {
     const deviceSelect = document.getElementById('microphone-device');
@@ -913,6 +1129,22 @@ function pauseRecording() {
         const mr = document.getElementById('meeting-resume');
         if (mp) mp.style.display = 'none';
         if (mr) mr.style.display = 'inline-block';
+
+        // Mute inputs and stop visualizers while paused
+        try {
+            // Audio-only: disable mic tracks
+            if (recordingStream) {
+                recordingStream.getAudioTracks().forEach(t => { t.enabled = false; });
+            }
+            // Stop timers/visualizers
+            if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+            if (meetingAnimationId) { cancelAnimationFrame(meetingAnimationId); meetingAnimationId = null; }
+            resetAudioVisualizer();
+            resetMeetingVisualizer();
+            // Meeting gains to zero
+            if (systemGainNode) systemGainNode.gain.value = 0;
+            if (microphoneGainNode) microphoneGainNode.gain.value = 0;
+        } catch (_) {}
     }
 }
 
@@ -933,6 +1165,19 @@ function resumeRecording() {
         const mr = document.getElementById('meeting-resume');
         if (mp) mp.style.display = 'inline-block';
         if (mr) mr.style.display = 'none';
+
+        // Re-enable inputs and restart visualizers
+        try {
+            if (recordingStream) {
+                recordingStream.getAudioTracks().forEach(t => { t.enabled = true; });
+            }
+            // Restart loops
+            if (analyser) startAudioAnalysis();
+            // Restore meeting gains based on toggles
+            if (systemGainNode) systemGainNode.gain.value = (systemAudioEnabled && !systemAudioMuted) ? 1 : 0;
+            if (microphoneGainNode) microphoneGainNode.gain.value = (microphoneAudioEnabled && !microphoneAudioMuted) ? 1 : 0;
+            startMeetingAnalysis();
+        } catch (_) {}
     }
 }
 
@@ -960,13 +1205,12 @@ function discardRecording() {
         clearInterval(recordingTimer);
         recordingTimer = null;
     }
-    if (animationId) {
-        cancelAnimationFrame(animationId);
-        animationId = null;
-    }
+    if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+    if (meetingAnimationId) { cancelAnimationFrame(meetingAnimationId); meetingAnimationId = null; }
 
     updateRecordingUI(false);
     resetAudioVisualizer();
+    resetMeetingVisualizer();
     resetRecordingControls();
 }
 
@@ -1001,13 +1245,12 @@ function handlePostActionCleanup(keepUI = false) {
             clearInterval(recordingTimer);
             recordingTimer = null;
         }
-        if (animationId) {
-            cancelAnimationFrame(animationId);
-            animationId = null;
-        }
+        if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+        if (meetingAnimationId) { cancelAnimationFrame(meetingAnimationId); meetingAnimationId = null; }
         if (!keepUI) {
             updateRecordingUI(false);
             resetAudioVisualizer();
+            resetMeetingVisualizer();
             resetRecordingControls();
         }
     } catch (_) {}
@@ -1087,6 +1330,7 @@ async function finalizeRecording() {
 
     updateRecordingUI(false);
     resetAudioVisualizer();
+    resetMeetingVisualizer();
     resetRecordingControls();
 
     let finalBlob;
@@ -1109,15 +1353,11 @@ async function finalizeRecording() {
     const now = new Date();
     const name = `grabacion-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
 
-    // Determinar contexto y descargar copia local en OGG cuando es reunión
+    // Determinar contexto
     const context = lastRecordingContext || (selectedMode === 'meeting' ? 'meeting' : 'recording');
-    if (context === 'meeting') {
-        try {
-            await downloadAudioAsOgg(finalBlob, name);
-        } catch (_) {
-            downloadAudioWithCorrectFormat(finalBlob, name);
-        }
-    }
+    // Ya no descargamos automáticamente las grabaciones de reunión.
+    // Se seguirá el mismo flujo que audio: subir en segundo plano si está "posponer",
+    // o analizar ahora.
     if (sizeMB > 200) {
         showError('La grabación supera el límite de 200 MB.');
         const upload = confirm('¿Deseas subirla en segundo plano? Cancelar para descargarla.');
@@ -1274,7 +1514,26 @@ function updateRecordingUI(recording) {
         timerLabel.textContent = 'Grabando...';
         timerLabel.classList.add('recording');
         visualizer.classList.add('active');
-        if (actions) actions.classList.add('show');
+    if (actions) actions.classList.add('show');
+    const meetingActions = document.getElementById('meeting-actions');
+    if (meetingActions) meetingActions.classList.add('show');
+        // UI de reunión
+        const meetBtn = document.getElementById('meeting-record-btn');
+        const meetCounter = document.getElementById('meeting-timer-counter');
+        const meetLabel = document.getElementById('meeting-timer-label');
+        const mp = document.getElementById('meeting-pause');
+        const mr = document.getElementById('meeting-resume');
+        const md = document.getElementById('meeting-discard');
+        if (meetBtn) meetBtn.classList.add('recording');
+        if (meetLabel) meetLabel.textContent = 'Grabando...';
+        if (meetCounter) meetCounter.classList.add('recording');
+        if (mp) mp.style.display = isPaused ? 'none' : 'inline-block';
+        if (mr) mr.style.display = isPaused ? 'inline-block' : 'none';
+        if (md) md.style.display = 'inline-block';
+        const sysViz = document.getElementById('system-audio-visualizer');
+        const micViz = document.getElementById('microphone-audio-visualizer');
+        if (sysViz) sysViz.classList.add('active');
+        if (micViz) micViz.classList.add('active');
     } else {
         micCircle.classList.remove('recording');
         timerCounter.classList.remove('recording');
@@ -1282,7 +1541,26 @@ function updateRecordingUI(recording) {
         timerLabel.classList.remove('recording');
         timerCounter.textContent = '00:00:00';
         visualizer.classList.remove('active');
-        if (actions) actions.classList.remove('show');
+    if (actions) actions.classList.remove('show');
+    const meetingActions = document.getElementById('meeting-actions');
+    if (meetingActions) meetingActions.classList.remove('show');
+        // UI de reunión
+        const meetBtn = document.getElementById('meeting-record-btn');
+        const meetCounter = document.getElementById('meeting-timer-counter');
+        const meetLabel = document.getElementById('meeting-timer-label');
+        const mp = document.getElementById('meeting-pause');
+        const mr = document.getElementById('meeting-resume');
+        const md = document.getElementById('meeting-discard');
+        if (meetBtn) meetBtn.classList.remove('recording');
+        if (meetLabel) meetLabel.textContent = 'Listo para grabar';
+        if (meetCounter) meetCounter.textContent = '00:00:00';
+        if (mp) mp.style.display = 'none';
+        if (mr) mr.style.display = 'none';
+        if (md) md.style.display = 'none';
+        const sysViz = document.getElementById('system-audio-visualizer');
+        const micViz = document.getElementById('microphone-audio-visualizer');
+        if (sysViz) sysViz.classList.remove('active');
+        if (micViz) micViz.classList.remove('active');
     }
 }
 
@@ -1297,6 +1575,100 @@ function resetAudioVisualizer() {
     });
 
     rings.classList.remove('active');
+}
+
+// Reset de visualizadores de reunión (barras + espectrogramas)
+function resetMeetingVisualizer() {
+    try {
+        // Reset barras
+        const bars = document.querySelectorAll('#system-audio-visualizer .meeting-audio-bar, #microphone-audio-visualizer .meeting-audio-bar');
+        bars.forEach(bar => {
+            bar.style.height = '4px';
+            bar.classList.remove('high', 'active');
+        });
+        // Limpiar espectrogramas
+        if (systemSpectrogramCtx && systemSpectrogramCanvas) {
+            systemSpectrogramCtx.clearRect(0, 0, systemSpectrogramCanvas.width, systemSpectrogramCanvas.height);
+        }
+        if (microphoneSpectrogramCtx && microphoneSpectrogramCanvas) {
+            microphoneSpectrogramCtx.clearRect(0, 0, microphoneSpectrogramCanvas.width, microphoneSpectrogramCanvas.height);
+        }
+    } catch (_) {}
+}
+
+// Inicializa tamaño y fondo de espectrograma
+function initSpectrogramCanvas(canvas, ctx) {
+    if (!canvas || !ctx) return;
+    try {
+        // Ajustar tamaño al contenedor visible
+        const rect = canvas.getBoundingClientRect();
+        // Ajustar tamaño interno del canvas para mejor nitidez
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.max(300, Math.floor(rect.width * dpr));
+        canvas.height = Math.max(60, Math.floor(rect.height * dpr));
+        ctx.scale(dpr, dpr);
+        // Fondo inicial
+        ctx.fillStyle = '#0b1020';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } catch(_) {}
+}
+
+// Dibuja una nueva columna en el espectrograma desplazando el contenido a la izquierda
+function drawSpectrogramColumn(canvas, ctx, freqData) {
+    if (!canvas || !ctx || !freqData) return;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    // Desplazar 1px a la izquierda
+    try {
+        ctx.drawImage(canvas, -1, 0);
+    } catch(_) {}
+    // Dibujar nueva columna en el borde derecho
+    const x = w - 1;
+    const bins = freqData.length;
+    for (let i = 0; i < h; i++) {
+        // Mapear fila y -> bin de frecuencia (invertido para graves abajo)
+        const bin = Math.floor((1 - i / h) * (bins - 1));
+        const v = freqData[bin] / 255; // 0..1
+        const hue = Math.max(0, 260 - Math.floor(v * 260)); // 260: azul -> 0: rojo
+        const light = 20 + Math.floor(v * 60); // 20%..80%
+        ctx.fillStyle = `hsl(${hue} 100% ${light}%)`;
+        ctx.fillRect(x, i, 1, 1);
+    }
+}
+
+// Bucle de análisis para reunión (sistema + mic)
+function startMeetingAnalysis() {
+    // Si no hay analizadores aún, salir silenciosamente
+    if (!isRecording) return;
+    try {
+        if (systemAnalyser && systemDataArray) {
+            systemAnalyser.getByteFrequencyData(systemDataArray);
+            updateMeetingAudioBars('#system-audio-visualizer', systemDataArray);
+            drawSpectrogramColumn(systemSpectrogramCanvas, systemSpectrogramCtx, systemDataArray);
+        }
+        if (microphoneAnalyser && microphoneDataArray) {
+            microphoneAnalyser.getByteFrequencyData(microphoneDataArray);
+            updateMeetingAudioBars('#microphone-audio-visualizer', microphoneDataArray);
+            drawSpectrogramColumn(microphoneSpectrogramCanvas, microphoneSpectrogramCtx, microphoneDataArray);
+        }
+    } catch (_) {}
+    meetingAnimationId = requestAnimationFrame(startMeetingAnalysis);
+}
+
+// Actualiza barras de un visualizador de reunión
+function updateMeetingAudioBars(selector, frequencyData) {
+    const container = document.querySelector(selector);
+    if (!container) return;
+    const bars = container.querySelectorAll('.meeting-audio-bar');
+    if (!bars || bars.length === 0) return;
+    const step = Math.max(1, Math.floor(frequencyData.length / bars.length));
+    bars.forEach((bar, idx) => {
+        const v = frequencyData[idx * step] || 0;
+        const h = Math.max(4, Math.floor((v / 255) * 50)); // hasta 50px
+        bar.style.height = h + 'px';
+        bar.classList.toggle('high', h > 35);
+        bar.classList.toggle('active', h > 12);
+    });
 }
 
 // ===== FUNCIONES AUXILIARES =====
@@ -1323,6 +1695,8 @@ function updateTimer() {
 
     const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     document.getElementById('timer-counter').textContent = timeString;
+    const meetCounter = document.getElementById('meeting-timer-counter');
+    if (meetCounter) meetCounter.textContent = timeString;
 }
 
 // Función para mostrar advertencias

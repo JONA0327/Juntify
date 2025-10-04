@@ -436,20 +436,21 @@ body {
 
 /* Micrófono central mejorado */
 .mic-circle {
-    width: 120px;
-    height: 120px;
+    width: 160px;
+    height: 160px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border: 3px solid rgba(255, 255, 255, 0.2);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 3rem;
+    font-size: 3.4rem;
     transition: all 0.3s ease;
     box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
     position: relative;
     z-index: 10;
     cursor: pointer;
+    line-height: 0; /* avoid stray baseline affecting centering */
 }
 
 .mic-circle:hover {
@@ -458,26 +459,29 @@ body {
 }
 
 .mic-circle.recording {
-    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-    border-color: rgba(255, 107, 107, 0.5);
-    box-shadow: 0 8px 32px rgba(255, 107, 107, 0.4);
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    border-color: rgba(220, 38, 38, 0.6);
+    box-shadow: 0 12px 44px rgba(220, 38, 38, 0.55);
     animation: recordingPulse 2s infinite;
 }
 
 @keyframes recordingPulse {
     0%, 100% {
         transform: scale(1);
-        box-shadow: 0 8px 32px rgba(255, 107, 107, 0.4);
+        box-shadow: 0 12px 44px rgba(220, 38, 38, 0.55);
     }
     50% {
-        transform: scale(1.05);
-        box-shadow: 0 12px 40px rgba(255, 107, 107, 0.6);
+        transform: scale(1.08);
+        box-shadow: 0 16px 56px rgba(220, 38, 38, 0.7);
     }
 }
 
 .mic-symbol {
     color: white;
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+    width: 96px;
+    height: 96px;
+    display: block;
 }
 
 /* Visualizador de audio mejorado */
@@ -1074,6 +1078,34 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
     border: 1px solid rgba(255,255,255,0.08);
     box-shadow: 0 8px 24px rgba(0,0,0,0.2);
 }
+
+/* Meeting recorder: reuse same circular buttons for meeting actions */
+#meeting-actions .icon-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(148, 163, 184, 0.15);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+}
+#meeting-actions .icon-btn .nav-icon {
+    width: 22px;
+    height: 22px;
+    color: #e2e8f0;
+    display: block;
+}
+
+/* Color accents to match audio controls */
+#meeting-pause.icon-btn { background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.25); }
+#meeting-resume.icon-btn { background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.25); }
+#meeting-discard.icon-btn { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.25); }
+#meeting-pause.icon-btn:hover { background: rgba(245, 158, 11, 0.3); }
+#meeting-resume.icon-btn:hover { background: rgba(16, 185, 129, 0.3); }
+#meeting-discard.icon-btn:hover { background: rgba(239, 68, 68, 0.3); }
 .recorder-controls #pause-recording .nav-icon,
 .recorder-controls #resume-recording .nav-icon,
 .recorder-controls #discard-recording .nav-icon {
@@ -1121,19 +1153,8 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
 
 /* Ensure all SVG icons render centered */
 .nav-icon, .nav-icon-giant, .nav-icon-xxl {
-
-    align-items: center;
-    justify-content: center;
-    left: 20px;
+    display: block; /* remove inline baseline gap */
 }
-
-.nav-icon-giant {
-    width: 64px;
-    height: 64px;
-    stroke-width: 3;
-    color: #fff;
-}
-
 
 .btn-giant {
     padding: 3rem 5rem;
@@ -1143,9 +1164,10 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
 }
 
 .nav-icon-giant {
-    width: 96px;
+    width: 96px;   /* one definitive size for big round button */
     height: 96px;
     stroke-width: 3;
+    color: #fff;
 }
 
 
@@ -1675,17 +1697,17 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    font-size: 1.1rem;
-    padding: 1rem 2rem;
-    border-radius: 25px;
+    font-size: 1.25rem;
+    padding: 1.25rem 2.25rem;
+    border-radius: 32px;
     font-weight: 600;
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
     box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
     transition: all 0.3s ease;
 }
 .nav-icon.nav-icon-xxl {
-    width: 30px;
-    height: 30px;
+    width: 36px;
+    height: 36px;
     color: #ffffff;
 }
 
@@ -1696,8 +1718,8 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
 
 
 .meeting-record-btn.recording {
-    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-    box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    box-shadow: 0 6px 22px rgba(220, 38, 38, 0.45);
 }
 
 .meeting-record-btn.recording:hover {
