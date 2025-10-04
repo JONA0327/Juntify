@@ -158,6 +158,10 @@
 <script>
 let currentTaskDetailsId = null;
 let lastMeetingIdForAssignable = null;
+let lastQueryForAssignable = '';
+let assigneeSearchTimeoutId = null;
+const DETAILS_ASSIGNEE_SEARCH_DELAY = 350;
+const DETAILS_ASSIGNEE_MIN_SEARCH_LENGTH = 2;
 
 function taskDetailsGetAssignableManager() {
     return window.AssignableUsersManager;
@@ -213,15 +217,66 @@ async function setupAssignableControls(task) {
         const forceRefresh = meetingId !== lastMeetingIdForAssignable;
         if (forceRefresh && assignableManager && typeof assignableManager.clearAssignableUsersCache === 'function') {
             assignableManager.clearAssignableUsersCache(meetingId);
+            lastQueryForAssignable = '';
         }
-        const users = assignableManager
-            ? await assignableManager.loadAssignableUsers(meetingId, { forceRefresh })
-            : [];
-        if (assignableManager && typeof assignableManager.populateAssigneeSelector === 'function') {
-            assignableManager.populateAssigneeSelector(assigneeSelector, users, task.assigned_user_id);
+        await refreshDetailsAssignableOptions(assigneeSelector, {
+            meetingId,
+            selectedUserId: task.assigned_user_id,
+            query: lastQueryForAssignable,
+            forceRefresh,
+        });
+
+        if (assigneeInput && !assigneeInput.dataset.assignableSearchBound) {
+            assigneeInput.addEventListener('input', () => {
+                if (!assigneeSelector) {
+                    return;
+                }
+                const value = assigneeInput.value.trim();
+                const shouldSearch = value.length >= DETAILS_ASSIGNEE_MIN_SEARCH_LENGTH;
+                const query = shouldSearch ? value : '';
+                const forceSearch = shouldSearch || lastQueryForAssignable !== query;
+                if (assigneeSearchTimeoutId) {
+                    clearTimeout(assigneeSearchTimeoutId);
+                }
+                assigneeSearchTimeoutId = setTimeout(() => {
+                    refreshDetailsAssignableOptions(assigneeSelector, {
+                        meetingId,
+                        selectedUserId: assigneeSelector.value || null,
+                        query,
+                        forceRefresh: forceSearch,
+                    });
+                }, DETAILS_ASSIGNEE_SEARCH_DELAY);
+            });
+            assigneeInput.dataset.assignableSearchBound = 'true';
         }
-        lastMeetingIdForAssignable = meetingId;
     }
+}
+
+function refreshDetailsAssignableOptions(assigneeSelector, { meetingId = null, selectedUserId = null, query = '', forceRefresh = false } = {}) {
+    const assignableManager = taskDetailsGetAssignableManager();
+    if (!assignableManager || typeof assignableManager.loadAssignableUsers !== 'function') {
+        return Promise.resolve([]);
+    }
+
+    const normalizedQuery = (query || '').trim();
+    const shouldForceRefresh = forceRefresh
+        || meetingId !== lastMeetingIdForAssignable
+        || normalizedQuery !== lastQueryForAssignable;
+
+    return assignableManager
+        .loadAssignableUsers(meetingId, { forceRefresh: shouldForceRefresh, query: normalizedQuery })
+        .then(users => {
+            if (assigneeSelector && typeof assignableManager.populateAssigneeSelector === 'function') {
+                assignableManager.populateAssigneeSelector(assigneeSelector, users, selectedUserId);
+            }
+            lastMeetingIdForAssignable = meetingId;
+            lastQueryForAssignable = normalizedQuery;
+            return users;
+        })
+        .catch(error => {
+            console.error('Error loading assignable users for details modal:', error);
+            return [];
+        });
 }
 
 function populateDriveDestination(options) {

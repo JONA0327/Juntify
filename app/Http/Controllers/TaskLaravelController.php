@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Str;
 use App\Services\GoogleDriveService;
 use App\Traits\GoogleDriveHelpers;
 use App\Traits\MeetingContentParsing;
@@ -733,6 +734,8 @@ class TaskLaravelController extends Controller
         ]);
     }
 
+    private const PLATFORM_SEARCH_LIMIT = 10;
+
     /** Lista contactos, miembros de organización y usuarios con reuniones compartidas disponibles para asignar tareas */
     public function assignableUsers(Request $request): JsonResponse
     {
@@ -740,9 +743,11 @@ class TaskLaravelController extends Controller
 
         $data = $request->validate([
             'meeting_id' => 'nullable|integer|exists:transcriptions_laravel,id',
+            'query' => 'nullable|string|max:255',
         ]);
 
         $meetingId = $data['meeting_id'] ?? null;
+        $searchTerm = isset($data['query']) ? trim((string) $data['query']) : '';
 
         $contacts = Contact::with('contact:id,full_name,email')
             ->where('user_id', $user->id)
@@ -814,7 +819,40 @@ class TaskLaravelController extends Controller
             }
         }
 
-        $combined = $contacts->concat($organizationUsers)->concat($sharedUsers)
+        $platformUsers = collect();
+        if ($searchTerm !== '') {
+            $normalized = Str::lower($searchTerm);
+            $like = '%' . $normalized . '%';
+
+            $platformUsers = User::query()
+                ->where('id', '!=', $user->id)
+                ->where(function ($query) use ($like) {
+                    $query->whereRaw("LOWER(COALESCE(full_name, '')) LIKE ?", [$like])
+                        ->orWhereRaw("LOWER(COALESCE(email, '')) LIKE ?", [$like])
+                        ->orWhereRaw("LOWER(COALESCE(username, '')) LIKE ?", [$like]);
+                })
+                ->orderBy('full_name')
+                ->limit(self::PLATFORM_SEARCH_LIMIT)
+                ->get(['id', 'full_name', 'email', 'username'])
+                ->map(function ($platformUser) {
+                    $name = $platformUser->full_name
+                        ?? $platformUser->email
+                        ?? $platformUser->username;
+
+                    return [
+                        'id' => $platformUser->id,
+                        'name' => $name,
+                        'email' => $platformUser->email,
+                        'source' => 'platform',
+                        'platform' => 'users',
+                    ];
+                });
+        }
+
+        $combined = $contacts
+            ->concat($organizationUsers)
+            ->concat($sharedUsers)
+            ->concat($platformUsers)
             ->unique('id')
             ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
             ->values();

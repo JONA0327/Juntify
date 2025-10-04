@@ -2,7 +2,33 @@ const SOURCE_LABELS = {
     contact: 'Contacto',
     organization: 'Organización',
     shared: 'Compartidos',
+    platform: 'Usuarios de Juntify',
 };
+
+const DEFAULT_SOURCE = 'contact';
+
+function normalizeOption(rawUser) {
+    if (!rawUser || typeof rawUser !== 'object') {
+        return null;
+    }
+
+    const id = rawUser.id ?? rawUser.user_id ?? null;
+    if (!id) {
+        return null;
+    }
+
+    const name = rawUser.name || rawUser.full_name || rawUser.email || '';
+    const email = rawUser.email || '';
+    const source = rawUser.source || rawUser.platform || DEFAULT_SOURCE;
+
+    return {
+        id: String(id),
+        name,
+        email,
+        source,
+        platform: rawUser.platform || null,
+    };
+}
 
 function resolveCsrfToken() {
     return (
@@ -14,9 +40,9 @@ function resolveCsrfToken() {
 
 export function getSourceLabel(source) {
     if (!source) {
-        return SOURCE_LABELS.contact;
+        return SOURCE_LABELS[DEFAULT_SOURCE];
     }
-    return SOURCE_LABELS[source] || SOURCE_LABELS.contact;
+    return SOURCE_LABELS[source] || SOURCE_LABELS[DEFAULT_SOURCE];
 }
 
 export function buildOptionLabel(user) {
@@ -33,6 +59,7 @@ export function groupUsersBySource(users = []) {
         contact: [],
         organization: [],
         shared: [],
+        platform: [],
         other: [],
     };
 
@@ -47,6 +74,8 @@ export function groupUsersBySource(users = []) {
             buckets.organization.push(user);
         } else if (source === 'shared') {
             buckets.shared.push(user);
+        } else if (source === 'platform') {
+            buckets.platform.push(user);
         } else {
             buckets.other.push(user);
         }
@@ -57,12 +86,15 @@ export function groupUsersBySource(users = []) {
 
 const cachedAssignableUsers = new Map();
 
-function getCacheKey(meetingId) {
-    return meetingId ? String(meetingId) : 'default';
+function getCacheKey(meetingId, query = '') {
+    const base = meetingId ? String(meetingId) : 'default';
+    const normalizedQuery = (query || '').trim().toLowerCase();
+    return `${base}::${normalizedQuery}`;
 }
 
-export async function loadAssignableUsers(meetingId = null, { forceRefresh = false } = {}) {
-    const cacheKey = getCacheKey(meetingId);
+export async function loadAssignableUsers(meetingId = null, { forceRefresh = false, query = '' } = {}) {
+    const normalizedQuery = (query || '').trim();
+    const cacheKey = getCacheKey(meetingId, normalizedQuery);
     if (!forceRefresh && cachedAssignableUsers.has(cacheKey)) {
         return cachedAssignableUsers.get(cacheKey);
     }
@@ -71,6 +103,9 @@ export async function loadAssignableUsers(meetingId = null, { forceRefresh = fal
         const url = new URL('/api/tasks-laravel/assignable-users', window.location.origin);
         if (meetingId) {
             url.searchParams.set('meeting_id', meetingId);
+        }
+        if (normalizedQuery) {
+            url.searchParams.set('query', normalizedQuery);
         }
         const headers = {
             Accept: 'application/json',
@@ -82,7 +117,9 @@ export async function loadAssignableUsers(meetingId = null, { forceRefresh = fal
 
         const response = await fetch(url, { headers });
         const data = await response.json();
-        const users = Array.isArray(data.users) ? data.users : [];
+        const users = Array.isArray(data.users)
+            ? data.users.map(normalizeOption).filter(Boolean)
+            : [];
         cachedAssignableUsers.set(cacheKey, users);
         return users;
     } catch (error) {
@@ -110,6 +147,9 @@ export function populateAssigneeSelector(selectElement, users = [], currentId = 
         option.dataset.email = user.email || '';
         option.dataset.source = user.source || '';
         option.dataset.name = user.name || '';
+        if (user.platform) {
+            option.dataset.platform = user.platform;
+        }
         selectElement.appendChild(option);
     });
 
@@ -128,7 +168,12 @@ export function clearAssignableUsersCache(meetingId = undefined) {
         return;
     }
 
-    cachedAssignableUsers.delete(getCacheKey(meetingId));
+    const base = meetingId ? String(meetingId) : 'default';
+    Array.from(cachedAssignableUsers.keys()).forEach(key => {
+        if (key.startsWith(`${base}::`)) {
+            cachedAssignableUsers.delete(key);
+        }
+    });
 }
 
 export const AssignableUsersUtils = {

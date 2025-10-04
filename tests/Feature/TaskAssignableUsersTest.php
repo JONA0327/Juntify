@@ -120,4 +120,41 @@ class TaskAssignableUsersTest extends TestCase
             'assignment_status' => 'pending',
         ]);
     }
+
+    /** @test */
+    public function it_includes_platform_results_when_searching_by_query(): void
+    {
+        $owner = User::factory()->create([
+            'full_name' => 'Owner Example',
+            'email' => 'owner@example.com',
+        ]);
+
+        for ($i = 0; $i < 12; $i++) {
+            User::factory()->create([
+                'full_name' => 'Busqueda Usuario ' . $i,
+            ]);
+        }
+
+        $nonMatching = User::factory()->create([
+            'full_name' => 'Otro Nombre',
+            'email' => 'otro@example.com',
+        ]);
+
+        $response = $this->actingAs($owner)->getJson(route('api.tasks-laravel.assignable-users', [
+            'query' => 'busqueda',
+        ]));
+
+        $response->assertOk();
+
+        $users = collect($response->json('users'));
+        $platformResults = $users->filter(fn ($user) => $user['source'] === 'platform')->values();
+
+        $this->assertNotEmpty($platformResults, 'Expected platform results when query parameter is provided');
+        $this->assertLessThanOrEqual(10, $platformResults->count(), 'Platform results should respect search limit');
+        $this->assertFalse($platformResults->contains(fn ($user) => (int) $user['id'] === (int) $owner->id));
+        $this->assertFalse($platformResults->contains(fn ($user) => (int) $user['id'] === (int) $nonMatching->id));
+
+        $firstPlatform = $platformResults->first();
+        $this->assertSame('users', $firstPlatform['platform']);
+    }
 }
