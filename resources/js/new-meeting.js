@@ -1321,6 +1321,48 @@ function showPostponeLockedModal() {
 }
 window.showPostponeLockedModal = showPostponeLockedModal;
 
+// Asegura limpieza segura antes de pedir de nuevo permisos de micrófono o pantalla
+async function clearPreviousAudioData() {
+    try {
+        // Detener MediaRecorder si está activo
+        if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state && mediaRecorder.state !== 'inactive') {
+            try { mediaRecorder.stop(); } catch (_) {}
+        }
+        // Detener streams previos
+        try {
+            if (typeof recordingStream !== 'undefined' && recordingStream && recordingStream.getTracks) {
+                recordingStream.getTracks().forEach(t => { try { t.stop(); } catch (_) {} });
+            }
+        } catch (_) {}
+        try {
+            if (typeof systemAudioStream !== 'undefined' && systemAudioStream && systemAudioStream.getTracks) {
+                systemAudioStream.getTracks().forEach(t => { try { t.stop(); } catch (_) {} });
+            }
+        } catch (_) {}
+        try {
+            if (typeof microphoneAudioStream !== 'undefined' && microphoneAudioStream && microphoneAudioStream.getTracks) {
+                microphoneAudioStream.getTracks().forEach(t => { try { t.stop(); } catch (_) {} });
+            }
+        } catch (_) {}
+        // Cerrar contextos
+        try {
+            if (typeof audioContext !== 'undefined' && audioContext && audioContext.state !== 'closed') {
+                await audioContext.close();
+            }
+        } catch (_) {}
+        // Cancelar animaciones y timers
+        try { if (typeof animationId !== 'undefined' && animationId) { cancelAnimationFrame(animationId); animationId = null; } } catch (_) {}
+        try { if (typeof meetingAnimationId !== 'undefined' && meetingAnimationId) { cancelAnimationFrame(meetingAnimationId); meetingAnimationId = null; } } catch (_) {}
+        try { if (typeof recordingTimer !== 'undefined' && recordingTimer) { clearInterval(recordingTimer); recordingTimer = null; } } catch (_) {}
+        // Reset estado ligero
+        try { if (typeof recordedChunks !== 'undefined') { recordedChunks = []; } } catch (_) {}
+        try { if (typeof pendingAudioBlob !== 'undefined') { pendingAudioBlob = null; } } catch (_) {}
+        try { discardRequested = false; } catch (_) {}
+    } catch (_) {
+        // Silencioso
+    }
+}
+
 
 // Función para detener grabación
 function stopRecording() {
