@@ -134,6 +134,10 @@ const taskAssigneeSelector = document.getElementById('taskAssigneeSelector');
 const taskAssigneeInput = document.getElementById('taskAssigneeInput');
 const taskAssignedUserIdInput = document.getElementById('taskAssignedUserId');
 let lastLoadedMeetingIdForTaskModal = null;
+let lastLoadedQueryForTaskModal = '';
+let taskAssigneeSearchTimeout = null;
+const ASSIGNEE_SEARCH_DELAY = 350;
+const ASSIGNEE_MIN_SEARCH_LENGTH = 2;
 
 function taskModalGetAssignableManager() {
     return window.AssignableUsersManager;
@@ -149,6 +153,7 @@ function resetTaskAssigneeFields() {
     if (taskAssignedUserIdInput) {
         taskAssignedUserIdInput.value = '';
     }
+    lastLoadedQueryForTaskModal = '';
 }
 
 function handleTaskAssigneeChange() {
@@ -180,22 +185,44 @@ function handleTaskAssigneeInputChange() {
     if (taskAssigneeSelector) {
         taskAssigneeSelector.value = '';
     }
+
+    const meetingId = window.lastSelectedMeetingId || null;
+    if (!meetingId || !taskAssigneeInput) {
+        return;
+    }
+
+    const value = taskAssigneeInput.value.trim();
+    const shouldSearch = value.length >= ASSIGNEE_MIN_SEARCH_LENGTH;
+    const query = shouldSearch ? value : '';
+    const forceRefresh = shouldSearch || lastLoadedQueryForTaskModal !== query;
+
+    if (taskAssigneeSearchTimeout) {
+        clearTimeout(taskAssigneeSearchTimeout);
+    }
+
+    taskAssigneeSearchTimeout = setTimeout(() => {
+        refreshTaskAssigneeOptions(meetingId, null, { forceRefresh, query });
+    }, ASSIGNEE_SEARCH_DELAY);
 }
 
-function refreshTaskAssigneeOptions(meetingId, selectedUserId = null, { forceRefresh = false } = {}) {
+function refreshTaskAssigneeOptions(meetingId, selectedUserId = null, { forceRefresh = false, query = '' } = {}) {
     const manager = taskModalGetAssignableManager();
     if (!manager || typeof manager.loadAssignableUsers !== 'function') {
         lastLoadedMeetingIdForTaskModal = meetingId;
         return Promise.resolve([]);
     }
-    const shouldForceRefresh = forceRefresh || meetingId !== lastLoadedMeetingIdForTaskModal;
+    const normalizedQuery = (query || '').trim();
+    const shouldForceRefresh = forceRefresh
+        || meetingId !== lastLoadedMeetingIdForTaskModal
+        || normalizedQuery !== lastLoadedQueryForTaskModal;
     return manager
-        .loadAssignableUsers(meetingId, { forceRefresh: shouldForceRefresh })
+        .loadAssignableUsers(meetingId, { forceRefresh: shouldForceRefresh, query: normalizedQuery })
         .then(users => {
             if (typeof manager.populateAssigneeSelector === 'function') {
                 manager.populateAssigneeSelector(taskAssigneeSelector, users, selectedUserId);
             }
             lastLoadedMeetingIdForTaskModal = meetingId;
+            lastLoadedQueryForTaskModal = normalizedQuery;
             return users;
         })
         .catch(error => {
