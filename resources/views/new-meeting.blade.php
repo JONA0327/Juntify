@@ -116,15 +116,7 @@
                         Configuración
                     </h2>
 
-                    <div class="form-group">
-                        <label class="form-label">Idioma de transcripción</label>
-                        <select class="form-select" id="advanced-language">
-                            <option value="es">Español</option>
-                            <option value="en">English</option>
-                            <option value="fr">Français</option>
-                            <option value="de">Deutsch</option>
-                        </select>
-                    </div>
+                    <!-- Idioma de transcripción eliminado: ahora se detecta automáticamente -->
 
                     <div class="form-group">
                         <label class="form-label">Dispositivo de micrófono</label>
@@ -153,6 +145,19 @@
 
                     <!-- Incluir parcial de Grabador de Reunión -->
                     @include('partials.new-meeting._meeting-recorder')
+
+                    <!-- Conmutador de "Posponer" unificado para audio y reunión -->
+                    <div class="postpone-switch flex flex-col items-center mt-6" id="postpone-switch" style="display:none;">
+                        <span id="postpone-mode-label" class="text-sm mb-1">Modo posponer: Apagado</span>
+                        <label for="postpone-toggle" class="cursor-pointer select-none">
+                            <input id="postpone-toggle" type="checkbox" class="sr-only" onchange="togglePostponeMode()">
+                            <span id="postpone-track" class="switch-track">
+                                <span class="switch-label off">OFF</span>
+                                <span class="switch-label on">ON</span>
+                                <span class="switch-thumb"></span>
+                            </span>
+                        </label>
+                    </div>
                 </div>
             </div>
         </main>

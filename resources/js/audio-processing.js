@@ -83,9 +83,9 @@ function detectLargeAudioFile(audioBlob) {
 function getPreferredAudioFormat() {
     // Solo formatos estables para reuniones - NO WebM
     const formats = [
-        'audio/ogg;codecs=opus',// OGG/Opus - PRIORIDAD MÁXIMA
-        'audio/ogg',            // OGG genérico como respaldo
-        'audio/mp4',            // MP4 audio como alternativa
+        'audio/ogg;codecs=vorbis', // OGG/Vorbis (sin Opus)
+        'audio/ogg',               // OGG genérico como respaldo
+        'audio/mp4',               // MP4 audio como alternativa
     ];
 
     for (const format of formats) {
@@ -386,8 +386,6 @@ async function startTranscription() {
         typingEl.textContent = typingMessages[messageIndex];
     }, 3000);
 
-    const lang = sessionStorage.getItem('transcriptionLanguage') || 'es';
-
     const progressBar = document.getElementById('transcription-progress');
     const progressText = document.getElementById('transcription-progress-text');
     const progressPercent = document.getElementById('transcription-progress-percent');
@@ -404,18 +402,17 @@ async function startTranscription() {
 
     if (audioSizeMB > 10) {
         console.log('📤 [startTranscription] Using chunked upload for large audio');
-        await startChunkedTranscription(audioBlob, lang, progressBar, progressText, progressPercent);
+        await startChunkedTranscription(audioBlob, progressBar, progressText, progressPercent);
     } else {
         console.log('📤 [startTranscription] Using standard upload for small audio');
-        await startStandardTranscription(audioBlob, lang, progressBar, progressText, progressPercent);
+        await startStandardTranscription(audioBlob, progressBar, progressText, progressPercent);
     }
 }
 
-async function startStandardTranscription(audioBlob, lang, progressBar, progressText, progressPercent) {
+async function startStandardTranscription(audioBlob, progressBar, progressText, progressPercent) {
     const formData = new FormData();
     const fileName = `recording.${getFileExtensionForMimeType(audioBlob.type)}`;
     formData.append('audio', audioBlob, fileName);
-    formData.append('language', lang);
 
     try {
         progressText.textContent = 'Subiendo audio...';
@@ -444,7 +441,7 @@ async function startStandardTranscription(audioBlob, lang, progressBar, progress
     }
 }
 
-async function startChunkedTranscription(audioBlob, lang, progressBar, progressText, progressPercent) {
+async function startChunkedTranscription(audioBlob, progressBar, progressText, progressPercent) {
     // Estrategia adaptativa: intentar con 8MB, luego 4MB, luego 2MB, luego 1MB si aparecen 413
     const CANDIDATE_SIZES = [8, 4, 2, 1].map(m => m * 1024 * 1024);
     const MAX_RETRIES = 3;
@@ -454,11 +451,10 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
         console.log(`🔧 [startChunkedTranscription] Intentando chunk size = ${Math.round(CHUNK_SIZE/1024/1024)}MB`);
         progressText.textContent = `Preparando subida (${Math.round(CHUNK_SIZE/1024/1024)}MB)...`;
 
-        const initResponse = await axios.post('/transcription/chunked/init', {
+            const initResponse = await axios.post('/transcription/chunked/init', {
             filename: `recording.${getFileExtensionForMimeType(audioBlob.type)}`,
             size: audioBlob.size,
-            language: lang,
-            chunks: Math.ceil(audioBlob.size / CHUNK_SIZE)
+                chunks: Math.ceil(audioBlob.size / CHUNK_SIZE)
         }, { timeout: 30000 });
 
         const { upload_id, chunk_urls } = initResponse.data;

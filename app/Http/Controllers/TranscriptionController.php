@@ -44,10 +44,8 @@ class TranscriptionController extends Controller
 
     public function store(Request $request)
     {
-        $supportedLangs = config('transcription.supported_languages', ['es','en','fr','de']);
         $request->validate([
             'audio'    => 'required|file|max:204800', // Máximo 200MB
-            'language' => 'nullable|in:' . implode(',', $supportedLangs),
         ]);
 
         $file = $request->file('audio');
@@ -81,7 +79,6 @@ class TranscriptionController extends Controller
 
         $filePath = $file->getRealPath();
 
-        $language = $request->input('language', 'es');
         $apiKey   = config('services.assemblyai.api_key');
 
         // Log información del archivo
@@ -89,7 +86,6 @@ class TranscriptionController extends Controller
             'original_name' => $fileName,
             'size' => $file->getSize(),
             'mime_type' => $mimeType,
-            'language' => $language,
             'is_webm' => $isWebM,
             'is_mp3' => $isMP3,
             'is_ogg' => $isOgg,
@@ -216,7 +212,7 @@ class TranscriptionController extends Controller
 
             $baseConfig = [
                 'audio_url'                => $uploadUrl,
-                'language_code'           => $language,
+                'language_detection'       => true,
                 'punctuate'               => true,
                 'format_text'             => false,  // Desactivado para mejor speaker detection
                 'dual_channel'            => false,
@@ -236,30 +232,8 @@ class TranscriptionController extends Controller
             // Aplicar optimizaciones según el formato de audio
             $transcriptionConfig = $this->getOptimizedConfigForFormat($mimeType, $baseConfig);
 
-            // Activar extras según soporte por idioma
-            $supported = config('transcription.extras_supported_by_language');
-            $langExtras = [
-                'auto_chapters'      => in_array($language, $supported['auto_chapters'] ?? []),
-                'summarization'      => in_array($language, $supported['summarization'] ?? []),
-                'sentiment_analysis' => in_array($language, $supported['sentiment_analysis'] ?? []),
-                'entity_detection'   => in_array($language, $supported['entity_detection'] ?? []),
-                'auto_highlights'    => in_array($language, $supported['auto_highlights'] ?? []),
-                'content_safety'     => in_array($language, $supported['content_safety'] ?? []),
-                'iab_categories'     => in_array($language, $supported['iab_categories'] ?? []),
-            ];
-
-            if ($langExtras['auto_chapters']) $transcriptionConfig['auto_chapters'] = true;
-            if ($langExtras['summarization']) { $transcriptionConfig['summarization'] = true; $transcriptionConfig['summary_model'] = 'informative'; $transcriptionConfig['summary_type'] = 'bullets'; }
-            if ($langExtras['sentiment_analysis']) $transcriptionConfig['sentiment_analysis'] = true;
-            if ($langExtras['entity_detection']) $transcriptionConfig['entity_detection'] = true;
-            if ($langExtras['auto_highlights']) $transcriptionConfig['auto_highlights'] = true;
-            if ($langExtras['content_safety']) $transcriptionConfig['content_safety'] = true;
-            if ($langExtras['iab_categories']) $transcriptionConfig['iab_categories'] = true;
-
-            Log::info('AssemblyAI extras selection', [
-                'language' => $language,
-                'enabled_extras' => array_keys(array_filter($langExtras)),
-            ]);
+            // Extras deshabilitados por defecto con auto-detección para evitar errores por idioma.
+            // Si AssemblyAI devuelve error de "not available in this language", reintentamos sin extras (mantenido abajo).
 
             $transcription = $transcriptionHttp->post('https://api.assemblyai.com/v2/transcript', $transcriptionConfig);
 
@@ -400,16 +374,13 @@ class TranscriptionController extends Controller
 
     public function initChunkedUpload(Request $request)
     {
-        $supportedLangs = config('transcription.supported_languages', ['es','en','fr','de']);
         $request->validate([
             'filename' => 'required|string',
             'size' => 'required|integer|min:1',
-            'language' => 'nullable|in:' . implode(',', $supportedLangs),
             'chunks' => 'required|integer|min:1'
         ]);
 
-        $uploadId = Str::uuid();
-        $language = $request->input('language', 'es');
+    $uploadId = Str::uuid();
         $filename = $request->input('filename');
         $lower = strtolower($filename);
         $ext = pathinfo($lower, PATHINFO_EXTENSION);
@@ -419,7 +390,7 @@ class TranscriptionController extends Controller
             'size_mb' => round($request->input('size') / 1024 / 1024, 2),
             'chunks' => $request->input('chunks'),
         ]);
-        $chunks = $request->input('chunks');
+    $chunks = $request->input('chunks');
 
         // Crear directorio temporal para los chunks
         $uploadDir = storage_path("app/temp-uploads/{$uploadId}");
@@ -432,7 +403,6 @@ class TranscriptionController extends Controller
             'upload_id' => $uploadId,
             'filename' => $request->input('filename'),
             'total_size' => $request->input('size'),
-            'language' => $language,
             'chunks_expected' => $chunks,
             'chunks_received' => 0,
             'created_at' => now()->toISOString()
@@ -454,7 +424,6 @@ class TranscriptionController extends Controller
             'filename' => $request->input('filename'),
             'size' => $request->input('size'),
             'chunks' => $chunks,
-            'language' => $language
         ]);
 
         return response()->json([
@@ -671,7 +640,6 @@ class TranscriptionController extends Controller
             'is_ogg' => $isOgg,
             'is_webm' => $isWebM,
             'is_large_audio' => $isLargeAudio,
-            'language' => $language,
         ]);
 
         // Configuración optimizada para archivos grandes
@@ -682,7 +650,6 @@ class TranscriptionController extends Controller
 
         Log::info('Starting large file upload to AssemblyAI', [
             'file_size' => filesize($filePath),
-            'language' => $language,
             'timeout' => $timeout,
             'connect_timeout' => $connectTimeout
         ]);
@@ -714,20 +681,9 @@ class TranscriptionController extends Controller
         $audioUrl = $uploadResponse->json()['upload_url'];
 
         // Crear transcripción - extras según soporte por idioma
-        $supported = config('transcription.extras_supported_by_language');
-        $langExtras = [
-            'auto_chapters'     => in_array($language, $supported['auto_chapters'] ?? []),
-            'summarization'     => in_array($language, $supported['summarization'] ?? []),
-            'sentiment_analysis'=> in_array($language, $supported['sentiment_analysis'] ?? []),
-            'entity_detection'  => in_array($language, $supported['entity_detection'] ?? []),
-            'auto_highlights'   => in_array($language, $supported['auto_highlights'] ?? []),
-            'content_safety'    => in_array($language, $supported['content_safety'] ?? []),
-            'iab_categories'    => in_array($language, $supported['iab_categories'] ?? []),
-        ];
-
         $basePayload = [
             'audio_url'               => $audioUrl,
-            'language_code'           => $language,
+            'language_detection'      => true,
             'punctuate'               => true,       // Mantiene puntuación
             'format_text'             => false,      // Desactivado para mejor speaker detection
             'dual_channel'            => false,      // Force mono analysis
@@ -746,16 +702,7 @@ class TranscriptionController extends Controller
         // Aplicar optimizaciones según el formato de audio
         $payload = $this->getOptimizedConfigForFormat($mimeType, $basePayload);
 
-        if ($langExtras['auto_chapters']) $payload['auto_chapters'] = true;
-        if ($langExtras['summarization']) { $payload['summarization'] = true; $payload['summary_model'] = 'informative'; $payload['summary_type'] = 'bullets'; }
-        if ($langExtras['sentiment_analysis']) $payload['sentiment_analysis'] = true;
-        if ($langExtras['entity_detection']) $payload['entity_detection'] = true;
-        if ($langExtras['auto_highlights']) $payload['auto_highlights'] = true;
-        if ($langExtras['content_safety']) $payload['content_safety'] = true;
-        if ($langExtras['iab_categories']) $payload['iab_categories'] = true;
-        if (!array_filter($langExtras)) {
-            Log::info('AssemblyAI extras disabled due to unsupported language', [ 'language' => $language ]);
-        }
+        // No habilitar extras condicionados por idioma cuando se usa autodetección para evitar rechazos.
 
         $transcriptResponse = Http::withHeaders([
             'authorization' => $apiKey,
@@ -765,11 +712,29 @@ class TranscriptionController extends Controller
         ->post('https://api.assemblyai.com/v2/transcript', $payload);
 
         if (!$transcriptResponse->successful()) {
+            $body = (string) $transcriptResponse->body();
+            if (stripos($body, 'not available in this language') !== false) {
+                Log::warning('AssemblyAI extras not available for detected language, retrying without extras', [ 'error' => $body ]);
+                $keys = ['auto_chapters','summarization','sentiment_analysis','entity_detection','auto_highlights','content_safety','iab_categories'];
+                foreach ($keys as $k) { unset($payload[$k]); }
+                unset($payload['summary_model'], $payload['summary_type']);
+
+                $retry = Http::withHeaders([
+                    'authorization' => $apiKey,
+                    'content-type' => 'application/json'
+                ])->timeout(60)->post('https://api.assemblyai.com/v2/transcript', $payload);
+
+                if (!$retry->successful()) {
+                    $error = $retry->json();
+                    Log::error('AssemblyAI transcript retry failed', [ 'status' => $retry->status(), 'error' => $error ]);
+                    throw new \Exception('AssemblyAI transcript creation failed after retry: ' . json_encode($error));
+                }
+                $transcriptionId = $retry->json()['id'];
+                Log::info('Large file transcription started successfully', [ 'transcription_id' => $transcriptionId, 'audio_url' => $audioUrl ]);
+                return $transcriptionId;
+            }
             $error = $transcriptResponse->json();
-            Log::error('AssemblyAI transcript creation failed', [
-                'status' => $transcriptResponse->status(),
-                'error' => $error
-            ]);
+            Log::error('AssemblyAI transcript creation failed', [ 'status' => $transcriptResponse->status(), 'error' => $error ]);
             throw new \Exception('AssemblyAI transcript creation failed: ' . json_encode($error));
         }
 

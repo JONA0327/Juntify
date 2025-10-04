@@ -98,7 +98,7 @@ class ProcessChunkedTranscription implements ShouldQueue
                 $processedPath = $this->processWebMFile($finalFilePath, $metadata);
             }
 
-            // Conversión unificada a OGG (Opus) si está habilitada en config('audio.force_ogg')
+            // Conversión unificada a OGG (Vorbis) si está habilitada en config('audio.force_ogg')
             $converted = false;
             if (config('audio.force_ogg')) {
                 try {
@@ -131,7 +131,7 @@ class ProcessChunkedTranscription implements ShouldQueue
                 }
             }
 
-            $transcriptionId = $this->uploadToAssemblyAI($processedPath, $metadata['language'], $isWebM);
+            $transcriptionId = $this->uploadToAssemblyAI($processedPath, $isWebM);
 
             Cache::put($cacheKey, [
                 'status' => 'processing',
@@ -153,7 +153,7 @@ class ProcessChunkedTranscription implements ShouldQueue
         }
     }
 
-    private function uploadToAssemblyAI(string $filePath, string $language, bool $isWebM = false): string
+    private function uploadToAssemblyAI(string $filePath, bool $isWebM = false): string
     {
         $apiKey = config('services.assemblyai.api_key');
         if (empty($apiKey)) {
@@ -187,20 +187,9 @@ class ProcessChunkedTranscription implements ShouldQueue
 
         $audioUrl = $uploadResponse->json('upload_url');
 
-        $supported = config('transcription.extras_supported_by_language');
-        $langExtras = [
-            'auto_chapters'     => in_array($language, $supported['auto_chapters'] ?? []),
-            'summarization'     => in_array($language, $supported['summarization'] ?? []),
-            'sentiment_analysis'=> in_array($language, $supported['sentiment_analysis'] ?? []),
-            'entity_detection'  => in_array($language, $supported['entity_detection'] ?? []),
-            'auto_highlights'   => in_array($language, $supported['auto_highlights'] ?? []),
-            'content_safety'    => in_array($language, $supported['content_safety'] ?? []),
-            'iab_categories'    => in_array($language, $supported['iab_categories'] ?? []),
-        ];
-
         $basePayload = [
             'audio_url' => $audioUrl,
-            'language_code' => $language,
+            'language_detection' => true,
             'speaker_labels' => true,
             'punctuate' => true,
             'format_text' => false,              // Desactivado para mejor speaker detection
@@ -214,7 +203,7 @@ class ProcessChunkedTranscription implements ShouldQueue
         if ($isWebM) {
             $payload = [
                 'audio_url' => $audioUrl,
-                'language_code' => $language,
+                'language_detection' => true,
                 'speaker_labels' => true,           // Activar para detección automática
                 'punctuate' => true,               // Mantener puntuación básica
                 'format_text' => false,            // Desactivar formato para reducir procesamiento
@@ -249,17 +238,7 @@ class ProcessChunkedTranscription implements ShouldQueue
             $payload = $basePayload;
         }
 
-        // Activar extras según soporte por idioma
-        if ($langExtras['auto_chapters']) $payload['auto_chapters'] = true;
-        if ($langExtras['summarization']) { $payload['summarization'] = true; $payload['summary_model'] = 'informative'; $payload['summary_type'] = 'bullets'; }
-        if ($langExtras['sentiment_analysis']) $payload['sentiment_analysis'] = true;
-        if ($langExtras['entity_detection']) $payload['entity_detection'] = true;
-        if ($langExtras['auto_highlights']) $payload['auto_highlights'] = true;
-        if ($langExtras['content_safety']) $payload['content_safety'] = true;
-        if ($langExtras['iab_categories']) $payload['iab_categories'] = true;
-        if (!array_filter($langExtras)) {
-            Log::info('AssemblyAI extras disabled due to unsupported language', [ 'language' => $language ]);
-        }
+        // Extras deshabilitados por idioma: con auto-detección evitamos habilitarlos para prevenir errores
 
         $transcriptResponse = Http::withHeaders([
             'authorization' => $apiKey,
@@ -277,7 +256,25 @@ class ProcessChunkedTranscription implements ShouldQueue
         }
 
         if (! $transcriptResponse->successful()) {
-            throw new \Exception('AssemblyAI transcript creation failed: ' . $transcriptResponse->body());
+            $body = (string) $transcriptResponse->body();
+            if (stripos($body, 'not available in this language') !== false) {
+                // Parse unsupported models and retry without them
+                Log::warning('AssemblyAI extras not available for detected language, retrying without extras', [ 'error' => $body ]);
+                $keys = ['auto_chapters','summarization','sentiment_analysis','entity_detection','auto_highlights','content_safety','iab_categories'];
+                foreach ($keys as $k) { unset($payload[$k]); }
+                unset($payload['summary_model'], $payload['summary_type']);
+
+                $retry = Http::withHeaders([
+                    'authorization' => $apiKey,
+                    'content-type' => 'application/json',
+                ])->timeout(60)->post('https://api.assemblyai.com/v2/transcript', $payload);
+
+                if (! $retry->successful()) {
+                    throw new \Exception('AssemblyAI transcript creation failed after retry: ' . $retry->body());
+                }
+                return $retry->json('id');
+            }
+            throw new \Exception('AssemblyAI transcript creation failed: ' . $body);
         }
 
         return $transcriptResponse->json('id');

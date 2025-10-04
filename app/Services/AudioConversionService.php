@@ -165,8 +165,8 @@ class AudioConversionService
     }
 
     /**
-     * Convert the provided audio file into OGG (Opus) format using ffmpeg.
-     * Will skip conversion if already ogg/opus.
+     * Convert the provided audio file into OGG (Vorbis) format using ffmpeg.
+     * Will skip conversion if already ogg/vorbis.
      *
      * @param  string      $filePath
      * @param  string|null $mimeType
@@ -179,18 +179,18 @@ class AudioConversionService
         $detectedMime      = $mimeType ?? (is_readable($filePath) ? @mime_content_type($filePath) : null);
 
         $alreadyOgg = false;
-        if ($detectedExtension === 'ogg' || $detectedExtension === 'opus') {
+        if ($detectedExtension === 'ogg' || $detectedExtension === 'oga') {
             $alreadyOgg = true;
         }
         if ($detectedMime) {
             $lowerMime = strtolower($detectedMime);
-            if (str_contains($lowerMime, 'ogg') || str_contains($lowerMime, 'opus')) {
+            if (str_contains($lowerMime, 'ogg') || str_contains($lowerMime, 'vorbis')) {
                 $alreadyOgg = true;
             }
         }
 
         if ($alreadyOgg) {
-            Log::info('Audio already in OGG/Opus format, skipping conversion', [
+            Log::info('Audio already in OGG/Vorbis format, skipping conversion', [
                 'mime_type' => $detectedMime,
                 'extension' => $detectedExtension,
             ]);
@@ -273,17 +273,16 @@ class AudioConversionService
         }
         $targetPath = $tempPath . '.ogg';
 
-        $bitrate = config('audio.opus_bitrate', '96k');
+        $bitrate = config('audio.vorbis_bitrate', '128k');
         $timeout = (int) config('audio.conversion_timeout', 1800);
 
         $command = array_merge([$this->ffmpegBin(), '-y'], $this->buildCommonDecodeArgs(), [
             '-i', $filePath,
             '-vn',
-            '-c:a', 'libopus',
+            '-c:a', 'libvorbis',
             '-b:a', $bitrate,
-            '-application', 'voip',
-            // Aseguramos sample rate estándar (48k) para Opus si no viene ya
-            '-ar', '48000',
+            // Vorbis funciona bien con 44.1k o 48k; usamos 44.1k por compatibilidad
+            '-ar', '44100',
             $targetPath,
         ]);
 
@@ -314,16 +313,15 @@ class AudioConversionService
                 'error' => $errorOutput,
             ]);
 
-            // Fallback: decode to WAV then encode to Opus
+            // Fallback: decode to WAV then encode to Vorbis
             try {
                 $wav = $this->convertViaWav($filePath, $timeout);
                 $second = array_merge([$this->ffmpegBin(), '-y'], $this->buildCommonDecodeArgs(), [
                     '-i', $wav['wav'],
                     '-vn',
-                    '-c:a', 'libopus',
+                    '-c:a', 'libvorbis',
                     '-b:a', $bitrate,
-                    '-application', 'voip',
-                    '-ar', '48000',
+                    '-ar', '44100',
                     $targetPath,
                 ]);
                 $p2 = new Process($second);
@@ -332,14 +330,14 @@ class AudioConversionService
                 @unlink($wav['wav']);
                 if (!$p2->isSuccessful()) {
                     @unlink($targetPath);
-                    throw new RuntimeException('FFmpeg OGG conversion failed after WAV fallback: ' . $p2->getErrorOutput());
+                    throw new RuntimeException('FFmpeg OGG (Vorbis) conversion failed after WAV fallback: ' . $p2->getErrorOutput());
                 }
             } catch (RuntimeException $e) {
                 throw $e;
             }
         }
 
-        Log::info('Audio converted to OGG (Opus) using ffmpeg', [
+        Log::info('Audio converted to OGG (Vorbis) using ffmpeg', [
             'original_mime_type' => $detectedMime,
             'original_extension' => $detectedExtension,
             'target_path'        => $targetPath,

@@ -44,17 +44,6 @@
             </svg>
             </button>
         </div>
-        <div class="postpone-switch flex flex-col items-center mt-6" id="postpone-switch">
-            <span id="postpone-mode-label" class="text-sm mb-1">Modo posponer: Apagado</span>
-            <label for="postpone-toggle" class="cursor-pointer select-none">
-                <input id="postpone-toggle" type="checkbox" class="sr-only" onchange="togglePostponeMode()">
-                <span id="postpone-track" class="switch-track">
-                    <span class="switch-label off">OFF</span>
-                    <span class="switch-label on">ON</span>
-                    <span class="switch-thumb"></span>
-                </span>
-            </label>
-        </div>
     <p id="max-duration-hint-audio" class="text-xs text-gray-500 mt-4 text-center">Puedes grabar hasta 2 horas continuas. Se notificará cuando queden 5 min para el límite.</p>
     </div>
 </div>

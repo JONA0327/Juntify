@@ -50,26 +50,19 @@ let failedAudioName = null; // Nombre del archivo que falló
 let retryAttempts = 0; // Contador de intentos de resubida
 const MAX_RETRY_ATTEMPTS = 3; // Máximo número de reintentos
 
-// Función para obtener el mejor formato de audio disponible priorizando OGG
+// Función para obtener el mejor formato de audio disponible priorizando OGG (Vorbis)
 function getOptimalAudioFormat() {
     const formats = [
-        'audio/ogg;codecs=opus',    // OGG/Opus - PRIORIDAD MÁXIMA para compatibilidad abierta
-        'audio/ogg',                // OGG genérico como respaldo principal
-        'audio/mp4',                // MP4 audio como alternativa
-        'audio/mpeg',               // MP3 como último recurso tradicional
-        'audio/webm;codecs=opus',   // WebM solo si es la única opción (evitar si es posible)
+        'audio/ogg;codecs=vorbis',  // OGG/Vorbis preferido (sin Opus)
+        'audio/ogg',                // OGG genérico como respaldo (puede variar por navegador)
+        'audio/mpeg',               // MP3 como alternativa universal
+        'audio/mp4',                // MP4 audio si es lo único disponible
         'audio/webm'                // WebM genérico como último recurso
     ];
 
     for (const format of formats) {
         if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(format)) {
             console.log(`🎵 [Recording] Formato seleccionado: ${format}`);
-
-            // Advertir si se usa Opus para que sepas que puede haber problemas de compatibilidad
-            if (format.includes('opus')) {
-                console.warn(`⚠️ [Recording] ADVERTENCIA: Usando Opus codec. Puede tener problemas de compatibilidad en reproductores móviles.`);
-            }
-
             return format;
         }
     }
@@ -109,20 +102,27 @@ function downloadAudioWithCorrectFormat(blob, baseName) {
     return fileName;
 }
 
-// Función específica para descargar siempre en OGG cuando hay errores
+// Función específica para descargar en un formato ampliamente reproducible cuando hay errores
 async function downloadAudioAsOgg(blob, baseName) {
     try {
-        let oggBlob = blob;
-
-        // Si no es OGG, intentar convertir
+        let outBlob = blob;
+        let ext = 'ogg';
+        // Si no es OGG, intentar convertir a OGG Vorbis; si no es posible, a MP3
         if (!blob.type.includes('ogg')) {
-            console.log('🎵 [Download] Convirtiendo a OGG para descarga...');
-            oggBlob = await convertToOgg(blob);
+            console.log('🎵 [Download] Convirtiendo para descarga (preferir OGG/Vorbis)...');
+            try {
+                outBlob = await convertToOgg(blob);
+                ext = 'ogg';
+            } catch (convErr) {
+                console.warn('⚠️ [Download] Conversión a OGG falló, intentando MP3:', convErr);
+                outBlob = await convertToMp3(blob);
+                ext = 'mp3';
+            }
         }
 
-        const fileName = `${baseName}.ogg`;
-        downloadBlob(oggBlob, fileName);
-        console.log(`💾 [Download] Audio descargado como OGG: ${fileName}`);
+        const fileName = `${baseName}.${ext}`;
+        downloadBlob(outBlob, fileName);
+        console.log(`💾 [Download] Audio descargado como ${ext.toUpperCase()}: ${fileName}`);
         return fileName;
     } catch (error) {
         console.error('❌ [Download] Error al convertir a OGG:', error);
@@ -147,8 +147,7 @@ function downloadBlob(blob, fileName) {
     }
 }
 
-// Helper para convertir blobs a OGG usando MediaRecorder
-// Función mejorada para conversión real a OGG
+// Helper para convertir blobs a OGG (preferir Vorbis) usando MediaRecorder
 async function convertToOgg(blob) {
     try {
         console.log(`🎵 [Convert] Iniciando conversión a OGG...`);
@@ -160,7 +159,10 @@ async function convertToOgg(blob) {
             return blob;
         }
 
-        if (!window.MediaRecorder || !MediaRecorder.isTypeSupported || !MediaRecorder.isTypeSupported('audio/ogg')) {
+        // Intentar específicamente Vorbis primero
+        const vorbisSupported = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/ogg;codecs=vorbis');
+        const oggSupported = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/ogg');
+        if (!vorbisSupported && !oggSupported) {
             console.warn('⚠️ [Convert] MediaRecorder no soporta audio/ogg. Ajustando MIME type como respaldo.');
             const arrayBuffer = await blob.arrayBuffer();
             return new Blob([arrayBuffer], { type: 'audio/ogg' });
@@ -188,7 +190,8 @@ async function convertToOgg(blob) {
 
         return await new Promise((resolve, reject) => {
             let settled = false;
-            const recorder = new MediaRecorder(destination.stream, { mimeType: 'audio/ogg' });
+            const mime = vorbisSupported ? 'audio/ogg;codecs=vorbis' : 'audio/ogg';
+            const recorder = new MediaRecorder(destination.stream, { mimeType: mime });
 
             recorder.ondataavailable = event => {
                 if (event.data && event.data.size > 0) {
@@ -246,6 +249,47 @@ async function convertToOgg(blob) {
     }
 }
 
+// Conversión simple a MP3 vía Web Audio + MediaRecorder si es posible; si no, devuelve el blob original con MIME mp3
+async function convertToMp3(blob) {
+    try {
+        const mp3Supported = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/mpeg');
+        if (!mp3Supported) {
+            const buf = await blob.arrayBuffer();
+            return new Blob([buf], { type: 'audio/mpeg' });
+        }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        const ac = AC ? new AC() : null;
+        if (!ac) {
+            const buf = await blob.arrayBuffer();
+            return new Blob([buf], { type: 'audio/mpeg' });
+        }
+        const arr = await blob.arrayBuffer();
+        const audioBuffer = await ac.decodeAudioData(arr.slice(0));
+        const dest = ac.createMediaStreamDestination();
+        const src = ac.createBufferSource();
+        src.buffer = audioBuffer;
+        src.connect(dest);
+        const chunks = [];
+        const recorder = new MediaRecorder(dest.stream, { mimeType: 'audio/mpeg' });
+        return await new Promise((resolve, reject) => {
+            recorder.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
+            recorder.onerror = e => reject(e.error || new Error('Error en MediaRecorder MP3'));
+            recorder.onstop = () => {
+                const out = new Blob(chunks, { type: 'audio/mpeg' });
+                resolve(out);
+                ac.close().catch(() => {});
+            };
+            src.onended = () => { if (recorder.state !== 'inactive') recorder.stop(); };
+            recorder.start();
+            ac.resume().then(() => src.start(0)).catch(reject);
+        });
+    } catch (e) {
+        console.warn('⚠️ [Convert] MP3 conversion failed, falling back to mime-only:', e);
+        const buf = await blob.arrayBuffer();
+        return new Blob([buf], { type: 'audio/mpeg' });
+    }
+}
+
 // SVG paths for dynamic icons
 const ICON_PATHS = {
     play: 'M5.25 5.25l13.5 6.75-13.5 6.75V5.25z',
@@ -261,8 +305,6 @@ function setIcon(svgEl, name) {
         if (svgEl.classList.contains('nav-icon-xxl')) {
             // Use fill icons and a 24x24 viewBox so paths scale to the large size
             svgEl.setAttribute('viewBox', '0 0 24 24');
-            svgEl.setAttribute('fill', 'currentColor');
-            svgEl.removeAttribute('stroke');
             svgEl.innerHTML = `<path d="${path}" />`;
         } else {
             // Default small icons: strokes on 24x24
@@ -275,7 +317,6 @@ function setIcon(svgEl, name) {
 }
 
 // ===== CONFIGURACIÓN DE GRABACIÓN =====
-let MAX_DURATION_MS = 2 * 60 * 60 * 1000; // 2 horas (dinámico por plan)
 let WARN_BEFORE_MINUTES = 5; // dinámico por plan
 let PLAN_LIMITS = {
     role: (window.userRole || 'free'),
@@ -286,46 +327,7 @@ let PLAN_LIMITS = {
     allow_postpone: true,
     warn_before_minutes: 5,
 };
-const SEGMENT_MS = 10 * 60 * 1000; // 10 minutos
-// Se almacenan todos los trozos generados por una única sesión del MediaRecorder
-let recordedChunks = [];
-let recordingStream = null;
-let currentRecordingId = null;
-let chunkIndex = 0;
 
-// ===== FUNCIONES DE LIMPIEZA =====
-
-// Función para limpiar completamente todos los datos de audio anteriores
-async function clearPreviousAudioData() {
-    try {
-        console.log('🧹 Limpiando datos de audio anteriores...');
-
-        // Limpiar IndexedDB
-        await clearAllAudio();
-
-        // Limpiar sessionStorage de audio
-        sessionStorage.removeItem('uploadedAudioKey');
-        sessionStorage.removeItem('recordingBlob');
-        sessionStorage.removeItem('recordingSegments');
-        sessionStorage.removeItem('recordingMetadata');
-        sessionStorage.removeItem('pendingAudioBlob');
-        sessionStorage.removeItem('audioDiscarded');
-
-        // Limpiar localStorage de audios pendientes
-        localStorage.removeItem('pendingAudioData');
-
-        // Limpiar variables locales
-        uploadedFile = null;
-        pendingAudioBlob = null;
-        recordedChunks = [];
-
-        console.log('✅ Datos de audio limpiados correctamente');
-
-    } catch (error) {
-        console.error('❌ Error al limpiar datos de audio:', error);
-        // No lanzar error para no interrumpir el flujo
-    }
-}
 
 // ===== FUNCIONES PRINCIPALES =====
 
@@ -747,7 +749,7 @@ function downloadFailedAudio() {
     }
     const base = stripFileExtension(failedAudioName) || 'grabacion_fallida';
     try {
-        downloadAudioWithCorrectFormat(failedAudioBlob, base);
+    downloadAudioAsOgg(failedAudioBlob, base);
     } catch (_) {
         downloadBlob(failedAudioBlob, base);
     }
@@ -857,8 +859,8 @@ async function populateMicrophoneDevices() {
 // Selección de MIME para grabación de reunión (video)
 function getOptimalMeetingFormat() {
     const candidates = [
-        'video/webm;codecs=vp9,opus',
-        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
         'video/webm',
         'video/mp4' // poco fiable en navegadores, fallback tardío
     ];
@@ -1374,13 +1376,13 @@ async function finalizeRecording() {
                 .catch(e => {
                     console.error('Error al subir la grabación', e);
                     showError('Error al subir la grabación. Se descargará el audio');
-                    downloadAudioWithCorrectFormat(finalBlob, name);
+                    downloadAudioAsOgg(finalBlob, name);
                 });
 
             showSuccess('La subida continuará en segundo plano. Revisa el panel de notificaciones para el estado final.');
             handlePostActionCleanup(true);
         } else {
-            downloadAudioWithCorrectFormat(finalBlob, name);
+            downloadAudioAsOgg(finalBlob, name);
             handlePostActionCleanup();
         }
         return;
@@ -1395,7 +1397,7 @@ async function finalizeRecording() {
         } catch (e) {
             console.error('Error al guardar el audio para subida en segundo plano', e);
             showError('No se pudo guardar el audio localmente. Se descargará el archivo.');
-            downloadAudioWithCorrectFormat(finalBlob, name);
+            downloadAudioAsOgg(finalBlob, name);
             handlePostActionCleanup();
             return;
         }
@@ -1813,171 +1815,36 @@ function removeSelectedFile() {
 window.removeSelectedFile = removeSelectedFile;
 
 async function processAudioFile() {
+    // Importante: la transcripción SIEMPRE se hace en /audio-processing
     try {
         if (!selectedUploadFile) {
             showWarning('Selecciona un archivo de audio primero.');
             return;
         }
-        const langSel = document.getElementById('advanced-language');
-        const language = langSel?.value || 'es';
 
-        const sizeMB = selectedUploadFile.size / (1024*1024);
         const progressWrap = document.getElementById('upload-progress');
         const progressFill = document.getElementById('progress-fill');
         const progressText = document.getElementById('progress-text');
         const processBtn = document.querySelector('#audio-uploader .process-btn');
-
         if (progressWrap) progressWrap.style.display = 'flex';
-        if (progressFill) progressFill.style.width = '0%';
-        if (progressText) progressText.textContent = '0%';
+        if (progressFill) progressFill.style.width = '5%';
+        if (progressText) progressText.textContent = 'Guardando...';
         if (processBtn) { processBtn.disabled = true; processBtn.classList.add('opacity-50'); }
 
-        if (sizeMB <= 10) {
-            await startStandardTranscriptionUpload(selectedUploadFile, language, progressFill, progressText);
-        } else {
-            await startChunkedTranscriptionUpload(selectedUploadFile, language, progressFill, progressText);
-        }
+        const key = await saveAudioBlob(selectedUploadFile);
+    sessionStorage.setItem('uploadedAudioKey', key);
+
+        window.location.href = '/audio-processing';
     } catch (err) {
-        console.error('Error processing audio file', err);
-        showError('Error al subir el audio. Reintenta o verifica tu conexión.');
-    } finally {
+        console.error('Error preparando el audio para procesar', err);
+        showError('No se pudo preparar el audio para procesarlo. Intenta de nuevo.');
         const processBtn = document.querySelector('#audio-uploader .process-btn');
         if (processBtn) { processBtn.disabled = false; processBtn.classList.remove('opacity-50'); }
     }
 }
 window.processAudioFile = processAudioFile;
 
-function startStandardTranscriptionUpload(file, language, progressFill, progressText) {
-    return new Promise((resolve, reject) => {
-        const formData = new FormData();
-        const ext = (file.name.split('.').pop() || 'ogg').toLowerCase();
-        formData.append('audio', file, `recording.${ext}`);
-        formData.append('language', language);
-
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/transcription');
-        try {
-            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            if (token) xhr.setRequestHeader('X-CSRF-TOKEN', token);
-        } catch(_) {}
-        xhr.withCredentials = true;
-        xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable && progressFill && progressText) {
-                const pct = Math.round((e.loaded / e.total) * 10); // 0-10%
-                progressFill.style.width = pct + '%';
-                progressText.textContent = pct + '%';
-            }
-        };
-        xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                let res;
-                try { res = JSON.parse(xhr.responseText); } catch { res = null; }
-                if (!res?.id) {
-                    reject(new Error('Respuesta inválida del servidor'));
-                    return;
-                }
-                if (progressFill && progressText) { progressFill.style.width = '10%'; progressText.textContent = '10%'; }
-                showSuccess('Audio subido. Iniciando transcripción...');
-                pollTranscriptionStatus(res.id, progressFill, progressText).then(resolve).catch(reject);
-            } else {
-                reject(new Error('Fallo al iniciar transcripción'));
-            }
-        };
-        xhr.onerror = () => reject(new Error('Error de red al subir audio'));
-        xhr.send(formData);
-    });
-}
-
-async function startChunkedTranscriptionUpload(file, language, progressFill, progressText) {
-    // Tamaño de chunk 8MB
-    const CHUNK_SIZE = 8 * 1024 * 1024;
-    const filename = file.name || 'recording.ogg';
-
-    const csrf = document.querySelector('meta[name="csrf-token"]');
-    const csrfToken = csrf ? csrf.getAttribute('content') : null;
-    const initResp = await fetch('/transcription/chunked/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}) },
-        credentials: 'same-origin',
-        body: JSON.stringify({ filename, size: file.size, language, chunks: Math.ceil(file.size / CHUNK_SIZE) })
-    });
-    if (!initResp.ok) throw new Error('No se pudo iniciar subida fragmentada');
-    const { upload_id } = await initResp.json();
-
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    for (let index = 0; index < totalChunks; index++) {
-        const start = index * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, file.size);
-        const chunk = file.slice(start, end);
-
-        const fd = new FormData();
-        fd.append('chunk', chunk);
-        fd.append('chunk_index', index);
-        fd.append('upload_id', upload_id);
-
-        const upResp = await fetch('/transcription/chunked/upload', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}) },
-            body: fd
-        });
-        if (!upResp.ok) throw new Error('Error al subir fragmento');
-
-        if (progressFill && progressText) {
-            const pct = Math.round(((index + 1) / totalChunks) * 80); // 0-80%
-            progressFill.style.width = pct + '%';
-            progressText.textContent = pct + '%';
-        }
-    }
-
-    const finResp = await fetch('/transcription/chunked/finalize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}) },
-        credentials: 'same-origin',
-        body: JSON.stringify({ upload_id })
-    });
-    if (!finResp.ok) throw new Error('No se pudo finalizar la subida fragmentada');
-    const { tracking_id } = await finResp.json();
-
-    if (progressFill && progressText) { progressFill.style.width = '85%'; progressText.textContent = '85%'; }
-    showSuccess('Audio subido. Procesando transcripción...');
-    await pollTranscriptionStatus(tracking_id, progressFill, progressText);
-}
-
-async function pollTranscriptionStatus(id, progressFill, progressText) {
-    let attempts = 0;
-    const maxAttempts = 600; // ~10 min si interval = 1s
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-    while (attempts < maxAttempts) {
-        attempts++;
-        try {
-            const resp = await fetch(`/transcription/${encodeURIComponent(id)}`, { credentials: 'same-origin' });
-            if (!resp.ok) throw new Error('Estado no disponible');
-            const data = await resp.json();
-            const status = data.status || 'processing';
-
-            // Avance simple basado en estado
-            let pct = 85;
-            if (status === 'queued') pct = 12;
-            if (status === 'processing') pct = Math.max(20, Math.min(95, 20 + Math.round(attempts / 4)));
-            if (progressFill && progressText) { progressFill.style.width = pct + '%'; progressText.textContent = pct + '%'; }
-
-            if (status === 'completed') {
-                if (progressFill && progressText) { progressFill.style.width = '100%'; progressText.textContent = '100%'; }
-                showSuccess('✅ Transcripción completada');
-                return;
-            }
-            if (status === 'error') {
-                showError('La transcripción falló.');
-                throw new Error('Transcripción fallida');
-            }
-        } catch (_) {
-            // Continuar reintentando de forma silenciosa
-        }
-        await sleep(1000);
-    }
-    showWarning('La transcripción está tardando más de lo esperado. Puedes revisar el estado más tarde.');
-}
+// Transcripción desde "new-meeting" ya no se hace aquí; se delega a /audio-processing
 
 function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
@@ -2416,7 +2283,7 @@ async function analyzeNow() {
         // Descargar en OGG cuando hay un error para contar con un mejor respaldo
         console.error('❌ [analyzeNow] Error preparando audio:', e);
         downloadAudioAsOgg(pendingAudioBlob, 'grabacion_error').catch(() => {
-            downloadAudioWithCorrectFormat(pendingAudioBlob, 'grabacion_error');
+        downloadAudioAsOgg(pendingAudioBlob, 'grabacion_error');
         });
         console.error('Error preparando audio', e);
         showError('Error al analizar la grabación. Usa el archivo descargado para reintentar.');

@@ -2,7 +2,7 @@
 """
 convert_to_ogg.py
 
-Standalone converter to OGG (Opus) using ffmpeg with a robust fallback path.
+Standalone converter to OGG (Vorbis) using ffmpeg with a robust fallback path.
 - Tries direct conversion to OGG with tolerant flags
 - If it fails, decodes to WAV (PCM) first and then encodes to OGG
 - Reads FFMPEG_BIN and FFPROBE_BIN from environment (optional); defaults to 'ffmpeg'/'ffprobe'
@@ -110,7 +110,7 @@ def convert_wav_to_ogg(wav_path: str, dst: str, timeout: int) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description='Convert any audio to OGG (Opus) using ffmpeg with WAV fallback.')
+    parser = argparse.ArgumentParser(description='Convert any audio to OGG (Vorbis) using ffmpeg with WAV fallback.')
     parser.add_argument('input', help='Input audio file path')
     parser.add_argument('-o', '--output', help='Output .ogg file path (default: temp file)')
     parser.add_argument('--timeout', type=int, default=int(os.environ.get('AUDIO_CONVERSION_TIMEOUT', '1800')),
