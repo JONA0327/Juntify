@@ -346,6 +346,7 @@ function selectRecordingMode(mode) {
 
 // Función para mostrar la interfaz correcta según el modo
 function showRecordingInterface(mode) {
+    selectedMode = mode || selectedMode;
     const audioRecorder = document.getElementById('audio-recorder');
     const audioUploader = document.getElementById('audio-uploader');
     const meetingRecorder = document.getElementById('meeting-recorder');
@@ -372,6 +373,46 @@ function showRecordingInterface(mode) {
             recorderTitle.innerHTML = '📹 Grabador de reunión';
             setupMeetingRecorder();
             break;
+    }
+
+    updatePostponeUIForMode(mode);
+}
+
+function updatePostponeUIForMode(modeOverride = selectedMode) {
+    const postponeContainer = document.getElementById('postpone-switch');
+    const postponeToggle = document.getElementById('postpone-toggle');
+    const currentMode = modeOverride || selectedMode;
+
+    if (currentMode === 'upload') {
+        if (postponeContainer) {
+            postponeContainer.style.display = 'none';
+        }
+        if (postponeToggle) {
+            postponeToggle.disabled = true;
+            if (postponeToggle.checked) {
+                postponeToggle.checked = false;
+            }
+        }
+        setPostponeMode(false);
+        return;
+    }
+
+    if (postponeContainer) {
+        postponeContainer.style.display = 'flex';
+    }
+
+    if (postponeToggle) {
+        const allowPostpone = !(PLAN_LIMITS && PLAN_LIMITS.allow_postpone === false);
+        postponeToggle.disabled = false; // permitir interacción o mostrar modal según el plan
+
+        if (allowPostpone) {
+            setPostponeMode(postponeToggle.checked);
+        } else {
+            if (postponeToggle.checked) {
+                postponeToggle.checked = false;
+            }
+            setPostponeMode(false);
+        }
     }
 }
 
@@ -536,8 +577,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Postponer: habilitar/deshabilitar
             const postponeToggle = document.getElementById('postpone-toggle');
-            const postponeContainer = document.getElementById('postpone-switch');
-            if (postponeContainer) postponeContainer.style.display = 'flex';
             if (postponeToggle) {
                 if (!limits.allow_postpone) {
                     postponeToggle.checked = false;
@@ -565,6 +604,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     setPostponeMode(postponeToggle.checked);
                 }
             }
+
+            updatePostponeUIForMode();
 
             // Actualizar banner de análisis mensual
             try {
@@ -1232,10 +1273,7 @@ function resetRecordingControls() {
     if (mp) mp.style.display = 'none';
     if (md) md.style.display = 'none';
     if (mr) mr.style.display = 'none';
-    const postponeContainer = document.getElementById('postpone-switch');
-    const postponeToggle = document.getElementById('postpone-toggle');
-    if (postponeContainer) postponeContainer.style.display = 'flex'; // o ''
-    if (postponeToggle) postponeToggle.disabled = false;
+    updatePostponeUIForMode();
 }
 
 // ===== HELPERS FALTANTES =====
