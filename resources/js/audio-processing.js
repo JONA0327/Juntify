@@ -660,10 +660,69 @@ function pollTranscription(id) {
                 showTranscriptionEditor();
             } else if (data.status === 'error') {
                 progressText.textContent = 'Error en transcripción';
-                const message = data.error || data.message;
-                if (message) {
-                    showNotification(message, 'error');
+                const normalizeDetails = details => {
+                    if (!details) return [];
+
+                    if (typeof details === 'string') {
+                        return [details];
+                    }
+
+                    if (Array.isArray(details)) {
+                        return details.flatMap(item => {
+                            if (!item) return [];
+                            if (typeof item === 'string') return [item];
+                            if (typeof item === 'object') {
+                                const entries = Object.entries(item)
+                                    .map(([key, value]) => `${key}: ${value}`);
+                                return entries.length ? [entries.join(', ')] : [];
+                            }
+                            return [String(item)];
+                        });
+                    }
+
+                    if (typeof details === 'object') {
+                        const preferredKeys = ['error', 'message', 'detail', 'status', 'reason', 'code', 'type'];
+                        const segments = [];
+
+                        preferredKeys.forEach(key => {
+                            if (details[key]) {
+                                segments.push(`${key}: ${details[key]}`);
+                            }
+                        });
+
+                        Object.entries(details).forEach(([key, value]) => {
+                            if (preferredKeys.includes(key)) return;
+                            if (typeof value === 'string' || typeof value === 'number') {
+                                segments.push(`${key}: ${value}`);
+                            }
+                        });
+
+                        if (!segments.length) {
+                            try {
+                                segments.push(JSON.stringify(details));
+                            } catch (_) {
+                                segments.push(String(details));
+                            }
+                        }
+
+                        return segments;
+                    }
+
+                    return [String(details)];
+                };
+
+                const messageParts = [];
+                if (data.error) messageParts.push(data.error);
+                if (data.message && data.message !== data.error) messageParts.push(data.message);
+                messageParts.push(...normalizeDetails(data.details));
+
+                const combinedMessage = messageParts.filter(Boolean).join(' | ');
+
+                if (combinedMessage) {
+                    showNotification(combinedMessage, 'error');
                 }
+
+                console.error('❌ [AssemblyAI] Error durante el sondeo:', data);
                 downloadAudio();
                 showNotification('Se descargó una copia de seguridad del audio', 'info');
                 await discardAudio();
