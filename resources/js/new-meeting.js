@@ -9,6 +9,7 @@ let startTime = null;
 let pauseStart = null;
 let selectedMode = 'audio';
 let mediaRecorder = null;
+let recordingStream = null;
 let audioContext = null;
 let analyser = null;
 let dataArray = null;
