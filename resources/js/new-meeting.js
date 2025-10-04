@@ -151,7 +151,7 @@ function downloadBlob(blob, fileName) {
 
 // Helper para convertir blobs a OGG (preferir Vorbis) usando MediaRecorder
 async function convertToOgg(blob, options = {}) {
-    const { strict = false } = options;
+    const { strict = false, forceFfmpeg = false } = options;
     try {
         console.log(`🎵 [Convert] Iniciando conversión a OGG...`);
         console.log(`🎵 [Convert] Blob original: ${blob.type}, Tamaño: ${(blob.size / 1024).toFixed(1)} KB`);
@@ -162,23 +162,46 @@ async function convertToOgg(blob, options = {}) {
             return blob;
         }
 
-        // Intentar específicamente Vorbis primero
-        const vorbisSupported = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/ogg;codecs=vorbis');
-        const oggSupported = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/ogg');
-        if (!vorbisSupported && !oggSupported) {
-            console.warn('⚠️ [Convert] MediaRecorder no soporta audio/ogg.');
-            if (strict) {
-                throw new Error('MediaRecorder no soporta audio/ogg');
+        const mediaRecorderAvailable = !forceFfmpeg && typeof window !== 'undefined' && !!window.MediaRecorder;
+        const vorbisSupported = mediaRecorderAvailable && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/ogg;codecs=vorbis');
+        const oggSupported = mediaRecorderAvailable && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/ogg');
+
+        const canUseMediaRecorder = mediaRecorderAvailable && (vorbisSupported || oggSupported);
+
+        if (!canUseMediaRecorder) {
+            console.warn('⚠️ [Convert] MediaRecorder no soporta audio/ogg, usando FFmpeg.');
+            try {
+                const { convertBlobToOgg } = await import('./media/ffmpeg.js');
+                const oggBlob = await convertBlobToOgg(blob);
+                console.log(`✅ [Convert] Conversión FFmpeg completada: ${(oggBlob.size / 1024).toFixed(1)} KB`);
+                return oggBlob;
+            } catch (ffmpegError) {
+                console.error('❌ [Convert] Error usando FFmpeg:', ffmpegError);
+                if (strict) {
+                    throw ffmpegError;
+                }
+                console.warn('⚠️ [Convert] Ajustando MIME type como respaldo.');
+                const arrayBuffer = await blob.arrayBuffer();
+                return new Blob([arrayBuffer], { type: 'audio/ogg' });
             }
-            console.warn('⚠️ [Convert] Ajustando MIME type como respaldo.');
-            const arrayBuffer = await blob.arrayBuffer();
-            return new Blob([arrayBuffer], { type: 'audio/ogg' });
         }
 
         const ConversionAudioContext = window.AudioContext || window.webkitAudioContext;
         if (!ConversionAudioContext) {
             console.warn('⚠️ [Convert] AudioContext no disponible.');
-            if (strict) {
+            if (!forceFfmpeg) {
+                try {
+                    const { convertBlobToOgg } = await import('./media/ffmpeg.js');
+                    const oggBlob = await convertBlobToOgg(blob);
+                    console.log(`✅ [Convert] Conversión FFmpeg completada sin AudioContext: ${(oggBlob.size / 1024).toFixed(1)} KB`);
+                    return oggBlob;
+                } catch (ffmpegError) {
+                    console.error('❌ [Convert] FFmpeg no disponible tras fallo de AudioContext:', ffmpegError);
+                    if (strict) {
+                        throw ffmpegError;
+                    }
+                }
+            } else if (strict) {
                 throw new Error('AudioContext no disponible para convertir a OGG');
             }
             console.warn('⚠️ [Convert] Ajustando MIME type como respaldo.');
@@ -250,6 +273,21 @@ async function convertToOgg(blob, options = {}) {
         });
     } catch (error) {
         console.error('❌ [Convert] Error en conversión a OGG:', error);
+
+        if (!forceFfmpeg) {
+            console.warn('⚠️ [Convert] Intentando conversión FFmpeg como respaldo tras error en MediaRecorder...');
+            try {
+                const { convertBlobToOgg } = await import('./media/ffmpeg.js');
+                const oggBlob = await convertBlobToOgg(blob);
+                console.log(`✅ [Convert] Conversión FFmpeg completada tras fallback: ${(oggBlob.size / 1024).toFixed(1)} KB`);
+                return oggBlob;
+            } catch (ffmpegError) {
+                console.error('❌ [Convert] Falló conversión FFmpeg tras fallback:', ffmpegError);
+                if (strict) {
+                    throw ffmpegError;
+                }
+            }
+        }
 
         if (strict) {
             throw error;
@@ -342,20 +380,19 @@ async function ensureAudioOnlyBlob(blob) {
         throw new Error('Blob inválido para conversión de audio');
     }
     const blobType = blob.type || '';
-    if (blobType.startsWith('audio')) {
+    const requiresConversion = !blobType.startsWith('audio') || !blobType.includes('ogg');
+
+    if (!requiresConversion) {
         return blob;
     }
 
+    const conversionOptions = { strict: true, forceFfmpeg: true };
+
     try {
-        return await convertToOgg(blob, { strict: true });
+        return await convertToOgg(blob, conversionOptions);
     } catch (oggError) {
-        console.warn('⚠️ [AudioOnly] Conversión estricta a OGG falló, intentando MP3...', oggError);
-        try {
-            return await convertToMp3(blob, { strict: true });
-        } catch (mp3Error) {
-            console.error('❌ [AudioOnly] Conversión a MP3 también falló', mp3Error);
-            throw mp3Error;
-        }
+        console.error('❌ [AudioOnly] Conversión estricta a OGG falló', oggError);
+        throw oggError;
     }
 }
 
