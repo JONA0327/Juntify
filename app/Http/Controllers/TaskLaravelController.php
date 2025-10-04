@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\TaskReactivatedMail;
 use App\Models\Contact;
 use App\Models\Notification;
+use App\Models\SharedMeeting;
 use App\Models\TaskLaravel;
 use App\Models\TranscriptionLaravel;
 use App\Models\User;
@@ -673,10 +674,16 @@ class TaskLaravelController extends Controller
         ]);
     }
 
-    /** Lista contactos y miembros de organización disponibles para asignar tareas */
-    public function assignableUsers(): JsonResponse
+    /** Lista contactos, miembros de organización y usuarios con reuniones compartidas disponibles para asignar tareas */
+    public function assignableUsers(Request $request): JsonResponse
     {
         $user = Auth::user();
+
+        $data = $request->validate([
+            'meeting_id' => 'nullable|integer|exists:transcriptions_laravel,id',
+        ]);
+
+        $meetingId = $data['meeting_id'] ?? null;
 
         $contacts = Contact::with('contact:id,full_name,email')
             ->where('user_id', $user->id)
@@ -708,7 +715,47 @@ class TaskLaravelController extends Controller
                 });
         }
 
-        $combined = $contacts->concat($organizationUsers)
+        $sharedUsers = collect();
+        if ($meetingId) {
+            $sharedUserIds = SharedMeeting::query()
+                ->where('meeting_id', $meetingId)
+                ->where('status', 'accepted')
+                ->where(function ($query) use ($user) {
+                    $query->where('shared_by', $user->id)
+                        ->orWhere('shared_with', $user->id);
+                })
+                ->get()
+                ->flatMap(function (SharedMeeting $shared) use ($user) {
+                    $ids = collect();
+                    if ($shared->shared_by === $user->id && $shared->shared_with) {
+                        $ids->push($shared->shared_with);
+                    }
+                    if ($shared->shared_with === $user->id && $shared->shared_by) {
+                        $ids->push($shared->shared_by);
+                    }
+                    return $ids;
+                })
+                ->filter(fn ($id) => !empty($id) && (int) $id !== (int) $user->id)
+                ->unique()
+                ->values();
+
+            if ($sharedUserIds->isNotEmpty()) {
+                $sharedUsers = User::query()
+                    ->whereIn('id', $sharedUserIds)
+                    ->select('id', 'full_name', 'email')
+                    ->get()
+                    ->map(function ($sharedUser) {
+                        return [
+                            'id' => $sharedUser->id,
+                            'name' => $sharedUser->full_name ?? $sharedUser->email,
+                            'email' => $sharedUser->email,
+                            'source' => 'shared',
+                        ];
+                    });
+            }
+        }
+
+        $combined = $contacts->concat($organizationUsers)->concat($sharedUsers)
             ->unique('id')
             ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
             ->values();
