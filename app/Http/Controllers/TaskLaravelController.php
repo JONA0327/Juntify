@@ -468,7 +468,13 @@ class TaskLaravelController extends Controller
             'hora_limite' => 'nullable|date_format:H:i',
             'progreso' => 'nullable|integer|min:0|max:100',
             'meeting_id' => 'required|exists:transcriptions_laravel,id',
+            'assigned_user_id' => 'nullable|integer|exists:users,id',
+            'asignado' => 'nullable|string',
         ]);
+
+        $existing = TaskLaravel::where('meeting_id', $data['meeting_id'])
+            ->where('tarea', $data['tarea'])
+            ->first();
 
         $payload = array_merge($data, [
             'username' => $user->username,
@@ -476,9 +482,9 @@ class TaskLaravelController extends Controller
             'progreso' => $data['progreso'] ?? 0,
         ]);
 
+        $payload = array_merge($payload, $this->resolveAssignmentPayload($data, $request, $existing, $user));
+
         // upsert safeguard by (meeting_id, tarea)
-        $existing = TaskLaravel::where('meeting_id', $payload['meeting_id'])
-            ->where('tarea', $payload['tarea'])->first();
         if ($existing) {
             $existing->update($payload);
             $task = $existing;
@@ -514,11 +520,16 @@ class TaskLaravelController extends Controller
             'fecha_limite' => 'nullable|date',
             'hora_limite' => 'nullable|date_format:H:i',
             'progreso' => 'nullable|integer|min:0|max:100',
+            'assigned_user_id' => 'nullable|integer|exists:users,id',
+            'asignado' => 'nullable|string',
         ]);
 
         if ($task->username !== $user->username) {
             if ($task->assignment_status === 'pending') {
                 return response()->json(['success' => false, 'message' => 'Debes aceptar la tarea antes de actualizarla'], 403);
+            }
+            if ($request->hasAny(['assigned_user_id', 'asignado'])) {
+                return response()->json(['success' => false, 'message' => 'Solo el propietario puede cambiar la asignación'], 403);
             }
             $data = array_intersect_key($data, ['progreso' => true]);
             if (!array_key_exists('progreso', $data)) {
@@ -526,7 +537,12 @@ class TaskLaravelController extends Controller
             }
         }
 
-        $task->update($data);
+        $payload = $data;
+        if ($task->username === $user->username) {
+            $payload = array_merge($payload, $this->resolveAssignmentPayload($data, $request, $task, $user));
+        }
+
+        $task->update($payload);
 
         // Sincronizar con Google Calendar en actualizaciones
         $this->maybeSyncToCalendar($task, $calendar);
@@ -603,6 +619,49 @@ class TaskLaravelController extends Controller
             'success' => true,
             'task' => $this->withTaskRelations($task),
         ]);
+    }
+
+    protected function resolveAssignmentPayload(array $data, Request $request, ?TaskLaravel $task, User $actor): array
+    {
+        $payload = [];
+        $hasAssignedId = array_key_exists('assigned_user_id', $data);
+        $hasAsignado = array_key_exists('asignado', $data);
+
+        if ($hasAssignedId) {
+            $assigneeId = $data['assigned_user_id'];
+            if ($assigneeId) {
+                $assignee = User::find($assigneeId);
+                if ($assignee) {
+                    $payload['assigned_user_id'] = $assignee->id;
+                    $payload['asignado'] = $assignee->full_name ?: ($assignee->username ?: $assignee->email);
+
+                    $currentAssignee = $task ? (int) $task->assigned_user_id : null;
+                    $isNewAssignee = $currentAssignee !== (int) $assignee->id;
+
+                    if ($isNewAssignee || !$task || empty($task->assignment_status)) {
+                        $payload['assignment_status'] = $assignee->id === $actor->id ? 'accepted' : 'pending';
+                    }
+
+                    if ($isNewAssignee) {
+                        $previousProgress = $request->has('progreso')
+                            ? ($data['progreso'] ?? 0)
+                            : ($task ? $task->progreso : 0);
+
+                        if ($previousProgress >= 100) {
+                            $payload['progreso'] = 0;
+                        }
+                    }
+                }
+            } else {
+                $payload['assigned_user_id'] = null;
+                $payload['assignment_status'] = null;
+                $payload['asignado'] = $hasAsignado ? $data['asignado'] : null;
+            }
+        } elseif ($hasAsignado) {
+            $payload['asignado'] = $data['asignado'];
+        }
+
+        return $payload;
     }
 
     /**
