@@ -187,7 +187,16 @@ class ProcessChunkedTranscription implements ShouldQueue
 
         $audioUrl = $uploadResponse->json('upload_url');
 
-        $supportsExtras = $language === 'en';
+        $supported = config('transcription.extras_supported_by_language');
+        $langExtras = [
+            'auto_chapters'     => in_array($language, $supported['auto_chapters'] ?? []),
+            'summarization'     => in_array($language, $supported['summarization'] ?? []),
+            'sentiment_analysis'=> in_array($language, $supported['sentiment_analysis'] ?? []),
+            'entity_detection'  => in_array($language, $supported['entity_detection'] ?? []),
+            'auto_highlights'   => in_array($language, $supported['auto_highlights'] ?? []),
+            'content_safety'    => in_array($language, $supported['content_safety'] ?? []),
+            'iab_categories'    => in_array($language, $supported['iab_categories'] ?? []),
+        ];
 
         $basePayload = [
             'audio_url' => $audioUrl,
@@ -240,15 +249,16 @@ class ProcessChunkedTranscription implements ShouldQueue
             $payload = $basePayload;
         }
 
-        if ($supportsExtras) {
-            $payload['auto_chapters'] = true;
-            $payload['summarization'] = true;
-            $payload['summary_model'] = 'informative';
-            $payload['summary_type'] = 'bullets';
-        } else {
-            Log::info('AssemblyAI extras disabled due to unsupported language', [
-                'language' => $language,
-            ]);
+        // Activar extras según soporte por idioma
+        if ($langExtras['auto_chapters']) $payload['auto_chapters'] = true;
+        if ($langExtras['summarization']) { $payload['summarization'] = true; $payload['summary_model'] = 'informative'; $payload['summary_type'] = 'bullets'; }
+        if ($langExtras['sentiment_analysis']) $payload['sentiment_analysis'] = true;
+        if ($langExtras['entity_detection']) $payload['entity_detection'] = true;
+        if ($langExtras['auto_highlights']) $payload['auto_highlights'] = true;
+        if ($langExtras['content_safety']) $payload['content_safety'] = true;
+        if ($langExtras['iab_categories']) $payload['iab_categories'] = true;
+        if (!array_filter($langExtras)) {
+            Log::info('AssemblyAI extras disabled due to unsupported language', [ 'language' => $language ]);
         }
 
         $transcriptResponse = Http::withHeaders([

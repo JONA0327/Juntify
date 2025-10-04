@@ -362,6 +362,7 @@ function showRecordingInterface(mode) {
         case 'upload':
             audioUploader.style.display = 'block';
             recorderTitle.innerHTML = '📁 Subir archivo de audio';
+            setupUploadInterface();
             break;
         case 'meeting':
             meetingRecorder.style.display = 'block';
@@ -1734,6 +1735,255 @@ function showWarning(message) {
             }).catch(() => {});
         } catch (_) {}
     }
+}
+
+// ====== SUBIR AUDIO: UI y Transcripción ======
+let selectedUploadFile = null;
+
+function setupUploadInterface() {
+    try {
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('audio-file-input');
+        const uploadBtn = document.querySelector('#audio-uploader .upload-btn');
+        const selectedWrap = document.getElementById('selected-file');
+
+        if (!uploadArea || !fileInput || !uploadBtn || !selectedWrap) return;
+
+        // Evitar múltiples bindings
+        if (uploadArea.__uploadBound) return;
+        uploadArea.__uploadBound = true;
+
+        // Click en botón abre selector
+        uploadBtn.addEventListener('click', () => fileInput.click());
+
+        // Cambio de input
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) handleFileSelected(file);
+        });
+
+        // Drag & drop
+        ['dragenter','dragover'].forEach(evt => uploadArea.addEventListener(evt, (e) => {
+            e.preventDefault(); e.stopPropagation();
+            uploadArea.classList.add('dragover');
+        }));
+        ['dragleave','drop'].forEach(evt => uploadArea.addEventListener(evt, (e) => {
+            e.preventDefault(); e.stopPropagation();
+            uploadArea.classList.remove('dragover');
+        }));
+        uploadArea.addEventListener('drop', (e) => {
+            const file = e.dataTransfer?.files?.[0];
+            if (file) handleFileSelected(file);
+        });
+    } catch (err) {
+        console.error('Error setting up upload interface', err);
+    }
+}
+
+function handleFileSelected(file) {
+    selectedUploadFile = file;
+    const uploadArea = document.getElementById('upload-area');
+    const selectedWrap = document.getElementById('selected-file');
+    const nameEl = document.getElementById('file-name');
+    const sizeEl = document.getElementById('file-size');
+    const progressWrap = document.getElementById('upload-progress');
+    const progressFill = document.getElementById('progress-fill');
+    const progressText = document.getElementById('progress-text');
+
+    if (uploadArea) uploadArea.style.display = 'none';
+    if (selectedWrap) selectedWrap.style.display = 'block';
+    if (nameEl) nameEl.textContent = file.name;
+    if (sizeEl) sizeEl.textContent = formatBytes(file.size);
+    if (progressWrap) progressWrap.style.display = 'none';
+    if (progressFill) progressFill.style.width = '0%';
+    if (progressText) progressText.textContent = '0%';
+}
+
+function removeSelectedFile() {
+    selectedUploadFile = null;
+    const fileInput = document.getElementById('audio-file-input');
+    const uploadArea = document.getElementById('upload-area');
+    const selectedWrap = document.getElementById('selected-file');
+    const progressWrap = document.getElementById('upload-progress');
+    if (fileInput) fileInput.value = '';
+    if (selectedWrap) selectedWrap.style.display = 'none';
+    if (uploadArea) uploadArea.style.display = 'block';
+    if (progressWrap) progressWrap.style.display = 'none';
+}
+window.removeSelectedFile = removeSelectedFile;
+
+async function processAudioFile() {
+    try {
+        if (!selectedUploadFile) {
+            showWarning('Selecciona un archivo de audio primero.');
+            return;
+        }
+        const langSel = document.getElementById('advanced-language');
+        const language = langSel?.value || 'es';
+
+        const sizeMB = selectedUploadFile.size / (1024*1024);
+        const progressWrap = document.getElementById('upload-progress');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const processBtn = document.querySelector('#audio-uploader .process-btn');
+
+        if (progressWrap) progressWrap.style.display = 'flex';
+        if (progressFill) progressFill.style.width = '0%';
+        if (progressText) progressText.textContent = '0%';
+        if (processBtn) { processBtn.disabled = true; processBtn.classList.add('opacity-50'); }
+
+        if (sizeMB <= 10) {
+            await startStandardTranscriptionUpload(selectedUploadFile, language, progressFill, progressText);
+        } else {
+            await startChunkedTranscriptionUpload(selectedUploadFile, language, progressFill, progressText);
+        }
+    } catch (err) {
+        console.error('Error processing audio file', err);
+        showError('Error al subir el audio. Reintenta o verifica tu conexión.');
+    } finally {
+        const processBtn = document.querySelector('#audio-uploader .process-btn');
+        if (processBtn) { processBtn.disabled = false; processBtn.classList.remove('opacity-50'); }
+    }
+}
+window.processAudioFile = processAudioFile;
+
+function startStandardTranscriptionUpload(file, language, progressFill, progressText) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        const ext = (file.name.split('.').pop() || 'ogg').toLowerCase();
+        formData.append('audio', file, `recording.${ext}`);
+        formData.append('language', language);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/transcription');
+        try {
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            if (token) xhr.setRequestHeader('X-CSRF-TOKEN', token);
+        } catch(_) {}
+        xhr.withCredentials = true;
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable && progressFill && progressText) {
+                const pct = Math.round((e.loaded / e.total) * 10); // 0-10%
+                progressFill.style.width = pct + '%';
+                progressText.textContent = pct + '%';
+            }
+        };
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                let res;
+                try { res = JSON.parse(xhr.responseText); } catch { res = null; }
+                if (!res?.id) {
+                    reject(new Error('Respuesta inválida del servidor'));
+                    return;
+                }
+                if (progressFill && progressText) { progressFill.style.width = '10%'; progressText.textContent = '10%'; }
+                showSuccess('Audio subido. Iniciando transcripción...');
+                pollTranscriptionStatus(res.id, progressFill, progressText).then(resolve).catch(reject);
+            } else {
+                reject(new Error('Fallo al iniciar transcripción'));
+            }
+        };
+        xhr.onerror = () => reject(new Error('Error de red al subir audio'));
+        xhr.send(formData);
+    });
+}
+
+async function startChunkedTranscriptionUpload(file, language, progressFill, progressText) {
+    // Tamaño de chunk 8MB
+    const CHUNK_SIZE = 8 * 1024 * 1024;
+    const filename = file.name || 'recording.ogg';
+
+    const csrf = document.querySelector('meta[name="csrf-token"]');
+    const csrfToken = csrf ? csrf.getAttribute('content') : null;
+    const initResp = await fetch('/transcription/chunked/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}) },
+        credentials: 'same-origin',
+        body: JSON.stringify({ filename, size: file.size, language, chunks: Math.ceil(file.size / CHUNK_SIZE) })
+    });
+    if (!initResp.ok) throw new Error('No se pudo iniciar subida fragmentada');
+    const { upload_id } = await initResp.json();
+
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    for (let index = 0; index < totalChunks; index++) {
+        const start = index * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
+
+        const fd = new FormData();
+        fd.append('chunk', chunk);
+        fd.append('chunk_index', index);
+        fd.append('upload_id', upload_id);
+
+        const upResp = await fetch('/transcription/chunked/upload', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}) },
+            body: fd
+        });
+        if (!upResp.ok) throw new Error('Error al subir fragmento');
+
+        if (progressFill && progressText) {
+            const pct = Math.round(((index + 1) / totalChunks) * 80); // 0-80%
+            progressFill.style.width = pct + '%';
+            progressText.textContent = pct + '%';
+        }
+    }
+
+    const finResp = await fetch('/transcription/chunked/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}) },
+        credentials: 'same-origin',
+        body: JSON.stringify({ upload_id })
+    });
+    if (!finResp.ok) throw new Error('No se pudo finalizar la subida fragmentada');
+    const { tracking_id } = await finResp.json();
+
+    if (progressFill && progressText) { progressFill.style.width = '85%'; progressText.textContent = '85%'; }
+    showSuccess('Audio subido. Procesando transcripción...');
+    await pollTranscriptionStatus(tracking_id, progressFill, progressText);
+}
+
+async function pollTranscriptionStatus(id, progressFill, progressText) {
+    let attempts = 0;
+    const maxAttempts = 600; // ~10 min si interval = 1s
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    while (attempts < maxAttempts) {
+        attempts++;
+        try {
+            const resp = await fetch(`/transcription/${encodeURIComponent(id)}`, { credentials: 'same-origin' });
+            if (!resp.ok) throw new Error('Estado no disponible');
+            const data = await resp.json();
+            const status = data.status || 'processing';
+
+            // Avance simple basado en estado
+            let pct = 85;
+            if (status === 'queued') pct = 12;
+            if (status === 'processing') pct = Math.max(20, Math.min(95, 20 + Math.round(attempts / 4)));
+            if (progressFill && progressText) { progressFill.style.width = pct + '%'; progressText.textContent = pct + '%'; }
+
+            if (status === 'completed') {
+                if (progressFill && progressText) { progressFill.style.width = '100%'; progressText.textContent = '100%'; }
+                showSuccess('✅ Transcripción completada');
+                return;
+            }
+            if (status === 'error') {
+                showError('La transcripción falló.');
+                throw new Error('Transcripción fallida');
+            }
+        } catch (_) {
+            // Continuar reintentando de forma silenciosa
+        }
+        await sleep(1000);
+    }
+    showWarning('La transcripción está tardando más de lo esperado. Puedes revisar el estado más tarde.');
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024, sizes = ['B','KB','MB','GB','TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 // Sube un blob de audio a Drive
