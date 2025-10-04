@@ -50,6 +50,9 @@ let failedAudioBlob = null; // Almacenar blob que falló al subir
 let failedAudioName = null; // Nombre del archivo que falló
 let retryAttempts = 0; // Contador de intentos de resubida
 const MAX_RETRY_ATTEMPTS = 3; // Máximo número de reintentos
+let recordedChunks = [];
+let currentRecordingId = null;
+let chunkIndex = 0;
 
 // Función para obtener el mejor formato de audio disponible priorizando OGG (Vorbis)
 function getOptimalAudioFormat() {
