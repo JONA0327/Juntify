@@ -616,6 +616,10 @@ window.pauseRecording = pauseRecording;
 window.resumeRecording = resumeRecording;
 window.discardRecording = discardRecording;
 window.togglePostponeMode = togglePostponeMode;
+// Modo de grabación (para onClick inline en Blade)
+window.selectRecordingMode = selectRecordingMode;
+// Exponer también la función de UI por si se usa desde consola o pruebas
+window.showRecordingInterface = showRecordingInterface;
 
 // Stubs seguros para los controles del grabador de reuniones (UI aún no implementada aquí)
 function toggleMeetingRecording() {
