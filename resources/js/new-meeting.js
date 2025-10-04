@@ -31,10 +31,6 @@ let meetingAnimationId = null;
 let systemGainNode = null;
 let microphoneGainNode = null;
 let meetingDestination = null;
-let systemSpectrogramCanvas = null;
-let microphoneSpectrogramCanvas = null;
-let systemSpectrogramCtx = null;
-let microphoneSpectrogramCtx = null;
 let lastRecordingContext = null; // 'recording' | 'meeting' | 'upload'
 let discardRequested = false;
 let uploadedFile = null;
@@ -1020,7 +1016,7 @@ async function startMeetingRecording() {
         const micAudioTrack = micStream ? micStream.getAudioTracks()[0] : null;
 
         if (ac && meetingDestination) {
-            // Inicializar analizadores para visualizadores y espectrogramas
+            // Inicializar analizadores para visualizadores
             systemAnalyser = ac.createAnalyser();
             microphoneAnalyser = ac.createAnalyser();
             // Configuración de FFT y suavizado
@@ -1096,16 +1092,6 @@ async function startMeetingRecording() {
 
         updateRecordingUI(true);
         recordingTimer = setInterval(updateTimer, 100);
-
-        // Preparar espectrogramas
-        try {
-            systemSpectrogramCanvas = document.getElementById('system-spectrogram') || null;
-            microphoneSpectrogramCanvas = document.getElementById('microphone-spectrogram') || null;
-            systemSpectrogramCtx = systemSpectrogramCanvas ? systemSpectrogramCanvas.getContext('2d') : null;
-            microphoneSpectrogramCtx = microphoneSpectrogramCanvas ? microphoneSpectrogramCanvas.getContext('2d') : null;
-            initSpectrogramCanvas(systemSpectrogramCanvas, systemSpectrogramCtx);
-            initSpectrogramCanvas(microphoneSpectrogramCanvas, microphoneSpectrogramCtx);
-        } catch(_) {}
 
         // Iniciar bucle de análisis de reunión
         startMeetingAnalysis();
@@ -1773,7 +1759,7 @@ function resetAudioVisualizer() {
     rings.classList.remove('active');
 }
 
-// Reset de visualizadores de reunión (barras + espectrogramas)
+// Reset de visualizadores de reunión (barras)
 function resetMeetingVisualizer() {
     try {
         // Reset barras
@@ -1782,54 +1768,7 @@ function resetMeetingVisualizer() {
             bar.style.height = '4px';
             bar.classList.remove('high', 'active');
         });
-        // Limpiar espectrogramas
-        if (systemSpectrogramCtx && systemSpectrogramCanvas) {
-            systemSpectrogramCtx.clearRect(0, 0, systemSpectrogramCanvas.width, systemSpectrogramCanvas.height);
-        }
-        if (microphoneSpectrogramCtx && microphoneSpectrogramCanvas) {
-            microphoneSpectrogramCtx.clearRect(0, 0, microphoneSpectrogramCanvas.width, microphoneSpectrogramCanvas.height);
-        }
     } catch (_) {}
-}
-
-// Inicializa tamaño y fondo de espectrograma
-function initSpectrogramCanvas(canvas, ctx) {
-    if (!canvas || !ctx) return;
-    try {
-        // Ajustar tamaño al contenedor visible
-        const rect = canvas.getBoundingClientRect();
-        // Ajustar tamaño interno del canvas para mejor nitidez
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.max(300, Math.floor(rect.width * dpr));
-        canvas.height = Math.max(60, Math.floor(rect.height * dpr));
-        ctx.scale(dpr, dpr);
-        // Fondo inicial
-        ctx.fillStyle = '#0b1020';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-    } catch(_) {}
-}
-
-// Dibuja una nueva columna en el espectrograma desplazando el contenido a la izquierda
-function drawSpectrogramColumn(canvas, ctx, freqData) {
-    if (!canvas || !ctx || !freqData) return;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    // Desplazar 1px a la izquierda
-    try {
-        ctx.drawImage(canvas, -1, 0);
-    } catch(_) {}
-    // Dibujar nueva columna en el borde derecho
-    const x = w - 1;
-    const bins = freqData.length;
-    for (let i = 0; i < h; i++) {
-        // Mapear fila y -> bin de frecuencia (invertido para graves abajo)
-        const bin = Math.floor((1 - i / h) * (bins - 1));
-        const v = freqData[bin] / 255; // 0..1
-        const hue = Math.max(0, 260 - Math.floor(v * 260)); // 260: azul -> 0: rojo
-        const light = 20 + Math.floor(v * 60); // 20%..80%
-        ctx.fillStyle = `hsl(${hue} 100% ${light}%)`;
-        ctx.fillRect(x, i, 1, 1);
-    }
 }
 
 // Bucle de análisis para reunión (sistema + mic)
@@ -1840,12 +1779,10 @@ function startMeetingAnalysis() {
         if (systemAnalyser && systemDataArray) {
             systemAnalyser.getByteFrequencyData(systemDataArray);
             updateMeetingAudioBars('#system-audio-visualizer', systemDataArray);
-            drawSpectrogramColumn(systemSpectrogramCanvas, systemSpectrogramCtx, systemDataArray);
         }
         if (microphoneAnalyser && microphoneDataArray) {
             microphoneAnalyser.getByteFrequencyData(microphoneDataArray);
             updateMeetingAudioBars('#microphone-audio-visualizer', microphoneDataArray);
-            drawSpectrogramColumn(microphoneSpectrogramCanvas, microphoneSpectrogramCtx, microphoneDataArray);
         }
     } catch (_) {}
     meetingAnimationId = requestAnimationFrame(startMeetingAnalysis);

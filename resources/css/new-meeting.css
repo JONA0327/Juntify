@@ -1634,19 +1634,6 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
     background: linear-gradient(to top, #ef4444, #dc2626);
 }
 
-/* Spectrogram */
-.spectrogram-wrap {
-    margin-top: 10px;
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.spectrogram-canvas {
-    display: block;
-    width: 100%;
-    height: 80px;
-}
-
 /* Timer de reunión */
 .meeting-timer-section {
     text-align: center;
