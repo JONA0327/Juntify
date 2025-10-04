@@ -154,6 +154,7 @@ let finalDrivePath = '';
 let finalAudioDuration = 0;
 let finalSpeakerCount = 0;
 let finalTasks = [];
+let cachedPendingAudioInfo = null;
 
 // Mensajes que se mostrarán mientras se genera la transcripción
 const typingMessages = [
@@ -2291,8 +2292,28 @@ document.addEventListener('click', e => {
 });
 
 document.addEventListener('DOMContentLoaded', async function() {
-    // Verificar inmediatamente si el audio fue descartado
-    if (audioDiscarded) {
+    let hasValidPendingAudio = false;
+
+    try {
+        const pendingAudioRaw = localStorage.getItem('pendingAudioData');
+        if (pendingAudioRaw) {
+            cachedPendingAudioInfo = JSON.parse(pendingAudioRaw);
+            window.pendingAudioInfo = cachedPendingAudioInfo;
+
+            if (cachedPendingAudioInfo?.tempFile) {
+                hasValidPendingAudio = true;
+                clearDiscardState();
+                console.log('✅ [DOMContentLoaded] Audio pendiente válido detectado');
+            }
+        }
+    } catch (e) {
+        console.error('❌ [DOMContentLoaded] Error al inicializar audio pendiente:', e);
+        cachedPendingAudioInfo = null;
+        await discardAudio();
+    }
+
+    // Verificar inmediatamente si el audio fue descartado y no hay audio pendiente válido
+    if (audioDiscarded && !hasValidPendingAudio) {
         console.log('🚫 [DOMContentLoaded] Audio fue descartado, redirigiendo a nueva reunión...');
         showNotification('El audio fue descartado. Redirigiendo...', 'warning');
         setTimeout(() => {
@@ -2342,53 +2363,47 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
-    // Verificar si es un audio pendiente
-    const pendingAudioData = localStorage.getItem('pendingAudioData');
-    if (pendingAudioData) {
-        try {
-            window.pendingAudioInfo = JSON.parse(pendingAudioData);
-            console.log("✅ Audio pendiente detectado:", window.pendingAudioInfo);
+    // Verificar si es un audio pendiente utilizando el objeto ya parseado
+    if (cachedPendingAudioInfo) {
+        window.pendingAudioInfo = cachedPendingAudioInfo;
+        console.log("✅ Audio pendiente detectado:", window.pendingAudioInfo);
 
-            // Cargar el audio desde el servidor usando el tempFile
-            if (window.pendingAudioInfo.tempFile) {
-                try {
-                    const response = await fetch(`/api/pending-meetings/audio/${window.pendingAudioInfo.tempFile}`);
-                    const result = await response.json();
+        // Cargar el audio desde el servidor usando el tempFile
+        if (window.pendingAudioInfo.tempFile) {
+            try {
+                const response = await fetch(`/api/pending-meetings/audio/${window.pendingAudioInfo.tempFile}`);
+                const result = await response.json();
 
-                    if (result.success && result.audioData) {
-                        // Convertir base64 a blob
-                        audioData = base64ToBlob(result.audioData, result.mimeType || 'audio/ogg');
-                        console.log("✅ Audio pendiente cargado desde servidor");
+                if (result.success && result.audioData) {
+                    // Convertir base64 a blob
+                    audioData = base64ToBlob(result.audioData, result.mimeType || 'audio/ogg');
+                    console.log("✅ Audio pendiente cargado desde servidor");
 
-                        // Limpiar datos temporales
-                        localStorage.removeItem('pendingAudioData');
+                    // Limpiar datos temporales
+                    localStorage.removeItem('pendingAudioData');
 
-                        // Iniciar procesamiento después de 1s solo si no fue descartado
-                        setTimeout(() => {
-                            if (!audioDiscarded) {
-                                startAudioProcessing();
-                            } else {
-                                console.log('🚫 [PendingAudio] Audio fue descartado, no se iniciará el procesamiento automático');
-                            }
-                        }, 1000);
-                        return;
-                    } else {
-                        throw new Error(result.error || 'Error al cargar audio del servidor');
-                    }
-                } catch (fetchError) {
-                    console.error("❌ Error al obtener audio del servidor:", fetchError);
-                    showNotification('Error al cargar el archivo de audio: ' + fetchError.message, 'error');
-                    await discardAudio();
+                    // Iniciar procesamiento después de 1s solo si no fue descartado
+                    setTimeout(() => {
+                        if (!audioDiscarded) {
+                            startAudioProcessing();
+                        } else {
+                            console.log('🚫 [PendingAudio] Audio fue descartado, no se iniciará el procesamiento automático');
+                        }
+                    }, 1000);
                     return;
+                } else {
+                    throw new Error(result.error || 'Error al cargar audio del servidor');
                 }
-            } else {
-                console.error("❌ No se encontró el tempFile para el audio pendiente");
-                showNotification('Error: Información de archivo incompleta', 'error');
+            } catch (fetchError) {
+                console.error("❌ Error al obtener audio del servidor:", fetchError);
+                showNotification('Error al cargar el archivo de audio: ' + fetchError.message, 'error');
+                await discardAudio();
                 return;
             }
-        } catch (e) {
-            console.error("❌ Error al parsear datos del audio pendiente:", e);
-            await discardAudio();
+        } else {
+            console.error("❌ No se encontró el tempFile para el audio pendiente");
+            showNotification('Error: Información de archivo incompleta', 'error');
+            return;
         }
     }
 
