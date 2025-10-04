@@ -132,6 +132,8 @@
                             <option value="" disabled selected>🔍 Selecciona un micrófono...</option>
                         </select>
                     </div>
+
+                    <!-- Selector de subcarpeta removido: se usará automáticamente Drive personal / "Audios Pospuestos" -->
                     <!-- Selector de Drive eliminado aquí: la elección se hace sólo antes de guardar -->
                 </div>
 

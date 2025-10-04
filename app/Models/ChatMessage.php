@@ -23,6 +23,8 @@ class ChatMessage extends Model
         'file_size',
         'preview_url',
         'voice_path',
+        'voice_base64',
+        'voice_mime',
         'created_at',
         'read_at',
     ];

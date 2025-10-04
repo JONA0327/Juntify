@@ -3,13 +3,22 @@ let currentChatId = null;
 let currentContactId = null;
 let chatMessages = [];
 let isChatLoading = false;
+let pendingVoiceBase64 = null; // Audio grabado (base64)
+let pendingVoiceMime = null;  // MIME del audio grabado
 let lastConversationUpdate = null;
 let autoRefreshInterval = null;
 let lastMessageIds = new Set(); // Para trackear qué mensajes ya hemos visto
+let autoScrollEnabled = true;   // Autoscroll inteligente sólo cuando el usuario está cerca del fondo
 let contactsCache = [];
 let pendingFile = null; // Archivo seleccionado para enviar
+// Estado de grabación de voz
+let mediaRecorder = null;
+let recordingStream = null;
+let recordingIntervalId = null;
+let recordingTimeoutId = null;
+let recordingStartAt = 0;
 
-// Función para inicializar auto-refresh de conversaciones
+    // Botón y input para adjuntar archivo (si existen en la vista)
 function startAutoRefresh() {
     // Limpiar interval anterior si existe
     if (autoRefreshInterval) {
@@ -30,41 +39,104 @@ function stopAutoRefresh() {
     }
 }
 
-// Función para refrescar conversaciones solo si hay cambios
+// Temporizador y control de grabación de voz (ámbito global)
+let audioChunks = [];
+function startTimer() {
+    const timerEl = document.getElementById('active-chat-voice-timer');
+    recordingStartAt = Date.now();
+    if (timerEl) timerEl.classList.remove('hidden');
+    if (recordingIntervalId) clearInterval(recordingIntervalId);
+    recordingIntervalId = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - recordingStartAt) / 1000);
+        const m = Math.floor(elapsed / 60).toString();
+        const s = (elapsed % 60).toString().padStart(2, '0');
+        if (timerEl) timerEl.textContent = `${m}:${s}`;
+    }, 250);
+}
+function stopTimer(reset = true) {
+    const timerEl = document.getElementById('active-chat-voice-timer');
+    if (recordingIntervalId) clearInterval(recordingIntervalId);
+    recordingIntervalId = null;
+    if (timerEl) {
+        if (reset) timerEl.textContent = '0:00';
+        timerEl.classList.add('hidden');
+    }
+}
+async function toggleRecording() {
+    const micBtn = document.getElementById('active-chat-voice-btn');
+    if (!mediaRecorder) {
+        try {
+            if (recordingStream) {
+                try { recordingStream.getTracks().forEach(t => t.stop()); } catch (_) {}
+                recordingStream = null;
+            }
+            recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(recordingStream);
+            audioChunks = [];
+            mediaRecorder.ondataavailable = (ev) => { if (ev.data.size > 0) audioChunks.push(ev.data); };
+            mediaRecorder.onstop = async () => {
+                try {
+                    const blob = new Blob(audioChunks, { type: (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'audio/webm' });
+                    try { if (recordingStream && recordingStream.getTracks) { recordingStream.getTracks().forEach(t => t.stop()); } } catch (_) {}
+                    recordingStream = null;
+                    stopTimer(false);
+                    const arrayBuffer = await blob.arrayBuffer();
+                    let binary = '';
+                    const bytes = new Uint8Array(arrayBuffer);
+                    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+                    pendingVoiceBase64 = btoa(binary);
+                    pendingVoiceMime = blob.type || 'audio/webm';
+                    const input = document.getElementById('active-chat-input');
+                    if (input) input.placeholder = 'Enviando audio...';
+                    if (micBtn) micBtn.classList.remove('text-yellow-400','bg-slate-600/50');
+                    try { await sendMessage(); } catch (e) { console.error('Fallo al enviar audio:', e); }
+                    if (input && !input.value) input.placeholder = 'Escribe un mensaje...';
+                } finally {
+                    mediaRecorder = null;
+                    if (recordingTimeoutId) { clearTimeout(recordingTimeoutId); recordingTimeoutId = null; }
+                }
+            };
+            mediaRecorder.start();
+            startTimer();
+            const input = document.getElementById('active-chat-input');
+            if (input && !input.value) input.placeholder = 'Grabando audio... (Alt+V o click para detener)';
+            if (micBtn) micBtn.classList.add('text-yellow-400','bg-slate-600/50');
+            if (recordingTimeoutId) clearTimeout(recordingTimeoutId);
+            recordingTimeoutId = setTimeout(() => {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    try { mediaRecorder.stop(); } catch (_) {}
+                }
+            }, 60000);
+        } catch (err) {
+            console.error('No se pudo iniciar la grabación de voz:', err);
+        }
+    } else if (mediaRecorder && mediaRecorder.state === 'recording') {
+        try { mediaRecorder.stop(); } catch (e) { console.error('No se pudo detener la grabación:', e); }
+    }
+}
+
+// Refrescar conversaciones sólo si hay cambios
 async function refreshConversationsIfNeeded() {
     try {
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-        // Hacer una petición ligera para verificar si hay cambios
-        const response = await fetch('/api/chats', {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
-            }
-        });
-
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : null;
+        const headers = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        if (csrfToken) headers['X-CSRF-TOKEN'] = csrfToken;
+        const response = await fetch('/api/chats', { method: 'GET', headers });
         if (!response.ok) return;
-
         const conversations = await response.json();
-
-        // Verificar si hay cambios comparando timestamps del último mensaje
         let hasNewMessages = false;
         let needsConversationUpdate = false;
-
         conversations.forEach(conv => {
             const lastMsg = conv.last_message;
             if (!lastMsg) return;
-
             const msgTime = new Date(lastMsg.created_at);
-
-            // Si es la primera vez o hay un mensaje más reciente
             if (!lastConversationUpdate || msgTime > lastConversationUpdate) {
                 needsConversationUpdate = true;
-
-                // Si es un mensaje en el chat actual, marcar para actualizar mensajes
                 if (conv.id == currentChatId) {
                     const currentLastMsg = chatMessages[chatMessages.length - 1];
                     if (!currentLastMsg || new Date(currentLastMsg.created_at) < msgTime) {
@@ -73,28 +145,18 @@ async function refreshConversationsIfNeeded() {
                 }
             }
         });
-
         if (needsConversationUpdate) {
             console.log('🔄 Actualizando conversaciones...', { hasNewMessages });
-
-            // Actualizar conversaciones sin loading
             updateConversationsList(conversations);
-
-            // Si hay mensajes nuevos en el chat actual, recargar mensajes silenciosamente
             if (hasNewMessages && currentChatId) {
                 console.log('📨 Nuevos mensajes detectados, actualizando...');
-                await loadChatMessages(true); // true = silencioso, sin loading
-
-                // Pequeña animación visual para indicar nuevo mensaje
+                await loadChatMessages(true);
                 const messagesContainer = document.getElementById('active-chat-messages');
                 if (messagesContainer) {
                     messagesContainer.style.transform = 'scale(1.01)';
-                    setTimeout(() => {
-                        messagesContainer.style.transform = 'scale(1)';
-                    }, 200);
+                    setTimeout(() => { messagesContainer.style.transform = 'scale(1)'; }, 200);
                 }
             }
-
             lastConversationUpdate = new Date();
         }
     } catch (error) {
@@ -116,18 +178,17 @@ async function loadConversations() {
             </div>
         `;
 
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : null;
         console.log('📝 CSRF Token:', csrfToken ? 'Encontrado' : 'No encontrado');
 
-        const response = await fetch('/api/chats', {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
-            }
-        });
+        const headers = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        if (csrfToken) headers['X-CSRF-TOKEN'] = csrfToken;
+        const response = await fetch('/api/chats', { method: 'GET', headers });
 
         console.log('📡 Response status:', response.status);
         console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
@@ -208,7 +269,7 @@ function updateConversationsList(conversations) {
 
     // Guardar el estado de selección actual
     const currentSelection = document.querySelector('.conversation-item.bg-slate-700\\/40');
-    const currentChatIdSelected = currentSelection?.getAttribute('data-chat-id');
+    const currentChatIdSelected = currentSelection ? currentSelection.getAttribute('data-chat-id') : null;
 
     if (conversations.length === 0) {
         conversationsList.innerHTML = `
@@ -248,9 +309,19 @@ function createConversationElement(conversation) {
         ? formatMessageTime(conversation.last_message.created_at)
         : '';
 
-    const lastMessageText = conversation.last_message
-        ? (conversation.last_message.is_mine ? 'Tú: ' : '') + conversation.last_message.body
-        : 'Conversación iniciada';
+    let lastMessageText = 'Conversación iniciada';
+    if (conversation.last_message) {
+        const prefix = conversation.last_message.is_mine ? 'Tú: ' : '';
+        const body = conversation.last_message.body;
+        // Si body es null/ vacío, mostrar un texto representativo
+        if (body && body.trim() !== '') {
+            lastMessageText = prefix + body;
+        } else {
+            // Cuando el último mensaje fue un adjunto o voz, el backend no siempre trae flags.
+            // Mostramos un genérico claro.
+            lastMessageText = prefix + 'Archivo adjunto';
+        }
+    }
 
     // Indicador de mensajes no leídos
     const unreadIndicator = conversation.has_unread
@@ -262,8 +333,9 @@ function createConversationElement(conversation) {
         : '';
 
     // Avatar del usuario - usar initial si no hay avatar
-    const userAvatar = conversation.other_user?.avatar || conversation.other_user?.name?.charAt(0).toUpperCase() || '?';
-    const userName = conversation.other_user?.name || 'Usuario desconocido';
+    const otherA = conversation.other_user || {};
+    const userAvatar = otherA.avatar || (otherA.name ? otherA.name.charAt(0).toUpperCase() : null) || '?';
+    const userName = otherA.name || 'Usuario desconocido';
 
     div.innerHTML = `
         <div class="flex items-center gap-3">
@@ -277,6 +349,9 @@ function createConversationElement(conversation) {
                     <div class="flex items-center gap-2">
                         ${unreadBadge}
                         <span class="text-xs text-slate-500">${lastMessageTime}</span>
+                        <button class="delete-chat-btn opacity-60 hover:opacity-100 text-slate-400 hover:text-red-400 transition" title="Eliminar conversación">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h.293l.853 12.79A2 2 0 0 0 8.14 22h7.72a2 2 0 0 0 1.994-2.21L18.707 7H19a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 4a1 1 0 1 0-2 0v10a1 1 0 1 0 2 0V7zm4 0a1 1 0 1 0-2 0v10a1 1 0 1 0 2 0V7z"/></svg>
+                        </button>
                     </div>
                 </div>
                 <p class="text-sm ${conversation.has_unread ? 'text-slate-300 font-medium' : 'text-slate-400'} truncate mt-1">${lastMessageText}</p>
@@ -284,9 +359,46 @@ function createConversationElement(conversation) {
         </div>
     `;
 
-    div.addEventListener('click', () => {
+    // Click sobre todo el item selecciona
+    div.addEventListener('click', (e) => {
+        // Evitar que el click del botón borrar abra el chat
+        if (e.target.closest && e.target.closest('.delete-chat-btn')) return;
         selectConversation(conversation);
     });
+
+    // Borrar conversación
+    const delBtn = div.querySelector('.delete-chat-btn');
+    if (delBtn) {
+        delBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const confirmed = await showConfirmModal('¿Eliminar esta conversación para ti? Si ambos usuarios la eliminan, se limpiará definitivamente.');
+            if (!confirmed) return;
+
+            try {
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : null;
+                const headers = { 'X-Requested-With': 'XMLHttpRequest' };
+                if (csrfToken) headers['X-CSRF-TOKEN'] = csrfToken;
+                const resp = await fetch(`/api/chats/${conversation.id}`, { method: 'DELETE', headers });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                // Si el chat eliminado era el activo, limpiar panel derecho
+                if (currentChatId == conversation.id) {
+                    currentChatId = null;
+                    const active = document.getElementById('active-chat');
+                    const empty = document.getElementById('no-chat-selected');
+                    if (active) active.classList.add('hidden');
+                    if (empty) empty.classList.remove('hidden');
+                    const messagesContainer = document.getElementById('active-chat-messages');
+                    if (messagesContainer) messagesContainer.innerHTML = '';
+                }
+                // Quitar del DOM
+                div.remove();
+            } catch (err) {
+                alert('No se pudo eliminar la conversación.');
+                console.error('DELETE /api/chats failed', err);
+            }
+        });
+    }
 
     return div;
 }
@@ -323,7 +435,7 @@ async function selectConversation(conversation) {
 
     // Configurar chat activo
     currentChatId = conversation.id;
-    currentContactId = conversation.other_user?.id;
+    currentContactId = (conversation.other_user && conversation.other_user.id) ? conversation.other_user.id : null;
 
     // Limpiar el set de mensajes vistos para la nueva conversación
     lastMessageIds.clear();
@@ -334,8 +446,9 @@ async function selectConversation(conversation) {
     const activeChatStatus = document.getElementById('active-chat-status');
     const activeChatStatusText = document.getElementById('active-chat-status-text');
 
-    const userAvatar = conversation.other_user?.avatar || conversation.other_user?.name?.charAt(0).toUpperCase() || '?';
-    const userName = conversation.other_user?.name || 'Usuario desconocido';
+    const otherB = conversation.other_user || {};
+    const userAvatar = otherB.avatar || (otherB.name ? otherB.name.charAt(0).toUpperCase() : null) || '?';
+    const userName = otherB.name || 'Usuario desconocido';
 
     if (activeChatAvatar) activeChatAvatar.textContent = userAvatar;
     if (activeChatName) activeChatName.textContent = userName;
@@ -386,17 +499,15 @@ async function loadChatMessages(silent = false) {
             `;
         }
 
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-        const response = await fetch(`/api/chats/${currentChatId}`, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
-            }
-        });
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : null;
+        const headers = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        if (csrfToken) headers['X-CSRF-TOKEN'] = csrfToken;
+        const response = await fetch(`/api/chats/${currentChatId}`, { method: 'GET', headers });
 
         console.log('📨 Messages response status:', response.status);
 
@@ -411,8 +522,8 @@ async function loadChatMessages(silent = false) {
 
         chatMessages = Array.isArray(messages) ? messages : [];
 
-        updateChatMessagesDisplay();
-        scrollChatToBottom();
+    updateChatMessagesDisplay();
+    maybeScrollToBottom();
 
     } catch (error) {
         console.error('❌ Error loading messages:', error);
@@ -428,7 +539,8 @@ async function loadChatMessages(silent = false) {
 // Función para actualizar la visualización de mensajes
 function updateChatMessagesDisplay() {
     const messagesContainer = document.getElementById('active-chat-messages');
-    const currentUserId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
+    const userMeta = document.querySelector('meta[name="user-id"]');
+    const currentUserId = userMeta ? userMeta.getAttribute('content') : null;
 
     console.log('🎨 Actualizando visualización de mensajes. Total:', chatMessages.length);
     console.log('👤 Current user ID:', currentUserId);
@@ -457,7 +569,7 @@ function updateChatMessagesDisplay() {
         // Verificar si es un mensaje nuevo (no temporal y no visto antes)
         const isNewMessage = !message.is_temp && !lastMessageIds.has(message.id);
 
-        const messageElement = createMessageElement(message, currentUserId, isNewMessage);
+    const messageElement = createMessageElement(message, currentUserId, isNewMessage);
         messagesContainer.appendChild(messageElement);
 
         // Agregar el ID del mensaje a los vistos (si no es temporal)
@@ -490,39 +602,162 @@ function createMessageElement(message, currentUserId, isNewMessage = false) {
 
     // Construcción de adjunto
     let attachmentHtml = '';
-    if (message.original_name || message.file_path || message.preview_url) {
+        if (message.original_name || message.file_path || message.drive_file_id) {
         const fileName = escapeHtml(message.original_name || message.originalName || 'Archivo');
-        const mime = message.mime_type || '';
-        const driveLink = message.drive_file_id ? `https://drive.google.com/file/d/${message.drive_file_id}/view` : null;
+            const mime = message.mime_type || '';
+            const driveLink = message.drive_file_id ? `https://drive.google.com/uc?export=download&id=${message.drive_file_id}` : null;
         const localPath = message.file_path ? `/storage/${message.file_path}` : null;
         const downloadLink = driveLink || localPath || '#';
-        let preview = '';
-        if (message.preview_url && mime.startsWith('image/')) {
-            preview = `<img src="${message.preview_url}" alt="${fileName}" class="mt-2 rounded shadow max-h-48">`;
-        } else if (message.preview_url && mime === 'application/pdf') {
-            preview = `<iframe src="${message.preview_url}" class="mt-2 w-60 h-40 rounded" loading="lazy"></iframe>`;
-        } else if (message.preview_url && mime.startsWith('audio/')) {
-            preview = `<audio controls class="mt-2 w-52"><source src="${message.preview_url}"></audio>`;
-        } else if (message.preview_url && mime.startsWith('video/')) {
-            preview = `<iframe src="${message.preview_url}" class="mt-2 w-60 h-40 rounded" loading="lazy"></iframe>`;
-        } else if (downloadLink && downloadLink !== '#') {
-            preview = `<div class="mt-2 px-3 py-2 bg-slate-800/40 rounded text-xs">Adjunto listo para descargar</div>`;
-        }
+            const preview = downloadLink && downloadLink !== '#'
+                ? `<button class="mt-2 inline-flex items-center gap-2 px-3 py-2 bg-slate-800/40 rounded text-xs hover:bg-slate-700/40 file-download" data-href="${downloadLink}">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/></svg>
+                        Descargar ${fileName}
+                   </button>`
+                : '';
         attachmentHtml = `
             <div class="mt-2 text-xs ${isMyMessage ? 'text-slate-800' : 'text-slate-300'}">
-                <a href="${downloadLink}" target="_blank" class="underline break-all">${fileName}</a>
+                    <span class="break-all">${fileName}</span>
                 ${preview}
             </div>`;
     }
+
+    // Incluir audio en base64 si existe (reproductor personalizado)
+    if (message.voice_base64) {
+        const mime = message.voice_mime || 'audio/webm';
+        const src = `data:${mime};base64,${message.voice_base64}`;
+        const playerId = 'vp_' + (message.id || Math.random().toString(36).slice(2));
+        attachmentHtml += `
+            <div class="mt-2 select-none">
+                <div class="voice-player bg-slate-900/40 rounded p-2 w-64 text-slate-200" data-src="${src}" id="${playerId}">
+                    <div class="flex items-center gap-2">
+                        <button class="vp-toggle bg-yellow-500 text-slate-900 rounded px-2 py-1 text-xs font-semibold">Play</button>
+                        <div class="vp-track flex-1 h-2 bg-slate-700 rounded cursor-pointer relative">
+                            <div class="vp-progress h-2 bg-yellow-500 rounded" style="width:0%"></div>
+                        </div>
+                        <span class="vp-time text-[10px] text-slate-400 min-w-[70px] text-right">0:00 / 0:00</span>
+                    </div>
+                </div>
+            </div>`;
+        setTimeout(function(){ initVoicePlayer(playerId); }, 0);
+    }
+
+    // Acciones de mensaje (eliminar)
+    const actionsHtml = message.is_temp ? '' : `
+        <div class="mt-1 flex gap-1 justify-${isMyMessage ? 'end' : 'start'} text-[11px]">
+            <button class="msg-del-me text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded hover:bg-slate-600/40">Eliminar para mí</button>
+            ${isMyMessage ? '<button class="msg-del-all text-red-400 hover:text-red-300 px-2 py-0.5 rounded hover:bg-red-600/30">Eliminar para todos</button>' : ''}
+        </div>`;
 
     div.innerHTML = `
         <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${bubbleClasses}">
             ${message.body ? `<p class="text-sm whitespace-pre-line">${escapeHtml(message.body)}</p>` : ''}
             ${attachmentHtml}
             <p class="text-xs mt-1 ${isMyMessage ? 'text-slate-800' : 'text-slate-400'}">${formatMessageTime(message.created_at)}</p>
+            ${actionsHtml}
         </div>`;
 
+    // Wire actions
+    const delMeBtn = message.is_temp ? null : div.querySelector('.msg-del-me');
+    if (delMeBtn) {
+        delMeBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const confirmed = await showConfirmModal('¿Eliminar este mensaje para ti?');
+            if (!confirmed) return;
+            try {
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : null;
+                const resp = await fetch(`/api/chats/${currentChatId}/messages/${message.id}/me`, {
+                    method: 'DELETE',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}) }
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                // Mostrar "tombstone" en vez de quitarlo, para dar contexto visual
+                const idx = chatMessages.findIndex(m => m.id === message.id);
+                if (idx !== -1) {
+                    chatMessages[idx] = { ...chatMessages[idx], body: 'Se eliminó este mensaje', original_name: null, file_path: null, drive_file_id: null, voice_base64: null, voice_path: null };
+                }
+                // Re-render sólo este bubble
+                const replacement = createMessageElement(chatMessages[idx] || message, currentUserId, false);
+                div.replaceWith(replacement);
+                // Actualizar snippet de conversación
+                updateCurrentConversationLastMessage(chatMessages[chatMessages.length - 1] || null);
+            } catch (err) {
+                console.error('Eliminar para mí falló', err);
+                // Modal fallback
+                showConfirmModal('No se pudo eliminar el mensaje para ti.').then(()=>{});
+            }
+        });
+    }
+    const delAllBtn = message.is_temp ? null : div.querySelector('.msg-del-all');
+    if (delAllBtn) {
+        delAllBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const ok = await showConfirmModal('¿Eliminar este mensaje para todos? Esta acción no se puede deshacer.');
+            if (!ok) return;
+            try {
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : null;
+                const resp = await fetch(`/api/chats/${currentChatId}/messages/${message.id}/all`, {
+                    method: 'DELETE',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}) }
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                let updated = null;
+                try { updated = await resp.json(); } catch(_) {}
+                const newMsg = (updated && updated.message) ? updated.message : { ...message, body: 'Se eliminó este mensaje', original_name: null, file_path: null, drive_file_id: null, voice_base64: null, voice_path: null };
+                const idx = chatMessages.findIndex(m => m.id === message.id);
+                if (idx !== -1) chatMessages[idx] = newMsg; else chatMessages.push(newMsg);
+                const replacement = createMessageElement(newMsg, currentUserId, false);
+                div.replaceWith(replacement);
+                updateCurrentConversationLastMessage(newMsg);
+            } catch (err) {
+                console.error('Eliminar para todos falló', err);
+                showConfirmModal('No se pudo eliminar el mensaje para todos.').then(()=>{});
+            }
+        });
+    }
+
     return div;
+}
+
+// Voice player logic
+function initVoicePlayer(id){
+    const root = document.getElementById(id);
+    if(!root) return;
+    const src = root.getAttribute('data-src');
+    const audio = new Audio(src);
+    root.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+    const btn = root.querySelector('.vp-toggle');
+    const bar = root.querySelector('.vp-track');
+    const prog = root.querySelector('.vp-progress');
+    const time = root.querySelector('.vp-time');
+    let dragging = false;
+
+    function fmt(s){
+        s = Math.max(0, Math.floor(s));
+        var m = Math.floor(s/60);
+        var r = (s%60).toString().padStart(2,'0');
+        return m + ':' + r;
+    }
+
+    audio.addEventListener('timeupdate', ()=>{
+        if(!dragging && audio.duration){ prog.style.width = (audio.currentTime/audio.duration*100)+'%'; }
+        const dur = isFinite(audio.duration) ? audio.duration : 0;
+        time.textContent = fmt(audio.currentTime) + ' / ' + fmt(dur);
+    });
+    audio.addEventListener('loadedmetadata', ()=>{
+        const dur = isFinite(audio.duration) ? audio.duration : 0;
+        time.textContent = '0:00 / ' + fmt(dur);
+    });
+    audio.addEventListener('ended', ()=>{ btn.textContent='Play'; prog.style.width='0%'; });
+
+    btn.addEventListener('click', ()=>{
+        if(audio.paused){ audio.play(); btn.textContent='Pause'; } else { audio.pause(); btn.textContent='Play'; }
+    });
+    bar.addEventListener('click', (e)=>{
+        const rect = bar.getBoundingClientRect();
+        const ratio = (e.clientX - rect.left)/rect.width; if(audio.duration){ audio.currentTime = ratio*audio.duration; }
+    });
 }
 
 // Función para enviar mensaje
@@ -535,7 +770,7 @@ async function sendMessage() {
     const messageInput = document.getElementById('active-chat-input');
     const messageText = messageInput.value.trim();
 
-    if (!messageText && !pendingFile) {
+        if (!messageText && !pendingFile && !pendingVoiceBase64) {
         console.warn('⚠️ Nada que enviar');
         return;
     }
@@ -545,10 +780,15 @@ async function sendMessage() {
     // Limpiar input inmediatamente
     messageInput.value = '';
     const fileToSend = pendingFile; // snapshot
+        const voiceToSend = pendingVoiceBase64; // snapshot
+        const voiceMime = pendingVoiceMime; // snapshot
     pendingFile = null;
+        pendingVoiceBase64 = null;
+        pendingVoiceMime = null;
 
     // Crear mensaje optimista (mostrar inmediatamente)
-    const currentUserId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
+    const userMetaDisplay = document.querySelector('meta[name="user-id"]');
+    const currentUserId = userMetaDisplay ? userMetaDisplay.getAttribute('content') : null;
     const optimisticMessage = {
         id: 'temp-' + Date.now(),
         body: messageText,
@@ -556,61 +796,131 @@ async function sendMessage() {
         created_at: new Date().toISOString(),
         is_temp: true,
         original_name: fileToSend ? fileToSend.name : null,
-        mime_type: fileToSend ? fileToSend.type : null
+        mime_type: fileToSend ? fileToSend.type : (voiceMime || null),
+        preview_url: null,
+        ...(voiceToSend ? { voice_base64: voiceToSend, voice_mime: voiceMime || 'audio/webm' } : {})
     };
 
     // Agregar mensaje optimista al array y actualizar UI inmediatamente
     chatMessages.push(optimisticMessage);
     updateChatMessagesDisplay();
-    scrollChatToBottom();
+    maybeScrollToBottom();
 
     try {
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : null;
 
         // Enviar mensaje al servidor en background
         let fetchOptions = { method: 'POST' };
         if (fileToSend) {
-            const formData = new FormData();
-            formData.append('body', messageText);
-            formData.append('file', fileToSend);
-            fetchOptions.body = formData;
-            fetchOptions.headers = {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
-            };
+            // Para mostrar progreso usamos XMLHttpRequest en lugar de fetch
+            await new Promise((resolve, reject) => {
+                const formData = new FormData();
+                formData.append('body', messageText);
+                formData.append('file', fileToSend);
+
+                const xhr = new XMLHttpRequest();
+                const url = `/api/chats/${currentChatId}/messages`;
+                xhr.open('POST', url, true);
+                if (csrfToken) xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+                const box = document.getElementById('upload-progress');
+                const name = document.getElementById('upload-progress-name');
+                const bar = document.getElementById('upload-progress-bar');
+                const pct = document.getElementById('upload-progress-percent');
+                if (box) box.classList.remove('hidden');
+                if (name) name.textContent = `Subiendo: ${fileToSend.name}`;
+
+                xhr.upload.onprogress = (e) => {
+                    if (!e.lengthComputable) return;
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    if (bar) bar.style.width = percent + '%';
+                    if (pct) pct.textContent = percent + '%';
+                };
+                xhr.onreadystatechange = () => {
+                    if (xhr.readyState === 4) {
+                        if (box) box.classList.add('hidden');
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                const json = JSON.parse(xhr.responseText);
+                                resolve(json);
+                            } catch (err) {
+                                resolve({});
+                            }
+                        } else {
+                            reject(new Error('Upload failed: ' + xhr.status));
+                        }
+                    }
+                };
+                xhr.send(formData);
+            });
+            // usamos el mismo flujo de abajo para refrescar UI (no seteamos fetchOptions)
+            fetchOptions = null;
+            } else if (voiceToSend) {
+                // Enviar audio en base64 como JSON (simple y rápido)
+                fetchOptions.body = JSON.stringify({ body: messageText, voice_base64: voiceToSend, voice_mime: voiceMime || 'audio/webm' });
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                };
+                if (csrfToken) headers['X-CSRF-TOKEN'] = csrfToken;
+                fetchOptions.headers = headers;
         } else {
             fetchOptions.body = JSON.stringify({ body: messageText });
-            fetchOptions.headers = {
+            const headers = {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
+                'X-Requested-With': 'XMLHttpRequest'
             };
+            if (csrfToken) headers['X-CSRF-TOKEN'] = csrfToken;
+            fetchOptions.headers = headers;
         }
-
-        const response = await fetch(`/api/chats/${currentChatId}/messages`, fetchOptions);
-
-        console.log('📤 Send message response status:', response.status);
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ Error sending message:', errorText);
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        let result = {};
+        if (fetchOptions) {
+            const response = await fetch(`/api/chats/${currentChatId}/messages`, fetchOptions);
+            console.log('📤 Send message response status:', response.status);
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Error sending message:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+            result = await response.json();
+        } else {
+            // En el flujo de XHR ya enviamos; leave result vacío y recarga fallback abajo
         }
-
-        const result = await response.json();
         console.log('📤 Mensaje enviado exitosamente:', result);
 
-        // Remover mensaje optimista y agregar el real (que incluye metadata de adjunto)
+        // Remover mensaje optimista
         chatMessages = chatMessages.filter(msg => msg.id !== optimisticMessage.id);
-        if (result.message) {
-            chatMessages.push(result.message);
-        }
-        updateChatMessagesDisplay();
 
-        // Actualizar conversaciones sin recargar todo (solo la actual)
-        updateCurrentConversationLastMessage(result.message);
+        // Intentar obtener el mensaje devuelto por la API; algunos endpoints no lo retornan
+        let deliveredMessage = null;
+        if (result && typeof result === 'object') {
+            if (result.message && (result.message.id || result.message.body)) {
+                deliveredMessage = result.message;
+            } else if (result.data && result.data.message) {
+                deliveredMessage = result.data.message;
+            } else if (result.id && result.body) {
+                // API devolvió directamente el mensaje
+                deliveredMessage = result;
+            }
+        }
+
+        if (deliveredMessage) {
+            chatMessages.push(deliveredMessage);
+            updateChatMessagesDisplay();
+        } else {
+            // Si no recibimos el mensaje, recargar mensajes en modo silencioso como fallback
+            await loadChatMessages(true);
+            deliveredMessage = chatMessages[chatMessages.length - 1] || null;
+        }
+
+        // Actualizar la vista de la conversación con el último mensaje disponible (si existe)
+        if (deliveredMessage) {
+            updateCurrentConversationLastMessage(deliveredMessage);
+        }
 
     } catch (error) {
         console.error('❌ Error sending message:', error);
@@ -631,19 +941,31 @@ function updateCurrentConversationLastMessage(message) {
     const conversationItem = document.querySelector(`[data-chat-id="${currentChatId}"]`);
     if (!conversationItem) return;
 
+    // Seguridad: si no hay mensaje, intentar usar el último cargado en memoria
+    const safeMessage = message || chatMessages[chatMessages.length - 1];
+    if (!safeMessage) return;
+
     // Encontrar el elemento del último mensaje
     const lastMessageElement = conversationItem.querySelector('p');
     if (lastMessageElement) {
-        const currentUserId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
-        const isMyMessage = message.sender_id == currentUserId;
+        const uidMeta2 = document.querySelector('meta[name="user-id"]');
+        const currentUserId = uidMeta2 ? uidMeta2.getAttribute('content') : null;
+        const sender = safeMessage.sender_id ?? safeMessage.user_id;
+        const isMyMessage = sender == currentUserId;
         const messagePrefix = isMyMessage ? 'Tú: ' : '';
-        lastMessageElement.textContent = messagePrefix + message.body;
+        let label = safeMessage && safeMessage.body ? safeMessage.body : '';
+        if (!label || label.trim() === '') {
+            if (safeMessage.voice_base64 || safeMessage.voice_path) label = 'Audio de voz';
+            else if (safeMessage.preview_url || safeMessage.original_name || safeMessage.file_path || safeMessage.drive_file_id) label = 'Archivo adjunto';
+            else label = '';
+        }
+        lastMessageElement.textContent = messagePrefix + label;
     }
 
     // Actualizar timestamp
     const timeElement = conversationItem.querySelector('.text-xs.text-slate-500');
     if (timeElement) {
-        timeElement.textContent = formatMessageTime(message.created_at);
+        timeElement.textContent = formatMessageTime(safeMessage.created_at || new Date().toISOString());
     }
 
     // Mover conversación al top de la lista
@@ -700,6 +1022,18 @@ function scrollChatToBottom() {
     }
 }
 
+function isNearBottom(container, thresholdPx = 120) {
+    return (container.scrollHeight - container.clientHeight - container.scrollTop) <= thresholdPx;
+}
+
+function maybeScrollToBottom() {
+    const container = document.getElementById('active-chat-messages');
+    if (!container) return;
+    if (autoScrollEnabled || isNearBottom(container)) {
+        scrollChatToBottom();
+    }
+}
+
 // Función para escapar HTML
 function escapeHtml(text) {
     if (!text) return '';
@@ -714,6 +1048,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Cargar conversaciones al cargar la página
     loadConversations();
+    // Autoscroll inteligente: detectar cuando el usuario hace scroll manual
+    const msgBox = document.getElementById('active-chat-messages');
+    if (msgBox) {
+        msgBox.addEventListener('scroll', () => {
+            // Desactivar autoscroll si el usuario se aleja del fondo; reactivar cuando vuelva cerca
+            autoScrollEnabled = isNearBottom(msgBox);
+        });
+        // Estilos de scrollbar oculto pero scrollable
+        msgBox.style.scrollbarWidth = 'thin';
+        msgBox.style.msOverflowStyle = 'none';
+        msgBox.classList.add('hide-scrollbar');
+    }
 
     // Inicializar auto-refresh después de cargar conversaciones
     setTimeout(() => {
@@ -747,11 +1093,29 @@ document.addEventListener('DOMContentLoaded', function() {
             pendingFile = e.target.files[0];
             if (pendingFile) {
                 fileBtn.classList.add('text-yellow-400');
+                const input = document.getElementById('active-chat-input');
+                if (input && !input.value) input.placeholder = `Archivo: ${pendingFile.name}`;
             } else {
                 fileBtn.classList.remove('text-yellow-400');
+                const input = document.getElementById('active-chat-input');
+                if (input) input.placeholder = 'Escribe un mensaje...';
             }
         });
     }
+
+    // Grabación de voz: botón y atajo Alt+V (usa los handlers globales con temporizador y auto-envío)
+    const micBtn = document.getElementById('active-chat-voice-btn');
+    if (micBtn) micBtn.addEventListener('click', () => toggleRecording());
+    document.addEventListener('keydown', (e) => {
+        if (e.altKey && (e.key === 'v' || e.key === 'V')) {
+            e.preventDefault();
+            toggleRecording();
+        }
+        if (e.key === 'Escape' && mediaRecorder && mediaRecorder.state === 'recording') {
+            e.preventDefault();
+            try { mediaRecorder.stop(); } catch (_) {}
+        }
+    });
 
     // Cargar contactos y listeners para crear chats
     loadContacts();
@@ -763,12 +1127,13 @@ document.addEventListener('DOMContentLoaded', function() {
         startChatBtn.addEventListener('click', async () => {
             const query = startChatUser.value.trim();
             if (!query) return;
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const csrfMeta3 = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta3 ? csrfMeta3.getAttribute('content') : null;
             const formData = new FormData();
             formData.append('user_query', query);
             const resp = await fetch('/api/chats/create-or-find', {
                 method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest', ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }) },
+                headers: (function(){ const h={'X-Requested-With':'XMLHttpRequest'}; if (csrfToken) h['X-CSRF-TOKEN']=csrfToken; return h; })(),
                 body: formData
             });
             if (resp.ok) {
@@ -783,14 +1148,62 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    // Emoji picker simple
+    const emojiBtn = document.getElementById('active-chat-emoji-btn');
+    const emojiPanel = document.getElementById('emoji-panel');
+    const msgInput = document.getElementById('active-chat-input');
+    if (emojiBtn && emojiPanel && msgInput) {
+        emojiBtn.addEventListener('click', (e)=>{
+            e.preventDefault();
+            emojiPanel.classList.toggle('hidden');
+        });
+        emojiPanel.querySelectorAll('.emoji').forEach(el=>{
+            el.addEventListener('click', ()=>{
+                const emoji = el.textContent || '';
+                const start = msgInput.selectionStart || msgInput.value.length;
+                const end = msgInput.selectionEnd || msgInput.value.length;
+                msgInput.value = msgInput.value.slice(0,start) + emoji + msgInput.value.slice(end);
+                msgInput.focus();
+                emojiPanel.classList.add('hidden');
+            });
+        });
+        document.addEventListener('click', (e)=>{
+            if (!emojiPanel.contains(e.target) && e.target !== emojiBtn) {
+                emojiPanel.classList.add('hidden');
+            }
+        });
+    }
 });
+
+// Modal confirm helper
+function showConfirmModal(text){
+    return new Promise((resolve)=>{
+        const modal = document.getElementById('confirm-modal');
+        const body = document.getElementById('confirm-modal-text');
+        const ok = document.getElementById('confirm-accept');
+        const cancel = document.getElementById('confirm-cancel');
+        if(!modal || !body || !ok || !cancel){ resolve(window.confirm(text)); return; }
+        body.textContent = text;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        const done = (val)=>{ modal.classList.add('hidden'); modal.classList.remove('flex'); resolve(val); };
+        const onOk=()=>{ cleanup(); done(true); };
+        const onCancel=()=>{ cleanup(); done(false); };
+        function cleanup(){ ok.removeEventListener('click', onOk); cancel.removeEventListener('click', onCancel); }
+        ok.addEventListener('click', onOk);
+        cancel.addEventListener('click', onCancel);
+    });
+}
 
 // Cargar contactos desde API
 async function loadContacts() {
     try {
-        const resp = await fetch('/api/chats/contacts');
+        const resp = await fetch('/api/contacts', {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        });
         if (!resp.ok) throw new Error('Error al cargar contactos');
-        contactsCache = await resp.json();
+        const data = await resp.json();
+        contactsCache = data.contacts || [];
         const list = document.getElementById('contacts-list');
         if (!list) return;
         if (!contactsCache.length) {
@@ -799,17 +1212,18 @@ async function loadContacts() {
         }
         list.innerHTML = contactsCache.map(c => `
             <button data-user-id="${c.id}" class="w-full text-left px-3 py-2 hover:bg-slate-700/40 flex items-center gap-2 text-xs">
-                <span class="w-6 h-6 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-slate-900 font-semibold">${c.avatar || (c.name ? c.name.charAt(0).toUpperCase() : '?')}</span>
+                <span class="w-6 h-6 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-slate-900 font-semibold">${c.name ? c.name.charAt(0).toUpperCase() : '?'}</span>
                 <span class="truncate">${c.name || 'Usuario'}</span>
             </button>`).join('');
         list.querySelectorAll('button').forEach(btn => btn.addEventListener('click', async () => {
             const id = btn.getAttribute('data-user-id');
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const csrfMeta4 = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta4 ? csrfMeta4.getAttribute('content') : null;
             const formData = new FormData();
             formData.append('contact_id', id);
             const resp2 = await fetch('/api/chats/create-or-find', {
                 method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest', ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }) },
+                headers: (function(){ const h={'X-Requested-With':'XMLHttpRequest'}; if (csrfToken) h['X-CSRF-TOKEN']=csrfToken; return h; })(),
                 body: formData
             });
             if (resp2.ok) {
@@ -822,9 +1236,14 @@ async function loadContacts() {
             }
         }));
     } catch (e) {
-        console.error(e);
+        console.error('Error: loadContacts()', e);
     }
 }
+
+// Permitir refresco desde otros módulos (invitaciones)
+window.addEventListener('chat:refresh-contacts', () => {
+    loadContacts();
+});
 
 // Detener auto-refresh cuando la ventana se cierra o cambia de pestaña
 window.addEventListener('beforeunload', stopAutoRefresh);

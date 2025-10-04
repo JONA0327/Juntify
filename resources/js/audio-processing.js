@@ -1367,21 +1367,9 @@ function updateAnalysisPreview() {
         }
         audioSection.innerHTML = `
             <audio id="full-audio-player" controls src="${audioUrl}"></audio>
-            <span id="audio-time" style="margin-left:10px; color:#aaa;"></span>
             <button id="download-audio-btn" class="download-audio-btn">Descargar audio original</button>
         `;
         const audioPlayer = document.getElementById('full-audio-player');
-        const timeEl = document.getElementById('audio-time');
-        if (audioPlayer && timeEl) {
-            const updateTime = () => {
-                const current = formatTime(audioPlayer.currentTime * 1000);
-                const total = formatTime(audioPlayer.duration * 1000);
-                timeEl.textContent = `${current} / ${total}`;
-            };
-            audioPlayer.addEventListener('timeupdate', updateTime);
-            audioPlayer.addEventListener('loadedmetadata', updateTime);
-            updateTime();
-        }
         const downloadBtn = document.getElementById('download-audio-btn');
         if (downloadBtn) {
             downloadBtn.onclick = function() {
@@ -1454,6 +1442,8 @@ async function loadDriveOptions() {
                     personalOpt.textContent = `🏠 ${personalData.root_folder.name}`;
                     driveSelect.appendChild(personalOpt);
                     console.log('✅ [loadDriveOptions] Added personal option:', personalData.root_folder.name);
+                    // Guardar ID raíz personal para uso en guardado pendiente
+                    window.personalRootFolderGoogleId = personalData.root_folder.google_id;
                 }
             } else {
                 const failText = await personalRes.text();
@@ -1486,6 +1476,8 @@ async function loadDriveOptions() {
                         orgOpt.textContent = `🏢 ${orgData.root_folder.name}`;
                         driveSelect.appendChild(orgOpt);
                         console.log('✅ [loadDriveOptions] Added organization option:', orgData.root_folder.name);
+                        // Guardar ID raíz organización
+                        window.organizationRootFolderGoogleId = orgData.root_folder.google_id;
                     }
                 } else {
                     console.warn('⚠️ [loadDriveOptions] Organization drive request failed:', await orgRes.text());
@@ -1848,14 +1840,31 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                 analysis_results: analysis
             });
 
+            // Resolver carpeta raíz según drive seleccionado
+            let rootFolderId = null;
+            if (driveType === 'organization') {
+                rootFolderId = window.organizationRootFolderGoogleId || resolvedRootFolder || null;
+            } else {
+                rootFolderId = window.personalRootFolderGoogleId || null;
+            }
+            if (!rootFolderId) {
+                console.error('❌ [processDatabaseSave] No se pudo resolver root_folder para completar pendiente');
+                showNotification('No se pudo resolver la carpeta raíz para guardar', 'error');
+                resetUI();
+                showStep(4);
+                return { success: false, message: 'root_folder no resuelto' };
+            }
             const response = await fetch('/api/pending-meetings/complete', {
                 method: 'POST',
                 headers: jsonHeaders,
                 body: JSON.stringify({
                     pending_id: window.pendingAudioInfo.pendingId,
                     meeting_name: meetingName,
+                    root_folder: rootFolderId,
                     transcription_data: transcription,
-                    analysis_results: analysis
+                    analysis_results: analysis,
+                    audio_subfolder: null,
+                    transcription_subfolder: null
                 })
             });
 

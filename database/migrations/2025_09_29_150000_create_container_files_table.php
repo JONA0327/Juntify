@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        if (Schema::hasTable('container_files')) {
+            // Ya existe (posible ejecución repetida en entornos locales)
+            return;
+        }
         Schema::create('container_files', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('container_id'); // meeting_content_containers.id

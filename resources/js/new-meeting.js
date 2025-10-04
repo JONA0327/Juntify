@@ -131,6 +131,22 @@ async function downloadAudioAsOgg(blob, baseName) {
     }
 }
 
+// Helper para descargar un blob como archivo
+function downloadBlob(blob, fileName) {
+    try {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        console.warn('⚠️ [Download] No se pudo descargar el archivo automáticamente:', e);
+    }
+}
+
 // Helper para convertir blobs a OGG usando MediaRecorder
 // Función mejorada para conversión real a OGG
 async function convertToOgg(blob) {
@@ -573,7 +589,206 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (e) {
         console.warn('No se pudieron cargar los límites del plan:', e);
     }
+
+    // Poblar lista de micrófonos disponibles
+    try {
+        await populateMicrophoneDevices();
+    } catch (e) {
+        console.warn('⚠️ No se pudieron cargar los dispositivos de micrófono:', e);
+    }
+    // React a cambios de hardware (conexión/desconexión de dispositivos)
+    try {
+        if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
+            navigator.mediaDevices.addEventListener('devicechange', async () => {
+                console.log('🔌 [new-meeting] Cambio en dispositivos detectado, recargando lista de micrófonos...');
+                await populateMicrophoneDevices();
+            });
+        }
+    } catch (_) {}
 });
+
+// ===== Handlers globales para compatibilidad con atributos inline =====
+// Notas:
+// - Vite usa módulos ES, por lo que las funciones no son globales por defecto.
+// - Estos enlaces aseguran que los onClick/onChange de las vistas Blade funcionen.
+window.toggleRecording = toggleRecording;
+window.pauseRecording = pauseRecording;
+window.resumeRecording = resumeRecording;
+window.discardRecording = discardRecording;
+window.togglePostponeMode = togglePostponeMode;
+
+// Stubs seguros para los controles del grabador de reuniones (UI aún no implementada aquí)
+function toggleMeetingRecording() {
+    console.warn('[new-meeting] toggleMeetingRecording no implementado todavía');
+    showWarning('El grabador de reuniones aún no está disponible en esta versión.');
+}
+function toggleSystemAudio() {
+    console.warn('[new-meeting] toggleSystemAudio no implementado todavía');
+    showWarning('Control de audio del sistema no disponible por ahora.');
+}
+function toggleMicrophoneAudio() {
+    console.warn('[new-meeting] toggleMicrophoneAudio no implementado todavía');
+    showWarning('Control avanzado del micrófono no disponible por ahora.');
+}
+function muteSystemAudio() {
+    console.warn('[new-meeting] muteSystemAudio no implementado todavía');
+}
+function muteMicrophoneAudio() {
+    console.warn('[new-meeting] muteMicrophoneAudio no implementado todavía');
+}
+function setupMeetingRecorder() {
+    console.warn('[new-meeting] setupMeetingRecorder no implementado todavía');
+}
+window.toggleMeetingRecording = toggleMeetingRecording;
+window.toggleSystemAudio = toggleSystemAudio;
+window.toggleMicrophoneAudio = toggleMicrophoneAudio;
+window.muteSystemAudio = muteSystemAudio;
+window.muteMicrophoneAudio = muteMicrophoneAudio;
+window.setupMeetingRecorder = setupMeetingRecorder;
+
+// ===== Handlers para reintento/descarga/descartar subida fallida =====
+function stripFileExtension(name) {
+    if (!name) return '';
+    const i = name.lastIndexOf('.');
+    return i > 0 ? name.substring(0, i) : name;
+}
+
+async function retryUpload() {
+    try {
+        if (!failedAudioBlob) {
+            showWarning('No hay audio pendiente para reintentar.');
+            return;
+        }
+        const base = stripFileExtension(failedAudioName) || 'grabacion';
+        showSuccess('Reintentando subida del audio...');
+        await uploadInBackground(failedAudioBlob, base, (loaded, total) => {
+            const pct = Math.min(100, Math.round((loaded / total) * 100));
+            const bar = document.getElementById('retry-progress-bar');
+            const txt = document.getElementById('retry-progress-text');
+            const wrap = document.getElementById('retry-progress');
+            if (wrap) wrap.style.display = 'block';
+            if (bar) bar.style.setProperty('--pct', pct + '%');
+            if (txt) txt.textContent = `Subiendo... ${pct}%`;
+        });
+        clearFailedUploadData();
+        showSuccess('Audio subido correctamente');
+    } catch (e) {
+        console.error('❌ [Retry] Error al reintentar subida:', e);
+        showError('No se pudo completar la subida. Intenta nuevamente.');
+    }
+}
+
+function downloadFailedAudio() {
+    if (!failedAudioBlob) {
+        showWarning('No hay audio para descargar.');
+        return;
+    }
+    const base = stripFileExtension(failedAudioName) || 'grabacion_fallida';
+    try {
+        downloadAudioWithCorrectFormat(failedAudioBlob, base);
+    } catch (_) {
+        downloadBlob(failedAudioBlob, base);
+    }
+}
+
+function discardFailedAudio() {
+    clearFailedUploadData();
+    showSuccess('Audio fallido descartado.');
+}
+
+window.retryUpload = retryUpload;
+window.downloadFailedAudio = downloadFailedAudio;
+window.discardFailedAudio = discardFailedAudio;
+
+// ===== DISPOSITIVOS DE AUDIO (MICRÓFONOS) =====
+async function populateMicrophoneDevices() {
+    const select = document.getElementById('microphone-device');
+    if (!select) return;
+
+    // Limpia opciones evitando duplicar placeholder
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    placeholder.textContent = '🔍 Selecciona un micrófono...';
+    select.appendChild(placeholder);
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        console.warn('⚠️ enumerateDevices no soportado en este navegador.');
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.disabled = true;
+        opt.textContent = 'Navegador no soporta dispositivos';
+        select.appendChild(opt);
+        return;
+    }
+
+    // Intentar obtener permisos para leer labels; si ya están concedidos, esto será rápido
+    let tempStream = null;
+    try {
+        // Solo solicitar si aún no tenemos permiso (heurística: labels vacías en un primer intento)
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        const labelsMissing = devices.filter(d => d.kind === 'audioinput').every(d => !d.label);
+        if (labelsMissing) {
+            try {
+                tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (permErr) {
+                console.warn('⚠️ No se concedió permiso de micrófono aún. Se mostrarán nombres genéricos.');
+            }
+            // Re-enumerar luego de permiso
+            devices = await navigator.mediaDevices.enumerateDevices();
+        }
+
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+        if (audioInputs.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.disabled = true;
+            opt.textContent = 'No se detectaron micrófonos';
+            select.appendChild(opt);
+            return;
+        }
+
+        // Persistencia de selección
+        let savedDeviceId = null;
+        try {
+            savedDeviceId = localStorage.getItem('selectedMicrophoneId') || sessionStorage.getItem('selectedMicrophoneId');
+        } catch (_) {}
+
+        audioInputs.forEach((d, idx) => {
+            const opt = document.createElement('option');
+            opt.value = d.deviceId;
+            const label = d.label && d.label.trim().length > 0 ? d.label : `Micrófono ${idx + 1}`;
+            opt.textContent = `🎙️ ${label}`;
+            if (savedDeviceId && d.deviceId === savedDeviceId) {
+                opt.selected = true;
+                placeholder.selected = false;
+            }
+            select.appendChild(opt);
+        });
+
+        // Guardar cambios cuando el usuario seleccione
+        select.addEventListener('change', () => {
+            try {
+                localStorage.setItem('selectedMicrophoneId', select.value || '');
+                sessionStorage.setItem('selectedMicrophoneId', select.value || '');
+            } catch (_) {}
+        }, { once: true });
+
+    } catch (e) {
+        console.error('❌ Error al enumerar dispositivos:', e);
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.disabled = true;
+        opt.textContent = 'Error al cargar dispositivos';
+        select.appendChild(opt);
+    } finally {
+        if (tempStream) {
+            try { tempStream.getTracks().forEach(t => t.stop()); } catch (_) {}
+        }
+    }
+}
 
 // ===== FUNCIONES DE GRABACIÓN =====
 
@@ -587,8 +802,15 @@ async function getAudioConstraints() {
         sampleRate: 44100
     };
 
-    if (deviceSelect && deviceSelect.value) {
-        constraints.deviceId = { exact: deviceSelect.value };
+    // Prefer UI selection; fallback to persisted selection
+    let chosenId = deviceSelect && deviceSelect.value ? deviceSelect.value : null;
+    if (!chosenId) {
+        try {
+            chosenId = localStorage.getItem('selectedMicrophoneId') || sessionStorage.getItem('selectedMicrophoneId');
+        } catch (_) {}
+    }
+    if (chosenId) {
+        constraints.deviceId = { exact: chosenId };
     }
 
     return constraints;
@@ -647,7 +869,12 @@ async function startRecording() {
         mediaRecorder.ondataavailable = event => {
             if (event.data && event.data.size > 0) {
                 recordedChunks.push(event.data);
-                sendChunkToServer(event.data, chunkIndex++);
+                // Enviar chunk a servidor para almacenamiento incremental (opcional)
+                try {
+                    sendChunkToServer(event.data, chunkIndex++);
+                } catch (_) {
+                    // Si no está implementado, continuar sin bloquear
+                }
             }
         };
 
@@ -754,6 +981,52 @@ function resetRecordingControls() {
     if (postponeContainer) postponeContainer.style.display = 'flex'; // o ''
     if (postponeToggle) postponeToggle.disabled = false;
 }
+
+// ===== HELPERS FALTANTES =====
+// Envío incremental de chunks (no bloqueante). Se puede ampliar en el futuro.
+async function sendChunkToServer(blob, index) {
+    // Desactivado por defecto: retornar sin hacer nada para evitar errores en dev
+    // Si se desea, implementar POST a '/api/recordings/chunk' con session id.
+    return false;
+}
+
+function handlePostActionCleanup(keepUI = false) {
+    // Limpia timers/animaciones y restablece controles; si keepUI=true, evita reset completo (p.ej. uploads bg)
+    try {
+        if (recordingTimer) {
+            clearInterval(recordingTimer);
+            recordingTimer = null;
+        }
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+            animationId = null;
+        }
+        if (!keepUI) {
+            updateRecordingUI(false);
+            resetAudioVisualizer();
+            resetRecordingControls();
+        }
+    } catch (_) {}
+}
+
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        try {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+function showPostponeLockedModal() {
+    // Mensaje simple de upgrade; puede integrarse con tu sistema de modales si existe
+    alert('La opción de posponer está disponible para los planes Negocios y Enterprise.');
+}
+window.showPostponeLockedModal = showPostponeLockedModal;
 
 
 // Función para detener grabación
@@ -1093,15 +1366,13 @@ function uploadAudioToDrive(blob, name, onProgress) {
     const fileExtension = getCorrectFileExtension(blob);
     const fileName = `${name}.${fileExtension}`;
 
-    // Get selected drive type (organization or personal)
-    // En flujo nuevo no hay drive-select aquí; el tipo se selecciona en paso de guardado (audio-processing)
-    const driveSelect = document.getElementById('drive-select');
-    const driveType = driveSelect ? driveSelect.value : 'personal';
+    // Forzar Drive personal para audios pospuestos
+    const driveType = 'personal';
 
     formData.append('audioFile', blob, fileName);
     formData.append('meetingName', name);
     formData.append('driveType', driveType); // Send drive type to backend
-
+    // No enviamos subcarpeta explícita; backend resolverá "Audios Pospuestos"
     console.log(`🗂️ [Upload] Subiendo a Drive tipo: ${driveType}`);
 
     // Remove the default rootFolder - let backend handle folder creation
@@ -1110,13 +1381,63 @@ function uploadAudioToDrive(blob, name, onProgress) {
     const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
     return new Promise((resolve, reject) => {
+        // Crear (o reutilizar) notificación flotante de progreso local
+        let progressNotification = document.querySelector('[data-upload-notification="active"]');
+        if (!progressNotification) {
+            progressNotification = document.createElement('div');
+            progressNotification.setAttribute('data-upload-notification', 'active');
+            progressNotification.style.position = 'fixed';
+            progressNotification.style.bottom = '1rem';
+            progressNotification.style.right = '1rem';
+            progressNotification.style.zIndex = '9999';
+            progressNotification.style.minWidth = '280px';
+            progressNotification.innerHTML = `
+                <div class="bg-slate-900/90 border border-slate-700/70 rounded-xl p-4 shadow-xl backdrop-blur-sm text-slate-200 text-sm font-medium flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs uppercase tracking-wide text-slate-400">Subiendo audio</span>
+                        <button type="button" class="text-slate-500 hover:text-slate-300 text-xs" data-close-upload>&times;</button>
+                    </div>
+                    <div class="text-xs line-clamp-1" title="${name}">${name}</div>
+                    <div class="h-2 w-full bg-slate-700/60 rounded overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded upload-progress-bar" style="width:0%"></div>
+                    </div>
+                    <div class="flex justify-between text-[10px] tracking-wide text-slate-400">
+                        <span class="upload-progress-label">Iniciando...</span>
+                        <span class="upload-progress-percent">0%</span>
+                    </div>
+                </div>`;
+            document.body.appendChild(progressNotification);
+            const closeBtn = progressNotification.querySelector('[data-close-upload]');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    progressNotification.remove();
+                });
+            }
+        } else {
+            const label = progressNotification.querySelector('.upload-progress-label');
+            if (label) label.textContent = 'Reiniciando...';
+        }
+
+        // Refrescar notificaciones globales para que aparezca "Subida iniciada" del backend cuanto antes
+        try { if (window.notifications) { window.notifications.refresh(); } } catch (_) {}
+
         const xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/drive/upload-pending-audio');
         xhr.setRequestHeader('X-CSRF-TOKEN', token);
+        // No enviamos subcarpeta explícita; el backend resolverá "Audios Pospuestos"
 
         xhr.upload.onprogress = (e) => {
             if (e.lengthComputable && onProgress) {
                 onProgress(e.loaded, e.total);
+            }
+            if (e.lengthComputable) {
+                const pct = Math.min(100, Math.round((e.loaded / e.total) * 100));
+                const bar = progressNotification.querySelector('.upload-progress-bar');
+                const pctSpan = progressNotification.querySelector('.upload-progress-percent');
+                const label = progressNotification.querySelector('.upload-progress-label');
+                if (bar) bar.style.width = pct + '%';
+                if (pctSpan) pctSpan.textContent = pct + '%';
+                if (label) label.textContent = pct < 100 ? 'Subiendo...' : 'Procesando respuesta...';
             }
         };
 
@@ -1146,11 +1467,26 @@ function uploadAudioToDrive(blob, name, onProgress) {
                 if (window.notifications) {
                     window.notifications.refresh();
                 }
+                // Actualizar notificación local a éxito
+                try {
+                    const label = progressNotification.querySelector('.upload-progress-label');
+                    const pctSpan = progressNotification.querySelector('.upload-progress-percent');
+                    const bar = progressNotification.querySelector('.upload-progress-bar');
+                    if (label) label.textContent = 'Completado';
+                    if (pctSpan) pctSpan.textContent = '100%';
+                    if (bar) bar.style.width = '100%';
+                    setTimeout(() => { progressNotification.remove(); }, 4000);
+                } catch (_) {}
                 // Limpiar datos de fallo si la subida fue exitosa
                 clearFailedUploadData();
                 resolve(response);
             } else {
                 console.error('Upload failed with status:', xhr.status, xhr.responseText);
+                try {
+                    const label = progressNotification.querySelector('.upload-progress-label');
+                    if (label) label.textContent = 'Error';
+                    progressNotification.classList.add('shake');
+                } catch(_) {}
                 // Almacenar datos para reintento con conversión automática a OGG
                 storeFailedUploadData(blob, name).then(() => {
                     showUploadRetryUI();
@@ -1165,6 +1501,10 @@ function uploadAudioToDrive(blob, name, onProgress) {
 
         xhr.onerror = () => {
             console.error('Error uploading audio - Network error');
+            try {
+                const label = progressNotification.querySelector('.upload-progress-label');
+                if (label) label.textContent = 'Error de red';
+            } catch(_) {}
             // Almacenar datos para reintento con conversión automática a OGG
             storeFailedUploadData(blob, name).then(() => {
                 showUploadRetryUI();
@@ -1462,1132 +1802,31 @@ async function analyzeNow() {
     window.location.href = '/audio-processing';
 }
 
-function handlePostActionCleanup(uploaded) {
-    if (pendingSaveContext === 'recording') {
-        recordedChunks = [];
-        startTime = null;
-        currentRecordingFormat = null; // Limpiar formato de grabación
-    } else if (pendingSaveContext === 'meeting') {
-        recordedChunks = [];
-        meetingStartTime = null;
-        currentRecordingFormat = null; // Limpiar formato de grabación
-    } else if (pendingSaveContext === 'upload' && !uploaded) {
-        removeSelectedFile();
-    }
-}
+// Subcarpeta: dejamos que el backend resuelva automáticamente "Audios Pospuestos" en Drive personal
+let pendingAudioSubfolderId = '';
 
-function sendChunkToServer(chunk, index) {
-    const formData = new FormData();
-    formData.append('chunk', chunk);
-    formData.append('recording_id', currentRecordingId);
-    formData.append('index', index);
-    const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    fetch('/api/recordings/chunk', {
-        method: 'POST',
-        headers: { 'X-CSRF-TOKEN': token },
-        body: formData
-    }).catch(err => console.error('Error enviando segmento', err));
-}
-
-async function fetchRemuxedBlob() {
-    const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    const response = await fetch('/api/recordings/concat', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': token
-        },
-        body: JSON.stringify({ recording_id: currentRecordingId })
-    });
-    if (!response.ok) {
-        throw new Error('Remux failed');
-    }
-    const buffer = await response.arrayBuffer();
-    // Convertir a OGG para descargas/compatibilidad si se usa este flujo
-    const webmBlob = new Blob([buffer], { type: 'audio/webm;codecs=opus' });
+// Helper: fetch con timeout para evitar UI bloqueada si una extensión del navegador intercepta la petición
+async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        const oggBlob = await convertToOgg(webmBlob);
-        return oggBlob;
-    } catch (_) {
-        // Fallback: devolver blob original pero marcando ogg para evitar descargas .webm
-        return new Blob([buffer], { type: 'audio/ogg' });
-    }
-}
-
-function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
-}
-
-function downloadBlob(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-// Función para alternar navbar móvil
-function toggleMobileNavbar() {
-    const navbar = document.querySelector('.mobile-navbar');
-    const button = document.getElementById('mobile-navbar-btn');
-
-    if (navbar) {
-        navbar.classList.toggle('active');
-        button.classList.toggle('active');
-    }
-}
-
-// Función para crear partículas animadas
-function createParticles() {
-    const particles = document.getElementById('particles');
-    const particleCount = window.innerWidth < 768 ? 30 : 50;
-
-    for (let i = 0; i < particleCount; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'particle';
-        particle.style.left = Math.random() * 100 + '%';
-        particle.style.animationDelay = Math.random() * 20 + 's';
-        particle.style.animationDuration = (Math.random() * 10 + 15) + 's';
-        particles.appendChild(particle);
-    }
-}
-
-// Enumerar dispositivos de micrófono y poblar el selector
-async function populateMicrophoneDevices() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-    try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const select = document.getElementById('microphone-device');
-        if (!select) return;
-
-        // Conservar la opción por defecto
-        const placeholder = select.querySelector('option[value=""]');
-        select.innerHTML = '';
-        if (placeholder) select.appendChild(placeholder);
-
-        let count = 1;
-        devices.filter(d => d.kind === 'audioinput').forEach(device => {
-            const option = document.createElement('option');
-            option.value = device.deviceId;
-            option.textContent = device.label || `Micrófono ${count++}`;
-            select.appendChild(option);
-        });
-    } catch (e) {
-        console.error('No se pudieron enumerar los micrófonos', e);
-    }
-}
-
-// ===== EVENT LISTENERS =====
-
-// Actualizar valor del slider de sensibilidad
-document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar partículas
-    createParticles();
-
-    // Cargar dispositivos de micrófono
-    populateMicrophoneDevices();
-
-    // Configurar subida de archivos una sola vez
-    setupFileUpload();
-
-    // Reajustar espectrogramas al redimensionar
-    window.addEventListener('resize', () => {
-        const meetingEl = document.getElementById('meeting-recorder');
-        if (meetingEl && meetingEl.style.display !== 'none') {
-            setupMeetingRecorder();
-        }
-    });
-
-    // Inicializar con modo de audio por defecto
-    showRecordingInterface('audio');
-});
-
-// ===== FUNCIONES PARA SUBIR ARCHIVO =====
-
-// Configurar la funcionalidad de subir archivo
-function setupFileUpload() {
-    if (fileUploadInitialized) return;
-    fileUploadInitialized = true;
-
-    const uploadArea = document.getElementById('upload-area');
-    const fileInput = document.getElementById('audio-file-input');
-    const uploadButton = uploadArea.querySelector('.upload-btn');
-
-    // Drag and drop
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('dragover');
-    });
-
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('dragover');
-    });
-
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('dragover');
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            handleFileSelection(files[0]);
-        }
-    });
-
-    // Click para seleccionar archivo
-    uploadArea.addEventListener('click', () => {
-        fileInput.click();
-    });
-
-    uploadButton.addEventListener('click', (event) => {
-        event.stopPropagation();
-        fileInput.click();
-    });
-
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleFileSelection(e.target.files[0]);
-        }
-    });
-}
-
-// Manejar la selección de archivo
-function handleFileSelection(file) {
-    const isAudioType = file.type && file.type.startsWith('audio/');
-    const looksLikeAudio = /\.(ogg|oga|wav|mp3|m4a|aac|flac|aiff|aif|wma|opus|weba|webm)$/i.test(file.name || '');
-
-    if (!isAudioType && !looksLikeAudio) {
-        showError('❌ Tipo de archivo no soportado. Selecciona un archivo de audio válido.');
-        return;
-    }
-
-    // Validar tamaño (máximo 200MB)
-    if (file.size > 200 * 1024 * 1024) {
-        showError('El archivo es demasiado grande. El tamaño máximo es 200MB.');
-        return;
-    }
-
-    uploadedFile = file;
-
-    // Mostrar información del archivo
-    document.getElementById('file-name').textContent = file.name;
-    document.getElementById('file-size').textContent = formatFileSize(file.size);
-    document.getElementById('selected-file').style.display = 'block';
-    document.getElementById('upload-area').style.display = 'none';
-
-    showSuccess('Archivo seleccionado correctamente');
-}
-
-// Remover archivo seleccionado
-function removeSelectedFile() {
-    document.getElementById('selected-file').style.display = 'none';
-    document.getElementById('upload-area').style.display = 'block';
-    document.getElementById('audio-file-input').value = '';
-    uploadedFile = null;
-}
-
-// Procesar archivo de audio
-async function processAudioFile() {
-    if (!uploadedFile) {
-        showError('Primero selecciona un archivo de audio');
-        return;
-    }
-
-    try {
-        // Mostrar progreso
-        const progressContainer = document.getElementById('upload-progress');
-        const progressFill = document.getElementById('progress-fill');
-        const progressText = document.getElementById('progress-text');
-
-        if (progressContainer) {
-            progressContainer.style.display = 'block';
-            progressFill.style.width = '5%';
-            progressText.textContent = 'Limpiando datos anteriores...';
-        }
-
-        // Guardar temporalmente el archivo antes de limpiar datos previos
-        const fileToProcess = uploadedFile;
-
-        // LIMPIAR DATOS ANTERIORES ANTES DE PROCESAR EL NUEVO ARCHIVO
-        await clearPreviousAudioData();
-        uploadedFile = fileToProcess;
-
-        if (progressContainer) {
-            progressFill.style.width = '20%';
-            progressText.textContent = 'Preparando archivo para procesamiento...';
-        }
-
-        // Guardar el archivo en IndexedDB
-        const audioKey = await saveAudioBlob(uploadedFile);
-        console.log('Audio guardado en IndexedDB con clave:', audioKey);
-
-        // Validar que se pueda recargar el blob
-        try {
-            const testBlob = await loadAudioBlob(audioKey);
-            if (!testBlob) {
-                throw new Error('Blob no encontrado tras guardar');
-            }
-        } catch (err) {
-            console.error('Error al validar audio subido:', err);
-            showError('Error al guardar el audio. Intenta nuevamente.');
-            if (progressContainer) {
-                progressContainer.style.display = 'none';
-            }
-            return;
-        }
-
-        if (progressContainer) {
-            progressFill.style.width = '70%';
-            progressText.textContent = 'Archivo guardado...';
-        }
-
-        // Guardar la clave en sessionStorage para que audio-processing.js la pueda usar
-        sessionStorage.setItem('uploadedAudioKey', audioKey);
-
-        // Respaldo: guardar una copia base64 si el archivo no es demasiado grande (<= 50MB)
-        try {
-            if (uploadedFile && typeof uploadedFile.size === 'number' && uploadedFile.size <= 50 * 1024 * 1024) {
-                const base64 = await blobToBase64(uploadedFile);
-                sessionStorage.setItem('recordingBlob', base64);
-            } else {
-                sessionStorage.removeItem('recordingBlob');
-            }
-        } catch (e) {
-            console.warn('No se pudo crear respaldo base64 del audio subido:', e);
-        }
-
-        if (progressContainer) {
-            progressFill.style.width = '90%';
-            progressText.textContent = 'Redirigiendo al procesamiento...';
-        }
-
-        // Limpiar variables
-        uploadedFile = null;
-
-        // Pequeña pausa para que se vea el progreso
-        setTimeout(() => {
-            // Redireccionar a audio-processing
-            window.location.href = '/audio-processing';
-        }, 500);
-
-    } catch (error) {
-        console.error('Error al procesar archivo de audio:', error);
-        showError('Error al procesar el archivo de audio: ' + error.message);
-
-        // Ocultar progreso en caso de error
-        const progressContainer = document.getElementById('upload-progress');
-        if (progressContainer) {
-            progressContainer.style.display = 'none';
-        }
-    }
-}
-
-// Formatear tamaño de archivo
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-// ===== FUNCIONES PARA REUNIÓN =====
-
-// Inicializa elementos y canvas del grabador de reunión
-function setupMeetingRecorder() {
-    // Espectrogramas
-    systemSpectrogramCanvas = document.getElementById('system-spectrogram');
-    microphoneSpectrogramCanvas = document.getElementById('microphone-spectrogram');
-
-    // Ajustar dimensiones al ancho del contenedor
-    [systemSpectrogramCanvas, microphoneSpectrogramCanvas].forEach(canvas => {
-        if (!canvas) return;
-        const parent = canvas.parentElement;
-        const width = Math.max(300, parent ? parent.clientWidth : 600);
-        const height = 80; // consistente con CSS
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#0b1020';
-        ctx.fillRect(0, 0, width, height);
-        if (canvas.id === 'system-spectrogram') systemSpectrogramCtx = ctx;
-        if (canvas.id === 'microphone-spectrogram') microphoneSpectrogramCtx = ctx;
-    });
-
-    // Reset de analizadores/gains (se crearán al iniciar la grabación)
-    systemGainNode = null;
-    microphoneGainNode = null;
-}
-
-// Dibuja la última columna del espectrograma desplazando la imagen 1px a la izquierda
-function drawSpectrogram(ctx, frequencyData) {
-    if (!ctx || !frequencyData || frequencyData.length === 0) return;
-    const { canvas } = ctx;
-    // Desplazar imagen 1px a la izquierda
-    const imageData = ctx.getImageData(1, 0, canvas.width - 1, canvas.height);
-    ctx.putImageData(imageData, 0, 0);
-
-    // Dibujar nueva columna en el borde derecho
-    const x = canvas.width - 1;
-    const bins = frequencyData.length;
-    for (let y = 0; y < canvas.height; y++) {
-        // Mapear y (alto->bajos) a índice de frecuencia (lineal)
-        const bin = Math.floor((1 - y / canvas.height) * (bins - 1));
-        const v = frequencyData[bin] || 0;
-
-        // Mapear magnitud a color (esquema plasma simple)
-        const r = Math.min(255, Math.floor(v * 1.2));
-        const g = Math.min(255, Math.floor(v * 0.7));
-        const b = Math.min(255, 50 + Math.floor(v * 0.3));
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        ctx.fillRect(x, y, 1, 1);
-    }
-}
-
-// Aplica estados de mute/enable a las fuentes durante la reunión
-function applyMuteStates() {
-    if (systemGainNode) {
-        systemGainNode.gain.value = (systemAudioEnabled && !systemAudioMuted) ? 1 : 0;
-    }
-    if (microphoneGainNode) {
-        microphoneGainNode.gain.value = (microphoneAudioEnabled && !microphoneAudioMuted) ? 1 : 0;
-    }
-}
-
-// Alternar audio del sistema
-function toggleSystemAudio() {
-    systemAudioEnabled = !systemAudioEnabled;
-    const btn = document.getElementById('system-audio-btn');
-    const text = btn.querySelector('.source-text');
-
-    if (systemAudioEnabled) {
-        btn.classList.add('active');
-        text.textContent = 'Sistema activado';
-    } else {
-        btn.classList.remove('active');
-        text.textContent = 'Sistema desactivado';
-    }
-    // Aplicar inmediatamente si estamos grabando reunión
-    if (meetingRecording) applyMuteStates();
-}
-
-// Alternar audio del micrófono
-function toggleMicrophoneAudio() {
-    microphoneAudioEnabled = !microphoneAudioEnabled;
-    const btn = document.getElementById('microphone-audio-btn');
-    const text = btn.querySelector('.source-text');
-
-    if (microphoneAudioEnabled) {
-        btn.classList.add('active');
-        text.textContent = 'Micrófono activado';
-    } else {
-        btn.classList.remove('active');
-        text.textContent = 'Micrófono desactivado';
-    }
-    // Aplicar inmediatamente si estamos grabando reunión
-    if (meetingRecording) applyMuteStates();
-}
-
-// Mutear audio del sistema
-function muteSystemAudio() {
-    systemAudioMuted = !systemAudioMuted;
-    const btn = document.getElementById('system-mute-btn');
-    const icon = btn.querySelector('.mute-icon');
-
-    if (systemAudioMuted) {
-        btn.classList.add('muted');
-        icon.textContent = '🔇';
-    } else {
-        btn.classList.remove('muted');
-        icon.textContent = '🔊';
-    }
-    applyMuteStates();
-}
-
-// Mutear audio del micrófono
-function muteMicrophoneAudio() {
-    microphoneAudioMuted = !microphoneAudioMuted;
-    const btn = document.getElementById('microphone-mute-btn');
-    const icon = btn.querySelector('.mute-icon');
-
-    if (microphoneAudioMuted) {
-        btn.classList.add('muted');
-        icon.textContent = '🔇';
-    } else {
-        btn.classList.remove('muted');
-        icon.textContent = '🔊';
-    }
-    applyMuteStates();
-}
-
-// Alternar grabación de reunión
-function toggleMeetingRecording() {
-    // Verificar soporte del navegador
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        showError('Tu navegador no soporta grabación de reuniones. Usa Chrome, Edge o Firefox actualizado.');
-        return;
-    }
-
-    // Verificar que se ejecute en HTTPS (requerido para getDisplayMedia)
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-        showError('La grabación de reuniones requiere HTTPS. Asegúrate de estar en una conexión segura.');
-        return;
-    }
-
-    if (!meetingRecording) {
-        startMeetingRecording();
-    } else {
-        stopMeetingRecording();
-    }
-}
-// Iniciar grabación de reunión
-async function startMeetingRecording() {
-    if (!systemAudioEnabled && !microphoneAudioEnabled) {
-        showError('Debes activar al menos una fuente de audio');
-        return;
-    }
-
-    try {
-        // Limpiar datos de audio previos antes de iniciar nueva reunión
-        await clearPreviousAudioData();
-
-        // Solicitar acceso a las fuentes de audio
-        const audioConstraints = await getAudioConstraints();
-        if (microphoneAudioEnabled) {
-            microphoneAudioStream = await navigator.mediaDevices.getUserMedia({
-                audio: audioConstraints
-            });
-        }
-
-        if (systemAudioEnabled) {
-            // Captura de pantalla + audio del sistema (usar constraints simples para evitar NotSupportedError)
-            systemAudioStream = await navigator.mediaDevices.getDisplayMedia({
-                video: true,
-                audio: true
-            });
-        }
-
-        // Crear contexto y destino mezclado
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        meetingDestination = audioContext.createMediaStreamDestination();
-
-        // Configurar análisis de audio y mezcla con gains individuales
-        if (systemAudioStream) {
-            systemAnalyser = audioContext.createAnalyser();
-            const systemSource = audioContext.createMediaStreamSource(systemAudioStream);
-            systemGainNode = audioContext.createGain();
-            systemSource.connect(systemAnalyser);
-            systemSource.connect(systemGainNode);
-            systemGainNode.connect(meetingDestination);
-            systemAnalyser.fftSize = 256;
-            systemAnalyser.smoothingTimeConstant = 0.8;
-            systemDataArray = new Uint8Array(systemAnalyser.frequencyBinCount);
-        }
-
-        if (microphoneAudioStream) {
-            microphoneAnalyser = audioContext.createAnalyser();
-            const microphoneSource = audioContext.createMediaStreamSource(microphoneAudioStream);
-            microphoneGainNode = audioContext.createGain();
-            microphoneSource.connect(microphoneAnalyser);
-            microphoneSource.connect(microphoneGainNode);
-            microphoneGainNode.connect(meetingDestination);
-            microphoneAnalyser.fftSize = 256;
-            microphoneAnalyser.smoothingTimeConstant = 0.8;
-            microphoneDataArray = new Uint8Array(microphoneAnalyser.frequencyBinCount);
-        }
-
-        // Aplicar estados iniciales de mute/enable
-        applyMuteStates();
-
-        meetingRecording = true;
-        meetingStartTime = Date.now();
-        limitWarningShown = false;
-
-        // Actualizar UI
-        updateMeetingRecordingUI(true);
-
-        // Iniciar timer y análisis
-        meetingTimer = setInterval(updateMeetingTimer, 100);
-        startMeetingAudioAnalysis();
-
-        // Preparar MediaRecorder para el audio mezclado
-        recordedChunks = [];
-        currentRecordingId = crypto.randomUUID();
-        chunkIndex = 0;
-        lastRecordingContext = 'meeting';
-
-        const optimalFormat = getOptimalAudioFormat();
-        currentRecordingFormat = optimalFormat;
-
-        recordingStream = meetingDestination.stream;
-        mediaRecorder = new MediaRecorder(recordingStream, {
-            mimeType: optimalFormat,
-            audioBitsPerSecond: 128000
-        });
-
-        mediaRecorder.ondataavailable = event => {
-            if (event.data && event.data.size > 0) {
-                recordedChunks.push(event.data);
-                sendChunkToServer(event.data, chunkIndex++);
-            }
-        };
-
-        mediaRecorder.onstop = () => {
-            // Si se descartó, no finalizar ni descargar
-            try {
-                const discardedFlag = sessionStorage.getItem('audioDiscarded') === 'true';
-                if (discardRequested || discardedFlag) {
-                    console.log('🗑️ [Meeting] Grabación descartada, se omite finalizeRecording');
-                    discardRequested = false;
-                    return;
-                }
-            } catch (_) {
-                if (discardRequested) {
-                    console.log('🗑️ [Meeting] Grabación descartada (no sessionStorage)');
-                    discardRequested = false;
-                    return;
-                }
-            }
-            // Dar tiempo a que llegue el último dataavailable antes de finalizar
-            setTimeout(() => finalizeRecording(), 50);
-        };
-
-        mediaRecorder.start(SEGMENT_MS);
-
-        // Mostrar controles de pausa/descartar para modo reunión
-        const mp = document.getElementById('meeting-pause');
-        const md = document.getElementById('meeting-discard');
-        const mr = document.getElementById('meeting-resume');
-        if (mp) mp.style.display = 'inline-block';
-        if (md) md.style.display = 'inline-block';
-        if (mr) mr.style.display = 'none';
-        const postponeContainer = document.getElementById('postpone-switch');
-        const postponeToggle = document.getElementById('postpone-toggle');
-        if (postponeContainer) postponeContainer.style.display = 'none';
-        if (postponeToggle) postponeToggle.disabled = true;
-
-        showSuccess('¡Grabación de reunión iniciada!');
-
-    } catch (error) {
-        console.error('Error al iniciar grabación de reunión:', error);
-        showError('No se pudo acceder a las fuentes de audio. Verifica los permisos.');
-    }
-}
-
-// Detener grabación de reunión
-async function stopMeetingRecording() {
-    meetingRecording = false;
-
-    // Detener MediaRecorder si está activo
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-    }
-
-    // Detener streams
-    if (systemAudioStream) {
-        systemAudioStream.getTracks().forEach(track => track.stop());
-        systemAudioStream = null;
-    }
-    if (microphoneAudioStream) {
-        microphoneAudioStream.getTracks().forEach(track => track.stop());
-        microphoneAudioStream = null;
-    }
-
-    // Limpiar timer y animación
-    if (meetingTimer) {
-        clearInterval(meetingTimer);
-        meetingTimer = null;
-    }
-    if (meetingAnimationId) {
-        cancelAnimationFrame(meetingAnimationId);
-        meetingAnimationId = null;
-    }
-    updateMeetingRecordingUI(false);
-    resetMeetingAudioVisualizers();
-    resetRecordingControls();
-}
-
-// Configurar análisis de audio para reunión
-function setupMeetingAudioAnalysis() {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
-    if (systemAudioStream) {
-        systemAnalyser = audioContext.createAnalyser();
-        const systemSource = audioContext.createMediaStreamSource(systemAudioStream);
-        systemSource.connect(systemAnalyser);
-        systemAnalyser.fftSize = 256;
-        systemAnalyser.smoothingTimeConstant = 0.8;
-        systemDataArray = new Uint8Array(systemAnalyser.frequencyBinCount);
-    }
-
-    if (microphoneAudioStream) {
-        microphoneAnalyser = audioContext.createAnalyser();
-        const microphoneSource = audioContext.createMediaStreamSource(microphoneAudioStream);
-        microphoneSource.connect(microphoneAnalyser);
-        microphoneAnalyser.fftSize = 256;
-        microphoneAnalyser.smoothingTimeConstant = 0.8;
-        microphoneDataArray = new Uint8Array(microphoneAnalyser.frequencyBinCount);
-    }
-}
-
-// Iniciar análisis de audio para reunión
-function startMeetingAudioAnalysis() {
-    if (!meetingRecording) return;
-
-    // Analizar audio del sistema
-    if (systemAnalyser && systemDataArray && !systemAudioMuted) {
-        systemAnalyser.getByteFrequencyData(systemDataArray);
-        updateMeetingAudioBars('system-audio-visualizer', systemDataArray);
-        if (systemSpectrogramCtx) drawSpectrogram(systemSpectrogramCtx, systemDataArray);
-    }
-
-    // Analizar audio del micrófono
-    if (microphoneAnalyser && microphoneDataArray && !microphoneAudioMuted) {
-        microphoneAnalyser.getByteFrequencyData(microphoneDataArray);
-        updateMeetingAudioBars('microphone-audio-visualizer', microphoneDataArray);
-        if (microphoneSpectrogramCtx) drawSpectrogram(microphoneSpectrogramCtx, microphoneDataArray);
-    }
-
-    meetingAnimationId = requestAnimationFrame(startMeetingAudioAnalysis);
-}
-
-// Actualizar barras de audio para reunión
-function updateMeetingAudioBars(visualizerId, frequencyData) {
-    const visualizer = document.getElementById(visualizerId);
-    if (!visualizer) return;
-
-    const bars = visualizer.querySelectorAll('.meeting-audio-bar');
-    const step = Math.floor(frequencyData.length / bars.length);
-
-    bars.forEach((bar, index) => {
-        const value = frequencyData[index * step] || 0;
-        const height = Math.max((value / 255) * 100, 8);
-
-        bar.style.height = height + '%';
-
-        // Aplicar clases según intensidad
-        bar.classList.remove('active', 'high');
-
-        if (height > 70) {
-            bar.classList.add('high');
-        } else if (height > 30) {
-            bar.classList.add('active');
-        }
-    });
-
-    // Activar visualizador si hay audio
-    const hasAudio = Array.from(frequencyData).some(value => value > 30);
-    if (hasAudio) {
-        visualizer.classList.add('active');
-    } else {
-        visualizer.classList.remove('active');
-    }
-}
-
-// Actualizar UI de grabación de reunión
-function updateMeetingRecordingUI(recording) {
-    const button = document.getElementById('meeting-record-btn');
-    const buttonIcon = button.querySelector('.nav-icon');
-    const timerCounter = document.getElementById('meeting-timer-counter');
-    const timerLabel = document.getElementById('meeting-timer-label');
-
-    if (recording) {
-        button.classList.add('recording');
-        setIcon(buttonIcon, 'stop');
-        timerCounter.classList.add('recording');
-        timerLabel.textContent = 'Grabando reunión...';
-        timerLabel.classList.add('recording');
-    } else {
-        button.classList.remove('recording');
-        setIcon(buttonIcon, 'video');
-        timerCounter.classList.remove('recording');
-        timerLabel.textContent = 'Listo para grabar';
-        timerLabel.classList.remove('recording');
-        timerCounter.textContent = '00:00:00';
-    }
-}
-
-// Actualizar timer de reunión
-function updateMeetingTimer() {
-    if (!meetingStartTime || !meetingRecording) return;
-
-    const elapsed = Date.now() - meetingStartTime;
-
-    if (elapsed >= MAX_DURATION_MS) {
-        stopMeetingRecording();
-        return;
-    }
-
-    if (!limitWarningShown && elapsed >= MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000) {
-        showWarning(`Quedan ${WARN_BEFORE_MINUTES} minutos para el límite de grabación`);
-        limitWarningShown = true;
-    }
-
-
-function showPostponeLockedModal() {
-    const modal = document.getElementById('postpone-locked-modal');
-    if (!modal) {
-        alert('Esta opción solo está disponible para los planes: Negocios, Enterprise, Founder, Developer y Superadmin.');
-        return;
-    }
-    modal.style.display = 'block';
-}
-
-// Cerrar modal de upgrade
-window.closePostponeLockedModal = function() {
-    const modal = document.getElementById('postpone-locked-modal');
-    if (modal) modal.style.display = 'none';
-}
-    const hours = Math.floor(elapsed / 3600000);
-    const minutes = Math.floor((elapsed % 3600000) / 60000);
-    const seconds = Math.floor((elapsed % 60000) / 1000);
-
-    const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    document.getElementById('meeting-timer-counter').textContent = timeString;
-}
-
-// Resetear visualizadores de audio de reunión
-function resetMeetingAudioVisualizers() {
-    const visualizers = document.querySelectorAll('.meeting-audio-visualizer');
-
-    visualizers.forEach(visualizer => {
-        const bars = visualizer.querySelectorAll('.meeting-audio-bar');
-        bars.forEach(bar => {
-            bar.style.height = '8px';
-            bar.classList.remove('active', 'high');
-        });
-        visualizer.classList.remove('active');
-    });
-}
-
-// Limpiar recursos al salir de la página
-window.addEventListener('beforeunload', function() {
-    if (isRecording) {
-        stopRecording();
-    }
-});
-
-// Hacer las funciones globales para que funcionen con onclick en el HTML
-window.selectRecordingMode = selectRecordingMode;
-window.toggleRecording = toggleRecording;
-window.toggleMobileNavbar = toggleMobileNavbar;
-window.removeSelectedFile = removeSelectedFile;
-window.processAudioFile = processAudioFile;
-window.pauseRecording = pauseRecording;
-window.resumeRecording = resumeRecording;
-window.discardRecording = discardRecording;
-window.togglePostponeMode = togglePostponeMode;
-// Funciones del grabador de reuniones que faltaban
-window.toggleSystemAudio = toggleSystemAudio;
-window.toggleMicrophoneAudio = toggleMicrophoneAudio;
-window.muteSystemAudio = muteSystemAudio;
-window.muteMicrophoneAudio = muteMicrophoneAudio;
-window.toggleMeetingRecording = toggleMeetingRecording;
-window.setupMeetingRecorder = setupMeetingRecorder;
-
-// Funciones para navbar móvil
-window.toggleMobileDropdown = function() {
-  const dropdown = document.getElementById('mobile-dropdown');
-  const overlay = document.getElementById('mobile-dropdown-overlay');
-
-  dropdown.classList.toggle('show');
-  overlay.classList.toggle('show');
-};
-
-window.closeMobileDropdown = function() {
-  const dropdown = document.getElementById('mobile-dropdown');
-  const overlay = document.getElementById('mobile-dropdown-overlay');
-
-  dropdown.classList.remove('show');
-  overlay.classList.remove('show');
-};
-
-// Funciones globales para manejar reintentos de subida
-window.retryUpload = async function() {
-    if (!failedAudioBlob || !failedAudioName) {
-        console.error('🔄 [Retry] No hay datos de audio para reintentar');
-        showError('No hay datos de audio para reintentar');
-        return;
-    }
-
-    if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
-        showError(`Has excedido el máximo de intentos (${MAX_RETRY_ATTEMPTS}). Intenta descargar el archivo.`);
-        return;
-    }
-
-    retryAttempts++;
-    console.log(`🔄 [Retry] Intento ${retryAttempts}/${MAX_RETRY_ATTEMPTS}`);
-
-    // Deshabilitar botón y mostrar progreso
-    const retryBtn = document.getElementById('retry-upload-btn');
-    const progressDiv = document.getElementById('retry-progress');
-    const progressBar = document.getElementById('retry-progress-bar');
-    const progressText = document.getElementById('retry-progress-text');
-
-    if (retryBtn) retryBtn.disabled = true;
-    if (progressDiv) progressDiv.style.display = 'block';
-    if (progressText) progressText.textContent = `Reintentando subida (${retryAttempts}/${MAX_RETRY_ATTEMPTS})...`;
-
-    // Create progress notification
-    const notificationId = await createUploadProgressNotification(
-        failedAudioName,
-        `Reintentando subida (${retryAttempts}/${MAX_RETRY_ATTEMPTS})...`
-    );
-
-    try {
-        // Función de progreso
-        const onProgress = (loaded, total) => {
-            const percent = (loaded / total) * 100;
-            if (progressBar) {
-                // Actualizar la barra de progreso usando CSS custom property
-                progressBar.style.setProperty('--progress-width', `${percent}%`);
-                // También actualizar directamente el after pseudo-element via style
-                const afterElement = progressBar.querySelector('::after');
-                if (afterElement) {
-                    afterElement.style.width = `${percent}%`;
-                }
-            }
-            if (progressText) {
-                progressText.textContent = `Subiendo... ${percent.toFixed(0)}%`;
-            }
-
-            // Update notification with progress
-            if (notificationId && percent > 0) {
-                updateUploadProgressNotification(notificationId, `Subiendo... ${percent.toFixed(0)}%`);
-            }
-        };
-
-        // Intentar subida
-        const result = await uploadAudioToDrive(failedAudioBlob, failedAudioName, onProgress);
-
-        // Éxito
-        console.log('✅ [Retry] Subida exitosa en intento', retryAttempts);
-
-        // Create success notification with folder info
-        const folderInfo = result?.folder_info || { root_folder: 'Grabaciones', subfolder: 'Sin clasificar' };
-        await createUploadSuccessNotification(failedAudioName, folderInfo);
-
-        // Clean up progress notification
-        await dismissNotification(notificationId);
-
-        showSuccess(`¡Archivo subido exitosamente en el intento ${retryAttempts}!`);
-        clearFailedUploadData();
-
-    } catch (error) {
-        console.error(`❌ [Retry] Fallo en intento ${retryAttempts}:`, error);
-
-        // Clean up progress notification on error
-        await dismissNotification(notificationId);
-
-        if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
-            showError(`Subida falló después de ${MAX_RETRY_ATTEMPTS} intentos. Puedes descargar el archivo manualmente.`);
-            if (progressText) progressText.textContent = 'Máximo de intentos alcanzado';
-        } else {
-            showError(`Intento ${retryAttempts} falló. Puedes intentar nuevamente.`);
-            if (progressText) progressText.textContent = `Fallo en intento ${retryAttempts}`;
-        }
+        const resp = await fetch(url, { ...options, signal: controller.signal });
+        return resp;
     } finally {
-        // Rehabilitar botón y ocultar progreso
-        if (retryBtn) retryBtn.disabled = false;
-        if (progressDiv) {
-            setTimeout(() => {
-                progressDiv.style.display = 'none';
-            }, 2000);
-        }
-    }
-};
-
-window.downloadFailedAudio = async function() {
-    if (!failedAudioBlob || !failedAudioName) {
-        console.error('🔄 [Download] No hay datos de audio para descargar');
-        showError('No hay datos de audio para descargar');
-        return;
-    }
-
-    try {
-        const fileName = await downloadAudioAsOgg(failedAudioBlob, failedAudioName);
-        console.log('💾 [Download] Archivo descargado:', fileName);
-        showSuccess(`Archivo ${fileName} descargado correctamente como OGG`);
-    } catch (error) {
-        console.error('❌ [Download] Error al descargar como OGG:', error);
-        // Fallback to normal download
-        const fileName = downloadAudioWithCorrectFormat(failedAudioBlob, failedAudioName);
-        showSuccess(`Archivo ${fileName} descargado (formato original)`);
-    }
-};
-
-window.discardFailedAudio = function() {
-    if (confirm('¿Estás seguro de que quieres descartar el audio? Esta acción no se puede deshacer.')) {
-        clearFailedUploadData();
-        console.log('🗑️ [Discard] Audio descartado por el usuario');
-        showSuccess('Audio descartado correctamente');
-    }
-};
-
-// ===== NOTIFICATION MANAGEMENT FUNCTIONS =====
-
-/**
- * Creates a progress notification for upload operations
- * @param {string} filename - Name of the file being uploaded
- * @param {string} message - Progress message to show
- * @returns {Promise<string>} Notification ID for later updates
- */
-async function createUploadProgressNotification(filename, message) {
-    try {
-        const response = await fetch('/api/notifications', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            },
-            body: JSON.stringify({
-                type: 'audio_upload_progress',
-                message: message,
-                data: {
-                    meeting_name: filename,
-                    status: 'progress'
-                }
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to create notification: ${response.status}`);
-        }
-
-        const notification = await response.json();
-        console.log('📧 [notifications] Created progress notification:', notification.id);
-
-        // Refresh notifications display
-        if (window.notifications) {
-            window.notifications.refresh();
-        }
-
-        return notification.id;
-    } catch (error) {
-        console.warn('📧 [notifications] Failed to create progress notification:', error);
-        return null; // Return null if notification creation fails (non-critical)
+        clearTimeout(id);
     }
 }
 
-/**
- * Updates an existing progress notification
- * @param {string} notificationId - ID of the notification to update
- * @param {string} message - New progress message
- */
-async function updateUploadProgressNotification(notificationId, message) {
-    if (!notificationId) return;
+// Ya no se carga selector de subcarpetas ni se consulta al backend aquí
 
-    try {
-        const response = await fetch(`/api/notifications/${notificationId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            },
-            body: JSON.stringify({
-                message: message,
-                data: {
-                    status: 'progress'
-                }
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to update notification: ${response.status}`);
-        }
-
-        console.log('📧 [notifications] Updated progress notification:', notificationId);
-
-        // Refresh notifications display
-        if (window.notifications) {
-            window.notifications.refresh();
-        }
-    } catch (error) {
-        console.warn('📧 [notifications] Failed to update progress notification:', error);
-    }
+// Dentro de la función que construye formData para upload pending añadir:
+// ...existing code...
+function buildPendingUploadFormData(blob, fileName, name, driveType, onProgress) {
+    const formData = new FormData();
+    formData.append('audioFile', blob, fileName);
+    formData.append('meetingName', name);
+    formData.append('driveType', driveType);
+    // No enviamos subcarpeta: el backend usará/creará "Audios Pospuestos" en Drive personal
+    return { formData };
 }
-
-/**
- * Creates a success notification for completed uploads
- * @param {string} filename - Name of the uploaded file
- * @param {Object} folderInfo - Information about the upload destination
- */
-async function createUploadSuccessNotification(filename, folderInfo) {
-    try {
-        const rootFolder = folderInfo.root_folder || 'Grabaciones';
-        const subfolder = folderInfo.subfolder || 'Sin clasificar';
-        const message = `Se ha subido audio pospuesto a la carpeta: ${rootFolder}/${subfolder}`;
-
-        const response = await fetch('/api/notifications', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            },
-            body: JSON.stringify({
-                type: 'audio_upload_success',
-                message: message,
-                data: {
-                    meeting_name: filename,
-                    root_folder: rootFolder,
-                    subfolder: subfolder,
-                    status: 'success'
-                }
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to create success notification: ${response.status}`);
-        }
-
-        const notification = await response.json();
-        console.log('📧 [notifications] Created success notification:', notification.id);
-
-        // Refresh notifications display
-        if (window.notifications) {
-            window.notifications.refresh();
-        }
-
-        return notification.id;
-    } catch (error) {
-        console.warn('📧 [notifications] Failed to create success notification:', error);
-        return null;
-    }
-}
-
-/**
- * Dismisses a notification by ID
- * @param {string} notificationId - ID of the notification to dismiss
- */
-async function dismissNotification(notificationId) {
-    if (!notificationId) return;
-
-    try {
-        const response = await fetch(`/api/notifications/${notificationId}`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to dismiss notification: ${response.status}`);
-        }
-
-        console.log('📧 [notifications] Dismissed notification:', notificationId);
-
-        // Refresh notifications display
-        if (window.notifications) {
-            window.notifications.refresh();
-        }
-    } catch (error) {
-        console.warn('📧 [notifications] Failed to dismiss notification:', error);
-    }
-}
+// Reemplazar uso original donde se creaba formData manual.

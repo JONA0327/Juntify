@@ -2913,6 +2913,7 @@ class MeetingController extends Controller
                 $this->setGoogleDriveToken($user);
             }
 
+            // Determinar carpeta de transcripción: usar subcarpeta enviada o auto 'Transcripciones'
             $transcriptionFolderId = $rootFolder->google_id;
             if ($request->input('transcription_subfolder')) {
                 if ($usingOrgDrive) {
@@ -2932,8 +2933,40 @@ class MeetingController extends Controller
                         'root_folder_id' => $rootFolder->id,
                     ]);
                 }
+            } else {
+                // Auto crear/usar 'Transcripciones'
+                try {
+                    if ($usingOrgDrive) {
+                        $sub = OrganizationSubfolder::where('organization_folder_id', $rootFolder->id)
+                            ->where('name', 'Transcripciones')->first();
+                        if (!$sub) {
+                            $gid = $this->googleDriveService->createFolder('Transcripciones', $rootFolder->google_id);
+                            $sub = OrganizationSubfolder::create([
+                                'organization_folder_id' => $rootFolder->id,
+                                'google_id' => $gid,
+                                'name' => 'Transcripciones'
+                            ]);
+                        }
+                        $transcriptionFolderId = $sub->google_id;
+                    } else {
+                        $sub = \App\Models\Subfolder::where('folder_id', $rootFolder->id)
+                            ->where('name', 'Transcripciones')->first();
+                        if (!$sub) {
+                            $gid = $this->googleDriveService->createFolder('Transcripciones', $rootFolder->google_id);
+                            $sub = \App\Models\Subfolder::create([
+                                'folder_id' => $rootFolder->id,
+                                'google_id' => $gid,
+                                'name' => 'Transcripciones'
+                            ]);
+                        }
+                        $transcriptionFolderId = $sub->google_id;
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('No se pudo crear subcarpeta Transcripciones, usando raíz', ['error' => $e->getMessage()]);
+                }
             }
 
+            // Determinar carpeta de audio final: usar subcarpeta enviada o auto 'Audios'
             $audioFolderId = $rootFolder->google_id;
             if ($request->input('audio_subfolder')) {
                 if ($usingOrgDrive) {
@@ -2952,6 +2985,37 @@ class MeetingController extends Controller
                         'audio_subfolder' => $request->input('audio_subfolder'),
                         'root_folder_id' => $rootFolder->id,
                     ]);
+                }
+            } else {
+                // Auto crear/usar 'Audios'
+                try {
+                    if ($usingOrgDrive) {
+                        $sub = OrganizationSubfolder::where('organization_folder_id', $rootFolder->id)
+                            ->where('name', 'Audios')->first();
+                        if (!$sub) {
+                            $gid = $this->googleDriveService->createFolder('Audios', $rootFolder->google_id);
+                            $sub = OrganizationSubfolder::create([
+                                'organization_folder_id' => $rootFolder->id,
+                                'google_id' => $gid,
+                                'name' => 'Audios'
+                            ]);
+                        }
+                        $audioFolderId = $sub->google_id;
+                    } else {
+                        $sub = \App\Models\Subfolder::where('folder_id', $rootFolder->id)
+                            ->where('name', 'Audios')->first();
+                        if (!$sub) {
+                            $gid = $this->googleDriveService->createFolder('Audios', $rootFolder->google_id);
+                            $sub = \App\Models\Subfolder::create([
+                                'folder_id' => $rootFolder->id,
+                                'google_id' => $gid,
+                                'name' => 'Audios'
+                            ]);
+                        }
+                        $audioFolderId = $sub->google_id;
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('No se pudo crear subcarpeta Audios, usando raíz', ['error' => $e->getMessage()]);
                 }
             }
             // 1. Mover y renombrar el audio en Google Drive

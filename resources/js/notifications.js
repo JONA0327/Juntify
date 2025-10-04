@@ -82,7 +82,24 @@ const Notifications = (() => {
                         </div>
                         <button class="dismiss-btn text-green-400 hover:text-white" data-id="${n.id}">&times;</button>
                     `;
-                } else {
+                                } else if (n.type === 'contact_request') {
+                                        const senderName = n.from_user?.name || n.sender_name || n.remitente_name || 'Usuario';
+                                        const senderEmail = n.from_user?.email || n.sender_email || '';
+                                        li.className = 'contact-request-item p-3 bg-slate-700/60 rounded-lg mb-2 flex flex-col gap-2';
+                                        li.innerHTML = `
+                                                <div class="flex items-start gap-3">
+                                                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center text-slate-900 font-semibold">${senderName.charAt(0).toUpperCase()}</div>
+                                                    <div class="flex-1 min-w-0">
+                                                        <p class="text-sm text-slate-200 font-medium truncate">${senderName}</p>
+                                                        <p class="text-[11px] text-slate-500 truncate">${senderEmail}</p>
+                                                        <p class="text-[11px] text-slate-400 mt-1">Solicitud de contacto</p>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center gap-2 justify-end">
+                                                    <button class="contact-req-accept bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-1 rounded-md transition" data-id="${n.id}">Aceptar</button>
+                                                    <button class="contact-req-reject bg-red-600 hover:bg-red-500 text-white text-xs px-3 py-1 rounded-md transition" data-id="${n.id}">Rechazar</button>
+                                                </div>`;
+                                } else {
                     li.className = 'relative p-3 bg-slate-700/60 backdrop-blur rounded-lg mb-2 pr-8 overflow-hidden';
                     li.innerHTML = `
                         <span class="block text-sm text-slate-200 leading-snug">${n.message}</span>
@@ -134,6 +151,16 @@ const Notifications = (() => {
             btn.addEventListener('click', e => {
                 const id = e.target.dataset.id;
                 dismissNotification(id);
+            });
+        });
+        document.querySelectorAll('.contact-req-accept').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = e.target.dataset.id; respondContactRequest(id, 'accept');
+            });
+        });
+        document.querySelectorAll('.contact-req-reject').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = e.target.dataset.id; respondContactRequest(id, 'reject');
             });
         });
             document.querySelectorAll('.notifications-list .notif-clear-all').forEach(btn => {
@@ -276,6 +303,32 @@ const Notifications = (() => {
                 console.debug('Error dismissing notification:', error);
             }
             showError('Error de conexión al descartar la notificación.');
+        }
+    }
+
+    async function respondContactRequest(notificationId, action){
+        try {
+            const res = await fetch(`/api/contacts/requests/${notificationId}/respond`, {
+                method:'POST',
+                headers:{ 'Content-Type':'application/json','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')},
+                body: JSON.stringify({ action })
+            });
+            if(!res.ok){ showError('Error al procesar solicitud'); return; }
+            // remover notificación local
+            notifications = notifications.filter(n => n.id != notificationId);
+            render();
+            if(action==='accept'){
+                showSuccess('Contacto agregado');
+                // refrescar contactos si el módulo está cargado
+                if(window.contactsModule) {
+                    try { window.contactsModule.reload(); } catch(_) {}
+                }
+            } else {
+                showSuccess('Solicitud rechazada');
+            }
+        } catch(err){
+            console.error('contact request respond error', err);
+            showError('Error de conexión');
         }
     }
 

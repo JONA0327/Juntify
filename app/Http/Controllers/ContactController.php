@@ -20,7 +20,7 @@ class ContactController extends Controller
      */
     public function index(): View
     {
-        return view('contacts.index');
+        return view('contacts.page');
     }
 
     /**
@@ -373,6 +373,8 @@ class ContactController extends Controller
             // Invalidar caché para ambos usuarios
             Cache::forget('contact_requests_'.$user->id);
             Cache::forget('contact_requests_'.$notification->remitente);
+            Cache::forget('contacts_list_v2_'.$user->id);
+            Cache::forget('contacts_list_v2_'.$notification->remitente);
             return response()->json([
                 'success' => true,
                 'message' => 'Solicitud aceptada',
@@ -382,6 +384,8 @@ class ContactController extends Controller
         $notification->delete();
         Cache::forget('contact_requests_'.$user->id);
         Cache::forget('contact_requests_'.$notification->remitente);
+        Cache::forget('contacts_list_v2_'.$user->id);
+        Cache::forget('contacts_list_v2_'.$notification->remitente);
 
         return response()->json([
             'success' => true,
@@ -409,9 +413,37 @@ class ContactController extends Controller
             $contact->delete();
         });
 
+        Cache::forget('contacts_list_v2_'.$user->id);
+        Cache::forget('contacts_list_v2_'.$contact->contact_id);
+
         return response()->json([
             'success' => true,
             'message' => 'Contacto eliminado'
+        ]);
+    }
+
+    /**
+     * Cancela una solicitud de contacto enviada (elimina la notificación pending).
+     */
+    public function cancel(Notification $notification): JsonResponse
+    {
+        $user = Auth::user();
+        // El usuario que quiere cancelar debe ser el remitente (sender) original
+        if ($notification->type !== 'contact_request' || $notification->remitente !== $user->id || $notification->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solicitud no válida'
+            ], 404);
+        }
+
+        $otherUserId = $notification->emisor; // receptor original
+        $notification->delete();
+        Cache::forget('contact_requests_'.$user->id);
+        Cache::forget('contact_requests_'.$otherUserId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Solicitud cancelada'
         ]);
     }
 

@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\Crypt;
 use RuntimeException;
 use App\Models\TranscriptionLaravel;
 use App\Models\TaskLaravel;
+use Illuminate\Support\Facades\Schema;
 
 class DriveController extends Controller
 {
@@ -691,6 +692,90 @@ class DriveController extends Controller
         ], 410);
     }
 
+    /**
+     * Devuelve las subcarpetas existentes bajo la raíz personal y/o de organización cuyo nombre contenga
+     * 'Audios Pospuestos'. Si no existen, intenta garantizar su existencia llamando a ensureStandardSubfolders,
+     * pero no fuerza error si falla: simplemente devuelve arreglo vacío para ese scope.
+     */
+    public function listPendingAudioSubfolders(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        $serviceAccount = app(GoogleServiceAccount::class);
+        $result = [
+            'personal' => [],
+            'organization' => [],
+        ];
+
+        // Personal root
+        try {
+            $token = GoogleToken::where('username', $user->username)->first();
+            if ($token) {
+                $rootFolder = Folder::where('google_token_id', $token->id)
+                    ->whereNull('parent_id')
+                    ->when($token->recordings_folder_id, function($q) use ($token) {
+                        $q->orWhere('google_id', $token->recordings_folder_id);
+                    })
+                    ->first();
+                if ($rootFolder) {
+                    $standard = $this->ensureStandardSubfolders($rootFolder, false, $serviceAccount);
+                    if (isset($standard['pending'])) {
+                        $result['personal'][] = [
+                            'id' => $standard['pending']->id,
+                            'google_id' => $standard['pending']->google_id,
+                            'name' => $standard['pending']->name,
+                        ];
+                    } else {
+                        // fallback: buscar cualquiera existente con ese nombre
+                        $candidates = Subfolder::where('folder_id', $rootFolder->id)
+                            ->where('name', 'like', '%Audios Pospuestos%')->get();
+                        foreach ($candidates as $c) {
+                            $result['personal'][] = [
+                                'id' => $c->id,
+                                'google_id' => $c->google_id,
+                                'name' => $c->name,
+                            ];
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('listPendingAudioSubfolders personal failed', ['error' => $e->getMessage()]);
+        }
+
+        // Organization root
+        try {
+            $orgFolder = $user->organizationFolder; // relación ya usada en otros métodos
+            if ($orgFolder) {
+                $standardOrg = $this->ensureStandardSubfolders($orgFolder, true, $serviceAccount);
+                if (isset($standardOrg['pending'])) {
+                    $result['organization'][] = [
+                        'id' => $standardOrg['pending']->id,
+                        'google_id' => $standardOrg['pending']->google_id,
+                        'name' => $standardOrg['pending']->name,
+                    ];
+                } else {
+                    $candidates = OrganizationSubfolder::where('organization_folder_id', $orgFolder->id)
+                        ->where('name', 'like', '%Audios Pospuestos%')->get();
+                    foreach ($candidates as $c) {
+                        $result['organization'][] = [
+                            'id' => $c->id,
+                            'google_id' => $c->google_id,
+                            'name' => $c->name,
+                        ];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('listPendingAudioSubfolders organization failed', ['error' => $e->getMessage()]);
+        }
+
+        return response()->json($result);
+    }
+
     public function uploadPendingAudio(Request $request)
     {
         Log::info('uploadPendingAudio entry', [
@@ -878,15 +963,44 @@ class DriveController extends Controller
                 }
             }
 
-            // Usar helper para garantizar subcarpetas estándar
-            $standard = $this->ensureStandardSubfolders($rootFolder, $useOrgDrive, $serviceAccount);
-            $subfolder = $standard['pending'] ?? null; // Audios Pospuestos
+            // Determinar la subcarpeta de audios pospuestos a usar.
+            $requestedPendingId = $request->input('pending_audio_subfolder');
+            $subfolderCreated = false;
+            $pendingSubfolderName = 'Audios Pospuestos';
+            $subfolder = null;
+
+            if ($requestedPendingId) {
+                // Intentar usar la subcarpeta indicada (personal u organización)
+                if ($useOrgDrive) {
+                    $subfolder = OrganizationSubfolder::where('organization_folder_id', $rootFolder->id)
+                        ->where('google_id', $requestedPendingId)
+                        ->first();
+                } else {
+                    $subfolder = Subfolder::where('folder_id', $rootFolder->id)
+                        ->where('google_id', $requestedPendingId)
+                        ->first();
+                }
+                if ($subfolder) {
+                    $pendingSubfolderName = $subfolder->name;
+                } else {
+                    Log::warning('uploadPendingAudio: pending_audio_subfolder no encontrada, se ignora', [
+                        'requested_id' => $requestedPendingId,
+                        'useOrgDrive' => $useOrgDrive,
+                        'root_id' => $rootFolder->id,
+                    ]);
+                }
+            }
+
+            if (!$subfolder) {
+                // Fallback: garantizar subcarpetas estándar y usar "Audios Pospuestos"
+                $standard = $this->ensureStandardSubfolders($rootFolder, $useOrgDrive, $serviceAccount);
+                $subfolder = $standard['pending'] ?? null;
+            }
+
             if (!$subfolder) {
                 return response()->json(['message' => 'No se pudo preparar la subcarpeta de audios pospuestos'], 500);
             }
             $pendingFolderId = $subfolder->google_id;
-            $pendingSubfolderName = 'Audios Pospuestos';
-            $subfolderCreated = false; // creación ya manejada dentro del helper
 
             // Nota: Si la cuenta de servicio no tiene acceso de escritura al folder raíz,
             // la creación/subida fallará con 403/404. Pediremos que compartan con la SA.
@@ -988,17 +1102,49 @@ class DriveController extends Controller
                 'error_message'      => null,
             ]);
 
-            Notification::create([
-                'remitente' => $user->id,
-                'emisor'    => $user->id,
-                'status'    => 'pending',
-                'message'   => 'Subida iniciada',
-                'type'      => 'audio_upload',
-                'data'      => [
+            // Notificación: soportar esquema antiguo y nuevo
+            $notificationData = [
+                'status'  => 'pending',
+                'message' => 'Subida iniciada',
+                'type'    => 'audio_upload',
+                'data'    => [
                     'pending_recording_id' => $pending->id,
                     'meeting_name'         => $fileName,
                 ],
-            ]);
+            ];
+
+            // Si existen columnas nuevas usamos user_id / from_user_id / title
+            try {
+                $notificationColumns = Schema::getColumnListing('notifications');
+                $hasUserId     = in_array('user_id', $notificationColumns, true);
+                $hasFromUserId = in_array('from_user_id', $notificationColumns, true);
+                $hasTitle      = in_array('title', $notificationColumns, true);
+                $hasRemitente  = in_array('remitente', $notificationColumns, true);
+                $hasEmisor     = in_array('emisor', $notificationColumns, true);
+
+                if ($hasUserId) {
+                    $notificationData['user_id'] = $user->id;
+                }
+                if ($hasFromUserId) {
+                    $notificationData['from_user_id'] = $user->id;
+                }
+                if ($hasTitle) {
+                    $notificationData['title'] = 'Subida de audio';
+                }
+                // Compatibilidad legado
+                if ($hasRemitente) {
+                    $notificationData['remitente'] = $user->id;
+                }
+                if ($hasEmisor) {
+                    $notificationData['emisor'] = $user->id;
+                }
+            } catch (\Throwable $e) {
+                // Si falla la inspección, asumimos esquema antiguo
+                $notificationData['remitente'] = $user->id;
+                $notificationData['emisor']    = $user->id;
+            }
+
+            Notification::create($notificationData);
 
             $response = [
                 'saved'              => true,

@@ -172,7 +172,10 @@ function setActiveTab(button) {
     } else if (targetId === 'containers') {
         loadContainers();
     } else if (targetId === 'contacts') {
-        loadContacts();
+        // loadContacts ya no se llama aquí porque la sección contactos fue movida al chat
+        if (document.getElementById('contacts-list')) {
+            loadContacts();
+        }
     }
 }
 
@@ -847,7 +850,9 @@ async function sendContactRequest(event) {
         }
 
         closeAddContactModal();
-        await loadContacts();
+        if (document.getElementById('contacts-list')) {
+            await loadContacts();
+        }
 
         // Show success message
         showNotification('Solicitud enviada correctamente', 'success');
@@ -873,7 +878,9 @@ async function respondContactRequest(id, action) {
             body: JSON.stringify({ action })
         });
         if (!response.ok) throw new Error('Error al responder solicitud');
-        await loadContacts();
+        if (document.getElementById('contacts-list')) {
+            await loadContacts();
+        }
         showNotification(
             action === 'accept' ? 'Solicitud aceptada' : 'Solicitud rechazada',
             'success'
@@ -895,7 +902,9 @@ async function deleteContact(id) {
             }
         });
         if (!response.ok) throw new Error('Error al eliminar contacto');
-        await loadContacts();
+        if (document.getElementById('contacts-list')) {
+            await loadContacts();
+        }
         showNotification('Contacto eliminado correctamente', 'success');
     } catch (error) {
         console.error('Error deleting contact:', error);

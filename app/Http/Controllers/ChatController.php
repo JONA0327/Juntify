@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Chat;
 use App\Models\ChatMessage;
+use App\Models\ChatMessageUserDeletion;
+use App\Models\ChatUserDeletion;
 use App\Models\Contact;
 use App\Models\User;
 use App\Models\GoogleToken;
@@ -58,11 +60,10 @@ class ChatController extends Controller
                 return response()->json(['error' => 'Usuario no autenticado'], 401);
             }
 
-            $chats = Chat::where('user_one_id', $userId)
-                ->orWhere('user_two_id', $userId)
-                ->with(['messages' => function($query) {
-                    $query->latest()->limit(1);
-                }])
+                        $chats = Chat::where(function($q) use ($userId) {
+                                        $q->where('user_one_id', $userId)
+                                            ->orWhere('user_two_id', $userId);
+                                })
                 ->with(['userOne:id,full_name,email', 'userTwo:id,full_name,email'])
                 ->orderByDesc('updated_at')
                 ->get();
@@ -76,13 +77,36 @@ class ChatController extends Controller
                     return null;
                 }
 
-                $lastMessage = $chat->messages->first();
+                // Si el usuario borró el chat en algún momento, ocultar todo lo anterior a esa fecha
+                $deletedAt = optional(ChatUserDeletion::where('chat_id', $chat->id)->where('user_id', $userId)->first())->deleted_at;
+
+                // Obtener último mensaje (respetando fecha de borrado del chat) y mostrar "tombstone" si fue eliminado para mí
+                $deletedIds = ChatMessageUserDeletion::where('user_id', $userId)
+                    ->whereIn('chat_message_id', function($q) use ($chat) {
+                        $q->select('id')->from('chat_messages')->where('chat_id', $chat->id);
+                    })->pluck('chat_message_id')->all();
+
+                $lastMessage = ChatMessage::where('chat_id', $chat->id)
+                    ->when($deletedAt, function($q) use ($deletedAt) { $q->where('created_at', '>', $deletedAt); })
+                    ->latest()
+                    ->first();
 
                 // Contar mensajes no leídos (mensajes del otro usuario que no han sido leídos por el usuario actual)
-                $unreadCount = ChatMessage::where('chat_id', $chat->id)
+                $unreadBase = ChatMessage::where('chat_id', $chat->id)
                     ->where('sender_id', '!=', $userId) // Mensajes del otro usuario
-                    ->whereNull('read_at') // No leídos
-                    ->count();
+                    ->whereNull('read_at'); // No leídos
+                if (!empty($deletedIds)) {
+                    $unreadBase->whereNotIn('id', $deletedIds);
+                }
+                if ($deletedAt) { $unreadBase->where('created_at', '>', $deletedAt); }
+                $unreadCount = $unreadBase->count();
+
+                // Si el último mensaje está eliminado para mí, presentar tombstone
+                $last = $lastMessage ? [
+                    'body' => ($lastMessage && in_array($lastMessage->id, $deletedIds)) ? 'Se eliminó este mensaje' : $lastMessage->body,
+                    'created_at' => $lastMessage->created_at,
+                    'is_mine' => $lastMessage->sender_id === $userId
+                ] : null;
 
                 return [
                     'id' => $chat->id,
@@ -92,11 +116,7 @@ class ChatController extends Controller
                         'email' => $otherUser->email,
                         'avatar' => strtoupper(substr($otherUser->full_name, 0, 1))
                     ],
-                    'last_message' => $lastMessage ? [
-                        'body' => $lastMessage->body,
-                        'created_at' => $lastMessage->created_at,
-                        'is_mine' => $lastMessage->sender_id === $userId
-                    ] : null,
+                    'last_message' => $last,
                     'unread_count' => $unreadCount,
                     'has_unread' => $unreadCount > 0,
                     'updated_at' => $chat->updated_at
@@ -109,7 +129,9 @@ class ChatController extends Controller
             Log::error('Error en apiIndex de Chat: ' . $e->getMessage());
             return response()->json(['error' => 'Error interno del servidor'], 500);
         }
-    }    public function show(Chat $chat): JsonResponse
+    }
+
+    public function show(Chat $chat): JsonResponse
     {
         $userId = Auth::id();
         abort_unless($chat->user_one_id === $userId || $chat->user_two_id === $userId, 403);
@@ -120,7 +142,34 @@ class ChatController extends Controller
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 
-        $messages = $chat->messages()->with('sender')->orderBy('created_at')->get();
+        // Ocultar historial previo si el usuario borró el chat
+        $deletedIds = ChatMessageUserDeletion::where('user_id', $userId)
+            ->whereIn('chat_message_id', function($q) use ($chat) {
+                $q->select('id')->from('chat_messages')->where('chat_id', $chat->id);
+            })->pluck('chat_message_id')->all();
+        $deletedAt = optional(ChatUserDeletion::where('chat_id', $chat->id)->where('user_id', $userId)->first())->deleted_at;
+
+        $messages = $chat->messages()
+            ->when($deletedAt, function($q) use ($deletedAt) { $q->where('created_at', '>', $deletedAt); })
+            ->with('sender')
+            ->orderBy('created_at')
+            ->get()
+            ->map(function($m) use ($deletedIds) {
+                if (in_array($m->id, $deletedIds)) {
+                    // Convertir a "tombstone" para este usuario
+                    $m->body = 'Se eliminó este mensaje';
+                    $m->file_path = null;
+                    $m->drive_file_id = null;
+                    $m->original_name = null;
+                    $m->mime_type = null;
+                    $m->file_size = null;
+                    $m->preview_url = null;
+                    $m->voice_path = null;
+                    $m->voice_base64 = null;
+                    $m->voice_mime = null;
+                }
+                return $m;
+            });
 
         return response()->json($messages);
     }
@@ -152,10 +201,15 @@ class ChatController extends Controller
             'body' => 'nullable|string',
             'file' => 'nullable|file',
             'voice' => 'nullable|file',
+            // opcional: envío de audio como base64 desde el front
+            'voice_base64' => 'nullable|string',
+            'voice_mime' => 'nullable|string|max:100',
         ]);
-        $uploadedFile = $request->file('file');
-        $filePath = $uploadedFile ? $uploadedFile->store('chat_files') : null; // local fallback
-        $voicePath = $request->file('voice') ? $request->file('voice')->store('chat_files') : null;
+    $uploadedFile = $request->file('file');
+    $filePath = $uploadedFile ? $uploadedFile->store('chat_files') : null; // local fallback
+    $voicePath = $request->file('voice') ? $request->file('voice')->store('chat_files') : null;
+    $voiceBase64 = $data['voice_base64'] ?? null;
+    $voiceMime = $data['voice_mime'] ?? null;
 
         $driveFileId = null; $previewUrl = null; $mime = null; $origName = null; $size = null;
         if ($uploadedFile) {
@@ -169,10 +223,32 @@ class ChatController extends Controller
                 if ($token && $token->recordings_folder_id) {
                     $driveService->setAccessToken($token->getTokenArray());
                     $contents = file_get_contents($uploadedFile->getRealPath());
+
+                    // Crear/asegurar carpeta chats/<chat_id>
+                    $chatsFolderId = null;
+                    try {
+                        // Buscar carpeta 'chats' bajo recordings_folder_id; si no existe, crearla
+                        $existing = $driveService->listSubfolders($token->recordings_folder_id);
+                        $chatsFolderId = collect($existing)->firstWhere('name', 'chats')?->getId();
+                    } catch (\Throwable $e) { $chatsFolderId = null; }
+                    if (!$chatsFolderId) {
+                        $chatsFolderId = $driveService->createFolder('chats', $token->recordings_folder_id);
+                    }
+
+                    // Subcarpeta por chat
+                    $chatFolderId = null;
+                    try {
+                        $subs = $driveService->listSubfolders($chatsFolderId);
+                        $chatFolderId = collect($subs)->firstWhere('name', 'chat_' . $chat->id)?->getId();
+                    } catch (\Throwable $e) { $chatFolderId = null; }
+                    if (!$chatFolderId) {
+                        $chatFolderId = $driveService->createFolder('chat_' . $chat->id, $chatsFolderId);
+                    }
+
                     $driveFileId = $driveService->uploadFile(
                         $origName,
                         $mime ?: 'application/octet-stream',
-                        $token->recordings_folder_id,
+                        $chatFolderId,
                         $contents
                     );
                     // Compartir con el otro usuario
@@ -180,16 +256,7 @@ class ChatController extends Controller
                     if ($otherUser?->email) {
                         try { $driveService->shareItem($driveFileId, $otherUser->email, 'reader'); } catch (\Throwable $e) { /* ignore */ }
                     }
-                    // Construir preview según MIME
-                    if (str_starts_with($mime, 'image/')) {
-                        $previewUrl = 'https://drive.google.com/uc?export=view&id=' . $driveFileId;
-                    } elseif (in_array($mime, ['application/pdf'])) {
-                        $previewUrl = 'https://drive.google.com/file/d/' . $driveFileId . '/preview';
-                    } elseif (str_starts_with($mime, 'audio/')) {
-                        $previewUrl = 'https://drive.google.com/uc?export=download&id=' . $driveFileId;
-                    } elseif (str_starts_with($mime, 'video/')) {
-                        $previewUrl = 'https://drive.google.com/file/d/' . $driveFileId . '/preview';
-                    }
+                    // No usaremos preview embebido por CSP; el front mostrará solo enlace/indicador
                 }
             } catch (\Throwable $e) {
                 // Mantener solo filePath local si falla Drive
@@ -197,9 +264,19 @@ class ChatController extends Controller
             }
         }
 
+        // Evitar body=null con adjuntos/voz: poner etiquetas amigables si viene vacío
+        $bodyToStore = $data['body'] ?? null;
+        if (!$bodyToStore) {
+            if ($uploadedFile) {
+                $bodyToStore = 'Se envió un archivo';
+            } elseif ($voiceBase64 || $voicePath) {
+                $bodyToStore = 'Se envió un audio';
+            }
+        }
+
         $message = $chat->messages()->create([
             'sender_id' => $user->id,
-            'body' => $data['body'] ?? null,
+            'body' => $bodyToStore,
             'file_path' => $filePath,
             'drive_file_id' => $driveFileId,
             'original_name' => $origName,
@@ -207,6 +284,8 @@ class ChatController extends Controller
             'file_size' => $size,
             'preview_url' => $previewUrl,
             'voice_path' => $voicePath,
+            'voice_base64' => $voiceBase64,
+            'voice_mime' => $voiceMime,
             'created_at' => now(),
         ]);
 
@@ -309,5 +388,141 @@ class ChatController extends Controller
         $otherUser = $chat->user_one_id === $userId ? $chat->userTwo : $chat->userOne;
 
         return view('contacts.chat', compact('chat', 'otherUser'));
+    }
+
+    /**
+     * Eliminar un chat (soft o hard). Actualmente eliminación dura y cascada de mensajes.
+     * Sólo uno de los participantes puede eliminarlo.
+     */
+    public function destroy(Chat $chat, GoogleDriveService $drive): JsonResponse
+    {
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'No autenticado'], 401);
+        if ($chat->user_one_id !== $userId && $chat->user_two_id !== $userId) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+        try {
+            // Marcar eliminado para este usuario
+            ChatUserDeletion::updateOrCreate([
+                'chat_id' => $chat->id,
+                'user_id' => $userId,
+            ], [
+                'deleted_at' => now(),
+            ]);
+
+            // Si ambos usuarios lo eliminaron, proceder a limpieza real
+            $otherUserId = $chat->user_one_id === $userId ? $chat->user_two_id : $chat->user_one_id;
+            $otherDeleted = ChatUserDeletion::where('chat_id', $chat->id)->where('user_id', $otherUserId)->exists();
+            if ($otherDeleted) {
+                $messages = ChatMessage::where('chat_id', $chat->id)->get();
+                foreach ($messages as $msg) {
+                    if (!empty($msg->drive_file_id)) {
+                        try {
+                            // Intentar borrar con token del autor del mensaje si existe
+                            $owner = User::find($msg->sender_id);
+                            $token = $owner ? \App\Models\GoogleToken::where('username', $owner->username)->first() : null;
+                            if ($token) {
+                                $drive->setAccessToken($token->getTokenArray());
+                                $drive->deleteFile($msg->drive_file_id);
+                            }
+                        } catch (\Throwable $e) {
+                            Log::warning('No se pudo eliminar archivo en Drive del chat', [
+                                'chat_id' => $chat->id,
+                                'file_id' => $msg->drive_file_id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+                    if (!empty($msg->file_path)) { try { @unlink(storage_path('app/' . ltrim($msg->file_path, '/'))); } catch (\Throwable $e) {} }
+                    if (!empty($msg->voice_path)) { try { @unlink(storage_path('app/' . ltrim($msg->voice_path, '/'))); } catch (\Throwable $e) {} }
+                }
+                ChatMessage::where('chat_id', $chat->id)->delete();
+                $chat->delete();
+            }
+            return response()->json(['status' => 'ok']);
+        } catch (\Throwable $e) {
+            Log::error('Error marcando chat eliminado', ['chat_id' => $chat->id, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'Error eliminando chat'], 500);
+        }
+    }
+
+    /**
+     * Eliminar un mensaje solo para el usuario autenticado (ocultar).
+     */
+    public function deleteMessageForMe(Chat $chat, ChatMessage $message): JsonResponse
+    {
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'No autenticado'], 401);
+        if ($message->chat_id !== $chat->id) return response()->json(['error' => 'Mensaje no pertenece al chat'], 422);
+        if ($chat->user_one_id !== $userId && $chat->user_two_id !== $userId) return response()->json(['error' => 'No autorizado'], 403);
+
+        ChatMessageUserDeletion::firstOrCreate([
+            'user_id' => $userId,
+            'chat_message_id' => $message->id,
+        ], [
+            'deleted_at' => now(),
+        ]);
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * Eliminar un mensaje para todos (sólo autor del mensaje).
+     */
+    public function deleteMessageForAll(Chat $chat, ChatMessage $message, GoogleDriveService $drive): JsonResponse
+    {
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'No autenticado'], 401);
+        if ($message->chat_id !== $chat->id) return response()->json(['error' => 'Mensaje no pertenece al chat'], 422);
+        if ($chat->user_one_id !== $userId && $chat->user_two_id !== $userId) return response()->json(['error' => 'No autorizado'], 403);
+        if ($message->sender_id !== $userId) return response()->json(['error' => 'Solo el autor puede eliminar para todos'], 403);
+
+        try {
+            // Borrar archivo en Drive si hay
+            if (!empty($message->drive_file_id)) {
+                try {
+                    $owner = User::find($userId);
+                    $token = $owner ? GoogleToken::where('username', $owner->username)->first() : null;
+                    if ($token) {
+                        $drive->setAccessToken($token->getTokenArray());
+                        $drive->deleteFile($message->drive_file_id);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('No se pudo eliminar archivo en Drive del mensaje', [
+                        'message_id' => $message->id,
+                        'file_id' => $message->drive_file_id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            // Borrar archivos locales si existen
+            if (!empty($message->file_path)) {
+                try { @unlink(storage_path('app/' . ltrim($message->file_path, '/'))); } catch (\Throwable $e) {}
+            }
+            if (!empty($message->voice_path)) {
+                try { @unlink(storage_path('app/' . ltrim($message->voice_path, '/'))); } catch (\Throwable $e) {}
+            }
+
+            // Limpiar adjuntos y marcar como "eliminado" para todos
+            $message->body = 'Se eliminó este mensaje';
+            $message->file_path = null;
+            $message->drive_file_id = null;
+            $message->original_name = null;
+            $message->mime_type = null;
+            $message->file_size = null;
+            $message->preview_url = null;
+            $message->voice_path = null;
+            $message->voice_base64 = null;
+            $message->voice_mime = null;
+            $message->save();
+
+            // Remover ocultamientos previos (ya no aplican)
+            ChatMessageUserDeletion::where('chat_message_id', $message->id)->delete();
+
+            return response()->json(['status' => 'ok', 'message' => $message]);
+        } catch (\Throwable $e) {
+            Log::error('Error eliminando mensaje', ['message_id' => $message->id, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'Error eliminando mensaje'], 500);
+        }
     }
 }

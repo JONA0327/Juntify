@@ -90,7 +90,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/chats/contacts', [ChatController::class, 'contacts'])->name('api.chats.contacts');
     Route::get('/api/chats/{chat}/messages', [ChatController::class, 'show'])->name('api.chats.messages');
     Route::post('/api/chats/{chat}/messages', [ChatController::class, 'store'])->name('api.chats.messages.store');
+    Route::delete('/api/chats/{chat}/messages/{message}/me', [ChatController::class, 'deleteMessageForMe'])->name('api.chats.messages.delete.me');
+    Route::delete('/api/chats/{chat}/messages/{message}/all', [ChatController::class, 'deleteMessageForAll'])->name('api.chats.messages.delete.all');
     Route::post('/api/chats/create-or-find', [ChatController::class, 'createOrFind'])->name('api.chats.create');
+    Route::delete('/api/chats/{chat}', [ChatController::class, 'destroy'])->name('api.chats.destroy');
 
     Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
     // Ruta web alternativa para crear organización (fallback a /api/organizations)
