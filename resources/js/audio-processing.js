@@ -1,6 +1,379 @@
 import { loadAudioBlob, clearAllAudio } from './idb.js';
 let __lastNotification = { msg: null, type: null, ts: 0 };
 
+const speakerDirectory = (() => {
+    let initialized = false;
+    let loadingPromise = null;
+    const contacts = [];
+    const organizationMembers = [];
+    const defaultFallback = ['Hablante 1', 'Hablante 2', 'Hablante 3'];
+
+    const getCsrfToken = () => {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    };
+
+    const buildName = (firstName = '', lastName = '') => {
+        const first = (firstName || '').trim();
+        let last = (lastName || '').trim();
+        if (!last && lastName !== undefined) {
+            last = '';
+        }
+        const values = [first, last].filter(Boolean);
+        return values.join(' ').trim() || null;
+    };
+
+    const normalizeName = (record) => {
+        if (!record) return null;
+        if (typeof record === 'string') {
+            const parts = record.trim().split(/\s+/).filter(Boolean);
+            if (!parts.length) return null;
+            const [first, ...rest] = parts;
+            const last = rest.find(Boolean) || '';
+            return buildName(first, last);
+        }
+
+        const rawName = (record.name || record.full_name || '').trim();
+        const fallbackParts = rawName ? rawName.split(/\s+/).filter(Boolean) : [];
+        const first = (record.first_name || record.firstName || fallbackParts[0] || '').trim();
+        let last = (record.last_name || record.lastName || '').trim();
+        if (!last && fallbackParts.length > 1) {
+            last = fallbackParts.slice(1).find(Boolean) || '';
+        }
+        return buildName(first, last);
+    };
+
+    const pushUnique = (target, name, source) => {
+        if (!name) return;
+        const lower = name.toLowerCase();
+        if (target.some(entry => entry.name.toLowerCase() === lower)) return;
+        target.push({ name, source });
+    };
+
+    const parseContactsResponse = (data) => {
+        const contactList = Array.isArray(data?.contacts) ? data.contacts : Array.isArray(data) ? data : [];
+        const orgList = Array.isArray(data?.users)
+            ? data.users
+            : Array.isArray(data?.organization_members)
+                ? data.organization_members
+                : [];
+
+        contactList.forEach(contact => {
+            const formatted = normalizeName(contact);
+            pushUnique(contacts, formatted, 'contact');
+        });
+
+        orgList.forEach(member => {
+            const formatted = normalizeName(member);
+            pushUnique(organizationMembers, formatted, 'organization');
+        });
+    };
+
+    const fetchDirectory = async () => {
+        try {
+            const response = await fetch('/api/contacts', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                }
+            });
+            if (!response.ok) {
+                console.warn('[speakerDirectory] /api/contacts failed with status', response.status);
+                initialized = true;
+                return;
+            }
+            const data = await response.json().catch(() => ({}));
+            parseContactsResponse(data || {});
+        } catch (error) {
+            console.warn('[speakerDirectory] Error loading contacts', error);
+        } finally {
+            initialized = true;
+            loadingPromise = null;
+        }
+    };
+
+    const ensureLoaded = async () => {
+        if (initialized) return;
+        if (!loadingPromise) {
+            loadingPromise = fetchDirectory();
+        }
+        await loadingPromise;
+    };
+
+    const filterCollection = (collection, query) => {
+        if (!query) return [...collection];
+        const normalized = query.toLowerCase();
+        return collection.filter(item => item.name.toLowerCase().includes(normalized));
+    };
+
+    const fetchGlobalResults = async (query) => {
+        if (!query || query.trim().length < 3) {
+            return [];
+        }
+        try {
+            const response = await fetch('/api/users/search', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                },
+                body: JSON.stringify({ query })
+            });
+            if (!response.ok) {
+                console.warn('[speakerDirectory] /api/users/search failed with status', response.status);
+                return [];
+            }
+            const data = await response.json().catch(() => ({ users: [] }));
+            const users = Array.isArray(data?.users) ? data.users : [];
+            const globalSuggestions = [];
+            const existingNames = new Set([
+                ...contacts.map(item => item.name.toLowerCase()),
+                ...organizationMembers.map(item => item.name.toLowerCase())
+            ]);
+            for (const user of users) {
+                const formatted = normalizeName(user);
+                if (!formatted) continue;
+                const lower = formatted.toLowerCase();
+                if (existingNames.has(lower) || globalSuggestions.some(entry => entry.name.toLowerCase() === lower)) {
+                    continue;
+                }
+                globalSuggestions.push({ name: formatted, source: 'global' });
+            }
+            return globalSuggestions;
+        } catch (error) {
+            console.warn('[speakerDirectory] Error fetching global users', error);
+            return [];
+        }
+    };
+
+    return {
+        init: ensureLoaded,
+        isInitialized: () => initialized,
+        getLocalDirectory: () => ({
+            contacts: [...contacts],
+            organizationMembers: [...organizationMembers]
+        }),
+        getDefaultSuggestions: () => defaultFallback.map(name => ({ name, source: 'default' })),
+        search: async (query) => {
+            await ensureLoaded();
+            const trimmed = (query || '').trim();
+            const localMatches = {
+                contacts: filterCollection(contacts, trimmed),
+                organizationMembers: filterCollection(organizationMembers, trimmed)
+            };
+            const globalMatches = await fetchGlobalResults(trimmed);
+            return { local: localMatches, global: globalMatches };
+        }
+    };
+})();
+
+window.speakerDirectory = speakerDirectory;
+
+const speakerSuggestionConfigs = [
+    {
+        inputId: 'speaker-name-input',
+        containerId: 'speaker-suggestions',
+        emptyMessage: 'No encontramos coincidencias. Prueba con uno de los nombres sugeridos.'
+    },
+    {
+        inputId: 'global-speaker-name-input',
+        containerId: 'global-speaker-suggestions',
+        emptyMessage: 'No encontramos coincidencias globales. Puedes usar uno de los nombres sugeridos.'
+    }
+];
+
+const speakerSuggestionSearchTokens = new Map();
+
+const speakerSuggestionLabels = {
+    contacts: {
+        default: 'Mis contactos',
+        filtered: 'Coincidencias en tus contactos'
+    },
+    organization: {
+        default: 'Mi organización',
+        filtered: 'Coincidencias en tu organización'
+    },
+    global: 'Resultados globales'
+};
+
+function setSpeakerSuggestionsLoading(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    const loading = document.createElement('div');
+    loading.className = 'speaker-suggestions-loading';
+
+    const spinner = document.createElement('div');
+    spinner.className = 'speaker-suggestions-spinner';
+    loading.appendChild(spinner);
+
+    const text = document.createElement('p');
+    text.className = 'speaker-suggestions-loading-text';
+    text.textContent = 'Buscando sugerencias...';
+    loading.appendChild(text);
+
+    container.appendChild(loading);
+}
+
+function createSuggestionChip(name, inputEl) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'speaker-suggestion';
+    chip.textContent = name;
+    chip.title = `Usar "${name}"`;
+    chip.addEventListener('click', () => {
+        inputEl.value = name;
+        const event = new Event('input', { bubbles: true });
+        inputEl.dispatchEvent(event);
+    });
+    return chip;
+}
+
+function renderSpeakerEmptyState(container, inputEl, emptyMessage) {
+    container.innerHTML = '';
+    const emptyWrapper = document.createElement('div');
+    emptyWrapper.className = 'speaker-suggestions-empty';
+
+    const emptyText = document.createElement('p');
+    emptyText.className = 'speaker-suggestions-empty-text';
+    emptyText.textContent = emptyMessage || 'No encontramos coincidencias. Puedes usar uno de los nombres sugeridos.';
+    emptyWrapper.appendChild(emptyText);
+
+    const list = document.createElement('div');
+    list.className = 'speaker-suggestions-list';
+    speakerDirectory.getDefaultSuggestions().forEach(item => {
+        list.appendChild(createSuggestionChip(item.name, inputEl));
+    });
+    emptyWrapper.appendChild(list);
+
+    container.appendChild(emptyWrapper);
+}
+
+function buildSuggestionSections(localMatches, globalMatches, { defaultState = false } = {}) {
+    const sections = [];
+    const hasContacts = Array.isArray(localMatches?.contacts) && localMatches.contacts.length;
+    const hasOrgMembers = Array.isArray(localMatches?.organizationMembers) && localMatches.organizationMembers.length;
+    const hasGlobal = Array.isArray(globalMatches) && globalMatches.length;
+
+    if (hasContacts) {
+        sections.push({
+            key: 'contacts',
+            title: defaultState ? speakerSuggestionLabels.contacts.default : speakerSuggestionLabels.contacts.filtered,
+            items: localMatches.contacts
+        });
+    }
+
+    if (hasOrgMembers) {
+        sections.push({
+            key: 'organization',
+            title: defaultState ? speakerSuggestionLabels.organization.default : speakerSuggestionLabels.organization.filtered,
+            items: localMatches.organizationMembers
+        });
+    }
+
+    if (hasGlobal) {
+        sections.push({
+            key: 'global',
+            title: speakerSuggestionLabels.global,
+            items: globalMatches
+        });
+    }
+
+    return sections;
+}
+
+function renderSpeakerSuggestions(containerId, sections, inputEl, emptyMessage) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (!sections.length) {
+        renderSpeakerEmptyState(container, inputEl, emptyMessage);
+        return;
+    }
+
+    container.innerHTML = '';
+    sections.forEach(section => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'speaker-suggestions-section';
+
+        if (section.title) {
+            const titleEl = document.createElement('h4');
+            titleEl.className = 'speaker-suggestions-title';
+            titleEl.textContent = section.title;
+            wrapper.appendChild(titleEl);
+        }
+
+        const list = document.createElement('div');
+        list.className = 'speaker-suggestions-list';
+        section.items.forEach(item => {
+            list.appendChild(createSuggestionChip(item.name, inputEl));
+        });
+
+        wrapper.appendChild(list);
+        container.appendChild(wrapper);
+    });
+}
+
+async function renderDefaultSpeakerSuggestions(containerId, inputEl, emptyMessage) {
+    await speakerDirectory.init();
+    const localDirectory = speakerDirectory.getLocalDirectory();
+    const sections = buildSuggestionSections(localDirectory, [], { defaultState: true });
+    renderSpeakerSuggestions(containerId, sections, inputEl, emptyMessage);
+}
+
+async function handleSpeakerInput(event, config) {
+    const { containerId, emptyMessage } = config;
+    const inputEl = event.target;
+    const query = inputEl.value.trim();
+    const token = Symbol('speakerSearch');
+    speakerSuggestionSearchTokens.set(containerId, token);
+
+    if (!query) {
+        await renderDefaultSpeakerSuggestions(containerId, inputEl, emptyMessage);
+        if (speakerSuggestionSearchTokens.get(containerId) === token) {
+            speakerSuggestionSearchTokens.delete(containerId);
+        }
+        return;
+    }
+
+    setSpeakerSuggestionsLoading(containerId);
+
+    const { local, global } = await speakerDirectory.search(query);
+    if (speakerSuggestionSearchTokens.get(containerId) !== token) {
+        return;
+    }
+
+    const sections = buildSuggestionSections(local, global, { defaultState: false });
+    renderSpeakerSuggestions(containerId, sections, inputEl, emptyMessage);
+    speakerSuggestionSearchTokens.delete(containerId);
+}
+
+function resetSpeakerSuggestions(config) {
+    const input = document.getElementById(config.inputId);
+    if (input) {
+        input.value = '';
+    }
+    const container = document.getElementById(config.containerId);
+    if (container) {
+        container.innerHTML = '';
+    }
+    speakerSuggestionSearchTokens.delete(config.containerId);
+}
+
+function setupSpeakerSuggestionInputs() {
+    speakerSuggestionConfigs.forEach(config => {
+        const inputEl = document.getElementById(config.inputId);
+        if (!inputEl || inputEl.dataset.speakerSuggestionsBound === 'true') return;
+        inputEl.dataset.speakerSuggestionsBound = 'true';
+        inputEl.addEventListener('input', (event) => handleSpeakerInput(event, config));
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupSpeakerSuggestionInputs);
+} else {
+    setupSpeakerSuggestionInputs();
+}
+
 // Retry helper for IndexedDB loads to avoid transient race conditions on navigation
 async function loadAudioFromIdbWithRetries(key, tries = 5, delayMs = 200) {
     for (let i = 0; i < tries; i++) {
@@ -1088,15 +1461,32 @@ function playSegmentAudio(segmentIndex) {
 
 let selectedSegmentIndex = null;
 
-function openChangeSpeakerModal(segmentIndex) {
+async function openChangeSpeakerModal(segmentIndex) {
     selectedSegmentIndex = segmentIndex;
     const currentName = transcriptionData[segmentIndex].speaker;
-    document.getElementById('speaker-name-input').value = currentName;
+    const input = document.getElementById('speaker-name-input');
+    if (input) {
+        input.value = currentName;
+    }
+    const config = speakerSuggestionConfigs.find(cfg => cfg.inputId === 'speaker-name-input');
+    if (config && input) {
+        setSpeakerSuggestionsLoading(config.containerId);
+        await renderDefaultSpeakerSuggestions(config.containerId, input, config.emptyMessage);
+        if (typeof input.focus === 'function') {
+            input.focus();
+        }
+    } else {
+        await speakerDirectory.init();
+    }
     document.getElementById('change-speaker-modal').classList.add('show');
 }
 
 function closeChangeSpeakerModal() {
     document.getElementById('change-speaker-modal').classList.remove('show');
+    const config = speakerSuggestionConfigs.find(cfg => cfg.inputId === 'speaker-name-input');
+    if (config) {
+        resetSpeakerSuggestions(config);
+    }
 }
 
 function confirmSpeakerChange() {
@@ -1117,16 +1507,34 @@ function confirmSpeakerChange() {
     showNotification('Hablante actualizado correctamente', 'success');
 }
 
-function openGlobalSpeakerModal(segmentIndex) {
+async function openGlobalSpeakerModal(segmentIndex) {
     selectedSegmentIndex = segmentIndex;
     const currentName = transcriptionData[segmentIndex].speaker;
-    document.getElementById('current-speaker-name').value = currentName;
-    document.getElementById('global-speaker-name-input').value = '';
+    const currentInput = document.getElementById('current-speaker-name');
+    if (currentInput) currentInput.value = currentName;
+    const input = document.getElementById('global-speaker-name-input');
+    if (input) {
+        input.value = '';
+    }
+    const config = speakerSuggestionConfigs.find(cfg => cfg.inputId === 'global-speaker-name-input');
+    if (config && input) {
+        setSpeakerSuggestionsLoading(config.containerId);
+        await renderDefaultSpeakerSuggestions(config.containerId, input, config.emptyMessage);
+        if (typeof input.focus === 'function') {
+            input.focus();
+        }
+    } else {
+        await speakerDirectory.init();
+    }
     document.getElementById('change-global-speaker-modal').classList.add('show');
 }
 
 function closeGlobalSpeakerModal() {
     document.getElementById('change-global-speaker-modal').classList.remove('show');
+    const config = speakerSuggestionConfigs.find(cfg => cfg.inputId === 'global-speaker-name-input');
+    if (config) {
+        resetSpeakerSuggestions(config);
+    }
 }
 
 function confirmGlobalSpeakerChange() {
