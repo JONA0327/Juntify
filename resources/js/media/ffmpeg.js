@@ -6,15 +6,24 @@ let ffmpegQueue = Promise.resolve();
 async function loadFFmpeg() {
     if (!ffmpegLoaderPromise) {
         ffmpegLoaderPromise = (async () => {
-            const [ffmpegModule, coreUrlModule, wasmUrlModule] = await Promise.all([
+            const [ffmpegModule, coreUrlModule, wasmUrlModule, utilModule] = await Promise.all([
                 import('@ffmpeg/ffmpeg'),
                 import('@ffmpeg/core?url'),
-                import('@ffmpeg/core/wasm?url')
+                import('@ffmpeg/core/wasm?url'),
+                import('@ffmpeg/util')
             ]);
-            const { createFFmpeg, fetchFile } = ffmpegModule;
-            const ffmpeg = createFFmpeg({
-                log: Boolean(import.meta.env?.DEV)
-            });
+            const { FFmpeg } = ffmpegModule;
+            const fetchFile = utilModule?.fetchFile
+                || utilModule?.default?.fetchFile
+                || utilModule?.default;
+            if (typeof fetchFile !== 'function') {
+                throw new Error('No se pudo cargar fetchFile de FFmpeg');
+            }
+
+            const ffmpeg = new FFmpeg();
+            if (import.meta.env?.DEV) {
+                ffmpeg.on('log', ({ message }) => console.log(message));
+            }
             const coreURL = coreUrlModule?.default || coreUrlModule;
             const wasmURL = wasmUrlModule?.default || wasmUrlModule;
             await ffmpeg.load({
