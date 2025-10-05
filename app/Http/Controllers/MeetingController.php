@@ -3076,7 +3076,7 @@ class MeetingController extends Controller
                             }
                         }
                     }
-
+                    // Evitar duplicados: si ya existe una tarea con mismo meeting_id, username y tarea, actualizarla
                     $existing = TaskLaravel::where('meeting_id', $payload['meeting_id'])
                         ->where('username', $payload['username'])
                         ->where('tarea', $payload['tarea'])
