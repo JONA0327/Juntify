@@ -36,10 +36,22 @@ class TranscriptionController extends Controller
             'speed_boost' => $config['speed_boost'],
             'speech_threshold' => $config['speech_threshold'],
             'dual_channel' => $config['dual_channel'],
+            'language_code' => $config['language_code'] ?? null,
             'is_ogg' => $isOgg,
         ]);
 
         return $config;
+    }
+
+    private function resolveLanguage(?string $language): string
+    {
+        $allowedLanguages = ['es', 'en', 'fr', 'de'];
+
+        if (!in_array($language, $allowedLanguages, true)) {
+            return 'es';
+        }
+
+        return $language;
     }
 
     public function store(Request $request)
@@ -80,7 +92,7 @@ class TranscriptionController extends Controller
 
         $filePath = $file->getRealPath();
 
-        $language = $request->input('language', 'es');
+        $language = $this->resolveLanguage($request->input('language'));
         $apiKey   = config('services.assemblyai.api_key');
 
         // Log información del archivo
@@ -215,7 +227,7 @@ class TranscriptionController extends Controller
 
             $baseConfig = [
                 'audio_url'                => $uploadUrl,
-                'language_code'           => 'es',
+                'language_code'           => $language,
                 'punctuate'               => true,
                 'format_text'             => false,  // Desactivado para mejor speaker detection
                 'dual_channel'            => false,
@@ -244,6 +256,7 @@ class TranscriptionController extends Controller
                 'is_webm' => $isWebM,
                 'is_ogg' => $isOgg,
                 'config_profile' => 'neutral-audio',
+                'language_code' => $transcriptionConfig['language_code'] ?? null,
             ]);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             $failedPath = $this->saveFailedAudio($filePath);
@@ -382,7 +395,7 @@ class TranscriptionController extends Controller
         ]);
 
         $uploadId = Str::uuid();
-        $language = $request->input('language', 'es');
+        $language = $this->resolveLanguage($request->input('language'));
         $filename = $request->input('filename');
         $lower = strtolower($filename);
         $ext = pathinfo($lower, PATHINFO_EXTENSION);
@@ -391,6 +404,7 @@ class TranscriptionController extends Controller
             'extension' => $ext,
             'size_mb' => round($request->input('size') / 1024 / 1024, 2),
             'chunks' => $request->input('chunks'),
+            'language' => $language,
         ]);
         $chunks = $request->input('chunks');
 
