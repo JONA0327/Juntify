@@ -556,7 +556,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         subtitle.textContent = 'Has alcanzado el límite de reuniones para este mes.';
                         // Deshabilitar inicio de nuevas grabaciones
                         const micBtn = document.getElementById('mic-circle');
-                        const meetBtn = document.getElementById('meeting-record-btn');
+                        const meetBtn = document.getElementById('meeting-mic-circle');
                         if (micBtn) { micBtn.disabled = true; micBtn.classList.add('disabled'); }
                         if (meetBtn) { meetBtn.disabled = true; meetBtn.classList.add('disabled'); }
                         // Mensaje visual rápido
@@ -746,9 +746,11 @@ function resetRecordingControls() {
     const mp = document.getElementById('meeting-pause');
     const md = document.getElementById('meeting-discard');
     const mr = document.getElementById('meeting-resume');
+    const meetingActions = document.getElementById('meeting-recorder-actions');
     if (mp) mp.style.display = 'none';
     if (md) md.style.display = 'none';
     if (mr) mr.style.display = 'none';
+    if (meetingActions) meetingActions.classList.remove('show');
     const postponeContainer = document.getElementById('postpone-switch');
     const postponeToggle = document.getElementById('postpone-toggle');
     if (postponeContainer) postponeContainer.style.display = 'flex'; // o ''
@@ -963,24 +965,42 @@ function updateAudioBars(frequencyData) {
     });
 }
 
-// Función para actualizar los anillos de volumen
-function updateVolumeRings(volumeLevel) {
-    const rings = document.getElementById('volume-rings');
+function updateVolumeRingsFor(ringsId, volumeLevel) {
+    const rings = document.getElementById(ringsId);
+    if (!rings) return;
 
     if (volumeLevel > 0.1) {
         rings.classList.add('active');
 
-        // Ajustar opacidad de los anillos según el volumen
         const ring1 = rings.querySelector('.ring-1');
         const ring2 = rings.querySelector('.ring-2');
         const ring3 = rings.querySelector('.ring-3');
 
-        ring1.style.opacity = Math.min(volumeLevel * 2, 1);
-        ring2.style.opacity = Math.min(volumeLevel * 1.5, 0.8);
-        ring3.style.opacity = Math.min(volumeLevel, 0.6);
+        if (ring1) ring1.style.opacity = Math.min(volumeLevel * 2, 1);
+        if (ring2) ring2.style.opacity = Math.min(volumeLevel * 1.5, 0.8);
+        if (ring3) ring3.style.opacity = Math.min(volumeLevel, 0.6);
     } else {
         rings.classList.remove('active');
     }
+}
+
+// Función para actualizar los anillos de volumen del grabador estándar
+function updateVolumeRings(volumeLevel) {
+    updateVolumeRingsFor('volume-rings', volumeLevel);
+}
+
+// Función para actualizar los anillos de volumen de reunión
+function updateMeetingVolumeRings(volumeLevel) {
+    updateVolumeRingsFor('meeting-volume-rings', volumeLevel);
+}
+
+function getAverageVolumeLevel(dataArray) {
+    if (!dataArray || dataArray.length === 0) return 0;
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i];
+    }
+    return (sum / dataArray.length) / 255;
 }
 
 // Función para actualizar la UI de grabación
@@ -2140,11 +2160,16 @@ function setupMeetingAudioAnalysis() {
 function startMeetingAudioAnalysis() {
     if (!meetingRecording) return;
 
+    let combinedVolume = 0;
+    let hasData = false;
+
     // Analizar audio del sistema
     if (systemAnalyser && systemDataArray && !systemAudioMuted) {
         systemAnalyser.getByteFrequencyData(systemDataArray);
         updateMeetingAudioBars('system-audio-visualizer', systemDataArray);
         if (systemSpectrogramCtx) drawSpectrogram(systemSpectrogramCtx, systemDataArray);
+        combinedVolume = Math.max(combinedVolume, getAverageVolumeLevel(systemDataArray));
+        hasData = true;
     }
 
     // Analizar audio del micrófono
@@ -2152,7 +2177,11 @@ function startMeetingAudioAnalysis() {
         microphoneAnalyser.getByteFrequencyData(microphoneDataArray);
         updateMeetingAudioBars('microphone-audio-visualizer', microphoneDataArray);
         if (microphoneSpectrogramCtx) drawSpectrogram(microphoneSpectrogramCtx, microphoneDataArray);
+        combinedVolume = Math.max(combinedVolume, getAverageVolumeLevel(microphoneDataArray));
+        hasData = true;
     }
+
+    updateMeetingVolumeRings(hasData ? combinedVolume : 0);
 
     meetingAnimationId = requestAnimationFrame(startMeetingAudioAnalysis);
 }
@@ -2192,24 +2221,34 @@ function updateMeetingAudioBars(visualizerId, frequencyData) {
 
 // Actualizar UI de grabación de reunión
 function updateMeetingRecordingUI(recording) {
-    const button = document.getElementById('meeting-record-btn');
-    const buttonIcon = button.querySelector('.nav-icon');
+    const micCircle = document.getElementById('meeting-mic-circle');
+    const micIcon = document.getElementById('meeting-record-icon');
     const timerCounter = document.getElementById('meeting-timer-counter');
     const timerLabel = document.getElementById('meeting-timer-label');
+    const actions = document.getElementById('meeting-recorder-actions');
 
     if (recording) {
-        button.classList.add('recording');
-        setIcon(buttonIcon, 'stop');
-        timerCounter.classList.add('recording');
-        timerLabel.textContent = 'Grabando reunión...';
-        timerLabel.classList.add('recording');
+        if (micCircle) micCircle.classList.add('recording');
+        setIcon(micIcon, 'stop');
+        if (timerCounter) timerCounter.classList.add('recording');
+        if (timerLabel) {
+            timerLabel.textContent = 'Grabando reunión...';
+            timerLabel.classList.add('recording');
+        }
+        if (actions) actions.classList.add('show');
     } else {
-        button.classList.remove('recording');
-        setIcon(buttonIcon, 'video');
-        timerCounter.classList.remove('recording');
-        timerLabel.textContent = 'Listo para grabar';
-        timerLabel.classList.remove('recording');
-        timerCounter.textContent = '00:00:00';
+        if (micCircle) micCircle.classList.remove('recording');
+        setIcon(micIcon, 'video');
+        if (timerCounter) {
+            timerCounter.classList.remove('recording');
+            timerCounter.textContent = '00:00:00';
+        }
+        if (timerLabel) {
+            timerLabel.textContent = 'Listo para grabar';
+            timerLabel.classList.remove('recording');
+        }
+        if (actions) actions.classList.remove('show');
+        updateMeetingVolumeRings(0);
     }
 }
 
