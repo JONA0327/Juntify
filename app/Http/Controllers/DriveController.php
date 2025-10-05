@@ -991,9 +991,12 @@ class DriveController extends Controller
             Notification::create([
                 'remitente' => $user->id,
                 'emisor'    => $user->id,
+                'user_id'   => $user->id,
+                'from_user_id' => $user->id,
                 'status'    => 'pending',
                 'message'   => 'Subida iniciada',
                 'type'      => 'audio_upload',
+                'title'     => 'Subida de audio pendiente',
                 'data'      => [
                     'pending_recording_id' => $pending->id,
                     'meeting_name'         => $fileName,
