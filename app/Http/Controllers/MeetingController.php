@@ -18,6 +18,7 @@ use App\Models\KeyPoint;
 use App\Models\Task;
 use Carbon\Carbon;
 use App\Services\GoogleDriveService;
+use App\Services\GoogleServiceAccount;
 use Google\Service\Drive\DriveFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,6 +30,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Traits\EnsuresStandardSubfolders;
 use App\Traits\GoogleDriveHelpers;
 use App\Traits\MeetingContentParsing;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -41,7 +43,7 @@ use Illuminate\Support\Facades\Log;
 
 class MeetingController extends Controller
 {
-    use GoogleDriveHelpers, MeetingContentParsing;
+    use GoogleDriveHelpers, MeetingContentParsing, EnsuresStandardSubfolders;
 
     protected $googleDriveService;
 
@@ -2886,6 +2888,10 @@ class MeetingController extends Controller
                 throw new \Exception('Carpeta raíz no encontrada: ' . $rootInput);
             }
 
+            /** @var GoogleServiceAccount $serviceAccount */
+            $serviceAccount = app(GoogleServiceAccount::class);
+            $standardSubfolders = $this->ensureStandardSubfolders($rootFolder, $usingOrgDrive, $serviceAccount);
+
             if ($usingOrgDrive) {
                 $orgToken = $rootFolder->googleToken;
                 if (!$orgToken) {
@@ -2934,7 +2940,9 @@ class MeetingController extends Controller
                 }
             }
 
-            $audioFolderId = $rootFolder->google_id;
+            $audioFolderId = isset($standardSubfolders['audio']) && !empty($standardSubfolders['audio']->google_id)
+                ? $standardSubfolders['audio']->google_id
+                : $rootFolder->google_id;
             if ($request->input('audio_subfolder')) {
                 if ($usingOrgDrive) {
                     $sub = OrganizationSubfolder::where('google_id', $request->input('audio_subfolder'))
