@@ -8,7 +8,7 @@
 
         <!-- Controles de fuentes de audio -->
         <div class="audio-sources-controls">
-            <button class="audio-source-btn system-audio" id="system-audio-btn" onclick="toggleSystemAudio()">
+            <button class="audio-source-btn system-audio active" id="system-audio-btn" onclick="toggleSystemAudio()">
                 <x-icon name="computer" class="source-icon" />
                 <span class="source-text">Sistema activado</span>
             </button>
