@@ -1384,19 +1384,7 @@ function updateAnalysisPreview() {
         }
         const downloadBtn = document.getElementById('download-audio-btn');
         if (downloadBtn) {
-            downloadBtn.onclick = function() {
-                let blob = (typeof audioData === 'string') ? base64ToBlob(audioData) : audioData;
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'audio_reunion.webm';
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }, 100);
-            };
+            downloadBtn.onclick = downloadAudio;
         }
     }
 }
@@ -1678,12 +1666,27 @@ function downloadAudio() {
 
     // Convertir a Blob si es una cadena base64
     const blob = (typeof audioData === 'string') ? base64ToBlob(audioData) : audioData;
+    let mimeType = blob?.type;
+
+    if (!mimeType && typeof audioData === 'string') {
+        const match = audioData.match(/^data:([^;]+);/);
+        if (match && match[1]) {
+            mimeType = match[1];
+        }
+    }
+
+    if (!mimeType) {
+        mimeType = getPreferredAudioFormat();
+    }
+
+    const extension = getFileExtensionForMimeType(mimeType);
+    const fileName = `audio_reunion.${extension}`;
     const url = URL.createObjectURL(blob);
 
     // Crear un enlace temporal para iniciar la descarga
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'audio_reunion.webm';
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1691,7 +1694,8 @@ function downloadAudio() {
     // Revocar el ObjectURL después de la descarga
     URL.revokeObjectURL(url);
 
-    showNotification('Descarga iniciada', 'success');
+    console.log(`⬇️ [downloadAudio] Descarga iniciada (${fileName}) con MIME ${mimeType}`);
+    showNotification(`Descarga iniciada: ${fileName}`, 'success');
 }
 
 async function saveToDatabase() {
