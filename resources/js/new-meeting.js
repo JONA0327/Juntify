@@ -13,7 +13,7 @@ let audioContext = null;
 let analyser = null;
 let dataArray = null;
 let animationId = null;
-let systemAudioEnabled = false;
+let systemAudioEnabled = true;
 let microphoneAudioEnabled = true;
 let systemAudioMuted = false;
 let microphoneAudioMuted = false;
@@ -316,6 +316,10 @@ function selectRecordingMode(mode) {
     });
     document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
     selectedMode = mode;
+
+    if (mode === 'meeting') {
+        syncMeetingSourceButtons();
+    }
 
     // Mostrar la interfaz correspondiente
     showRecordingInterface(mode);
@@ -1824,6 +1828,34 @@ function setupMeetingRecorder() {
             bar.classList.remove('active', 'high');
         });
     });
+
+    syncMeetingSourceButtons();
+}
+
+function syncMeetingSourceButtons() {
+    const systemBtn = document.getElementById('system-audio-btn');
+    const systemText = systemBtn ? systemBtn.querySelector('.source-text') : null;
+    if (systemBtn && systemText) {
+        if (systemAudioEnabled) {
+            systemBtn.classList.add('active');
+            systemText.textContent = 'Sistema activado';
+        } else {
+            systemBtn.classList.remove('active');
+            systemText.textContent = 'Sistema desactivado';
+        }
+    }
+
+    const microphoneBtn = document.getElementById('microphone-audio-btn');
+    const microphoneText = microphoneBtn ? microphoneBtn.querySelector('.source-text') : null;
+    if (microphoneBtn && microphoneText) {
+        if (microphoneAudioEnabled) {
+            microphoneBtn.classList.add('active');
+            microphoneText.textContent = 'Micrófono activado';
+        } else {
+            microphoneBtn.classList.remove('active');
+            microphoneText.textContent = 'Micrófono desactivado';
+        }
+    }
 }
 
 // Aplica estados de mute/enable a las fuentes durante la reunión
@@ -1839,16 +1871,7 @@ function applyMuteStates() {
 // Alternar audio del sistema
 function toggleSystemAudio() {
     systemAudioEnabled = !systemAudioEnabled;
-    const btn = document.getElementById('system-audio-btn');
-    const text = btn.querySelector('.source-text');
-
-    if (systemAudioEnabled) {
-        btn.classList.add('active');
-        text.textContent = 'Sistema activado';
-    } else {
-        btn.classList.remove('active');
-        text.textContent = 'Sistema desactivado';
-    }
+    syncMeetingSourceButtons();
     // Aplicar inmediatamente si estamos grabando reunión
     if (meetingRecording) applyMuteStates();
 }
@@ -1856,16 +1879,7 @@ function toggleSystemAudio() {
 // Alternar audio del micrófono
 function toggleMicrophoneAudio() {
     microphoneAudioEnabled = !microphoneAudioEnabled;
-    const btn = document.getElementById('microphone-audio-btn');
-    const text = btn.querySelector('.source-text');
-
-    if (microphoneAudioEnabled) {
-        btn.classList.add('active');
-        text.textContent = 'Micrófono activado';
-    } else {
-        btn.classList.remove('active');
-        text.textContent = 'Micrófono desactivado';
-    }
+    syncMeetingSourceButtons();
     // Aplicar inmediatamente si estamos grabando reunión
     if (meetingRecording) applyMuteStates();
 }
