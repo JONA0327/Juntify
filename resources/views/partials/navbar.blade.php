@@ -49,14 +49,6 @@
       Tareas
     </a>
   </li>
-  <li>
-    <a href="{{ route('chats.index') }}" class="{{ request()->routeIs('chats.*') ? 'active' : '' }}">
-      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.418 8-9.899 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.418-8 9.899-8s9.899 3.582 9.899 8z" />
-      </svg>
-      Chat
-    </a>
-  </li>
   @php /* visible for all users */ @endphp
   <li>
     <a href="{{ route('organization.index') }}">
