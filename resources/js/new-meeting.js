@@ -868,15 +868,8 @@ async function finalizeRecording() {
     const now = new Date();
     const name = `grabacion-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
 
-    // Determinar contexto y descargar copia local en OGG cuando es reunión
+    // Determinar contexto actual de la grabación
     const context = lastRecordingContext || (selectedMode === 'meeting' ? 'meeting' : 'recording');
-    if (context === 'meeting') {
-        try {
-            await downloadAudioAsOgg(finalBlob, name);
-        } catch (_) {
-            downloadAudioWithCorrectFormat(finalBlob, name);
-        }
-    }
     if (sizeMB > 200) {
         showError('La grabación supera el límite de 200 MB.');
         const upload = confirm('¿Deseas subirla en segundo plano? Cancelar para descargarla.');
