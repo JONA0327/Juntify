@@ -92,11 +92,11 @@ class DriveController extends Controller
             }
 
             // Drive personal: intentar con token OAuth
-            if ($userToken) {
+            if ($userToken && $userToken->hasValidAccessToken()) {
                 try {
                     /** @var \App\Services\GoogleDriveService $driveOAuth */
                     $driveOAuth = app(\App\Services\GoogleDriveService::class);
-                    $driveOAuth->setAccessToken($userToken->access_token_json ?? $userToken->access_token);
+                    $driveOAuth->setAccessToken($userToken->getTokenArray());
                     if ($driveOAuth->ensureSharedWithServiceAccount($folderId, $serviceEmail)) {
                         Log::info('attemptShareSubfolder: shared via OAuth fallback', [
                             'folder_id' => $folderId,
@@ -1057,31 +1057,55 @@ class DriveController extends Controller
                 str_contains($e->getMessage(), 'The caller does not have permission')
             );
             if ($needsShare) {
+                $shared = false;
+
                 // Fallback: intentar compartir con token del usuario
                 try {
                     /** @var \App\Services\GoogleDriveService $driveOAuth */
                     $driveOAuth = app(\App\Services\GoogleDriveService::class);
                     $userToken = \App\Models\GoogleToken::where('username', $user->username)->first();
-                    if ($userToken) {
-                        $driveOAuth->setAccessToken($userToken->access_token_json ?? $userToken->access_token);
+                    if ($userToken && $userToken->hasValidAccessToken()) {
+                        $driveOAuth->setAccessToken($userToken->getTokenArray());
                         if ($driveOAuth->ensureSharedWithServiceAccount($rootFolder->google_id, $serviceEmail)) {
                             Log::info('saveResults: folder auto-shared with service account via OAuth fallback');
-                        } else {
-                            return response()->json([
-                                'code'    => 'FOLDER_NOT_SHARED',
-                                'message' => "La carpeta principal no está compartida con la cuenta de servicio. Comparte la carpeta con {$serviceEmail}",
-                            ], 403);
+                            $shared = true;
                         }
-                    } else {
-                        return response()->json([
-                            'code'    => 'FOLDER_NOT_SHARED',
-                            'message' => "La carpeta principal no está compartida con la cuenta de servicio. Comparte la carpeta con {$serviceEmail}",
-                        ], 403);
                     }
                 } catch (\Throwable $e2) {
                     Log::error('saveResults: auto-share fallback failed', [
                         'error' => $e2->getMessage(),
                     ]);
+                }
+
+                // Fallback adicional: intentar impersonar al propietario del folder raíz
+                if (!$shared) {
+                    $ownerEmail = $this->resolveRootOwnerEmail($rootFolder, $useOrgDrive);
+                    if ($ownerEmail && !GoogleServiceAccount::impersonationDisabled()) {
+                        try {
+                            $serviceAccount->impersonate($ownerEmail);
+                            $serviceAccount->shareFolder($rootFolder->google_id, $serviceEmail);
+                            $shared = true;
+                            Log::info('saveResults: root folder shared via impersonation fallback', [
+                                'owner' => $ownerEmail,
+                            ]);
+                        } catch (\Throwable $impersonationError) {
+                            Log::warning('saveResults: impersonation fallback failed', [
+                                'owner' => $ownerEmail,
+                                'error' => $impersonationError->getMessage(),
+                            ]);
+                        } finally {
+                            try {
+                                $serviceAccount->impersonate(null);
+                            } catch (\Throwable $resetError) {
+                                Log::debug('saveResults: failed to reset impersonation after root share attempt', [
+                                    'error' => $resetError->getMessage(),
+                                ]);
+                            }
+                        }
+                    }
+                }
+
+                if (!$shared) {
                     return response()->json([
                         'code'    => 'FOLDER_NOT_SHARED',
                         'message' => "La carpeta principal no está compartida con la cuenta de servicio. Comparte la carpeta con {$serviceEmail}",
