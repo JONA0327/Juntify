@@ -104,3 +104,22 @@
         </div>
     </div>
 </div>
+
+<!-- Modal Confirmar cambio de vista durante grabación -->
+<div class="modal" id="recording-navigation-modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">
+                <x-icon name="x" class="modal-icon" />
+                Cambiar de vista
+            </h2>
+        </div>
+        <div class="modal-body">
+            <p>¿Seguro que quieres cambiar de vista? Tu grabación actual se descartará.</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="cancelRecordingNavigationChange()">Seguir grabando</button>
+            <button class="btn btn-danger" onclick="confirmRecordingNavigationChange()">Descartar y salir</button>
+        </div>
+    </div>
+</div>

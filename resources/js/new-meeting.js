@@ -48,6 +48,7 @@ let failedAudioBlob = null; // Almacenar blob que falló al subir
 let failedAudioName = null; // Nombre del archivo que falló
 let retryAttempts = 0; // Contador de intentos de resubida
 const MAX_RETRY_ATTEMPTS = 3; // Máximo número de reintentos
+let pendingNavigationUrl = null;
 
 // Función para obtener el mejor formato de audio disponible priorizando OGG
 function getOptimalAudioFormat() {
@@ -576,6 +577,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (e) {
         console.warn('No se pudieron cargar los límites del plan:', e);
     }
+
+    setupRecordingNavigationGuards();
 });
 
 // ===== FUNCIONES DE GRABACIÓN =====
@@ -812,6 +815,93 @@ function confirmDiscardRecording() {
 
 function cancelDiscardRecording() {
     closeDiscardRecordingModal();
+}
+
+function showRecordingNavigationModal() {
+    const modal = document.getElementById('recording-navigation-modal');
+
+    if (!modal) {
+        confirmRecordingNavigationChange();
+        return;
+    }
+
+    modal.style.display = 'block';
+}
+
+function closeRecordingNavigationModal() {
+    const modal = document.getElementById('recording-navigation-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function confirmRecordingNavigationChange() {
+    const url = pendingNavigationUrl;
+    pendingNavigationUrl = null;
+
+    closeRecordingNavigationModal();
+
+    if (!url) {
+        return;
+    }
+
+    performDiscardRecording();
+
+    if (typeof window.closeMobileDropdown === 'function') {
+        window.closeMobileDropdown();
+    }
+
+    window.location.href = url;
+}
+
+function cancelRecordingNavigationChange() {
+    pendingNavigationUrl = null;
+    closeRecordingNavigationModal();
+}
+
+function handleRecordingNavigationClick(event) {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+    }
+
+    const anchor = event.currentTarget;
+    if (!anchor || anchor.target === '_blank') {
+        return;
+    }
+
+    const href = anchor.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript:')) {
+        return;
+    }
+
+    if (!isRecording && !meetingRecording) {
+        return;
+    }
+
+    const targetUrl = anchor.href;
+    const currentUrl = window.location.href;
+
+    if (targetUrl.replace(/#.*$/, '') === currentUrl.replace(/#.*$/, '')) {
+        return;
+    }
+
+    event.preventDefault();
+
+    pendingNavigationUrl = targetUrl;
+
+    showRecordingNavigationModal();
+}
+
+function setupRecordingNavigationGuards() {
+    const selectors = ['.nav a', '#mobile-menu a', '#mobile-header a'];
+    const links = document.querySelectorAll(selectors.join(', '));
+
+    links.forEach(link => {
+        if (!link.dataset.recordingGuardBound) {
+            link.addEventListener('click', handleRecordingNavigationClick);
+            link.dataset.recordingGuardBound = 'true';
+        }
+    });
 }
 
 function resetRecordingControls() {
@@ -2371,6 +2461,8 @@ window.resumeRecording = resumeRecording;
 window.discardRecording = requestDiscardRecording;
 window.confirmDiscardRecording = confirmDiscardRecording;
 window.cancelDiscardRecording = cancelDiscardRecording;
+window.confirmRecordingNavigationChange = confirmRecordingNavigationChange;
+window.cancelRecordingNavigationChange = cancelRecordingNavigationChange;
 window.togglePostponeMode = togglePostponeMode;
 // Funciones del grabador de reuniones que faltaban
 window.toggleSystemAudio = toggleSystemAudio;
