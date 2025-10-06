@@ -44,6 +44,14 @@
             </svg>
             </button>
         </div>
+        <div class="recorder-action-hints text-xs text-gray-500 mt-3 text-center">
+            <div class="flex justify-center gap-6">
+                <span>Pausa</span>
+                <span>Reanudar</span>
+                <span>Descartar</span>
+            </div>
+            <p class="mt-2">Cuando se detenga la reunión, selecciona nuevamente el ícono de micrófono para detener y procesar el audio.</p>
+        </div>
         <div class="postpone-switch flex flex-col items-center mt-6" id="postpone-switch">
             <span id="postpone-mode-label" class="text-sm mb-1">Modo posponer: Apagado</span>
             <label for="postpone-toggle" class="cursor-pointer select-none">
@@ -74,6 +82,25 @@
         <div class="modal-footer" id="save-modal-footer">
             <button class="btn btn-primary" id="analyze-now-btn">Analizar ahora</button>
             <button class="btn" id="postpone-btn">Posponer</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmar Descarte -->
+<div class="modal" id="discard-recording-modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">
+                <x-icon name="x" class="modal-icon" />
+                Descartar grabación
+            </h2>
+        </div>
+        <div class="modal-body">
+            <p>¿Deseas descartar la reunión actual? Si confirmas, la grabación se eliminará y no podrás recuperarla.</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="cancelDiscardRecording()">Continuar grabando</button>
+            <button class="btn btn-danger" onclick="confirmDiscardRecording()">Descartar reunión</button>
         </div>
     </div>
 </div>
