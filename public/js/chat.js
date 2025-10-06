@@ -783,6 +783,66 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Tabs de la barra lateral
+    const sidebarTabs = document.querySelectorAll('.chat-sidebar-tab');
+    const tabPanels = {};
+    sidebarTabs.forEach(btn => {
+        const target = btn.dataset.target;
+        if (target) {
+            tabPanels[target] = document.getElementById(target);
+        }
+    });
+
+    function setActiveSidebarTab(targetId) {
+        sidebarTabs.forEach(btn => {
+            const isActive = btn.dataset.target === targetId;
+            btn.classList.toggle('bg-slate-700/50', isActive);
+        });
+
+        Object.entries(tabPanels).forEach(([id, panel]) => {
+            if (!panel) return;
+            if (id === targetId) {
+                panel.classList.remove('hidden');
+            } else {
+                panel.classList.add('hidden');
+            }
+        });
+    }
+
+    if (sidebarTabs.length) {
+        sidebarTabs.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetId = btn.dataset.target;
+                if (targetId) {
+                    setActiveSidebarTab(targetId);
+                }
+            });
+        });
+
+        const defaultTab = document.querySelector('.chat-sidebar-tab[data-target="sidebar-conversations"]');
+        if (defaultTab?.dataset.target) {
+            setActiveSidebarTab(defaultTab.dataset.target);
+        }
+    }
+
+    // Botón para ocultar/mostrar la lista de conversaciones
+    const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+    const conversationSidebar = document.getElementById('conversation-sidebar');
+    if (toggleSidebarBtn && conversationSidebar) {
+        const icons = {
+            hide: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>',
+            show: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>'
+        };
+
+        toggleSidebarBtn.addEventListener('click', () => {
+            const willHide = !conversationSidebar.classList.contains('hidden');
+            conversationSidebar.classList.toggle('hidden', willHide);
+            toggleSidebarBtn.setAttribute('aria-expanded', String(!willHide));
+            toggleSidebarBtn.innerHTML = willHide ? icons.show : icons.hide;
+            toggleSidebarBtn.setAttribute('aria-label', willHide ? 'Mostrar conversaciones' : 'Ocultar conversaciones');
+        });
+    }
 });
 
 // Cargar contactos desde API
