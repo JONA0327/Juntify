@@ -22,7 +22,6 @@ use App\Http\Controllers\GroupController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ContactController;
-use App\Http\Controllers\ChatController;
 use App\Http\Controllers\AiAssistantController;
 
 // Rutas de archivos de contenedor (deben ir antes de otros grupos pero dentro de PHP)
@@ -83,13 +82,6 @@ Route::middleware(['auth'])->group(function () {
         ->name('reuniones.index');
 
     Route::get('/contacts', [ContactController::class, 'index'])->name('contacts.index');
-    Route::get('/chats', [ChatController::class, 'index'])->name('chats.index');
-    Route::get('/chats/{chat}', [ChatController::class, 'showView'])->name('chats.show');
-    // API chat endpoints
-    Route::get('/api/chats', [ChatController::class, 'apiIndex'])->name('api.chats.index');
-    Route::get('/api/chats/{chat}/messages', [ChatController::class, 'show'])->name('api.chats.messages');
-    Route::post('/api/chats/{chat}/messages', [ChatController::class, 'store'])->name('api.chats.messages.store');
-    Route::post('/api/chats/create-or-find', [ChatController::class, 'createOrFind'])->name('api.chats.create');
 
     Route::get('/organization', [OrganizationController::class, 'index'])->name('organization.index');
     // Ruta web alternativa para crear organización (fallback a /api/organizations)
