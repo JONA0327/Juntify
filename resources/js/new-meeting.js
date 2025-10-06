@@ -18,6 +18,7 @@ let microphoneAudioEnabled = true;
 let systemAudioMuted = false;
 let microphoneAudioMuted = false;
 let meetingRecording = false;
+let microphoneMutedBeforePause = null;
 let meetingTimer = null;
 let meetingStartTime = null;
 let systemAudioStream = null;
@@ -684,6 +685,13 @@ function pauseRecording() {
         const mr = document.getElementById('meeting-resume');
         if (mp) mp.style.display = 'none';
         if (mr) mr.style.display = 'inline-block';
+
+        if (meetingRecording) {
+            microphoneMutedBeforePause = microphoneAudioMuted;
+            if (!microphoneAudioMuted) {
+                setMicrophoneMuteState(true);
+            }
+        }
     }
 }
 
@@ -704,6 +712,11 @@ function resumeRecording() {
         const mr = document.getElementById('meeting-resume');
         if (mp) mp.style.display = 'inline-block';
         if (mr) mr.style.display = 'none';
+
+        if (meetingRecording && microphoneMutedBeforePause === false) {
+            setMicrophoneMuteState(false);
+        }
+        microphoneMutedBeforePause = null;
     }
 }
 
@@ -724,6 +737,7 @@ function discardRecording() {
     if (wasMeetingRecording) {
         meetingRecording = false;
         meetingStartTime = null;
+        microphoneMutedBeforePause = null;
 
         if (systemAudioStream) {
             try { systemAudioStream.getTracks().forEach(track => track.stop()); } catch(_) {}
@@ -1929,16 +1943,19 @@ function muteSystemAudio() {
 
 // Mutear audio del micrófono
 function muteMicrophoneAudio() {
-    microphoneAudioMuted = !microphoneAudioMuted;
-    const btn = document.getElementById('microphone-mute-btn');
-    const icon = btn.querySelector('.mute-icon');
+    setMicrophoneMuteState(!microphoneAudioMuted);
+}
 
-    if (microphoneAudioMuted) {
-        btn.classList.add('muted');
-        icon.textContent = '🔇';
-    } else {
-        btn.classList.remove('muted');
-        icon.textContent = '🔊';
+function setMicrophoneMuteState(muted) {
+    microphoneAudioMuted = muted;
+    const btn = document.getElementById('microphone-mute-btn');
+    const icon = btn ? btn.querySelector('.mute-icon') : null;
+
+    if (btn) {
+        btn.classList.toggle('muted', muted);
+    }
+    if (icon) {
+        icon.textContent = muted ? '🔇' : '🔊';
     }
     applyMuteStates();
 }
@@ -1971,6 +1988,8 @@ async function startMeetingRecording() {
     }
 
     try {
+        microphoneMutedBeforePause = null;
+
         // Limpiar datos de audio previos antes de iniciar nueva reunión
         await clearPreviousAudioData();
 
@@ -2100,6 +2119,11 @@ async function startMeetingRecording() {
 // Detener grabación de reunión
 async function stopMeetingRecording() {
     meetingRecording = false;
+
+    if (microphoneMutedBeforePause === false) {
+        setMicrophoneMuteState(false);
+    }
+    microphoneMutedBeforePause = null;
 
     // Detener MediaRecorder si está activo
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
