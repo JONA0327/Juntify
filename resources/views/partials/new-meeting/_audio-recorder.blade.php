@@ -45,11 +45,6 @@
             </button>
         </div>
         <div class="recorder-action-hints text-xs text-gray-500 mt-3 text-center">
-            <div class="flex justify-center gap-6">
-                <span>Pausa</span>
-                <span>Reanudar</span>
-                <span>Descartar</span>
-            </div>
             <p class="mt-2">Cuando se detenga la reunión, selecciona nuevamente el ícono de micrófono para detener y procesar el audio.</p>
         </div>
         <div class="postpone-switch flex flex-col items-center mt-6" id="postpone-switch">

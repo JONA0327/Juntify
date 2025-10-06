@@ -805,7 +805,7 @@ function requestDiscardRecording() {
         return;
     }
 
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
 }
 
 function confirmDiscardRecording() {
@@ -825,7 +825,7 @@ function showRecordingNavigationModal() {
         return;
     }
 
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
 }
 
 function closeRecordingNavigationModal() {
