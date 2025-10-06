@@ -19,7 +19,6 @@ use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\RecordingChunkController;
 use App\Http\Controllers\ContactController;
-use App\Http\Controllers\ChatController;
 use App\Http\Controllers\SharedMeetingController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PaymentController;
@@ -318,13 +317,6 @@ Route::middleware(['web', 'auth'])->group(function () {
           Route::delete('/contacts/{contact}', [ContactController::class, 'destroy'])->name('api.contacts.destroy');
           Route::post('/users/search', [ContactController::class, 'searchUsers'])->name('api.users.search');
 
-          Route::get('/chats/test', [ChatController::class, 'apiTest'])->name('api.chats.test');
-          Route::get('/chats/contacts', [ChatController::class, 'contacts'])->name('api.chats.contacts');
-          Route::get('/chats', [ChatController::class, 'apiIndex'])->name('api.chats.index');
-          Route::post('/chats/create-or-find', [ChatController::class, 'createOrFind'])->name('api.chats.create-or-find');
-          Route::post('/chats/unread-count', [ChatController::class, 'getUnreadCount'])->name('api.chats.unread-count');
-          Route::get('/chats/{chat}', [ChatController::class, 'show'])->name('api.chats.show');
-          Route::post('/chats/{chat}/messages', [ChatController::class, 'store'])->name('api.chats.messages.store');
 
           // API para reuniones compartidas
           Route::get('/shared-meetings/contacts', [SharedMeetingController::class, 'getContactsForSharing'])->name('api.shared-meetings.contacts');
