@@ -88,7 +88,8 @@
                                     <select id="assigneeSelector" class="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm min-w-[180px]">
                                         <option value="">Selecciona contacto o miembro</option>
                                     </select>
-                                    <input id="assigneeInput" type="text" placeholder="usuario o email" class="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm" />
+                                    <input id="assigneeInput" type="text" placeholder="usuario o email" list="assigneeSuggestions" class="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm" />
+                                    <datalist id="assigneeSuggestions"></datalist>
                                     <button id="assignTaskBtn" class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm">Asignar</button>
                                 </div>
                                 <div id="assignmentResponseControls" class="flex items-center gap-2">
@@ -158,6 +159,8 @@
 <script>
 let currentTaskDetailsId = null;
 let cachedAssignableUsers = null;
+let directorySearchCache = new Map();
+let directorySearchTimeout = null;
 
 const assignmentStatusStyles = {
     pending: { text: 'Pendiente de aceptación', class: 'bg-yellow-500/20 text-yellow-300' },
@@ -213,6 +216,69 @@ function populateAssigneeSelector(users, currentId) {
     select.disabled = users.length <= 0;
 }
 
+async function fetchDirectorySuggestions(query) {
+    const normalized = query.trim().toLowerCase();
+    if (normalized.length < 3) {
+        populateAssigneeSuggestions([]);
+        return;
+    }
+
+    if (directorySearchCache.has(normalized)) {
+        populateAssigneeSuggestions(directorySearchCache.get(normalized));
+        return;
+    }
+
+    try {
+        const url = new URL('/api/tasks-laravel/assignable-users', window.location.origin);
+        url.searchParams.set('q', normalized);
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]')?.content || '')
+            }
+        });
+        const data = await response.json();
+        const suggestions = Array.isArray(data.directory) ? data.directory : [];
+        directorySearchCache.set(normalized, suggestions);
+        populateAssigneeSuggestions(suggestions);
+    } catch (error) {
+        console.error('Error loading directory suggestions:', error);
+        populateAssigneeSuggestions([]);
+    }
+}
+
+function populateAssigneeSuggestions(users) {
+    const dataList = document.getElementById('assigneeSuggestions');
+    if (!dataList) return;
+    dataList.innerHTML = '';
+    users.forEach(user => {
+        if (!user) return;
+        const option = document.createElement('option');
+        option.value = user.email || user.username || '';
+        option.label = user.name ? `${user.name} (${user.email || user.username || ''})` : (user.email || user.username || '');
+        dataList.appendChild(option);
+    });
+}
+
+function scheduleDirectorySearch(value) {
+    if (directorySearchTimeout) {
+        clearTimeout(directorySearchTimeout);
+        directorySearchTimeout = null;
+    }
+
+    const normalized = (value || '').trim();
+    if (normalized.length < 3) {
+        directorySearchTimeout = setTimeout(() => populateAssigneeSuggestions([]), 0);
+        return;
+    }
+
+    directorySearchTimeout = setTimeout(() => fetchDirectorySuggestions(normalized), 250);
+}
+
+function handleAssigneeSearchInput(event) {
+    scheduleDirectorySearch(event?.target?.value || '');
+}
+
 async function setupAssignableControls(task) {
     const assignWrapper = document.getElementById('assignControls');
     const responseControls = document.getElementById('assignmentResponseControls');
@@ -230,7 +296,16 @@ async function setupAssignableControls(task) {
         assignWrapper.classList.toggle('hidden', !isOwner);
     }
     if (assigneeSelector) assigneeSelector.disabled = !isOwner;
-    if (assigneeInput) assigneeInput.disabled = !isOwner;
+    if (assigneeInput) {
+        assigneeInput.disabled = !isOwner;
+        assigneeInput.removeEventListener('input', handleAssigneeSearchInput);
+        if (isOwner) {
+            populateAssigneeSuggestions([]);
+            assigneeInput.addEventListener('input', handleAssigneeSearchInput);
+        } else {
+            populateAssigneeSuggestions([]);
+        }
+    }
     if (assignBtn) assignBtn.disabled = !isOwner;
 
     if (responseControls) {
@@ -412,6 +487,7 @@ function populateTaskDetails(task) {
                 if (data.success) {
                     if (assigneeInput) assigneeInput.value = '';
                     if (assigneeSelector) assigneeSelector.value = '';
+                    populateAssigneeSuggestions([]);
                     alert('Solicitud de asignación enviada');
                     loadTaskDetails(task.id);
                     if (typeof kanbanReload === 'function') kanbanReload();

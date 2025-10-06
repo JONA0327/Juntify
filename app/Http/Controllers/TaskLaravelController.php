@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 use App\Services\GoogleDriveService;
 use App\Traits\GoogleDriveHelpers;
 use App\Traits\MeetingContentParsing;
@@ -69,6 +70,86 @@ class TaskLaravelController extends Controller
     protected function withTaskRelations(TaskLaravel $task): TaskLaravel
     {
         return $task->loadMissing(['assignedUser:id,full_name,email', 'meeting:id,meeting_name']);
+    }
+
+    protected function isTaskOverdue(TaskLaravel $task): bool
+    {
+        if ($task->progreso >= 100) {
+            return false;
+        }
+
+        if (empty($task->fecha_limite)) {
+            return false;
+        }
+
+        try {
+            $due = $task->fecha_limite instanceof Carbon
+                ? $task->fecha_limite->copy()->endOfDay()
+                : Carbon::parse($task->fecha_limite)->endOfDay();
+        } catch (\Throwable $e) {
+            return false;
+        }
+
+        return $due->lt(now());
+    }
+
+    protected function syncOverdueNotifications(Collection $tasks): void
+    {
+        $now = now();
+        $today = Carbon::today();
+
+        foreach ($tasks as $task) {
+            if (!$this->isTaskOverdue($task)) {
+                if (!empty($task->overdue_notified_at)) {
+                    $task->overdue_notified_at = null;
+                    $task->save();
+                }
+                continue;
+            }
+
+            if (empty($task->assigned_user_id)) {
+                continue;
+            }
+
+            $lastNotification = $task->overdue_notified_at
+                ? Carbon::parse($task->overdue_notified_at)
+                : null;
+
+            if ($lastNotification && $lastNotification->gte($today)) {
+                continue;
+            }
+
+            $owner = User::where('username', $task->username)->first();
+            $assignee = $task->assignedUser ?: User::find($task->assigned_user_id);
+
+            if (!$owner || !$assignee) {
+                continue;
+            }
+
+            Notification::create([
+                'remitente' => $assignee->id,
+                'emisor' => $owner->id,
+                'user_id' => $owner->id,
+                'from_user_id' => $assignee->id,
+                'type' => 'task_overdue_alert',
+                'title' => 'Tarea vencida',
+                'message' => sprintf(
+                    'El usuario %s tiene la tarea "%s" vencida.',
+                    $assignee->full_name ?: ($assignee->username ?: $assignee->email),
+                    $task->tarea ?? 'Sin título'
+                ),
+                'status' => 'pending',
+                'data' => [
+                    'task_id' => $task->id,
+                    'meeting_id' => $task->meeting_id,
+                    'assignee_id' => $assignee->id,
+                ],
+                'read' => false,
+            ]);
+
+            $task->overdue_notified_at = $now;
+            $task->save();
+        }
     }
     /**
      * Lista reuniones para importar tareas (misma lógica que reuniones_v2: getMeetings)
@@ -259,7 +340,10 @@ class TaskLaravelController extends Controller
             'progreso',
             'created_at',
             'updated_at',
+            'overdue_notified_at',
         ]);
+
+        $this->syncOverdueNotifications($tasks);
 
         $today = Carbon::today();
         $statsQuery = clone $query;
@@ -293,6 +377,8 @@ class TaskLaravelController extends Controller
                 'progreso' => $task->progreso,
                 'created_at' => optional($task->created_at)->toDateTimeString(),
                 'updated_at' => optional($task->updated_at)->toDateTimeString(),
+                'is_overdue' => $this->isTaskOverdue($task),
+                'overdue_notified_at' => optional($task->overdue_notified_at)->toDateTimeString(),
             ];
         })->values();
 
@@ -515,7 +601,9 @@ class TaskLaravelController extends Controller
             'progreso' => 'nullable|integer|min:0|max:100',
         ]);
 
-        if ($task->username !== $user->username) {
+        $isOwner = $task->username === $user->username;
+
+        if (!$isOwner) {
             if ($task->assignment_status === 'pending') {
                 return response()->json(['success' => false, 'message' => 'Debes aceptar la tarea antes de actualizarla'], 403);
             }
@@ -523,9 +611,20 @@ class TaskLaravelController extends Controller
             if (!array_key_exists('progreso', $data)) {
                 return response()->json(['success' => false, 'message' => 'Solo puedes actualizar el progreso de la tarea asignada'], 403);
             }
+
+            if ($this->isTaskOverdue($task) && isset($data['progreso']) && (int)$data['progreso'] < 100) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Esta tarea está vencida. Solicita al dueño una nueva fecha para continuar.',
+                ], 423);
+            }
         }
 
-        $task->update($data);
+        $task->fill($data);
+        if (!$this->isTaskOverdue($task)) {
+            $task->overdue_notified_at = null;
+        }
+        $task->save();
 
         // Sincronizar con Google Calendar en actualizaciones
         $this->maybeSyncToCalendar($task, $calendar);
@@ -596,7 +695,9 @@ class TaskLaravelController extends Controller
         $user = Auth::user();
         $task = TaskLaravel::findOrFail($id);
         $this->ensureTaskAccess($task, $user);
-        $task->update(['progreso' => 100]);
+        $task->progreso = 100;
+        $task->overdue_notified_at = null;
+        $task->save();
         $this->normalizeAssignmentStatus($task);
         return response()->json([
             'success' => true,
@@ -641,6 +742,7 @@ class TaskLaravelController extends Controller
         if ($task->progreso >= 100) {
             $task->progreso = 0;
         }
+        $task->overdue_notified_at = null;
         $task->save();
 
         // Crear notificación (compatibilidad legacy y nueva)
@@ -674,9 +776,10 @@ class TaskLaravelController extends Controller
     }
 
     /** Lista contactos y miembros de organización disponibles para asignar tareas */
-    public function assignableUsers(): JsonResponse
+    public function assignableUsers(Request $request): JsonResponse
     {
         $user = Auth::user();
+        $search = trim($request->query('q', ''));
 
         $contacts = Contact::with('contact:id,full_name,email')
             ->where('user_id', $user->id)
@@ -713,9 +816,32 @@ class TaskLaravelController extends Controller
             ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
             ->values();
 
+        $directoryUsers = collect();
+        if ($search !== '') {
+            $directoryUsers = User::query()
+                ->where('id', '!=', $user->id)
+                ->where(function ($q) use ($search) {
+                    $q->where('email', 'like', "%{$search}%")
+                        ->orWhere('username', 'like', "%{$search}%")
+                        ->orWhere('full_name', 'like', "%{$search}%");
+                })
+                ->limit(10)
+                ->get(['id', 'full_name', 'email', 'username'])
+                ->map(function ($directoryUser) {
+                    return [
+                        'id' => $directoryUser->id,
+                        'name' => $directoryUser->full_name ?: ($directoryUser->username ?: $directoryUser->email),
+                        'email' => $directoryUser->email,
+                        'username' => $directoryUser->username,
+                        'source' => 'directory',
+                    ];
+                });
+        }
+
         return response()->json([
             'success' => true,
             'users' => $combined,
+            'directory' => $directoryUsers->values(),
         ]);
     }
 
@@ -759,6 +885,7 @@ class TaskLaravelController extends Controller
             if ($task->progreso >= 100) {
                 $task->progreso = 0;
             }
+            $task->overdue_notified_at = null;
             $task->save();
 
             // Intentar crear evento en Calendar si hay fecha/hora
@@ -786,6 +913,7 @@ class TaskLaravelController extends Controller
             $task->assignment_status = 'rejected';
             $task->assigned_user_id = null;
             $task->asignado = null;
+            $task->overdue_notified_at = null;
             $task->save();
 
             if ($owner) {

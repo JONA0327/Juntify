@@ -27,6 +27,7 @@ class TaskLaravel extends Model
         'google_event_id',
         'google_calendar_id',
         'calendar_synced_at',
+        'overdue_notified_at',
     ];
 
     protected $casts = [
@@ -38,6 +39,7 @@ class TaskLaravel extends Model
         'assignment_status' => 'string',
         'progreso' => 'integer',
         'calendar_synced_at' => 'datetime',
+        'overdue_notified_at' => 'datetime',
     ];
 
     public function meeting()
