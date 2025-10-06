@@ -721,7 +721,7 @@ function resumeRecording() {
 }
 
 // Descartar grabación
-function discardRecording() {
+function performDiscardRecording() {
     const wasMeetingRecording = meetingRecording || lastRecordingContext === 'meeting';
 
     discardRequested = true;
@@ -785,6 +785,33 @@ function discardRecording() {
     updateRecordingUI(false);
     resetAudioVisualizer();
     resetRecordingControls();
+}
+
+function closeDiscardRecordingModal() {
+    const modal = document.getElementById('discard-recording-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function requestDiscardRecording() {
+    const modal = document.getElementById('discard-recording-modal');
+
+    if (!modal) {
+        performDiscardRecording();
+        return;
+    }
+
+    modal.style.display = 'block';
+}
+
+function confirmDiscardRecording() {
+    closeDiscardRecordingModal();
+    performDiscardRecording();
+}
+
+function cancelDiscardRecording() {
+    closeDiscardRecordingModal();
 }
 
 function resetRecordingControls() {
@@ -2341,7 +2368,9 @@ window.removeSelectedFile = removeSelectedFile;
 window.processAudioFile = processAudioFile;
 window.pauseRecording = pauseRecording;
 window.resumeRecording = resumeRecording;
-window.discardRecording = discardRecording;
+window.discardRecording = requestDiscardRecording;
+window.confirmDiscardRecording = confirmDiscardRecording;
+window.cancelDiscardRecording = cancelDiscardRecording;
 window.togglePostponeMode = togglePostponeMode;
 // Funciones del grabador de reuniones que faltaban
 window.toggleSystemAudio = toggleSystemAudio;

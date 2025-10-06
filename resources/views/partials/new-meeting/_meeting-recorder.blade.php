@@ -94,6 +94,14 @@
                     </svg>
                 </button>
             </div>
+            <div class="recorder-action-hints text-xs text-gray-500 mt-3 text-center">
+                <div class="flex justify-center gap-6">
+                    <span>Pausa</span>
+                    <span>Reanudar</span>
+                    <span>Descartar</span>
+                </div>
+                <p class="mt-2">Cuando se detenga la reunión, selecciona nuevamente el ícono de micrófono para detener y procesar el audio.</p>
+            </div>
         </div>
     </div>
     <p id="max-duration-hint-meeting" class="text-xs text-gray-500 mt-4 text-center">Puedes grabar hasta 2 horas continuas. Se notificará cuando queden 5 min para el límite.</p>
