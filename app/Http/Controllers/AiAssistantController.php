@@ -2302,6 +2302,7 @@ class AiAssistantController extends Controller
                         $summaryLines = [];
                         $allKeyPoints = [];
                         $allTasks = [];
+                        $aggregatedTaskLines = [];
                         $stats = [
                             'total_meetings' => 0,
                             'total_segments' => 0,
@@ -2318,8 +2319,6 @@ class AiAssistantController extends Controller
                             $tasksCount = is_countable($cached['tasks'] ?? null) ? count($cached['tasks']) : 0;
                             $stats['total_segments'] += $segmentsCount;
                             $stats['total_key_points'] += $kpCount;
-                            $stats['total_tasks'] += $tasksCount;
-
                             if (!empty($cached['summary'])) {
                                 $summaryLines[] = $m->meeting_name . ': ' . Str::limit(trim((string)$cached['summary']), 800);
                             }
@@ -2342,9 +2341,57 @@ class AiAssistantController extends Controller
                                         $title = $task['tarea'] ?? $task['title'] ?? $task['name'] ?? json_encode($task);
                                     } else { $title = (string)$task; }
                                     $title = Str::limit(trim((string)$title), 160);
-                                    if ($title !== '') { $allTasks[] = $m->meeting_name . ': ' . $title; }
+                                    if ($title === '') { continue; }
+                                    $line = $m->meeting_name . ': ' . $title;
+                                    $hash = md5($line);
+                                    if (!isset($aggregatedTaskLines[$hash])) {
+                                        $aggregatedTaskLines[$hash] = $line;
+                                        $stats['total_tasks']++;
+                                    }
                                 }
                             }
+
+                            // Incluir tareas persistidas en BD como respaldo consolidado
+                            try {
+                                $dbTasks = TaskLaravel::where('meeting_id', $m->id)
+                                    ->orderByDesc('updated_at')
+                                    ->limit(5)
+                                    ->get();
+                            } catch (\Throwable $taskFetchException) {
+                                $dbTasks = collect();
+                            }
+
+                            if ($dbTasks->isNotEmpty()) {
+                                foreach ($dbTasks as $taskModel) {
+                                    $title = Str::limit(trim((string)$taskModel->tarea), 160);
+                                    if ($title === '') {
+                                        $title = 'Tarea sin título';
+                                    }
+
+                                    $metaBits = [];
+                                    if ($taskModel->asignado) { $metaBits[] = 'Asignado: ' . $taskModel->asignado; }
+                                    if ($taskModel->prioridad) { $metaBits[] = 'Prioridad: ' . $taskModel->prioridad; }
+                                    if ($taskModel->fecha_inicio) { $metaBits[] = 'Inicio: ' . $taskModel->fecha_inicio; }
+                                    if ($taskModel->fecha_limite) { $metaBits[] = 'Vence: ' . $taskModel->fecha_limite; }
+                                    if ($taskModel->hora_limite) { $metaBits[] = 'Hora: ' . $taskModel->hora_limite; }
+                                    $metaTxt = empty($metaBits) ? '' : ' [' . implode(' | ', $metaBits) . ']';
+
+                                    $description = $taskModel->descripcion
+                                        ? ' — ' . Str::limit(trim((string)$taskModel->descripcion), 200)
+                                        : '';
+
+                                    $line = $m->meeting_name . ': ' . $title . $metaTxt . $description;
+                                    $hash = 'db:' . ($taskModel->id ?? md5($line));
+                                    if (!isset($aggregatedTaskLines[$hash])) {
+                                        $aggregatedTaskLines[$hash] = $line;
+                                        $stats['total_tasks']++;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!empty($aggregatedTaskLines)) {
+                            $allTasks = array_values($aggregatedTaskLines);
                         }
 
                         if (!empty($summaryLines)) {
@@ -2910,6 +2957,7 @@ class AiAssistantController extends Controller
             $segmentsSelected = [];
             // Derivar lista de participantes potenciales (speakers distintos)
             $participantsSet = [];
+            $participantsNormalizedMap = [];
             foreach ($segmentsAll as $segP) {
                 if (!is_array($segP)) continue;
                 $sp = $segP['speaker'] ?? $segP['display_speaker'] ?? null;
@@ -2917,14 +2965,54 @@ class AiAssistantController extends Controller
                     $normSp = trim(preg_replace('/\s+/', ' ', $sp));
                     if ($normSp !== '' && mb_strlen($normSp) <= 60) {
                         $participantsSet[$normSp] = true;
+                        $normalizedKey = $this->normalizeSpeakerString($normSp);
+                        if ($normalizedKey !== '') {
+                            $participantsNormalizedMap[$normSp] = $normalizedKey;
+                        }
                     }
                 }
             }
 
             // Detección simple de speaker (nombres capitalizados en query) y tema (resto de palabras)
             $speakerCandidate = null;
-            if (preg_match('/\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,})\b/u', $query, $mSp)) {
-                $speakerCandidate = $mSp[1];
+            $speakerCandidateNormalized = null;
+            $speakerCandidateParts = [];
+
+            $normalizedQuery = $this->normalizeSpeakerString($query);
+            if (!empty($participantsNormalizedMap) && $normalizedQuery !== '') {
+                foreach ($participantsNormalizedMap as $originalName => $normalizedName) {
+                    if ($normalizedName !== '' && str_contains($normalizedQuery, $normalizedName)) {
+                        $speakerCandidate = $originalName;
+                        $speakerCandidateNormalized = $normalizedName;
+                        break;
+                    }
+                }
+
+                if (!$speakerCandidate) {
+                    foreach ($participantsNormalizedMap as $originalName => $normalizedName) {
+                        $parts = array_filter(explode(' ', $normalizedName), fn ($part) => mb_strlen($part) >= 3);
+                        foreach ($parts as $part) {
+                            if ($part !== '' && str_contains($normalizedQuery, $part)) {
+                                $speakerCandidate = $originalName;
+                                $speakerCandidateNormalized = $normalizedName;
+                                $speakerCandidateParts = $parts;
+                                break 2;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!$speakerCandidate && preg_match('/\b([A-ZÁÉÍÓÚÑ][\p{L}]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\p{L}]{2,})*)\b/u', $query, $mSp)) {
+                $speakerCandidate = trim($mSp[1]);
+                $speakerCandidateNormalized = $this->normalizeSpeakerString($speakerCandidate);
+            }
+
+            if ($speakerCandidateNormalized && empty($speakerCandidateParts)) {
+                $speakerCandidateParts = array_filter(
+                    explode(' ', $speakerCandidateNormalized),
+                    fn ($part) => mb_strlen($part) >= 3
+                );
             }
             $keywords = $this->extractQueryKeywords($query);
 
@@ -2934,7 +3022,24 @@ class AiAssistantController extends Controller
                     $txt = is_array($seg) ? ($seg['text'] ?? '') : '';
                     if (trim($txt) === '') continue;
                     $speaker = $seg['speaker'] ?? $seg['display_speaker'] ?? '';
-                    if ($speaker && stripos($speaker, $speakerCandidate) === false) continue;
+                    if ($speakerCandidateNormalized) {
+                        $speakerNormalized = $this->normalizeSpeakerString((string)$speaker);
+                        $matchesSpeaker = $speakerNormalized !== ''
+                            && str_contains($speakerNormalized, $speakerCandidateNormalized);
+                        if (!$matchesSpeaker && !empty($speakerCandidateParts)) {
+                            foreach ($speakerCandidateParts as $part) {
+                                if ($part !== '' && str_contains($speakerNormalized, $part)) {
+                                    $matchesSpeaker = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!$matchesSpeaker) {
+                            continue;
+                        }
+                    } elseif ($speaker && stripos((string)$speaker, $speakerCandidate) === false) {
+                        continue;
+                    }
                     $ok = true;
                     foreach ($keywords as $kw) {
                         if (stripos($txt, $kw) === false && stripos((string)$speaker, $kw) === false) { $ok = false; break; }
@@ -2970,6 +3075,7 @@ class AiAssistantController extends Controller
                         'speaker' => $speaker,
                         'timestamp' => $time,
                         'focused_speaker' => (bool)$speakerCandidate,
+                        'focused_speaker_name' => $speakerCandidate,
                     ]),
                     'similarity' => null,
                     'citation' => 'meeting:' . $meeting->id . ' t.' . ($time ? $this->formatTimeForCitation($time) : '—'),
@@ -2979,6 +3085,7 @@ class AiAssistantController extends Controller
                         'speaker' => $speaker,
                         'source' => 'ju',
                         'focused_speaker' => (bool)$speakerCandidate,
+                        'focused_speaker_name' => $speakerCandidate,
                     ]),
                 ];
             }
@@ -3277,6 +3384,23 @@ class AiAssistantController extends Controller
 
             return $value !== null;
         });
+    }
+
+    private function normalizeSpeakerString(?string $value): string
+    {
+        if (!is_string($value) || $value === '') {
+            return '';
+        }
+
+        return (string) Str::of($value)
+            ->lower()
+            ->replaceMatches('/[\p{P}\p{S}]+/u', ' ')
+            ->replace(
+                ['á', 'é', 'í', 'ó', 'ú', 'ü', 'ñ'],
+                ['a', 'e', 'i', 'o', 'u', 'u', 'n']
+            )
+            ->replaceMatches('/\s+/', ' ')
+            ->trim();
     }
 
     private function extractQueryKeywords(string $query, int $limit = 5): array
