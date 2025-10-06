@@ -87,7 +87,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/chats/{chat}', [ChatController::class, 'showView'])->name('chats.show');
     // API chat endpoints
     Route::get('/api/chats', [ChatController::class, 'apiIndex'])->name('api.chats.index');
-    Route::get('/api/chats/contacts', [ChatController::class, 'contacts'])->name('api.chats.contacts');
     Route::get('/api/chats/{chat}/messages', [ChatController::class, 'show'])->name('api.chats.messages');
     Route::post('/api/chats/{chat}/messages', [ChatController::class, 'store'])->name('api.chats.messages.store');
     Route::post('/api/chats/create-or-find', [ChatController::class, 'createOrFind'])->name('api.chats.create');

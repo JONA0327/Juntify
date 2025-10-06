@@ -134,12 +134,22 @@ class ChatController extends Controller
         $contacts = Contact::where('user_id', $userId)
             ->with(['contact:id,full_name,email'])
             ->get()
-            ->map(fn($c) => [
-                'id' => $c->contact->id,
-                'name' => $c->contact->full_name,
-                'email' => $c->contact->email,
-                'avatar' => strtoupper(substr($c->contact->full_name,0,1))
-            ]);
+            ->map(function ($c) {
+                $contact = $c->contact;
+                if (!$contact) {
+                    return null;
+                }
+
+                return [
+                    'id' => $contact->id,
+                    'name' => $contact->full_name,
+                    'email' => $contact->email,
+                    'avatar' => strtoupper(substr($contact->full_name, 0, 1)),
+                ];
+            })
+            ->filter()
+            ->values();
+
         return response()->json($contacts);
     }
 

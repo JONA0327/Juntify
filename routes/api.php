@@ -319,6 +319,7 @@ Route::middleware(['web', 'auth'])->group(function () {
           Route::post('/users/search', [ContactController::class, 'searchUsers'])->name('api.users.search');
 
           Route::get('/chats/test', [ChatController::class, 'apiTest'])->name('api.chats.test');
+          Route::get('/chats/contacts', [ChatController::class, 'contacts'])->name('api.chats.contacts');
           Route::get('/chats', [ChatController::class, 'apiIndex'])->name('api.chats.index');
           Route::post('/chats/create-or-find', [ChatController::class, 'createOrFind'])->name('api.chats.create-or-find');
           Route::post('/chats/unread-count', [ChatController::class, 'getUnreadCount'])->name('api.chats.unread-count');
