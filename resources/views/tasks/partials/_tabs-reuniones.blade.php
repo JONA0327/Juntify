@@ -115,6 +115,7 @@
                             }
                         }
                         window.lastSelectedMeetingId = m.id;
+                        window.lastSelectedMeetingName = m.meeting_name || null;
                         window.lastSelectedMeetingSource = src;
                         if (window.showTasksPanel) window.showTasksPanel(true);
                         const current = await fetchTasksForMeeting(m.id, src);

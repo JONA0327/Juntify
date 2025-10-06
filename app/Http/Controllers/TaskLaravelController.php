@@ -612,10 +612,10 @@ class TaskLaravelController extends Controller
                 return response()->json(['success' => false, 'message' => 'Solo puedes actualizar el progreso de la tarea asignada'], 403);
             }
 
-            if ($this->isTaskOverdue($task) && isset($data['progreso']) && (int)$data['progreso'] < 100) {
+            if ($this->isTaskOverdue($task) && array_key_exists('progreso', $data)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Esta tarea está vencida. Solicita al dueño una nueva fecha para continuar.',
+                    'message' => 'Esta tarea está vencida. Pídele al dueño de la reunión que la reabra antes de actualizarla.',
                 ], 423);
             }
         }
@@ -695,6 +695,13 @@ class TaskLaravelController extends Controller
         $user = Auth::user();
         $task = TaskLaravel::findOrFail($id);
         $this->ensureTaskAccess($task, $user);
+        $isOwner = $task->username === $user->username;
+        if (!$isOwner && $this->isTaskOverdue($task)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta tarea está vencida. Pídele al dueño de la reunión que la reabra antes de completarla.',
+            ], 423);
+        }
         $task->progreso = 100;
         $task->overdue_notified_at = null;
         $task->save();
