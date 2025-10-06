@@ -1,6 +1,6 @@
 @php($hideChat = $hideChat ?? false)
 
-<div class="space-y-6">
+<div class="space-y-6" data-contacts-root data-show-chat="{{ $hideChat ? 'false' : 'true' }}">
     <!-- Header con título y botón de agregar -->
     <div class="flex justify-between items-center">
         <h1 class="text-2xl font-bold text-slate-200">Mis contactos</h1>

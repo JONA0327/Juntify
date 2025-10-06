@@ -20,6 +20,13 @@ if (typeof contactsFeatures.showChat === 'undefined') {
 window.contactsFeatures = contactsFeatures;
 
 function isChatEnabled() {
+    const contactsRoot = document.querySelector('[data-contacts-root]');
+    if (contactsRoot) {
+        const showChat = contactsRoot.dataset.showChat;
+        if (typeof showChat !== 'undefined') {
+            return showChat !== 'false';
+        }
+    }
     return Boolean(window.contactsFeatures && window.contactsFeatures.showChat);
 }
 
