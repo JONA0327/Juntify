@@ -47,6 +47,19 @@
     border-color: rgba(250, 204, 21, 0.6) !important;
 }
 
+.kanban-card-inprogress {
+    border-color: rgba(249, 115, 22, 0.65) !important;
+}
+
+.kanban-card-completed {
+    border-color: rgba(59, 130, 246, 0.65) !important;
+}
+
+.kanban-card-approved {
+    border-color: rgba(16, 185, 129, 0.8) !important;
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25);
+}
+
 .kanban-card-overdue {
     border-color: rgba(239, 68, 68, 0.9) !important;
     animation: overduePulse 1s ease-in-out infinite alternate;

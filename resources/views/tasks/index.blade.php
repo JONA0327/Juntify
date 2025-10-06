@@ -80,49 +80,77 @@
                             @include('tasks.partials._tabs-reuniones')
                         </div>
                         <!-- Kanban simple por reunión -->
-                        <div id="kanban-board" class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 hidden" data-task-view-targets="todo,tablero" data-task-view-requires-kanban="1">
-                            <div class="flex flex-col gap-3">
-                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div id="kanban-board" class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 hidden" data-task-view-targets="todo,tablero" data-task-view-requires-kanban="1">
+                            <div class="flex flex-col gap-6">
+                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                                     <div>
-                                        <h3 class="text-lg font-semibold">Kanban</h3>
-                                        <p class="text-slate-400 text-sm">Arrastra tareas entre columnas para actualizar progreso</p>
+                                        <h3 class="text-lg font-semibold text-slate-100">Tablero Kanban</h3>
+                                        <p class="text-slate-400 text-sm">Gestiona el avance de tus tareas arrastrándolas entre columnas.</p>
+                                        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                                            <span id="kanban-context-label">Mostrando tareas de todas tus reuniones y asignaciones.</span>
+                                            <button type="button" id="kanban-reset-btn" class="hidden text-blue-300 hover:text-blue-200 font-medium underline-offset-2 hover:underline transition-colors">Ver todas las reuniones</button>
+                                        </div>
                                     </div>
                                     <div class="inline-flex rounded-lg border border-slate-700/60 bg-slate-900/60 overflow-hidden">
                                         <button type="button" class="kanban-tab-btn px-3 py-1.5 text-sm text-slate-300 bg-slate-800/80" data-kanban-tab="board">Tablero</button>
                                         <button type="button" class="kanban-tab-btn px-3 py-1.5 text-sm text-slate-300" data-kanban-tab="summary">Resumen</button>
                                     </div>
                                 </div>
-                                <div id="kanban-board-view" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                                    <div class="kanban-col" data-status="pending">
-                                        <div class="px-3 py-2 bg-slate-900/60 rounded border border-slate-700/50 font-medium mb-2">Pendientes</div>
-                                        <div class="kanban-list min-h-[200px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'pending')"></div>
+
+                                <div id="kanban-board-view" class="flex flex-col gap-5">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4">
+                                        <div class="kanban-col" data-status="pending">
+                                            <div class="kanban-col-header px-3 py-2 rounded border border-yellow-400/40 bg-gradient-to-r from-yellow-500/20 to-yellow-500/0 text-sm font-semibold text-yellow-200 uppercase tracking-wide">Pendientes</div>
+                                            <div class="kanban-list min-h-[220px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'pending')"></div>
+                                        </div>
+                                        <div class="kanban-col" data-status="in_progress">
+                                            <div class="kanban-col-header px-3 py-2 rounded border border-orange-400/40 bg-gradient-to-r from-orange-500/20 to-orange-500/0 text-sm font-semibold text-orange-200 uppercase tracking-wide">En proceso</div>
+                                            <div class="kanban-list min-h-[220px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'in_progress')"></div>
+                                        </div>
+                                        <div class="kanban-col" data-status="completed">
+                                            <div class="kanban-col-header px-3 py-2 rounded border border-blue-400/40 bg-gradient-to-r from-blue-500/20 to-blue-500/0 text-sm font-semibold text-blue-200 uppercase tracking-wide">Completadas</div>
+                                            <div class="kanban-list min-h-[220px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'completed')"></div>
+                                        </div>
+                                        <div class="kanban-col" data-status="approved">
+                                            <div class="kanban-col-header px-3 py-2 rounded border border-emerald-400/50 bg-gradient-to-r from-emerald-500/20 to-emerald-500/0 text-sm font-semibold text-emerald-200 uppercase tracking-wide">Aprobadas</div>
+                                            <div class="kanban-list min-h-[220px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'approved')"></div>
+                                        </div>
                                     </div>
-                                    <div class="kanban-col" data-status="in_progress">
-                                        <div class="px-3 py-2 bg-slate-900/60 rounded border border-slate-700/50 font-medium mb-2">En progreso</div>
-                                        <div class="kanban-list min-h-[200px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'in_progress')"></div>
-                                    </div>
-                                    <div class="kanban-col" data-status="completed">
-                                        <div class="px-3 py-2 bg-slate-900/60 rounded border border-slate-700/50 font-medium mb-2">Completadas</div>
-                                        <div class="kanban-list min-h-[200px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'completed')"></div>
-                                    </div>
-                                    <div class="kanban-col" data-status="overdue">
-                                        <div class="px-3 py-2 bg-slate-900/60 rounded border border-slate-700/50 font-medium mb-2 text-rose-300">Vencidas</div>
-                                        <div class="kanban-list min-h-[200px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'overdue')"></div>
+
+                                    <div class="bg-slate-900/50 border border-rose-500/40 rounded-xl p-4 shadow-inner">
+                                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                            <div>
+                                                <h4 class="text-base font-semibold text-rose-200">Tareas vencidas</h4>
+                                                <p class="text-xs text-rose-100/80">No podrás completarlas hasta que el dueño de la reunión reabra la tarea con una nueva fecha.</p>
+                                            </div>
+                                            <span id="kanban-overdue-count" class="inline-flex items-center justify-center px-3 py-1 rounded-full bg-rose-500/20 text-rose-100 text-xs font-semibold">0</span>
+                                        </div>
+                                        <div id="kanban-overdue-list" class="mt-4 flex flex-col gap-3"></div>
+                                        <div id="kanban-overdue-empty" class="mt-4 text-sm text-slate-400 border border-dashed border-rose-400/30 rounded-lg px-4 py-6 text-center">Sin tareas vencidas 🎉</div>
                                     </div>
                                 </div>
+
                                 <div id="kanban-summary-view" class="hidden">
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                         <div class="bg-slate-900/50 border border-slate-700/40 rounded-lg p-3">
                                             <h4 class="text-xs font-semibold uppercase tracking-wide text-yellow-300">Pendientes</h4>
                                             <ul id="summaryPending" class="mt-2 space-y-1 text-sm text-slate-200"></ul>
                                         </div>
                                         <div class="bg-slate-900/50 border border-slate-700/40 rounded-lg p-3">
-                                            <h4 class="text-xs font-semibold uppercase tracking-wide text-rose-300">Vencidas</h4>
-                                            <ul id="summaryOverdue" class="mt-2 space-y-1 text-sm text-slate-200"></ul>
+                                            <h4 class="text-xs font-semibold uppercase tracking-wide text-orange-300">En proceso</h4>
+                                            <ul id="summaryInProgress" class="mt-2 space-y-1 text-sm text-slate-200"></ul>
                                         </div>
                                         <div class="bg-slate-900/50 border border-slate-700/40 rounded-lg p-3">
-                                            <h4 class="text-xs font-semibold uppercase tracking-wide text-emerald-300">Completados</h4>
+                                            <h4 class="text-xs font-semibold uppercase tracking-wide text-blue-300">Completadas</h4>
                                             <ul id="summaryCompleted" class="mt-2 space-y-1 text-sm text-slate-200"></ul>
+                                        </div>
+                                        <div class="bg-slate-900/50 border border-slate-700/40 rounded-lg p-3">
+                                            <h4 class="text-xs font-semibold uppercase tracking-wide text-emerald-300">Aprobadas</h4>
+                                            <ul id="summaryApproved" class="mt-2 space-y-1 text-sm text-slate-200"></ul>
+                                        </div>
+                                        <div class="bg-slate-900/50 border border-slate-700/40 rounded-lg p-3 md:col-span-2 xl:col-span-3">
+                                            <h4 class="text-xs font-semibold uppercase tracking-wide text-rose-300">Vencidas</h4>
+                                            <ul id="summaryOverdue" class="mt-2 space-y-1 text-sm text-slate-200"></ul>
                                         </div>
                                     </div>
                                 </div>
@@ -158,16 +186,49 @@
     @include('tasks.partials._modal-task')
     @include('tasks.partials._task-details-modal')
 
+
     <script>
-        // Extensión Kanban: actualiza progreso al arrastrar y muestra resumen por responsable
+        // Extensión Kanban: agrupa tareas por estado y muestra un resumen interactivo
         const csrfToken = (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '');
         let currentKanbanTab = 'board';
         let currentKanbanTasks = [];
         let currentTaskMainView = 'todo';
 
+        window.lastSelectedMeetingId = window.lastSelectedMeetingId || null;
+        window.lastSelectedMeetingName = window.lastSelectedMeetingName || null;
+
         const kanbanBoardElement = document.getElementById('kanban-board');
         if (kanbanBoardElement && !kanbanBoardElement.dataset.hasKanban) {
             kanbanBoardElement.dataset.hasKanban = '0';
+        }
+
+        const kanbanContextLabel = document.getElementById('kanban-context-label');
+        const kanbanResetBtn = document.getElementById('kanban-reset-btn');
+        const kanbanOverdueCount = document.getElementById('kanban-overdue-count');
+        const kanbanOverdueList = document.getElementById('kanban-overdue-list');
+        const kanbanOverdueEmpty = document.getElementById('kanban-overdue-empty');
+
+        if (kanbanResetBtn) {
+            kanbanResetBtn.addEventListener('click', () => {
+                window.lastSelectedMeetingId = null;
+                window.lastSelectedMeetingName = null;
+                if (typeof showTasksPanel === 'function') showTasksPanel(false);
+                kanbanReload();
+            });
+        }
+
+        function updateKanbanContextLabel(hasMeeting) {
+            if (!kanbanContextLabel) return;
+            if (hasMeeting) {
+                const displayName = window.lastSelectedMeetingName
+                    ? `"${window.lastSelectedMeetingName}"`
+                    : (window.lastSelectedMeetingId ? `#${window.lastSelectedMeetingId}` : 'seleccionada');
+                kanbanContextLabel.textContent = `Mostrando tareas de la reunión ${displayName}.`;
+                if (kanbanResetBtn) kanbanResetBtn.classList.remove('hidden');
+            } else {
+                kanbanContextLabel.textContent = 'Mostrando tareas de todas tus reuniones y asignaciones.';
+                if (kanbanResetBtn) kanbanResetBtn.classList.add('hidden');
+            }
         }
 
         function kanbanHasData(){
@@ -223,22 +284,24 @@
 
         async function kanbanDrop(ev, status){
             ev.preventDefault();
+            const allowedStatuses = ['pending', 'in_progress', 'completed', 'approved'];
+            if (!allowedStatuses.includes(status)) return;
+
             const id = ev.dataTransfer.getData('text/plain');
-            if (!id || status === 'overdue') {
-                return;
-            }
+            if (!id) return;
 
             const task = currentKanbanTasks.find(t => String(t.id) === String(id));
-            if (!task) {
+            if (!task) return;
+
+            if (task._overdue) {
+                alert('Esta tarea está vencida. Solicita al dueño de la reunión que la reabra antes de continuar.');
                 return;
             }
 
-            if (task._overdue && status !== 'completed') {
-                alert('Esta tarea está vencida. El dueño debe reprogramar la fecha antes de continuar.');
-                return;
-            }
+            const progressMap = { pending: 0, in_progress: 50, completed: 100, approved: 100 };
+            const desiredProgress = progressMap[status];
+            if (typeof desiredProgress !== 'number') return;
 
-            const prog = status === 'completed' ? 100 : (status === 'in_progress' ? 50 : 0);
             try {
                 const res = await fetch(new URL(`/api/tasks-laravel/tasks/${id}`, window.location.origin), {
                     method: 'PUT',
@@ -246,7 +309,7 @@
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': csrfToken
                     },
-                    body: JSON.stringify({ progreso: prog })
+                    body: JSON.stringify({ progreso: desiredProgress })
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) {
@@ -261,19 +324,22 @@
         }
 
         async function kanbanReload(){
-            if (!window.lastSelectedMeetingId) {
-                currentKanbanTasks = [];
-                showKanban(false);
-                return;
-            }
+            const hasMeeting = !!window.lastSelectedMeetingId;
+            updateKanbanContextLabel(hasMeeting);
 
             try {
                 const url = new URL('/api/tasks-laravel/tasks', window.location.origin);
-                url.searchParams.set('meeting_id', window.lastSelectedMeetingId);
+                if (hasMeeting) {
+                    url.searchParams.set('meeting_id', window.lastSelectedMeetingId);
+                }
+
                 const res = await fetch(url);
                 const json = await res.json();
                 if (!json.success) {
                     currentKanbanTasks = [];
+                    if (kanbanOverdueList) kanbanOverdueList.innerHTML = '';
+                    if (kanbanOverdueCount) kanbanOverdueCount.textContent = '0';
+                    if (kanbanOverdueEmpty) kanbanOverdueEmpty.classList.remove('hidden');
                     showKanban(false);
                     return;
                 }
@@ -288,73 +354,144 @@
 
                 currentKanbanTasks = enrichedTasks;
 
-                const cols = { pending: [], in_progress: [], completed: [], overdue: [] };
+                const columns = { pending: [], in_progress: [], completed: [], approved: [] };
+                const overdueTasks = [];
 
                 enrichedTasks.forEach(t => {
-                    const completed = t._progress >= 100;
-                    const status = t._overdue
-                        ? 'overdue'
-                        : (completed ? 'completed' : (t._progress > 0 ? 'in_progress' : 'pending'));
-                    cols[status].push(t);
+                    const progress = typeof t._progress === 'number' ? t._progress : 0;
+                    const isApproved = t.assignment_status === 'completed';
+                    const isCompleted = progress >= 100;
+
+                    if (t._overdue) {
+                        overdueTasks.push(t);
+                        return;
+                    }
+
+                    if (isApproved) {
+                        columns.approved.push(t);
+                    } else if (isCompleted) {
+                        columns.completed.push(t);
+                    } else if (progress > 0) {
+                        columns.in_progress.push(t);
+                    } else {
+                        columns.pending.push(t);
+                    }
                 });
 
                 document.querySelectorAll('#kanban-board .kanban-list').forEach(el => el.innerHTML = '');
 
-                Object.entries(cols).forEach(([st, list]) => {
-                    const target = document.querySelector(`#kanban-board .kanban-col[data-status="${st}"] .kanban-list`);
+                const statusCardClass = {
+                    pending: 'kanban-card-pending',
+                    in_progress: 'kanban-card-inprogress',
+                    completed: 'kanban-card-completed',
+                    approved: 'kanban-card-approved'
+                };
+
+                Object.entries(columns).forEach(([status, list]) => {
+                    const target = document.querySelector(`#kanban-board .kanban-col[data-status="${status}"] .kanban-list`);
                     if (!target) return;
+
                     list.forEach(t => {
                         const card = document.createElement('div');
-                        card.className = 'kanban-card bg-slate-800/60 border border-slate-700 rounded p-3 mb-2 transition-colors';
-                        if (t.assignment_status === 'pending') {
-                            card.classList.add('kanban-card-pending');
-                        }
-                        if (t._overdue) {
-                            card.classList.add('kanban-card-overdue', 'cursor-not-allowed');
-                            card.draggable = false;
-                            card.setAttribute('aria-disabled', 'true');
-                            card.title = 'Tarea vencida. Espera a que el dueño reprograma la fecha.';
-                        } else {
-                            card.classList.add('cursor-move');
-                            card.draggable = true;
-                            card.setAttribute('aria-disabled', 'false');
-                        }
+                        card.className = 'kanban-card bg-slate-800/60 border border-slate-700 rounded-xl p-3 mb-2 transition-colors';
                         card.dataset.id = t.id;
+                        card.dataset.status = status;
+
+                        const extra = statusCardClass[status];
+                        if (extra) card.classList.add(extra);
+
+                        card.classList.add('cursor-move');
+                        card.draggable = true;
+                        card.setAttribute('aria-disabled', 'false');
                         card.addEventListener('dragstart', ev => {
                             ev.dataTransfer.setData('text/plain', String(t.id));
                         });
+
                         const assigneeName = (t.assigned_user && t.assigned_user.name) || t.asignado || 'Sin asignar';
                         const assignmentText = assignmentStatusLabel(t.assignment_status, !!t.assigned_user_id);
-                        const dueLabel = t.fecha_limite ? `Vence: ${escapeHtml(t.fecha_limite)}` : 'Sin fecha límite';
+                        const dueLabel = t.fecha_limite ? escapeHtml(t.fecha_limite) : 'Sin fecha límite';
+                        const meetingLabel = t.meeting_name ? escapeHtml(t.meeting_name) : 'Sin reunión';
+
                         card.innerHTML = `
-                            <div class="text-sm text-slate-200 font-semibold">${escapeHtml(t.tarea || 'Sin nombre')}</div>
-                            <div class="text-[11px] text-slate-400 flex justify-between gap-2">
-                                <span>${escapeHtml(t.prioridad || '-')} • ${pct(t._progress)}%</span>
-                                <span>${assignmentText}</span>
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="text-sm text-slate-100 font-semibold leading-snug">${escapeHtml(t.tarea || 'Sin nombre')}</p>
+                                <span class="text-[10px] uppercase tracking-wide text-slate-200/80 bg-slate-900/60 border border-slate-700/60 rounded-full px-2 py-0.5">${escapeHtml(t.prioridad || '-')}</span>
                             </div>
-                            <div class="text-[11px] text-slate-400">Responsable: ${escapeHtml(assigneeName)}</div>
-                            <div class="text-[11px] text-slate-500">${dueLabel}</div>
-                            <div class="text-[11px] text-slate-500">Reunión: ${escapeHtml(t.meeting_name || 'Sin reunión')}</div>
+                            <div class="mt-1 flex items-center justify-between text-[11px] text-slate-400">
+                                <span>${assignmentText}</span>
+                                <span class="font-semibold text-slate-200">${pct(t._progress)}%</span>
+                            </div>
+                            <div class="mt-1 text-[11px] text-slate-400">Responsable: ${escapeHtml(assigneeName)}</div>
+                            <div class="mt-1 text-[11px] text-slate-500 flex items-center gap-1">📅 <span>${dueLabel}</span></div>
+                            <div class="mt-1 text-[11px] text-slate-500 flex items-center gap-1">🗓 <span>${meetingLabel}</span></div>
                         `;
+
                         card.addEventListener('dblclick', () => {
                             if (typeof openTaskDetailsModal === 'function') openTaskDetailsModal(t.id);
                         });
+
                         target.appendChild(card);
                     });
                 });
 
+                if (kanbanOverdueCount) kanbanOverdueCount.textContent = String(overdueTasks.length);
+                if (kanbanOverdueList) {
+                    kanbanOverdueList.innerHTML = '';
+                    overdueTasks.forEach(t => {
+                        const card = document.createElement('div');
+                        card.className = 'kanban-card bg-slate-900/70 border border-rose-500/50 rounded-xl p-3 text-sm text-rose-100 transition-colors';
+                        card.classList.add('kanban-card-overdue', 'cursor-not-allowed');
+                        card.dataset.id = t.id;
+                        card.setAttribute('aria-disabled', 'true');
+
+                        const assigneeName = (t.assigned_user && t.assigned_user.name) || t.asignado || 'Sin asignar';
+                        const dueLabel = t.fecha_limite ? escapeHtml(t.fecha_limite) : 'Sin fecha límite';
+                        const meetingLabel = t.meeting_name ? escapeHtml(t.meeting_name) : 'Sin reunión';
+
+                        card.innerHTML = `
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="text-sm font-semibold text-rose-100 leading-snug">${escapeHtml(t.tarea || 'Sin nombre')}</p>
+                                <span class="text-[10px] uppercase tracking-wide text-rose-100 bg-rose-500/20 border border-rose-400/40 rounded-full px-2 py-0.5">Vencida</span>
+                            </div>
+                            <div class="mt-1 text-[11px] text-rose-100/80">Responsable: ${escapeHtml(assigneeName)}</div>
+                            <div class="mt-1 text-[11px] text-rose-100/70 flex items-center gap-1">⏰ <span>Venció: ${dueLabel}</span></div>
+                            <div class="mt-1 text-[11px] text-rose-100/70 flex items-center gap-1">🗓 <span>${meetingLabel}</span></div>
+                            <p class="mt-2 text-[11px] text-rose-200/80 italic">Pide al dueño de la reunión que reabra la tarea para continuar.</p>
+                        `;
+
+                        card.addEventListener('dblclick', () => {
+                            if (typeof openTaskDetailsModal === 'function') openTaskDetailsModal(t.id);
+                        });
+
+                        kanbanOverdueList.appendChild(card);
+                    });
+                }
+                if (kanbanOverdueEmpty) kanbanOverdueEmpty.classList.toggle('hidden', overdueTasks.length > 0);
+
                 updateKanbanSummary(enrichedTasks);
                 setKanbanTab(currentKanbanTab);
-                showKanban(enrichedTasks.length > 0);
+                showKanban(true);
             } catch (e) {
                 console.error('kanban reload', e);
                 currentKanbanTasks = [];
+                if (kanbanOverdueList) kanbanOverdueList.innerHTML = '';
+                if (kanbanOverdueCount) kanbanOverdueCount.textContent = '0';
+                if (kanbanOverdueEmpty) kanbanOverdueEmpty.classList.remove('hidden');
                 showKanban(false);
             }
         }
 
         function pct(v){ return typeof v === 'number' ? v : 0; }
-        function escapeHtml(s){ return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
+        function escapeHtml(s){
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            };
+            return String(s || '').replace(/[&<>"']/g, c => map[c] || c);
+        }
 
         function assignmentStatusLabel(status, hasAssignee){
             if (!status) {
@@ -368,25 +505,32 @@
 
         function updateKanbanSummary(tasks){
             const pendingContainer = document.getElementById('summaryPending');
-            const overdueContainer = document.getElementById('summaryOverdue');
+            const inProgressContainer = document.getElementById('summaryInProgress');
             const completedContainer = document.getElementById('summaryCompleted');
-            if (!pendingContainer || !overdueContainer || !completedContainer) return;
+            const approvedContainer = document.getElementById('summaryApproved');
+            const overdueContainer = document.getElementById('summaryOverdue');
+            if (!pendingContainer || !inProgressContainer || !completedContainer || !approvedContainer || !overdueContainer) return;
 
             const today = new Date();
             today.setHours(23,59,59,999);
 
             const categories = {
                 pending: new Map(),
-                overdue: new Map(),
+                in_progress: new Map(),
                 completed: new Map(),
+                approved: new Map(),
+                overdue: new Map(),
             };
 
             tasks.forEach(t => {
                 const progress = typeof t._progress === 'number' ? t._progress : (typeof t.progreso === 'number' ? t.progreso : 0);
                 const due = t.fecha_limite ? new Date(`${t.fecha_limite}T23:59:59`) : null;
-                const completed = progress >= 100;
-                const overdue = t._overdue || t.is_overdue === true || (!completed && due && due < today);
-                const pending = !completed && !overdue && progress <= 0;
+                const isApproved = t.assignment_status === 'completed';
+                const isCompleted = progress >= 100;
+                const isOverdue = t._overdue || t.is_overdue === true || (!isCompleted && due && due < today);
+                const isInProgress = !isCompleted && !isOverdue && progress > 0;
+                const isPending = !isCompleted && !isOverdue && progress <= 0;
+
                 const name = (t.assigned_user && t.assigned_user.name) || t.asignado || 'Sin asignar';
                 const key = `${t.assigned_user_id || 'none'}::${name}`;
 
@@ -397,18 +541,24 @@
                     map.get(key).count += 1;
                 };
 
-                if (completed) {
-                    add(categories.completed);
-                } else if (overdue) {
+                if (isOverdue) {
                     add(categories.overdue);
-                } else if (pending) {
+                } else if (isApproved) {
+                    add(categories.approved);
+                } else if (isCompleted) {
+                    add(categories.completed);
+                } else if (isInProgress) {
+                    add(categories.in_progress);
+                } else if (isPending) {
                     add(categories.pending);
                 }
             });
 
             renderSummaryList(pendingContainer, categories.pending, 'Sin pendientes');
-            renderSummaryList(overdueContainer, categories.overdue, 'Sin vencidas');
+            renderSummaryList(inProgressContainer, categories.in_progress, 'Sin tareas en proceso');
             renderSummaryList(completedContainer, categories.completed, 'Sin completadas');
+            renderSummaryList(approvedContainer, categories.approved, 'Sin aprobadas');
+            renderSummaryList(overdueContainer, categories.overdue, 'Sin vencidas');
         }
 
         function renderSummaryList(container, map, emptyMessage){
@@ -460,6 +610,9 @@
             if (_origLoadTasks) await _origLoadTasks(id, src);
             await kanbanReload();
         };
+
+        kanbanReload();
     </script>
+
 </body>
 </html>
