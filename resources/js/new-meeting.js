@@ -709,6 +709,8 @@ function resumeRecording() {
 
 // Descartar grabación
 function discardRecording() {
+    const wasMeetingRecording = meetingRecording || lastRecordingContext === 'meeting';
+
     discardRequested = true;
     isRecording = false;
     isPaused = false;
@@ -718,6 +720,36 @@ function discardRecording() {
         try { mediaRecorder.stop(); } catch(_) {}
         try { mediaRecorder.stream.getTracks().forEach(track => track.stop()); } catch(_) {}
     }
+
+    if (wasMeetingRecording) {
+        meetingRecording = false;
+        meetingStartTime = null;
+
+        if (systemAudioStream) {
+            try { systemAudioStream.getTracks().forEach(track => track.stop()); } catch(_) {}
+            systemAudioStream = null;
+        }
+
+        if (microphoneAudioStream) {
+            try { microphoneAudioStream.getTracks().forEach(track => track.stop()); } catch(_) {}
+            microphoneAudioStream = null;
+        }
+
+        if (meetingTimer) {
+            clearInterval(meetingTimer);
+            meetingTimer = null;
+        }
+
+        if (meetingAnimationId) {
+            cancelAnimationFrame(meetingAnimationId);
+            meetingAnimationId = null;
+        }
+
+        meetingDestination = null;
+        updateMeetingRecordingUI(false);
+        resetMeetingAudioVisualizers();
+    }
+
     recordingStream = null;
     try {
         sessionStorage.setItem('audioDiscarded', 'true');
