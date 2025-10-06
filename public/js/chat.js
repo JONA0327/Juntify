@@ -712,6 +712,62 @@ function escapeHtml(text) {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Inicializando chat...');
 
+    // Tabs principales (Mensajes / Contactos)
+    const mainTabs = document.querySelectorAll('.chat-main-tab');
+    const mainSections = {};
+    const messagesHeader = document.getElementById('chat-messages-header');
+
+    mainTabs.forEach(tab => {
+        const targetId = tab.dataset.target;
+        if (targetId) {
+            mainSections[targetId] = document.getElementById(targetId);
+        }
+    });
+
+    function setActiveMainTab(targetId) {
+        mainTabs.forEach(tab => {
+            const isActive = tab.dataset.target === targetId;
+            tab.setAttribute('aria-pressed', String(isActive));
+            tab.classList.toggle('bg-yellow-500', isActive);
+            tab.classList.toggle('text-slate-900', isActive);
+            tab.classList.toggle('shadow-lg', isActive);
+            tab.classList.toggle('shadow-yellow-400/30', isActive);
+            tab.classList.toggle('border-yellow-400/50', isActive);
+            tab.classList.toggle('bg-slate-800/50', !isActive);
+            tab.classList.toggle('text-slate-200', !isActive);
+            tab.classList.toggle('border-slate-700/60', !isActive);
+        });
+
+        Object.entries(mainSections).forEach(([id, section]) => {
+            if (!section) return;
+            if (id === targetId) {
+                section.classList.remove('hidden');
+            } else {
+                section.classList.add('hidden');
+            }
+        });
+
+        if (messagesHeader) {
+            messagesHeader.classList.toggle('hidden', targetId !== 'chat-messages-section');
+        }
+    }
+
+    if (mainTabs.length) {
+        mainTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const targetId = tab.dataset.target;
+                if (targetId) {
+                    setActiveMainTab(targetId);
+                }
+            });
+        });
+
+        const defaultMainTab = document.querySelector('.chat-main-tab[data-target="chat-messages-section"]');
+        if (defaultMainTab?.dataset.target) {
+            setActiveMainTab(defaultMainTab.dataset.target);
+        }
+    }
+
     // Cargar conversaciones al cargar la página
     loadConversations();
 
@@ -754,9 +810,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Cargar contactos y listeners para crear chats
-    loadContacts();
-    const refreshContacts = document.getElementById('refresh-contacts');
-    if (refreshContacts) refreshContacts.addEventListener('click', loadContacts);
+    const sidebarContactsPanel = document.getElementById('sidebar-contacts');
+    if (sidebarContactsPanel) {
+        loadContacts();
+        const refreshContacts = document.getElementById('refresh-contacts');
+        if (refreshContacts) refreshContacts.addEventListener('click', loadContacts);
+    }
     const startChatBtn = document.getElementById('start-chat-btn');
     const startChatUser = document.getElementById('start-chat-user');
     if (startChatBtn && startChatUser) {
@@ -829,15 +888,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Botón para ocultar/mostrar la lista de conversaciones
     const toggleSidebarBtn = document.getElementById('toggle-sidebar');
     const conversationSidebar = document.getElementById('conversation-sidebar');
-    if (toggleSidebarBtn && conversationSidebar) {
+    const chatLayout = document.getElementById('chat-layout');
+    if (toggleSidebarBtn && conversationSidebar && chatLayout) {
         const icons = {
             hide: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>',
             show: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>'
         };
 
         toggleSidebarBtn.addEventListener('click', () => {
-            const willHide = !conversationSidebar.classList.contains('hidden');
-            conversationSidebar.classList.toggle('hidden', willHide);
+            const willHide = !chatLayout.classList.contains('sidebar-hidden');
+            chatLayout.classList.toggle('sidebar-hidden', willHide);
             toggleSidebarBtn.setAttribute('aria-expanded', String(!willHide));
             toggleSidebarBtn.innerHTML = willHide ? icons.show : icons.hide;
             toggleSidebarBtn.setAttribute('aria-label', willHide ? 'Mostrar conversaciones' : 'Ocultar conversaciones');

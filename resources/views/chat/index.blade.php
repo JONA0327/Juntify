@@ -43,6 +43,15 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+        #toggle-sidebar svg {
+            transition: transform 0.2s ease-out;
+        }
+        #chat-layout.sidebar-hidden #conversation-sidebar {
+            display: none;
+        }
+        #chat-layout.sidebar-hidden #toggle-sidebar svg {
+            transform: rotate(180deg);
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
@@ -57,85 +66,58 @@
             <div class="container mx-auto px-4 py-6 h-screen flex flex-col min-h-0">
         <!-- Header -->
         <div class="mb-6">
-            <div>
-                <h1 class="text-2xl font-bold text-slate-200">Mensajes</h1>
-                <p class="text-slate-400">Conversaciones con tus contactos</p>
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div id="chat-messages-header" class="space-y-1">
+                    <h1 class="text-2xl font-bold text-slate-200">Mensajes</h1>
+                    <p class="text-slate-400">Conversaciones con tus contactos</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" class="chat-main-tab px-4 py-2 rounded-lg border text-sm font-medium transition-all bg-slate-800/50 text-slate-200 border-slate-700/60 hover:bg-slate-700/50" data-target="chat-messages-section">Mensajes</button>
+                    <button type="button" class="chat-main-tab px-4 py-2 rounded-lg border text-sm font-medium transition-all bg-slate-800/50 text-slate-200 border-slate-700/60 hover:bg-slate-700/50" data-target="chat-contacts-section">Contactos</button>
+                </div>
             </div>
         </div>
 
-        <!-- Chat Container -->
-        <div class="flex-1 bg-slate-800/30 backdrop-blur-sm border border-slate-700/50 rounded-lg overflow-hidden flex min-h-0">
-            <!-- Lista de Conversaciones -->
-            <div class="w-1/3 border-r border-slate-700/50 flex flex-col relative min-h-0" id="conversation-sidebar">
-                <div class="p-4 border-b border-slate-700/50">
-                    <nav>
-                        <ul class="flex gap-3">
-                            <li>
-                                <button class="chat-sidebar-tab tab-transition px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-200 hover:bg-slate-700/50" data-target="sidebar-conversations">Conversaciones</button>
-                            </li>
-                            <li>
-                                <button class="chat-sidebar-tab tab-transition px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-200 hover:bg-slate-700/50" data-target="sidebar-contacts">Contactos</button>
-                            </li>
-                        </ul>
-                    </nav>
-                </div>
-
-                <div class="flex-1 flex flex-col min-h-0">
-                    <!-- Conversaciones -->
-                    <div id="sidebar-conversations" class="flex-1 flex flex-col min-h-0">
-                        <div class="p-4 border-b border-slate-700/50">
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0114 0z"></path>
-                                    </svg>
-                                </div>
-                                <input type="text"
-                                       id="chat-search"
-                                       placeholder="Buscar conversaciones..."
-                                       class="w-full pl-10 pr-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500/50 transition-all text-sm">
+        <div id="chat-messages-section" class="flex-1 flex flex-col min-h-0">
+            <!-- Chat Container -->
+            <div id="chat-layout" class="flex-1 bg-slate-800/30 backdrop-blur-sm border border-slate-700/50 rounded-lg overflow-hidden flex min-h-0">
+                <!-- Lista de Conversaciones -->
+                <div class="w-1/3 border-r border-slate-700/50 flex flex-col relative min-h-0" id="conversation-sidebar">
+                    <div class="p-4 border-b border-slate-700/50">
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0114 0z"></path>
+                                </svg>
                             </div>
-                        </div>
-
-                        <div class="flex-1 overflow-y-auto scrollbar-hide" id="conversations-list">
-                            <div class="p-8 text-center">
-                                <div class="loading-spinner w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-                                <p class="text-slate-400">Cargando conversaciones...</p>
-                            </div>
+                            <input type="text"
+                                   id="chat-search"
+                                   placeholder="Buscar conversaciones..."
+                                   class="w-full pl-10 pr-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500/50 transition-all text-sm">
                         </div>
                     </div>
 
-                    <!-- Contactos -->
-                    <div id="sidebar-contacts" class="hidden flex-1 flex flex-col min-h-0">
-                        <div class="p-4 border-b border-slate-700/50 flex items-center justify-between">
-                            <h3 class="text-sm font-semibold text-slate-300">Contactos</h3>
-                            <button id="refresh-contacts" class="text-xs text-slate-400 hover:text-slate-200">Refrescar</button>
-                        </div>
-                        <div class="flex-1 overflow-y-auto scrollbar-hide" id="contacts-list">
-                            <div class="p-4 text-center text-slate-500 text-xs">Cargando...</div>
-                        </div>
-                        <div class="p-4 border-t border-slate-700/50">
-                            <input id="start-chat-user" type="text" placeholder="Usuario o email..." class="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded text-xs focus:ring-2 focus:ring-yellow-500/50" />
-                            <button id="start-chat-btn" class="mt-2 w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 text-xs font-semibold py-2 rounded transition">Iniciar chat</button>
-                            <p class="mt-2 text-[10px] text-slate-500">Puedes chatear con usuarios no agregados. Se creará el chat automáticamente.</p>
+                    <div class="flex-1 overflow-y-auto scrollbar-hide" id="conversations-list">
+                        <div class="p-8 text-center">
+                            <div class="loading-spinner w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                            <p class="text-slate-400">Cargando conversaciones...</p>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <button id="toggle-sidebar" aria-expanded="true" aria-controls="conversation-sidebar" aria-label="Ocultar conversaciones" class="bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 px-2 transition-all focus:outline-none focus:ring-2 focus:ring-yellow-500/50 flex items-center justify-center h-full">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                </svg>
-            </button>
+                <button id="toggle-sidebar" aria-expanded="true" aria-controls="conversation-sidebar" aria-label="Ocultar conversaciones" class="bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 px-2 transition-all focus:outline-none focus:ring-2 focus:ring-yellow-500/50 flex items-center justify-center h-full">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
 
-            <!-- Área de Chat -->
-            <div class="flex-1 flex flex-col min-h-0" id="chat-area">
-                <!-- Estado inicial cuando no hay chat seleccionado -->
-                <div id="no-chat-selected" class="flex-1 flex items-center justify-center">
-                    <div class="text-center">
-                        <div class="w-20 h-20 bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg class="w-10 h-10 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <!-- Área de Chat -->
+                <div class="flex-1 flex flex-col min-h-0" id="chat-area">
+                    <!-- Estado inicial cuando no hay chat seleccionado -->
+                    <div id="no-chat-selected" class="flex-1 flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="w-20 h-20 bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <svg class="w-10 h-10 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.418 8-9.899 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.418-8 9.899-8s9.899 3.582 9.899 8z"></path>
                             </svg>
                         </div>
@@ -210,6 +192,10 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div id="chat-contacts-section" class="hidden flex-1 flex-col overflow-y-auto">
+            @include('contacts.index')
         </div>
             </div>
         </main>
