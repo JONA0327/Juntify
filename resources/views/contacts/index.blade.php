@@ -1,3 +1,5 @@
+@php($hideChat = $hideChat ?? false)
+
 <div class="space-y-6">
     <!-- Header con título y botón de agregar -->
     <div class="flex justify-between items-center">
@@ -137,88 +139,91 @@
     </div>
 </div>
 
-<!-- Modal de Chat -->
-<div id="chat-modal" class="fixed inset-0 z-[9500] hidden items-center justify-center bg-black/30 backdrop-blur-sm opacity-0 transition-all duration-300 p-6">
-    <div class="bg-slate-900/85 backdrop-blur-xl border border-slate-700/40 rounded-xl w-full max-w-4xl h-auto max-h-[80vh] shadow-2xl flex flex-col transform scale-95 transition-all duration-300 my-auto">
-        <!-- Header del Modal -->
-        <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
-            <div class="flex items-center gap-3">
-                <div id="chat-contact-avatar" class="w-12 h-12 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-slate-900 font-bold text-lg">
-                    ?
+@unless($hideChat)
+    <!-- Modal de Chat -->
+    <div id="chat-modal" class="fixed inset-0 z-[9500] hidden items-center justify-center bg-black/30 backdrop-blur-sm opacity-0 transition-all duration-300 p-6">
+        <div class="bg-slate-900/85 backdrop-blur-xl border border-slate-700/40 rounded-xl w-full max-w-4xl h-auto max-h-[80vh] shadow-2xl flex flex-col transform scale-95 transition-all duration-300 my-auto">
+            <!-- Header del Modal -->
+            <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
+                <div class="flex items-center gap-3">
+                    <div id="chat-contact-avatar" class="w-12 h-12 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-slate-900 font-bold text-lg">
+                        ?
+                    </div>
+                    <div>
+                        <h3 id="chat-contact-name" class="text-xl font-semibold text-slate-200">Chat</h3>
+                        <div class="flex items-center gap-2">
+                            <div id="chat-status-indicator" class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                            <span id="chat-contact-email" class="text-sm text-slate-400">En línea</span>
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <h3 id="chat-contact-name" class="text-xl font-semibold text-slate-200">Chat</h3>
-                    <div class="flex items-center gap-2">
-                        <div id="chat-status-indicator" class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                        <span id="chat-contact-email" class="text-sm text-slate-400">En línea</span>
+                <button id="close-chat-modal" class="text-slate-400 hover:text-slate-200 transition-colors hover:bg-slate-800 p-2 rounded-lg">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <!-- Área de mensajes -->
+            <div id="chat-messages-container" class="flex-1 p-4 overflow-y-auto space-y-3 min-h-[300px] max-h-[400px]">
+                <div id="chat-messages-list">
+                    <div class="text-center py-8">
+                        <div class="loading-spinner w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                        <p class="text-slate-400">Cargando mensajes...</p>
                     </div>
                 </div>
             </div>
-            <button id="close-chat-modal" class="text-slate-400 hover:text-slate-200 transition-colors hover:bg-slate-800 p-2 rounded-lg">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-            </button>
-        </div>        <!-- Área de mensajes -->
-        <div id="chat-messages-container" class="flex-1 p-4 overflow-y-auto space-y-3 min-h-[300px] max-h-[400px]">
-            <div id="chat-messages-list">
-                <div class="text-center py-8">
-                    <div class="loading-spinner w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-                    <p class="text-slate-400">Cargando mensajes...</p>
+
+            <!-- Indicador de escritura -->
+            <div id="typing-indicator" class="hidden px-6 py-2 border-t border-slate-700/50">
+                <div class="flex items-center gap-2 text-slate-400 text-sm">
+                    <div class="flex space-x-1">
+                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                    </div>
+                    <span>Escribiendo...</span>
                 </div>
             </div>
-        </div>
 
-        <!-- Indicador de escritura -->
-        <div id="typing-indicator" class="hidden px-6 py-2 border-t border-slate-700/50">
-            <div class="flex items-center gap-2 text-slate-400 text-sm">
-                <div class="flex space-x-1">
-                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
-                </div>
-                <span>Escribiendo...</span>
-            </div>
-        </div>
+            <!-- Área de entrada de mensaje -->
+            <div class="border-t border-slate-700/50 p-4 bg-slate-800/50">
+                <form id="chat-message-form" class="flex items-center gap-3">
+                    <div class="flex-1 relative">
+                        <input type="text"
+                               id="chat-message-input"
+                               placeholder="Escribe tu mensaje..."
+                               class="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all pr-12">
+                        <button type="button"
+                                id="chat-emoji-btn"
+                                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors">
+                            😊
+                        </button>
+                    </div>
 
-        <!-- Área de entrada de mensaje -->
-        <div class="border-t border-slate-700/50 p-4 bg-slate-800/50">
-            <form id="chat-message-form" class="flex items-center gap-3">
-                <div class="flex-1 relative">
-                    <input type="text"
-                           id="chat-message-input"
-                           placeholder="Escribe tu mensaje..."
-                           class="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all pr-12">
+                    <input type="file"
+                           id="chat-file-input"
+                           accept="image/*,video/*,.pdf,.doc,.docx"
+                           class="hidden">
                     <button type="button"
-                            id="chat-emoji-btn"
-                            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors">
-                        😊
+                            id="chat-file-btn"
+                            class="p-3 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-lg transition-all">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                        </svg>
                     </button>
-                </div>
 
-                <input type="file"
-                       id="chat-file-input"
-                       accept="image/*,video/*,.pdf,.doc,.docx"
-                       class="hidden">
-                <button type="button"
-                        id="chat-file-btn"
-                        class="p-3 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-lg transition-all">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-                    </svg>
-                </button>
-
-                <button type="submit"
-                        id="chat-send-btn"
-                        class="px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-                    </svg>
-                </button>
-            </form>
+                    <button type="submit"
+                            id="chat-send-btn"
+                            class="px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                        </svg>
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
-</div>
+@endunless
 
 <style>
 .loading-spinner {
