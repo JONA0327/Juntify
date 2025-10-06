@@ -13,6 +13,16 @@ var segmentEndHandler = typeof window.segmentEndHandler !== 'undefined' ? window
 var selectedSegmentIndex = typeof window.selectedSegmentIndex !== 'undefined' ? window.selectedSegmentIndex : null;
 var segmentsModified = typeof window.segmentsModified !== 'undefined' ? window.segmentsModified : false;
 
+var contactsFeatures = window.contactsFeatures || {};
+if (typeof contactsFeatures.showChat === 'undefined') {
+    contactsFeatures.showChat = true;
+}
+window.contactsFeatures = contactsFeatures;
+
+function isChatEnabled() {
+    return Boolean(window.contactsFeatures && window.contactsFeatures.showChat);
+}
+
 // Almacenamiento temporal para datos de reuniones descargadas
 window.downloadMeetingData = window.downloadMeetingData || {};
 window.lastOpenedDownloadMeetingId = window.lastOpenedDownloadMeetingId || null;
@@ -404,7 +414,9 @@ async function loadContacts() {
         renderContacts(data.contacts || [], data.users || []);
 
         // Después de cargar los contactos, verificar mensajes no leídos
-        await checkUnreadMessagesForContacts();
+        if (isChatEnabled()) {
+            await checkUnreadMessagesForContacts();
+        }
     } catch (error) {
         console.error('Error loading contacts:', error);
         if (list) list.innerHTML = '<div class="text-center py-8 text-red-400">Error al cargar contactos</div>';
@@ -443,6 +455,17 @@ function renderContacts(contacts, users) {
             for (const contact of contacts) {
                 const contactElement = document.createElement('div');
                 contactElement.className = 'contact-card';
+                const chatButtonHtml = isChatEnabled() ? `
+                            <button onclick="startChat('${contact.id}')"
+                                    class="relative p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/20 transform hover:scale-105"
+                                    title="Iniciar chat"
+                                    id="chat-btn-${contact.id}">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.418 8-9.899 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.418-8 9.899-8s9.899 3.582 9.899 8z"></path>
+                                </svg>
+                                <div id="unread-indicator-${contact.id}" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-slate-800 hidden"></div>
+                            </button>
+                ` : '';
                 contactElement.innerHTML = `
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
@@ -455,15 +478,7 @@ function renderContacts(contacts, users) {
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button onclick="startChat('${contact.id}')"
-                                    class="relative p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/20 transform hover:scale-105"
-                                    title="Iniciar chat"
-                                    id="chat-btn-${contact.id}">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.418 8-9.899 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.418-8 9.899-8s9.899 3.582 9.899 8z"></path>
-                                </svg>
-                                <div id="unread-indicator-${contact.id}" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-slate-800 hidden"></div>
-                            </button>
+                            ${chatButtonHtml}
                             <button onclick="deleteContact('${contact.contact_record_id}')"
                                     class="p-2 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-red-500/20 transform hover:scale-105"
                                     title="Eliminar contacto">
@@ -557,6 +572,7 @@ function renderContacts(contacts, users) {
 
 // Función para verificar mensajes no leídos para todos los contactos
 async function checkUnreadMessagesForContacts() {
+    if (!isChatEnabled()) return;
     const contactElements = document.querySelectorAll('[id^="chat-btn-"]');
 
     for (const element of contactElements) {
@@ -905,6 +921,7 @@ async function deleteContact(id) {
 
 // Funciones auxiliares
 async function startChat(contactId) {
+    if (!isChatEnabled()) return;
     try {
         showNotification('Iniciando chat...', 'info');
 
