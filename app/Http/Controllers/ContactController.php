@@ -283,16 +283,25 @@ class ContactController extends Controller
 
         $data = $request->validate([
             'email' => 'nullable|email',
+            'username' => 'nullable|string',
         ]);
 
-        if (empty($data['email'])) {
+        if (empty($data['email']) && empty($data['username'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Debe proporcionar un correo electrónico.'
+                'message' => 'Debe proporcionar un correo electrónico o nombre de usuario.'
             ], 422);
         }
 
-        $contactUser = User::where('email', $data['email'])->first();
+        $contactUser = null;
+
+        if (! empty($data['email'])) {
+            $contactUser = User::where('email', $data['email'])->first();
+        }
+
+        if (! $contactUser && ! empty($data['username'])) {
+            $contactUser = User::where('username', $data['username'])->first();
+        }
 
         if (! $contactUser) {
             return response()->json([
