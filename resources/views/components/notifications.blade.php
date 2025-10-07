@@ -15,6 +15,10 @@
 <style>
 /* Panel styling */
 .notifications-panel.notifications-panel--styled {
+    position: fixed;
+    top: 72px;
+    right: 1rem;
+    z-index: 9999;
     background: rgba(15,23,42,0.92); /* slate-900 with opacity */
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
