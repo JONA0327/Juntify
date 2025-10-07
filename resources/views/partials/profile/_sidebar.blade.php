@@ -37,6 +37,15 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a href="#" class="nav-link" data-section="apikey">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3.75 3.75 0 11-5.5 3.3L6 12.75V15h2.25l2.739-2.739a3.75 3.75 0 014.761 5.722" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M18 15.75a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                    </svg>
+                    API Key
+                </a>
+            </li>
+            <li class="nav-item">
                 <a href="#" class="nav-link" data-section="purchases">
                     <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 2.25h1.386c.51 0 .96.36 1.07.86l.507 2.454a.563.563 0 00.55.436h11.614a.563.563 0 00.551-.436L19.294 3.11a1.125 1.125 0 011.07-.86H21.75M5.25 12.75h14.25m-14.25 0l-.75 3.75m0 0h15.75m-15.75 0L5.25 21m0 0a1.5 1.5 0 103 0m10.5 0a1.5 1.5 0 103 0" />

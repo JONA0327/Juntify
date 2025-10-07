@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 use App\Models\GoogleToken;
+use App\Models\ApiToken;
 
 class User extends Authenticatable
 {
@@ -104,5 +105,10 @@ class User extends Authenticatable
     public function planPurchases(): HasManyThrough
     {
         return $this->hasManyThrough(PlanPurchase::class, UserPlan::class);
+    }
+
+    public function apiTokens(): HasMany
+    {
+        return $this->hasMany(ApiToken::class);
     }
 }
