@@ -1,8 +1,8 @@
 <!-- Modal para Crear/Editar Tarea -->
-<div id="taskModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[1100]">
-    <div class="flex items-center justify-center min-h-screen p-4">
+<div id="taskModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[4000]">
+    <div class="flex items-center justify-center min-h-screen p-4 sm:p-6">
 
-        <div class="bg-slate-800 rounded-lg shadow-xl w-full max-w-md sm:max-w-lg md:max-w-2xl max-h-screen overflow-y-auto">
+        <div class="bg-slate-800 rounded-lg shadow-xl w-full max-w-md sm:max-w-lg md:max-w-2xl max-h-[90vh] overflow-y-auto">
 
             <div class="p-6">
                 <!-- Header del Modal -->
