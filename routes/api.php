@@ -226,7 +226,10 @@ Route::prefix('integrations')->group(function () {
         Route::get('/me', [IntegrationAuthController::class, 'me']);
         Route::post('/logout', [IntegrationAuthController::class, 'logout']);
         Route::get('/meetings', [IntegrationDataController::class, 'meetings']);
+        Route::get('/meetings/{meeting}', [IntegrationDataController::class, 'meetingDetails']);
         Route::get('/meetings/{meeting}/tasks', [IntegrationDataController::class, 'meetingTasks']);
+        Route::get('/meetings/{meeting}/audio', [IntegrationDataController::class, 'meetingAudio'])
+            ->name('api.integrations.meetings.audio');
         Route::get('/tasks', [IntegrationDataController::class, 'tasks']);
         Route::get('/users/search', [IntegrationDataController::class, 'searchUsers']);
     });
