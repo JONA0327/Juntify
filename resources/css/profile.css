@@ -812,6 +812,19 @@ body {
     color: #3b82f6;
 }
 
+.btn-outline {
+    background: transparent;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    color: #cbd5f5;
+}
+
+.btn-outline:hover {
+    border-color: rgba(96, 165, 250, 0.55);
+    color: #e0f2fe;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(14, 165, 233, 0.2);
+}
+
 /* Danger button (Perfil) */
 .btn-danger {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
@@ -829,6 +842,16 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2rem;
+}
+
+.api-docs-cta {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.api-docs-cta .btn {
+  font-size: 0.85rem;
 }
 
 .api-intro {

@@ -9,6 +9,10 @@
             Sigue la guía paso a paso para autenticarte, guardar tu token y consumir los endpoints disponibles.
         </p>
 
+        <div class="api-docs-cta">
+            <a href="{{ route('profile.documentation') }}" class="btn btn-outline">Ver documentación detallada</a>
+        </div>
+
         <div class="api-status-panel">
             <div>
                 <span id="api-connection-status" class="api-status-badge api-status--disconnected">Sin conectar</span>
