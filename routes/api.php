@@ -24,6 +24,9 @@ use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PaymentController;
 use App\Services\AudioConversionService;
 use App\Exceptions\FfmpegUnavailableException;
+use App\Http\Controllers\Api\IntegrationAuthController;
+use App\Http\Controllers\Api\IntegrationDataController;
+use App\Models\ApiToken;
 
 /*
 |--------------------------------------------------------------------------
@@ -190,17 +193,40 @@ Route::get('/test', function () {
 
 // Endpoint para crear tokens de API (requiere autenticación web)
 Route::middleware('auth')->post('/create-token', function (Request $request) {
-    $request->validate([
+    $validated = $request->validate([
         'name' => 'required|string|max:255',
+        'abilities' => 'nullable|array',
+        'abilities.*' => 'string',
     ]);
 
-    $token = $request->user()->createToken($request->name);
+    $plainToken = ApiToken::generatePlainTextToken();
+
+    $token = $request->user()->apiTokens()->create([
+        'name' => $validated['name'],
+        'token_hash' => ApiToken::hashToken($plainToken),
+        'abilities' => $validated['abilities'] ?? null,
+        'last_used_at' => now(),
+    ]);
 
     return response()->json([
-        'token' => $token->plainTextToken,
-        'name' => $request->name,
-        'created_at' => now()
-    ]);
+        'token' => $plainToken,
+        'name' => $token->name,
+        'abilities' => $token->abilities,
+        'created_at' => $token->created_at?->toIso8601String(),
+    ], 201);
+});
+
+Route::prefix('integrations')->group(function () {
+    Route::post('/login', [IntegrationAuthController::class, 'login'])->middleware('throttle:10,1');
+
+    Route::middleware('api.token')->group(function () {
+        Route::get('/me', [IntegrationAuthController::class, 'me']);
+        Route::post('/logout', [IntegrationAuthController::class, 'logout']);
+        Route::get('/meetings', [IntegrationDataController::class, 'meetings']);
+        Route::get('/meetings/{meeting}/tasks', [IntegrationDataController::class, 'meetingTasks']);
+        Route::get('/tasks', [IntegrationDataController::class, 'tasks']);
+        Route::get('/users/search', [IntegrationDataController::class, 'searchUsers']);
+    });
 });
 
 Route::get('/analyzers', [AnalyzerController::class, 'list']);
