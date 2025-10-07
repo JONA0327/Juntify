@@ -49,8 +49,11 @@
                         <h2>Contenido</h2>
                         <nav>
                             <a href="#overview" class="active">Introducción</a>
-                            <a href="#api-key">Uso de API Key</a>
-                            <a href="#endpoints">Endpoints disponibles</a>
+                            <a href="#auth">Autenticación</a>
+                            <a href="#meetings">Reuniones</a>
+                            <a href="#tasks">Tareas</a>
+                            <a href="#users">Usuarios</a>
+                            <a href="#errors">Errores comunes</a>
                             <a href="#integration">Integración en tu sistema</a>
                         </nav>
                         <div>
@@ -59,81 +62,188 @@
                     </aside>
 
                     <section class="doc-content">
-                        <section class="doc-card" aria-labelledby="api-key-title" id="api-key">
-                            <h2 id="api-key-title">🔐 Uso de API Key</h2>
+                        <section class="doc-card" aria-labelledby="auth-title" id="auth">
+                            <h2 id="auth-title">🔐 Autenticación</h2>
                             <p>
-                                Con una sesión activa en Juntify puedes generar tu token personal directamente desde tu perfil. El token
-                                queda disponible para probar los endpoints desde esta documentación y puedes revocarlo cuando lo necesites.
+                                Crea o recupera tu token personal directamente desde tu perfil o emítelo programáticamente. El token
+                                se devuelve con su fecha de expiración para que puedas renovarlo cuando sea necesario.
                             </p>
-
-                            <div class="doc-grid columns-3 doc-api-examples" id="doc-api-section">
+                            <div class="doc-grid columns-2 doc-api-examples" id="doc-api-section">
                                 <article>
-                                    <h3>Generar y custodiar tu token</h3>
-                                    <p>
-                                        Conserva tu token seguro y revócalo cuando ya no lo necesites. Si debes emitirlo desde otra aplicación,
-                                        realiza una petición al endpoint de autenticación con las credenciales del usuario que integrará Juntify.
-                                    </p>
+                                    <h3>Login con credenciales</h3>
+                                    <p>Solicita un token firmado enviando las credenciales del usuario que integrará Juntify.</p>
                                     <div class="code-block">
-                                        <pre><code>curl -X POST {{ url('/api/integrations/login') }} \
-  -H "Content-Type: application/json" \
-  -d '{"email":"tu-correo@empresa.com","password":"tu-contraseña"}'</code></pre>
+<pre><code>POST {{ url('/api/integrations/login') }}
+Content-Type: application/json
+
+{
+  "email": "usuario@empresa.com",
+  "password": "********"
+}</code></pre>
+                                    </div>
+                                    <p>Respuesta exitosa:</p>
+                                    <div class="code-block">
+<pre><code>{
+  "token": "token_de_api",
+  "expires_at": "2024-05-11T00:00:00Z"
+}</code></pre>
                                     </div>
                                 </article>
-
                                 <article>
-                                    <h3>Consumir la API</h3>
-                                    <p>Envía el token en el encabezado <code>Authorization: Bearer &lt;token&gt;</code> para acceder a tus recursos.</p>
+                                    <h3>Token desde la sesión activa</h3>
+                                    <p>Cuando ya estás autenticado en el navegador puedes emitir un token sin volver a pedir contraseña.</p>
                                     <div class="code-block">
-                                        <pre><code>fetch('{{ url('/api/integrations/meetings') }}', {
-  headers: {
-    'Authorization': `Bearer ${token}`
-  }
-})
-  .then(res => res.json())
-  .then(console.log);</code></pre>
+<pre><code>POST {{ url('/api/integrations/token') }}
+X-CSRF-TOKEN: {{ csrf_token() }}</code></pre>
                                     </div>
-                                </article>
-
-                                <article>
-                                    <h3>Buscar usuarios</h3>
-                                    <p>Consulta información puntual de usuarios utilizando el endpoint de búsqueda.</p>
-                                    <div class="code-block">
-                                        <pre><code>GET {{ url('/api/integrations/users/search?query=ana') }}</code></pre>
-                                    </div>
+                                    <p class="mt-4">Incluye el encabezado <code>Authorization: Bearer &lt;token&gt;</code> en cada petición y utiliza <code>POST {{ url('/api/integrations/logout') }}</code> para revocar el token cuando dejes de usarlo.</p>
                                 </article>
                             </div>
                         </section>
 
-                        <section class="doc-card" id="endpoints">
-                            <h2>🧭 Endpoints disponibles</h2>
+                        <section class="doc-card" id="meetings">
+                            <h2>🧭 Reuniones</h2>
                             <p>
-                                Todos los endpoints siguen el prefijo <code>/api/integrations</code> y responden en formato JSON.
-                                Recuerda incluir el encabezado <code>Authorization</code> en cada solicitud.
+                                La API entrega metadatos, el contenido desencriptado del archivo <code>.ju</code> y la información
+                                necesaria para reproducir el audio sin acceder a Google Drive. Todos los endpoints requieren el token
+                                del usuario autenticado.
                             </p>
                             <div class="doc-grid">
                                 <article class="code-block">
-                                    <h3>Reuniones</h3>
-                                    <pre><code>GET {{ url('/api/integrations/meetings') }}
-Respuesta: {
+                                    <h3>Últimas reuniones</h3>
+<pre><code>GET {{ url('/api/integrations/meetings') }}
+Authorization: Bearer {{ '{token}' }}
+
+{
   "data": [
     {
-      "id": 1,
-      "title": "Daily Standup",
-      "created_at_readable": "2024-05-04 09:00"
+      "id": 1234,
+      "title": "Demo con cliente",
+      "created_at": "2024-05-10T17:00:12Z",
+      "created_at_readable": "10/05/2024 14:00"
     }
   ]
 }</code></pre>
                                 </article>
                                 <article class="code-block">
-                                    <h3>Tareas</h3>
-                                    <pre><code>GET {{ url('/api/integrations/tasks') }}
-GET {{ url('/api/integrations/tasks?meeting_id=123') }}</code></pre>
+                                    <h3>Detalle con archivo .ju y audio</h3>
+<pre><code>GET {{ url('/api/integrations/meetings/{meeting}') }}
+Authorization: Bearer {{ '{token}' }}
+
+{
+  "data": {
+    "id": 1234,
+    "title": "Demo con cliente",
+    "ju": {
+      "available": true,
+      "summary": "Resumen de la reunión...",
+      "key_points": ["Punto 1", "Punto 2"],
+      "tasks": [{"title": "Enviar propuesta", "owner": "María"}],
+      "transcription": "Texto completo..."
+    },
+    "audio": {
+      "available": true,
+      "filename": "demo_cliente.mp3",
+      "mime_type": "audio/mpeg",
+      "stream_url": "{{ url('/api/integrations/meetings/1234/audio') }}"
+    }
+  }
+}</code></pre>
+                                    <p class="mt-4">El campo <code>stream_url</code> ya está autenticado y permite reproducir el audio directamente en tu panel.</p>
                                 </article>
                                 <article class="code-block">
-                                    <h3>Búsqueda de usuarios</h3>
-                                    <pre><code>GET {{ url('/api/integrations/users/search?query=ana') }}</code></pre>
+                                    <h3>Streaming de audio</h3>
+<pre><code>GET {{ url('/api/integrations/meetings/{meeting}/audio') }}
+Authorization: Bearer {{ '{token}' }}
+Accept: audio/*
+
+// Devuelve el flujo binario del archivo original</code></pre>
+                                </article>
+                                <article class="code-block">
+                                    <h3>Tareas de una reunión</h3>
+<pre><code>GET {{ url('/api/integrations/meetings/{meeting}/tasks') }}
+Authorization: Bearer {{ '{token}' }}
+
+{
+  "meeting": {
+    "id": 1234,
+    "title": "Demo con cliente"
+  },
+  "tasks": [
+    {
+      "id": 777,
+      "title": "Enviar propuesta",
+      "status": "pendiente",
+      "due_date": "2024-05-12",
+      "due_time": "18:00"
+    }
+  ]
+}</code></pre>
                                 </article>
                             </div>
+                        </section>
+
+                        <section class="doc-card" id="tasks">
+                            <h2>🗂️ Tareas asignadas</h2>
+                            <p>
+                                Consulta y filtra todas las tareas asociadas al usuario autenticado. Puedes combinar los resultados con la
+                                información de reuniones para construir paneles de seguimiento.
+                            </p>
+                            <div class="code-block">
+<pre><code>GET {{ url('/api/integrations/tasks') }}
+Authorization: Bearer {{ '{token}' }}
+
+Parámetros opcionales:
+- meeting_id: Filtra tareas de una reunión específica.
+
+Respuesta 200:
+{
+  "data": [
+    {
+      "id": 777,
+      "title": "Enviar propuesta",
+      "status": "en_progreso",
+      "progress": 50,
+      "due_date": "2024-05-12",
+      "due_time": "18:00",
+      "assigned_to": "María",
+      "meeting": {
+        "id": 1234,
+        "title": "Demo con cliente"
+      }
+    }
+  ]
+}</code></pre>
+                            </div>
+                        </section>
+
+                        <section class="doc-card" id="users">
+                            <h2>🙋 Búsqueda de usuarios</h2>
+                            <p>Localiza miembros de tu organización para asignaciones o validaciones dentro de tu panel externo.</p>
+                            <div class="code-block">
+<pre><code>GET {{ url('/api/integrations/users/search?query=mar') }}
+Authorization: Bearer {{ '{token}' }}
+
+{
+  "data": [
+    {
+      "id": 55,
+      "full_name": "María García",
+      "email": "maria@empresa.com",
+      "role": "manager"
+    }
+  ]
+}</code></pre>
+                            </div>
+                        </section>
+
+                        <section class="doc-card" id="errors">
+                            <h2>⚠️ Errores comunes</h2>
+                            <ul class="list-disc list-inside space-y-2 text-sm text-slate-300">
+                                <li><code>401 Unauthorized</code>: el token es inválido o expiró. Renueva el token o ejecuta <code>/login</code> nuevamente.</li>
+                                <li><code>404 Not Found</code>: el recurso no pertenece al usuario autenticado o ya no está disponible.</li>
+                                <li><code>429 Too Many Requests</code>: se alcanzó el límite de peticiones. Implementa reintentos con backoff exponencial.</li>
+                            </ul>
                         </section>
 
                         <section class="doc-card" id="integration">
