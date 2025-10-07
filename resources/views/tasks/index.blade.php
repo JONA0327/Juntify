@@ -129,12 +129,20 @@
                                     </div>
 
                                     <div class="bg-slate-900/50 border border-amber-400/40 rounded-xl p-4 shadow-inner">
-                                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                                             <div>
                                                 <h4 class="text-base font-semibold text-amber-200">Tareas sin fecha</h4>
                                                 <p class="text-xs text-amber-100/80">Asigna una fecha y un responsable para que puedan avanzar.</p>
                                             </div>
-                                            <span id="kanban-undated-count" class="inline-flex items-center justify-center px-3 py-1 rounded-full bg-amber-500/20 text-amber-100 text-xs font-semibold">0</span>
+                                            <div class="flex flex-col items-end gap-2 sm:gap-3 w-full sm:w-auto">
+                                                <span id="kanban-undated-count" class="inline-flex items-center justify-center px-3 py-1 rounded-full bg-amber-500/20 text-amber-100 text-xs font-semibold">0</span>
+                                                <div id="kanban-undated-filter-container" class="w-full sm:w-64 hidden">
+                                                    <label for="kanban-undated-filter" class="sr-only">Filtrar tareas sin fecha por reunión</label>
+                                                    <select id="kanban-undated-filter" class="w-full bg-slate-950/70 border border-amber-500/40 text-amber-100 text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-300/60 transition">
+                                                        <option value="all">Todas las reuniones</option>
+                                                    </select>
+                                                </div>
+                                            </div>
                                         </div>
                                         <div id="kanban-undated-list" class="mt-4 flex flex-col gap-3"></div>
                                         <div id="kanban-undated-empty" class="mt-4 text-sm text-slate-400 border border-dashed border-amber-400/30 rounded-lg px-4 py-6 text-center">Todas las tareas tienen fecha 🎉</div>
@@ -221,6 +229,11 @@
         const kanbanUndatedCount = document.getElementById('kanban-undated-count');
         const kanbanUndatedList = document.getElementById('kanban-undated-list');
         const kanbanUndatedEmpty = document.getElementById('kanban-undated-empty');
+        const kanbanUndatedFilter = document.getElementById('kanban-undated-filter');
+        const kanbanUndatedFilterContainer = document.getElementById('kanban-undated-filter-container');
+        const kanbanUndatedEmptyDefaultText = kanbanUndatedEmpty ? kanbanUndatedEmpty.textContent.trim() : '';
+        let cachedUndatedTasks = [];
+        let currentUndatedFilter = 'all';
 
         if (kanbanResetBtn) {
             kanbanResetBtn.addEventListener('click', () => {
@@ -228,6 +241,13 @@
                 window.lastSelectedMeetingName = null;
                 if (typeof showTasksPanel === 'function') showTasksPanel(false);
                 kanbanReload();
+            });
+        }
+
+        if (kanbanUndatedFilter) {
+            kanbanUndatedFilter.addEventListener('change', () => {
+                currentUndatedFilter = kanbanUndatedFilter.value || 'all';
+                renderUndatedTasks();
             });
         }
 
@@ -341,6 +361,184 @@
             }
         }
 
+        function undatedMeetingKey(task){
+            if (!task) return 'none';
+            const id = task.meeting_id;
+            if (id === null || typeof id === 'undefined' || id === '') {
+                return 'none';
+            }
+            return String(id);
+        }
+
+        function updateUndatedFilterOptions(tasks){
+            if (!kanbanUndatedFilter) return;
+
+            const entries = new Map();
+            (Array.isArray(tasks) ? tasks : []).forEach(task => {
+                const key = undatedMeetingKey(task);
+                if (!entries.has(key)) {
+                    const label = task && task.meeting_name ? task.meeting_name : 'Sin reunión';
+                    entries.set(key, { value: key, label });
+                }
+            });
+
+            if (!Array.isArray(tasks) || tasks.length === 0 || (currentUndatedFilter !== 'all' && !entries.has(currentUndatedFilter))) {
+                currentUndatedFilter = 'all';
+            }
+
+            kanbanUndatedFilter.innerHTML = '';
+            const defaultOption = document.createElement('option');
+            defaultOption.value = 'all';
+            defaultOption.textContent = 'Todas las reuniones';
+            kanbanUndatedFilter.appendChild(defaultOption);
+
+            const sorted = Array.from(entries.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+            sorted.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.label;
+                kanbanUndatedFilter.appendChild(option);
+            });
+
+            kanbanUndatedFilter.value = currentUndatedFilter;
+
+            const showFilter = entries.size > 1;
+            if (kanbanUndatedFilterContainer) {
+                kanbanUndatedFilterContainer.classList.toggle('hidden', !showFilter);
+            }
+            kanbanUndatedFilter.disabled = !showFilter;
+        }
+
+        function renderUndatedTasks(){
+            if (!kanbanUndatedList) return;
+
+            const tasks = Array.isArray(cachedUndatedTasks) ? cachedUndatedTasks : [];
+            const total = tasks.length;
+            const filtered = tasks.filter(task => {
+                if (currentUndatedFilter === 'all') return true;
+                return undatedMeetingKey(task) === currentUndatedFilter;
+            });
+
+            kanbanUndatedList.innerHTML = '';
+
+            if (kanbanUndatedCount) {
+                const label = currentUndatedFilter !== 'all' && total > 0
+                    ? `${filtered.length} / ${total}`
+                    : String(total);
+                kanbanUndatedCount.textContent = label;
+                if (currentUndatedFilter !== 'all' && total > 0) {
+                    kanbanUndatedCount.setAttribute('title', `Mostrando ${filtered.length} de ${total} tareas sin fecha`);
+                } else {
+                    kanbanUndatedCount.removeAttribute('title');
+                }
+            }
+
+            if (!filtered.length) {
+                if (kanbanUndatedEmpty) {
+                    if (currentUndatedFilter !== 'all') {
+                        kanbanUndatedEmpty.textContent = 'No hay tareas sin fecha para esta reunión.';
+                    } else {
+                        kanbanUndatedEmpty.textContent = kanbanUndatedEmptyDefaultText || 'Todas las tareas tienen fecha 🎉';
+                    }
+                    kanbanUndatedEmpty.classList.remove('hidden');
+                }
+                return;
+            }
+
+            if (kanbanUndatedEmpty) {
+                kanbanUndatedEmpty.textContent = kanbanUndatedEmptyDefaultText || 'Todas las tareas tienen fecha 🎉';
+                kanbanUndatedEmpty.classList.add('hidden');
+            }
+
+            filtered.forEach(task => {
+                const card = document.createElement('div');
+                card.className = 'kanban-card bg-slate-900/70 border border-amber-500/50 rounded-xl p-3 text-sm text-amber-100 transition-colors cursor-pointer hover:border-amber-400/80';
+                card.dataset.id = task.id;
+                card.dataset.meetingId = task.meeting_id ?? '';
+
+                const assigneeName = (task.assigned_user && task.assigned_user.name) || task.asignado || 'Sin responsable';
+                const meetingLabel = task.meeting_name ? task.meeting_name : 'Sin reunión';
+
+                card.innerHTML = `
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="flex-1">
+                            <p class="text-sm font-semibold text-amber-100 leading-snug">${escapeHtml(task.tarea || 'Sin nombre')}</p>
+                            <div class="mt-1 text-[11px] text-amber-100/80">Responsable: ${escapeHtml(assigneeName)}</div>
+                            <div class="mt-1 text-[11px] text-amber-100/70 flex items-center gap-1">🗓 <span>${escapeHtml(meetingLabel)}</span></div>
+                        </div>
+                        <div class="flex flex-col items-end gap-2">
+                            <span class="text-[10px] uppercase tracking-wide text-amber-100 bg-amber-500/20 border border-amber-400/40 rounded-full px-2 py-0.5">Sin fecha</span>
+                            <button type="button" class="kanban-undated-delete inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-amber-100/80 hover:text-amber-50 border border-amber-400/40 rounded-full px-2 py-0.5 transition-colors" data-action="delete-undated-task" title="Eliminar tarea">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                <span>Eliminar</span>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-[11px] text-amber-200/80 italic">Haz clic para asignar fecha y responsable.</p>
+                `;
+
+                card.addEventListener('click', () => {
+                    if (typeof openTaskModal === 'function') {
+                        openTaskModal(task.id, 'tasks_laravel');
+                    }
+                });
+
+                const deleteBtn = card.querySelector('[data-action="delete-undated-task"]');
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        handleUndatedTaskDeletion(task.id, task.meeting_id);
+                    });
+                }
+
+                kanbanUndatedList.appendChild(card);
+            });
+        }
+
+        async function handleUndatedTaskDeletion(taskId, meetingId){
+            if (!taskId) return;
+            const confirmed = window.confirm('¿Seguro que deseas eliminar esta tarea? Esta acción no se puede deshacer.');
+            if (!confirmed) return;
+
+            try {
+                const url = new URL(`/api/tasks-laravel/tasks/${taskId}`, window.location.origin);
+                const res = await fetch(url, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json'
+                    },
+                });
+
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (_) {
+                    data = null;
+                }
+
+                if (!res.ok || (data && data.success === false)) {
+                    const message = (data && data.message) ? data.message : 'No se pudo eliminar la tarea.';
+                    throw new Error(message);
+                }
+
+                const shouldRefreshMeeting = window.lastSelectedMeetingId
+                    && meetingId != null
+                    && Number(window.lastSelectedMeetingId) === Number(meetingId)
+                    && typeof window.loadTasksForMeeting === 'function';
+
+                if (shouldRefreshMeeting) {
+                    const source = window.lastSelectedMeetingSource || 'transcriptions_laravel';
+                    await window.loadTasksForMeeting(window.lastSelectedMeetingId, source);
+                } else {
+                    await kanbanReload();
+                }
+            } catch (error) {
+                console.error('delete task', error);
+                alert(error.message || 'No se pudo eliminar la tarea');
+            }
+        }
+
         async function kanbanReload(){
             const hasMeeting = !!window.lastSelectedMeetingId;
             updateKanbanContextLabel(hasMeeting);
@@ -358,9 +556,9 @@
                     if (kanbanOverdueList) kanbanOverdueList.innerHTML = '';
                     if (kanbanOverdueCount) kanbanOverdueCount.textContent = '0';
                     if (kanbanOverdueEmpty) kanbanOverdueEmpty.classList.remove('hidden');
-                    if (kanbanUndatedList) kanbanUndatedList.innerHTML = '';
-                    if (kanbanUndatedCount) kanbanUndatedCount.textContent = '0';
-                    if (kanbanUndatedEmpty) kanbanUndatedEmpty.classList.remove('hidden');
+                    cachedUndatedTasks = [];
+                    updateUndatedFilterOptions([]);
+                    renderUndatedTasks();
                     showKanban(false);
                     return;
                 }
@@ -498,37 +696,9 @@
                 }
                 if (kanbanOverdueEmpty) kanbanOverdueEmpty.classList.toggle('hidden', overdueTasks.length > 0);
 
-                if (kanbanUndatedCount) kanbanUndatedCount.textContent = String(undatedTasks.length);
-                if (kanbanUndatedList) {
-                    kanbanUndatedList.innerHTML = '';
-                    undatedTasks.forEach(t => {
-                        const card = document.createElement('div');
-                        card.className = 'kanban-card bg-slate-900/70 border border-amber-500/50 rounded-xl p-3 text-sm text-amber-100 transition-colors cursor-pointer hover:border-amber-400/80';
-                        card.dataset.id = t.id;
-
-                        const assigneeName = (t.assigned_user && t.assigned_user.name) || t.asignado || 'Sin responsable';
-                        const meetingLabel = t.meeting_name ? escapeHtml(t.meeting_name) : 'Sin reunión';
-
-                        card.innerHTML = `
-                            <div class="flex items-start justify-between gap-2">
-                                <p class="text-sm font-semibold text-amber-100 leading-snug">${escapeHtml(t.tarea || 'Sin nombre')}</p>
-                                <span class="text-[10px] uppercase tracking-wide text-amber-100 bg-amber-500/20 border border-amber-400/40 rounded-full px-2 py-0.5">Sin fecha</span>
-                            </div>
-                            <div class="mt-1 text-[11px] text-amber-100/80">Responsable: ${escapeHtml(assigneeName)}</div>
-                            <div class="mt-1 text-[11px] text-amber-100/70 flex items-center gap-1">🗓 <span>${meetingLabel}</span></div>
-                            <p class="mt-2 text-[11px] text-amber-200/80 italic">Haz clic para asignar fecha y responsable.</p>
-                        `;
-
-                        card.addEventListener('click', () => {
-                            if (typeof openTaskModal === 'function') {
-                                openTaskModal(t.id, 'tasks_laravel');
-                            }
-                        });
-
-                        kanbanUndatedList.appendChild(card);
-                    });
-                }
-                if (kanbanUndatedEmpty) kanbanUndatedEmpty.classList.toggle('hidden', undatedTasks.length > 0);
+                cachedUndatedTasks = undatedTasks;
+                updateUndatedFilterOptions(undatedTasks);
+                renderUndatedTasks();
 
                 updateKanbanSummary(enrichedTasks);
                 setKanbanTab(currentKanbanTab);
@@ -539,9 +709,9 @@
                 if (kanbanOverdueList) kanbanOverdueList.innerHTML = '';
                 if (kanbanOverdueCount) kanbanOverdueCount.textContent = '0';
                 if (kanbanOverdueEmpty) kanbanOverdueEmpty.classList.remove('hidden');
-                if (kanbanUndatedList) kanbanUndatedList.innerHTML = '';
-                if (kanbanUndatedCount) kanbanUndatedCount.textContent = '0';
-                if (kanbanUndatedEmpty) kanbanUndatedEmpty.classList.remove('hidden');
+                cachedUndatedTasks = [];
+                updateUndatedFilterOptions([]);
+                renderUndatedTasks();
                 showKanban(false);
             }
         }
