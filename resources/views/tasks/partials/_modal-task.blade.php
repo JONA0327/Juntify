@@ -81,29 +81,6 @@
                         <p class="text-xs text-slate-400 mt-1">Deja vacío para asignarte la tarea a ti mismo</p>
                     </div>
 
-                    <!-- Progreso (solo para editar) -->
-                    <div id="progressContainer" class="mb-4 hidden">
-                        <label for="taskProgress" class="block text-sm font-medium text-slate-300 mb-2">
-                            Progreso (%)
-                        </label>
-                        <input type="range" id="taskProgress" name="progress" min="0" max="100" value="0"
-                               class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
-                        <div class="flex justify-between text-xs text-slate-400 mt-1">
-                            <span>0%</span>
-                            <span id="progressValue">0%</span>
-                            <span>100%</span>
-                        </div>
-                    </div>
-
-                    <!-- Completada (solo para editar) -->
-                    <div id="completedContainer" class="mb-6 hidden">
-                        <label class="flex items-center">
-                            <input type="checkbox" id="taskCompleted" name="completed"
-                                   class="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500">
-                            <span class="ml-2 text-sm text-slate-300">Marcar como completada</span>
-                        </label>
-                    </div>
-
                     <!-- Botones -->
                     <div class="flex justify-end gap-3">
                         <button type="button" onclick="closeTaskModal()"
@@ -128,8 +105,6 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
     const modal = document.getElementById('taskModal');
     const modalTitle = document.getElementById('modalTitle');
     const submitBtn = document.getElementById('submitBtn');
-    const progressContainer = document.getElementById('progressContainer');
-    const completedContainer = document.getElementById('completedContainer');
     const form = document.getElementById('taskForm');
 
     editingTaskId = taskId;
@@ -139,8 +114,6 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
         // Modo edición
         modalTitle.textContent = 'Editar Tarea';
         submitBtn.textContent = 'Actualizar Tarea';
-        progressContainer.classList.remove('hidden');
-        completedContainer.classList.remove('hidden');
 
         // Para todas las reuniones, usar tasks_laravel
         fetch(new URL(`/api/tasks-laravel/tasks/${taskId}`, window.location.origin))
@@ -174,9 +147,6 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
 
                 document.getElementById('taskPriority').value = (t.prioridad || 'media');
                 document.getElementById('taskAssignee').value = t.asignado || '';
-                document.getElementById('taskProgress').value = (typeof t.progreso === 'number' ? t.progreso : 0);
-                document.getElementById('taskCompleted').checked = (t.progreso >= 100);
-                updateProgressValue();
             })
             .catch(error => {
                 console.error('Error cargando tarea:', error);
@@ -186,8 +156,6 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
         // Modo creación
         modalTitle.textContent = 'Crear Nueva Tarea';
         submitBtn.textContent = 'Crear Tarea';
-        progressContainer.classList.add('hidden');
-        completedContainer.classList.add('hidden');
         form.reset();
     }
 
@@ -201,14 +169,6 @@ function closeTaskModal() {
     document.body.classList.remove('overflow-hidden');
     editingTaskId = null;
 }
-
-function updateProgressValue() {
-    const progress = document.getElementById('taskProgress').value;
-    document.getElementById('progressValue').textContent = progress + '%';
-}
-
-// Event listeners
-document.getElementById('taskProgress').addEventListener('input', updateProgressValue);
 
 document.getElementById('taskForm').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -227,11 +187,11 @@ document.getElementById('taskForm').addEventListener('submit', function(e) {
             fecha_inicio: null,
             fecha_limite: entries.due_date || null,
             hora_limite: entries.due_time || null,
-            asignado: entries.assignee || null,
-            progreso: parseInt(document.getElementById('taskProgress').value || '0', 10)
+            asignado: entries.assignee || null
         };
         if (!isEdit) {
             payload.meeting_id = window.lastSelectedMeetingId;
+            payload.progreso = 0;
         }
 
         const endpoint = isEdit ? `/api/tasks-laravel/tasks/${editingTaskId}` : '/api/tasks-laravel/tasks';
