@@ -59,21 +59,21 @@
             <section class="doc-card" aria-labelledby="api-key-title" id="api-key">
                 <h2 id="api-key-title">🔐 Uso de API Key</h2>
                 <p>
-                    Inicia sesión con tu cuenta de Juntify para generar un token personal. Este token se almacena en tu
-                    navegador y puedes revocarlo en cualquier momento. Utilízalo como credencial <code>Bearer</code>
-                    en cada petición a la API.
+                    Con una sesión activa en Juntify puedes generar tu token personal directamente desde tu perfil. El token
+                    queda disponible para probar los endpoints desde esta documentación y puedes revocarlo cuando lo necesites.
                 </p>
 
                 <div class="api-panel" id="doc-api-section">
                     <div class="api-status">
                         <div>
-                            <span id="api-connection-status" class="api-status-badge api-status--disconnected">Sin conectar</span>
-                            <p class="api-status-help">Autentícate con tus credenciales para habilitar las consultas.</p>
+                            <span id="api-connection-status" class="api-status-badge api-status--disconnected">Sin token activo</span>
+                            <p class="api-status-help">Genera un token desde tu perfil o con el botón siguiente y úsalo en tus integraciones.</p>
                         </div>
                         <div class="api-token-wrapper">
                             <span class="api-token-label">Token activo</span>
-                            <code id="api-token-value" class="api-token-value">No has iniciado sesión aún.</code>
+                            <code id="api-token-value" class="api-token-value">Aún no has generado un token desde este navegador.</code>
                             <div class="api-token-actions">
+                                <button type="button" class="btn btn-primary" id="api-generate-token">Generar token</button>
                                 <button type="button" class="btn btn-secondary" id="api-copy-token" disabled>Copiar token</button>
                                 <button type="button" class="btn btn-danger" id="api-logout-btn" disabled>Revocar token</button>
                             </div>
@@ -82,22 +82,15 @@
 
                     <div class="doc-grid columns-3">
                         <article>
-                            <h3>Paso 1 · Autenticación</h3>
-                            <p>Introduce tu correo y contraseña para recibir un token seguro asociado a tu cuenta.</p>
-                            <form id="api-login-form" class="api-form" autocomplete="off">
-                                <div class="form-row">
-                                    <label for="api-login-email">Correo electrónico</label>
-                                    <input type="email" id="api-login-email" name="email" placeholder="tu-correo@empresa.com" required>
-                                </div>
-                                <div class="form-row">
-                                    <label for="api-login-password">Contraseña</label>
-                                    <input type="password" id="api-login-password" name="password" placeholder="••••••••" required>
-                                </div>
-                                <div class="api-token-actions">
-                                    <button type="submit" class="btn btn-primary" id="api-login-submit">Generar token</button>
-                                    <a href="{{ route('password.forgot') }}" class="btn btn-outline">¿Olvidaste tu contraseña?</a>
-                                </div>
-                            </form>
+                            <h3>Generar y custodiar tu token</h3>
+                            <p>
+                                Usa el botón anterior para obtener un token inmediato utilizando tu sesión actual. Guarda el valor en un gestor
+                                seguro y, si lo utilizas en producción, revoca los tokens que ya no necesites.
+                            </p>
+                            <p>
+                                ¿Necesitas emitirlo desde otra aplicación? Realiza una petición al endpoint de autenticación con las credenciales
+                                del usuario que integrará Juntify.
+                            </p>
                             <div class="code-block">
                                 <pre><code>curl -X POST {{ url('/api/integrations/login') }} \
   -H "Content-Type: application/json" \
@@ -106,7 +99,7 @@
                         </article>
 
                         <article>
-                            <h3>Paso 2 · Consumir la API</h3>
+                            <h3>Consumir la API</h3>
                             <p>Envía el token en el encabezado <code>Authorization: Bearer &lt;token&gt;</code> para acceder a tus recursos.</p>
                             <div class="code-block">
                                 <pre><code>fetch('{{ url('/api/integrations/meetings') }}', {
@@ -121,20 +114,20 @@
                                 <div class="api-data-card">
                                     <h4>Reuniones recientes</h4>
                                     <ul id="api-meetings-list" class="api-list">
-                                        <li class="api-list-empty">Inicia sesión para ver tus reuniones.</li>
+                                        <li class="api-list-empty">Genera tu token para ver tus reuniones.</li>
                                     </ul>
                                 </div>
                                 <div class="api-data-card">
                                     <h4>Tareas vinculadas</h4>
                                     <ul id="api-tasks-list" class="api-list">
-                                        <li class="api-list-empty">Inicia sesión para listar tus tareas.</li>
+                                        <li class="api-list-empty">Genera tu token para listar tus tareas.</li>
                                     </ul>
                                 </div>
                             </div>
                         </article>
 
                         <article>
-                            <h3>Paso 3 · Buscar usuarios</h3>
+                            <h3>Buscar usuarios</h3>
                             <p>Realiza consultas puntuales desde el panel para validar tu integración.</p>
                             <form id="api-user-search-form" class="api-form api-form-inline">
                                 <div class="form-row">

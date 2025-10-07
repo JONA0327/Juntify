@@ -6,7 +6,7 @@
         </h2>
         <p class="api-intro">
             Integra tus aplicaciones con Juntify para consultar reuniones, tareas y usuarios de forma segura.
-            Sigue la guía paso a paso para autenticarte, guardar tu token y consumir los endpoints disponibles.
+            Genera tu token personal desde este panel y reutilízalo en tus integraciones externas.
         </p>
 
         <div class="api-docs-cta">
@@ -15,13 +15,14 @@
 
         <div class="api-status-panel">
             <div>
-                <span id="api-connection-status" class="api-status-badge api-status--disconnected">Sin conectar</span>
-                <p class="api-status-help">Inicia sesión para generar un token y habilitar las consultas desde este panel.</p>
+                <span id="api-connection-status" class="api-status-badge api-status--disconnected">Sin token activo</span>
+                <p class="api-status-help">Con tu sesión iniciada puedes generar un token y habilitar las consultas desde este panel.</p>
             </div>
             <div class="api-token-wrapper">
                 <span class="api-token-label">Token activo</span>
-                <code id="api-token-value" class="api-token-value">No has iniciado sesión aún.</code>
+                <code id="api-token-value" class="api-token-value">Aún no has generado un token desde este dispositivo.</code>
                 <div class="api-token-actions">
+                    <button type="button" class="btn btn-primary" id="api-generate-token">Generar token</button>
                     <button type="button" class="btn btn-secondary" id="api-copy-token" disabled>Copiar token</button>
                     <button type="button" class="btn btn-danger" id="api-logout-btn" disabled>Revocar token</button>
                 </div>
@@ -30,29 +31,23 @@
 
         <div class="api-sections-grid">
             <section class="api-section">
-                <h3>Paso 1: Autenticación</h3>
-                <p class="api-text">Utiliza tus credenciales de Juntify para generar un token personal. Puedes hacerlo desde este formulario o vía API.</p>
-                <form id="api-login-form" class="api-form" autocomplete="off">
-                    <div class="form-row">
-                        <label for="api-login-email">Correo electrónico</label>
-                        <input type="email" id="api-login-email" name="email" placeholder="tu-correo@empresa.com" required>
-                    </div>
-                    <div class="form-row">
-                        <label for="api-login-password">Contraseña</label>
-                        <input type="password" id="api-login-password" name="password" placeholder="••••••••" required>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary" id="api-login-submit">Generar token</button>
-                    </div>
-                </form>
+                <h3>Gestiona tu token</h3>
+                <p class="api-text">
+                    Estando autenticado en Juntify puedes generar un token personal con un clic. El token se almacena de forma
+                    local para que puedas probar los endpoints y revocarlo cuando ya no lo necesites.
+                </p>
+                <p class="api-text">
+                    Si necesitas crear tokens desde otra aplicación (por ejemplo, tu propio panel), utiliza el endpoint de
+                    autenticación descrito en la documentación.
+                </p>
                 <div class="api-snippet">
-                    <span class="api-snippet-label">Ejemplo con cURL</span>
+                    <span class="api-snippet-label">Generar token vía API</span>
                     <pre><code>curl -X POST https://tuservidor.com/api/integrations/login \&#10;  -H "Content-Type: application/json" \&#10;  -d '{"email":"tu-correo@empresa.com","password":"tu-contraseña"}'</code></pre>
                 </div>
             </section>
 
             <section class="api-section">
-                <h3>Paso 2: Consumir la API</h3>
+                <h3>Consume la API</h3>
                 <p class="api-text">Incluye el token en el encabezado <code>Authorization: Bearer &lt;token&gt;</code> para acceder a los recursos.</p>
                 <div class="api-endpoints">
                     <article class="api-endpoint">
@@ -83,19 +78,19 @@
             </section>
 
             <section class="api-section">
-                <h3>Paso 3: Consultas desde el panel</h3>
-                <p class="api-text">Una vez que hayas iniciado sesión, podrás visualizar rápidamente tus reuniones y tareas, además de buscar usuarios.</p>
+                <h3>Pruebas rápidas</h3>
+                <p class="api-text">Cuando generes tu token podrás visualizar tus reuniones y tareas recientes directamente desde este panel.</p>
                 <div id="api-data-panels" class="api-data-panels" style="display: none;">
                     <div class="api-data-card">
                         <h4>Reuniones recientes</h4>
                         <ul id="api-meetings-list" class="api-list">
-                            <li class="api-list-empty">Inicia sesión para ver tus reuniones.</li>
+                            <li class="api-list-empty">Genera tu token para ver tus reuniones.</li>
                         </ul>
                     </div>
                     <div class="api-data-card">
                         <h4>Tareas asociadas</h4>
                         <ul id="api-tasks-list" class="api-list">
-                            <li class="api-list-empty">Inicia sesión para listar tus tareas.</li>
+                            <li class="api-list-empty">Genera tu token para listar tus tareas.</li>
                         </ul>
                     </div>
                 </div>

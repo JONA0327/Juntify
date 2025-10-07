@@ -218,6 +218,9 @@ Route::middleware('auth')->post('/create-token', function (Request $request) {
 
 Route::prefix('integrations')->group(function () {
     Route::post('/login', [IntegrationAuthController::class, 'login'])->middleware('throttle:10,1');
+    Route::post('/token', [IntegrationAuthController::class, 'createFromSession'])
+        ->middleware(['web', 'auth'])
+        ->name('api.integrations.token');
 
     Route::middleware('api.token')->group(function () {
         Route::get('/me', [IntegrationAuthController::class, 'me']);
