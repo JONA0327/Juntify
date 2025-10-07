@@ -4,24 +4,6 @@ axios.defaults.headers.common['X-CSRF-TOKEN'] = document
   .querySelector('meta[name="csrf-token"]')
   ?.getAttribute('content') ?? '';
 
-function createParticles() {
-  const container = document.getElementById('particles');
-  if (!container) {
-    return;
-  }
-
-  const count = 50;
-  for (let i = 0; i < count; i += 1) {
-    const particle = document.createElement('div');
-    particle.className = 'particle';
-    particle.style.left = `${Math.random() * 100}%`;
-    particle.style.top = `${Math.random() * 100}%`;
-    particle.style.animationDelay = `${Math.random() * 6}s`;
-    particle.style.animationDuration = `${Math.random() * 6 + 4}s`;
-    container.appendChild(particle);
-  }
-}
-
 function toggleSidebar() {
   const layout = document.querySelector('.doc-layout');
   layout?.classList.toggle('sidebar-open');
@@ -88,7 +70,6 @@ function enableSnippetCopy() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  createParticles();
   initApiIntegrationSection('doc-api-section');
   enableSidebarNavigation();
   enableSnippetCopy();
