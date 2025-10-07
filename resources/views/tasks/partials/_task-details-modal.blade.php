@@ -1,7 +1,7 @@
 <!-- Modal de Detalles de Tarea -->
-<div id="taskDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[1200]">
-    <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-screen overflow-y-auto">
+<div id="taskDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[4000]">
+    <div class="flex items-center justify-center min-h-screen p-4 sm:p-6">
+        <div class="bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div class="p-6">
                 <!-- Header del Modal -->
                 <div class="flex justify-between items-center mb-6">
