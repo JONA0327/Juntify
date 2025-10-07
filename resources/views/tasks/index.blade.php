@@ -61,9 +61,9 @@
                     <button type="button" data-task-view-btn="tablero" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/40 text-sm font-medium text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">Tablero</button>
                 </div>
 
-                <div class="mt-8 flex flex-col-reverse lg:grid lg:grid-cols-3 lg:gap-8 items-start">
+                <div id="tasks-layout" class="mt-8 flex flex-col-reverse lg:grid lg:grid-cols-3 lg:gap-8 items-start">
 
-                    <div class="lg:col-span-2 flex flex-col gap-8 w-full mt-8 lg:mt-0">
+                    <div id="tasks-main-column" class="lg:col-span-2 flex flex-col gap-8 w-full mt-8 lg:mt-0">
                         <div x-data="{ open: window.innerWidth >= 1024 }" class="bg-slate-800/50 border border-slate-700/50 rounded-xl" data-task-view-targets="calendario">
                             <button @click="open = !open" class="w-full flex justify-between items-center p-4 lg:hidden">
                                 <span class="font-semibold text-lg">Calendario</span>
@@ -258,6 +258,11 @@
                     btn.classList.remove('bg-slate-800/70', 'text-slate-200');
                 }
             });
+
+            const layout = document.getElementById('tasks-layout');
+            if (layout) {
+                layout.classList.toggle('kanban-active', currentTaskMainView === 'tablero');
+            }
 
             const board = document.getElementById('kanban-board');
             if (board) {

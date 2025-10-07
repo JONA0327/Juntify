@@ -73,3 +73,9 @@
         box-shadow: 0 0 12px 4px rgba(239, 68, 68, 0.1);
     }
 }
+
+@media (min-width: 1024px) {
+    #tasks-layout.kanban-active #tasks-main-column {
+        grid-column: span 3 / span 3;
+    }
+}
