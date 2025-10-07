@@ -66,84 +66,41 @@
                                 queda disponible para probar los endpoints desde esta documentación y puedes revocarlo cuando lo necesites.
                             </p>
 
-                            <div class="api-panel" id="doc-api-section">
-                                <div class="api-status">
-                                    <div>
-                                        <span id="api-connection-status" class="api-status-badge api-status--disconnected">Sin token activo</span>
-                                        <p class="api-status-help">Genera un token desde tu perfil o con el botón siguiente y úsalo en tus integraciones.</p>
-                                    </div>
-                                    <div class="api-token-wrapper">
-                                        <span class="api-token-label">Token activo</span>
-                                        <code id="api-token-value" class="api-token-value">Aún no has generado un token desde este navegador.</code>
-                                        <div class="api-token-actions">
-                                            <button type="button" class="btn btn-primary" id="api-generate-token">Generar token</button>
-                                            <button type="button" class="btn btn-secondary" id="api-copy-token" disabled>Copiar token</button>
-                                            <button type="button" class="btn btn-danger" id="api-logout-btn" disabled>Revocar token</button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="doc-grid columns-3">
-                                    <article>
-                                        <h3>Generar y custodiar tu token</h3>
-                                        <p>
-                                            Usa el botón anterior para obtener un token inmediato utilizando tu sesión actual. Guarda el valor en un gestor
-                                            seguro y, si lo utilizas en producción, revoca los tokens que ya no necesites.
-                                        </p>
-                                        <p>
-                                            ¿Necesitas emitirlo desde otra aplicación? Realiza una petición al endpoint de autenticación con las credenciales
-                                            del usuario que integrará Juntify.
-                                        </p>
-                                        <div class="code-block">
-                                            <pre><code>curl -X POST {{ url('/api/integrations/login') }} \
+                            <div class="doc-grid columns-3 doc-api-examples" id="doc-api-section">
+                                <article>
+                                    <h3>Generar y custodiar tu token</h3>
+                                    <p>
+                                        Conserva tu token seguro y revócalo cuando ya no lo necesites. Si debes emitirlo desde otra aplicación,
+                                        realiza una petición al endpoint de autenticación con las credenciales del usuario que integrará Juntify.
+                                    </p>
+                                    <div class="code-block">
+                                        <pre><code>curl -X POST {{ url('/api/integrations/login') }} \
   -H "Content-Type: application/json" \
   -d '{"email":"tu-correo@empresa.com","password":"tu-contraseña"}'</code></pre>
-                                        </div>
-                                    </article>
+                                    </div>
+                                </article>
 
-                                    <article>
-                                        <h3>Consumir la API</h3>
-                                        <p>Envía el token en el encabezado <code>Authorization: Bearer &lt;token&gt;</code> para acceder a tus recursos.</p>
-                                        <div class="code-block">
-                                            <pre><code>fetch('{{ url('/api/integrations/meetings') }}', {
+                                <article>
+                                    <h3>Consumir la API</h3>
+                                    <p>Envía el token en el encabezado <code>Authorization: Bearer &lt;token&gt;</code> para acceder a tus recursos.</p>
+                                    <div class="code-block">
+                                        <pre><code>fetch('{{ url('/api/integrations/meetings') }}', {
   headers: {
     'Authorization': `Bearer ${token}`
   }
 })
   .then(res => res.json())
   .then(console.log);</code></pre>
-                                        </div>
-                                        <div class="api-data-panels" id="api-data-panels">
-                                            <div class="api-data-card">
-                                                <h4>Reuniones recientes</h4>
-                                                <ul id="api-meetings-list" class="api-list">
-                                                    <li class="api-list-empty">Genera tu token para ver tus reuniones.</li>
-                                                </ul>
-                                            </div>
-                                            <div class="api-data-card">
-                                                <h4>Tareas vinculadas</h4>
-                                                <ul id="api-tasks-list" class="api-list">
-                                                    <li class="api-list-empty">Genera tu token para listar tus tareas.</li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </article>
+                                    </div>
+                                </article>
 
-                                    <article>
-                                        <h3>Buscar usuarios</h3>
-                                        <p>Realiza consultas puntuales desde el panel para validar tu integración.</p>
-                                        <form id="api-user-search-form" class="api-form api-form-inline">
-                                            <div class="form-row">
-                                                <label for="api-user-search-input">Buscar usuarios</label>
-                                                <input type="text" id="api-user-search-input" name="query" placeholder="Escribe al menos 2 caracteres" minlength="2">
-                                            </div>
-                                            <div>
-                                                <button type="submit" class="btn btn-secondary">Buscar</button>
-                                            </div>
-                                        </form>
-                                        <ul id="api-user-search-results" class="api-list"></ul>
-                                    </article>
-                                </div>
+                                <article>
+                                    <h3>Buscar usuarios</h3>
+                                    <p>Consulta información puntual de usuarios utilizando el endpoint de búsqueda.</p>
+                                    <div class="code-block">
+                                        <pre><code>GET {{ url('/api/integrations/users/search?query=ana') }}</code></pre>
+                                    </div>
+                                </article>
                             </div>
                         </section>
 
