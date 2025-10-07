@@ -127,6 +127,18 @@
                                         <div id="kanban-overdue-list" class="mt-4 flex flex-col gap-3"></div>
                                         <div id="kanban-overdue-empty" class="mt-4 text-sm text-slate-400 border border-dashed border-rose-400/30 rounded-lg px-4 py-6 text-center">Sin tareas vencidas 🎉</div>
                                     </div>
+
+                                    <div class="bg-slate-900/50 border border-amber-400/40 rounded-xl p-4 shadow-inner">
+                                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                            <div>
+                                                <h4 class="text-base font-semibold text-amber-200">Tareas sin fecha</h4>
+                                                <p class="text-xs text-amber-100/80">Asigna una fecha y un responsable para que puedan avanzar.</p>
+                                            </div>
+                                            <span id="kanban-undated-count" class="inline-flex items-center justify-center px-3 py-1 rounded-full bg-amber-500/20 text-amber-100 text-xs font-semibold">0</span>
+                                        </div>
+                                        <div id="kanban-undated-list" class="mt-4 flex flex-col gap-3"></div>
+                                        <div id="kanban-undated-empty" class="mt-4 text-sm text-slate-400 border border-dashed border-amber-400/30 rounded-lg px-4 py-6 text-center">Todas las tareas tienen fecha 🎉</div>
+                                    </div>
                                 </div>
 
                                 <div id="kanban-summary-view" class="hidden">
@@ -206,6 +218,9 @@
         const kanbanOverdueCount = document.getElementById('kanban-overdue-count');
         const kanbanOverdueList = document.getElementById('kanban-overdue-list');
         const kanbanOverdueEmpty = document.getElementById('kanban-overdue-empty');
+        const kanbanUndatedCount = document.getElementById('kanban-undated-count');
+        const kanbanUndatedList = document.getElementById('kanban-undated-list');
+        const kanbanUndatedEmpty = document.getElementById('kanban-undated-empty');
 
         if (kanbanResetBtn) {
             kanbanResetBtn.addEventListener('click', () => {
@@ -343,6 +358,9 @@
                     if (kanbanOverdueList) kanbanOverdueList.innerHTML = '';
                     if (kanbanOverdueCount) kanbanOverdueCount.textContent = '0';
                     if (kanbanOverdueEmpty) kanbanOverdueEmpty.classList.remove('hidden');
+                    if (kanbanUndatedList) kanbanUndatedList.innerHTML = '';
+                    if (kanbanUndatedCount) kanbanUndatedCount.textContent = '0';
+                    if (kanbanUndatedEmpty) kanbanUndatedEmpty.classList.remove('hidden');
                     showKanban(false);
                     return;
                 }
@@ -359,11 +377,16 @@
 
                 const columns = { pending: [], in_progress: [], completed: [], approved: [] };
                 const overdueTasks = [];
+                const undatedTasks = [];
 
                 enrichedTasks.forEach(t => {
                     const progress = typeof t._progress === 'number' ? t._progress : 0;
                     const isApproved = t.assignment_status === 'completed';
                     const isCompleted = progress >= 100;
+
+                    if (!t.fecha_limite) {
+                        undatedTasks.push(t);
+                    }
 
                     if (t._overdue) {
                         overdueTasks.push(t);
@@ -471,6 +494,38 @@
                 }
                 if (kanbanOverdueEmpty) kanbanOverdueEmpty.classList.toggle('hidden', overdueTasks.length > 0);
 
+                if (kanbanUndatedCount) kanbanUndatedCount.textContent = String(undatedTasks.length);
+                if (kanbanUndatedList) {
+                    kanbanUndatedList.innerHTML = '';
+                    undatedTasks.forEach(t => {
+                        const card = document.createElement('div');
+                        card.className = 'kanban-card bg-slate-900/70 border border-amber-500/50 rounded-xl p-3 text-sm text-amber-100 transition-colors cursor-pointer hover:border-amber-400/80';
+                        card.dataset.id = t.id;
+
+                        const assigneeName = (t.assigned_user && t.assigned_user.name) || t.asignado || 'Sin responsable';
+                        const meetingLabel = t.meeting_name ? escapeHtml(t.meeting_name) : 'Sin reunión';
+
+                        card.innerHTML = `
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="text-sm font-semibold text-amber-100 leading-snug">${escapeHtml(t.tarea || 'Sin nombre')}</p>
+                                <span class="text-[10px] uppercase tracking-wide text-amber-100 bg-amber-500/20 border border-amber-400/40 rounded-full px-2 py-0.5">Sin fecha</span>
+                            </div>
+                            <div class="mt-1 text-[11px] text-amber-100/80">Responsable: ${escapeHtml(assigneeName)}</div>
+                            <div class="mt-1 text-[11px] text-amber-100/70 flex items-center gap-1">🗓 <span>${meetingLabel}</span></div>
+                            <p class="mt-2 text-[11px] text-amber-200/80 italic">Haz clic para asignar fecha y responsable.</p>
+                        `;
+
+                        card.addEventListener('click', () => {
+                            if (typeof openTaskModal === 'function') {
+                                openTaskModal(t.id, 'tasks_laravel');
+                            }
+                        });
+
+                        kanbanUndatedList.appendChild(card);
+                    });
+                }
+                if (kanbanUndatedEmpty) kanbanUndatedEmpty.classList.toggle('hidden', undatedTasks.length > 0);
+
                 updateKanbanSummary(enrichedTasks);
                 setKanbanTab(currentKanbanTab);
                 showKanban(true);
@@ -480,6 +535,9 @@
                 if (kanbanOverdueList) kanbanOverdueList.innerHTML = '';
                 if (kanbanOverdueCount) kanbanOverdueCount.textContent = '0';
                 if (kanbanOverdueEmpty) kanbanOverdueEmpty.classList.remove('hidden');
+                if (kanbanUndatedList) kanbanUndatedList.innerHTML = '';
+                if (kanbanUndatedCount) kanbanUndatedCount.textContent = '0';
+                if (kanbanUndatedEmpty) kanbanUndatedEmpty.classList.remove('hidden');
                 showKanban(false);
             }
         }
