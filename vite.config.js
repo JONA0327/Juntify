@@ -19,6 +19,8 @@ export default defineConfig({
                 'resources/js/index.js',
                 'resources/css/profile.css',
                 'resources/js/profile.js',
+                'resources/css/profile-documentation.css',
+                'resources/js/profile-documentation.js',
                 'resources/css/auth/login.css',
                 'resources/js/auth/login.js',
                 'resources/css/auth/register.css',

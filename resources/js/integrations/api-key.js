@@ -143,17 +143,18 @@ export function initApiIntegrationSection(rootId = 'section-apikey') {
   const dataPanels = section.querySelector('#api-data-panels');
   const meetingsList = section.querySelector('#api-meetings-list');
   const tasksList = section.querySelector('#api-tasks-list');
-  const loginForm = section.querySelector('#api-login-form');
-  const loginEmail = section.querySelector('#api-login-email');
-  const loginPassword = section.querySelector('#api-login-password');
-  const loginSubmit = section.querySelector('#api-login-submit');
+  const generateBtn = section.querySelector('#api-generate-token');
+
+  if (generateBtn && !generateBtn.dataset.defaultText) {
+    generateBtn.dataset.defaultText = generateBtn.textContent ?? 'Generar token';
+  }
   const userSearchForm = section.querySelector('#api-user-search-form');
   const userSearchInput = section.querySelector('#api-user-search-input');
   const userSearchResults = section.querySelector('#api-user-search-results');
 
-  const setDisconnectedState = (message = 'No has iniciado sesión aún.') => {
+  const setDisconnectedState = (message = 'Aún no has generado un token desde este dispositivo.') => {
     if (statusBadge) {
-      statusBadge.textContent = 'Sin conectar';
+      statusBadge.textContent = 'Sin token activo';
       statusBadge.classList.add('api-status--disconnected');
       statusBadge.classList.remove('api-status--connected');
     }
@@ -164,13 +165,17 @@ export function initApiIntegrationSection(rootId = 'section-apikey') {
 
     if (copyBtn) copyBtn.disabled = true;
     if (logoutBtn) logoutBtn.disabled = true;
+    if (generateBtn) {
+      generateBtn.disabled = false;
+      generateBtn.textContent = generateBtn.dataset.defaultText ?? 'Generar token';
+    }
 
     if (dataPanels) dataPanels.style.display = 'none';
     if (meetingsList) {
-      meetingsList.innerHTML = '<li class="api-list-empty">Inicia sesión para ver tus reuniones.</li>';
+      meetingsList.innerHTML = '<li class="api-list-empty">Genera tu token para ver tus reuniones.</li>';
     }
     if (tasksList) {
-      tasksList.innerHTML = '<li class="api-list-empty">Inicia sesión para listar tus tareas.</li>';
+      tasksList.innerHTML = '<li class="api-list-empty">Genera tu token para listar tus tareas.</li>';
     }
     if (userSearchResults) {
       userSearchResults.innerHTML = '';
@@ -190,6 +195,10 @@ export function initApiIntegrationSection(rootId = 'section-apikey') {
 
     if (copyBtn) copyBtn.disabled = false;
     if (logoutBtn) logoutBtn.disabled = false;
+    if (generateBtn) {
+      generateBtn.disabled = false;
+      generateBtn.textContent = generateBtn.dataset.defaultText ?? 'Generar token';
+    }
     if (dataPanels) dataPanels.style.display = 'grid';
   };
 
@@ -200,8 +209,8 @@ export function initApiIntegrationSection(rootId = 'section-apikey') {
 
   const handleUnauthorized = () => {
     clearIntegrationToken();
-    setDisconnectedState('Tu token expiró o fue revocado. Genera uno nuevo.');
-    showErrorMessage('Tu token API ya no es válido. Inicia sesión nuevamente.');
+    setDisconnectedState('Tu token expiró o fue revocado. Genera uno nuevo desde tu perfil.');
+    showErrorMessage('Tu token API ya no es válido. Genera uno nuevo desde el panel.');
   };
 
   const fetchMeetings = async () => {
@@ -262,23 +271,16 @@ export function initApiIntegrationSection(rootId = 'section-apikey') {
     fetchTasks();
   };
 
-  loginForm?.addEventListener('submit', async event => {
-    event.preventDefault();
-
-    if (!loginEmail?.value || !loginPassword?.value) {
-      showErrorMessage('Debes ingresar tu correo y contraseña.');
+  generateBtn?.addEventListener('click', async () => {
+    if (generateBtn.disabled) {
       return;
     }
 
-    if (loginSubmit) {
-      loginSubmit.disabled = true;
-      loginSubmit.textContent = 'Generando...';
-    }
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generando...';
 
     try {
-      const response = await axios.post(`${INTEGRATIONS_BASE_URL}/login`, {
-        email: loginEmail.value,
-        password: loginPassword.value,
+      const response = await axios.post(`${INTEGRATIONS_BASE_URL}/token`, {
         device_name: 'Panel de perfil',
       });
 
@@ -286,22 +288,21 @@ export function initApiIntegrationSection(rootId = 'section-apikey') {
       if (token) {
         storeIntegrationToken(token);
         showSuccessMessage('Token generado correctamente.');
-        loginForm.reset();
         refreshData();
       } else {
         showErrorMessage('No se recibió un token válido.');
+        setDisconnectedState();
       }
     } catch (error) {
       const message = error.response?.data?.message
-        ?? error.response?.data?.errors?.email?.[0]
-        ?? 'No se pudo generar el token. Verifica tus credenciales.';
+        ?? error.response?.data?.errors?.device_name?.[0]
+        ?? 'No se pudo generar el token.';
       showErrorMessage(message);
-    } finally {
-      if (loginSubmit) {
-        loginSubmit.disabled = false;
-        loginSubmit.textContent = 'Generar token';
-      }
+      setDisconnectedState();
     }
+
+    generateBtn.disabled = false;
+    generateBtn.textContent = generateBtn.dataset.defaultText ?? 'Generar token';
   });
 
   copyBtn?.addEventListener('click', async () => {
@@ -357,7 +358,7 @@ export function initApiIntegrationSection(rootId = 'section-apikey') {
     }
 
     if (!getStoredIntegrationToken()) {
-      showErrorMessage('Primero debes iniciar sesión en la API.');
+      showErrorMessage('Primero debes generar un token de API desde este panel.');
       return;
     }
 

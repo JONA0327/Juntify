@@ -12,6 +12,33 @@ use Illuminate\Validation\ValidationException;
 
 class IntegrationAuthController extends Controller
 {
+    /**
+     * @return array{plain: string, token: ApiToken}
+     */
+    private function issueTokenForUser(User $user, ?string $deviceName = null): array
+    {
+        do {
+            $plainToken = ApiToken::generatePlainTextToken();
+            $tokenHash = ApiToken::hashToken($plainToken);
+        } while (ApiToken::where('token_hash', $tokenHash)->exists());
+
+        $token = $user->apiTokens()->create([
+            'name' => $deviceName ?? 'Panel de integraciones',
+            'token_hash' => $tokenHash,
+            'abilities' => [
+                'meetings:read',
+                'tasks:read',
+                'users:search',
+            ],
+            'last_used_at' => now(),
+        ]);
+
+        return [
+            'plain' => $plainToken,
+            'token' => $token,
+        ];
+    }
+
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -35,27 +62,13 @@ class IntegrationAuthController extends Controller
             ]);
         }
 
-        do {
-            $plainToken = ApiToken::generatePlainTextToken();
-            $tokenHash = ApiToken::hashToken($plainToken);
-        } while (ApiToken::where('token_hash', $tokenHash)->exists());
-
-        $token = $user->apiTokens()->create([
-            'name' => $validated['device_name'] ?? 'Panel de integraciones',
-            'token_hash' => $tokenHash,
-            'abilities' => [
-                'meetings:read',
-                'tasks:read',
-                'users:search',
-            ],
-            'last_used_at' => now(),
-        ]);
+        $issuedToken = $this->issueTokenForUser($user, $validated['device_name'] ?? 'Panel de integraciones');
 
         return response()->json([
-            'token' => $plainToken,
+            'token' => $issuedToken['plain'],
             'token_type' => 'Bearer',
-            'abilities' => $token->abilities,
-            'created_at' => $token->created_at?->toIso8601String(),
+            'abilities' => $issuedToken['token']->abilities,
+            'created_at' => $issuedToken['token']->created_at?->toIso8601String(),
             'user' => [
                 'id' => $user->id,
                 'username' => $user->username,
@@ -63,6 +76,24 @@ class IntegrationAuthController extends Controller
                 'email' => $user->email,
                 'role' => $user->roles,
             ],
+        ], 201);
+    }
+
+    public function createFromSession(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'device_name' => 'nullable|string|max:255',
+        ]);
+
+        $issuedToken = $this->issueTokenForUser($user, $validated['device_name'] ?? 'Panel de perfil');
+
+        return response()->json([
+            'token' => $issuedToken['plain'],
+            'token_type' => 'Bearer',
+            'abilities' => $issuedToken['token']->abilities,
+            'created_at' => $issuedToken['token']->created_at?->toIso8601String(),
         ], 201);
     }
 
