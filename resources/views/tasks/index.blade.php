@@ -57,15 +57,14 @@
                 @include('tasks.partials._header')
 
                 <div class="mt-6 flex flex-wrap gap-2" role="tablist" aria-label="Vistas de tareas">
-                    <button type="button" data-task-view-btn="todo" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-800/70 text-sm font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500">Todo</button>
-                    <button type="button" data-task-view-btn="calendario" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/40 text-sm font-medium text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">Calendario</button>
+                    <button type="button" data-task-view-btn="calendario" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-800/70 text-sm font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500">Calendario</button>
                     <button type="button" data-task-view-btn="tablero" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/40 text-sm font-medium text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">Tablero</button>
                 </div>
 
                 <div class="mt-8 flex flex-col-reverse lg:grid lg:grid-cols-3 lg:gap-8 items-start">
 
                     <div class="lg:col-span-2 flex flex-col gap-8 w-full mt-8 lg:mt-0">
-                        <div x-data="{ open: window.innerWidth >= 1024 }" class="bg-slate-800/50 border border-slate-700/50 rounded-xl" data-task-view-targets="todo,calendario">
+                        <div x-data="{ open: window.innerWidth >= 1024 }" class="bg-slate-800/50 border border-slate-700/50 rounded-xl" data-task-view-targets="calendario">
                             <button @click="open = !open" class="w-full flex justify-between items-center p-4 lg:hidden">
                                 <span class="font-semibold text-lg">Calendario</span>
                                 <svg class="w-6 h-6 transition-transform" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -76,11 +75,11 @@
                                 @include('tasks.partials._calendar-main')
                             </div>
                         </div>
-                        <div data-task-view-targets="todo,calendario">
+                        <div data-task-view-targets="calendario">
                             @include('tasks.partials._tabs-reuniones')
                         </div>
                         <!-- Kanban simple por reunión -->
-                        <div id="kanban-board" class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 hidden" data-task-view-targets="todo,tablero" data-task-view-requires-kanban="1">
+                        <div id="kanban-board" class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 hidden" data-task-view-targets="tablero" data-task-view-requires-kanban="1">
                             <div class="flex flex-col gap-6">
                                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                                     <div>
@@ -158,7 +157,7 @@
                         </div>
                     </div>
 
-                    <aside class="col-span-1 w-full" data-task-view-targets="todo,calendario">
+                    <aside class="col-span-1 w-full" data-task-view-targets="calendario">
                         @include('tasks.partials._sidebar-details') <div id="tasks-empty" class="info-card p-6 mt-8 text-center text-slate-300">
                             <div class="text-xl font-semibold mb-2">Tareas de la reunión</div>
                             <div class="text-blue-400">Selecciona una conversación</div>
@@ -192,7 +191,7 @@
         const csrfToken = (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '');
         let currentKanbanTab = 'board';
         let currentKanbanTasks = [];
-        let currentTaskMainView = 'todo';
+        let currentTaskMainView = 'calendario';
 
         window.lastSelectedMeetingId = window.lastSelectedMeetingId || null;
         window.lastSelectedMeetingName = window.lastSelectedMeetingName || null;
@@ -243,8 +242,7 @@
                     .map(v => v.trim().toLowerCase())
                     .filter(Boolean);
                 const matchesView = views.length === 0
-                    || views.includes(currentTaskMainView)
-                    || (views.includes('todo') && currentTaskMainView === 'todo');
+                    || views.includes(currentTaskMainView);
                 const requiresKanban = section.dataset.taskViewRequiresKanban === '1';
                 const shouldShow = matchesView && (!requiresKanban || kanbanHasData());
                 section.classList.toggle('hidden', !shouldShow);
@@ -263,13 +261,13 @@
 
             const board = document.getElementById('kanban-board');
             if (board) {
-                const visible = kanbanHasData() && (currentTaskMainView === 'todo' || currentTaskMainView === 'tablero');
+                const visible = kanbanHasData() && currentTaskMainView === 'tablero';
                 board.classList.toggle('hidden', !visible);
             }
         }
 
         function setTaskMainView(view){
-            currentTaskMainView = ['todo', 'calendario', 'tablero'].includes(view) ? view : 'todo';
+            currentTaskMainView = ['calendario', 'tablero'].includes(view) ? view : 'calendario';
             refreshTaskViewVisibility();
         }
 
@@ -603,7 +601,7 @@
             btn.addEventListener('click', () => setTaskMainView(btn.dataset.taskViewBtn));
         });
 
-        setTaskMainView('todo');
+        setTaskMainView('calendario');
 
         const _origLoadTasks = window.loadTasksForMeeting;
         window.loadTasksForMeeting = async function(id, src){
