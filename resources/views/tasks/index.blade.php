@@ -97,7 +97,7 @@
                                 </div>
 
                                 <div id="kanban-board-view" class="flex flex-col gap-5">
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                         <div class="kanban-col" data-status="pending">
                                             <div class="kanban-col-header px-3 py-2 rounded border border-yellow-400/40 bg-gradient-to-r from-yellow-500/20 to-yellow-500/0 text-sm font-semibold text-yellow-200 uppercase tracking-wide">Pendientes</div>
                                             <div class="kanban-list min-h-[220px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'pending')"></div>
