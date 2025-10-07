@@ -383,8 +383,9 @@
                     const progress = typeof t._progress === 'number' ? t._progress : 0;
                     const isApproved = t.assignment_status === 'completed';
                     const isCompleted = progress >= 100;
+                    const hasDueDate = !!t.fecha_limite;
 
-                    if (!t.fecha_limite) {
+                    if (!hasDueDate) {
                         undatedTasks.push(t);
                     }
 
@@ -400,6 +401,9 @@
                     } else if (progress > 0) {
                         columns.in_progress.push(t);
                     } else {
+                        if (!hasDueDate) {
+                            return;
+                        }
                         columns.pending.push(t);
                     }
                 });
@@ -588,9 +592,10 @@
                 const due = t.fecha_limite ? new Date(`${t.fecha_limite}T23:59:59`) : null;
                 const isApproved = t.assignment_status === 'completed';
                 const isCompleted = progress >= 100;
+                const hasDueDate = !!t.fecha_limite;
                 const isOverdue = t._overdue || t.is_overdue === true || (!isCompleted && due && due < today);
                 const isInProgress = !isCompleted && !isOverdue && progress > 0;
-                const isPending = !isCompleted && !isOverdue && progress <= 0;
+                const isPending = hasDueDate && !isCompleted && !isOverdue && progress <= 0;
 
                 const name = (t.assigned_user && t.assigned_user.name) || t.asignado || 'Sin asignar';
                 const key = `${t.assigned_user_id || 'none'}::${name}`;
