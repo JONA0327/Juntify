@@ -1,5 +1,22 @@
 <?php
 
+$defaultAllowedOrigins = [
+    'https://app.juntify.com',
+    'https://demo.juntify.com',
+    'http://localhost:5173',
+    'http://localhost:3000',
+];
+
+$configuredAllowedOrigins = array_values(array_filter(array_map(
+    'trim',
+    explode(',', (string) env('CORS_ALLOWED_ORIGINS', ''))
+)));
+
+$allowedOriginPatterns = array_values(array_filter(array_map(
+    'trim',
+    explode(',', (string) env('CORS_ALLOWED_ORIGIN_PATTERNS', '#^https://.*\\.juntify\\.com$#'))
+)));
+
 return [
 
     /*
@@ -19,9 +36,9 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => $configuredAllowedOrigins ?: $defaultAllowedOrigins,
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => $allowedOriginPatterns,
 
     'allowed_headers' => ['*'],
 
@@ -29,6 +46,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
+    'supports_credentials' => filter_var(env('CORS_SUPPORTS_CREDENTIALS', true), FILTER_VALIDATE_BOOLEAN),
 
 ];
