@@ -55,6 +55,41 @@ class MeetingJuCacheService
         }
     }
 
+    public function getCachedRaw(int $meetingId): ?array
+    {
+        try {
+            $row = AiMeetingJuCache::where('meeting_id', $meetingId)->first();
+            if ($row) {
+                $raw = $row->raw_data;
+                if ($raw === null && !empty($row->raw_encrypted_data)) {
+                    Log::warning('MeetingJuCacheService:getCachedRaw raw decrypt failed', [
+                        'meeting_id' => $meetingId,
+                    ]);
+                }
+                return $raw;
+            }
+        } catch (\Throwable $e) {
+            Log::debug('MeetingJuCacheService:getCachedRaw exception, using file fallback', [
+                'meeting_id' => $meetingId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $path = $this->pathFor($meetingId);
+        if (!Storage::disk($this->disk)->exists($path)) {
+            return null;
+        }
+
+        try {
+            $json = Storage::disk($this->disk)->get($path);
+            $payload = json_decode($json, true);
+            $raw = is_array($payload) ? ($payload['raw'] ?? null) : null;
+            return is_array($raw) ? $raw : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     public function setCachedParsed(int $meetingId, array $parsed, ?string $transcriptDriveId = null, ?array $rawFull = null): bool
     {
         try {

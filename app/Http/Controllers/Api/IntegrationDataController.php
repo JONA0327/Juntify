@@ -61,7 +61,7 @@ class IntegrationDataController extends Controller
         }
 
         $juPayload = $this->buildMeetingJuPayload($meeting);
-        $audioMeta = $this->buildMeetingAudioMetadata($meeting);
+        $audioMeta = $this->buildMeetingAudioMetadata($meeting, $request);
 
         return response()->json([
             'data' => [
@@ -219,7 +219,9 @@ class IntegrationDataController extends Controller
 
     private function buildMeetingJuPayload(TranscriptionLaravel $meeting): array
     {
-        $cached = $this->juCache->getCachedParsed((int) $meeting->id);
+        $meetingId = (int) $meeting->id;
+        $cached = $this->juCache->getCachedParsed($meetingId);
+        $rawData = $cached !== null ? $this->juCache->getCachedRaw($meetingId) : null;
         $source = 'cache';
         $needsEncryption = false;
 
@@ -231,12 +233,18 @@ class IntegrationDataController extends Controller
                 $parsed = $this->decryptJuFile($content);
                 $needsEncryption = (bool) ($parsed['needs_encryption'] ?? false);
                 $normalized = $this->processTranscriptData($parsed['data'] ?? []);
+                $rawData = is_array($parsed['raw'] ?? null) ? $parsed['raw'] : null;
+
                 if (!empty($normalized)) {
+                    if ($needsEncryption) {
+                        $normalized['needs_encryption'] = true;
+                    }
+
                     $this->juCache->setCachedParsed(
-                        (int) $meeting->id,
+                        $meetingId,
                         $normalized,
                         $meeting->transcript_drive_id ? (string) $meeting->transcript_drive_id : null,
-                        $parsed['raw'] ?? null
+                        $rawData
                     );
                 }
                 $cached = $normalized;
@@ -244,6 +252,15 @@ class IntegrationDataController extends Controller
                 $cached = $this->processTranscriptData($this->getDefaultMeetingData());
                 $source = 'missing';
             }
+        }
+
+        if (is_array($cached) && array_key_exists('needs_encryption', $cached)) {
+            $needsEncryption = (bool) $cached['needs_encryption'];
+            unset($cached['needs_encryption']);
+        }
+
+        if ($rawData === null) {
+            $rawData = $this->juCache->getCachedRaw($meetingId);
         }
 
         return [
@@ -256,10 +273,11 @@ class IntegrationDataController extends Controller
             'transcription' => $cached['transcription'] ?? '',
             'speakers' => $cached['speakers'] ?? [],
             'segments' => $cached['segments'] ?? [],
+            'raw' => $rawData,
         ];
     }
 
-    private function buildMeetingAudioMetadata(TranscriptionLaravel $meeting): array
+    private function buildMeetingAudioMetadata(TranscriptionLaravel $meeting, Request $request): array
     {
         $metadata = [
             'available' => false,
@@ -271,6 +289,10 @@ class IntegrationDataController extends Controller
         ];
 
         $streamRoute = route('api.integrations.meetings.audio', ['meeting' => $meeting->id]);
+        $plainToken = $this->resolvePlainToken($request);
+        if ($plainToken) {
+            $streamRoute .= (str_contains($streamRoute, '?') ? '&' : '?') . 'api_token=' . urlencode($plainToken);
+        }
         $metadata['stream_url'] = $streamRoute;
 
         $fileId = $meeting->audio_drive_id;
@@ -296,6 +318,21 @@ class IntegrationDataController extends Controller
         }
 
         return $metadata;
+    }
+
+    private function resolvePlainToken(Request $request): ?string
+    {
+        if ($token = $request->bearerToken()) {
+            return $token;
+        }
+
+        if ($headerToken = $request->header('X-API-Token')) {
+            return trim($headerToken);
+        }
+
+        $queryToken = $request->query('api_token');
+
+        return $queryToken ? trim($queryToken) : null;
     }
 
     private function downloadMeetingJuContent(TranscriptionLaravel $meeting): ?string
