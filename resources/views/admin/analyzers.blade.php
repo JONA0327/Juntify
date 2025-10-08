@@ -240,6 +240,11 @@
         let deletingAnalyzerId = null;
         const analyzerCache = new Map();
 
+        const csrfTokenMeta = document.querySelector('meta[name="csrf-token"]');
+        if (csrfTokenMeta && window.axios) {
+            window.axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfTokenMeta.content;
+        }
+
         function loadAnalyzers() {
             axios.get('/admin/analyzers/list')
                 .then(res => {
@@ -311,7 +316,9 @@
             document.getElementById('analyzer-prompt').value = data.system_prompt ?? '';
             document.getElementById('analyzer-user-prompt').value = data.user_prompt_template ?? '';
             document.getElementById('analyzer-icon').value = data.icon ?? '';
-            document.getElementById('analyzer-type').value = data.is_system ? '1' : '0';
+            const isSystemValue = data.is_system;
+            const normalizedIsSystem = isSystemValue === true || isSystemValue === 1 || isSystemValue === '1';
+            document.getElementById('analyzer-type').value = normalizedIsSystem ? '1' : '0';
         }
 
         function showCreateAnalyzerModal() {
@@ -401,7 +408,7 @@
             const prompt = document.getElementById('analyzer-prompt').value.trim();
             const userPrompt = document.getElementById('analyzer-user-prompt').value.trim();
             const icon = document.getElementById('analyzer-icon').value.trim();
-            const isSystem = document.getElementById('analyzer-type').value;
+            const isSystem = document.getElementById('analyzer-type').value === '1';
 
             if (!name || !description || !prompt || !userPrompt) {
                 showNotification('Por favor completa todos los campos requeridos', 'error');
