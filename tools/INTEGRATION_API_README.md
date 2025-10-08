@@ -12,10 +12,11 @@ según tu entorno).
    Content-Type: application/json
 
    {
-     "email": "usuario@empresa.com",
+     "login": "usuario@empresa.com",
      "password": "********"
    }
    ```
+   > También puedes enviar el campo `login` con el nombre de usuario en lugar del correo.
    Respuesta 200:
    ```json
    {

@@ -57,23 +57,34 @@ class IntegrationAuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'email' => 'required_without:username|nullable|email',
-            'username' => 'required_without:email|nullable|string',
+            'login' => 'nullable|string',
+            'email' => 'required_without_all:login,username|nullable|email',
+            'username' => 'required_without_all:login,email|nullable|string',
             'password' => 'required|string|min:6',
             'device_name' => 'nullable|string|max:255',
         ]);
 
         $user = null;
+        $errorField = 'login';
 
-        if (!empty($validated['email'])) {
+        if (!empty($validated['login'])) {
+            $field = filter_var($validated['login'], FILTER_VALIDATE_EMAIL)
+                ? 'email'
+                : 'username';
+
+            $user = User::where($field, $validated['login'])->first();
+            $errorField = 'login';
+        } elseif (!empty($validated['email'])) {
             $user = User::where('email', $validated['email'])->first();
+            $errorField = 'email';
         } elseif (!empty($validated['username'])) {
             $user = User::where('username', $validated['username'])->first();
+            $errorField = 'username';
         }
 
         if (!$user || !$this->passwordMatches($validated['password'], $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['Las credenciales proporcionadas no son válidas.'],
+                $errorField => ['Las credenciales proporcionadas no son válidas.'],
             ]);
         }
 
