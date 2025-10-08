@@ -1,5 +1,18 @@
 <?php
 
+$allowedOrigins = array_values(array_filter(array_map('trim', explode(',', (string) env('CORS_ALLOWED_ORIGINS', '')))));
+
+if (empty($allowedOrigins)) {
+    $appUrl = config('app.url');
+    if (!empty($appUrl)) {
+        $allowedOrigins[] = rtrim($appUrl, '/');
+    }
+}
+
+$allowedOrigins = array_values(array_unique($allowedOrigins));
+
+$allowedOriginPatterns = array_values(array_filter(array_map('trim', explode(',', (string) env('CORS_ALLOWED_ORIGINS_PATTERNS', '')))));
+
 return [
 
     /*
@@ -19,9 +32,9 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => $allowedOrigins,
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => $allowedOriginPatterns,
 
     'allowed_headers' => ['*'],
 
@@ -29,6 +42,5 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
-
+    'supports_credentials' => (bool) env('CORS_SUPPORTS_CREDENTIALS', true),
 ];
