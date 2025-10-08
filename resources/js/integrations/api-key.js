@@ -1,5 +1,9 @@
 const INTEGRATIONS_STORAGE_KEY = 'juntifyApiToken';
 const INTEGRATIONS_BASE_URL = '/api/integrations';
+
+if (typeof axios !== 'undefined') {
+  axios.defaults.withCredentials = true;
+}
 let notificationsStyleInjected = false;
 
 function ensureNotificationStyles() {
@@ -282,6 +286,8 @@ export function initApiIntegrationSection(rootId = 'section-apikey') {
     try {
       const response = await axios.post(`${INTEGRATIONS_BASE_URL}/token`, {
         device_name: 'Panel de perfil',
+      }, {
+        withCredentials: true,
       });
 
       const token = response?.data?.token;
@@ -337,7 +343,10 @@ export function initApiIntegrationSection(rootId = 'section-apikey') {
     }
 
     try {
-      await axios.post(`${INTEGRATIONS_BASE_URL}/logout`, {}, { headers: getAuthHeaders() });
+      await axios.post(`${INTEGRATIONS_BASE_URL}/logout`, {}, {
+        headers: getAuthHeaders(),
+        withCredentials: true,
+      });
       showSuccessMessage('Token revocado con éxito.');
     } catch (error) {
       if (error.response?.status !== 401) {
