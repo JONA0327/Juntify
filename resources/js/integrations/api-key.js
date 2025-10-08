@@ -2,6 +2,10 @@ const INTEGRATIONS_STORAGE_KEY = 'juntifyApiToken';
 const INTEGRATIONS_BASE_URL = '/api/integrations';
 let notificationsStyleInjected = false;
 
+if (window.axios && typeof window.axios === 'function') {
+  window.axios.defaults.withCredentials = true;
+}
+
 function ensureNotificationStyles() {
   if (notificationsStyleInjected) {
     return;
@@ -294,11 +298,17 @@ export function initApiIntegrationSection(rootId = 'section-apikey') {
         setDisconnectedState();
       }
     } catch (error) {
-      const message = error.response?.data?.message
-        ?? error.response?.data?.errors?.device_name?.[0]
-        ?? 'No se pudo generar el token.';
-      showErrorMessage(message);
-      setDisconnectedState();
+      if (!error?.response) {
+        console.error('Token from session request failed', error);
+        showErrorMessage('No se pudo comunicar con el servidor para generar el token. Verifica tu conexión o vuelve a iniciar sesión.');
+        setDisconnectedState('Error de conexión al solicitar el token. Refresca la página e inténtalo nuevamente.');
+      } else {
+        const message = error.response?.data?.message
+          ?? error.response?.data?.errors?.device_name?.[0]
+          ?? 'No se pudo generar el token.';
+        showErrorMessage(message);
+        setDisconnectedState();
+      }
     }
 
     generateBtn.disabled = false;
