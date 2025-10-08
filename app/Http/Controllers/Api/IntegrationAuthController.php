@@ -39,6 +39,21 @@ class IntegrationAuthController extends Controller
         ];
     }
 
+    private function passwordMatches(string $plainPassword, string $hashedPassword): bool
+    {
+        try {
+            return Hash::check($plainPassword, $hashedPassword);
+        } catch (\RuntimeException $exception) {
+            $hashInfo = password_get_info($hashedPassword);
+
+            if (($hashInfo['algo'] ?? 0) === 0) {
+                throw $exception;
+            }
+
+            return password_verify($plainPassword, $hashedPassword);
+        }
+    }
+
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -56,7 +71,7 @@ class IntegrationAuthController extends Controller
             $user = User::where('username', $validated['username'])->first();
         }
 
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
+        if (!$user || !$this->passwordMatches($validated['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Las credenciales proporcionadas no son válidas.'],
             ]);
