@@ -56,7 +56,26 @@ class IntegrationAuthController extends Controller
             $user = User::where('username', $validated['username'])->first();
         }
 
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
+        $passwordIsValid = false;
+
+        if ($user) {
+            $providedPassword = (string) $validated['password'];
+
+            // Intenta validar utilizando el mismo mecanismo que el login web
+            $passwordIsValid = password_verify($providedPassword, $user->password);
+
+            // Como alternativa, acepta hashes de bcrypt previamente generados
+            if (!$passwordIsValid && $this->looksLikeBcryptHash($providedPassword)) {
+                $passwordIsValid = hash_equals($user->password, $providedPassword);
+            }
+
+            // Compatibilidad con hashes generados por Hash::make
+            if (!$passwordIsValid) {
+                $passwordIsValid = Hash::check($providedPassword, $user->password);
+            }
+        }
+
+        if (!$user || !$passwordIsValid) {
             throw ValidationException::withMessages([
                 'email' => ['Las credenciales proporcionadas no son válidas.'],
             ]);
@@ -121,5 +140,10 @@ class IntegrationAuthController extends Controller
         return response()->json([
             'message' => 'Token de acceso revocado correctamente.',
         ]);
+    }
+
+    private function looksLikeBcryptHash(string $value): bool
+    {
+        return (bool) preg_match('/^\$2[aby]\$\d{2}\$[\.\/0-9A-Za-z]{53}$/', $value);
     }
 }
