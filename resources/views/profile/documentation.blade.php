@@ -94,6 +94,8 @@ Content-Type: application/json
                                     <p>Cuando ya estás autenticado en el navegador puedes emitir un token sin volver a pedir contraseña.</p>
                                     <div class="code-block">
 <pre><code>POST {{ url('/api/integrations/token') }}
+# o GET {{ url('/api/integrations/token') }} si ya tienes la sesión activa
+# CSRF solo necesario para POST
 X-CSRF-TOKEN: {{ csrf_token() }}</code></pre>
                                     </div>
                                     <p class="mt-4">Incluye el encabezado <code>Authorization: Bearer &lt;token&gt;</code> en cada petición y utiliza <code>POST {{ url('/api/integrations/logout') }}</code> para revocar el token cuando dejes de usarlo.</p>
@@ -260,16 +262,46 @@ Authorization: Bearer {{ '{token}' }}
   const container = document.getElementById('juntify-api-widget');
   const baseUrl = container.dataset.endpoint;
 
-  async function login(email, password) {
+  async function login(email, password, deviceName = 'Mi integración') {
     const response = await fetch(`${baseUrl}/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, device_name: 'Mi integración' })
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'include',
+      body: JSON.stringify({ email, password, device_name: deviceName })
     });
     if (!response.ok) throw new Error('Credenciales inválidas');
     const { token } = await response.json();
     localStorage.setItem('juntifyApiToken', token);
     return token;
+  }
+
+  async function tokenFromSession(deviceName = 'Mi integración') {
+    try {
+      const response = await fetch(`${baseUrl}/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ device_name: deviceName })
+      });
+
+      if (!response.ok) {
+        const details = await response.text();
+        throw new Error(`No se pudo obtener el token desde la sesión (${response.status}). ${details}`.trim());
+      }
+
+      const { token } = await response.json();
+      localStorage.setItem('juntifyApiToken', token);
+      return token;
+    } catch (error) {
+      console.error('Token from session error:', error);
+      throw error;
+    }
   }
 
   async function request(path) {
@@ -288,6 +320,7 @@ Authorization: Bearer {{ '{token}' }}
   // Ejemplo de uso
   // const token = await login('tu-correo@empresa.com', 'tu-contraseña');
   // const meetings = await request('meetings');
+  // const sessionToken = await tokenFromSession();
 &lt;/script&gt;</code></pre>
                             </div>
                             <p>
