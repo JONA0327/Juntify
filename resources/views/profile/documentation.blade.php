@@ -240,7 +240,7 @@ Authorization: Bearer {{ '{token}' }}
                         <section class="doc-card" id="errors">
                             <h2>⚠️ Errores comunes</h2>
                             <ul class="list-disc list-inside space-y-2 text-sm text-slate-300">
-                                <li><code>401 Unauthorized</code>: el token es inválido o expiró. Renueva el token o ejecuta <code>/login</code> nuevamente.</li>
+                                <li><code>401 Unauthorized</code>: el token es inválido, expiró o tu sesión del navegador caducó. Si ves el mensaje "Unauthenticated" al generar un token, inicia sesión en Juntify en otra pestaña, actualiza esta página y vuelve a intentarlo.</li>
                                 <li><code>404 Not Found</code>: el recurso no pertenece al usuario autenticado o ya no está disponible.</li>
                                 <li><code>429 Too Many Requests</code>: se alcanzó el límite de peticiones. Implementa reintentos con backoff exponencial.</li>
                             </ul>

@@ -294,11 +294,16 @@ export function initApiIntegrationSection(rootId = 'section-apikey') {
         setDisconnectedState();
       }
     } catch (error) {
-      const message = error.response?.data?.message
-        ?? error.response?.data?.errors?.device_name?.[0]
-        ?? 'No se pudo generar el token.';
-      showErrorMessage(message);
-      setDisconnectedState();
+      if (error.response?.status === 401) {
+        showErrorMessage('Tu sesión de Juntify expiró en este navegador. Inicia sesión nuevamente y recarga la página para generar un token.');
+        setDisconnectedState('Debes iniciar sesión en Juntify para emitir un token desde este panel.');
+      } else {
+        const message = error.response?.data?.message
+          ?? error.response?.data?.errors?.device_name?.[0]
+          ?? 'No se pudo generar el token.';
+        showErrorMessage(message);
+        setDisconnectedState();
+      }
     }
 
     generateBtn.disabled = false;
