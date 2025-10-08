@@ -17,7 +17,7 @@
         'resources/js/profile.js'
     ])
 </head>
-<body>
+<body class="admin-analyzers-page">
     <div class="particles" id="particles"></div>
 
     @include('partials.navbar')
@@ -238,17 +238,20 @@
     <script>
         let editingAnalyzerId = null;
         let deletingAnalyzerId = null;
+        const analyzerCache = new Map();
 
         function loadAnalyzers() {
             axios.get('/admin/analyzers/list')
                 .then(res => {
                     const grid = document.querySelector('.content-grid');
                     grid.innerHTML = '';
+                    analyzerCache.clear();
                     if (res.data.length === 0) {
                         grid.innerHTML = '<p>No se encontraron analizadores</p>';
                         return;
                     }
                     res.data.forEach(analyzer => {
+                        analyzerCache.set(analyzer.id, analyzer);
                         const badge = analyzer.is_system ? 'status-active' : 'status-inactive';
                         grid.insertAdjacentHTML('beforeend', `
                             <div class="info-card analyzer-card" data-analyzer-id="${analyzer.id}">
@@ -294,6 +297,23 @@
 
         document.addEventListener('DOMContentLoaded', loadAnalyzers);
 
+        function resetAnalyzerForm() {
+            const form = document.getElementById('analyzer-form');
+            if (form) {
+                form.reset();
+            }
+            document.getElementById('analyzer-type').value = '1';
+        }
+
+        function populateAnalyzerForm(data) {
+            document.getElementById('analyzer-name').value = data.name ?? '';
+            document.getElementById('analyzer-description').value = data.description ?? '';
+            document.getElementById('analyzer-prompt').value = data.system_prompt ?? '';
+            document.getElementById('analyzer-user-prompt').value = data.user_prompt_template ?? '';
+            document.getElementById('analyzer-icon').value = data.icon ?? '';
+            document.getElementById('analyzer-type').value = data.is_system ? '1' : '0';
+        }
+
         function showCreateAnalyzerModal() {
             editingAnalyzerId = null;
             document.getElementById('modal-title').innerHTML = `
@@ -310,8 +330,20 @@
             `;
 
             // Limpiar formulario
-            document.getElementById('analyzer-form').reset();
+            resetAnalyzerForm();
+            document.getElementById('analyzer-modal').classList.add('show');
+            populateAnalyzerForm({
+                name: '',
+                description: '',
+                system_prompt: '',
+                user_prompt_template: '',
+                icon: '',
+                is_system: true
+            });
+        }
 
+        function openAnalyzerModalWithData(data) {
+            populateAnalyzerForm(data);
             document.getElementById('analyzer-modal').classList.add('show');
         }
 
@@ -330,16 +362,17 @@
                 Actualizar Analizador
             `;
 
+            const cachedAnalyzer = analyzerCache.get(analyzerId);
+            if (cachedAnalyzer) {
+                openAnalyzerModalWithData(cachedAnalyzer);
+                return;
+            }
+
             axios.get(`/admin/analyzers/${analyzerId}`)
                 .then(res => {
                     const data = res.data;
-                    document.getElementById('analyzer-name').value = data.name;
-                    document.getElementById('analyzer-description').value = data.description ?? '';
-                    document.getElementById('analyzer-prompt').value = data.system_prompt ?? '';
-                    document.getElementById('analyzer-user-prompt').value = data.user_prompt_template ?? '';
-                    document.getElementById('analyzer-icon').value = data.icon ?? '';
-                    document.getElementById('analyzer-type').value = data.is_system ? '1' : '0';
-                    document.getElementById('analyzer-modal').classList.add('show');
+                    analyzerCache.set(data.id, data);
+                    openAnalyzerModalWithData(data);
                 })
                 .catch(err => {
                     console.error('Error fetching analyzer:', err);
@@ -400,6 +433,9 @@
                 .then(response => {
                     const action = editingAnalyzerId ? 'actualizado' : 'creado';
                     showNotification(`Analizador ${action} exitosamente`, 'success');
+                    if (response?.data?.id) {
+                        analyzerCache.set(response.data.id, response.data);
+                    }
                     closeAnalyzerModal();
                     loadAnalyzers();
                 })

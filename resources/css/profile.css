@@ -262,13 +262,13 @@ body {
 }
 
 .main-admin {
-    margin-left: auto; /* Espacio para sidebar en desktop */
     margin-top: 30px;
-    padding: 2rem; /* Sin espacio extra superior */
+    padding: 2.5rem;
     min-height: 100vh;
     transition: margin-left 0.3s ease;
     padding-bottom: 6rem; /* Espacio para navbar móvil */
     margin-bottom: 80px;
+    width: 100%;
 }
 
 
@@ -283,6 +283,93 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+.admin-analyzers-page .app-container {
+    justify-content: center;
+    padding: 0 3rem 4rem;
+}
+
+.admin-analyzers-page .main-admin {
+    margin: 30px auto 80px;
+    max-width: 1180px;
+    padding: 2.5rem 2.75rem 3rem;
+}
+
+.admin-analyzers-page .content-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 1.5rem;
+}
+
+.admin-analyzers-page .content-header .action-buttons {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+    display: flex;
+    gap: 1rem;
+}
+
+.admin-analyzers-page .content-grid {
+    gap: 2.5rem;
+}
+
+.admin-analyzers-page .analyzer-card {
+    padding: 2.25rem;
+}
+
+@media (max-width: 1024px) {
+    .admin-analyzers-page .app-container {
+        padding: 0 2.25rem 3.5rem;
+    }
+
+    .admin-analyzers-page .main-admin {
+        padding: 2.25rem 2rem 2.75rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .admin-analyzers-page .app-container {
+        padding: 0 1.5rem 3rem;
+    }
+
+    .admin-analyzers-page .main-admin {
+        padding: 2rem 1.5rem 2.5rem;
+        margin: 20px auto 60px;
+    }
+
+    .admin-analyzers-page .content-header {
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .admin-analyzers-page .content-header .action-buttons {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .admin-analyzers-page .content-header .action-buttons .btn {
+        flex: 1;
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-analyzers-page .app-container {
+        padding: 0 1rem 2.5rem;
+    }
+
+    .admin-analyzers-page .main-admin {
+        padding: 1.75rem 1.25rem 2.25rem;
+    }
+
+    .admin-analyzers-page .content-grid {
+        gap: 1.75rem;
+        grid-template-columns: 1fr;
+    }
+
+    .admin-analyzers-page .analyzer-card {
+        padding: 1.75rem;
+    }
 }
 
 .page-title {
