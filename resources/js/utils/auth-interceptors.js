@@ -1,6 +1,17 @@
 // Global redirect to login on session expiration for both axios and fetch
 (() => {
   let redirecting = false;
+  const shouldSkipRedirect = (url, baseURL) => {
+    if (!url) return false;
+
+    try {
+      const resolved = new URL(url, baseURL || window.location.origin);
+      return resolved.pathname.startsWith('/api/integrations');
+    } catch (_) {
+      return false;
+    }
+  };
+
   const redirectToLogin = () => {
   // Avoid redirect loops if we're already on the login page
     if (redirecting || window.location.pathname.startsWith('/login')) return;
@@ -24,6 +35,9 @@
       (error) => {
         const status = error?.response?.status;
         if (status === 401 || status === 419) {
+          if (shouldSkipRedirect(error?.config?.url, error?.config?.baseURL)) {
+            return Promise.reject(error);
+          }
           redirectToLogin();
           // Return a pending promise to stop further error handling
           return new Promise(() => {});
@@ -73,6 +87,9 @@
 
   const res = await originalFetch(input, opts);
       if (res && (res.status === 401 || res.status === 419)) {
+        if (shouldSkipRedirect(url)) {
+          return res;
+        }
         redirectToLogin();
       }
       return res;
