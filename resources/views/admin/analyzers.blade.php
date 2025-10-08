@@ -300,7 +300,31 @@
                 });
         }
 
-        document.addEventListener('DOMContentLoaded', loadAnalyzers);
+        function handleAnalyzerCardClick(event) {
+            const controlButton = event.target.closest('.control-btn');
+            if (controlButton) {
+                return;
+            }
+
+            const analyzerCard = event.target.closest('.analyzer-card');
+            if (!analyzerCard) {
+                return;
+            }
+
+            const analyzerId = analyzerCard.dataset.analyzerId;
+            if (analyzerId) {
+                editAnalyzer(analyzerId);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const analyzerGrid = document.querySelector('.content-grid');
+            if (analyzerGrid) {
+                analyzerGrid.addEventListener('click', handleAnalyzerCardClick);
+            }
+
+            loadAnalyzers();
+        });
 
         function resetAnalyzerForm() {
             const form = document.getElementById('analyzer-form');
