@@ -83,7 +83,8 @@ Respuesta 200:
       "tasks": [{"title": "Enviar propuesta", "owner": "María"}],
       "transcription": "Texto completo...",
       "speakers": [{"name": "Orador 1"}],
-      "segments": [{"speaker": "Orador 1", "text": "Hola"}]
+      "segments": [{"speaker": "Orador 1", "text": "Hola"}],
+      "raw": {"summary": "Resumen de la reunión...", "key_points": ["Punto 1"], "tasks": []}
     },
     "audio": {
       "available": true,
@@ -91,19 +92,20 @@ Respuesta 200:
       "filename": "demo_cliente.mp3",
       "mime_type": "audio/mpeg",
       "size_bytes": 10485760,
-      "stream_url": "https://app.juntify.com/api/integrations/meetings/1234/audio"
+      "stream_url": "https://app.juntify.com/api/integrations/meetings/1234/audio?api_token={token}"
     }
   }
 }
 ```
 
 * `ju.available` indica si se pudo obtener y desencriptar el archivo `.ju`.
-* `audio.stream_url` se usa para reproducir/descargar el audio directamente desde la API.
+* `ju.raw` contiene el JSON desencriptado original del `.ju` para usos avanzados.
+* `audio.stream_url` se usa para reproducir/descargar el audio directamente desde la API. Incluye el `api_token` en la query string para permitir el uso en etiquetas `<audio>` u otros consumidores sin cabeceras.
 
 ### Descargar audio de la reunión
 ```http
-GET /api/integrations/meetings/{meetingId}/audio
-Authorization: Bearer {token}
+GET /api/integrations/meetings/{meetingId}/audio?api_token={token}
+Authorization: Bearer {token} (opcional si ya enviaste `api_token`)
 Accept: audio/*
 ```
 Devuelve el flujo binario (`Content-Type` según el archivo original). Usa este endpoint para
