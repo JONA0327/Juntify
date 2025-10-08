@@ -70,7 +70,10 @@ class IntegrationAuthController extends Controller
             }
 
             // Compatibilidad con hashes generados por Hash::make
-            if (!$passwordIsValid) {
+            if (
+                !$passwordIsValid
+                && $this->looksLikeBcryptHash((string) $user->password)
+            ) {
                 $passwordIsValid = Hash::check($providedPassword, $user->password);
             }
         }
