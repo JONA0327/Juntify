@@ -96,7 +96,14 @@ class IntegrationAuthController extends Controller
 
     public function createFromSession(Request $request): JsonResponse
     {
-        $user = $request->user();
+        $user = $request->user('web');
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'Unauthenticated.',
+                'error' => 'Token de autenticación requerido'
+            ], 401);
+        }
 
         $validated = $request->validate([
             'device_name' => 'nullable|string|max:255',
