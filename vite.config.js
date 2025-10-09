@@ -40,6 +40,8 @@ export default defineConfig({
                 'resources/js/organization.js',
                 'resources/css/ai-assistant.css',
                 'resources/js/ai-assistant.js',
+                'resources/js/admin-users.js',
+                'resources/js/admin-panels.js',
             ],
             refresh: true,
         }),
