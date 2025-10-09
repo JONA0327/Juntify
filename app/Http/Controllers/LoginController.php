@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ErroresSistema;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -33,6 +34,20 @@ class LoginController extends Controller
             $request->session()->regenerate();
             return redirect()->route('profile.show')
                  ->with('success', 'Bienvenido, ' . $user->full_name . '!');
+        }
+
+        $emailToCheck = null;
+
+        if ($field === 'email') {
+            $emailToCheck = $credentials['login'];
+        } elseif ($user && $user->email) {
+            $emailToCheck = $user->email;
+        }
+
+        if ($emailToCheck && ErroresSistema::needsPasswordUpdate($emailToCheck)) {
+            return back()
+                ->withErrors(['login' => 'password_update_required'])
+                ->withInput($request->only('login'));
         }
 
         return back()
