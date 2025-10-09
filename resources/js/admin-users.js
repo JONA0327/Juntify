@@ -226,12 +226,9 @@ const renderUsers = () => {
         const deleteButton = document.createElement('button');
         deleteButton.className = 'btn btn-danger btn-sm';
         deleteButton.textContent = 'Eliminar';
-        deleteButton.disabled = !user.blocked_permanent;
-        deleteButton.title = user.blocked_permanent
-            ? 'Eliminar cuenta bloqueada permanentemente'
-            : 'Solo disponible para cuentas bloqueadas permanentemente';
+        deleteButton.disabled = false;
+        deleteButton.title = 'Eliminar cuenta de usuario';
         deleteButton.addEventListener('click', () => {
-            if (deleteButton.disabled) return;
             openDeleteModal(user.id);
         });
 

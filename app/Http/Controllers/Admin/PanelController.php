@@ -72,6 +72,11 @@ class PanelController extends Controller
             'panel_url' => ['nullable', 'url', 'max:255', 'unique:user_panel_administrativo,panel_url'],
         ]);
 
+        // Convert empty string to null for panel_url
+        if (empty($data['panel_url'])) {
+            $data['panel_url'] = null;
+        }
+
         $administrator = User::findOrFail($data['administrator_id']);
 
         if (! in_array($administrator->roles, ['enterprise', 'founder', 'developer'])) {
