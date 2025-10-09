@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -49,22 +50,28 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        // Verificar si el usuario está bloqueado
+        /** @var User|null $authenticatedUser */
         $authenticatedUser = Auth::user();
-        if ($authenticatedUser && method_exists($authenticatedUser, 'isBlocked') && $authenticatedUser->isBlocked()) {
-            $message = __('Tu cuenta está bloqueada.');
+        if ($authenticatedUser instanceof User && $authenticatedUser->isBlocked()) {
+            Auth::guard('web')->logout(); // Cerrar sesión inmediatamente
+
+            $message = 'Tu cuenta está bloqueada.';
+
             if ($authenticatedUser->blocked_permanent) {
-                $message = __('Tu cuenta ha sido bloqueada de forma permanente.');
+                $message = 'Tu cuenta ha sido bloqueada de forma permanente.';
             } elseif ($authenticatedUser->blockingEndsAt()) {
-                $message = __('Tu cuenta está bloqueada hasta :date.', [
-                    'date' => $authenticatedUser->blockingEndsAt()->timezone(config('app.timezone'))->format('d/m/Y H:i'),
-                ]);
+                $blockEndDate = $authenticatedUser->blockingEndsAt()
+                    ->setTimezone(config('app.timezone', 'UTC'))
+                    ->format('d/m/Y \a \l\a\s H:i');
+
+                $message = "Tu cuenta está bloqueada hasta el {$blockEndDate}.";
             }
 
-            if ($authenticatedUser->blocked_reason) {
-                $message .= ' ' . __('Motivo: :reason', ['reason' => $authenticatedUser->blocked_reason]);
+            // Agregar motivo si está disponible
+            if (!empty($authenticatedUser->blocked_reason)) {
+                $message .= " Motivo: {$authenticatedUser->blocked_reason}";
             }
-
-            Auth::guard('web')->logout();
 
             throw ValidationException::withMessages([
                 'email' => $message,
