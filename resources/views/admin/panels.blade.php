@@ -115,8 +115,8 @@
                         <small class="input-hint">Solo usuarios con roles Enterprise, Founder o Developer.</small>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="panel-url">URL del panel</label>
-                        <input id="panel-url" type="url" class="modal-input" placeholder="https://empresa.juntify.com" required maxlength="255">
+                        <label class="form-label" for="panel-url">URL del panel <span class="text-slate-400">(opcional)</span></label>
+                        <input id="panel-url" type="url" class="modal-input" placeholder="https://empresa.juntify.com" maxlength="255">
                     </div>
                     <div class="modal-actions">
                         <button type="button" class="btn btn-secondary" data-close-panel-modal>Cancelar</button>

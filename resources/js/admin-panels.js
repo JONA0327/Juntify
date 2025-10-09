@@ -219,8 +219,8 @@ createPanelForm?.addEventListener('submit', async (event) => {
     const administratorId = panelAdminSelect?.value;
     const panelUrl = panelUrlInput.value.trim();
 
-    if (!companyName || !administratorId || !panelUrl) {
-        showAlert('error', 'Completa todos los campos para crear el panel.');
+    if (!companyName || !administratorId) {
+        showAlert('error', 'Completa los campos requeridos para crear el panel.');
         return;
     }
 

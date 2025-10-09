@@ -5,9 +5,11 @@ const blockModal = document.getElementById('block-user-modal');
 const blockForm = document.getElementById('block-user-form');
 const blockReasonInput = document.getElementById('block-reason');
 const blockDurationSelect = document.getElementById('block-duration');
+const deleteModal = document.getElementById('delete-user-modal');
 
 let usersMap = new Map();
 let blockTargetUserId = null;
+let deleteTargetUserId = null;
 
 const showAlert = (type, message) => {
     if (!alertBox) return;
@@ -84,6 +86,18 @@ const openBlockModal = (userId) => {
     blockModal?.classList.remove('hidden');
     blockModal?.classList.add('show');
     blockReasonInput.focus();
+};
+
+const closeDeleteModal = () => {
+    deleteModal?.classList.remove('show');
+    deleteModal?.classList.add('hidden');
+    deleteTargetUserId = null;
+};
+
+const openDeleteModal = (userId) => {
+    deleteTargetUserId = userId;
+    deleteModal?.classList.remove('hidden');
+    deleteModal?.classList.add('show');
 };
 
 const renderUsers = () => {
@@ -218,9 +232,7 @@ const renderUsers = () => {
             : 'Solo disponible para cuentas bloqueadas permanentemente';
         deleteButton.addEventListener('click', () => {
             if (deleteButton.disabled) return;
-            const confirmDelete = window.confirm('¿Eliminar definitivamente la cuenta de este usuario? Esta acción no se puede deshacer.');
-            if (!confirmDelete) return;
-            deleteUser(user.id);
+            openDeleteModal(user.id);
         });
 
         actionsWrapper.appendChild(blockButton);
@@ -398,9 +410,27 @@ blockModal?.addEventListener('click', (event) => {
     }
 });
 
+// Delete modal event listeners
+const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+confirmDeleteBtn?.addEventListener('click', () => {
+    if (deleteTargetUserId) {
+        deleteUser(deleteTargetUserId);
+        closeDeleteModal();
+    }
+});
+
+deleteModal?.addEventListener('click', (event) => {
+    if (event.target === deleteModal || event.target.dataset.closeDeleteModal !== undefined) {
+        closeDeleteModal();
+    }
+});
+
 window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && blockModal?.classList.contains('show')) {
         closeBlockModal();
+    }
+    if (event.key === 'Escape' && deleteModal?.classList.contains('show')) {
+        closeDeleteModal();
     }
 });
 

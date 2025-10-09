@@ -69,7 +69,7 @@ class PanelController extends Controller
         $data = $request->validate([
             'company_name' => ['required', 'string', 'max:255'],
             'administrator_id' => ['required', 'exists:users,id'],
-            'panel_url' => ['required', 'url', 'max:255', 'unique:user_panel_administrativo,panel_url'],
+            'panel_url' => ['nullable', 'url', 'max:255', 'unique:user_panel_administrativo,panel_url'],
         ]);
 
         $administrator = User::findOrFail($data['administrator_id']);
