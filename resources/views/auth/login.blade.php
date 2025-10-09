@@ -73,11 +73,6 @@
         <button type="submit" class="btn-primary" id="submitBtn">
           Iniciar Sesión
         </button>
-
-        <!-- DEBUG: Botón para probar modal -->
-        <button type="button" onclick="testModal()" style="margin-top: 10px; background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 4px;">
-          🧪 Probar Modal
-        </button>
       </form>
 
       <div class="auth-links">
@@ -248,18 +243,6 @@
     function redirectToPasswordReset() {
       const email = document.getElementById('login').value;
       window.location.href = '{{ route("password.forgot") }}' + (email ? '?email=' + encodeURIComponent(email) : '');
-    }
-
-    function testModal() {
-      console.log('DEBUG: Test modal function called');
-      const modal = document.getElementById('passwordUpdateModal');
-      if (modal) {
-        console.log('DEBUG: Modal found, showing...');
-        modal.classList.remove('hidden');
-        modal.classList.add('show');
-      } else {
-        console.log('ERROR: Modal not found');
-      }
     }
 
     // Manejar respuesta de error de actualización de contraseña
