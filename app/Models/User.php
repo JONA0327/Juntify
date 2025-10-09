@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 use App\Models\GoogleToken;
+use App\Models\UserPanelAdministrativo;
+use App\Models\UserPanelMiembro;
 
 class User extends Authenticatable
 {
@@ -26,10 +29,18 @@ class User extends Authenticatable
         'roles',           // ahora un string
         'current_organization_id',
         'plan_expires_at',
+        'blocked_at',
+        'blocked_until',
+        'blocked_permanent',
+        'blocked_reason',
+        'blocked_by',
     ];
 
     protected $casts = [
         'plan_expires_at' => 'datetime',
+        'blocked_at' => 'datetime',
+        'blocked_until' => 'datetime',
+        'blocked_permanent' => 'boolean',
     ];
 
     protected static function boot()
@@ -104,5 +115,42 @@ class User extends Authenticatable
     public function planPurchases(): HasManyThrough
     {
         return $this->hasManyThrough(PlanPurchase::class, UserPlan::class);
+    }
+
+    public function blockedBy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'blocked_by');
+    }
+
+    public function administeredPanels(): HasMany
+    {
+        return $this->hasMany(UserPanelAdministrativo::class, 'administrator_id');
+    }
+
+    public function panelMemberships(): HasMany
+    {
+        return $this->hasMany(UserPanelMiembro::class, 'user_id');
+    }
+
+    public function isBlocked(): bool
+    {
+        if ($this->blocked_permanent) {
+            return true;
+        }
+
+        if ($this->blocked_until instanceof Carbon) {
+            return $this->blocked_until->isFuture();
+        }
+
+        return false;
+    }
+
+    public function blockingEndsAt(): ?Carbon
+    {
+        if ($this->blocked_permanent) {
+            return null;
+        }
+
+        return $this->blocked_until;
     }
 }

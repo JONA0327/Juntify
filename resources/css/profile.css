@@ -710,6 +710,24 @@ body {
   border: 1px solid rgba(100, 116, 139, 0.4);
 }
 
+.status-badge.status-success {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.status-badge.status-warning {
+  background: rgba(250, 204, 21, 0.18);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+}
+
+.status-badge.status-danger {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+}
+
 /* business (cian) */
 .status-badge.status-business {
   background: rgba(6, 182, 212, 0.2);
@@ -910,6 +928,35 @@ body {
 .btn-danger:hover {
   transform: translateY(-2px);
   box-shadow: 0 15px 40px rgba(239, 68, 68, 0.4);
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.admin-table thead {
+  background: rgba(15, 23, 42, 0.75);
+}
+
+.admin-table th {
+  text-align: left;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  padding: 0.75rem 1rem;
+}
+
+.admin-table td {
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  padding: 0.85rem 1rem;
+}
+
+.admin-table tr:hover td {
+  background: rgba(30, 41, 59, 0.4);
 }
 
 /* Mobile Responsive */
@@ -1682,6 +1729,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  position: relative;
 }
 
 .modal-title {
@@ -1699,6 +1747,23 @@ body {
   height: 22px;
   stroke: #82c7ff; /* azul suave para icono */
   opacity: 0.9;
+}
+
+.modal-close {
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+  background: transparent;
+  border: none;
+  color: #cbd5f5;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.modal-close:hover {
+  color: #f87171;
 }
 
 /* 1) Apunta al contenedor que hace scroll (aquí .modal-body) */
