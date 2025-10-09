@@ -40,4 +40,20 @@ class UserPanelAdministrativo extends Model
     {
         return $this->hasMany(UserPanelMiembro::class, 'panel_id');
     }
+
+    /**
+     * Relación con los usuarios de la empresa
+     */
+    public function companyUsers(): HasMany
+    {
+        return $this->hasMany(CompanyUser::class, 'company_panel_id');
+    }
+
+    /**
+     * Usuarios activos de la empresa
+     */
+    public function activeCompanyUsers(): HasMany
+    {
+        return $this->hasMany(CompanyUser::class, 'company_panel_id')->where('is_active', true);
+    }
 }

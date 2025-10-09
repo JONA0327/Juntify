@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use App\Models\GoogleToken;
 use App\Models\UserPanelAdministrativo;
 use App\Models\UserPanelMiembro;
+use App\Models\CompanyUser;
 
 class User extends Authenticatable
 {
@@ -130,6 +131,22 @@ class User extends Authenticatable
     public function panelMemberships(): HasMany
     {
         return $this->hasMany(UserPanelMiembro::class, 'user_id');
+    }
+
+    /**
+     * Empresas donde el usuario está registrado
+     */
+    public function companyMemberships(): HasMany
+    {
+        return $this->hasMany(CompanyUser::class, 'user_id');
+    }
+
+    /**
+     * Empresas activas donde el usuario está registrado
+     */
+    public function activeCompanyMemberships(): HasMany
+    {
+        return $this->hasMany(CompanyUser::class, 'user_id')->where('is_active', true);
     }
 
     public function isBlocked(): bool
