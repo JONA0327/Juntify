@@ -31,7 +31,7 @@
       </div>
 
       {{-- Mensaje de error genérico --}}
-      @if ($errors->has('login'))
+      @if ($errors->has('login') && $errors->first('login') !== 'password_update_required')
         <div class="error-message" style="display:block; margin-bottom:1rem;">
           {{ $errors->first('login') }}
         </div>
