@@ -23,6 +23,8 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\AiAssistantController;
+use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\Admin\PanelController;
 
 // Rutas de archivos de contenedor (deben ir antes de otros grupos pero dentro de PHP)
 Route::middleware(['web','auth'])->group(function() {
@@ -177,6 +179,18 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/admin/analyzers', [\App\Http\Controllers\AnalyzerController::class, 'store']);
     Route::put('/admin/analyzers/{analyzer}', [\App\Http\Controllers\AnalyzerController::class, 'update']);
     Route::delete('/admin/analyzers/{analyzer}', [\App\Http\Controllers\AnalyzerController::class, 'destroy']);
+
+    Route::get('/admin/users', [UserManagementController::class, 'index'])->name('admin.users');
+    Route::get('/admin/users/list', [UserManagementController::class, 'list']);
+    Route::put('/admin/users/{user}/role', [UserManagementController::class, 'updateRole']);
+    Route::post('/admin/users/{user}/block', [UserManagementController::class, 'block']);
+    Route::post('/admin/users/{user}/unblock', [UserManagementController::class, 'unblock']);
+    Route::delete('/admin/users/{user}', [UserManagementController::class, 'destroy']);
+
+    Route::get('/admin/panels', [PanelController::class, 'index'])->name('admin.panels');
+    Route::get('/admin/panels/list', [PanelController::class, 'list']);
+    Route::get('/admin/panels/eligible-admins', [PanelController::class, 'eligibleAdmins']);
+    Route::post('/admin/panels', [PanelController::class, 'store']);
 
     Route::post('/admin/pending-recordings/process', [\App\Http\Controllers\PendingRecordingController::class, 'process'])
         ->name('admin.pending-recordings.process');

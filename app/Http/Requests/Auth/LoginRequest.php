@@ -49,6 +49,28 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        $authenticatedUser = Auth::user();
+        if ($authenticatedUser && method_exists($authenticatedUser, 'isBlocked') && $authenticatedUser->isBlocked()) {
+            $message = __('Tu cuenta está bloqueada.');
+            if ($authenticatedUser->blocked_permanent) {
+                $message = __('Tu cuenta ha sido bloqueada de forma permanente.');
+            } elseif ($authenticatedUser->blockingEndsAt()) {
+                $message = __('Tu cuenta está bloqueada hasta :date.', [
+                    'date' => $authenticatedUser->blockingEndsAt()->timezone(config('app.timezone'))->format('d/m/Y H:i'),
+                ]);
+            }
+
+            if ($authenticatedUser->blocked_reason) {
+                $message .= ' ' . __('Motivo: :reason', ['reason' => $authenticatedUser->blocked_reason]);
+            }
+
+            Auth::guard('web')->logout();
+
+            throw ValidationException::withMessages([
+                'email' => $message,
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 
