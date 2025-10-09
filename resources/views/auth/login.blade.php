@@ -73,6 +73,11 @@
         <button type="submit" class="btn-primary" id="submitBtn">
           Iniciar Sesión
         </button>
+
+        <!-- DEBUG: Botón para probar modal -->
+        <button type="button" onclick="testModal()" style="margin-top: 10px; background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 4px;">
+          🧪 Probar Modal
+        </button>
       </form>
 
       <div class="auth-links">
@@ -245,6 +250,18 @@
       window.location.href = '{{ route("password.forgot") }}' + (email ? '?email=' + encodeURIComponent(email) : '');
     }
 
+    function testModal() {
+      console.log('DEBUG: Test modal function called');
+      const modal = document.getElementById('passwordUpdateModal');
+      if (modal) {
+        console.log('DEBUG: Modal found, showing...');
+        modal.classList.remove('hidden');
+        modal.classList.add('show');
+      } else {
+        console.log('ERROR: Modal not found');
+      }
+    }
+
     // Manejar respuesta de error de actualización de contraseña
     document.addEventListener('DOMContentLoaded', function() {
       const loginForm = document.getElementById('loginForm');
@@ -260,10 +277,18 @@
 
       // Verificar si hay error de actualización de contraseña al cargar la página
       @if($errors->has('login') && $errors->first('login') === 'password_update_required')
+        console.log('DEBUG: Password update required detected');
         setTimeout(() => {
+          console.log('DEBUG: Showing modal');
           modal.classList.remove('hidden');
           modal.classList.add('show');
         }, 500);
+      @endif
+
+      // DEBUG: Mostrar todos los errores
+      @if($errors->any())
+        console.log('DEBUG: Errors found:', @json($errors->all()));
+        console.log('DEBUG: Login error:', '@if($errors->has("login")){{ $errors->first("login") }}@endif');
       @endif
     });
   </script>
