@@ -119,7 +119,11 @@ class ContainerFileController extends Controller
 
             // Compartir el archivo con los miembros del grupo del contenedor
             try {
-                $this->shareFileWithGroupMembers($container, $driveFileId);
+                $this->hierarchyService->shareContainerFileWithGroupMembers(
+                    $container,
+                    $driveFileId,
+                    auth()->id()
+                );
             } catch (\Throwable $e) {
                 Log::warning('store: failed to share file with group members', [
                     'container_id' => $container->id,
@@ -197,7 +201,6 @@ class ContainerFileController extends Controller
         $isMember = $group->users()->where('user_id', $user->id)->exists();
         if (!$isMember) abort(403, 'No perteneces a este grupo');
     }
-
     /**
      * Comparte un archivo subido con todos los miembros del grupo del contenedor.
      */
