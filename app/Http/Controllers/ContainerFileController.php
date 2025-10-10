@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Group;
 use App\Models\MeetingContentContainer;
 use App\Models\OrganizationContainerFolder;
 use App\Services\GoogleDriveService;
 use App\Services\OrganizationDriveHierarchyService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Google\Service\Exception as GoogleServiceException;
 
 class ContainerFileController extends Controller
 {
@@ -117,6 +117,17 @@ class ContainerFileController extends Controller
                 Log::warning('No se pudo compartir el archivo como público', ['file_id' => $driveFileId, 'error' => $e->getMessage()]);
             }
 
+            // Compartir el archivo con los miembros del grupo del contenedor
+            try {
+                $this->shareFileWithGroupMembers($container, $driveFileId);
+            } catch (\Throwable $e) {
+                Log::warning('store: failed to share file with group members', [
+                    'container_id' => $container->id,
+                    'drive_file_id' => $driveFileId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             // Recuperar metadata del archivo recién subido
             $meta = $this->driveService->getDrive()->files->get($driveFileId, [
                 'fields' => 'id,name,mimeType,size,createdTime'
@@ -185,6 +196,81 @@ class ContainerFileController extends Controller
         if (!$group) abort(404);
         $isMember = $group->users()->where('user_id', $user->id)->exists();
         if (!$isMember) abort(403, 'No perteneces a este grupo');
+    }
+
+    /**
+     * Comparte un archivo subido con todos los miembros del grupo del contenedor.
+     */
+    protected function shareFileWithGroupMembers(MeetingContentContainer $container, string $driveFileId): void
+    {
+        $group = $container->group;
+        $organization = $group?->organization;
+
+        if (!$group || !$organization) {
+            return;
+        }
+
+        $members = $group->users()->withPivot('rol')->get();
+        if ($members->isEmpty()) {
+            return;
+        }
+
+        $currentUserId = auth()->id();
+
+        foreach ($members as $member) {
+            $email = $member->email;
+            if (!$email) {
+                continue;
+            }
+
+            if ($member->id === $currentUserId) {
+                continue;
+            }
+
+            $role = match ($member->pivot?->rol) {
+                Group::ROLE_ADMINISTRADOR, Group::ROLE_COLABORADOR => 'writer',
+                default => 'reader',
+            };
+
+            try {
+                $permission = new \Google\Service\Drive\Permission([
+                    'type' => 'user',
+                    'role' => $role,
+                    'emailAddress' => $email,
+                ]);
+
+                $this->driveService->getDrive()->permissions->create($driveFileId, $permission, [
+                    'supportsAllDrives' => true,
+                    'sendNotificationEmail' => false,
+                ]);
+            } catch (GoogleServiceException $e) {
+                $code = (int) $e->getCode();
+                $message = strtolower($e->getMessage());
+                $alreadyShared = $code === 409 || str_contains($message, 'already') || str_contains($message, 'duplicate');
+
+                if ($alreadyShared) {
+                    Log::info('shareFileWithGroupMembers: permission already exists', [
+                        'drive_file_id' => $driveFileId,
+                        'email' => $email,
+                    ]);
+                    continue;
+                }
+
+                Log::warning('shareFileWithGroupMembers: failed to share via user token', [
+                    'drive_file_id' => $driveFileId,
+                    'email' => $email,
+                    'role' => $role,
+                    'code' => $code,
+                    'error' => $e->getMessage(),
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('shareFileWithGroupMembers: unexpected error', [
+                    'drive_file_id' => $driveFileId,
+                    'email' => $email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     /**
