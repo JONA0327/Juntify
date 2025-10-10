@@ -326,6 +326,52 @@ class OrganizationDriveHierarchyService
         }
     }
 
+    /**
+     * Comparte un archivo de contenedor con los miembros del grupo utilizando los mismos fallbacks
+     * (service account y OAuth) que se usan para carpetas.
+     */
+    public function shareContainerFileWithGroupMembers(
+        MeetingContentContainer $container,
+        string $driveFileId,
+        ?int $skipUserId = null
+    ): void {
+        $group = $container->group;
+        $organization = $group?->organization;
+
+        if (! $group || ! $organization) {
+            return;
+        }
+
+        try {
+            $members = $group->users()->withPivot('rol')->get();
+            foreach ($members as $user) {
+                if (! $user->email) {
+                    continue;
+                }
+
+                if ($skipUserId !== null && $user->id === $skipUserId) {
+                    continue;
+                }
+
+                $role = $user->pivot->rol ?? null;
+                $driveRole = match ($role) {
+                    Group::ROLE_ADMINISTRADOR, Group::ROLE_COLABORADOR => 'writer',
+                    default => 'reader',
+                };
+
+                $this->shareItemWithFallback($driveFileId, $user->email, $driveRole, $organization);
+            }
+        } catch (Throwable $e) {
+            Log::warning('Hierarchy: shareContainerFileWithGroupMembers failed', [
+                'group_id' => $group->id,
+                'container_id' => $container->id,
+                'org_id' => $organization->id,
+                'drive_file_id' => $driveFileId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     protected function shareItemWithFallback(string $itemId, string $email, string $driveRole, Organization $organization): void
     {
         $strategies = ['service_account_impersonate', 'service_account_direct', 'oauth'];

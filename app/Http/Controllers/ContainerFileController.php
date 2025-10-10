@@ -7,9 +7,7 @@ use App\Models\OrganizationContainerFolder;
 use App\Services\GoogleDriveService;
 use App\Services\OrganizationDriveHierarchyService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ContainerFileController extends Controller
@@ -117,6 +115,21 @@ class ContainerFileController extends Controller
                 Log::warning('No se pudo compartir el archivo como público', ['file_id' => $driveFileId, 'error' => $e->getMessage()]);
             }
 
+            // Compartir el archivo con los miembros del grupo del contenedor
+            try {
+                $this->hierarchyService->shareContainerFileWithGroupMembers(
+                    $container,
+                    $driveFileId,
+                    auth()->id()
+                );
+            } catch (\Throwable $e) {
+                Log::warning('store: failed to share file with group members', [
+                    'container_id' => $container->id,
+                    'drive_file_id' => $driveFileId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             // Recuperar metadata del archivo recién subido
             $meta = $this->driveService->getDrive()->files->get($driveFileId, [
                 'fields' => 'id,name,mimeType,size,createdTime'
@@ -186,7 +199,6 @@ class ContainerFileController extends Controller
         $isMember = $group->users()->where('user_id', $user->id)->exists();
         if (!$isMember) abort(403, 'No perteneces a este grupo');
     }
-
     /**
      * Establece el token de Google Drive para el usuario autenticado si está disponible.
      * Si falla, se loguea advertencia y se continúa (podría usar service account si configurado).
