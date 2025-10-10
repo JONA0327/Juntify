@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Group;
 use App\Models\MeetingContentContainer;
 use App\Models\OrganizationContainerFolder;
 use App\Services\GoogleDriveService;
@@ -9,6 +10,7 @@ use App\Services\OrganizationDriveHierarchyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Google\Service\Exception as GoogleServiceException;
 
 class ContainerFileController extends Controller
 {
@@ -199,6 +201,81 @@ class ContainerFileController extends Controller
         $isMember = $group->users()->where('user_id', $user->id)->exists();
         if (!$isMember) abort(403, 'No perteneces a este grupo');
     }
+    /**
+     * Comparte un archivo subido con todos los miembros del grupo del contenedor.
+     */
+    protected function shareFileWithGroupMembers(MeetingContentContainer $container, string $driveFileId): void
+    {
+        $group = $container->group;
+        $organization = $group?->organization;
+
+        if (!$group || !$organization) {
+            return;
+        }
+
+        $members = $group->users()->withPivot('rol')->get();
+        if ($members->isEmpty()) {
+            return;
+        }
+
+        $currentUserId = auth()->id();
+
+        foreach ($members as $member) {
+            $email = $member->email;
+            if (!$email) {
+                continue;
+            }
+
+            if ($member->id === $currentUserId) {
+                continue;
+            }
+
+            $role = match ($member->pivot?->rol) {
+                Group::ROLE_ADMINISTRADOR, Group::ROLE_COLABORADOR => 'writer',
+                default => 'reader',
+            };
+
+            try {
+                $permission = new \Google\Service\Drive\Permission([
+                    'type' => 'user',
+                    'role' => $role,
+                    'emailAddress' => $email,
+                ]);
+
+                $this->driveService->getDrive()->permissions->create($driveFileId, $permission, [
+                    'supportsAllDrives' => true,
+                    'sendNotificationEmail' => false,
+                ]);
+            } catch (GoogleServiceException $e) {
+                $code = (int) $e->getCode();
+                $message = strtolower($e->getMessage());
+                $alreadyShared = $code === 409 || str_contains($message, 'already') || str_contains($message, 'duplicate');
+
+                if ($alreadyShared) {
+                    Log::info('shareFileWithGroupMembers: permission already exists', [
+                        'drive_file_id' => $driveFileId,
+                        'email' => $email,
+                    ]);
+                    continue;
+                }
+
+                Log::warning('shareFileWithGroupMembers: failed to share via user token', [
+                    'drive_file_id' => $driveFileId,
+                    'email' => $email,
+                    'role' => $role,
+                    'code' => $code,
+                    'error' => $e->getMessage(),
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('shareFileWithGroupMembers: unexpected error', [
+                    'drive_file_id' => $driveFileId,
+                    'email' => $email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
     /**
      * Establece el token de Google Drive para el usuario autenticado si está disponible.
      * Si falla, se loguea advertencia y se continúa (podría usar service account si configurado).
