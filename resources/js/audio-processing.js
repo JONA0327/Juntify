@@ -119,13 +119,165 @@ function getFileExtensionForMimeType(mimeType) {
 
 const SAVE_RESULTS_DIRECT_UPLOAD_LIMIT = 40 * 1024 * 1024; // 40MB límite para evitar 413
 
+// Declarado aquí para permitir el acceso desde las funciones de reintento automático
+let audioDiscarded = false;
+
+// ===== GESTIÓN DE REINTENTOS AUTOMÁTICOS =====
+const AUTOMATIC_RETRY_STORAGE_KEY = 'automaticTranscriptionRetryState';
+const AUTOMATIC_RETRY_BASE_DELAY_MS = 15000; // 15 segundos antes del primer reintento automático
+const AUTOMATIC_RETRY_MAX_DELAY_MS = 60000;  // Limitar a 60 segundos para no esperar demasiado
+const AUTOMATIC_RETRY_MAX_ATTEMPTS = 3;      // Máximo de reintentos automáticos consecutivos
+
+let automaticTranscriptionRetryTimeout = null;
+let automaticTranscriptionRetryState = loadAutomaticTranscriptionRetryState();
+
+function loadAutomaticTranscriptionRetryState() {
+    try {
+        const stored = sessionStorage.getItem(AUTOMATIC_RETRY_STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            return {
+                attempts: Number(parsed.attempts) || 0,
+                pendingAttempt: Number(parsed.pendingAttempt) || null,
+                scheduledAt: Number(parsed.scheduledAt) || null,
+                reason: typeof parsed.reason === 'string' ? parsed.reason : null
+            };
+        }
+    } catch (error) {
+        console.warn('⚠️ [autoRetry] No se pudo cargar el estado almacenado:', error);
+    }
+
+    return { attempts: 0, pendingAttempt: null, scheduledAt: null, reason: null };
+}
+
+function persistAutomaticTranscriptionRetryState() {
+    try {
+        sessionStorage.setItem(AUTOMATIC_RETRY_STORAGE_KEY, JSON.stringify(automaticTranscriptionRetryState));
+    } catch (error) {
+        console.warn('⚠️ [autoRetry] No se pudo persistir el estado:', error);
+    }
+}
+
+function resetAutomaticTranscriptionRetryState() {
+    automaticTranscriptionRetryState = { attempts: 0, pendingAttempt: null, scheduledAt: null, reason: null };
+    try {
+        sessionStorage.removeItem(AUTOMATIC_RETRY_STORAGE_KEY);
+    } catch (error) {
+        console.warn('⚠️ [autoRetry] No se pudo eliminar el estado almacenado:', error);
+    }
+}
+
+function scheduleAutomaticTranscriptionRetry(reason = '') {
+    const nextAttempt = (automaticTranscriptionRetryState.pendingAttempt || automaticTranscriptionRetryState.attempts || 0) + 1;
+
+    if (nextAttempt > AUTOMATIC_RETRY_MAX_ATTEMPTS) {
+        console.warn(`⚠️ [autoRetry] Se alcanzó el máximo de ${AUTOMATIC_RETRY_MAX_ATTEMPTS} reintentos automáticos`);
+        cancelAutomaticTranscriptionRetry(true);
+        return false;
+    }
+
+    cancelAutomaticTranscriptionRetry(false);
+
+    const delayMultiplier = Math.max(nextAttempt, 1);
+    const delayMs = Math.min(AUTOMATIC_RETRY_BASE_DELAY_MS * delayMultiplier, AUTOMATIC_RETRY_MAX_DELAY_MS);
+    const scheduledAt = Date.now() + delayMs;
+
+    automaticTranscriptionRetryState.pendingAttempt = nextAttempt;
+    automaticTranscriptionRetryState.scheduledAt = scheduledAt;
+    automaticTranscriptionRetryState.reason = reason || null;
+    persistAutomaticTranscriptionRetryState();
+
+    automaticTranscriptionRetryTimeout = setTimeout(() => {
+        automaticTranscriptionRetryTimeout = null;
+        automaticTranscriptionRetryState.attempts = automaticTranscriptionRetryState.pendingAttempt || nextAttempt;
+        automaticTranscriptionRetryState.pendingAttempt = null;
+        automaticTranscriptionRetryState.scheduledAt = null;
+        persistAutomaticTranscriptionRetryState();
+
+        if (audioDiscarded) {
+            console.log('🚫 [autoRetry] Se omitió el reintento automático porque el audio fue descartado');
+            return;
+        }
+
+        console.log(`🔄 [autoRetry] Ejecutando reintento automático #${automaticTranscriptionRetryState.attempts} (motivo: ${reason || 'desconocido'})`);
+        startTranscription();
+    }, delayMs);
+
+    console.log(`⏱️ [autoRetry] Reintento automático #${nextAttempt} programado en ${Math.round(delayMs / 1000)}s (motivo: ${reason || 'desconocido'})`);
+    return true;
+}
+
+function cancelAutomaticTranscriptionRetry(resetAttempts = false) {
+    if (automaticTranscriptionRetryTimeout) {
+        clearTimeout(automaticTranscriptionRetryTimeout);
+        automaticTranscriptionRetryTimeout = null;
+    }
+
+    if (resetAttempts) {
+        resetAutomaticTranscriptionRetryState();
+        console.log('🛑 [autoRetry] Reintentos automáticos reiniciados completamente');
+    } else {
+        automaticTranscriptionRetryState.pendingAttempt = null;
+        automaticTranscriptionRetryState.scheduledAt = null;
+        persistAutomaticTranscriptionRetryState();
+        console.log('🛑 [autoRetry] Reintento automático cancelado');
+    }
+}
+
+function restoreAutomaticTranscriptionRetryIfNeeded() {
+    if (!automaticTranscriptionRetryState.pendingAttempt || !automaticTranscriptionRetryState.scheduledAt) {
+        return;
+    }
+
+    if (automaticTranscriptionRetryState.pendingAttempt > AUTOMATIC_RETRY_MAX_ATTEMPTS) {
+        cancelAutomaticTranscriptionRetry(true);
+        return;
+    }
+
+    const delayMs = Math.max(automaticTranscriptionRetryState.scheduledAt - Date.now(), 0);
+    if (delayMs === 0) {
+        // Si ya se venció el tiempo, ejecutar inmediatamente en la siguiente cola de tareas
+        setTimeout(() => {
+            if (audioDiscarded) {
+                console.log('🚫 [autoRetry] Se omitió la restauración del reintento porque el audio fue descartado');
+                cancelAutomaticTranscriptionRetry(false);
+                return;
+            }
+            console.log(`🔄 [autoRetry] Ejecutando reintento automático restaurado #${automaticTranscriptionRetryState.pendingAttempt}`);
+            automaticTranscriptionRetryState.attempts = automaticTranscriptionRetryState.pendingAttempt;
+            automaticTranscriptionRetryState.pendingAttempt = null;
+            automaticTranscriptionRetryState.scheduledAt = null;
+            persistAutomaticTranscriptionRetryState();
+            startTranscription();
+        }, 0);
+        return;
+    }
+
+    automaticTranscriptionRetryTimeout = setTimeout(() => {
+        automaticTranscriptionRetryTimeout = null;
+        if (audioDiscarded) {
+            console.log('🚫 [autoRetry] Se omitió el reintento automático restaurado porque el audio fue descartado');
+            cancelAutomaticTranscriptionRetry(false);
+            return;
+        }
+        console.log(`🔄 [autoRetry] Ejecutando reintento automático restaurado #${automaticTranscriptionRetryState.pendingAttempt}`);
+        automaticTranscriptionRetryState.attempts = automaticTranscriptionRetryState.pendingAttempt;
+        automaticTranscriptionRetryState.pendingAttempt = null;
+        automaticTranscriptionRetryState.scheduledAt = null;
+        persistAutomaticTranscriptionRetryState();
+        startTranscription();
+    }, delayMs);
+
+    console.log(`⏱️ [autoRetry] Reintento automático restaurado en ${Math.round(delayMs / 1000)}s`);
+}
+
 // ===== VARIABLES GLOBALES =====
 let currentStep = 1;
 let selectedAnalyzer = null;
 let availableAnalyzers = [];
 let audioData = null;
 let audioSegments = [];
-let audioDiscarded = false; // Variable para controlar si el audio fue descartado
+// Variable para controlar si el audio fue descartado (declarada previamente para uso en reintentos automáticos)
 let processingFinished = false; // Flag para indicar si el procesamiento finalizó exitosamente
 
 // Verificar si el audio fue descartado previamente
@@ -138,6 +290,8 @@ try {
 } catch (e) {
     console.warn('No se pudo verificar el estado de descarte:', e);
 }
+
+restoreAutomaticTranscriptionRetryIfNeeded();
 
 // Array que almacena la transcripción completa. Cada elemento
 // representa un segmento con propiedades como:
