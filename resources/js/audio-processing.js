@@ -158,68 +158,35 @@ let finalAudioDuration = 0;
 let finalSpeakerCount = 0;
 let finalTasks = [];
 
-// Control de reintentos automáticos ante errores recuperables de transcripción
-const AUTO_RETRY_DELAY_MS = 15000;
-const MAX_AUTO_RETRY_ATTEMPTS = 2;
-let transcriptionAutoRetryAttempts = 0;
-let transcriptionAutoRetryTimer = null;
-let transcriptionAutoRetryCountdown = null;
+function ensureSaveProgressLog() {
+    const section = document.querySelector('#step-saving .progress-section');
+    if (!section) return null;
 
-function cancelAutomaticTranscriptionRetry(resetAttempts = false) {
-    if (transcriptionAutoRetryTimer) {
-        clearTimeout(transcriptionAutoRetryTimer);
-        transcriptionAutoRetryTimer = null;
+    let log = document.getElementById('save-progress-log');
+    if (!log) {
+        log = document.createElement('div');
+        log.id = 'save-progress-log';
+        log.className = 'progress-log';
+        section.appendChild(log);
     }
-    if (transcriptionAutoRetryCountdown) {
-        clearInterval(transcriptionAutoRetryCountdown);
-        transcriptionAutoRetryCountdown = null;
-    }
-    if (resetAttempts) {
-        transcriptionAutoRetryAttempts = 0;
-    }
+
+    return log;
 }
 
-function scheduleAutomaticTranscriptionRetry(reason, delayMs = AUTO_RETRY_DELAY_MS) {
-    if (transcriptionAutoRetryAttempts >= MAX_AUTO_RETRY_ATTEMPTS) {
-        return false;
+function appendSaveLogMessage(msg) {
+    const log = ensureSaveProgressLog();
+    if (!log) return;
+
+    const p = document.createElement('p');
+    p.textContent = msg;
+    log.appendChild(p);
+}
+
+function resetSaveLog() {
+    const log = document.getElementById('save-progress-log');
+    if (log) {
+        log.innerHTML = '';
     }
-
-    transcriptionAutoRetryAttempts += 1;
-    cancelAutomaticTranscriptionRetry(false);
-
-    const progressText = document.getElementById('transcription-progress-text');
-    const reasonText = reason ? ` (${reason})` : '';
-    let remainingSeconds = Math.ceil(delayMs / 1000);
-
-    const updateCountdownLabel = () => {
-        if (progressText) {
-            progressText.textContent = `Reintentando transcripción automáticamente${reasonText} en ${remainingSeconds}s...`;
-        }
-    };
-
-    updateCountdownLabel();
-
-    transcriptionAutoRetryCountdown = setInterval(() => {
-        remainingSeconds -= 1;
-        if (remainingSeconds <= 0) {
-            clearInterval(transcriptionAutoRetryCountdown);
-            transcriptionAutoRetryCountdown = null;
-        }
-        updateCountdownLabel();
-    }, 1000);
-
-    transcriptionAutoRetryTimer = setTimeout(() => {
-        if (transcriptionAutoRetryCountdown) {
-            clearInterval(transcriptionAutoRetryCountdown);
-            transcriptionAutoRetryCountdown = null;
-        }
-        transcriptionAutoRetryTimer = null;
-        const retryButton = document.getElementById('retry-transcription');
-        if (retryButton) retryButton.remove();
-        startTranscription();
-    }, delayMs);
-
-    return true;
 }
 
 // Mensajes que se mostrarán mientras se genera la transcripción
@@ -735,7 +702,7 @@ async function uploadAudioInChunksForSave(audioBlob, audioMimeType, onProgress =
     const RETRY_DELAY = 2000;
 
     const attemptUpload = async (chunkSize) => {
-        addMessage(`Subiendo audio en fragmentos de ${Math.round(chunkSize / 1024 / 1024)}MB...`);
+        appendSaveLogMessage(`Subiendo audio en fragmentos de ${Math.round(chunkSize / 1024 / 1024)}MB...`);
 
         const totalChunks = Math.ceil(audioBlob.size / chunkSize);
         const initResponse = await axios.post('/drive/save-results/chunked/init', {
@@ -795,7 +762,7 @@ async function uploadAudioInChunksForSave(audioBlob, audioMimeType, onProgress =
                 const status = error?.response?.status;
                 const data = error?.response?.data;
                 if (status === 400 && data?.error === 'missing_chunks' && Array.isArray(data.missing_indices) && data.missing_indices.length) {
-                    addMessage(`Reintentando ${data.missing_indices.length} fragmentos faltantes...`);
+                    appendSaveLogMessage(`Reintentando ${data.missing_indices.length} fragmentos faltantes...`);
                     for (const idx of data.missing_indices) {
                         const chunk = chunks.find(c => c.index === idx);
                         if (!chunk) continue;
@@ -1973,38 +1940,21 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
         }
     }
 
-    // Contenedor de mensajes detallados
-    const addMessage = (msg) => {
-        const section = document.querySelector('#step-saving .progress-section');
-        if (!section) return;
-        let log = document.getElementById('save-progress-log');
-        if (!log) {
-            log = document.createElement('div');
-            log.id = 'save-progress-log';
-            log.className = 'progress-log';
-            section.appendChild(log);
-        }
-        const p = document.createElement('p');
-        p.textContent = msg;
-        log.appendChild(p);
-    };
-
     const resetUI = () => {
         setProgress(0, 'Preparando guardado...');
         document.getElementById('audio-upload-status').textContent = '⏳';
         document.getElementById('transcription-save-status').textContent = '⏳';
         document.getElementById('analysis-save-status').textContent = '⏳';
         document.getElementById('tasks-save-status').textContent = '⏳';
-        const log = document.getElementById('save-progress-log');
-        if (log) log.innerHTML = '';
+        resetSaveLog();
     };
 
     resetUI();
-    addMessage('Iniciando guardado de resultados');
+    appendSaveLogMessage('Iniciando guardado de resultados');
 
     // Informar al usuario sobre el tipo de drive seleccionado
     const driveTypeText = driveType === 'organization' ? 'Drive Organizacional' : 'Drive Personal';
-    addMessage(`📁 Tipo de Drive: ${driveTypeText}`);
+    appendSaveLogMessage(`📁 Tipo de Drive: ${driveTypeText}`);
 
     const transcription = transcriptionData;
     const analysis = analysisResults;
@@ -2049,11 +1999,11 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
 
     try {
         setProgress(10, 'Guardando resultados...');
-        addMessage('Enviando datos al servidor...');
+        appendSaveLogMessage('Enviando datos al servidor...');
 
         // Verificar si es un audio pendiente
         if (window.pendingAudioInfo) {
-            addMessage('Completando procesamiento de audio pendiente...');
+            appendSaveLogMessage('Completando procesamiento de audio pendiente...');
 
             console.log('📦 Datos a enviar (pendiente):', {
                 pending_id: window.pendingAudioInfo.pendingId,
@@ -2098,7 +2048,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                     errorMsg = `Error del servidor (${response.status}): ${response.statusText}`;
                 }
 
-                addMessage(`⚠️ ${errorMsg}`);
+                appendSaveLogMessage(`⚠️ ${errorMsg}`);
                 showNotification(errorMsg, 'error');
                 await discardAudio();
                 resetUI();
@@ -2113,7 +2063,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                 console.error('Error al parsear JSON de respuesta exitosa:', jsonError);
                 const responseText = await response.text();
                 console.error('Contenido de respuesta:', responseText.substring(0, 500));
-                addMessage('⚠️ Error al procesar respuesta del servidor');
+                appendSaveLogMessage('⚠️ Error al procesar respuesta del servidor');
                 showNotification('Error al procesar respuesta del servidor', 'error');
                 await discardAudio();
                 resetUI();
@@ -2223,7 +2173,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                     const tooLargeMsg = 'El audio es demasiado grande para enviarlo de una sola vez (413). ' +
                         'Prueba con: 1) usar "Posponer" para subir el audio como archivo, 2) grabar menos tiempo, o ' +
                         '3) si eres admin, aumenta los límites de carga del servidor (post_max_size / upload_max_filesize / client_max_body_size).';
-                    addMessage(`⚠️ ${tooLargeMsg}`);
+                    appendSaveLogMessage(`⚠️ ${tooLargeMsg}`);
                     showNotification(tooLargeMsg, 'error');
                     resetUI();
                     showStep(4);
@@ -2241,7 +2191,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                     errorMsg = 'Respuesta inesperada del servidor';
                 }
 
-                addMessage(`⚠️ ${errorMsg}`);
+                appendSaveLogMessage(`⚠️ ${errorMsg}`);
                 showNotification(errorMsg, 'error');
                 resetUI();
                 showStep(4);
@@ -2285,7 +2235,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
         document.getElementById('tasks-save-status').textContent = '✅';
 
         setProgress(100, 'Guardado completado');
-        addMessage('Resultados almacenados con éxito');
+        appendSaveLogMessage('Resultados almacenados con éxito');
         setTimeout(async () => {
             // Cleanup local temporary audio after successful save
             try {
@@ -2307,7 +2257,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
     } catch (e) {
         console.error('Error al guardar en base de datos', e);
         const msg = e.message || 'No se pudo conectar con el servidor';
-        addMessage(`⚠️ ${msg}`);
+        appendSaveLogMessage(`⚠️ ${msg}`);
         showNotification(msg, 'error');
         downloadAudio();
         showNotification('Se descargó una copia de seguridad del audio', 'info');
