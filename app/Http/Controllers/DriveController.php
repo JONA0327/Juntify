@@ -31,6 +31,7 @@ use Illuminate\Support\Facades\Crypt;
 use RuntimeException;
 use App\Models\TranscriptionLaravel;
 use App\Models\TaskLaravel;
+use Illuminate\Support\Str;
 
 class DriveController extends Controller
 {
@@ -877,12 +878,158 @@ class DriveController extends Controller
 
         return response()->json(['id' => $fileId]);
     }
+
+    public function initChunkedAudioSave(Request $request)
+    {
+        $v = $request->validate([
+            'filename' => 'required|string',
+            'mime_type' => 'required|string',
+            'size' => 'required|integer|min:1',
+            'chunks' => 'required|integer|min:1',
+        ]);
+
+        $uploadId = (string) Str::uuid();
+        $baseDir = $this->getChunkedAudioBasePath($uploadId);
+        if (!is_dir($baseDir) && !mkdir($baseDir, 0775, true) && !is_dir($baseDir)) {
+            return response()->json([
+                'message' => 'No se pudo preparar el almacenamiento temporal para el audio',
+            ], 500);
+        }
+
+        $metadata = [
+            'filename' => $v['filename'],
+            'mime_type' => strtolower($v['mime_type']),
+            'total_size' => (int) $v['size'],
+            'chunks_expected' => (int) $v['chunks'],
+            'chunks_received' => 0,
+            'received_indices' => [],
+            'created_at' => now()->toIso8601String(),
+        ];
+
+        file_put_contents($this->getChunkedAudioMetadataPath($uploadId), json_encode($metadata));
+
+        return response()->json([
+            'upload_id' => $uploadId,
+        ]);
+    }
+
+    public function uploadChunkedAudioSave(Request $request)
+    {
+        set_time_limit(300);
+
+        $v = $request->validate([
+            'chunk' => 'required|file',
+            'chunk_index' => 'required|integer|min:0',
+            'upload_id' => 'required|string',
+        ]);
+
+        $uploadId = $v['upload_id'];
+        $metadataPath = $this->getChunkedAudioMetadataPath($uploadId);
+        if (!file_exists($metadataPath)) {
+            return response()->json(['error' => 'Upload session not found'], 404);
+        }
+
+        $chunk = $request->file('chunk');
+        $chunkDir = dirname($metadataPath);
+        $chunk->move($chunkDir, 'chunk_' . $v['chunk_index']);
+
+        $this->updateChunkedAudioMetadata($metadataPath, function (&$metadata) use ($v) {
+            $metadata['received_indices'] = $metadata['received_indices'] ?? [];
+            if (!in_array($v['chunk_index'], $metadata['received_indices'], true)) {
+                $metadata['received_indices'][] = $v['chunk_index'];
+                sort($metadata['received_indices']);
+                $metadata['chunks_received'] = count($metadata['received_indices']);
+            }
+        });
+
+        return response()->json(['success' => true]);
+    }
+
+    public function finalizeChunkedAudioSave(Request $request)
+    {
+        set_time_limit(900);
+
+        $v = $request->validate([
+            'upload_id' => 'required|string',
+        ]);
+
+        $uploadId = $v['upload_id'];
+        $metadataPath = $this->getChunkedAudioMetadataPath($uploadId);
+        if (!file_exists($metadataPath)) {
+            return response()->json(['error' => 'Upload session not found'], 404);
+        }
+
+        $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+        $expected = (int) ($metadata['chunks_expected'] ?? 0);
+
+        $chunkDir = dirname($metadataPath);
+        $files = glob($chunkDir . '/chunk_*');
+        $present = is_array($files) ? count($files) : 0;
+        $missing = [];
+        for ($i = 0; $i < $expected; $i++) {
+            $path = $chunkDir . '/chunk_' . $i;
+            if (!file_exists($path)) {
+                $missing[] = $i;
+            }
+        }
+
+        if (!empty($missing)) {
+            return response()->json([
+                'error' => 'missing_chunks',
+                'expected' => $expected,
+                'present_count' => $present,
+                'missing_indices' => $missing,
+            ], 400);
+        }
+
+        $extension = pathinfo($metadata['filename'] ?? '', PATHINFO_EXTENSION);
+        $extension = $extension ? '.' . $extension : '';
+        $finalPath = $chunkDir . '/final_audio' . $extension;
+
+        $dest = fopen($finalPath, 'wb');
+        if (!$dest) {
+            return response()->json([
+                'message' => 'No se pudo combinar el audio en el servidor',
+            ], 500);
+        }
+
+        for ($i = 0; $i < $expected; $i++) {
+            $chunkPath = $chunkDir . '/chunk_' . $i;
+            $source = fopen($chunkPath, 'rb');
+            if (!$source) {
+                fclose($dest);
+                return response()->json([
+                    'message' => 'No se pudo leer un fragmento de audio',
+                ], 500);
+            }
+            stream_copy_to_stream($source, $dest);
+            fclose($source);
+            @unlink($chunkPath);
+        }
+
+        fflush($dest);
+        fclose($dest);
+
+        $metadata['chunks_received'] = $expected;
+        $metadata['combined_size'] = filesize($finalPath);
+        $metadata['final_path'] = $finalPath;
+        $metadata['final_filename'] = basename($finalPath);
+        $metadata['combined_at'] = now()->toIso8601String();
+        file_put_contents($metadataPath, json_encode($metadata));
+
+        return response()->json([
+            'upload_id' => $uploadId,
+            'final_size' => $metadata['combined_size'],
+            'mime_type' => $metadata['mime_type'] ?? null,
+        ]);
+    }
     public function saveResults(Request $request)
     {
         Log::info('saveResults reached', ['user' => Auth::user() ? Auth::user()->username : null]);
         Log::debug('saveResults before validation', [
             'meetingName' => $request->input('meetingName'),
             'audioLength' => strlen($request->input('audioData', '')),
+            'audioUploadId' => $request->input('audioUploadId'),
         ]);
         // Permitir hasta 5 minutos de ejecución para cargas grandes
         set_time_limit(300);
@@ -925,13 +1072,25 @@ class DriveController extends Controller
             'audioSubfolder'         => 'nullable|string',
             'transcriptionData'      => 'required',
             'analysisResults'        => 'required',
-            'audioData'              => 'required_without:audioFile|string|max:' . (int) ceil($maxAudioBytes * 4 / 3),      // Base64 (~266MB bruto)
-            'audioMimeType'          => 'required_without:audioFile|string',      // p.ej. "audio/webm"
-            'audioFile'              => 'required_without:audioData|file|mimetypes:' . $allowedAudioMimes . '|max:204800',
+            'audioData'              => 'required_without_all:audioFile,audioUploadId|string|max:' . (int) ceil($maxAudioBytes * 4 / 3),      // Base64 (~266MB bruto)
+            'audioMimeType'          => 'required_without_all:audioFile,audioUploadId|string',      // p.ej. "audio/webm"
+            'audioFile'              => 'required_without_all:audioData,audioUploadId|file|mimetypes:' . $allowedAudioMimes . '|max:204800',
+            'audioUploadId'          => 'required_without_all:audioFile,audioData|string',
             'driveType'              => 'nullable|string|in:personal,organization', // Nuevo campo para tipo de drive
         ], [
             'audioData.max' => 'Archivo de audio demasiado grande (máx. 200 MB)',
         ]);
+
+        $audioUploadId = $v['audioUploadId'] ?? null;
+        $cleanupChunkedUpload = function () use ($audioUploadId) {
+            if ($audioUploadId) {
+                $this->cleanupChunkedAudioUpload($audioUploadId);
+            }
+        };
+        $respondWithCleanup = function (array $payload, int $status = 200) use ($cleanupChunkedUpload) {
+            $cleanupChunkedUpload();
+            return response()->json($payload, $status);
+        };
 
         if (is_string($v['transcriptionData'])) {
             $decoded = json_decode($v['transcriptionData'], true);
@@ -948,7 +1107,7 @@ class DriveController extends Controller
         }
 
         if (!is_array($v['transcriptionData'])) {
-            return response()->json([
+            return $respondWithCleanup([
                 'message' => 'Transcripción inválida',
             ], 422);
         }
@@ -957,7 +1116,7 @@ class DriveController extends Controller
             if (is_null($v['analysisResults'])) {
                 $v['analysisResults'] = [];
             } else {
-                return response()->json([
+                return $respondWithCleanup([
                     'message' => 'Resultados de análisis inválidos',
                 ], 422);
             }
@@ -969,7 +1128,7 @@ class DriveController extends Controller
             $planService = app(\App\Services\PlanLimitService::class);
             if (!$planService->canCreateAnotherMeeting($user)) {
                 $limits = $planService->getLimitsForUser($user);
-                return response()->json([
+                return $respondWithCleanup([
                     'code' => 'PLAN_LIMIT_REACHED',
                     'message' => 'Has alcanzado el número máximo de reuniones para tu plan este mes.',
                     'used' => $limits['used_this_month'],
@@ -1003,7 +1162,7 @@ class DriveController extends Controller
             Log::warning('saveResults: Organization drive requested but no organization folder found', [
                 'username' => $user->username
             ]);
-            return response()->json([
+            return $respondWithCleanup([
                 'message' => 'No tienes acceso a Drive organizacional o no está configurado'
             ], 403);
         }
@@ -1013,7 +1172,7 @@ class DriveController extends Controller
         } else {
             $token = GoogleToken::where('username', $user->username)->first();
             if (!$token) {
-                return response()->json(['message' => 'Token de Google no encontrado'], 400);
+                return $respondWithCleanup(['message' => 'Token de Google no encontrado'], 400);
             }
 
             // Resolución del root personal (prioridad): recordings_folder_id del token -> rootFolder parámetro -> primer root en BD
@@ -1040,7 +1199,7 @@ class DriveController extends Controller
                     ->first();
             }
             if (!$rootFolder) {
-                return response()->json(['message' => 'Carpeta principal no encontrada o no configurada'], 400);
+                return $respondWithCleanup(['message' => 'Carpeta principal no encontrada o no configurada'], 400);
             }
         }
 
@@ -1106,7 +1265,7 @@ class DriveController extends Controller
                 }
 
                 if (!$shared) {
-                    return response()->json([
+                    return $respondWithCleanup([
                         'code'    => 'FOLDER_NOT_SHARED',
                         'message' => "La carpeta principal no está compartida con la cuenta de servicio. Comparte la carpeta con {$serviceEmail}",
                     ], 403);
@@ -1119,7 +1278,7 @@ class DriveController extends Controller
         $audioModel = $standard['audio'] ?? null;
         $transModel = $standard['transcription'] ?? null;
         if (!$audioModel || !$transModel) {
-            return response()->json([
+            return $respondWithCleanup([
                 'message' => 'No se pudieron preparar las subcarpetas estándar (Audios/Transcripciones) dentro de la carpeta raíz. Verifica permisos de la cuenta de servicio.'
             ], 500);
         }
@@ -1131,13 +1290,13 @@ class DriveController extends Controller
         // Compartir subcarpetas con fallback robusto
         $userTokenModel = isset($token) ? $token : (isset($user) ? GoogleToken::where('username', $user->username)->first() : null);
         if (!$this->attemptShareSubfolder($transcriptionFolderId, $useOrgDrive, $serviceAccount, $accountEmail, $user, $userTokenModel, $rootFolder, 'Transcripciones')) {
-            return response()->json([
+            return $respondWithCleanup([
                 'code' => 'FOLDER_NOT_SHARED',
                 'message' => "No se pudo compartir la carpeta de transcripciones con la cuenta de servicio. Comparte manualmente con {$accountEmail}",
             ], 403);
         }
         if (!$this->attemptShareSubfolder($audioFolderId, $useOrgDrive, $serviceAccount, $accountEmail, $user, $userTokenModel, $rootFolder, 'Audios')) {
-            return response()->json([
+            return $respondWithCleanup([
                 'code' => 'FOLDER_NOT_SHARED',
                 'message' => "No se pudo compartir la carpeta de audios con la cuenta de servicio. Comparte manualmente con {$accountEmail}",
             ], 403);
@@ -1147,32 +1306,55 @@ class DriveController extends Controller
             // 2. Carpetas en Drive
             $meetingName = $v['meetingName'];
 
-            $audioFile = $request->file('audioFile');
-            $tmp = null;
-            if ($audioFile instanceof UploadedFile) {
-                if ($audioFile->getSize() > $maxAudioBytes) {
-                    return response()->json([
-                        'message' => 'Archivo de audio demasiado grande (máx. 200 MB)',
-                    ], 422);
-                }
+        $audioUploadId = $v['audioUploadId'] ?? null;
+        $audioFile = $request->file('audioFile');
+        $tmp = null;
+        if ($audioUploadId) {
+            $resolvedUpload = $this->resolveChunkedAudioUpload($audioUploadId);
+            if (!$resolvedUpload) {
+                return $respondWithCleanup([
+                    'message' => 'El archivo de audio temporal no está disponible o expiró. Vuelve a subir el audio e inténtalo de nuevo.',
+                ], 422);
+            }
+
+            $sourcePath = $resolvedUpload['path'];
+            if (filesize($sourcePath) > $maxAudioBytes) {
+                return $respondWithCleanup([
+                    'message' => 'Archivo de audio demasiado grande (máx. 200 MB)',
+                ], 422);
+            }
+
+            $tmp = tempnam(sys_get_temp_dir(), 'aud');
+            if (!@copy($sourcePath, $tmp)) {
+                return $respondWithCleanup([
+                    'message' => 'No se pudo preparar el audio temporal',
+                ], 500);
+            }
+            $audioMime = $resolvedUpload['mime'] ?: strtolower($v['audioMimeType'] ?? '');
+        } elseif ($audioFile instanceof UploadedFile) {
+            if ($audioFile->getSize() > $maxAudioBytes) {
+                return $respondWithCleanup([
+                    'message' => 'Archivo de audio demasiado grande (máx. 200 MB)',
+                ], 422);
+            }
 
                 $tmp = tempnam(sys_get_temp_dir(), 'aud');
                 file_put_contents($tmp, file_get_contents($audioFile->getRealPath()));
                 $audioMime = strtolower($audioFile->getMimeType() ?: $audioFile->getClientMimeType() ?: ($v['audioMimeType'] ?? ''));
-            } else {
-                // 3. Decodifica Base64
-                $b64    = $v['audioData'];
-                if (str_contains($b64, ',')) {
-                    [, $b64] = explode(',', $b64, 2);
-                }
+        } else {
+            // 3. Decodifica Base64
+            $b64    = $v['audioData'];
+            if (str_contains($b64, ',')) {
+                [, $b64] = explode(',', $b64, 2);
+            }
                 $raw    = base64_decode($b64);
                 if ($raw === false) {
-                    return response()->json([
+                    return $respondWithCleanup([
                         'message' => 'Audio inválido o corrupto',
                     ], 422);
                 }
                 if (strlen($raw) > $maxAudioBytes) {
-                    return response()->json([
+                    return $respondWithCleanup([
                         'message' => 'Archivo de audio demasiado grande (máx. 200 MB)',
                     ], 422);
                 }
@@ -1182,9 +1364,9 @@ class DriveController extends Controller
                 $audioMime = strtolower($v['audioMimeType']);
             }
 
-            if (empty($audioMime)) {
-                $audioMime = 'audio/ogg';
-            }
+        if (empty($audioMime)) {
+            $audioMime = 'audio/ogg';
+        }
 
             // Posible conversión a OGG (política: subir solo OGG)
             $converted = null;
@@ -1200,7 +1382,7 @@ class DriveController extends Controller
                     } else {
                         $alreadyOgg = str_contains(strtolower($audioMime), 'ogg') || str_ends_with(strtolower($tmp), '.ogg');
                         if (!$alreadyOgg) {
-                            return response()->json([
+                            return $respondWithCleanup([
                                 'code' => 'OGG_REQUIRED',
                                 'message' => 'La conversión a OGG es obligatoria y no se pudo completar.',
                             ], 500);
@@ -1208,13 +1390,13 @@ class DriveController extends Controller
                     }
                 } catch (\App\Exceptions\FfmpegUnavailableException $e) {
                     Log::warning('saveResults: ffmpeg unavailable - OGG required policy', ['error' => $e->getMessage()]);
-                    return response()->json([
+                    return $respondWithCleanup([
                         'code' => 'FFMPEG_UNAVAILABLE',
                         'message' => 'FFmpeg no está disponible en el servidor. La conversión a OGG es obligatoria. Instala ffmpeg o desactiva AUDIO_FORCE_OGG para desarrollo.',
                     ], 500);
                 } catch (\Throwable $e) {
                     Log::error('saveResults: ogg conversion failed (policy requires OGG)', ['error' => $e->getMessage()]);
-                    return response()->json([
+                    return $respondWithCleanup([
                         'code' => 'OGG_CONVERSION_FAILED',
                         'message' => 'Falló la conversión a OGG. Intenta con otro archivo o contacta al administrador.',
                     ], 500);
@@ -1265,13 +1447,13 @@ class DriveController extends Controller
                     str_contains($e->getMessage(), 'File not found') ||
                     str_contains($e->getMessage(), 'The caller does not have permission')
                 ) {
-                    return response()->json([
+                    return $respondWithCleanup([
                         'code'    => 'FOLDER_NOT_SHARED',
                         'message' => "La carpeta no está compartida con la cuenta de servicio. Comparte la carpeta con {$accountEmail}",
                     ], 403);
                 }
 
-                return response()->json([
+                return $respondWithCleanup([
                     'message' => 'Error de Drive: ' . $e->getMessage(),
                 ], 502);
             } catch (RuntimeException $e) {
@@ -1281,7 +1463,7 @@ class DriveController extends Controller
                     'audio_folder'          => $audioFolderId,
                     'service_account_email' => $accountEmail,
                 ]);
-                return response()->json([
+                return $respondWithCleanup([
                     'message' => 'Error de Drive: ' . $e->getMessage(),
                 ], 502);
             }
@@ -1393,12 +1575,12 @@ class DriveController extends Controller
                     'audio_folder'          => $audioFolderId,
                     'service_account_email' => $accountEmail,
                 ]);
-                return response()->json([
+                return $respondWithCleanup([
                     'message' => 'Error de base de datos: ' . $e->getMessage(),
                 ], 500);
             }
 
-            return response()->json([
+            return $respondWithCleanup([
                 'saved'                   => true,
                 'audio_drive_id'          => $audioFileId,
                 'audio_download_url'      => $audioUrl,
@@ -1417,7 +1599,7 @@ class DriveController extends Controller
                 'audio_folder'          => $audioFolderId,
                 'service_account_email' => $accountEmail,
             ]);
-            return response()->json(['message' => $e->getMessage()], 400);
+            return $respondWithCleanup(['message' => $e->getMessage()], 400);
         } catch (\Throwable $e) {
             Log::error('saveResults failed', [
                 'exception'             => $e->getMessage(),
@@ -1427,7 +1609,7 @@ class DriveController extends Controller
             ]);
 
             if (str_contains($e->getMessage(), 'unauthorized_client')) {
-                return response()->json([
+                return $respondWithCleanup([
                     'message' => 'La cuenta de servicio no está autorizada para acceder a Google Drive'
                 ], 403);
             }
@@ -1436,13 +1618,134 @@ class DriveController extends Controller
                 str_contains($e->getMessage(), 'File not found') ||
                 str_contains($e->getMessage(), 'The caller does not have permission')
             ) {
-                return response()->json([
+                return $respondWithCleanup([
                     'code'    => 'FOLDER_NOT_SHARED',
                     'message' => "La carpeta no está compartida con la cuenta de servicio. Comparte la carpeta con {$accountEmail}",
                 ], 403);
             }
 
-            return response()->json(['message' => 'Error interno'], 500);
+            return $respondWithCleanup(['message' => 'Error interno'], 500);
+        }
+    }
+
+    private function getChunkedAudioBasePath(string $uploadId): string
+    {
+        return storage_path('app/temp-save-audio/' . $uploadId);
+    }
+
+    private function getChunkedAudioMetadataPath(string $uploadId): string
+    {
+        return $this->getChunkedAudioBasePath($uploadId) . '/metadata.json';
+    }
+
+    private function updateChunkedAudioMetadata(string $metadataPath, callable $callback): void
+    {
+        $dir = dirname($metadataPath);
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        $fp = fopen($metadataPath, 'c+');
+        if (!$fp) {
+            return;
+        }
+
+        try {
+            if (!flock($fp, LOCK_EX)) {
+                fclose($fp);
+                return;
+            }
+
+            $raw = stream_get_contents($fp);
+            $metadata = $raw ? json_decode($raw, true) : [];
+            if (!is_array($metadata)) {
+                $metadata = [];
+            }
+
+            $callback($metadata);
+
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($metadata));
+            fflush($fp);
+            flock($fp, LOCK_UN);
+        } finally {
+            fclose($fp);
+        }
+    }
+
+    private function resolveChunkedAudioUpload(?string $uploadId): ?array
+    {
+        if (!$uploadId) {
+            return null;
+        }
+
+        $metadataPath = $this->getChunkedAudioMetadataPath($uploadId);
+        if (!file_exists($metadataPath)) {
+            return null;
+        }
+
+        $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+        $finalPath = $metadata['final_path'] ?? null;
+        if (!$finalPath || !file_exists($finalPath)) {
+            return null;
+        }
+
+        $mime = strtolower($metadata['mime_type'] ?? '');
+        if (!$mime && !empty($metadata['filename'])) {
+            $ext = strtolower(pathinfo($metadata['filename'], PATHINFO_EXTENSION));
+            $mimeMap = [
+                'mp3' => 'audio/mpeg',
+                'm4a' => 'audio/mp4',
+                'mp4' => 'video/mp4',
+                'aac' => 'audio/aac',
+                'wav' => 'audio/wav',
+                'ogg' => 'audio/ogg',
+                'oga' => 'audio/ogg',
+                'opus' => 'audio/opus',
+                'webm' => 'audio/webm',
+                'flac' => 'audio/flac',
+                'amr' => 'audio/amr',
+                '3gp' => 'audio/3gpp',
+                '3g2' => 'audio/3gpp2',
+            ];
+            $mime = $mimeMap[$ext] ?? '';
+        }
+
+        return [
+            'metadata_path' => $metadataPath,
+            'directory' => dirname($metadataPath),
+            'path' => $finalPath,
+            'mime' => $mime,
+        ];
+    }
+
+    private function cleanupChunkedAudioUpload(?string $uploadId): void
+    {
+        if (!$uploadId) {
+            return;
+        }
+
+        $baseDir = $this->getChunkedAudioBasePath($uploadId);
+        if (!is_dir($baseDir)) {
+            return;
+        }
+
+        try {
+            $files = glob($baseDir . '/*');
+            if (is_array($files)) {
+                foreach ($files as $file) {
+                    if (is_file($file)) {
+                        @unlink($file);
+                    }
+                }
+            }
+            @rmdir($baseDir);
+        } catch (\Throwable $e) {
+            Log::warning('cleanupChunkedAudioUpload failed', [
+                'upload_id' => $uploadId,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }

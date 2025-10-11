@@ -117,6 +117,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/drive/status', [DriveController::class, 'status'])
          ->name('drive.status');
     Route::post('/drive/save-results', [DriveController::class, 'saveResults']);
+    Route::post('/drive/save-results/chunked/init', [DriveController::class, 'initChunkedAudioSave']);
+    Route::post('/drive/save-results/chunked/upload', [DriveController::class, 'uploadChunkedAudioSave']);
+    Route::post('/drive/save-results/chunked/finalize', [DriveController::class, 'finalizeChunkedAudioSave']);
 
     Route::post('/calendar/event', [\App\Http\Controllers\CalendarController::class, 'createEvent'])
          ->name('calendar.createEvent');
