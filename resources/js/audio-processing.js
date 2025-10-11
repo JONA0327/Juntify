@@ -39,6 +39,7 @@ async function discardAudio() {
     } catch (e) {
         console.warn('No se pudo guardar el estado de descarte:', e);
     }
+    cancelAutomaticTranscriptionRetry(true);
     try { await clearAllAudio(); } catch (_) {}
     clearStoredAudioKeys();
     showNotification('El audio se descartó para evitar conflictos en futuras grabaciones', 'warning');
@@ -154,6 +155,70 @@ let finalDrivePath = '';
 let finalAudioDuration = 0;
 let finalSpeakerCount = 0;
 let finalTasks = [];
+
+// Control de reintentos automáticos ante errores recuperables de transcripción
+const AUTO_RETRY_DELAY_MS = 15000;
+const MAX_AUTO_RETRY_ATTEMPTS = 2;
+let transcriptionAutoRetryAttempts = 0;
+let transcriptionAutoRetryTimer = null;
+let transcriptionAutoRetryCountdown = null;
+
+function cancelAutomaticTranscriptionRetry(resetAttempts = false) {
+    if (transcriptionAutoRetryTimer) {
+        clearTimeout(transcriptionAutoRetryTimer);
+        transcriptionAutoRetryTimer = null;
+    }
+    if (transcriptionAutoRetryCountdown) {
+        clearInterval(transcriptionAutoRetryCountdown);
+        transcriptionAutoRetryCountdown = null;
+    }
+    if (resetAttempts) {
+        transcriptionAutoRetryAttempts = 0;
+    }
+}
+
+function scheduleAutomaticTranscriptionRetry(reason, delayMs = AUTO_RETRY_DELAY_MS) {
+    if (transcriptionAutoRetryAttempts >= MAX_AUTO_RETRY_ATTEMPTS) {
+        return false;
+    }
+
+    transcriptionAutoRetryAttempts += 1;
+    cancelAutomaticTranscriptionRetry(false);
+
+    const progressText = document.getElementById('transcription-progress-text');
+    const reasonText = reason ? ` (${reason})` : '';
+    let remainingSeconds = Math.ceil(delayMs / 1000);
+
+    const updateCountdownLabel = () => {
+        if (progressText) {
+            progressText.textContent = `Reintentando transcripción automáticamente${reasonText} en ${remainingSeconds}s...`;
+        }
+    };
+
+    updateCountdownLabel();
+
+    transcriptionAutoRetryCountdown = setInterval(() => {
+        remainingSeconds -= 1;
+        if (remainingSeconds <= 0) {
+            clearInterval(transcriptionAutoRetryCountdown);
+            transcriptionAutoRetryCountdown = null;
+        }
+        updateCountdownLabel();
+    }, 1000);
+
+    transcriptionAutoRetryTimer = setTimeout(() => {
+        if (transcriptionAutoRetryCountdown) {
+            clearInterval(transcriptionAutoRetryCountdown);
+            transcriptionAutoRetryCountdown = null;
+        }
+        transcriptionAutoRetryTimer = null;
+        const retryButton = document.getElementById('retry-transcription');
+        if (retryButton) retryButton.remove();
+        startTranscription();
+    }, delayMs);
+
+    return true;
+}
 
 // Mensajes que se mostrarán mientras se genera la transcripción
 const typingMessages = [
@@ -298,6 +363,8 @@ async function startAudioProcessing() {
         return;
     }
 
+    cancelAutomaticTranscriptionRetry(true);
+
     showStep(1);
 
     const progressBar = document.getElementById('audio-progress');
@@ -362,6 +429,8 @@ async function mergeAudioSegments(segments) {
 // ===== PASO 2: TRANSCRIPCIÓN =====
 
 async function startTranscription() {
+    cancelAutomaticTranscriptionRetry(false);
+
     // Verificar si el audio fue descartado
     if (audioDiscarded) {
         console.log('🚫 [startTranscription] Audio fue descartado, cancelando transcripción');
@@ -585,29 +654,76 @@ async function handleTranscriptionError(e) {
     console.error("❌ [handleTranscriptionError] Error:", e);
 
     let userMessage = '';
+    let shouldDiscardAudio = false;
+    let shouldDownloadBackup = false;
+    let shouldAutoRetry = false;
+    let autoRetryReason = '';
+
     if (e.code === 'ERR_CONNECTION') {
         userMessage = '⚠️ Problema de conexión. Verifica tu conexión e intenta nuevamente.';
+        shouldAutoRetry = true;
+        autoRetryReason = 'fallo de conexión';
     } else if (e.code === 'ERR_TIMEOUT') {
         userMessage = '⚠️ La solicitud tardó demasiado. Reintenta o revisa tu conexión.';
+        shouldAutoRetry = true;
+        autoRetryReason = 'tiempo de espera';
     } else if (e.response) {
-        console.error("📡 STATUS:", e.response.status);
+        const status = e.response.status;
+        console.error("📡 STATUS:", status);
         console.error("📩 HEADERS:", e.response.headers);
         console.error("📦 BODY:", e.response.data);
-        userMessage = "🧠 Error del servidor: " + JSON.stringify(e.response.data);
+
+        if (status === 504) {
+            userMessage = '⚠️ El servidor tardó demasiado en responder. Conservamos el audio para que reintentes la transcripción sin perderlo.';
+            shouldAutoRetry = true;
+            autoRetryReason = 'tiempo de espera del servidor (504)';
+        } else if (status >= 500) {
+            userMessage = '⚠️ El servidor encontró un problema inesperado. Intenta nuevamente en unos minutos.';
+            shouldAutoRetry = true;
+            autoRetryReason = `error ${status}`;
+        } else if (status === 422 || status === 415) {
+            userMessage = '❌ El formato del audio no es válido o supera los límites permitidos.';
+            shouldDiscardAudio = true;
+            shouldDownloadBackup = true;
+        } else {
+            userMessage = "🧠 Error del servidor: " + JSON.stringify(e.response.data);
+            shouldDownloadBackup = true;
+        }
     } else {
         userMessage = "❌ Error desconocido. Revisa consola.";
+        shouldDownloadBackup = true;
     }
 
-    alert(userMessage);
+    const notificationType = shouldDiscardAudio ? 'error' : 'warning';
+    showNotification(userMessage, notificationType);
 
-    downloadAudio();
-    showNotification('Se descargó una copia de seguridad del audio', 'info');
-    await discardAudio();
+    if (shouldDownloadBackup) {
+        downloadAudio();
+        showNotification('Se descargó una copia de seguridad del audio', 'info');
+    }
+
+    if (shouldDiscardAudio) {
+        await discardAudio();
+    } else {
+        clearDiscardState();
+        showNotification('El audio se mantiene disponible para reintentar la transcripción.', 'warning');
+    }
+
+    let autoRetryScheduled = false;
+    if (shouldAutoRetry) {
+        autoRetryScheduled = scheduleAutomaticTranscriptionRetry(autoRetryReason);
+        if (autoRetryScheduled) {
+            showNotification('Intentaremos nuevamente la transcripción automáticamente en unos segundos.', 'info');
+        } else {
+            showNotification('Se agotaron los reintentos automáticos. Puedes reintentar manualmente.', 'warning');
+        }
+    }
 
     const progressText = document.getElementById('transcription-progress-text');
-    if (progressText) {
+    if (progressText && !autoRetryScheduled) {
         progressText.textContent = 'Error al subir audio. Reintenta o verifica tu conexión.';
     }
+
     showRetryTranscription();
 }
 
@@ -2086,6 +2202,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
 
 function showCompletion({ drivePath, audioDuration, speakerCount, tasks, driveType }) {
     processingFinished = true;
+    cancelAutomaticTranscriptionRetry(true);
     showStep(8);
 
     // Limpiar el estado de descarte cuando se completa exitosamente
