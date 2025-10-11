@@ -116,6 +116,8 @@ function getFileExtensionForMimeType(mimeType) {
     return 'ogg';
 }
 
+const SAVE_RESULTS_DIRECT_UPLOAD_LIMIT = 40 * 1024 * 1024; // 40MB límite para evitar 413
+
 // ===== VARIABLES GLOBALES =====
 let currentStep = 1;
 let selectedAnalyzer = null;
@@ -154,6 +156,37 @@ let finalDrivePath = '';
 let finalAudioDuration = 0;
 let finalSpeakerCount = 0;
 let finalTasks = [];
+
+function ensureSaveProgressLog() {
+    const section = document.querySelector('#step-saving .progress-section');
+    if (!section) return null;
+
+    let log = document.getElementById('save-progress-log');
+    if (!log) {
+        log = document.createElement('div');
+        log.id = 'save-progress-log';
+        log.className = 'progress-log';
+        section.appendChild(log);
+    }
+
+    return log;
+}
+
+function appendSaveLogMessage(msg) {
+    const log = ensureSaveProgressLog();
+    if (!log) return;
+
+    const p = document.createElement('p');
+    p.textContent = msg;
+    log.appendChild(p);
+}
+
+function resetSaveLog() {
+    const log = document.getElementById('save-progress-log');
+    if (log) {
+        log.innerHTML = '';
+    }
+}
 
 // Mensajes que se mostrarán mientras se genera la transcripción
 const typingMessages = [
@@ -609,6 +642,102 @@ async function handleTranscriptionError(e) {
         progressText.textContent = 'Error al subir audio. Reintenta o verifica tu conexión.';
     }
     showRetryTranscription();
+}
+
+async function uploadAudioInChunksForSave(audioBlob, audioMimeType, onProgress = () => {}) {
+    const CANDIDATE_SIZES = [8, 4, 2, 1].map(m => m * 1024 * 1024);
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 2000;
+
+    const attemptUpload = async (chunkSize) => {
+        appendSaveLogMessage(`Subiendo audio en fragmentos de ${Math.round(chunkSize / 1024 / 1024)}MB...`);
+
+        const totalChunks = Math.ceil(audioBlob.size / chunkSize);
+        const initResponse = await axios.post('/drive/save-results/chunked/init', {
+            filename: `recording.${getFileExtensionForMimeType(audioMimeType || audioBlob.type || 'audio/ogg')}`,
+            mime_type: audioMimeType || audioBlob.type || 'audio/ogg',
+            size: audioBlob.size,
+            chunks: totalChunks
+        }, { timeout: 30000 });
+
+        const uploadId = initResponse.data.upload_id;
+        const chunks = [];
+        for (let offset = 0; offset < audioBlob.size; offset += chunkSize) {
+            chunks.push({
+                index: chunks.length,
+                blob: audioBlob.slice(offset, Math.min(offset + chunkSize, audioBlob.size))
+            });
+        }
+
+        let completedChunks = 0;
+        const concurrentUploads = 3;
+
+        const uploadChunk = async (chunk, retryCount = 0) => {
+            try {
+                const formData = new FormData();
+                formData.append('chunk', chunk.blob);
+                formData.append('chunk_index', chunk.index);
+                formData.append('upload_id', uploadId);
+
+                await axios.post('/drive/save-results/chunked/upload', formData, {
+                    timeout: 180000
+                });
+
+                completedChunks++;
+                onProgress({ completedChunks, totalChunks });
+            } catch (error) {
+                if (error?.response?.status === 413) {
+                    throw { adaptive413: true };
+                }
+                if (retryCount < MAX_RETRIES) {
+                    await new Promise(r => setTimeout(r, RETRY_DELAY * Math.pow(2, retryCount)));
+                    return uploadChunk(chunk, retryCount + 1);
+                }
+                throw error;
+            }
+        };
+
+        for (let i = 0; i < chunks.length; i += concurrentUploads) {
+            const batch = chunks.slice(i, i + concurrentUploads);
+            await Promise.all(batch.map(chunk => uploadChunk(chunk)));
+        }
+
+        const finalize = async () => {
+            try {
+                await axios.post('/drive/save-results/chunked/finalize', { upload_id: uploadId }, { timeout: 180000 });
+                return uploadId;
+            } catch (error) {
+                const status = error?.response?.status;
+                const data = error?.response?.data;
+                if (status === 400 && data?.error === 'missing_chunks' && Array.isArray(data.missing_indices) && data.missing_indices.length) {
+                    appendSaveLogMessage(`Reintentando ${data.missing_indices.length} fragmentos faltantes...`);
+                    for (const idx of data.missing_indices) {
+                        const chunk = chunks.find(c => c.index === idx);
+                        if (!chunk) continue;
+                        await uploadChunk(chunk);
+                    }
+                    return finalize();
+                }
+                throw error;
+            }
+        };
+
+        return finalize();
+    };
+
+    for (const size of CANDIDATE_SIZES) {
+        try {
+            return await attemptUpload(size);
+        } catch (error) {
+            if (error && error.adaptive413) {
+                console.warn(`Reduciendo fragmentos a ${size / 1024 / 1024}MB por error 413 en guardado`);
+                continue;
+            }
+            throw error;
+        }
+    }
+
+    throw new Error('No se pudo subir el audio en fragmentos. Verifica el límite client_max_body_size del servidor.');
 }
 
 function showRetryTranscription() {
@@ -1759,38 +1888,21 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
         }
     }
 
-    // Contenedor de mensajes detallados
-    const addMessage = (msg) => {
-        const section = document.querySelector('#step-saving .progress-section');
-        if (!section) return;
-        let log = document.getElementById('save-progress-log');
-        if (!log) {
-            log = document.createElement('div');
-            log.id = 'save-progress-log';
-            log.className = 'progress-log';
-            section.appendChild(log);
-        }
-        const p = document.createElement('p');
-        p.textContent = msg;
-        log.appendChild(p);
-    };
-
     const resetUI = () => {
         setProgress(0, 'Preparando guardado...');
         document.getElementById('audio-upload-status').textContent = '⏳';
         document.getElementById('transcription-save-status').textContent = '⏳';
         document.getElementById('analysis-save-status').textContent = '⏳';
         document.getElementById('tasks-save-status').textContent = '⏳';
-        const log = document.getElementById('save-progress-log');
-        if (log) log.innerHTML = '';
+        resetSaveLog();
     };
 
     resetUI();
-    addMessage('Iniciando guardado de resultados');
+    appendSaveLogMessage('Iniciando guardado de resultados');
 
     // Informar al usuario sobre el tipo de drive seleccionado
     const driveTypeText = driveType === 'organization' ? 'Drive Organizacional' : 'Drive Personal';
-    addMessage(`📁 Tipo de Drive: ${driveTypeText}`);
+    appendSaveLogMessage(`📁 Tipo de Drive: ${driveTypeText}`);
 
     const transcription = transcriptionData;
     const analysis = analysisResults;
@@ -1835,11 +1947,11 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
 
     try {
         setProgress(10, 'Guardando resultados...');
-        addMessage('Enviando datos al servidor...');
+        appendSaveLogMessage('Enviando datos al servidor...');
 
         // Verificar si es un audio pendiente
         if (window.pendingAudioInfo) {
-            addMessage('Completando procesamiento de audio pendiente...');
+            appendSaveLogMessage('Completando procesamiento de audio pendiente...');
 
             console.log('📦 Datos a enviar (pendiente):', {
                 pending_id: window.pendingAudioInfo.pendingId,
@@ -1884,7 +1996,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                     errorMsg = `Error del servidor (${response.status}): ${response.statusText}`;
                 }
 
-                addMessage(`⚠️ ${errorMsg}`);
+                appendSaveLogMessage(`⚠️ ${errorMsg}`);
                 showNotification(errorMsg, 'error');
                 await discardAudio();
                 resetUI();
@@ -1899,7 +2011,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                 console.error('Error al parsear JSON de respuesta exitosa:', jsonError);
                 const responseText = await response.text();
                 console.error('Contenido de respuesta:', responseText.substring(0, 500));
-                addMessage('⚠️ Error al procesar respuesta del servidor');
+                appendSaveLogMessage('⚠️ Error al procesar respuesta del servidor');
                 showNotification('Error al procesar respuesta del servidor', 'error');
                 await discardAudio();
                 resetUI();
@@ -1945,20 +2057,42 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
             // Flujo normal
             let requestOptions;
             if (audioBlob) {
-                const formData = new FormData();
-                const [, typeSub] = (audioBlob.type || 'audio/ogg').split('/');
-                const extension = (typeSub || 'ogg').split(';')[0] || 'ogg';
-                formData.append('meetingName', meetingName);
-                formData.append('transcriptionData', JSON.stringify(transcription));
-                formData.append('analysisResults', JSON.stringify(analysis));
-                formData.append('driveType', driveType);
-                formData.append('audioMimeType', audioMimeType);
-                formData.append('audioFile', audioBlob, `audio.${extension}`);
-                requestOptions = {
-                    method: 'POST',
-                    headers: baseHeaders,
-                    body: formData
-                };
+                const shouldUseChunked = audioBlob.size > SAVE_RESULTS_DIRECT_UPLOAD_LIMIT;
+                if (shouldUseChunked) {
+                    setProgress(12, 'Preparando subida fragmentada...');
+                    const uploadId = await uploadAudioInChunksForSave(audioBlob, audioMimeType, ({ completedChunks, totalChunks }) => {
+                        const progress = 12 + Math.round((completedChunks / totalChunks) * 18);
+                        setProgress(Math.min(progress, 30), `Subiendo audio (${completedChunks}/${totalChunks})...`);
+                    });
+                    setProgress(32, 'Audio subido, guardando en Drive...');
+                    requestOptions = {
+                        method: 'POST',
+                        headers: jsonHeaders,
+                        body: JSON.stringify({
+                            meetingName,
+                            transcriptionData: transcription,
+                            analysisResults: analysis,
+                            audioUploadId: uploadId,
+                            audioMimeType,
+                            driveType
+                        })
+                    };
+                } else {
+                    const formData = new FormData();
+                    const [, typeSub] = (audioBlob.type || 'audio/ogg').split('/');
+                    const extension = (typeSub || 'ogg').split(';')[0] || 'ogg';
+                    formData.append('meetingName', meetingName);
+                    formData.append('transcriptionData', JSON.stringify(transcription));
+                    formData.append('analysisResults', JSON.stringify(analysis));
+                    formData.append('driveType', driveType);
+                    formData.append('audioMimeType', audioMimeType);
+                    formData.append('audioFile', audioBlob, `audio.${extension}`);
+                    requestOptions = {
+                        method: 'POST',
+                        headers: baseHeaders,
+                        body: formData
+                    };
+                }
             } else {
                 requestOptions = {
                     method: 'POST',
@@ -1987,7 +2121,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                     const tooLargeMsg = 'El audio es demasiado grande para enviarlo de una sola vez (413). ' +
                         'Prueba con: 1) usar "Posponer" para subir el audio como archivo, 2) grabar menos tiempo, o ' +
                         '3) si eres admin, aumenta los límites de carga del servidor (post_max_size / upload_max_filesize / client_max_body_size).';
-                    addMessage(`⚠️ ${tooLargeMsg}`);
+                    appendSaveLogMessage(`⚠️ ${tooLargeMsg}`);
                     showNotification(tooLargeMsg, 'error');
                     resetUI();
                     showStep(4);
@@ -2005,7 +2139,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                     errorMsg = 'Respuesta inesperada del servidor';
                 }
 
-                addMessage(`⚠️ ${errorMsg}`);
+                appendSaveLogMessage(`⚠️ ${errorMsg}`);
                 showNotification(errorMsg, 'error');
                 resetUI();
                 showStep(4);
@@ -2049,7 +2183,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
         document.getElementById('tasks-save-status').textContent = '✅';
 
         setProgress(100, 'Guardado completado');
-        addMessage('Resultados almacenados con éxito');
+        appendSaveLogMessage('Resultados almacenados con éxito');
         setTimeout(async () => {
             // Cleanup local temporary audio after successful save
             try {
@@ -2071,7 +2205,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
     } catch (e) {
         console.error('Error al guardar en base de datos', e);
         const msg = e.message || 'No se pudo conectar con el servidor';
-        addMessage(`⚠️ ${msg}`);
+        appendSaveLogMessage(`⚠️ ${msg}`);
         showNotification(msg, 'error');
         downloadAudio();
         showNotification('Se descargó una copia de seguridad del audio', 'info');
