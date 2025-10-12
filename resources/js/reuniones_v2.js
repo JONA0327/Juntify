@@ -19,6 +19,218 @@ if (typeof contactsFeatures.showChat === 'undefined') {
 }
 window.contactsFeatures = contactsFeatures;
 
+// ===============================================
+// UTILIDADES PARA NORMALIZAR SEGMENTOS
+// ===============================================
+function parseSegmentTimecode(value) {
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    const trimmed = value.trim().replace(/^[\[]|[\]]$/g, '');
+    if (!trimmed) {
+        return null;
+    }
+
+    const parts = trimmed.split(':').map(part => part.trim());
+    if (!parts.length) {
+        return null;
+    }
+
+    const numbers = parts.map((part, index) => {
+        if (index === parts.length - 1) {
+            const normalized = part.replace(',', '.');
+            const parsed = parseFloat(normalized);
+            return Number.isNaN(parsed) ? NaN : parsed;
+        }
+        const parsed = parseInt(part, 10);
+        return Number.isNaN(parsed) ? NaN : parsed;
+    });
+
+    if (numbers.some(num => Number.isNaN(num))) {
+        return null;
+    }
+
+    if (numbers.length === 3) {
+        return numbers[0] * 3600 + numbers[1] * 60 + numbers[2];
+    }
+    if (numbers.length === 2) {
+        return numbers[0] * 60 + numbers[1];
+    }
+    if (numbers.length === 1) {
+        return numbers[0];
+    }
+
+    return null;
+}
+
+function parseSegmentsFromText(transcriptionText) {
+    if (typeof transcriptionText !== 'string') {
+        return [];
+    }
+
+    const lines = transcriptionText.split(/\r?\n/);
+    const segments = [];
+    const regex = /^\s*\[(\d{2}:\d{2}(?::\d{2})?)\s*-\s*(\d{2}:\d{2}(?::\d{2})?)\]\s*(.+?)[：:]\s*(.+)$/u;
+
+    lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+            return;
+        }
+
+        const match = trimmed.match(regex);
+        if (!match) {
+            return;
+        }
+
+        const startSeconds = parseSegmentTimecode(match[1]);
+        const endSeconds = parseSegmentTimecode(match[2]);
+        const speaker = match[3] ? match[3].trim() : '';
+        const text = match[4] ? match[4].trim() : '';
+        const timestamp = `${match[1]} - ${match[2]}`;
+
+        segments.push({
+            speaker,
+            text,
+            start: typeof startSeconds === 'number' ? startSeconds : 0,
+            end: typeof endSeconds === 'number' ? endSeconds : 0,
+            timestamp,
+            time: timestamp,
+        });
+    });
+
+    return segments;
+}
+
+function toNumberOrNull(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return null;
+        }
+        const parsedDirect = Number(trimmed);
+        if (Number.isFinite(parsedDirect)) {
+            return parsedDirect;
+        }
+        const parsedTime = parseSegmentTimecode(trimmed);
+        if (typeof parsedTime === 'number') {
+            return parsedTime;
+        }
+    }
+    return null;
+}
+
+function normalizeSegmentShape(segment, index) {
+    const fallbackIndex = typeof index === 'number' ? index : 0;
+    const base = segment && typeof segment === 'object' ? segment : {};
+
+    let speaker = base.speaker || base.speaker_name || base.participant || '';
+    if (typeof speaker !== 'string' || !speaker.trim()) {
+        speaker = `Hablante ${fallbackIndex + 1}`;
+    }
+    speaker = speaker.trim();
+
+    let text = base.text ?? base.content ?? '';
+    if (typeof text !== 'string') {
+        text = text === null || typeof text === 'undefined' ? '' : String(text);
+    }
+    text = text.trim();
+
+    const rangeSource = (typeof base.timestamp === 'string' && base.timestamp.trim())
+        ? base.timestamp.trim()
+        : (typeof base.time === 'string' && base.time.trim() ? base.time.trim() : '');
+
+    let start = toNumberOrNull(base.start);
+    let end = toNumberOrNull(base.end);
+
+    if ((!Number.isFinite(start) || !Number.isFinite(end)) && rangeSource) {
+        const cleanedRange = rangeSource.replace(/^[\[]|[\]]$/g, '');
+        const parts = cleanedRange.split('-').map(part => part.trim());
+        if (parts.length >= 2) {
+            if (!Number.isFinite(start)) {
+                const parsedStart = parseSegmentTimecode(parts[0]);
+                if (typeof parsedStart === 'number') {
+                    start = parsedStart;
+                }
+            }
+            if (!Number.isFinite(end)) {
+                const parsedEnd = parseSegmentTimecode(parts[parts.length - 1]);
+                if (typeof parsedEnd === 'number') {
+                    end = parsedEnd;
+                }
+            }
+        }
+    }
+
+    if (!Number.isFinite(start)) {
+        start = 0;
+    }
+    if (!Number.isFinite(end) || end < start) {
+        end = start;
+    }
+
+    const range = rangeSource
+        ? rangeSource.replace(/^[\[]|[\]]$/g, '')
+        : `${formatTime(Math.max(0, Math.round(start * 1000)))} - ${formatTime(Math.max(0, Math.round(end * 1000)))}`;
+
+    return {
+        ...base,
+        speaker,
+        text,
+        start,
+        end,
+        timestamp: range,
+        time: range,
+    };
+}
+
+function normalizeMeetingSegments(rawSegments, transcriptionText) {
+    let segments = [];
+
+    if (Array.isArray(rawSegments)) {
+        segments = rawSegments;
+    } else if (rawSegments && typeof rawSegments === 'string') {
+        const trimmed = rawSegments.trim();
+        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) {
+                    segments = parsed;
+                } else if (parsed && typeof parsed === 'object') {
+                    segments = Object.values(parsed);
+                }
+            } catch (error) {
+                console.warn('No se pudo parsear la segmentación desde JSON:', error);
+            }
+        }
+
+        if ((!Array.isArray(segments) || segments.length === 0) && trimmed) {
+            segments = parseSegmentsFromText(trimmed);
+        }
+    } else if (rawSegments && typeof rawSegments === 'object') {
+        segments = Object.values(rawSegments);
+    }
+
+    if (!Array.isArray(segments)) {
+        segments = [];
+    }
+
+    segments = segments
+        .filter(segment => segment && typeof segment === 'object')
+        .map((segment, index) => normalizeSegmentShape(segment, index));
+
+    if (segments.length === 0 && typeof transcriptionText === 'string' && transcriptionText.trim()) {
+        segments = parseSegmentsFromText(transcriptionText.trim())
+            .map((segment, index) => normalizeSegmentShape(segment, index));
+    }
+
+    return segments;
+}
+
 function isChatEnabled() {
     const contactsRoot = document.querySelector('[data-contacts-root]');
     if (contactsRoot) {
@@ -2546,6 +2758,7 @@ async function openMeetingModal(meetingId, sharedMeetingId = null) {
         if (data.success) {
             const meeting = data.meeting || {};
 
+            meeting.segments = normalizeMeetingSegments(meeting.segments, meeting.transcription);
             // Solo usar meeting.segments (proveniente del .ju). Si no existen segmentos, mostrar error o mensaje vacío.
             if (!Array.isArray(meeting.segments) || meeting.segments.length === 0) {
                 meeting.segments = [];
@@ -2594,6 +2807,7 @@ function showMeetingModal(meeting) {
     console.log('Ruta de audio:', meeting.audio_path);
 
     // Asegurar que summary, key_points, tasks y segmentos estén en el formato correcto
+    meeting.segments = normalizeMeetingSegments(meeting.segments, meeting.transcription);
     meeting.summary = meeting.summary || '';
     meeting.key_points = Array.isArray(meeting.key_points) ? meeting.key_points : [];
     meeting.tasks = Array.isArray(meeting.tasks) ? meeting.tasks : [];
