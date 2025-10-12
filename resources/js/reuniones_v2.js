@@ -2549,8 +2549,10 @@ async function openMeetingModal(meetingId, sharedMeetingId = null) {
             // Solo usar meeting.segments (proveniente del .ju). Si no existen segmentos, mostrar error o mensaje vacío.
             if (!Array.isArray(meeting.segments) || meeting.segments.length === 0) {
                 meeting.segments = [];
-                meeting.transcription = '';
-            } else if (!meeting.transcription) {
+                if (typeof meeting.transcription !== 'string' || !meeting.transcription.trim()) {
+                    meeting.transcription = '';
+                }
+            } else if (!meeting.transcription || !meeting.transcription.trim()) {
                 meeting.transcription = meeting.segments.map(s => s.text).join(' ');
             }
 
@@ -2599,8 +2601,10 @@ function showMeetingModal(meeting) {
     // Solo usar meeting.segments (proveniente del .ju). Si no existen segmentos, mostrar mensaje vacío.
     if (!Array.isArray(meeting.segments) || meeting.segments.length === 0) {
         meeting.segments = [];
-        meeting.transcription = '';
-    } else if (!meeting.transcription) {
+        if (typeof meeting.transcription !== 'string' || !meeting.transcription.trim()) {
+            meeting.transcription = '';
+        }
+    } else if (!meeting.transcription || !meeting.transcription.trim()) {
         meeting.transcription = meeting.segments.map(s => s.text).join(' ');
     }
 
