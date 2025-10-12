@@ -31,6 +31,13 @@ trait MeetingContentParsing
 
         $segments = $data['segments'] ?? [];
 
+        if (empty($segments) && !empty($data['transcription']) && is_string($data['transcription'])) {
+            $fallbackSegments = $this->parseSegmentsFromTranscriptText($data['transcription']);
+            if (!empty($fallbackSegments)) {
+                $segments = $fallbackSegments;
+            }
+        }
+
         $segments = array_map(function ($segment) {
             if ((!isset($segment['start']) || !isset($segment['end'])) && isset($segment['timestamp'])) {
                 if (preg_match('/(\d{2}):(\d{2})(?::(\d{2}))?\s*-\s*(\d{2}):(\d{2})(?::(\d{2}))?/', $segment['timestamp'], $m)) {
@@ -77,6 +84,66 @@ trait MeetingContentParsing
             'speakers' => $data['speakers'] ?? [],
             'segments' => $segments,
         ];
+    }
+
+    /**
+     * Construye segmentos a partir de una transcripción en formato
+     * "[00:00 - 00:10] Nombre: Texto" cuando no vienen en JSON.
+     */
+    protected function parseSegmentsFromTranscriptText(string $transcription): array
+    {
+        $lines = preg_split('/\r\n|\r|\n/', $transcription) ?: [];
+        $segments = [];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            $pattern = '/^\[(\d{2}):(\d{2})(?::(\d{2}))?\s*-\s*(\d{2}):(\d{2})(?::(\d{2}))?\]\s*(.+?)[：:]-?\s*(.+)$/u';
+
+            if (!preg_match($pattern, $line, $matches)) {
+                continue;
+            }
+
+            $startSeconds = $this->convertTimestampMatchToSeconds($matches[1], $matches[2], $matches[3] ?? null);
+            $endSeconds = $this->convertTimestampMatchToSeconds($matches[4], $matches[5], $matches[6] ?? null);
+
+            $speaker = trim($matches[7]);
+            $text = trim($matches[8]);
+
+            $segments[] = [
+                'timestamp' => sprintf('%s - %s',
+                    $this->formatSegmentTimestamp($startSeconds),
+                    $this->formatSegmentTimestamp($endSeconds)
+                ),
+                'start' => $startSeconds,
+                'end' => $endSeconds,
+                'speaker' => $speaker,
+                'text' => $text,
+            ];
+        }
+
+        return $segments;
+    }
+
+    protected function convertTimestampMatchToSeconds($hoursOrMinutes, $minutesOrSeconds, $seconds = null): int
+    {
+        $hoursOrMinutes = (int) $hoursOrMinutes;
+        $minutesOrSeconds = (int) $minutesOrSeconds;
+
+        // Cuando la coincidencia opcional para segundos existe pero está vacía,
+        // preg_match la retorna como cadena vacía. En ese caso debemos tratarla
+        // como si no hubiera sido proporcionada (formato mm:ss).
+        if ($seconds === '' || $seconds === null) {
+            return ($hoursOrMinutes * 60) + $minutesOrSeconds;
+        }
+
+        $seconds = (int) $seconds;
+
+        return ($hoursOrMinutes * 3600) + ($minutesOrSeconds * 60) + $seconds;
     }
 
     protected function buildTranscriptFromSegments(array $segments): string
