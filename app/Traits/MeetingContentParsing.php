@@ -133,11 +133,15 @@ trait MeetingContentParsing
     {
         $hoursOrMinutes = (int) $hoursOrMinutes;
         $minutesOrSeconds = (int) $minutesOrSeconds;
-        $seconds = $seconds !== null ? (int) $seconds : null;
 
-        if ($seconds === null) {
+        // Cuando la coincidencia opcional para segundos existe pero está vacía,
+        // preg_match la retorna como cadena vacía. En ese caso debemos tratarla
+        // como si no hubiera sido proporcionada (formato mm:ss).
+        if ($seconds === '' || $seconds === null) {
             return ($hoursOrMinutes * 60) + $minutesOrSeconds;
         }
+
+        $seconds = (int) $seconds;
 
         return ($hoursOrMinutes * 3600) + ($minutesOrSeconds * 60) + $seconds;
     }
