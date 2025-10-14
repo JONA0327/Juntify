@@ -22,8 +22,23 @@
     ])
 
     <link rel="stylesheet" href="{{ asset('css/ai-assistant.css') }}?v={{ time() }}">
+    @php($authUser = auth()->user())
+    @auth
+        <meta name="user-role" content="{{ $authUser->roles }}">
+    @endauth
 </head>
-<body class="bg-slate-950 text-slate-200 font-sans antialiased">
+@php($user = $authUser)
+<body class="bg-slate-950 text-slate-200 font-sans antialiased" data-user-role="{{ $user->roles ?? 'free' }}">
+    @include('partials.global-vars')
+    <script>
+        window.aiAssistantLimits = @json([
+            'role' => $user->roles ?? 'free',
+            'messageLimit' => $messageLimit,
+            'messagesUsed' => $messagesUsed,
+            'documentLimit' => $documentLimit,
+            'documentsUsed' => $documentsUsed,
+        ]);
+    </script>
     <div class="flex">
         @include('partials.navbar')
 
@@ -121,6 +136,7 @@
                 <div class="character-count">
                     <span id="char-count">0</span>/4000
                 </div>
+                <div id="message-quota-notice" class="mt-2 text-xs text-amber-300 hidden"></div>
             </form>
         </div>
     </div>

@@ -19,6 +19,7 @@ use App\Models\OrganizationGoogleToken;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -56,7 +57,38 @@ class AiAssistantController extends Controller
     }
     public function index()
     {
-        return view('ai-assistant.index');
+        $user = Auth::user();
+        $role = $user?->roles ?? 'free';
+
+        $today = Carbon::now();
+
+        $messagesToday = 0;
+        $documentsToday = 0;
+
+        if ($user) {
+            $messagesToday = AiChatMessage::whereHas('session', function ($query) use ($user) {
+                    $query->where('username', $user->username);
+                })
+                ->where('role', 'user')
+                ->whereDate('created_at', $today)
+                ->count();
+
+            $documentsToday = AiDocument::byUser($user->username)
+                ->whereDate('created_at', $today)
+                ->where('document_metadata->created_via', 'assistant_upload')
+                ->count();
+        }
+
+        $messageLimit = $role === 'free' ? 3 : null;
+        $documentLimit = $role === 'free' ? 1 : null;
+
+        return view('ai-assistant.index', [
+            'messageLimit' => $messageLimit,
+            'messagesUsed' => $messagesToday,
+            'documentLimit' => $documentLimit,
+            'documentsUsed' => $documentsToday,
+            'userRole' => $role,
+        ]);
     }
 
     /**
@@ -1060,6 +1092,31 @@ class AiAssistantController extends Controller
             'mentions.*.title' => 'nullable|string'
         ]);
 
+        $role = $user->roles ?? 'free';
+        $messageLimit = $role === 'free' ? 3 : null;
+        $messagesToday = 0;
+
+        if ($messageLimit !== null) {
+            $messagesToday = AiChatMessage::whereHas('session', function ($query) use ($user) {
+                    $query->where('username', $user->username);
+                })
+                ->where('role', 'user')
+                ->whereDate('created_at', Carbon::now())
+                ->count();
+
+            if ($messagesToday >= $messageLimit) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Has alcanzado el límite diario de mensajes del plan Free. Mejora tu plan para continuar conversando con el asistente.',
+                    'code' => 'DAILY_MESSAGE_LIMIT',
+                    'limits' => [
+                        'message_limit' => $messageLimit,
+                        'messages_used' => $messagesToday,
+                    ],
+                ], 429);
+            }
+        }
+
         // Modo offline opcional: responder sin llamar a OpenAI
         $offline = filter_var(env('AI_ASSISTANT_OFFLINE', false), FILTER_VALIDATE_BOOLEAN);
         // Validar API Key de OpenAI antes de continuar (si no estamos offline)
@@ -1186,6 +1243,10 @@ class AiAssistantController extends Controller
 
         $assistantArray = $assistantMessage->toArray();
 
+        if ($messageLimit !== null) {
+            $messagesToday++;
+        }
+
         return response()->json([
             'success' => true,
             'user_message' => $userMessage->toArray(),
@@ -1197,6 +1258,10 @@ class AiAssistantController extends Controller
                 'context_type' => $session->context_type,
                 'context_data' => $session->context_data,
                 'last_activity' => $session->last_activity,
+            ],
+            'limits' => [
+                'message_limit' => $messageLimit,
+                'messages_used' => $messagesToday,
             ],
         ]);
     }
@@ -1460,6 +1525,43 @@ class AiAssistantController extends Controller
                 ], 422);
             }
 
+            $role = $user->roles ?? 'free';
+            $documentLimit = $role === 'free' ? 1 : null;
+            $documentsToday = 0;
+
+            if ($documentLimit !== null) {
+                $documentsToday = AiDocument::byUser($user->username)
+                    ->whereDate('created_at', Carbon::now())
+                    ->where('document_metadata->created_via', 'assistant_upload')
+                    ->count();
+
+                $remainingUploads = max(0, $documentLimit - $documentsToday);
+
+                if ($remainingUploads <= 0) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Has alcanzado el límite diario de subida de documentos del plan Free. Actualiza tu plan para seguir agregando archivos al asistente.',
+                        'code' => 'DAILY_DOCUMENT_LIMIT',
+                        'limits' => [
+                            'document_limit' => $documentLimit,
+                            'documents_used' => $documentsToday,
+                        ],
+                    ], 429);
+                }
+
+                if (count($files) > $remainingUploads) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Solo puedes subir un documento por día con el plan Free. Selecciona un archivo e inténtalo de nuevo.',
+                        'code' => 'DAILY_DOCUMENT_LIMIT',
+                        'limits' => [
+                            'document_limit' => $documentLimit,
+                            'documents_used' => $documentsToday,
+                        ],
+                    ], 429);
+                }
+            }
+
             $documents = [];
             foreach ($files as $file) {
                 if (! $file) continue;
@@ -1515,12 +1617,20 @@ class AiAssistantController extends Controller
                 }
 
                 $documents[] = $document;
+
+                if ($documentLimit !== null) {
+                    $documentsToday++;
+                }
             }
 
             return response()->json([
                 'success' => true,
                 'documents' => $documents,
-                'message' => 'Documento(s) subido(s). Procesando contenido...'
+                'message' => 'Documento(s) subido(s). Procesando contenido...',
+                'limits' => [
+                    'document_limit' => $documentLimit,
+                    'documents_used' => $documentsToday,
+                ],
             ]);
 
         } catch (\Throwable $e) {

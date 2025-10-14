@@ -107,8 +107,143 @@ let pendingMentions = [];
 let mentionState = { active: false, symbol: null, startIndex: 0, query: '', items: [], selectedIndex: 0 };
 let mentionsDropdownEl = null;
 
+const aiLimits = window.aiAssistantLimits || {};
+window.aiAssistantLimits = aiLimits;
+
+function normalizeRole(role) {
+    if (role === null || typeof role === 'undefined') return '';
+    return String(role).toLowerCase();
+}
+
+function getCurrentUserRole() {
+    if (aiLimits.role) return normalizeRole(aiLimits.role);
+    if (typeof window !== 'undefined' && window.userRole) return normalizeRole(window.userRole);
+    if (document && document.body && document.body.dataset && document.body.dataset.userRole) {
+        return normalizeRole(document.body.dataset.userRole);
+    }
+    const metaRole = document?.querySelector?.('meta[name="user-role"]')?.getAttribute('content');
+    return normalizeRole(metaRole || 'free');
+}
+
+function getMessageLimit() {
+    if (typeof aiLimits.messageLimit === 'number') return aiLimits.messageLimit;
+    return getCurrentUserRole() === 'free' ? 3 : null;
+}
+
+function getMessagesUsed() {
+    const value = Number(aiLimits.messagesUsed ?? 0);
+    return Number.isFinite(value) ? value : 0;
+}
+
+function setMessagesUsed(value) {
+    const numeric = Number(value);
+    aiLimits.messagesUsed = Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
+    window.aiAssistantLimits = aiLimits;
+}
+
+function getDocumentLimit() {
+    if (typeof aiLimits.documentLimit === 'number') return aiLimits.documentLimit;
+    return getCurrentUserRole() === 'free' ? 1 : null;
+}
+
+function getDocumentsUsed() {
+    const value = Number(aiLimits.documentsUsed ?? 0);
+    return Number.isFinite(value) ? value : 0;
+}
+
+function setDocumentsUsed(value) {
+    const numeric = Number(value);
+    aiLimits.documentsUsed = Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
+    window.aiAssistantLimits = aiLimits;
+}
+
+function hasMessageQuotaAvailable(count = 1) {
+    const limit = getMessageLimit();
+    if (limit === null || typeof limit === 'undefined') return true;
+    return getMessagesUsed() + count <= limit;
+}
+
+function hasDocumentQuotaAvailable(count = 1) {
+    const limit = getDocumentLimit();
+    if (limit === null || typeof limit === 'undefined') return true;
+    return getDocumentsUsed() + count <= limit;
+}
+
+function messageQuotaRemaining() {
+    const limit = getMessageLimit();
+    if (limit === null || typeof limit === 'undefined') return Infinity;
+    return Math.max(0, limit - getMessagesUsed());
+}
+
+function applyLimitsFromResponse(limits) {
+    if (!limits || typeof limits !== 'object') return;
+
+    if (Object.prototype.hasOwnProperty.call(limits, 'message_limit')) {
+        const limit = limits.message_limit;
+        if (typeof limit === 'number' || limit === null) {
+            aiLimits.messageLimit = limit;
+        }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(limits, 'messages_used') && limits.messages_used !== undefined) {
+        setMessagesUsed(limits.messages_used);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(limits, 'document_limit')) {
+        const limit = limits.document_limit;
+        if (typeof limit === 'number' || limit === null) {
+            aiLimits.documentLimit = limit;
+        }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(limits, 'documents_used') && limits.documents_used !== undefined) {
+        setDocumentsUsed(limits.documents_used);
+    }
+
+    window.aiAssistantLimits = aiLimits;
+    renderMessageQuotaNotice();
+    updateSendButton(isLoading);
+}
+
+function renderMessageQuotaNotice() {
+    const notice = document.getElementById('message-quota-notice');
+    if (!notice) return;
+
+    if (getCurrentUserRole() !== 'free') {
+        notice.classList.add('hidden');
+        notice.textContent = '';
+        return;
+    }
+
+    const limit = getMessageLimit();
+    if (limit === null || typeof limit === 'undefined') {
+        notice.classList.add('hidden');
+        notice.textContent = '';
+        return;
+    }
+
+    const used = getMessagesUsed();
+    const remaining = messageQuotaRemaining();
+
+    if (used <= 0) {
+        notice.classList.add('hidden');
+        notice.textContent = '';
+        return;
+    }
+
+    if (remaining <= 0) {
+        notice.textContent = `Has alcanzado el límite diario de ${limit} mensajes del plan Free. Mejora tu plan para seguir conversando.`;
+        notice.classList.remove('hidden');
+    } else {
+        notice.textContent = `Te quedan ${remaining} mensaje${remaining === 1 ? '' : 's'} disponibles hoy con el plan Free.`;
+        notice.classList.remove('hidden');
+    }
+}
+
 // Inicialización
 document.addEventListener('DOMContentLoaded', function() {
+    try { renderMessageQuotaNotice(); } catch (_) {}
+    try { updateSendButton(isLoading); } catch (_) {}
     initializeAiAssistant();
 });
 
@@ -117,6 +252,7 @@ document.addEventListener('DOMContentLoaded', function() {
  */
 async function initializeAiAssistant() {
     try {
+        applyLimitsFromResponse(aiLimits);
         await loadChatSessions();
         setupEventListeners();
         await ensureCurrentSession();
@@ -574,6 +710,13 @@ async function sendMessage(messageText = null) {
 
     if (!message && selectedFiles.length === 0) return;
 
+    if (!hasMessageQuotaAvailable()) {
+        showNotification('Has alcanzado el límite diario de mensajes del plan Free. Mejora tu plan para seguir conversando.', 'warning');
+        renderMessageQuotaNotice();
+        updateSendButton(false);
+        return;
+    }
+
     const attachmentsToSend = [...selectedFiles];
 
     isLoading = true;
@@ -614,21 +757,36 @@ async function sendMessage(messageText = null) {
         });
 
         const data = await response.json();
-        if (data.success) {
-            // Agregar respuesta de la IA
-            addMessageToChat(data.assistant_message);
+        if (!response.ok || !data.success) {
+            const error = new Error(data.message || 'Error al enviar mensaje');
+            error.code = data.code || 'UNKNOWN';
+            error.limits = data.limits || null;
+            throw error;
+        }
 
-            if (data.session) {
-                updateSessionInfo(data.session);
-                await loadChatSessions();
-            }
-        } else {
-            throw new Error(data.message || 'Error al enviar mensaje');
+        // Agregar respuesta de la IA
+        addMessageToChat(data.assistant_message);
+
+        if (data.session) {
+            updateSessionInfo(data.session);
+            await loadChatSessions();
+        }
+
+        if (data.limits) {
+            applyLimitsFromResponse(data.limits);
+        } else if (getMessageLimit() !== null) {
+            setMessagesUsed(getMessagesUsed() + 1);
+            renderMessageQuotaNotice();
         }
 
     } catch (error) {
         console.error('Error sending message:', error);
-        showNotification('Error al enviar mensaje', 'error');
+        if (error && error.limits) {
+            applyLimitsFromResponse(error.limits);
+        }
+        const type = error && error.code === 'DAILY_MESSAGE_LIMIT' ? 'warning' : 'error';
+        const messageText = error && error.message ? error.message : 'Error al enviar mensaje';
+        showNotification(messageText, type);
     } finally {
         isLoading = false;
         updateSendButton(false);
@@ -2208,7 +2366,16 @@ function setButtonLoading(buttonEl, loading, defaultText = 'Enviar', loadingText
 }
 
 /**
- * Ajustar altura del textarea
+    const hasAttachments = Array.isArray(selectedFiles) && selectedFiles.length > 0;
+    const quotaAvailable = hasMessageQuotaAvailable();
+
+    sendBtn.disabled = loading || (!hasMessage && !hasAttachments) || !quotaAvailable;
+    if (!quotaAvailable) {
+        const limit = getMessageLimit();
+        sendBtn.title = limit ? `Límite diario alcanzado (${limit} mensajes). Mejora tu plan para continuar.` : '';
+    } else {
+        sendBtn.removeAttribute('title');
+    }
  */
 function adjustTextareaHeight(textarea) {
     textarea.style.height = 'auto';
@@ -2919,12 +3086,38 @@ function setupDetailsTabs() {
  * Configurar zona de drop para archivos
  */
 function setupChatDropZone() {
-    const dropZone = document.getElementById('messages-container');
-    if (!dropZone) return;
+        let incomingFiles = Array.isArray(files) ? [...files] : Array.from(files || []);
+        if (!incomingFiles.length) return;
 
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('drag-over');
+        const limit = getDocumentLimit();
+        if (limit !== null) {
+            const remaining = Math.max(0, limit - getDocumentsUsed());
+            if (remaining <= 0) {
+                showNotification('Has alcanzado el límite diario de subida de documentos del plan Free. Mejora tu plan para seguir agregando archivos.', 'warning');
+                return;
+            }
+
+            if (incomingFiles.length > remaining) {
+                incomingFiles = incomingFiles.slice(0, remaining);
+                showNotification(`Solo puedes subir ${remaining} documento${remaining === 1 ? '' : 's'} más hoy con el plan Free.`, 'warning');
+            }
+        }
+
+        const validFiles = incomingFiles.filter(isValidFile);
+        const rejected = incomingFiles.filter(f => !isValidFile(f));
+
+        if (!response.ok || !data.success) {
+            const error = new Error(data.message || 'No se pudo subir el archivo');
+            error.code = data.code || 'UNKNOWN';
+            error.limits = data.limits || null;
+            throw error;
+        const uploaded = Array.isArray(data.documents) ? data.documents : [];
+
+        if (data.limits) {
+            applyLimitsFromResponse(data.limits);
+        } else if (getDocumentLimit() !== null && uploaded.length) {
+            setDocumentsUsed(getDocumentsUsed() + uploaded.length);
+        }
     });
 
     dropZone.addEventListener('dragleave', (e) => {
@@ -3055,7 +3248,12 @@ async function uploadChatAttachments(files) {
                                             content: `El documento "${(doc && doc.id && documentNameById.get(Number(doc.id))) || doc.name || 'Documento'}" ya está cargado y listo para usar en esta conversación.`,
                                             created_at: new Date().toISOString(),
                                         });
-                                        if (doc && doc.id) { addDocIdToSessionContext(Number(doc.id)); }
+        if (error && error.limits) {
+            applyLimitsFromResponse(error.limits);
+        }
+        const type = error && error.code === 'DAILY_DOCUMENT_LIMIT' ? 'warning' : 'error';
+        const message = error && error.message ? error.message : 'Error al subir adjuntos';
+        showNotification(message, type);
                                         try { loadExistingDocuments(); } catch (_) {}
                                         if (currentContextType === 'documents') { try { loadDriveDocuments(); } catch (_) {} }
                                     } else if (doc.processing_status === 'failed') {
@@ -3148,6 +3346,8 @@ function debounceUpdateSessionContext() {
 }
 
 /**
+        updateSendButton(isLoading);
+    updateSendButton(isLoading);
  * Manejar subida de archivos
  */
 async function handleFileUpload(files) {

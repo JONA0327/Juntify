@@ -42,6 +42,9 @@ class TaskController extends Controller
                       ->orderByRaw("FIELD(priority, 'alta', 'media', 'baja')")
                       ->paginate(20);
 
+        $user = Auth::user();
+        $userRole = $user?->roles ?? 'free';
+
         // Estadísticas para el dashboard
         $stats = [
             'total' => Task::where(function($q) use ($username) {
@@ -61,7 +64,7 @@ class TaskController extends Controller
             })->overdue()->count(),
         ];
 
-        return view('tasks.index', compact('tasks', 'stats'));
+        return view('tasks.index', compact('tasks', 'stats', 'userRole'));
     }
 
     /**

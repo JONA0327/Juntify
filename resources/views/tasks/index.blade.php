@@ -42,7 +42,8 @@
         'resources/css/tasks-index.css'
     ])
 </head>
-<body class="bg-slate-950 text-slate-200 font-sans antialiased">
+@php($currentTaskUserRole = $userRole ?? (auth()->user()->roles ?? 'free'))
+<body class="bg-slate-950 text-slate-200 font-sans antialiased" data-user-role="{{ $currentTaskUserRole }}">
 
     @include('partials.global-vars')
 
@@ -51,7 +52,27 @@
         @include('partials.navbar')
         @include('partials.mobile-nav')
 
-        <main class="w-full pt-20 lg:pl-24 lg:pt-24 lg:mt-[130px]">
+        <main class="w-full pt-20 lg:pl-24 lg:pt-24 lg:mt-[130px] relative">
+            @if($currentTaskUserRole === 'free')
+                <div class="absolute inset-0 z-40 bg-slate-950/95 backdrop-blur-sm flex items-center justify-center px-4">
+                    <div class="max-w-xl w-full bg-slate-900/80 border border-yellow-400/40 rounded-2xl shadow-xl shadow-yellow-500/20 p-8 text-center">
+                        <div class="flex items-center justify-center w-14 h-14 mx-auto rounded-full bg-yellow-400/20 text-yellow-300 mb-5">
+                            <svg class="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.007v.008H12v-.008z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h2 class="text-2xl font-semibold text-yellow-200 mb-3">Funcionalidad disponible en planes superiores</h2>
+                        <p class="text-sm text-slate-300 leading-relaxed mb-6">
+                            La gestión avanzada de tareas está incluida para los planes <strong>Basic</strong>, <strong>Business</strong> y <strong>Enterprise</strong>.
+                            Actualiza tu suscripción para desbloquear el tablero Kanban, calendario integrado y todas las herramientas de seguimiento.
+                        </p>
+                        <a href="{{ url('/profile#plans') }}" class="inline-flex items-center justify-center px-5 py-3 rounded-lg bg-yellow-400 text-slate-900 font-semibold hover:bg-yellow-300 transition-colors">
+                            Mejorar plan
+                        </a>
+                    </div>
+                </div>
+            @endif
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
                 @include('tasks.partials._header')
