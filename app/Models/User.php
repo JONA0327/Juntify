@@ -198,6 +198,37 @@ class User extends Authenticatable
     }
 
     /**
+     * Verificar si el usuario tiene un rol protegido que no debe ser degradado
+     */
+    public function hasProtectedRole(): bool
+    {
+        return in_array($this->roles, ['developer', 'superadmin']);
+    }
+
+    /**
+     * Verificar si el usuario debe ser degradado automáticamente
+     */
+    public function shouldBeDowngraded(): bool
+    {
+        return $this->isPlanExpired()
+            && !$this->hasProtectedRole()
+            && $this->roles !== 'free';
+    }
+
+    /**
+     * Degradar usuario a plan gratuito
+     */
+    public function downgradeToFree(): bool
+    {
+        if (!$this->shouldBeDowngraded()) {
+            return false;
+        }
+
+        $this->roles = 'free';
+        return $this->save();
+    }
+
+    /**
      * Obtener la suscripción activa actual
      */
     public function getCurrentSubscription(): ?UserSubscription

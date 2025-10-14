@@ -14,10 +14,26 @@ class PlansSeeder extends Seeder
     {
         $plans = [
             [
+                'code' => 'free',
+                'name' => 'Freemium',
+                'description' => 'Perfecto para empezar con reuniones inteligentes sin compromiso.',
+                'price' => 0.00, // Gratuito
+                'currency' => 'MXN', // Peso mexicano
+                'billing_cycle_days' => 30,
+                'is_active' => true,
+                'features' => [
+                    '10 reuniones mensuales gratuitas',
+                    'Transcripción básica con IA',
+                    'Resúmenes automáticos',
+                    'Almacenamiento 1GB',
+                    'Soporte por email'
+                ]
+            ],
+            [
                 'code' => 'basico',
                 'name' => 'Básico',
                 'description' => 'Flexibilidad mes a mes para equipos medianos que buscan mejorar sus reuniones.',
-                'price' => 999.00, // Precio en pesos mexicanos
+                'price' => 499.00, // Precio en pesos mexicanos
                 'currency' => 'MXN', // Peso mexicano
                 'billing_cycle_days' => 30,
                 'is_active' => true,
@@ -34,7 +50,7 @@ class PlansSeeder extends Seeder
                 'code' => 'negocios',
                 'name' => 'Negocios',
                 'description' => 'Analítica avanzada y dashboards ejecutivos sin compromisos anuales.',
-                'price' => 1999.00, // Precio en pesos mexicanos
+                'price' => 999.00, // Precio en pesos mexicanos
                 'currency' => 'MXN', // Peso mexicano
                 'billing_cycle_days' => 30,
                 'is_active' => true,
@@ -52,7 +68,7 @@ class PlansSeeder extends Seeder
                 'code' => 'empresas',
                 'name' => 'Empresas',
                 'description' => 'Control total, seguridad avanzada y soporte dedicado bajo demanda.',
-                'price' => 4999.00, // Precio en pesos mexicanos
+                'price' => 2999.00, // Precio en pesos mexicanos
                 'currency' => 'MXN', // Peso mexicano
                 'billing_cycle_days' => 30,
                 'is_active' => true,

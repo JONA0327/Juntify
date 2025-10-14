@@ -15,6 +15,9 @@ class Kernel extends ConsoleKernel
         // Renovar tokens de Google cada 30 minutos
         $schedule->command('google:refresh-tokens')->everyThirtyMinutes();
 
+        // Verificar planes vencidos cada hora
+        $schedule->command('plans:update-expired')->hourly();
+
         // $schedule->command('inspire')->hourly();
         $schedule->command('activities:cleanup')->cron('0 0 1 * *');
         $schedule->command('plans:expire')->dailyAt('02:00');

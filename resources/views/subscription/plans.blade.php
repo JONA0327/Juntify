@@ -15,6 +15,24 @@
             </p>
         </div>
 
+        <!-- Billing Toggle -->
+        <div class="flex justify-center mb-12">
+            <div class="bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 p-2 flex items-center">
+                <button id="monthly-btn" class="px-6 py-3 rounded-xl font-semibold transition-all duration-300 text-white bg-blue-600">
+                    Mensual
+                </button>
+                <button id="annual-btn" class="px-6 py-3 rounded-xl font-semibold transition-all duration-300 text-blue-200 hover:text-white">
+                    Anual
+                </button>
+            </div>
+            <div class="ml-4 flex items-center text-green-400">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                </svg>
+                <span class="text-sm font-medium">Ahorra 30% con pago anual</span>
+            </div>
+        </div>
+
         <!-- Planes -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
             @foreach($plans as $plan)
@@ -31,10 +49,41 @@
 
                 <div class="text-center mb-8">
                     <h3 class="text-2xl font-bold mb-2">{{ $plan->name }}</h3>
-                    <div class="text-4xl font-bold text-blue-300 mb-2">
-                        ${{ number_format($plan->price, 0, ',', '.') }}
+
+                    <!-- Precio mensual -->
+                    <div class="monthly-price">
+                        <div class="text-4xl font-bold text-blue-300 mb-2">
+                            ${{ number_format($plan->price, 0, ',', '.') }}
+                        </div>
+                        <p class="text-blue-200">por mes</p>
                     </div>
-                    <p class="text-blue-200">por mes</p>
+
+                    <!-- Precio anual (30% descuento) -->
+                    <div class="annual-price hidden">
+                        @php
+                            $annualPrice = $plan->price * 12 * 0.7; // 30% descuento
+                            $monthlyEquivalent = $annualPrice / 12;
+                        @endphp
+                        <div class="text-4xl font-bold text-blue-300 mb-2">
+                            ${{ number_format($annualPrice, 0, ',', '.') }}
+                        </div>
+                        <p class="text-blue-200">por año</p>
+                        <div class="mt-2">
+                            <span class="text-sm text-green-400 font-medium">
+                                Equivale a ${{ number_format($monthlyEquivalent, 0, ',', '.') }}/mes
+                            </span>
+                        </div>
+                        @if($plan->price > 0)
+                        <div class="mt-1">
+                            <span class="text-xs text-gray-400 line-through">
+                                ${{ number_format($plan->price * 12, 0, ',', '.') }}/año
+                            </span>
+                            <span class="text-xs text-green-400 ml-2 font-semibold">
+                                Ahorra ${{ number_format($plan->price * 12 * 0.3, 0, ',', '.') }}
+                            </span>
+                        </div>
+                        @endif
+                    </div>
                 </div>
 
                 <p class="text-center text-blue-100 mb-8">
@@ -129,6 +178,38 @@
 @section('scripts')
 <script src="https://sdk.mercadopago.com/js/v2"></script>
 <script>
+// Billing Toggle functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const monthlyBtn = document.getElementById('monthly-btn');
+    const annualBtn = document.getElementById('annual-btn');
+    const monthlyPrices = document.querySelectorAll('.monthly-price');
+    const annualPrices = document.querySelectorAll('.annual-price');
+
+    let isAnnual = false;
+
+    monthlyBtn.addEventListener('click', function() {
+        if (isAnnual) {
+            isAnnual = false;
+            monthlyBtn.className = 'px-6 py-3 rounded-xl font-semibold transition-all duration-300 text-white bg-blue-600';
+            annualBtn.className = 'px-6 py-3 rounded-xl font-semibold transition-all duration-300 text-blue-200 hover:text-white';
+
+            monthlyPrices.forEach(el => el.classList.remove('hidden'));
+            annualPrices.forEach(el => el.classList.add('hidden'));
+        }
+    });
+
+    annualBtn.addEventListener('click', function() {
+        if (!isAnnual) {
+            isAnnual = true;
+            annualBtn.className = 'px-6 py-3 rounded-xl font-semibold transition-all duration-300 text-white bg-blue-600';
+            monthlyBtn.className = 'px-6 py-3 rounded-xl font-semibold transition-all duration-300 text-blue-200 hover:text-white';
+
+            monthlyPrices.forEach(el => el.classList.add('hidden'));
+            annualPrices.forEach(el => el.classList.remove('hidden'));
+        }
+    });
+});
+
 // MercadoPago SDK
 const mp = new MercadoPago('{{ config("mercadopago.public_key") }}');
 
