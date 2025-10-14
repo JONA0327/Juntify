@@ -43,8 +43,8 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Header -->
-            <div class="content-header">
+            <!-- Header - Solo visible en la sección de Información -->
+            <div class="content-header" id="welcome-card">
                 <div>
                     <h1 class="page-title">Bienvenido, {{ $user->full_name }}</h1>
                     <p class="page-subtitle">Gestiona tu cuenta y configuraciones</p>

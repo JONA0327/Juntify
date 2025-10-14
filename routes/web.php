@@ -25,6 +25,7 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\AiAssistantController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\PanelController;
+use App\Http\Controllers\SubscriptionPaymentController;
 
 // Rutas de archivos de contenedor (deben ir antes de otros grupos pero dentro de PHP)
 Route::middleware(['web','auth'])->group(function() {
@@ -277,3 +278,26 @@ Route::middleware(['auth'])->group(function () {
     // Ruta principal del asistente IA
     Route::get('/ai-assistant', [AiAssistantController::class, 'index'])->name('ai-assistant');
 });
+
+// Rutas de suscripciones y pagos
+Route::middleware(['auth'])->group(function () {
+    // Planes y suscripciones
+    Route::get('/subscription/plans', [SubscriptionPaymentController::class, 'index'])->name('subscription.plans');
+    Route::post('/subscription/create-preference', [SubscriptionPaymentController::class, 'createPreference'])->name('subscription.create-preference');
+
+    // Estados de pago
+    Route::get('/payment/success', [SubscriptionPaymentController::class, 'success'])->name('payment.success');
+    Route::get('/payment/failure', [SubscriptionPaymentController::class, 'failure'])->name('payment.failure');
+    Route::get('/payment/pending', [SubscriptionPaymentController::class, 'pending'])->name('payment.pending');
+
+    // API para verificar estado
+    Route::post('/payment/check-status', [SubscriptionPaymentController::class, 'checkPaymentStatus'])->name('payment.check-status');
+
+    // Historial de pagos
+    Route::get('/subscription/history', [SubscriptionPaymentController::class, 'history'])->name('subscription.history');
+});
+
+// Webhook de MercadoPago (sin middleware auth)
+Route::post('/webhook/mercadopago', [SubscriptionPaymentController::class, 'webhook'])->name('payment.webhook');
+
+

@@ -6,6 +6,7 @@ use App\Http\Requests\ProfileUpdateRequest;
 use App\Models\Folder;
 use App\Models\Subfolder;
 use App\Models\GoogleToken;
+use App\Models\Plan;
 use App\Services\GoogleDriveService;
 use App\Services\GoogleCalendarService;
 use App\Services\GoogleTokenRefreshService;
@@ -50,7 +51,10 @@ class ProfileController extends Controller
                 ? 'Token expirado. Se intentó renovar automáticamente pero falló. Necesitas reconectarte.'
                 : $connectionStatus['message'];
 
-            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage'));
+            // Obtener planes para la sección de suscripciones
+            $plans = Plan::where('is_active', true)->orderBy('price')->get();
+
+            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans'));
         }
 
         $driveConnected = $connectionStatus['drive_connected'];
@@ -281,7 +285,10 @@ class ProfileController extends Controller
             }
         }
 
-        return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage'));
+        // Obtener planes para la sección de suscripciones
+        $plans = Plan::where('is_active', true)->orderBy('price')->get();
+
+        return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans'));
     }
 
     /**

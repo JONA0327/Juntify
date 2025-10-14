@@ -349,6 +349,7 @@ Route::middleware(['web', 'auth'])->group(function () {
           Route::post('/organizations/{organization}/documents/groups/{group}/containers/{container}/ensure', [\App\Http\Controllers\OrganizationDocumentsController::class, 'ensureContainerFolder']);
           Route::get('/organizations/{organization}/documents/groups/{group}/containers/{container}/files', [\App\Http\Controllers\OrganizationDocumentsController::class, 'listContainerFiles']);
           Route::post('/organizations/{organization}/documents/groups/{group}/containers/{container}/upload', [\App\Http\Controllers\OrganizationDocumentsController::class, 'uploadToContainer'])->middleware('upload.max150');
+          Route::delete('/organizations/{organization}/documents/groups/{group}/containers/{container}/delete', [\App\Http\Controllers\OrganizationDocumentsController::class, 'deleteDocument']);
 
           // API para reuniones pendientes
           Route::get('/pending-meetings', [MeetingController::class, 'getPendingMeetings']);

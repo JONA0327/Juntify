@@ -372,11 +372,34 @@ class OrganizationDriveController extends Controller
         }
 
         $this->initDrive($organization);
-        // Eliminar primero en Drive, luego en BD
-        $this->drive->deleteFile($subfolder->google_id);
+        $user = auth()->user();
+
+        // Eliminar primero en Drive usando método robusta, luego en BD
+        $deleteSuccess = $this->drive->deleteFileResilient($subfolder->google_id, $user->email);
+
+        if ($deleteSuccess) {
+            Log::info('Subcarpeta eliminada exitosamente de Google Drive', [
+                'subfolder_id' => $subfolder->id,
+                'google_id' => $subfolder->google_id,
+                'organization_id' => $organization->id,
+                'deleted_by' => $user->email
+            ]);
+        } else {
+            Log::error('No se pudo eliminar la subcarpeta de Google Drive', [
+                'subfolder_id' => $subfolder->id,
+                'google_id' => $subfolder->google_id,
+                'organization_id' => $organization->id,
+                'deleted_by' => $user->email
+            ]);
+        }
+
+        // Eliminar de la BD independientemente del resultado en Drive para evitar datos huérfanos
         $subfolder->delete();
 
-        return response()->json(['deleted' => true]);
+        return response()->json([
+            'deleted' => true,
+            'drive_deleted' => $deleteSuccess
+        ]);
     }
 
     /**

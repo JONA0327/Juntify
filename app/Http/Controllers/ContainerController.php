@@ -7,6 +7,7 @@ use App\Models\MeetingContentRelation;
 use App\Models\TranscriptionLaravel;
 use App\Models\OrganizationActivity;
 use App\Models\Group;
+use App\Models\OrganizationContainerFolder;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -732,6 +733,67 @@ class ContainerController extends Controller
             }
 
             Log::info("User {$user->username} authorized to delete container {$id}");
+
+            // Antes de desactivar el contenedor, mover todas las reuniones de vuelta a la lista general
+            $meetingRelations = MeetingContentRelation::where('container_id', $container->id)->get();
+            $movedMeetings = $meetingRelations->count();
+
+            // Loguear las reuniones que se van a mover
+            foreach ($meetingRelations as $relation) {
+                Log::info("Meeting moved back to general list", [
+                    'meeting_id' => $relation->meeting_id,
+                    'container_id' => $container->id,
+                    'container_name' => $container->name
+                ]);
+            }
+
+            // Eliminar todas las relaciones contenedor-reunión de una vez
+            MeetingContentRelation::where('container_id', $container->id)->delete();
+
+            Log::info("Container deletion: moved {$movedMeetings} meetings back to general list", [
+                'container_id' => $container->id,
+                'container_name' => $container->name,
+                'moved_meetings' => $movedMeetings
+            ]);
+
+            // Eliminar la subcarpeta de documentos del contenedor en Google Drive
+            $containerFolder = OrganizationContainerFolder::where('container_id', $container->id)->first();
+            if ($containerFolder) {
+                $this->setGoogleDriveToken($user);
+
+                // Usar el método robusta para eliminar la carpeta
+                $driveDeleteSuccess = $this->googleDriveService->deleteFolderResilient(
+                    $containerFolder->google_id,
+                    $user->email
+                );
+
+                if ($driveDeleteSuccess) {
+                    Log::info("Container folder deleted from Google Drive", [
+                        'container_id' => $container->id,
+                        'container_name' => $container->name,
+                        'folder_id' => $containerFolder->google_id,
+                        'folder_name' => $containerFolder->name
+                    ]);
+                } else {
+                    Log::error("Failed to delete container folder from Google Drive with all strategies", [
+                        'container_id' => $container->id,
+                        'container_name' => $container->name,
+                        'folder_id' => $containerFolder->google_id ?? 'unknown',
+                        'folder_name' => $containerFolder->name ?? 'unknown',
+                        'recommendation' => 'Manual deletion may be required in Google Drive'
+                    ]);
+                }
+
+                // Eliminar el registro de la base de datos independientemente del resultado en Drive
+                // Esto evita datos huérfanos en la BD
+                $containerFolder->delete();
+
+                Log::info("Container folder record deleted from database", [
+                    'container_id' => $container->id,
+                    'folder_id' => $containerFolder->google_id,
+                    'drive_deletion_success' => $driveDeleteSuccess
+                ]);
+            }
 
             $container->update(['is_active' => false]);
 

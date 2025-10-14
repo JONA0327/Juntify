@@ -6,11 +6,25 @@ use App\Models\Organization;
 use App\Models\Group;
 use App\Models\User;
 use App\Models\OrganizationActivity;
+use App\Models\OrganizationFolder;
+use App\Models\OrganizationSubfolder;
+use App\Models\OrganizationGroupFolder;
+use App\Models\OrganizationContainerFolder;
+use App\Services\GoogleDriveService;
+use App\Traits\GoogleDriveHelpers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class OrganizationController extends Controller
 {
+    use GoogleDriveHelpers;
+
+    protected $googleDriveService;
+
+    public function __construct(GoogleDriveService $googleDriveService)
+    {
+        $this->googleDriveService = $googleDriveService;
+    }
     public function driveSettings(Organization $organization)
     {
         $user = auth()->user();
@@ -454,20 +468,223 @@ class OrganizationController extends Controller
             abort(403);
         }
 
-        // Detach usuarios de grupos y organizacion
+        $orgId = $organization->id;
+        $orgName = $organization->nombre_organizacion;
+
+        Log::info('Iniciando eliminación completa de organización', [
+            'org_id' => $orgId,
+            'org_name' => $orgName,
+            'by_user' => $user->id
+        ]);
+
+        // 1. Eliminar todas las carpetas de Google Drive ANTES de eliminar registros BD
+        $this->deleteOrganizationFoldersFromDrive($organization, $user);
+
+        // 2. Detach usuarios de grupos y organizacion
         foreach ($organization->groups as $group) {
             $group->users()->detach();
         }
         $organization->users()->detach();
 
-        // Reset current_organization_id de usuarios que apuntan a esta organización
+        // 3. Reset current_organization_id de usuarios que apuntan a esta organización
         \App\Models\User::where('current_organization_id', $organization->id)
             ->update(['current_organization_id' => null]);
 
-        $orgId = $organization->id;
+        // 4. Eliminar la organización (las FK cascade eliminarán automáticamente los registros relacionados)
         $organization->delete();
-        Log::info('[OrganizationController@destroy] Organización eliminada', ['org_id' => $orgId, 'by_user' => $user->id]);
+
+        Log::info('Organización eliminada completamente', [
+            'org_id' => $orgId,
+            'org_name' => $orgName,
+            'by_user' => $user->id
+        ]);
 
         return response()->json(['deleted' => true, 'organization_id' => $orgId]);
+    }
+
+    /**
+     * Elimina todas las carpetas de Google Drive asociadas a una organización
+     *
+     * @param Organization $organization
+     * @param User $user
+     * @return void
+     */
+    private function deleteOrganizationFoldersFromDrive(Organization $organization, User $user): void
+    {
+        $orgId = $organization->id;
+
+        try {
+            // Configurar token de Google Drive con lógica mejorada
+            $tokenConfigured = false;
+
+            // Intentar usar token de organización si está disponible
+            if ($organization->googleToken && $organization->googleToken->isConnected()) {
+
+                try {
+                    $client = $this->googleDriveService->getClient();
+                    $orgToken = $organization->googleToken;
+
+                    // Si el token está expirado, intentar refrescarlo
+                    if ($orgToken->isExpired() && $orgToken->refresh_token) {
+                        Log::info('Organization token expired, attempting refresh', [
+                            'org_id' => $orgId,
+                            'expiry_date' => $orgToken->expiry_date
+                        ]);
+
+                        $client->refreshToken($orgToken->refresh_token);
+                        $newToken = $client->getAccessToken();
+
+                        // Actualizar token en base de datos
+                        $orgToken->access_token = $newToken;
+                        if (isset($newToken['created']) && isset($newToken['expires_in'])) {
+                            $orgToken->expiry_date = now()->addSeconds($newToken['expires_in']);
+                        }
+                        $orgToken->save();
+
+                        Log::info('Organization token refreshed successfully', [
+                            'org_id' => $orgId,
+                            'new_expiry' => $orgToken->expiry_date
+                        ]);
+                    } else {
+                        // Usar token existente
+                        $client->setAccessToken($orgToken->access_token);
+                    }
+
+                    $tokenConfigured = true;
+
+                    Log::info('Using organization token for Drive operations', [
+                        'org_id' => $orgId,
+                        'token_expiry' => $orgToken->expiry_date
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to configure organization token, falling back to user token', [
+                        'org_id' => $orgId,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Si no se pudo configurar token de organización, usar token del usuario
+            if (!$tokenConfigured) {
+                $this->setGoogleDriveToken($user);
+                Log::info('Using user token for Drive operations', [
+                    'org_id' => $orgId,
+                    'user_email' => $user->email
+                ]);
+            }
+
+            $deletedFolders = 0;
+            $failedFolders = 0;
+
+            // 1. Eliminar carpetas de contenedores
+            $containerFolders = OrganizationContainerFolder::where('organization_id', $orgId)->get();
+            foreach ($containerFolders as $containerFolder) {
+                $success = $this->googleDriveService->deleteFolderResilient($containerFolder->google_id, $user->email);
+                if ($success) {
+                    $deletedFolders++;
+                    Log::info('Container folder deleted during organization deletion', [
+                        'org_id' => $orgId,
+                        'container_id' => $containerFolder->container_id,
+                        'folder_id' => $containerFolder->google_id,
+                        'folder_name' => $containerFolder->name
+                    ]);
+                } else {
+                    $failedFolders++;
+                    Log::error('Failed to delete container folder during organization deletion', [
+                        'org_id' => $orgId,
+                        'container_id' => $containerFolder->container_id,
+                        'folder_id' => $containerFolder->google_id,
+                        'folder_name' => $containerFolder->name
+                    ]);
+                }
+            }
+
+            // 2. Eliminar carpetas de grupos
+            $groupFolders = OrganizationGroupFolder::where('organization_id', $orgId)->get();
+            foreach ($groupFolders as $groupFolder) {
+                $success = $this->googleDriveService->deleteFolderResilient($groupFolder->google_id, $user->email);
+                if ($success) {
+                    $deletedFolders++;
+                    Log::info('Group folder deleted during organization deletion', [
+                        'org_id' => $orgId,
+                        'group_id' => $groupFolder->group_id,
+                        'folder_id' => $groupFolder->google_id,
+                        'folder_name' => $groupFolder->name
+                    ]);
+                } else {
+                    $failedFolders++;
+                    Log::error('Failed to delete group folder during organization deletion', [
+                        'org_id' => $orgId,
+                        'group_id' => $groupFolder->group_id,
+                        'folder_id' => $groupFolder->google_id,
+                        'folder_name' => $groupFolder->name
+                    ]);
+                }
+            }
+
+            // 3. Eliminar subcarpetas organizacionales
+            $subfolders = OrganizationSubfolder::whereHas('folder', function($query) use ($orgId) {
+                $query->where('organization_id', $orgId);
+            })->get();
+
+            foreach ($subfolders as $subfolder) {
+                $success = $this->googleDriveService->deleteFolderResilient($subfolder->google_id, $user->email);
+                if ($success) {
+                    $deletedFolders++;
+                    Log::info('Subfolder deleted during organization deletion', [
+                        'org_id' => $orgId,
+                        'subfolder_id' => $subfolder->id,
+                        'folder_id' => $subfolder->google_id,
+                        'folder_name' => $subfolder->name
+                    ]);
+                } else {
+                    $failedFolders++;
+                    Log::error('Failed to delete subfolder during organization deletion', [
+                        'org_id' => $orgId,
+                        'subfolder_id' => $subfolder->id,
+                        'folder_id' => $subfolder->google_id,
+                        'folder_name' => $subfolder->name
+                    ]);
+                }
+            }
+
+            // 4. Eliminar carpetas principales de la organización
+            $organizationFolders = OrganizationFolder::where('organization_id', $orgId)->get();
+            foreach ($organizationFolders as $orgFolder) {
+                $success = $this->googleDriveService->deleteFolderResilient($orgFolder->google_id, $user->email);
+                if ($success) {
+                    $deletedFolders++;
+                    Log::info('Organization main folder deleted', [
+                        'org_id' => $orgId,
+                        'org_folder_id' => $orgFolder->id,
+                        'folder_id' => $orgFolder->google_id,
+                        'folder_name' => $orgFolder->name
+                    ]);
+                } else {
+                    $failedFolders++;
+                    Log::error('Failed to delete organization main folder', [
+                        'org_id' => $orgId,
+                        'org_folder_id' => $orgFolder->id,
+                        'folder_id' => $orgFolder->google_id,
+                        'folder_name' => $orgFolder->name
+                    ]);
+                }
+            }
+
+            Log::info('Organization Drive folders deletion summary', [
+                'org_id' => $orgId,
+                'deleted_folders' => $deletedFolders,
+                'failed_folders' => $failedFolders,
+                'total_attempted' => $deletedFolders + $failedFolders
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error during organization Drive folders deletion', [
+                'org_id' => $orgId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            // No fallar la eliminación de la organización por problemas con Drive
+        }
     }
 }

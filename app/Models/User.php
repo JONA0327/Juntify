@@ -15,6 +15,8 @@ use App\Models\GoogleToken;
 use App\Models\UserPanelAdministrativo;
 use App\Models\UserPanelMiembro;
 use App\Models\CompanyUser;
+use App\Models\UserSubscription;
+use App\Models\Payment;
 
 class User extends Authenticatable
 {
@@ -169,5 +171,37 @@ class User extends Authenticatable
         }
 
         return $this->blocked_until;
+    }
+
+    /**
+     * Relación con suscripciones
+     */
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(UserSubscription::class);
+    }
+
+    /**
+     * Relación con pagos
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * Verificar si el plan del usuario ha expirado
+     */
+    public function isPlanExpired(): bool
+    {
+        return $this->plan_expires_at && $this->plan_expires_at->isPast();
+    }
+
+    /**
+     * Obtener la suscripción activa actual
+     */
+    public function getCurrentSubscription(): ?UserSubscription
+    {
+        return $this->subscriptions()->active()->first();
     }
 }

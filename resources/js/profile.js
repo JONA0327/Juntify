@@ -365,11 +365,25 @@ document.addEventListener('DOMContentLoaded', () => {
         sec.style.display = (sec.id === `section-${section}`) ? 'block' : 'none';
       });
 
+      // Mostrar/ocultar la tarjeta de bienvenida solo en la sección de información
+      const welcomeCard = document.getElementById('welcome-card');
+      if (welcomeCard) {
+        welcomeCard.style.display = (section === 'info') ? 'flex' : 'none';
+      }
+
       if (window.innerWidth <= 768) {
         closeSidebar();
       }
     });
   });
+
+  // Configurar estado inicial de la tarjeta de bienvenida
+  const activeLink = document.querySelector('.sidebar-nav .nav-link.active');
+  const welcomeCard = document.getElementById('welcome-card');
+  if (welcomeCard && activeLink) {
+    const activeSection = activeLink.dataset.section;
+    welcomeCard.style.display = (activeSection === 'info') ? 'flex' : 'none';
+  }
 
   setupProfilePricingToggle();
   initMercadoPagoStatusPolling();

@@ -462,7 +462,8 @@ class GoogleDriveService
     }
 
     /**
-     * Elimina un archivo o carpeta en Google Drive (best-effort).
+     * Elimina un archivo o carpeta en Google Drive.
+     * Lanza excepción si falla la eliminación.
      */
     public function deleteFile(string $fileId): void
     {
@@ -470,12 +471,255 @@ class GoogleDriveService
             $this->drive->files->delete($fileId, [
                 'supportsAllDrives' => true,
             ]);
+            Log::info('GoogleDriveService: archivo eliminado exitosamente', [
+                'file_id' => $fileId,
+            ]);
         } catch (\Throwable $e) {
-            Log::warning('GoogleDriveService: fallo al borrar archivo/carpeta', [
+            Log::error('GoogleDriveService: fallo al borrar archivo/carpeta', [
                 'file_id' => $fileId,
                 'error' => $e->getMessage(),
             ]);
+            // Propagar la excepción para que el controlador la maneje
+            throw $e;
         }
+    }
+
+    /**
+     * Elimina una carpeta de Google Drive
+     *
+     * @param string $folderId
+     * @return void
+     * @throws \Throwable
+     */
+    public function deleteFolder(string $folderId): void
+    {
+        try {
+            // Verificar que la carpeta existe antes de intentar eliminarla
+            $folderInfo = $this->getFileInfo($folderId);
+
+            if (!$folderInfo || $folderInfo->getMimeType() !== 'application/vnd.google-apps.folder') {
+                throw new \Exception("La carpeta con ID {$folderId} no existe o no es una carpeta válida");
+            }
+
+            Log::info('GoogleDriveService: intentando eliminar carpeta', [
+                'folder_id' => $folderId,
+                'folder_name' => $folderInfo->getName(),
+            ]);
+
+            // Intentar eliminar la carpeta directamente
+            $this->drive->files->delete($folderId, [
+                'supportsAllDrives' => true,
+            ]);
+
+            Log::info('GoogleDriveService: carpeta eliminada exitosamente', [
+                'folder_id' => $folderId,
+                'folder_name' => $folderInfo->getName(),
+            ]);
+
+        } catch (\Google_Service_Exception $e) {
+            $errorCode = $e->getCode();
+            $errorMessage = $e->getMessage();
+
+            Log::error('GoogleDriveService: error de Google API al borrar carpeta', [
+                'folder_id' => $folderId,
+                'error_code' => $errorCode,
+                'error_message' => $errorMessage,
+            ]);
+
+            // Si es error de permisos (403), intentar estrategias alternativas
+            if ($errorCode === 403) {
+                Log::warning('GoogleDriveService: error de permisos, intentando mover carpeta a papelera', [
+                    'folder_id' => $folderId,
+                ]);
+
+                try {
+                    // Intentar mover a papelera en lugar de eliminar permanentemente
+                    $this->drive->files->update($folderId, new DriveFile([
+                        'trashed' => true
+                    ]), [
+                        'supportsAllDrives' => true,
+                    ]);
+
+                    Log::info('GoogleDriveService: carpeta movida a papelera exitosamente', [
+                        'folder_id' => $folderId,
+                    ]);
+                    return; // Éxito con método alternativo
+
+                } catch (\Throwable $trashError) {
+                    Log::error('GoogleDriveService: también falló mover a papelera', [
+                        'folder_id' => $folderId,
+                        'trash_error' => $trashError->getMessage(),
+                    ]);
+                }
+            }
+
+            // Si no se pudo resolver, propagar el error original
+            throw $e;
+
+        } catch (\Throwable $e) {
+            Log::error('GoogleDriveService: fallo general al borrar carpeta', [
+                'folder_id' => $folderId,
+                'error' => $e->getMessage(),
+            ]);
+            // Propagar la excepción para que el controlador la maneje
+            throw $e;
+        }
+    }
+
+    /**
+     * Elimina una carpeta de forma robusta usando múltiples estrategias
+     * Similar al método deleteDriveFileResilient del MeetingController
+     *
+     * @param string $folderId
+     * @param string $userEmail
+     * @return bool
+     */
+    public function deleteFolderResilient(string $folderId, string $userEmail): bool
+    {
+        Log::info('GoogleDriveService: iniciando eliminación robusta de carpeta', [
+            'folder_id' => $folderId,
+            'user_email' => $userEmail,
+        ]);
+
+        // La mayoría de carpetas son creadas por Service Account, entonces empezar por ahí
+        // Primero, intentar con Service Account sin impersonate (más directo)
+        try {
+            $sa = app(\App\Services\GoogleServiceAccount::class);
+            $sa->deleteFile($folderId);
+            Log::info('GoogleDriveService: carpeta eliminada con service account directo', ['folder_id' => $folderId]);
+            return true;
+        } catch (\Exception $e) {
+            Log::warning('GoogleDriveService: fallo con service account directo, intentando impersonation', [
+                'folder_id' => $folderId,
+                'error' => $e->getMessage(),
+            ]);
+            if ($this->isNotFoundDriveError($e)) {
+                return true; // ya no existe, considerar éxito
+            }
+        }
+
+        // Segundo, intentar con Service Account impersonando al usuario
+        try {
+            $sa = app(\App\Services\GoogleServiceAccount::class);
+            $sa->impersonate($userEmail);
+            $sa->deleteFile($folderId); // Las carpetas también se eliminan con deleteFile
+            Log::info('GoogleDriveService: carpeta eliminada con service account impersonando', ['folder_id' => $folderId]);
+            return true;
+        } catch (\Exception $e) {
+            Log::warning('GoogleDriveService: fallo con service account impersonando, intentando token de usuario', [
+                'folder_id' => $folderId,
+                'error' => $e->getMessage(),
+            ]);
+            if ($this->isNotFoundDriveError($e)) {
+                return true; // ya no existe, considerar éxito
+            }
+        }
+
+        // Tercero, intentar con el token del usuario (para carpetas creadas por el usuario)
+        try {
+            $this->deleteFolder($folderId);
+            Log::info('GoogleDriveService: carpeta eliminada con token de usuario', ['folder_id' => $folderId]);
+            return true;
+        } catch (\Exception $e) {
+            Log::error('GoogleDriveService: fallo con token de usuario también', [
+                'folder_id' => $folderId,
+                'error' => $e->getMessage(),
+            ]);
+            if ($this->isNotFoundDriveError($e)) {
+                return true; // ya no existe, considerar éxito
+            }
+        }
+
+        Log::error('GoogleDriveService: no se pudo eliminar la carpeta con ninguna estrategia', [
+            'folder_id' => $folderId,
+        ]);
+        return false;
+    }
+
+    /**
+     * Elimina un archivo de forma robusta usando múltiples estrategias
+     *
+     * @param string $fileId
+     * @param string $userEmail
+     * @return bool
+     */
+    public function deleteFileResilient(string $fileId, string $userEmail): bool
+    {
+        Log::info('GoogleDriveService: iniciando eliminación robusta de archivo', [
+            'file_id' => $fileId,
+            'user_email' => $userEmail,
+        ]);
+
+        // La mayoría de archivos son creados por Service Account, entonces empezar por ahí
+        // Primero, intentar con Service Account sin impersonate (más directo)
+        try {
+            $sa = app(\App\Services\GoogleServiceAccount::class);
+            $sa->deleteFile($fileId);
+            Log::info('GoogleDriveService: archivo eliminado con service account directo', ['file_id' => $fileId]);
+            return true;
+        } catch (\Exception $e) {
+            Log::warning('GoogleDriveService: fallo con service account directo, intentando impersonation', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
+            if ($this->isNotFoundDriveError($e)) {
+                return true; // ya no existe, considerar éxito
+            }
+        }
+
+        // Segundo, intentar con Service Account impersonando al usuario
+        try {
+            $sa = app(\App\Services\GoogleServiceAccount::class);
+            $sa->impersonate($userEmail);
+            $sa->deleteFile($fileId);
+            Log::info('GoogleDriveService: archivo eliminado con service account impersonando', ['file_id' => $fileId]);
+            return true;
+        } catch (\Exception $e) {
+            Log::warning('GoogleDriveService: fallo con service account impersonando, intentando token de usuario', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
+            if ($this->isNotFoundDriveError($e)) {
+                return true; // ya no existe, considerar éxito
+            }
+        }
+
+        // Tercero, intentar con el token del usuario (para archivos creados por el usuario)
+        try {
+            $this->deleteFile($fileId);
+            Log::info('GoogleDriveService: archivo eliminado con token de usuario', ['file_id' => $fileId]);
+            return true;
+        } catch (\Exception $e) {
+            Log::error('GoogleDriveService: fallo con token de usuario también', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
+            if ($this->isNotFoundDriveError($e)) {
+                return true; // ya no existe, considerar éxito
+            }
+        }
+
+        Log::error('GoogleDriveService: no se pudo eliminar el archivo con ninguna estrategia', [
+            'file_id' => $fileId,
+        ]);
+        return false;
+    }
+
+    /**
+     * Verifica si un error es de "archivo no encontrado"
+     *
+     * @param \Exception $e
+     * @return bool
+     */
+    private function isNotFoundDriveError(\Exception $e): bool
+    {
+        $msg = $e->getMessage();
+        if (stripos($msg, 'File not found') !== false || stripos($msg, 'notFound') !== false) {
+            return true;
+        }
+        // Algunos SDK devuelven código en getCode()
+        $code = (int) $e->getCode();
+        return $code === 404;
     }
 
 }

@@ -16,6 +16,17 @@ class MeetingContentRelation extends Model
     protected $table = 'meeting_content_relations';
 
     /**
+     * The primary key for the model.
+     * Esta tabla usa clave primaria compuesta
+     */
+    protected $primaryKey = ['container_id', 'meeting_id'];
+
+    /**
+     * Indicates if the IDs are auto-incrementing.
+     */
+    public $incrementing = false;
+
+    /**
      * The attributes that are mass assignable.
      */
     protected $fillable = [

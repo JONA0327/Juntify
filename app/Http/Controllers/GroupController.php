@@ -8,15 +8,27 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Models\Organization;
 use App\Models\OrganizationActivity;
+use App\Models\OrganizationGroupFolder;
+use App\Models\OrganizationContainerFolder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use App\Models\GroupCode;
+use App\Services\GoogleDriveService;
+use App\Traits\GoogleDriveHelpers;
 
 class GroupController extends Controller
 {
+    use GoogleDriveHelpers;
+
+    protected $googleDriveService;
+
+    public function __construct(GoogleDriveService $googleDriveService)
+    {
+        $this->googleDriveService = $googleDriveService;
+    }
     public function publicIndex(Request $request)
     {
         $query = Group::query()
@@ -708,6 +720,9 @@ class GroupController extends Controller
                     }
                 }
 
+                // Eliminar carpetas de Google Drive asociadas al grupo ANTES de eliminar el grupo
+                $this->deleteGroupFoldersFromDrive($groupId, $user);
+
                 $group->delete();
                 $organization->refreshMemberCount();
             });
@@ -756,5 +771,83 @@ class GroupController extends Controller
         return response()->json([
             'containers' => $containers
         ]);
+    }
+
+    /**
+     * Elimina las carpetas de Google Drive asociadas a un grupo
+     *
+     * @param int $groupId
+     * @param User $user
+     * @return void
+     */
+    private function deleteGroupFoldersFromDrive(int $groupId, User $user): void
+    {
+        try {
+            $this->setGoogleDriveToken($user);
+
+            // 1. Eliminar carpetas de contenedores asociadas al grupo
+            $containerFolders = OrganizationContainerFolder::whereHas('container', function ($query) use ($groupId) {
+                $query->where('group_id', $groupId);
+            })->get();
+
+            foreach ($containerFolders as $containerFolder) {
+                $success = $this->googleDriveService->deleteFolderResilient(
+                    $containerFolder->google_id,
+                    $user->email
+                );
+
+                if ($success) {
+                    Log::info("Container folder deleted during group deletion", [
+                        'group_id' => $groupId,
+                        'container_id' => $containerFolder->container_id,
+                        'folder_id' => $containerFolder->google_id,
+                        'folder_name' => $containerFolder->name
+                    ]);
+                } else {
+                    Log::error("Failed to delete container folder during group deletion", [
+                        'group_id' => $groupId,
+                        'container_id' => $containerFolder->container_id,
+                        'folder_id' => $containerFolder->google_id,
+                        'folder_name' => $containerFolder->name
+                    ]);
+                }
+
+                // Eliminar registro de la base de datos
+                $containerFolder->delete();
+            }
+
+            // 2. Eliminar carpeta principal del grupo
+            $groupFolder = OrganizationGroupFolder::where('group_id', $groupId)->first();
+            if ($groupFolder) {
+                $success = $this->googleDriveService->deleteFolderResilient(
+                    $groupFolder->google_id,
+                    $user->email
+                );
+
+                if ($success) {
+                    Log::info("Group folder deleted from Google Drive", [
+                        'group_id' => $groupId,
+                        'folder_id' => $groupFolder->google_id,
+                        'folder_name' => $groupFolder->name
+                    ]);
+                } else {
+                    Log::error("Failed to delete group folder from Google Drive", [
+                        'group_id' => $groupId,
+                        'folder_id' => $groupFolder->google_id,
+                        'folder_name' => $groupFolder->name
+                    ]);
+                }
+
+                // Eliminar registro de la base de datos
+                $groupFolder->delete();
+            }
+
+        } catch (\Exception $e) {
+            Log::error("Error during group folders deletion", [
+                'group_id' => $groupId,
+                'error' => $e->getMessage()
+            ]);
+            // No fallar la eliminación del grupo por problemas con Drive
+        }
     }
 }

@@ -85,55 +85,7 @@
         </p>
     </section>
 
-    <!-- Integration Section -->
-    <section class="content-section fade-in">
-        <h2 class="section-title">Una experiencia perfectamente integrada</h2>
-        <p class="section-subtitle">
-            Nuestra plataforma se integra elegantemente diseñada y se integra perfectamente con las herramientas que ya utilizas. No necesitas adaptar tus procesos a Juntify, Juntify se adapta a ti.
-        </p>
 
-        <div class="integration-diagram">
-            <div class="integration-grid">
-                <div class="integration-item">
-                    <div class="integration-icon" style="background: #10b981;">🎯</div>
-                    <div class="integration-name">Zoom</div>
-                </div>
-                <div class="integration-item">
-                    <div class="integration-icon" style="background: #3b82f6;">📊</div>
-                    <div class="integration-name">Google Calendar</div>
-                </div>
-                <div class="integration-item">
-                    <div class="integration-icon" style="background: #8b5cf6;">💼</div>
-                    <div class="integration-name">Slack</div>
-                </div>
-                <div class="integration-item">
-                    <div class="integration-icon" style="background: #f59e0b;">📝</div>
-                    <div class="integration-name">Notion</div>
-                </div>
-                <div class="integration-item">
-                    <div class="integration-icon" style="background: #10b981;">📋</div>
-                    <div class="integration-name">Trello</div>
-                </div>
-                <div class="integration-item">
-                    <div class="integration-icon" style="background: #ef4444;">📧</div>
-                    <div class="integration-name">Gmail</div>
-                </div>
-                <div class="integration-item">
-                    <div class="integration-icon" style="background: #8b5cf6;">🎨</div>
-                    <div class="integration-name">Figma</div>
-                </div>
-                <div class="integration-item">
-                    <div class="integration-icon" style="background: #6366f1;">📊</div>
-                    <div class="integration-name">Teams</div>
-                </div>
-                <div class="integration-item">
-                    <div class="integration-icon" style="background: #10b981;">📈</div>
-                    <div class="integration-name">Asana</div>
-                </div>
-            </div>
-            <div class="integration-center">Juntify</div>
-        </div>
-    </section>
 
     <!-- Transform Work Section -->
     <section class="content-section fade-in">
@@ -203,73 +155,7 @@
         </div>
     </section>
 
-    <!-- Pricing Section -->
-    @php
-        $pricing = json_decode(file_get_contents(resource_path('data/pricing.json')), true);
-    @endphp
-    <section class="pricing-section fade-in">
-        <div class="content-section">
-            <h2 class="section-title">Planes de Reuniones</h2>
-            <p class="section-subtitle">
-                La claridad que siempre quisiste para tus reuniones ya está aquí. Es tiempo de abandonar, simplificar la comunicación y hacer que cada minuto cuente.
-            </p>
 
-            <p style="text-align: center; color: #cbd5e1; margin-bottom: 2rem;">
-                Elige tu plan de facturación preferida
-            </p>
-
-            <div class="pricing-wrapper">
-                <div class="pricing-toggle">
-                    <button class="toggle-btn active" data-target="monthly">Mensual</button>
-                    <button class="toggle-btn" data-target="annual">Anual</button>
-                    <button class="toggle-btn" data-target="addons">Reuniones adicionales</button>
-                </div>
-
-                <div class="pricing-groups">
-                    @foreach (["monthly", "annual", "addons"] as $group)
-                        <div class="pricing-grid {{ $group === 'monthly' ? '' : 'hidden' }}" data-plan-group="{{ $group }}">
-                            @foreach ($pricing[$group] as $plan)
-                                @php
-                                    $ctaLabel = 'Seleccionar plan';
-                                    $ctaClass = '';
-                                    if ($group === 'addons') {
-                                        $ctaLabel = 'Comprar paquete';
-                                    }
-                                    if ($plan['id'] === 'freemium') {
-                                        $ctaLabel = 'Empezar gratis';
-                                        $ctaClass = 'secondary';
-                                    }
-                                    if ($plan['id'] === 'enterprise' && $group !== 'addons') {
-                                        $ctaLabel = 'Contactar ventas';
-                                    }
-                                @endphp
-                                <div class="pricing-card {{ !empty($plan['popular']) ? 'popular' : '' }}">
-                                    <h3 class="pricing-title">{{ $plan['name'] }}</h3>
-                                    <div class="pricing-price">{{ $plan['price'] }}</div>
-                                    <div class="pricing-period">{{ $plan['period'] }}</div>
-                                    @if (!empty($plan['description']))
-                                        <p class="pricing-description">{{ $plan['description'] }}</p>
-                                    @endif
-                                    <ul class="pricing-features">
-                                        @foreach ($plan['features'] as $feature)
-                                            <li>{{ $feature }}</li>
-                                        @endforeach
-                                    </ul>
-                                    <a href="#" class="pricing-btn {{ $ctaClass }}">{{ $ctaLabel }}</a>
-                                </div>
-                            @endforeach
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-
-            <p style="text-align: center; color: #cbd5e1; margin-top: 3rem; font-size: 0.9rem;">
-                ¿Quieres probar antes de comprar? Hay créditos de reunión disponibles a<br>
-                miembros premium completamente gratis, para que experimentes por ti mismo el<br>
-                poder transformador de Juntify.
-            </p>
-        </div>
-    </section>
 
 </body>
 </html>

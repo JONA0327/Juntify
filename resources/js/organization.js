@@ -1999,6 +1999,7 @@ function registerOrganizationComponent() {
     containerDocs: { files: [], loading: false, container: null },
     showContainerDocsModal: false,
     uploadingDocument: false,
+    deletingDocument: false,
     showUploadDocModal: false,
     uploadTargetContainer: null,
     selectedUploadFile: null,
@@ -2013,10 +2014,32 @@ function registerOrganizationComponent() {
 
     async fetchContainerDocuments(containerId) {
         try {
-            const res = await fetch(`/containers/${containerId}/files`);
+            // Obtener contexto necesario
+            const container = this.containerDocs.container;
+            let organization = this.selectedOrganization;
+            let group = this.currentGroup;
+
+            // Buscar organización si no está disponible
+            if (!organization && this.organizations && this.organizations.length > 0) {
+                organization = this.organizations.length === 1 ? this.organizations[0] :
+                             (this.organizations.find(org => org.active) || this.organizations[0]);
+            }
+
+            // Buscar grupo si no está disponible
+            if (!group && organization && container) {
+                const groupsInOrg = organization.groups || [];
+                group = groupsInOrg.find(g => g.containers && g.containers.some(c => c.id === container.id)) ||
+                       groupsInOrg.find(g => g.id === container.group_id);
+            }
+
+            if (!organization || !group) {
+                throw new Error('No se pudo determinar la organización o grupo');
+            }
+
+            const res = await fetch(`/api/organizations/${organization.id}/documents/groups/${group.id}/containers/${containerId}/files`);
             if (!res.ok) throw new Error('Error al listar documentos');
             const data = await res.json();
-            this.containerDocs.files = data.data || [];
+            this.containerDocs.files = data.files || [];
         } catch (e) {
             console.error(e);
             this.showError('No se pudieron cargar los documentos');
@@ -2108,6 +2131,27 @@ function registerOrganizationComponent() {
         if (this.uploadingDocument) return;
         this.uploadingDocument = true;
         try {
+            // Obtener contexto necesario
+            let organization = this.selectedOrganization;
+            let group = this.currentGroup;
+
+            // Buscar organización si no está disponible
+            if (!organization && this.organizations && this.organizations.length > 0) {
+                organization = this.organizations.length === 1 ? this.organizations[0] :
+                             (this.organizations.find(org => org.active) || this.organizations[0]);
+            }
+
+            // Buscar grupo si no está disponible
+            if (!group && organization && container) {
+                const groupsInOrg = organization.groups || [];
+                group = groupsInOrg.find(g => g.containers && g.containers.some(c => c.id === container.id)) ||
+                       groupsInOrg.find(g => g.id === container.group_id);
+            }
+
+            if (!organization || !group) {
+                throw new Error('No se pudo determinar la organización o grupo para la subida');
+            }
+
             // Usamos XMLHttpRequest para poder monitorear progreso
             const form = new FormData();
             form.append('file', file);
@@ -2115,7 +2159,7 @@ function registerOrganizationComponent() {
 
             const uploadPromise = () => new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
-                xhr.open('POST', `/containers/${container.id}/files`, true);
+                xhr.open('POST', `/api/organizations/${organization.id}/documents/groups/${group.id}/containers/${container.id}/upload`, true);
                 xhr.setRequestHeader('X-CSRF-TOKEN', csrf);
                 xhr.onreadystatechange = () => {
                     if (xhr.readyState === 4) {
@@ -2176,6 +2220,103 @@ function registerOrganizationComponent() {
     closeContainerDocsModal() {
         this.showContainerDocsModal = false;
         this.containerDocs = { files: [], loading: false, container: null };
+    },
+
+    async deleteDocument(file) {
+        if (this.deletingDocument) return;
+
+        // Confirmar eliminación
+        if (!confirm(`¿Estás seguro de que deseas eliminar "${file.name}"? Esta acción no se puede deshacer.`)) {
+            return;
+        }
+
+        this.deletingDocument = true;
+        try {
+            const container = this.containerDocs.container;
+
+            // Obtener organización y grupo desde las propiedades disponibles
+            let organization = this.selectedOrganization;
+            let group = this.currentGroup;
+
+            // Si no tenemos el contexto directo, usar el container que debe tener la info del grupo
+            if (!organization && this.organizations && this.organizations.length > 0) {
+                // Si solo hay una organización, usarla
+                if (this.organizations.length === 1) {
+                    organization = this.organizations[0];
+                } else {
+                    // Buscar la organización activa o la primera disponible
+                    organization = this.organizations.find(org => org.active) || this.organizations[0];
+                }
+            }
+
+            // Si no tenemos grupo, buscar el grupo que contiene este container
+            if (!group && organization && container) {
+                const groupsInOrg = organization.groups || [];
+                group = groupsInOrg.find(g => g.containers && g.containers.some(c => c.id === container.id));
+
+                // Si no lo encontramos así, usar group_id del container
+                if (!group && container.group_id) {
+                    group = groupsInOrg.find(g => g.id === container.group_id);
+                }
+            }
+
+            // Debug: verificar qué valores tenemos
+            console.log('[deleteDocument] Debug context:', {
+                container: container ? { id: container.id, name: container.name, group_id: container.group_id } : null,
+                organization: organization ? { id: organization.id, name: organization.name } : null,
+                group: group ? { id: group.id, nombre_grupo: group.nombre_grupo } : null,
+                organizations: this.organizations,
+                selectedOrganization: this.selectedOrganization,
+                currentGroup: this.currentGroup
+            });
+
+            if (!container) {
+                throw new Error('Container no disponible');
+            }
+            if (!organization) {
+                throw new Error('Organización no disponible');
+            }
+            if (!group) {
+                throw new Error('Grupo no disponible');
+            }
+
+            const response = await fetch(`/api/organizations/${organization.id}/documents/groups/${group.id}/containers/${container.id}/delete`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                },
+                body: JSON.stringify({
+                    file_id: file.id,
+                    file_name: file.name
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || result.error || 'Error al eliminar documento');
+            }
+
+            // Remover el archivo de la lista local
+            this.containerDocs.files = this.containerDocs.files.filter(f => f.id !== file.id);
+
+            // Notificación de éxito
+            if (typeof this.showStatus === 'function') {
+                this.showStatus(`Documento "${file.name}" eliminado correctamente`);
+            } else {
+                console.log('[delete] Documento eliminado correctamente');
+            }
+        } catch (e) {
+            console.error('[deleteDocument] Error:', e);
+            if (typeof this.showError === 'function') {
+                this.showError(e.message || 'Error al eliminar documento');
+            } else {
+                alert('Error al eliminar documento: ' + (e.message || 'Error desconocido'));
+            }
+        } finally {
+            this.deletingDocument = false;
+        }
     },
 
     formatFileMeta(file) {

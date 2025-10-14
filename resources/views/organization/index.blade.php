@@ -906,6 +906,12 @@
                                             <template x-if="currentGroup.user_role !== 'invitado' && !file.webContentLink">
                                                 <a :href="file.url" target="_blank" class="px-2 py-1 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded">Descargar</a>
                                             </template>
+                                            <template x-if="currentGroup.user_role === 'administrador' || currentGroup.user_role === 'colaborador'">
+                                                <button @click="deleteDocument(file)" class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded flex items-center gap-1" :disabled="deletingDocument">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    <span x-text="deletingDocument ? 'Eliminando...' : 'Eliminar'"></span>
+                                                </button>
+                                            </template>
                                         </div>
                                     </div>
                                 </div>
