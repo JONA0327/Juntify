@@ -907,6 +907,16 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
     justify-content: center;
     z-index: 2000;
     backdrop-filter: blur(10px);
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* Forzar ocultado del modal */
+.modal[style*="display: none"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 .modal-content {
@@ -916,7 +926,12 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
     padding: 2rem;
     max-width: 500px;
     width: 90%;
+    max-height: 90vh;
     text-align: center;
+    margin: auto;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    transform: translateY(0);
+    position: relative;
 }
 
 .modal-header {
@@ -983,6 +998,59 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
     display: flex;
     gap: 1rem;
     justify-content: center;
+    margin-top: 2rem;
+}
+
+/* Animación para el modal */
+.modal {
+    animation: fadeInModal 0.3s ease-out;
+}
+
+.modal-content {
+    animation: slideInModal 0.3s ease-out;
+}
+
+@keyframes fadeInModal {
+    from {
+        opacity: 0;
+        backdrop-filter: blur(0px);
+    }
+    to {
+        opacity: 1;
+        backdrop-filter: blur(10px);
+    }
+}
+
+@keyframes slideInModal {
+    from {
+        opacity: 0;
+        transform: translateY(-50px) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Asegurar centrado en todos los dispositivos */
+@media (max-height: 600px) {
+    .modal {
+        align-items: flex-start !important;
+        padding-top: 2rem;
+    }
+
+    .modal-content {
+        margin-top: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-content {
+        width: 95%;
+        padding: 1.5rem;
+        max-height: 85vh;
+        overflow-y: auto;
+    }
 }
 
 /* Mobile Navbar Button */
@@ -1839,5 +1907,68 @@ input#postpone-toggle:checked + .switch-track .switch-label.on  { opacity: 0.95;
     .volume-rings .ring-3 {
         width: 140px;
         height: 140px;
+    }
+}
+
+/* ===== ESTILOS PARA ADVERTENCIAS DE TIEMPO LÍMITE ===== */
+
+/* Notificación especial para advertencias de tiempo */
+.notification.time-warning {
+    background: linear-gradient(135deg, #ff6b35, #f7931e) !important;
+    border: 2px solid #ff4444 !important;
+    box-shadow: 0 8px 25px rgba(255, 68, 68, 0.3) !important;
+    z-index: 10001 !important;
+    animation: pulse-warning 1s infinite, slideIn 0.3s ease !important;
+}
+
+.notification.time-warning .notification-message {
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.notification.time-warning .notification-icon {
+    font-size: 1.5rem !important;
+    animation: bounce-warning 0.5s infinite alternate;
+}
+
+/* Animación de pulso para advertencias críticas */
+@keyframes pulse-warning {
+    0% {
+        box-shadow: 0 8px 25px rgba(255, 68, 68, 0.3), 0 0 0 0 rgba(255, 68, 68, 0.7);
+    }
+    50% {
+        box-shadow: 0 8px 25px rgba(255, 68, 68, 0.5), 0 0 0 10px rgba(255, 68, 68, 0);
+    }
+    100% {
+        box-shadow: 0 8px 25px rgba(255, 68, 68, 0.3), 0 0 0 0 rgba(255, 68, 68, 0);
+    }
+}
+
+/* Animación de rebote para el icono de advertencia */
+@keyframes bounce-warning {
+    0% {
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        transform: translateY(-3px) scale(1.1);
+    }
+}
+
+/* Estilos para timer cuando se acerca al límite */
+.timer-counter.warning {
+    color: #ff4444 !important;
+    font-weight: bold !important;
+    animation: pulse-timer 1s infinite;
+}
+
+@keyframes pulse-timer {
+    0%, 100% {
+        opacity: 1;
+        text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+    }
+    50% {
+        opacity: 0.7;
+        text-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
     }
 }

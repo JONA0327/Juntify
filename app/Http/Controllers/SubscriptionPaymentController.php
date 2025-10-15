@@ -20,14 +20,12 @@ class SubscriptionPaymentController extends Controller
     }
 
     /**
-     * Mostrar planes disponibles
+     * Mostrar planes disponibles - Redirige al perfil
      */
     public function index()
     {
-        $plans = Plan::where('is_active', true)->orderBy('price')->get();
-        $user = Auth::user();
-
-        return view('subscription.plans', compact('plans', 'user'));
+        // Redirigir al perfil con la sección de planes
+        return redirect('/profile')->with('navigateToPlans', true);
     }
 
     /**

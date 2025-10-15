@@ -164,7 +164,7 @@
     </script>
     @vite(['resources/js/new-meeting.js'])
     <!-- Modal para opción de posponer bloqueada por plan -->
-    <div class="modal" id="postpone-locked-modal" style="display:none;">
+    <div class="modal" id="postpone-locked-modal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="modal-title">
@@ -173,11 +173,11 @@
                 </h2>
             </div>
             <div class="modal-body">
-                <p>La opción "Posponer" está disponible para los planes: <strong>Negocios</strong> y <strong>Enterprise</strong>.</p>
+                <p class="modal-description">La opción "Posponer" está disponible para los planes: <strong>Negocios</strong> y <strong>Enterprise</strong>.</p>
             </div>
             <div class="modal-footer">
-                <button class="btn" onclick="closePostponeLockedModal()">Cerrar</button>
-                <button class="btn btn-primary">Cambiar plan</button>
+                <button class="btn" onclick="document.getElementById('postpone-locked-modal').style.display='none'; document.body.style.overflow='';" id="close-modal-btn">Cerrar</button>
+                <button class="btn btn-primary" onclick="document.getElementById('postpone-locked-modal').style.display='none'; document.body.style.overflow=''; sessionStorage.setItem('navigateToPlans', 'true'); window.location.href='/profile';">Cambiar plan</button>
             </div>
         </div>
     </div>

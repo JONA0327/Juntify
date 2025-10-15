@@ -388,6 +388,9 @@ document.addEventListener('DOMContentLoaded', () => {
   setupProfilePricingToggle();
   initMercadoPagoStatusPolling();
 
+  // Verificar si se debe navegar a la sección de planes
+  checkNavigateToPlans();
+
   // Vincular botones de Drive
   const connectBtn    = document.getElementById('connect-drive-btn');
   const setMainBtn    = document.getElementById('set-main-folder-btn');
@@ -449,6 +452,38 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+/**
+ * Verifica si se debe navegar automáticamente a la sección de planes
+ */
+function checkNavigateToPlans() {
+  // Verificar sessionStorage (desde new-meeting)
+  const shouldNavigateSession = sessionStorage.getItem('navigateToPlans');
+
+  // Verificar Laravel session flash (desde redirección)
+  const shouldNavigateFlash = document.querySelector('meta[name="navigate-to-plans"]')?.getAttribute('content') === 'true';
+
+  if (shouldNavigateSession === 'true' || shouldNavigateFlash) {
+    console.log('🎯 Navegando automáticamente a la sección de planes...');
+
+    // Limpiar el flag de sessionStorage
+    if (shouldNavigateSession === 'true') {
+      sessionStorage.removeItem('navigateToPlans');
+    }
+
+    // Navegar a la sección de planes
+    setTimeout(() => {
+      const plansLink = document.querySelector('.sidebar-nav .nav-link[data-section="plans"]');
+      if (plansLink) {
+        // Simular click en el enlace de planes
+        plansLink.click();
+        console.log('✅ Sección de planes activada');
+      } else {
+        console.warn('⚠️ No se encontró el enlace de la sección de planes');
+      }
+    }, 100);
+  }
+}
 
 /**
  * Abre un modal genérico por id (agrega la clase .show)

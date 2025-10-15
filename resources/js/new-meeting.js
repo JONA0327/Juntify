@@ -270,6 +270,12 @@ let PLAN_LIMITS = {
     allow_postpone: true,
     warn_before_minutes: 5,
 };
+
+// ===== SISTEMA DE AUDIO DE NOTIFICACIONES =====
+let notificationAudio = null;
+const NOTIFICATION_SOUNDS = {
+    timeWarning: '/audio/notifications/time-warning.m4a' // Solo usar archivo de advertencia
+};
 const SEGMENT_MS = 10 * 60 * 1000; // 10 minutos
 // Se almacenan todos los trozos generados por una única sesión del MediaRecorder
 let recordedChunks = [];
@@ -310,6 +316,165 @@ async function clearPreviousAudioData() {
         // No lanzar error para no interrumpir el flujo
     }
 }
+
+// ===== FUNCIONES DE AUDIO DE NOTIFICACIONES =====
+
+// Función para reproducir sonido de advertencia de tiempo
+function playNotificationSound(soundType) {
+    // Solo procesar advertencia de tiempo
+    if (soundType !== 'timeWarning') {
+        console.warn(`Sonido no soportado: ${soundType}. Solo se soporta 'timeWarning'`);
+        playFallbackBeep();
+        return;
+    }
+
+    try {
+        // Detener audio anterior si está reproduciéndose
+        if (notificationAudio) {
+            notificationAudio.pause();
+            notificationAudio.currentTime = 0;
+        }
+
+        // Crear nuevo elemento de audio
+        notificationAudio = new Audio(NOTIFICATION_SOUNDS.timeWarning);
+        notificationAudio.volume = 0.7; // Volumen al 70%
+
+        // Configurar eventos
+        notificationAudio.addEventListener('canplaythrough', () => {
+            notificationAudio.play().catch(error => {
+                console.warn('No se pudo reproducir el archivo de audio, usando beep de fallback:', error);
+                playFallbackBeep();
+            });
+        });
+
+        notificationAudio.addEventListener('error', (error) => {
+            console.warn('Error al cargar el archivo de audio, usando beep de fallback:', error);
+            playFallbackBeep();
+        });
+
+        // Cargar el audio
+        notificationAudio.load();
+
+        console.log(`🔊 Reproduciendo advertencia de tiempo: ${NOTIFICATION_SOUNDS.timeWarning}`);
+
+    } catch (error) {
+        console.warn('Error en sistema de audio de notificaciones, usando fallback:', error);
+        playFallbackBeep();
+    }
+}
+
+// Función de fallback para generar beep de advertencia usando Web Audio API
+function playFallbackBeep() {
+    try {
+        // Crear contexto de audio
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        console.log('🎵 Generando beep de advertencia de fallback (800Hz, beep doble)');
+
+        // Generar beep doble para advertencia
+        const frequency = 800;
+        const duration = 0.2;
+        const beepCount = 2;
+
+        for (let i = 0; i < beepCount; i++) {
+            setTimeout(() => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+                oscillator.type = 'sine';
+
+                // Envelope para evitar clics
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
+                gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + duration - 0.01);
+                gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + duration);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + duration);
+            }, i * (duration + 0.1) * 1000); // Pausa entre beeps
+        }
+
+    } catch (error) {
+        console.error('Error generando beep de fallback:', error);
+        // Último recurso: log llamativo
+        console.log('🚨🚨🚨 ADVERTENCIA: QUEDAN 5 MINUTOS PARA EL LÍMITE 🚨🚨🚨');
+    }
+}
+
+// Función para verificar si existe el archivo de audio de advertencia
+async function checkNotificationAudioFiles() {
+    try {
+        const response = await fetch(NOTIFICATION_SOUNDS.timeWarning, { method: 'HEAD' });
+        const exists = response.ok;
+        console.log(`📁 Archivo de advertencia (${NOTIFICATION_SOUNDS.timeWarning}):`, exists ? '✅ Encontrado' : '❌ No encontrado');
+        return { timeWarning: exists };
+    } catch {
+        console.log(`📁 Archivo de advertencia (${NOTIFICATION_SOUNDS.timeWarning}): ❌ Error al verificar`);
+        return { timeWarning: false };
+    }
+}
+
+// Función para agregar botón de prueba (solo en desarrollo)
+function addTestAudioButton() {
+    const testContainer = document.createElement('div');
+    testContainer.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        z-index: 9999;
+        background: rgba(59, 130, 246, 0.9);
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        backdrop-filter: blur(10px);
+    `;
+
+    testContainer.innerHTML = `
+        <div style="color: white; font-size: 12px; margin-bottom: 5px;">🔊 Test Advertencia:</div>
+        <button id="test-warning-btn" style="margin: 2px; padding: 5px 8px; font-size: 10px; background: #f59e0b; border: none; border-radius: 4px; color: white; cursor: pointer;">
+            ⚠️ Probar Audio
+        </button>
+        <button id="close-test-btn" style="margin: 2px; padding: 5px 8px; font-size: 10px; background: #6b7280; border: none; border-radius: 4px; color: white; cursor: pointer;">
+            ✕
+        </button>
+    `;
+
+    document.body.appendChild(testContainer);
+
+    // Event listeners
+    document.getElementById('test-warning-btn').addEventListener('click', () => {
+        console.log('🧪 Probando sonido de advertencia de tiempo...');
+        playNotificationSound('timeWarning');
+        showWarning('Prueba: Quedan 5 minutos para el límite de grabación');
+    });
+
+    document.getElementById('close-test-btn').addEventListener('click', () => {
+        testContainer.remove();
+    });
+
+    console.log('🧪 Botón de prueba de audio agregado (desarrollo)');
+}
+
+// Función de debug para simular advertencia de tiempo (solo desarrollo)
+window.debugForceTimeWarning = function() {
+    console.log('🧪 DEBUG: Forzando advertencia de tiempo...');
+    console.log(`Variables actuales:
+        - MAX_DURATION_MS: ${MAX_DURATION_MS}
+        - WARN_BEFORE_MINUTES: ${WARN_BEFORE_MINUTES}
+        - limitWarningShown: ${limitWarningShown}
+        - isRecording: ${isRecording}
+        - meetingRecording: ${meetingRecording}
+    `);
+
+    limitWarningShown = false; // Reset flag
+    showWarning(`DEBUG: Quedan ${WARN_BEFORE_MINUTES} minutos para el límite de grabación`);
+
+    return 'Advertencia de tiempo forzada - revisar consola para detalles';
+};
 
 // ===== FUNCIONES PRINCIPALES =====
 
@@ -502,14 +667,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Cargar límites del plan y aplicarlos a la UI/funcionalidad
     try {
+        console.log('🔄 Cargando límites del plan...');
         const resp = await fetch('/api/plan/limits', { credentials: 'include' });
         if (resp.ok) {
             const limits = await resp.json();
+            console.log('📋 Límites del plan cargados:', limits);
+
             PLAN_LIMITS = limits;
             // Duración máxima por reunión
             const minutes = Number(limits.max_duration_minutes || 120);
             MAX_DURATION_MS = minutes * 60 * 1000;
             WARN_BEFORE_MINUTES = Number(limits.warn_before_minutes || 5);
+
+            console.log(`⏱️ Configuración de tiempo:
+                - Duración máxima: ${minutes} minutos (${MAX_DURATION_MS}ms)
+                - Advertencia: ${WARN_BEFORE_MINUTES} minutos antes
+                - Umbral advertencia: ${MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000}ms`);
             // Actualizar mensajes de UI
             const hintAudio = document.getElementById('max-duration-hint-audio');
             const hintMeeting = document.getElementById('max-duration-hint-meeting');
@@ -577,6 +750,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (e) {
         console.warn('No se pudieron cargar los límites del plan:', e);
     }
+
+    // Verificar archivo de audio de advertencia
+    setTimeout(async () => {
+        console.log('🔊 Verificando archivo de advertencia de tiempo...');
+        const audioFiles = await checkNotificationAudioFiles();
+
+        if (!audioFiles.timeWarning) {
+            console.warn('⚠️ Archivo de advertencia no encontrado. Se usará beep de fallback');
+        } else {
+            console.log('✅ Archivo de advertencia encontrado y listo');
+        }
+
+        // Agregar botón de prueba temporal (solo en desarrollo)
+        if (window.location.hostname === 'localhost' || window.location.hostname.includes('laragon')) {
+            addTestAudioButton();
+        }
+    }, 1000);
+
+    // Configurar event listeners para el modal (una sola vez)
+    setupModalEventListeners();
 
     setupRecordingNavigationGuards();
 });
@@ -1207,13 +1400,25 @@ function updateTimer() {
     if (isPaused || !startTime) return;
 
     const elapsed = Date.now() - startTime;
+    const elapsedMinutes = Math.floor(elapsed / 60000);
+    const maxMinutes = Math.floor(MAX_DURATION_MS / 60000);
+    const warningThreshold = MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000;
+
+    // Debug logging cada 30 segundos
+    if (elapsedMinutes > 0 && elapsed % 30000 < 100) {
+        console.log(`⏱️ Timer Audio: ${elapsedMinutes}/${maxMinutes} min - Límite advertencia: ${Math.floor(warningThreshold/60000)} min`);
+    }
 
     if (elapsed >= MAX_DURATION_MS) {
+        console.log('🛑 LÍMITE DE TIEMPO ALCANZADO - Deteniendo grabación automáticamente');
+        // Solo usar beep de fallback para límite alcanzado
+        playFallbackBeep();
         stopRecording();
         return;
     }
 
-    if (!limitWarningShown && elapsed >= MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000) {
+    if (!limitWarningShown && elapsed >= warningThreshold) {
+        console.log(`🚨 ACTIVANDO ADVERTENCIA: ${elapsedMinutes} min transcurridos de ${maxMinutes} max`);
         showWarning(`Quedan ${WARN_BEFORE_MINUTES} minutos para el límite de grabación`);
         limitWarningShown = true;
     }
@@ -1223,13 +1428,28 @@ function updateTimer() {
     const seconds = Math.floor((elapsed % 60000) / 1000);
 
     const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    document.getElementById('timer-counter').textContent = timeString;
+    const timerEl = document.getElementById('timer-counter');
+    if (timerEl) {
+        timerEl.textContent = timeString;
+
+        // Cambiar color cuando se acerque al límite
+        if (elapsed >= warningThreshold) {
+            timerEl.style.color = '#ff4444';
+            timerEl.style.fontWeight = 'bold';
+        }
+    }
 }
 
 // Función para mostrar advertencias
 function showWarning(message) {
+    // 🔊 Reproducir sonido para advertencias de tiempo límite
+    if (message.includes('minutos') && message.includes('límite')) {
+        playNotificationSound('timeWarning');
+        console.log(`🚨 ADVERTENCIA DE TIEMPO: ${message}`);
+    }
+
     const notification = document.createElement('div');
-    notification.className = 'notification warning';
+    notification.className = 'notification warning time-warning';
     notification.innerHTML = `
         <div class="notification-content">
             <span class="notification-icon">⚠️</span>
@@ -1239,9 +1459,20 @@ function showWarning(message) {
 
     document.body.appendChild(notification);
 
+    // Hacer la notificación más visible para advertencias de tiempo
+    if (message.includes('minutos') && message.includes('límite')) {
+        notification.style.cssText = `
+            background: linear-gradient(135deg, #ff6b35, #f7931e) !important;
+            border: 2px solid #ff4444 !important;
+            box-shadow: 0 8px 25px rgba(255, 68, 68, 0.3) !important;
+            animation: pulse-warning 1s infinite !important;
+            z-index: 10001 !important;
+        `;
+    }
+
     setTimeout(() => {
         notification.remove();
-    }, 5000);
+    }, 8000); // Mantener más tiempo visible para advertencias críticas
 
     // Enviar notificación al backend solo para advertencia de tiempo restante
     if (!timeWarnNotified && message.includes('minutos') && message.includes('límite')) {
@@ -1837,9 +2068,18 @@ function handleFileSelection(file) {
         return;
     }
 
-    // Validar tamaño (máximo 200MB)
-    if (file.size > 200 * 1024 * 1024) {
-        showError('El archivo es demasiado grande. El tamaño máximo es 200MB.');
+    // Validar tamaño basado en el plan del usuario
+    const userRole = window.userRole || 'free';
+    const maxSize = userRole === 'free' ? 50 * 1024 * 1024 : 200 * 1024 * 1024; // 50MB para Free, 200MB para otros
+    const maxSizeText = userRole === 'free' ? '50MB' : '200MB';
+    
+    if (file.size > maxSize) {
+        const currentSizeText = formatFileSize(file.size);
+        if (userRole === 'free') {
+            showError(`🔒 El archivo es demasiado grande (${currentSizeText}). Los usuarios del plan Free tienen un límite de ${maxSizeText}. Actualiza tu plan para subir archivos más grandes.`);
+        } else {
+            showError(`El archivo es demasiado grande (${currentSizeText}). El tamaño máximo es ${maxSizeText}.`);
+        }
         return;
     }
 
@@ -2395,38 +2635,113 @@ function updateMeetingTimer() {
     if (!meetingStartTime || !meetingRecording) return;
 
     const elapsed = Date.now() - meetingStartTime;
+    const elapsedMinutes = Math.floor(elapsed / 60000);
+    const maxMinutes = Math.floor(MAX_DURATION_MS / 60000);
+    const warningThreshold = MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000;
+
+    // Debug logging cada 30 segundos
+    if (elapsedMinutes > 0 && elapsed % 30000 < 100) {
+        console.log(`⏱️ Timer Reunión: ${elapsedMinutes}/${maxMinutes} min - Límite advertencia: ${Math.floor(warningThreshold/60000)} min`);
+    }
 
     if (elapsed >= MAX_DURATION_MS) {
+        console.log('🛑 LÍMITE DE TIEMPO REUNIÓN ALCANZADO - Deteniendo grabación automáticamente');
+        // Solo usar beep de fallback para límite alcanzado
+        playFallbackBeep();
         stopMeetingRecording();
         return;
     }
 
-    if (!limitWarningShown && elapsed >= MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000) {
+    if (!limitWarningShown && elapsed >= warningThreshold) {
+        console.log(`🚨 ACTIVANDO ADVERTENCIA REUNIÓN: ${elapsedMinutes} min transcurridos de ${maxMinutes} max`);
         showWarning(`Quedan ${WARN_BEFORE_MINUTES} minutos para el límite de grabación`);
         limitWarningShown = true;
     }
 
-
-function showPostponeLockedModal() {
-    const modal = document.getElementById('postpone-locked-modal');
-    if (!modal) {
-        alert('Esta opción solo está disponible para los planes: Negocios, Enterprise, Founder, Developer y Superadmin.');
-        return;
-    }
-    modal.style.display = 'block';
-}
-
-// Cerrar modal de upgrade
-window.closePostponeLockedModal = function() {
-    const modal = document.getElementById('postpone-locked-modal');
-    if (modal) modal.style.display = 'none';
-}
     const hours = Math.floor(elapsed / 3600000);
     const minutes = Math.floor((elapsed % 3600000) / 60000);
     const seconds = Math.floor((elapsed % 60000) / 1000);
 
     const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    document.getElementById('meeting-timer-counter').textContent = timeString;
+    const timerEl = document.getElementById('meeting-timer-counter');
+    if (timerEl) {
+        timerEl.textContent = timeString;
+
+        // Cambiar color cuando se acerque al límite
+        if (elapsed >= warningThreshold) {
+            timerEl.style.color = '#ff4444';
+            timerEl.style.fontWeight = 'bold';
+        }
+    }
+}
+
+// Función simple para mostrar modal
+function showPostponeLockedModal() {
+    console.log('🚀 INICIANDO showPostponeLockedModal...');
+
+    const modal = document.getElementById('postpone-locked-modal');
+    console.log('🔍 Modal encontrado:', !!modal);
+
+    if (!modal) {
+        console.error('❌ Modal no encontrado!');
+        alert('Esta opción solo está disponible para los planes: Negocios, Enterprise, Founder, Developer y Superadmin.');
+        return;
+    }
+
+    // Resetear cualquier estilo previo
+    modal.removeAttribute('style');
+
+    // Aplicar estilos de forma directa y forzada
+    modal.style.setProperty('display', 'block', 'important');
+    modal.style.setProperty('visibility', 'visible', 'important');
+    modal.style.setProperty('opacity', '1', 'important');
+
+    // Bloquear scroll del body
+    document.body.style.setProperty('overflow', 'hidden', 'important');
+
+    console.log('✅ Modal configurado. Display:', modal.style.display);
+    console.log('✅ Body overflow:', document.body.style.overflow);
+}
+
+// Función simple para cerrar modal
+window.closePostponeLockedModal = function() {
+    console.log('🔄 INICIANDO closePostponeLockedModal...');
+
+    const modal = document.getElementById('postpone-locked-modal');
+    console.log('🔍 Modal para cerrar encontrado:', !!modal);
+
+    if (modal) {
+        // Resetear y aplicar estilos de cierre de forma forzada
+        modal.removeAttribute('style');
+        modal.style.setProperty('display', 'none', 'important');
+        modal.style.setProperty('visibility', 'hidden', 'important');
+        modal.style.setProperty('opacity', '0', 'important');
+
+        // Restaurar scroll del body
+        document.body.removeAttribute('style');
+        document.body.style.setProperty('overflow', '', 'important');
+
+        console.log('✅ Modal cerrado. Display:', modal.style.display);
+        console.log('✅ Body overflow restaurado:', document.body.style.overflow);
+    } else {
+        console.error('❌ No se encontró el modal para cerrar');
+    }
+}
+
+// Función simple para ir a planes
+window.goToProfilePlans = function() {
+    console.log('🚀 Navegando a planes...');
+
+    // Cerrar modal primero
+    const modal = document.getElementById('postpone-locked-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    // Ir a perfil
+    sessionStorage.setItem('navigateToPlans', 'true');
+    window.location.href = '/profile';
 }
 
 // Resetear visualizadores de audio de reunión

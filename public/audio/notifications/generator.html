@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Audio de Notificaciones - Juntify</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1e293b;
+            color: white;
+        }
+        .generator {
+            background: rgba(59, 130, 246, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 10px 0;
+        }
+        label {
+            min-width: 100px;
+        }
+        input[type="range"] {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔊 Generador de Audio de Notificaciones - Juntify</h1>
+    <p>Esta herramienta genera los archivos de audio necesarios para las notificaciones del sistema de grabación.</p>
+
+    <div class="generator">
+        <h2>⚠️ Advertencia de Tiempo Límite</h2>
+        <p>Audio que se reproduce cuando quedan 5 minutos para el límite de grabación.</p>
+
+        <div class="controls">
+            <label>Frecuencia:</label>
+            <input type="range" id="warningFreq" min="200" max="1000" value="800">
+            <span id="warningFreqValue">800 Hz</span>
+        </div>
+
+        <div class="controls">
+            <label>Duración:</label>
+            <input type="range" id="warningDuration" min="0.1" max="3" step="0.1" value="1.5">
+            <span id="warningDurationValue">1.5s</span>
+        </div>
+
+        <button onclick="playWarningSound()">🎵 Reproducir</button>
+        <button onclick="generateWarningAudio()">📥 Generar y Descargar</button>
+    </div>
+
+    <div class="generator">
+        <h2>🛑 Límite de Tiempo Alcanzado</h2>
+        <p>Audio que se reproduce cuando se alcanza el límite máximo de grabación.</p>
+
+        <div class="controls">
+            <label>Frecuencia:</label>
+            <input type="range" id="limitFreq" min="300" max="1200" value="600">
+            <span id="limitFreqValue">600 Hz</span>
+        </div>
+
+        <div class="controls">
+            <label>Duración:</label>
+            <input type="range" id="limitDuration" min="0.5" max="5" step="0.1" value="2">
+            <span id="limitDurationValue">2s</span>
+        </div>
+
+        <button onclick="playLimitSound()">🎵 Reproducir</button>
+        <button onclick="generateLimitAudio()">📥 Generar y Descargar</button>
+    </div>
+
+    <div class="generator">
+        <h2>📁 Generar Todos los Archivos</h2>
+        <button onclick="generateAllAudioFiles()" style="background: #10b981; font-size: 18px; padding: 15px 30px;">
+            📦 Generar Todos los Audios
+        </button>
+    </div>
+
+    <script>
+        let audioContext = null;
+
+        // Inicializar Web Audio Context
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioContext;
+        }
+
+        // Actualizar valores mostrados
+        document.getElementById('warningFreq').addEventListener('input', (e) => {
+            document.getElementById('warningFreqValue').textContent = e.target.value + ' Hz';
+        });
+
+        document.getElementById('warningDuration').addEventListener('input', (e) => {
+            document.getElementById('warningDurationValue').textContent = e.target.value + 's';
+        });
+
+        document.getElementById('limitFreq').addEventListener('input', (e) => {
+            document.getElementById('limitFreqValue').textContent = e.target.value + ' Hz';
+        });
+
+        document.getElementById('limitDuration').addEventListener('input', (e) => {
+            document.getElementById('limitDurationValue').textContent = e.target.value + 's';
+        });
+
+        // Generar audio de advertencia (beep doble)
+        function generateWarningBeep(frequency = 800, duration = 1.5) {
+            const ctx = initAudioContext();
+            const sampleRate = ctx.sampleRate;
+            const length = sampleRate * duration;
+            const buffer = ctx.createBuffer(1, length, sampleRate);
+            const data = buffer.getChannelData(0);
+
+            // Beep doble: beep corto, pausa, beep corto
+            const beepDuration = 0.2; // 200ms cada beep
+            const pauseDuration = 0.1; // 100ms pausa
+            const beepSamples = sampleRate * beepDuration;
+            const pauseSamples = sampleRate * pauseDuration;
+
+            for (let i = 0; i < length; i++) {
+                let sample = 0;
+
+                // Primer beep
+                if (i < beepSamples) {
+                    const t = i / sampleRate;
+                    const envelope = Math.sin(Math.PI * t / beepDuration); // Envelope suave
+                    sample = Math.sin(2 * Math.PI * frequency * t) * envelope * 0.3;
+                }
+                // Segundo beep
+                else if (i >= beepSamples + pauseSamples && i < 2 * beepSamples + pauseSamples) {
+                    const t = (i - beepSamples - pauseSamples) / sampleRate;
+                    const envelope = Math.sin(Math.PI * t / beepDuration);
+                    sample = Math.sin(2 * Math.PI * frequency * t) * envelope * 0.3;
+                }
+
+                data[i] = sample;
+            }
+
+            return buffer;
+        }
+
+        // Generar audio de límite alcanzado (beep triple más urgente)
+        function generateLimitBeep(frequency = 600, duration = 2) {
+            const ctx = initAudioContext();
+            const sampleRate = ctx.sampleRate;
+            const length = sampleRate * duration;
+            const buffer = ctx.createBuffer(1, length, sampleRate);
+            const data = buffer.getChannelData(0);
+
+            // Triple beep rápido
+            const beepDuration = 0.15; // 150ms cada beep
+            const pauseDuration = 0.1; // 100ms pausa
+            const beepSamples = sampleRate * beepDuration;
+            const pauseSamples = sampleRate * pauseDuration;
+
+            for (let i = 0; i < length; i++) {
+                let sample = 0;
+
+                // Calcular en qué beep estamos
+                const cycleLength = beepSamples + pauseSamples;
+                const beepIndex = Math.floor(i / cycleLength);
+                const posInCycle = i % cycleLength;
+
+                if (beepIndex < 3 && posInCycle < beepSamples) {
+                    const t = posInCycle / sampleRate;
+                    const envelope = Math.sin(Math.PI * t / beepDuration);
+                    sample = Math.sin(2 * Math.PI * frequency * t) * envelope * 0.4;
+                }
+
+                data[i] = sample;
+            }
+
+            return buffer;
+        }
+
+        // Reproducir sonido de advertencia
+        function playWarningSound() {
+            const freq = parseInt(document.getElementById('warningFreq').value);
+            const duration = parseFloat(document.getElementById('warningDuration').value);
+
+            const ctx = initAudioContext();
+            const buffer = generateWarningBeep(freq, duration);
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(ctx.destination);
+            source.start();
+        }
+
+        // Reproducir sonido de límite
+        function playLimitSound() {
+            const freq = parseInt(document.getElementById('limitFreq').value);
+            const duration = parseFloat(document.getElementById('limitDuration').value);
+
+            const ctx = initAudioContext();
+            const buffer = generateLimitBeep(freq, duration);
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(ctx.destination);
+            source.start();
+        }
+
+        // Convertir buffer a WAV y descargar
+        function downloadAudio(buffer, filename) {
+            const wav = bufferToWav(buffer);
+            const blob = new Blob([wav], { type: 'audio/wav' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+
+            URL.revokeObjectURL(url);
+        }
+
+        // Generar y descargar audio de advertencia
+        function generateWarningAudio() {
+            const freq = parseInt(document.getElementById('warningFreq').value);
+            const duration = parseFloat(document.getElementById('warningDuration').value);
+
+            const ctx = initAudioContext();
+            const buffer = generateWarningBeep(freq, duration);
+            downloadAudio(buffer, 'time-warning.wav');
+        }
+
+        // Generar y descargar audio de límite
+        function generateLimitAudio() {
+            const freq = parseInt(document.getElementById('limitFreq').value);
+            const duration = parseFloat(document.getElementById('limitDuration').value);
+
+            const ctx = initAudioContext();
+            const buffer = generateLimitBeep(freq, duration);
+            downloadAudio(buffer, 'time-limit-reached.wav');
+        }
+
+        // Generar todos los archivos
+        function generateAllAudioFiles() {
+            // Generar archivos con configuraciones optimizadas
+            const ctx = initAudioContext();
+
+            // Advertencia: beep doble suave
+            const warningBuffer = generateWarningBeep(800, 1.5);
+            downloadAudio(warningBuffer, 'time-warning.wav');
+
+            setTimeout(() => {
+                // Límite alcanzado: beep triple urgente
+                const limitBuffer = generateLimitBeep(600, 2);
+                downloadAudio(limitBuffer, 'time-limit-reached.wav');
+            }, 500);
+
+            // Generar archivos adicionales
+            setTimeout(() => {
+                const startBuffer = generateWarningBeep(900, 0.8);
+                downloadAudio(startBuffer, 'meeting-start.wav');
+            }, 1000);
+
+            setTimeout(() => {
+                const endBuffer = generateWarningBeep(500, 1.2);
+                downloadAudio(endBuffer, 'meeting-end.wav');
+            }, 1500);
+        }
+
+        // Función para convertir buffer a WAV
+        function bufferToWav(buffer) {
+            const length = buffer.length;
+            const arrayBuffer = new ArrayBuffer(44 + length * 2);
+            const view = new DataView(arrayBuffer);
+            const channels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+
+            // WAV header
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + length * 2, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, channels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, length * 2, true);
+
+            // Audio data
+            const channelData = buffer.getChannelData(0);
+            let offset = 44;
+            for (let i = 0; i < length; i++) {
+                const sample = Math.max(-1, Math.min(1, channelData[i]));
+                view.setInt16(offset, sample * 0x7FFF, true);
+                offset += 2;
+            }
+
+            return arrayBuffer;
+        }
+
+        // Inicializar al cargar la página
+        document.addEventListener('click', () => {
+            if (!audioContext) {
+                initAudioContext();
+            }
+        }, { once: true });
+    </script>
+</body>
+</html>
