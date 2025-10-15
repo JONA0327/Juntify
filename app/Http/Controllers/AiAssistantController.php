@@ -61,12 +61,69 @@ class AiAssistantController extends Controller
     private function hasPremiumAccess($user = null): bool
     {
         $user = $user ?: Auth::user();
-        $userPlan = $user->plan_code ?? 'free';
+        $planCode = strtolower((string) ($user->plan_code ?? 'free'));
+        $role = strtolower((string) ($user->roles ?? 'free'));
+
         $organizationId = session('organizationId');
-        $hasOrganizationalRole = in_array($user->roles ?? '', ['admin', 'superadmin', 'founder', 'developer']);
+        $hasOrganizationalRole = in_array($role, ['admin', 'superadmin', 'founder', 'developer'], true);
         $belongsToOrg = $organizationId || $hasOrganizationalRole;
 
-        return $userPlan !== 'free' || $belongsToOrg;
+        $isBasicPlan = $this->isBasicPlan($planCode, $role);
+        $isFreePlan = $this->isFreePlan($planCode, $role);
+
+        $hasPaidPlan = !$isFreePlan && !$isBasicPlan && $planCode !== '';
+        $hasPaidRole = !$isFreePlan && !$isBasicPlan && $role !== '';
+
+        return $belongsToOrg || $hasPaidPlan || $hasPaidRole;
+    }
+
+    private function isBasicPlan(string $planCode, string $role): bool
+    {
+        if (in_array($role, ['basic'], true)) {
+            return true;
+        }
+
+        if (in_array($planCode, ['basic', 'basico'], true)) {
+            return true;
+        }
+
+        return str_contains($planCode, 'basic');
+    }
+
+    private function isFreePlan(string $planCode, string $role): bool
+    {
+        if (in_array($role, ['free'], true)) {
+            return true;
+        }
+
+        if ($planCode === '' || in_array($planCode, ['free', 'freemium'], true)) {
+            return true;
+        }
+
+        return str_contains($planCode, 'free');
+    }
+
+    private function getPlanDisplayName(string $planCode, string $role): string
+    {
+        $lookup = [
+            'free' => 'Plan Free',
+            'freemium' => 'Plan Free',
+            'basic' => 'Plan Basic',
+            'basico' => 'Plan Basic',
+            'negocios' => 'Plan Negocios',
+            'business' => 'Plan Negocios',
+            'enterprise' => 'Plan Enterprise',
+            'empresas' => 'Plan Empresas',
+        ];
+
+        foreach ([$planCode, $role] as $key) {
+            if ($key !== '' && isset($lookup[$key])) {
+                return $lookup[$key];
+            }
+        }
+
+        $fallback = $planCode ?: $role;
+        return $fallback ? 'Plan ' . ucfirst($fallback) : 'Plan Free';
     }
 
     /**
@@ -101,25 +158,73 @@ class AiAssistantController extends Controller
     /**
      * Verificar límites para usuarios FREE
      */
-    private function checkFreePlanLimits($user = null): array
+    private function resolvePlanLimits($user = null): array
     {
         $user = $user ?: Auth::user();
 
-        if ($this->hasPremiumAccess($user)) {
-            return ['allowed' => true];
-        }
+        $planCode = strtolower((string) ($user->plan_code ?? 'free'));
+        $role = strtolower((string) ($user->roles ?? 'free'));
 
         $dailyMessages = $this->getDailyMessageCount($user);
         $dailyDocuments = $this->getDailyDocumentCount($user);
 
+        $isBasicPlan = $this->isBasicPlan($planCode, $role);
+        $isFreePlan = $this->isFreePlan($planCode, $role);
+
+        if ($this->hasPremiumAccess($user) && !$isFreePlan && !$isBasicPlan) {
+            $planName = $this->getPlanDisplayName($planCode, $role);
+
+            return [
+                'allowed' => true,
+                'planRole' => $role,
+                'planCode' => $planCode,
+                'planName' => $planName,
+                'dailyMessageCount' => $dailyMessages,
+                'dailyDocumentCount' => $dailyDocuments,
+                'maxDailyMessages' => null,
+                'maxDailyDocuments' => null,
+                'canSendMessage' => true,
+                'canCreateSession' => true,
+                'canUploadDocument' => true,
+            ];
+        }
+
+        if ($isBasicPlan) {
+            $maxMessages = 10;
+            $maxDocuments = 5;
+            $planName = 'Plan Basic';
+
+            return [
+                'allowed' => true,
+                'planRole' => $role,
+                'planCode' => $planCode,
+                'planName' => $planName,
+                'dailyMessageCount' => $dailyMessages,
+                'dailyDocumentCount' => $dailyDocuments,
+                'maxDailyMessages' => $maxMessages,
+                'maxDailyDocuments' => $maxDocuments,
+                'canSendMessage' => $dailyMessages < $maxMessages,
+                'canCreateSession' => $dailyMessages < $maxMessages,
+                'canUploadDocument' => $dailyDocuments < $maxDocuments,
+            ];
+        }
+
+        $maxMessages = 3;
+        $maxDocuments = 1;
+        $planName = 'Plan Free';
+
         return [
             'allowed' => false,
-            'daily_messages' => $dailyMessages,
-            'daily_documents' => $dailyDocuments,
-            'message_limit' => 3,
-            'document_limit' => 1,
-            'can_send_message' => $dailyMessages < 3,
-            'can_upload_document' => $dailyDocuments < 1
+            'planRole' => $role,
+            'planCode' => $planCode,
+            'planName' => $planName,
+            'dailyMessageCount' => $dailyMessages,
+            'dailyDocumentCount' => $dailyDocuments,
+            'maxDailyMessages' => $maxMessages,
+            'maxDailyDocuments' => $maxDocuments,
+            'canSendMessage' => $dailyMessages < $maxMessages,
+            'canCreateSession' => $dailyMessages < $maxMessages,
+            'canUploadDocument' => $dailyDocuments < $maxDocuments,
         ];
     }
 
@@ -134,13 +239,14 @@ class AiAssistantController extends Controller
     public function getLimits(): JsonResponse
     {
         $user = Auth::user();
-        $limits = $this->checkFreePlanLimits($user);
+        $limits = $this->resolvePlanLimits($user);
 
-        return response()->json([
+        return response()->json(array_merge([
             'success' => true,
+            'user_plan' => $limits['planCode'] ?? ($user->plan_code ?? 'free'),
+        ], $limits, [
             'limits' => $limits,
-            'user_plan' => $user->plan_code ?? 'free'
-        ]);
+        ]));
     }
 
     /**

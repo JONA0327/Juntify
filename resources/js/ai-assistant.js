@@ -550,6 +550,69 @@ function setContext(type, data) {
 // Variable global para límites del usuario
 let userLimits = null;
 
+function inferPlanName(planCode, planRole) {
+    const normalizedCode = (planCode || '').toString().toLowerCase();
+    const normalizedRole = (planRole || '').toString().toLowerCase();
+    const lookup = {
+        free: 'Plan Free',
+        freemium: 'Plan Free',
+        basic: 'Plan Basic',
+        basico: 'Plan Basic',
+        negocios: 'Plan Negocios',
+        business: 'Plan Negocios',
+        enterprise: 'Plan Enterprise',
+        empresas: 'Plan Empresas',
+    };
+
+    if (lookup[normalizedCode]) {
+        return lookup[normalizedCode];
+    }
+
+    if (lookup[normalizedRole]) {
+        return lookup[normalizedRole];
+    }
+
+    if (normalizedCode.includes('basic')) {
+        return 'Plan Basic';
+    }
+
+    if (normalizedCode.includes('free')) {
+        return 'Plan Free';
+    }
+
+    return normalizedCode ? `Plan ${normalizedCode.charAt(0).toUpperCase()}${normalizedCode.slice(1)}` : 'tu plan actual';
+}
+
+function normalizeLimitsResponse(data) {
+    if (!data) return null;
+    const raw = data.limits ?? data;
+    const planCode = (data.planCode ?? raw.planCode ?? data.user_plan ?? '').toString();
+    const planRole = (data.planRole ?? raw.planRole ?? '').toString();
+    const planName = data.planName ?? raw.planName ?? inferPlanName(planCode, planRole);
+
+    const dailyMessages = raw.dailyMessageCount ?? raw.daily_messages ?? 0;
+    const dailyDocuments = raw.dailyDocumentCount ?? raw.daily_documents ?? 0;
+    const maxMessages = raw.maxDailyMessages ?? raw.message_limit ?? raw.max_daily_messages ?? null;
+    const maxDocuments = raw.maxDailyDocuments ?? raw.document_limit ?? raw.max_daily_documents ?? null;
+    const canSend = raw.canSendMessage ?? raw.can_send_message;
+    const canUpload = raw.canUploadDocument ?? raw.can_upload_document;
+    const canCreateSession = raw.canCreateSession ?? (raw.can_send_message ?? true);
+
+    return {
+        allowed: raw.allowed ?? data.allowed ?? false,
+        planCode,
+        planRole,
+        planName,
+        dailyMessageCount: dailyMessages,
+        dailyDocumentCount: dailyDocuments,
+        maxDailyMessages: typeof maxMessages === 'number' ? maxMessages : null,
+        maxDailyDocuments: typeof maxDocuments === 'number' ? maxDocuments : null,
+        canSendMessage: typeof canSend === 'boolean' ? canSend : true,
+        canCreateSession: typeof canCreateSession === 'boolean' ? canCreateSession : true,
+        canUploadDocument: typeof canUpload === 'boolean' ? canUpload : true,
+    };
+}
+
 /**
  * Cargar límites del usuario desde el backend
  */
@@ -564,7 +627,8 @@ async function loadUserLimits() {
         });
 
         if (response.ok) {
-            userLimits = await response.json();
+            const data = await response.json();
+            userLimits = normalizeLimitsResponse(data);
             updateUIBasedOnLimits();
         } else {
             console.error('Error al cargar límites del usuario');
@@ -602,6 +666,7 @@ function showLimitExceededModal(action) {
 
     const messageLimit = limits.maxDailyMessages ?? limits.message_limit ?? limits.max_daily_messages;
     const documentLimit = limits.maxDailyDocuments ?? limits.document_limit ?? limits.max_daily_documents;
+    const planLabel = limits.planName || inferPlanName(limits.planCode, limits.planRole);
 
     switch (action) {
         case 'sendMessage':
@@ -610,9 +675,9 @@ function showLimitExceededModal(action) {
         case 'send_message':
             title = 'Límite de consultas diarias alcanzado';
             if (messageLimit) {
-                message = `Has alcanzado el límite de ${messageLimit} consultas diarias del plan FREE.<br><br>Actualiza tu plan para tener acceso ilimitado a conversaciones con IA.`;
+                message = `Has alcanzado el límite de ${messageLimit} consultas diarias del ${planLabel}.<br><br>Actualiza tu plan para tener acceso ilimitado a conversaciones con IA.`;
             } else {
-                message = 'Has alcanzado el límite diario de consultas del plan FREE.<br><br>Actualiza tu plan para tener acceso ilimitado a conversaciones con IA.';
+                message = `Has alcanzado el límite diario de consultas del ${planLabel}.<br><br>Actualiza tu plan para tener acceso ilimitado a conversaciones con IA.`;
             }
             break;
         case 'uploadDocument':
@@ -620,9 +685,9 @@ function showLimitExceededModal(action) {
         case 'upload_document':
             title = 'Límite de documentos alcanzado';
             if (documentLimit) {
-                message = `Has alcanzado el límite diario de ${documentLimit} documento. Los usuarios FREE pueden subir hasta ${documentLimit} documento por día.<br><br>Actualiza tu plan para tener acceso ilimitado.`;
+                message = `Has alcanzado el límite diario de ${documentLimit} documento(s) para el ${planLabel}.<br><br>Actualiza tu plan para tener acceso ilimitado.`;
             } else {
-                message = 'Has alcanzado el límite diario de documentos del plan FREE.<br><br>Actualiza tu plan para tener acceso ilimitado.';
+                message = `Has alcanzado el límite diario de documentos del ${planLabel}.<br><br>Actualiza tu plan para tener acceso ilimitado.`;
             }
             break;
     }
@@ -659,16 +724,24 @@ function updateUIBasedOnLimits() {
     // Actualizar contadores en la interfaz si existen
     const messageCountElement = document.getElementById('daily-message-count');
     if (messageCountElement) {
-        messageCountElement.textContent = `${userLimits.dailyMessageCount}/${userLimits.maxDailyMessages}`;
+        if (typeof userLimits.maxDailyMessages === 'number') {
+            messageCountElement.textContent = `${userLimits.dailyMessageCount}/${userLimits.maxDailyMessages}`;
+        } else {
+            messageCountElement.textContent = `${userLimits.dailyMessageCount}/∞`;
+        }
     }
 
     const documentCountElement = document.getElementById('daily-document-count');
     if (documentCountElement) {
-        documentCountElement.textContent = `${userLimits.dailyDocumentCount}/${userLimits.maxDailyDocuments}`;
+        if (typeof userLimits.maxDailyDocuments === 'number') {
+            documentCountElement.textContent = `${userLimits.dailyDocumentCount}/${userLimits.maxDailyDocuments}`;
+        } else {
+            documentCountElement.textContent = `${userLimits.dailyDocumentCount}/∞`;
+        }
     }
 
     // Deshabilitar botones si se alcanzaron los límites
-    if (!userLimits.canSendMessage) {
+    if (userLimits.canSendMessage === false) {
         const sendButton = document.getElementById('send-btn');
         if (sendButton) {
             sendButton.disabled = true;
@@ -676,7 +749,7 @@ function updateUIBasedOnLimits() {
         }
     }
 
-    if (!userLimits.canCreateSession) {
+    if (userLimits.canCreateSession === false) {
         const newChatButton = document.querySelector('.new-chat-btn');
         if (newChatButton) {
             newChatButton.disabled = true;
