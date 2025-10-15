@@ -50,6 +50,45 @@ let retryAttempts = 0; // Contador de intentos de resubida
 const MAX_RETRY_ATTEMPTS = 3; // Máximo número de reintentos
 let pendingNavigationUrl = null;
 
+function getUserPlanInfo() {
+    const planCode = (window.userPlanCode || '').toString().toLowerCase();
+    const role = (window.userRole || '').toString().toLowerCase();
+    const isBasic = role === 'basic' || planCode === 'basic' || planCode === 'basico' || planCode.includes('basic');
+    const isFree = role === 'free' || planCode === '' || planCode === 'free' || planCode.includes('free');
+
+    let planName = 'tu plan actual';
+    if (isBasic) {
+        planName = 'Plan Basic';
+    } else if (isFree) {
+        planName = 'Plan Free';
+    }
+
+    return {
+        planCode,
+        role,
+        isBasic,
+        isFree,
+        planName,
+        belongsToOrg: !!window.userBelongsToOrganization,
+    };
+}
+
+function getUploadLimitBytes(planInfo, hasPremium) {
+    if (hasPremium) {
+        return null;
+    }
+
+    if (planInfo.isBasic) {
+        return 60 * 1024 * 1024;
+    }
+
+    if (planInfo.isFree) {
+        return 50 * 1024 * 1024;
+    }
+
+    return null;
+}
+
 // Función para obtener el mejor formato de audio disponible priorizando OGG
 function getOptimalAudioFormat() {
     const formats = [
@@ -1930,9 +1969,14 @@ async function analyzeNow() {
             handlePostActionCleanup();
             return;
         }
-        // Respaldo: guardar base64 si el blob no es muy grande (<= 50MB)
+        const planInfo = getUserPlanInfo();
+        const hasPremium = window.hasPremiumAccess ? window.hasPremiumAccess() : false;
+        const planLimitBytes = getUploadLimitBytes(planInfo, hasPremium);
+        const fallbackLimitBytes = planLimitBytes ?? (60 * 1024 * 1024);
+
+        // Respaldo: guardar base64 si el blob no es muy grande
         try {
-            if (pendingAudioBlob.size <= 50 * 1024 * 1024) {
+            if (pendingAudioBlob.size <= fallbackLimitBytes) {
                 const base64 = await blobToBase64(pendingAudioBlob);
                 sessionStorage.setItem('recordingBlob', base64);
             } else {
@@ -2190,18 +2234,21 @@ async function processAudioFile() {
         return;
     }
 
-    // Verificar límite de tamaño para usuarios sin acceso premium
+    // Verificar límite de tamaño según plan
     const fileSize = uploadedFile.size;
-    const maxSizeForFree = 50 * 1024 * 1024; // 50MB en bytes
     const hasPremium = window.hasPremiumAccess ? window.hasPremiumAccess() : false;
+    const planInfo = getUserPlanInfo();
+    const planLimitBytes = getUploadLimitBytes(planInfo, hasPremium);
 
-    if (!hasPremium && fileSize > maxSizeForFree) {
-        console.log(`🚫 Archivo excede límite para usuario sin acceso premium: ${fileSize} bytes > ${maxSizeForFree} bytes`);
+    if (planLimitBytes !== null && fileSize > planLimitBytes) {
+        console.log(`🚫 Archivo excede límite para el ${planInfo.planName}: ${fileSize} bytes > ${planLimitBytes} bytes`);
 
         // Mostrar modal específico para límite de tamaño
-        showFileSizeLimitModal(fileSize, 50);
+        showFileSizeLimitModal(fileSize, planLimitBytes / (1024 * 1024), planInfo.planName);
         return;
-    }    try {
+    }
+
+    try {
         // Mostrar progreso
         const progressContainer = document.getElementById('upload-progress');
         const progressFill = document.getElementById('progress-fill');
@@ -2252,9 +2299,10 @@ async function processAudioFile() {
         // Guardar la clave en sessionStorage para que audio-processing.js la pueda usar
         sessionStorage.setItem('uploadedAudioKey', audioKey);
 
-        // Respaldo: guardar una copia base64 si el archivo no es demasiado grande (<= 50MB)
+        const fallbackLimitBytes = planLimitBytes ?? (60 * 1024 * 1024);
+        // Respaldo: guardar una copia base64 si el archivo no es demasiado grande
         try {
-            if (uploadedFile && typeof uploadedFile.size === 'number' && uploadedFile.size <= 50 * 1024 * 1024) {
+            if (uploadedFile && typeof uploadedFile.size === 'number' && uploadedFile.size <= fallbackLimitBytes) {
                 const base64 = await blobToBase64(uploadedFile);
                 sessionStorage.setItem('recordingBlob', base64);
             } else {
@@ -2840,11 +2888,12 @@ function showPostponeLockedModal() {
 }
 
 // Función específica para límite de tamaño de archivo
-function showFileSizeLimitModal(fileSize, maxSize = 50) {
+function showFileSizeLimitModal(fileSize, maxSize = 50, planLabel = 'Plan Free') {
     const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(1);
+    const planText = planLabel || 'tu plan actual';
     showUpgradeModal({
         title: 'Límite de tamaño excedido',
-        message: `El archivo pesa <strong>${fileSizeMB}MB</strong>. Los planes FREE tienen un límite de <strong>${maxSize}MB</strong>. Actualiza tu plan para subir archivos más grandes.`,
+        message: `El archivo pesa <strong>${fileSizeMB}MB</strong>. Los usuarios del <strong>${planText}</strong> tienen un límite de <strong>${maxSize}MB</strong>. Actualiza tu plan para subir archivos más grandes.`,
         icon: 'file'
     });
 }

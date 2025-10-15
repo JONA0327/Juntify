@@ -61,7 +61,18 @@
 
         // Función helper para verificar si el usuario tiene acceso a funciones premium
         window.hasPremiumAccess = function() {
-            return window.userPlanCode !== 'free' || window.userBelongsToOrganization;
+            const planCode = (window.userPlanCode || '').toString().toLowerCase();
+            const role = (window.userRole || '').toString().toLowerCase();
+            const restrictedValues = ['free', 'basic', 'basico'];
+
+            const isRestrictedPlan = restrictedValues.some(value => value && (planCode === value || planCode.includes(value)));
+            const isRestrictedRole = restrictedValues.includes(role);
+
+            if (window.userBelongsToOrganization) {
+                return true;
+            }
+
+            return planCode !== '' && !isRestrictedPlan && !isRestrictedRole;
         };
 
         // Función global showUpgradeModal

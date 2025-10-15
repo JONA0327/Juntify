@@ -191,6 +191,26 @@ class ContainerController extends Controller
 
             Log::info("User {$user->username} authorized to create container");
 
+            if (!$groupId) {
+                $planCode = strtolower((string) ($user->plan_code ?? 'free'));
+                $role = strtolower((string) ($user->roles ?? 'free'));
+                $isBasicPlan = $role === 'basic' || in_array($planCode, ['basic', 'basico'], true) || str_contains($planCode, 'basic');
+
+                if ($isBasicPlan) {
+                    $personalContainers = MeetingContentContainer::where('username', $user->username)
+                        ->whereNull('group_id')
+                        ->where('is_active', true)
+                        ->count();
+
+                    if ($personalContainers >= 3) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'El Plan Basic permite crear hasta 3 contenedores personales.',
+                        ], 403);
+                    }
+                }
+            }
+
             $container = MeetingContentContainer::create([
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,

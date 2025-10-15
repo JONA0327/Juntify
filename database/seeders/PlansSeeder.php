@@ -32,19 +32,21 @@ class PlansSeeder extends Seeder
             ],
             [
                 'code' => 'basico',
-                'name' => 'Básico',
-                'description' => 'Flexibilidad mes a mes para equipos medianos que buscan mejorar sus reuniones.',
+                'name' => 'Plan Basic',
+                'description' => 'Pago mensual con límites claros para equipos que necesitan colaborar y compartir reuniones esenciales.',
                 'price' => 499.00, // Precio en pesos mexicanos
                 'currency' => 'MXN', // Peso mexicano
                 'billing_cycle_days' => 30,
                 'is_active' => true,
                 'features' => [
-                    'Reuniones ilimitadas',
-                    'Transcripción avanzada con IA',
-                    'Resúmenes inteligentes y tareas automáticas',
-                    'Identificación de hablantes',
-                    'Integraciones básicas',
-                    'Soporte prioritario'
+                    'Hasta 15 reuniones al mes',
+                    'Duración máxima de 1 hora por reunión',
+                    '10 consultas al asistente y análisis de hasta 5 documentos por día',
+                    'Subida de audio de hasta 60 MB',
+                    'Transcripciones disponibles durante 15 días',
+                    'Exportar documentos',
+                    'Compartir reuniones',
+                    'Acceso a 3 contenedores para almacenar reuniones'
                 ]
             ],
             [
@@ -56,7 +58,7 @@ class PlansSeeder extends Seeder
                 'billing_cycle_days' => 30,
                 'is_active' => true,
                 'features' => [
-                    'Todo lo del plan Básico',
+                    'Todo lo del Plan Basic',
                     'IA avanzada para análisis de conversaciones',
                     'Análisis de sentimientos y temas',
                     'Dashboards ejecutivos en tiempo real',

@@ -49,6 +49,21 @@ window.addEventListener('beforeunload', () => {
     if (!processingFinished) discardAudio();
 });
 
+function getPlanUploadLimitMb() {
+    const planCode = (window.userPlanCode || '').toString().toLowerCase();
+    const role = (window.userRole || '').toString().toLowerCase();
+
+    if (role === 'basic' || planCode === 'basic' || planCode === 'basico' || planCode.includes('basic')) {
+        return 60;
+    }
+
+    if (role === 'free' || planCode === '' || planCode === 'free' || planCode.includes('free')) {
+        return 50;
+    }
+
+    return 0;
+}
+
 // Función para detectar y manejar archivos de audio largos (MP4/OGG)
 function detectLargeAudioFile(audioBlob) {
     if (!audioBlob) return false;
@@ -67,7 +82,10 @@ function detectLargeAudioFile(audioBlob) {
 
         console.log(`🎵 [detectLargeAudioFile] ${formatName} file detected: ${sizeMB.toFixed(2)} MB`);
 
-        if (sizeMB > 50) { // Archivos grandes (>50MB)
+        const limitMb = getPlanUploadLimitMb();
+        const threshold = limitMb > 0 ? limitMb : 50;
+
+        if (sizeMB > threshold) { // Archivos grandes
             showNotification(
                 `Audio ${formatName} de ${sizeMB.toFixed(1)}MB detectado. Formato óptimo para reuniones largas.`,
                 'success'

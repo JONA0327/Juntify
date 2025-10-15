@@ -288,6 +288,20 @@ class MeetingController extends Controller
             'name' => 'required|string|max:255',
         ]);
 
+        $planCode = strtolower((string) ($user->plan_code ?? 'free'));
+        $role = strtolower((string) ($user->roles ?? 'free'));
+        $isBasicPlan = $role === 'basic' || in_array($planCode, ['basic', 'basico'], true) || str_contains($planCode, 'basic');
+
+        if ($isBasicPlan) {
+            $existingContainers = Container::where('username', $user->username)->count();
+            if ($existingContainers >= 3) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El Plan Basic permite hasta 3 contenedores activos.',
+                ], 403);
+            }
+        }
+
         $container = Container::create([
             'username' => $user->username,
             'name' => $data['name'],

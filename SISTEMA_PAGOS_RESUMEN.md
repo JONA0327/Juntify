@@ -3,7 +3,7 @@
 ## ✅ Componentes Implementados
 
 ### 1. Modelos y Base de Datos
-- **Plan**: Almacena los planes de suscripción (Básico $549, Negocios $1099, Empresas $3099)
+- **Plan**: Almacena los planes de suscripción (Plan Basic $549 con límites de 15 reuniones y 60MB, Negocios $1099, Empresas $3099)
 - **Payment**: Registra todos los pagos realizados con MercadoPago
 - **UserSubscription**: Ya existía, mejorado con relaciones
 - **User**: Agregadas relaciones y métodos para manejo de suscripciones

@@ -31,11 +31,25 @@ class TranscriptionTempController extends Controller
             $user = Auth::user();
             $audioFile = $request->file('audioFile');
 
-            // Verificar plan FREE y límite de 50MB
-            if (($user->plan_code ?? 'free') === 'free' && $audioFile->getSize() > 50 * 1024 * 1024) {
+            $planCode = strtolower((string) ($user->plan_code ?? 'free'));
+            $role = strtolower((string) ($user->roles ?? 'free'));
+            $isBasic = $role === 'basic' || in_array($planCode, ['basic', 'basico'], true) || str_contains($planCode, 'basic');
+            $isFree = $role === 'free' || $planCode === 'free' || str_contains($planCode, 'free');
+
+            $maxSizeMb = null;
+            $planLabel = 'tu plan';
+            if ($isBasic) {
+                $maxSizeMb = 60;
+                $planLabel = 'Plan Basic';
+            } elseif ($isFree) {
+                $maxSizeMb = 50;
+                $planLabel = 'Plan Free';
+            }
+
+            if ($maxSizeMb !== null && $audioFile->getSize() > $maxSizeMb * 1024 * 1024) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Los planes FREE tienen un límite de 50MB por archivo'
+                    'message' => "Los usuarios del {$planLabel} tienen un límite de {$maxSizeMb}MB por archivo"
                 ], 413);
             }
 
@@ -46,8 +60,8 @@ class TranscriptionTempController extends Controller
             // Generar nombre único para el archivo .ju
             $juFileName = 'temp_transcriptions/' . $user->id . '/' . uniqid() . '_' . $validated['meetingName'] . '.ju';
 
-            // Los archivos temporales se eliminan después de 7 días para plan FREE
-            $expiresAt = Carbon::now()->addDays(7);
+            $expiresInDays = $isBasic ? 15 : 7;
+            $expiresAt = Carbon::now()->addDays($expiresInDays);
 
             // Crear registro temporal
             $transcriptionTemp = TranscriptionTemp::create([
@@ -62,7 +76,7 @@ class TranscriptionTempController extends Controller
                 'metadata' => [
                     'original_filename' => $audioFile->getClientOriginalName(),
                     'mime_type' => $audioFile->getMimeType(),
-                    'plan_type' => 'free_temp'
+                    'plan_type' => $isBasic ? 'basic_temp' : ($isFree ? 'free_temp' : 'standard_temp')
                 ]
             ]);
 
