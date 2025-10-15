@@ -16,7 +16,7 @@ class PlansSeeder extends Seeder
             [
                 'code' => 'free',
                 'name' => 'Plan Free',
-                'description' => 'Gratis para siempre.',
+                'description' => 'Gratis para siempre',
                 'price' => 0.00, // Gratuito
                 'currency' => 'MXN', // Peso mexicano
                 'billing_cycle_days' => 30,
@@ -27,13 +27,14 @@ class PlansSeeder extends Seeder
                     '3 consultas al asistente y análisis de 1 documento por día',
                     'Subida de audio de hasta 50 MB',
                     'Transcripciones disponibles durante 7 días',
-                    'Exportar documentos'
+                    'Exportar documentos',
+                    'Compartir reuniones'
                 ]
             ],
             [
                 'code' => 'basico',
                 'name' => 'Plan Basic',
-                'description' => 'Pago mensual con límites claros para equipos que necesitan colaborar y compartir reuniones esenciales.',
+                'description' => 'Pago mensual',
                 'price' => 499.00, // Precio en pesos mexicanos
                 'currency' => 'MXN', // Peso mexicano
                 'billing_cycle_days' => 30,
