@@ -28,10 +28,14 @@
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
 
+    @include('partials.global-vars')
+
     <div class="flex">
 
         @include('partials.navbar')
-        @include('partials.mobile-nav') <main class="w-full pt-20 md:pt-24 lg:pl-24 lg:mt-[130px]">
+        @include('partials.mobile-nav')
+
+        <main class="w-full pt-20 md:pt-24 lg:pl-24 lg:mt-[130px]">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
                 <header class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 pb-12 fade-in">
@@ -227,5 +231,56 @@
             if (cancelMain) cancelMain.addEventListener('click', closeModalLocal);
         });
     </script>
+
+    <!-- Modal para opciones bloqueadas por plan -->
+    <div class="modal" id="postpone-locked-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="modal-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Opción disponible en planes superiores
+                </h2>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">Esta opción está disponible para los planes: <strong>Negocios</strong> y <strong>Enterprise</strong>.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeUpgradeModal()" id="close-modal-btn">Cerrar</button>
+                <button class="btn btn-primary" onclick="goToPlans()">Cambiar plan</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables del usuario para JavaScript
+        @auth
+            window.userPlanCode = @json(auth()->user()->plan_code ?? 'free');
+            window.userId = @json(auth()->user()->id);
+            window.userName = @json(auth()->user()->name);
+            console.log('👤 Plan del usuario:', window.userPlanCode);
+        @else
+            window.userPlanCode = 'free';
+            window.userId = null;
+            window.userName = null;
+        @endauth
+
+        // Funciones para los botones del modal
+        function closeUpgradeModal() {
+            const modal = document.getElementById('postpone-locked-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        }
+
+        function goToPlans() {
+            closeUpgradeModal();
+            sessionStorage.setItem('navigateToPlans', 'true');
+            window.location.href = '/profile';
+        }
+    </script>
+
     </body>
 </html>

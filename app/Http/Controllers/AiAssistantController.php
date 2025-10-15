@@ -54,9 +54,93 @@ class AiAssistantController extends Controller
         $this->googleDriveService = $googleDriveService;
         $this->googleTokenRefreshService = $googleTokenRefreshService;
     }
+
+    /**
+     * Verificar si el usuario tiene acceso premium (no es FREE o pertenece a organización)
+     */
+    private function hasPremiumAccess($user = null): bool
+    {
+        $user = $user ?: Auth::user();
+        $userPlan = $user->plan_code ?? 'free';
+        $organizationId = session('organizationId');
+        $hasOrganizationalRole = in_array($user->roles ?? '', ['admin', 'superadmin', 'founder', 'developer']);
+        $belongsToOrg = $organizationId || $hasOrganizationalRole;
+
+        return $userPlan !== 'free' || $belongsToOrg;
+    }
+
+    /**
+     * Contar mensajes del usuario en el día actual
+     */
+    private function getDailyMessageCount($user = null): int
+    {
+        $user = $user ?: Auth::user();
+        $today = now()->startOfDay();
+
+        return AiChatMessage::whereHas('session', function($query) use ($user) {
+            $query->where('username', $user->username);
+        })
+        ->where('role', 'user')
+        ->where('created_at', '>=', $today)
+        ->count();
+    }
+
+    /**
+     * Contar documentos subidos por el usuario en el día actual
+     */
+    private function getDailyDocumentCount($user = null): int
+    {
+        $user = $user ?: Auth::user();
+        $today = now()->startOfDay();
+
+        return AiDocument::where('username', $user->username)
+        ->where('created_at', '>=', $today)
+        ->count();
+    }
+
+    /**
+     * Verificar límites para usuarios FREE
+     */
+    private function checkFreePlanLimits($user = null): array
+    {
+        $user = $user ?: Auth::user();
+
+        if ($this->hasPremiumAccess($user)) {
+            return ['allowed' => true];
+        }
+
+        $dailyMessages = $this->getDailyMessageCount($user);
+        $dailyDocuments = $this->getDailyDocumentCount($user);
+
+        return [
+            'allowed' => false,
+            'daily_messages' => $dailyMessages,
+            'daily_documents' => $dailyDocuments,
+            'message_limit' => 3,
+            'document_limit' => 1,
+            'can_send_message' => $dailyMessages < 3,
+            'can_upload_document' => $dailyDocuments < 1
+        ];
+    }
+
     public function index()
     {
         return view('ai-assistant.index');
+    }
+
+    /**
+     * Obtener límites del usuario
+     */
+    public function getLimits(): JsonResponse
+    {
+        $user = Auth::user();
+        $limits = $this->checkFreePlanLimits($user);
+
+        return response()->json([
+            'success' => true,
+            'limits' => $limits,
+            'user_plan' => $user->plan_code ?? 'free'
+        ]);
     }
 
     /**
@@ -711,6 +795,17 @@ class AiAssistantController extends Controller
     {
         $user = Auth::user();
 
+        // Verificar límites para usuarios FREE
+        $limits = $this->checkFreePlanLimits($user);
+        if (!$limits['allowed'] && !$limits['can_send_message']) {
+            return response()->json([
+                'success' => false,
+                'error' => 'limit_exceeded',
+                'message' => 'Has alcanzado el límite diario de consultas. Los usuarios FREE pueden realizar hasta 3 consultas por día.',
+                'limits' => $limits
+            ], 403);
+        }
+
         $request->validate([
             'title' => 'sometimes|string|max:255',
             'context_type' => 'required|in:general,container,meeting,contact_chat,documents,mixed',
@@ -1049,6 +1144,17 @@ class AiAssistantController extends Controller
     public function sendMessage(Request $request, $sessionId): JsonResponse
     {
         $user = Auth::user();
+
+        // Verificar límites para usuarios FREE
+        $limits = $this->checkFreePlanLimits($user);
+        if (!$limits['allowed'] && !$limits['can_send_message']) {
+            return response()->json([
+                'success' => false,
+                'error' => 'limit_exceeded',
+                'message' => 'Has alcanzado el límite diario de consultas. Los usuarios FREE pueden realizar hasta 3 consultas por día.',
+                'limits' => $limits
+            ], 403);
+        }
 
         $request->validate([
             'content' => 'required|string',
@@ -1432,6 +1538,17 @@ class AiAssistantController extends Controller
     public function uploadDocument(Request $request): JsonResponse
     {
         $user = Auth::user();
+
+        // Verificar límites para usuarios FREE
+        $limits = $this->checkFreePlanLimits($user);
+        if (!$limits['allowed'] && !$limits['can_upload_document']) {
+            return response()->json([
+                'success' => false,
+                'error' => 'limit_exceeded',
+                'message' => 'Has alcanzado el límite diario de documentos. Los usuarios FREE pueden subir hasta 1 documento por día.',
+                'limits' => $limits
+            ], 403);
+        }
 
         $request->validate([
             'file' => 'sometimes|file|max:102400|mimes:pdf,jpg,jpeg,png,xlsx,docx,pptx', // 100MB max, allowed types only

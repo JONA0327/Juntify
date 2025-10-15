@@ -261,6 +261,15 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('/groups/{group}/containers', [GroupController::class, 'getContainers'])->name('api.groups.containers');
     });
 
+    // Rutas de Transcripciones Temporales (Plan FREE)
+    Route::middleware(['web', 'auth'])->group(function () {
+        Route::get('/transcriptions-temp', [App\Http\Controllers\TranscriptionTempController::class, 'index'])->name('api.transcriptions-temp.index');
+        Route::post('/transcriptions-temp', [App\Http\Controllers\TranscriptionTempController::class, 'store'])->name('api.transcriptions-temp.store');
+        Route::get('/transcriptions-temp/{transcription}', [App\Http\Controllers\TranscriptionTempController::class, 'show'])->name('api.transcriptions-temp.show');
+        Route::delete('/transcriptions-temp/{transcription}', [App\Http\Controllers\TranscriptionTempController::class, 'destroy'])->name('api.transcriptions-temp.destroy');
+        Route::post('/transcriptions-temp/clean-expired', [App\Http\Controllers\TranscriptionTempController::class, 'cleanExpired'])->name('api.transcriptions-temp.clean-expired');
+    });
+
     // (Eliminado grupo duplicado de notificaciones para permitir route:cache)
 
     // Rutas de Tareas (tabla tasks tradicional)

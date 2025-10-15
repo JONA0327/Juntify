@@ -594,6 +594,10 @@
         window.currentOrganizationId = @json($organizationId);
     </script>
     @vite(['resources/js/audio-processing.js'])
+
+    <!-- Global vars and functions -->
+    @include('partials.global-vars')
+
 </body>
 </html>
 

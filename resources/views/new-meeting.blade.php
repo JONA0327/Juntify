@@ -181,5 +181,24 @@
             </div>
         </div>
     </div>
+
+<script>
+    // Variables del usuario para JavaScript
+    @auth
+        window.userPlanCode = '{{ auth()->user()->plan_code ?? "free" }}';
+        window.userId = {{ auth()->user()->id }};
+        window.userName = '{{ auth()->user()->name }}';
+        window.userRole = '{{ $userRole }}';
+        window.organizationId = {{ $organizationId ?? 'null' }};
+        console.log('👤 Plan del usuario:', window.userPlanCode);
+    @else
+        window.userPlanCode = 'free';
+        window.userId = null;
+    @endauth
+</script>
+
+<!-- Global vars and functions -->
+@include('partials.global-vars')
+
 </body>
 </html>

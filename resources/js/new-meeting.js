@@ -267,7 +267,7 @@ let PLAN_LIMITS = {
     used_this_month: 0,
     remaining: null,
     max_duration_minutes: 120,
-    allow_postpone: true,
+    allow_postpone: window.hasPremiumAccess ? window.hasPremiumAccess() : false, // Solo premium o con organización
     warn_before_minutes: 5,
 };
 
@@ -672,6 +672,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (resp.ok) {
             const limits = await resp.json();
             console.log('📋 Límites del plan cargados:', limits);
+
+            // Actualizar allow_postpone basado en acceso premium
+            limits.allow_postpone = window.hasPremiumAccess ? window.hasPremiumAccess() : false;
+            console.log('🔒 Allow postpone actualizado:', limits.allow_postpone);
 
             PLAN_LIMITS = limits;
             // Duración máxima por reunión
@@ -1589,8 +1593,94 @@ function uploadAudioToDrive(blob, name, onProgress) {
     });
 }
 
-// Función existente para compatibilidad
+// Guarda un blob de audio temporalmente para planes FREE
+function saveAudioTemporarily(blob, name, onProgress) {
+    const formData = new FormData();
+
+    // Use correct file extension based on blob type
+    const fileExtension = getCorrectFileExtension(blob);
+    const fileName = `${name}.${fileExtension}`;
+
+    formData.append('audioFile', blob, fileName);
+    formData.append('meetingName', name);
+    formData.append('description', document.getElementById('meeting-description')?.value || '');
+    formData.append('duration', Math.round((blob.size / 16000) * 8)); // Estimación aproximada
+
+    console.log(`💾 [TempSave] Guardando temporalmente: ${fileName}`);
+
+    const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/transcriptions-temp');
+        xhr.setRequestHeader('X-CSRF-TOKEN', token);
+
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable && onProgress) {
+                onProgress(e.loaded, e.total);
+            }
+        };
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                let response;
+                try {
+                    response = JSON.parse(xhr.responseText);
+                } catch (err) {
+                    response = xhr.responseText;
+                }
+
+                console.log('✅ [TempSave] Audio guardado temporalmente:', response);
+
+                if (response?.success) {
+                    showSuccess(`Reunión guardada temporalmente. Se eliminará automáticamente en 7 días. Actualiza tu plan para guardar permanentemente en Drive.`);
+
+                    // Mostrar modal específico para guardado temporal después de 3 segundos
+                    setTimeout(() => {
+                        showUpgradeModal({
+                            title: 'Reunión guardada temporalmente',
+                            message: 'Tu reunión se guardó correctamente pero <strong>se eliminará en 7 días</strong>. Actualiza a un plan superior para guardar permanentemente en Google Drive y acceder a todas las funciones premium.',
+                            icon: 'file'
+                        });
+                    }, 3000);
+                }                if (window.notifications) {
+                    window.notifications.refresh();
+                }
+
+                clearFailedUploadData();
+                resolve(response);
+            } else {
+                console.error('Temp save failed with status:', xhr.status, xhr.responseText);
+                showError(`Error al guardar temporalmente (Error ${xhr.status}).`);
+                reject(new Error('Temp save failed'));
+            }
+        };
+
+        xhr.onerror = () => {
+            console.error('Error saving temporarily - Network error');
+            showError('Error de conexión al guardar temporalmente.');
+            reject(new Error('Temp save failed'));
+        };
+
+        xhr.send(formData);
+    });
+}
+
+// Función existente para compatibilidad - ahora con lógica de planes
 function uploadInBackground(blob, name, onProgress) {
+    const userPlan = window.userPlanCode || 'free';
+    const hasPremium = window.hasPremiumAccess ? window.hasPremiumAccess() : userPlan !== 'free';
+
+    console.log(`📋 [Upload] Plan del usuario: ${userPlan}, Premium Access: ${hasPremium}`);
+
+    // Si no tiene acceso premium (plan FREE sin organización), usar guardado temporal
+    if (!hasPremium) {
+        console.log('💾 [Upload] Usando guardado temporal para usuario sin acceso premium');
+        return saveAudioTemporarily(blob, name, onProgress);
+    }
+
+    // Para usuarios con acceso premium, usar Drive
+    console.log('☁️ [Upload] Usando Drive para usuario con acceso premium');
     return uploadAudioToDrive(blob, name, onProgress);
 }
 
@@ -2068,18 +2158,9 @@ function handleFileSelection(file) {
         return;
     }
 
-    // Validar tamaño basado en el plan del usuario
-    const userRole = window.userRole || 'free';
-    const maxSize = userRole === 'free' ? 50 * 1024 * 1024 : 200 * 1024 * 1024; // 50MB para Free, 200MB para otros
-    const maxSizeText = userRole === 'free' ? '50MB' : '200MB';
-    
-    if (file.size > maxSize) {
-        const currentSizeText = formatFileSize(file.size);
-        if (userRole === 'free') {
-            showError(`🔒 El archivo es demasiado grande (${currentSizeText}). Los usuarios del plan Free tienen un límite de ${maxSizeText}. Actualiza tu plan para subir archivos más grandes.`);
-        } else {
-            showError(`El archivo es demasiado grande (${currentSizeText}). El tamaño máximo es ${maxSizeText}.`);
-        }
+    // Validar tamaño (máximo 200MB)
+    if (file.size > 200 * 1024 * 1024) {
+        showError('El archivo es demasiado grande. El tamaño máximo es 200MB.');
         return;
     }
 
@@ -2109,7 +2190,18 @@ async function processAudioFile() {
         return;
     }
 
-    try {
+    // Verificar límite de tamaño para usuarios sin acceso premium
+    const fileSize = uploadedFile.size;
+    const maxSizeForFree = 50 * 1024 * 1024; // 50MB en bytes
+    const hasPremium = window.hasPremiumAccess ? window.hasPremiumAccess() : false;
+
+    if (!hasPremium && fileSize > maxSizeForFree) {
+        console.log(`🚫 Archivo excede límite para usuario sin acceso premium: ${fileSize} bytes > ${maxSizeForFree} bytes`);
+
+        // Mostrar modal específico para límite de tamaño
+        showFileSizeLimitModal(fileSize, 50);
+        return;
+    }    try {
         // Mostrar progreso
         const progressContainer = document.getElementById('upload-progress');
         const progressFill = document.getElementById('progress-fill');
@@ -2676,23 +2768,59 @@ function updateMeetingTimer() {
 }
 
 // Función simple para mostrar modal
-function showPostponeLockedModal() {
-    console.log('🚀 INICIANDO showPostponeLockedModal...');
+// Función genérica para mostrar modal de upgrade con mensaje personalizable
+function showUpgradeModal(options = {}) {
+    console.log('🚀 INICIANDO showUpgradeModal...');
 
     const modal = document.getElementById('postpone-locked-modal');
     console.log('🔍 Modal encontrado:', !!modal);
 
     if (!modal) {
         console.error('❌ Modal no encontrado!');
-        alert('Esta opción solo está disponible para los planes: Negocios, Enterprise, Founder, Developer y Superadmin.');
+        alert('Esta opción requiere un plan superior.');
         return;
+    }
+
+    // Configurar contenido del modal
+    const title = options.title || 'Opción disponible en planes superiores';
+    const message = options.message || 'Esta opción está disponible para los planes: Negocios, Enterprise, Founder, Developer y Superadmin.';
+    const icon = options.icon || 'lock';
+
+    // Actualizar contenido del modal
+    const modalTitle = modal.querySelector('.modal-title');
+    const modalDescription = modal.querySelector('.modal-description');
+
+    if (modalTitle) {
+        modalTitle.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="modal-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                ${icon === 'file' ?
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />' :
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />'}
+            </svg>
+            ${title}
+        `;
+    }
+
+    if (modalDescription) {
+        modalDescription.innerHTML = message;
+    }
+
+    // Manejar el botón de cerrar si se especifica ocultarlo
+    const closeButton = modal.querySelector('.btn:not(.btn-primary)'); // Botón "Cerrar"
+    if (options.hideCloseButton && closeButton) {
+        closeButton.style.display = 'none';
+        console.log('🔒 Botón cerrar ocultado');
+    } else if (closeButton) {
+        closeButton.style.display = ''; // Mostrar botón cerrar normalmente
     }
 
     // Resetear cualquier estilo previo
     modal.removeAttribute('style');
 
-    // Aplicar estilos de forma directa y forzada
-    modal.style.setProperty('display', 'block', 'important');
+    // Aplicar estilos de forma directa y forzada para centrado perfecto
+    modal.style.setProperty('display', 'flex', 'important');
+    modal.style.setProperty('align-items', 'center', 'important');
+    modal.style.setProperty('justify-content', 'center', 'important');
     modal.style.setProperty('visibility', 'visible', 'important');
     modal.style.setProperty('opacity', '1', 'important');
 
@@ -2700,8 +2828,30 @@ function showPostponeLockedModal() {
     document.body.style.setProperty('overflow', 'hidden', 'important');
 
     console.log('✅ Modal configurado. Display:', modal.style.display);
-    console.log('✅ Body overflow:', document.body.style.overflow);
 }
+
+// Función específica para opción posponer (retrocompatibilidad)
+function showPostponeLockedModal() {
+    showUpgradeModal({
+        title: 'Opción disponible en planes superiores',
+        message: 'La opción "Posponer" está disponible para los planes: <strong>Negocios</strong> y <strong>Enterprise</strong>.',
+        icon: 'lock'
+    });
+}
+
+// Función específica para límite de tamaño de archivo
+function showFileSizeLimitModal(fileSize, maxSize = 50) {
+    const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(1);
+    showUpgradeModal({
+        title: 'Límite de tamaño excedido',
+        message: `El archivo pesa <strong>${fileSizeMB}MB</strong>. Los planes FREE tienen un límite de <strong>${maxSize}MB</strong>. Actualiza tu plan para subir archivos más grandes.`,
+        icon: 'file'
+    });
+}
+
+// Hacer funciones globales
+window.showUpgradeModal = showUpgradeModal;
+window.showFileSizeLimitModal = showFileSizeLimitModal;
 
 // Función simple para cerrar modal
 window.closePostponeLockedModal = function() {
@@ -2859,8 +3009,8 @@ window.retryUpload = async function() {
             }
         };
 
-        // Intentar subida
-        const result = await uploadAudioToDrive(failedAudioBlob, failedAudioName, onProgress);
+        // Intentar subida - usar función que respeta el plan del usuario
+        const result = await uploadInBackground(failedAudioBlob, failedAudioName, onProgress);
 
         // Éxito
         console.log('✅ [Retry] Subida exitosa en intento', retryAttempts);

@@ -145,6 +145,46 @@
         </main>
     </div>
 
+    <!-- Modal de Upgrade para límites -->
+    <div class="modal" id="postpone-locked-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="modal-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Límite alcanzado
+                </h2>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">Has alcanzado el límite de tu plan actual.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeUpgradeModal()">Cerrar</button>
+                <button class="btn btn-primary" onclick="goToPlans()">Actualizar Plan</button>
+            </div>
+        </div>
+    </div>
+
+    @include('partials.global-vars')
+
+    <script>
+        // Funciones para el modal
+        function closeUpgradeModal() {
+            const modal = document.getElementById('postpone-locked-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        }
+
+        function goToPlans() {
+            closeUpgradeModal();
+            sessionStorage.setItem('navigateToPlans', 'true');
+            window.location.href = '/profile';
+        }
+    </script>
+
     <script src="{{ asset('js/ai-assistant.js') }}?v={{ time() }}"></script>
 </body>
 </html>

@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
  * Inicializar el asistente IA
  */
 function initializeAiAssistant() {
+    loadUserLimits(); // Cargar límites del usuario
     loadChatSessions();
     setupEventListeners();
     initializeEmptyState();
@@ -118,6 +119,12 @@ function displayChatSessions(sessions) {
  * Crear nueva sesión de chat
  */
 async function createNewChat() {
+    // Verificar límites antes de crear nueva sesión
+    if (!canPerformAction('createSession')) {
+        showLimitExceededModal('createSession');
+        return;
+    }
+
     try {
         const response = await fetch('/api/ai-assistant/sessions', {
             method: 'POST',
@@ -132,6 +139,14 @@ async function createNewChat() {
             })
         });
 
+        if (response.status === 403) {
+            // Límite alcanzado
+            const errorData = await response.json();
+            showLimitExceededModal('createSession');
+            await loadUserLimits(); // Recargar límites actualizados
+            return;
+        }
+
         const responseData = await response.json();
 
         if (!response.ok) {
@@ -143,6 +158,7 @@ async function createNewChat() {
         if (responseData.session && responseData.session.id) {
             await loadChatSessions(); // Recargar lista
             loadChatSession(responseData.session.id);
+            await loadUserLimits(); // Recargar límites después de crear sesión exitosa
         }
     } catch (error) {
         console.error('Error al crear nueva sesión:', error);
@@ -224,6 +240,12 @@ async function handleSendMessage(e) {
 
     if (isLoading) return;
 
+    // Verificar límites antes de proceder
+    if (!canPerformAction('sendMessage')) {
+        showLimitExceededModal('sendMessage');
+        return;
+    }
+
     const input = document.getElementById('message-input');
     const message = input.value.trim();
 
@@ -257,6 +279,14 @@ async function handleSendMessage(e) {
             })
         });
 
+        if (response.status === 403) {
+            // Límite alcanzado
+            const errorData = await response.json();
+            showLimitExceededModal('sendMessage');
+            await loadUserLimits(); // Recargar límites actualizados
+            return;
+        }
+
         const result = await response.json();
 
         if (result.success) {
@@ -267,6 +297,9 @@ async function handleSendMessage(e) {
             if (result.context_info) {
                 updateDetailsPanel(result.context_info);
             }
+
+            // Recargar límites después de enviar mensaje exitoso
+            await loadUserLimits();
         } else {
             throw new Error(result.message || 'Error al procesar mensaje');
         }
@@ -485,6 +518,134 @@ function setContext(type, data) {
         const typeElement = indicator.querySelector('.context-type');
         if (typeElement) {
             typeElement.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+        }
+    }
+}
+
+/**
+ * Funciones para manejo de límites de plan FREE
+ */
+
+// Variable global para límites del usuario
+let userLimits = null;
+
+/**
+ * Cargar límites del usuario desde el backend
+ */
+async function loadUserLimits() {
+    try {
+        const response = await fetch('/api/ai-assistant/limits', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        });
+
+        if (response.ok) {
+            userLimits = await response.json();
+            updateUIBasedOnLimits();
+        } else {
+            console.error('Error al cargar límites del usuario');
+        }
+    } catch (error) {
+        console.error('Error al cargar límites:', error);
+    }
+}
+
+/**
+ * Verificar si el usuario puede realizar una acción específica
+ */
+function canPerformAction(action) {
+    if (!userLimits) return true; // Si no hay límites cargados, permitir
+
+    switch (action) {
+        case 'sendMessage':
+            return userLimits.canSendMessage;
+        case 'createSession':
+            return userLimits.canCreateSession;
+        case 'uploadDocument':
+            return userLimits.canUploadDocument;
+        default:
+            return true;
+    }
+}
+
+/**
+ * Mostrar modal cuando se exceden los límites
+ */
+function showLimitExceededModal(action) {
+    let title = 'Límite alcanzado';
+    let message = '';
+
+    if (!userLimits) return;
+
+    switch (action) {
+        case 'sendMessage':
+        case 'createSession':
+            title = 'Límite de consultas diarias alcanzado';
+            message = `Has alcanzado el límite de ${userLimits.maxDailyMessages} consultas diarias del plan FREE.<br><br>Actualiza tu plan para tener acceso ilimitado a conversaciones con IA.`;
+            break;
+        case 'uploadDocument':
+            title = 'Límite de documentos alcanzado';
+            message = `Has alcanzado el límite diario de ${userLimits.maxDailyDocuments} documento. Los usuarios FREE pueden subir hasta ${userLimits.maxDailyDocuments} documento por día.<br><br>Actualiza tu plan para tener acceso ilimitado.`;
+            break;
+    }
+
+    // Usar el modal global mejorado
+    if (typeof window.showUpgradeModal === 'function') {
+        window.showUpgradeModal({
+            title: title,
+            message: message,
+            icon: 'lock',
+            hideCloseButton: false
+        });
+    } else {
+        // Fallback al modal anterior si no está disponible
+        const modal = document.getElementById('postpone-locked-modal');
+        if (modal) {
+            const titleElement = modal.querySelector('h3');
+            const messageElement = modal.querySelector('p');
+
+            if (titleElement) titleElement.textContent = title;
+            if (messageElement) messageElement.innerHTML = message;
+
+            modal.classList.add('active');
+        }
+    }
+}
+
+/**
+ * Actualizar interfaz basada en los límites del usuario
+ */
+function updateUIBasedOnLimits() {
+    if (!userLimits) return;
+
+    // Actualizar contadores en la interfaz si existen
+    const messageCountElement = document.getElementById('daily-message-count');
+    if (messageCountElement) {
+        messageCountElement.textContent = `${userLimits.dailyMessageCount}/${userLimits.maxDailyMessages}`;
+    }
+
+    const documentCountElement = document.getElementById('daily-document-count');
+    if (documentCountElement) {
+        documentCountElement.textContent = `${userLimits.dailyDocumentCount}/${userLimits.maxDailyDocuments}`;
+    }
+
+    // Deshabilitar botones si se alcanzaron los límites
+    if (!userLimits.canSendMessage) {
+        const sendButton = document.getElementById('send-btn');
+        if (sendButton) {
+            sendButton.disabled = true;
+            sendButton.title = 'Límite de consultas diarias alcanzado';
+        }
+    }
+
+    if (!userLimits.canCreateSession) {
+        const newChatButton = document.querySelector('.new-chat-btn');
+        if (newChatButton) {
+            newChatButton.disabled = true;
+            newChatButton.title = 'Límite de consultas diarias alcanzado';
         }
     }
 }

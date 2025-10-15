@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Modal - Límite de Documentos</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            margin: 0;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .test-container {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .test-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 1rem;
+            transition: all 0.2s;
+        }
+
+        .test-btn:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Test Modal de Límites</h1>
+        <p>Prueba los diferentes modales que aparecen cuando se alcanzan los límites:</p>
+
+        <button class="test-btn" onclick="testDocumentModal()">
+            📄 Test Modal Documentos
+        </button>
+
+        <button class="test-btn" onclick="testTasksModal()">
+            📋 Test Modal Tareas
+        </button>
+
+        <button class="test-btn" onclick="testGenericModal()">
+            ⭐ Test Modal Genérico
+        </button>
+    </div>
+
+    <!-- Incluir el modal global -->
+    <script>
+        // Copiar la funcionalidad del modal desde global-vars.blade.php
+        (function() {
+            try {
+                // Función global showUpgradeModal
+                if (typeof window.showUpgradeModal === 'undefined') {
+                    window.showUpgradeModal = function(options = {}) {
+                        console.log('🚀 INICIANDO showUpgradeModal global...', options);
+
+                        const defaults = {
+                            title: 'Actualiza tu plan',
+                            message: 'Esta funcionalidad requiere un plan premium.',
+                            icon: 'lock',
+                            hideCloseButton: false
+                        };
+
+                        const config = { ...defaults, ...options };
+
+                        // Crear modal dinámicamente
+                        let modal = document.getElementById('upgrade-modal');
+                        if (!modal) {
+                            modal = document.createElement('div');
+                            modal.id = 'upgrade-modal';
+                            modal.className = 'modal';
+                            modal.innerHTML = `
+                                <div class="modal-overlay" onclick="closeUpgradeModal()"></div>
+                                <div class="modal-content" onclick="event.stopPropagation()">
+                                    <div class="modal-header">
+                                        <h3 id="modal-title">${config.title}</h3>
+                                        ${!config.hideCloseButton ? '<button class="modal-close" onclick="closeUpgradeModal()">&times;</button>' : ''}
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="modal-icon">
+                                            ${config.icon === 'lock' ? '🔒' : '⭐'}
+                                        </div>
+                                        <div class="modal-message">
+                                            <p id="modal-message">${config.message}</p>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" onclick="window.goToPlans()" class="btn btn-primary">Ver Planes</button>
+                                        <button type="button" onclick="window.closeUpgradeModal()" class="btn btn-secondary">Cerrar</button>
+                                    </div>
+                                </div>
+                            `;
+                            document.body.appendChild(modal);
+                        } else {
+                            // Actualizar contenido del modal existente
+                            modal.querySelector('#modal-title').innerHTML = config.title;
+                            modal.querySelector('#modal-message').innerHTML = config.message;
+                        }
+
+                        // Mostrar modal
+                        modal.style.display = 'flex';
+                        modal.classList.add('active');
+
+                        console.log('✅ Modal de upgrade mostrado');
+                    };
+                }
+
+                // Funciones auxiliares para el modal
+                window.closeUpgradeModal = function() {
+                    console.log('🔒 Cerrando modal de upgrade...');
+                    const modal = document.getElementById('upgrade-modal');
+                    if (modal) {
+                        modal.style.display = 'none';
+                        modal.classList.remove('active');
+                        console.log('✅ Modal cerrado correctamente');
+                    } else {
+                        console.warn('⚠️ Modal no encontrado');
+                    }
+                };
+
+                window.goToPlans = function() {
+                    console.log('📋 Redirigiendo a planes...');
+                    // Simular redirección
+                    alert('Redirigiendo a /profile#plans...');
+                    window.closeUpgradeModal();
+                };
+
+                // Funciones específicas
+                window.showDocumentLimitModal = function() {
+                    window.showUpgradeModal({
+                        title: 'Límite de documentos alcanzado',
+                        message: 'Has alcanzado el límite diario de 1 documento. Los usuarios FREE pueden subir hasta 1 documento por día.<br><br>Actualiza tu plan para tener acceso ilimitado.',
+                        icon: 'lock',
+                        hideCloseButton: false
+                    });
+                };
+
+                window.showTasksLockedModal = function() {
+                    window.showUpgradeModal({
+                        title: 'Tareas bloqueadas para tu plan actual',
+                        message: 'Las tareas están disponibles para los planes: <strong>Negocios</strong> y <strong>Enterprise</strong>. Debes actualizar tu plan para acceder a esta funcionalidad.',
+                        icon: 'lock',
+                        hideCloseButton: false
+                    });
+                };
+
+            } catch(e) {
+                console.error('Error:', e);
+            }
+        })();
+
+        // Funciones de prueba
+        function testDocumentModal() {
+            window.showDocumentLimitModal();
+        }
+
+        function testTasksModal() {
+            window.showTasksLockedModal();
+        }
+
+        function testGenericModal() {
+            window.showUpgradeModal({
+                title: 'Función Premium',
+                message: 'Esta es una funcionalidad premium. Actualiza tu plan para acceder.',
+                icon: 'star',
+                hideCloseButton: false
+            });
+        }
+    </script>
+
+    <!-- Incluir estilos del modal -->
+    <style>
+        #upgrade-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        #upgrade-modal .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+        }
+
+        #upgrade-modal .modal-content {
+            position: relative;
+            background: #1e293b;
+            padding: 2rem;
+            border-radius: 16px;
+            max-width: 480px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        #upgrade-modal .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+        }
+
+        #upgrade-modal .modal-header h3 {
+            color: #f1f5f9;
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0;
+            flex: 1;
+            text-align: center;
+            padding-right: 2rem;
+        }
+
+        #upgrade-modal .modal-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.25rem;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        #upgrade-modal .modal-close:hover {
+            background: rgba(148, 163, 184, 0.1);
+            color: #f1f5f9;
+        }
+
+        #upgrade-modal .modal-body {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        #upgrade-modal .modal-icon {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            font-size: 4rem;
+            height: 80px;
+        }
+
+        #upgrade-modal .modal-message {
+            margin-top: 1rem;
+        }
+
+        #upgrade-modal .modal-message p {
+            color: #cbd5e1;
+            line-height: 1.7;
+            margin: 0 0 1rem 0;
+            font-size: 1rem;
+        }
+
+        #upgrade-modal .modal-footer {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        #upgrade-modal .btn {
+            padding: 0.875rem 2rem;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            border: none;
+            font-size: 0.95rem;
+            min-width: 120px;
+        }
+
+        #upgrade-modal .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        #upgrade-modal .btn-primary:hover {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+            transform: translateY(-2px);
+        }
+
+        #upgrade-modal .btn-secondary {
+            background: rgba(148, 163, 184, 0.1);
+            color: #cbd5e1;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        #upgrade-modal .btn-secondary:hover {
+            background: rgba(148, 163, 184, 0.2);
+            color: #f1f5f9;
+            border-color: rgba(148, 163, 184, 0.5);
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            #upgrade-modal .modal-content {
+                margin: 1rem;
+                padding: 1.5rem;
+                width: calc(100% - 2rem);
+            }
+
+            #upgrade-modal .modal-header h3 {
+                font-size: 1.25rem;
+                padding-right: 1rem;
+            }
+
+            #upgrade-modal .modal-footer {
+                flex-direction: column;
+            }
+
+            #upgrade-modal .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</body>
+</html>

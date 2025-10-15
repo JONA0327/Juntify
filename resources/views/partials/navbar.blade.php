@@ -41,8 +41,20 @@
     </a>
   </li>
   @endif
+  @php
+    // Verificar si el usuario tiene acceso a tareas
+    $user = auth()->user();
+    $userPlan = $user->plan_code ?? 'free';
+
+    // Un usuario pertenece a organización si tiene grupos o roles organizacionales
+    $belongsToOrg = $user->groups()->exists() ||
+                   in_array($user->roles ?? '', ['admin', 'superadmin', 'founder', 'developer']);
+
+    $hasTasksAccess = $userPlan !== 'free' || $belongsToOrg;
+  @endphp
   <li>
-    <a href="{{ route('tareas.index') }}">
+    <a href="{{ $hasTasksAccess ? route('tareas.index') : '#' }}"
+       @if(!$hasTasksAccess) onclick="event.preventDefault(); showTasksLockedModal();" @endif>
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2.25 2.25L15 10.5m6 1.5a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>

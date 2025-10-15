@@ -188,5 +188,8 @@
         }
     </script>
 
+    <!-- Global vars and functions -->
+    @include('partials.global-vars')
+
 </body>
 </html>

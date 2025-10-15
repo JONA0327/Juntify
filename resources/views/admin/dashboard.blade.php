@@ -229,5 +229,9 @@
                 .catch(() => alert('Error al iniciar el proceso'));
         });
     </script>
+
+    <!-- Global vars and functions -->
+    @include('partials.global-vars')
+
 </body>
 </html>

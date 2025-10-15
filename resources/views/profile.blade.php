@@ -288,6 +288,9 @@
         });
     </script>
 
+    <!-- Global vars and functions -->
+    @include('partials.global-vars')
+
     <!-- Google Connection Monitor Script -->
     <script src="{{ asset('js/google-connection-monitor.js') }}"></script>
     <script>

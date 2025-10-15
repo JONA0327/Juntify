@@ -15,6 +15,22 @@ class TaskController extends Controller
      */
     public function index(Request $request)
     {
+        // Verificar acceso a tareas basado en plan y organización
+        $user = Auth::user();
+        $userPlan = $user->plan_code ?? 'free';
+        $organizationId = session('organizationId');
+        $hasOrganizationalRole = in_array($user->roles ?? '', ['admin', 'superadmin', 'founder', 'developer']);
+        $belongsToOrg = $organizationId || $hasOrganizationalRole;
+        $hasTasksAccess = $userPlan !== 'free' || $belongsToOrg;
+
+        // Si no tiene acceso, mostrar vista con modal bloqueado
+        if (!$hasTasksAccess) {
+            return view('tasks.blocked', [
+                'userPlan' => $userPlan,
+                'belongsToOrganization' => $belongsToOrg
+            ]);
+        }
+
         $username = $this->getValidatedUsername();
 
         // Obtener tareas del usuario autenticado o asignadas a él

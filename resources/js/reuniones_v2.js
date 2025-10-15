@@ -674,8 +674,8 @@ function renderContacts(contacts, users) {
             for (const contact of contacts) {
                 const contactElement = document.createElement('div');
                 contactElement.className = 'contact-card';
-                const chatButtonHtml = isChatEnabled() ? `
-                            <button onclick="startChat('${contact.id}')"
+                const chatButtonHtml = isChatEnabled() ?
+                            `<button onclick="startChat('${contact.id}')"
                                     class="relative p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/20 transform hover:scale-105"
                                     title="Iniciar chat"
                                     id="chat-btn-${contact.id}">
@@ -683,8 +683,8 @@ function renderContacts(contacts, users) {
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.418 8-9.899 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.418-8 9.899-8s9.899 3.582 9.899 8z"></path>
                                 </svg>
                                 <div id="unread-indicator-${contact.id}" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-slate-800 hidden"></div>
-                            </button>
-                ` : '';
+                            </button>`
+                            : '';
                 contactElement.innerHTML = `
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
@@ -769,11 +769,11 @@ function renderContacts(contacts, users) {
                                     <span class="inline-block ${getGroupColor(user.group_name)} text-xs px-2 py-1 rounded-full">
                                         📂 ${user.group_name || 'Sin grupo'}
                                     </span>
-                                    ${user.group_role ? `
-                                        <span class="inline-block ${getRoleColor(user.group_role)} text-xs px-2 py-1 rounded-full">
+                                    ${user.group_role ?
+                                        `<span class="inline-block ${getRoleColor(user.group_role)} text-xs px-2 py-1 rounded-full">
                                             👤 ${user.group_role}
-                                        </span>
-                                    ` : ''}
+                                        </span>`
+                                        : ''}
                                 </div>
                             </div>
                         </div>
@@ -4241,6 +4241,21 @@ function renderContainers() {
 }
 
 function openCreateContainerModal() {
+    // Verificar si es plan FREE y bloquear la creación de contenedores
+    const hasPremium = window.hasPremiumAccess ? window.hasPremiumAccess() : false;
+
+    if (!hasPremium) {
+        console.log('🚫 Usuario sin acceso premium - bloqueando creación de contenedores');
+
+        // Mostrar modal específico para contenedores
+        showUpgradeModal({
+            title: 'Contenedores disponibles en planes superiores',
+            message: 'La creación de contenedores está disponible para los planes: <strong>Negocios</strong> y <strong>Enterprise</strong>.',
+            icon: 'lock'
+        });
+        return;
+    }
+
     isEditMode = false;
     currentContainer = null;
 
@@ -5950,3 +5965,69 @@ async function confirmShare() {
         updateConfirmButton();
     }
 }
+
+// Función genérica para mostrar modal de upgrade - copia de new-meeting.js
+function showUpgradeModal(options = {}) {
+    console.log('🚀 INICIANDO showUpgradeModal...');
+
+    const modal = document.getElementById('postpone-locked-modal');
+    console.log('🔍 Modal encontrado:', !!modal);
+
+    if (!modal) {
+        console.error('❌ Modal no encontrado!');
+        alert('Esta opción requiere un plan superior.');
+        return;
+    }
+
+    // Configurar contenido del modal
+    const title = options.title || 'Opción disponible en planes superiores';
+    const message = options.message || 'Esta opción está disponible para los planes: Negocios y Enterprise.';
+    const icon = options.icon || 'lock';
+
+    // Actualizar contenido del modal
+    const modalTitle = modal.querySelector('.modal-title');
+    const modalDescription = modal.querySelector('.modal-description');
+
+    if (modalTitle) {
+        modalTitle.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="modal-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                ${icon === 'file' ?
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />' :
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />'}
+            </svg>
+            ${title}
+        `;
+    }
+
+    if (modalDescription) {
+        modalDescription.innerHTML = message;
+    }
+
+    // Manejar el botón de cerrar si se especifica ocultarlo
+    const closeButton = modal.querySelector('.btn:not(.btn-primary)'); // Botón "Cerrar"
+    if (options.hideCloseButton && closeButton) {
+        closeButton.style.display = 'none';
+        console.log('🔒 Botón cerrar ocultado');
+    } else if (closeButton) {
+        closeButton.style.display = ''; // Mostrar botón cerrar normalmente
+    }
+
+    // Resetear cualquier estilo previo
+    modal.removeAttribute('style');
+    modal.classList.remove('show');
+
+    // Aplicar estilos de forma directa y forzada para centrado perfecto
+    modal.style.setProperty('display', 'flex', 'important');
+    modal.style.setProperty('align-items', 'center', 'important');
+    modal.style.setProperty('justify-content', 'center', 'important');
+    modal.style.setProperty('visibility', 'visible', 'important');
+    modal.style.setProperty('opacity', '1', 'important');
+
+    // Bloquear scroll del body
+    document.body.style.setProperty('overflow', 'hidden', 'important');
+
+    console.log('✅ Modal configurado. Display:', modal.style.display);
+}
+
+// Hacer función global
+window.showUpgradeModal = showUpgradeModal;

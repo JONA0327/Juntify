@@ -21,6 +21,10 @@ const documentNameById = new Map();
 const pendingDocIds = new Set();
 let pendingDocWatcher = null;
 
+// Variables de límites del plan
+let userLimits = null;
+let userPlan = 'free';
+
 function addPendingDoc(id) {
     if (!Number.isFinite(Number(id))) return;
     pendingDocIds.add(Number(id));
@@ -117,6 +121,8 @@ document.addEventListener('DOMContentLoaded', function() {
  */
 async function initializeAiAssistant() {
     try {
+        // Cargar límites del usuario primero
+        await loadUserLimits();
         await loadChatSessions();
         setupEventListeners();
         await ensureCurrentSession();
@@ -125,6 +131,102 @@ async function initializeAiAssistant() {
     } catch (error) {
         console.error('Error initializing AI Assistant:', error);
         showNotification('Error al inicializar el asistente', 'error');
+    }
+}
+
+/**
+ * Cargar límites del usuario
+ */
+async function loadUserLimits() {
+    try {
+        const response = await fetch('/api/ai-assistant/limits', {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            userLimits = data.limits;
+            userPlan = data.user_plan;
+            console.log('Límites del usuario cargados:', userLimits);
+            updateUIBasedOnLimits();
+        }
+    } catch (error) {
+        console.error('Error cargando límites del usuario:', error);
+    }
+}
+
+/**
+ * Verificar si el usuario puede realizar una acción
+ */
+function canPerformAction(action) {
+    if (!userLimits || userLimits.allowed) return true;
+
+    switch (action) {
+        case 'send_message':
+            return userLimits.can_send_message;
+        case 'upload_document':
+            return userLimits.can_upload_document;
+        default:
+            return false;
+    }
+}
+
+/**
+ * Mostrar modal de límites excedidos
+ */
+function showLimitExceededModal(type) {
+    let title, message;
+
+    if (type === 'message') {
+        title = 'Límite de consultas alcanzado';
+        message = `Has alcanzado el límite diario de ${userLimits.message_limit} consultas. Los usuarios FREE pueden realizar hasta ${userLimits.message_limit} consultas por día.`;
+    } else if (type === 'document') {
+        title = 'Límite de documentos alcanzado';
+        message = `Has alcanzado el límite diario de ${userLimits.document_limit} documento. Los usuarios FREE pueden subir hasta ${userLimits.document_limit} documento por día.`;
+    }
+
+    // Usar la función global si está disponible
+    if (typeof window.showUpgradeModal === 'function') {
+        window.showUpgradeModal({
+            title: title,
+            message: message + ' <br><br>Actualiza tu plan para tener acceso ilimitado.',
+            icon: 'lock'
+        });
+    } else {
+        alert(title + '\n\n' + message + '\n\nActualiza tu plan para tener acceso ilimitado.');
+    }
+}
+
+/**
+ * Actualizar UI basado en límites
+ */
+function updateUIBasedOnLimits() {
+    if (!userLimits || userLimits.allowed) return;
+
+    // Mostrar información de límites en la UI
+    const limitInfo = document.createElement('div');
+    limitInfo.className = 'limit-info';
+    limitInfo.innerHTML = `
+        <div class="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3 mb-4">
+            <div class="flex items-center gap-2 text-yellow-400 text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.118 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+                Plan FREE - Límites diarios:
+            </div>
+            <div class="text-slate-300 text-sm mt-1">
+                Consultas: ${userLimits.daily_messages}/${userLimits.message_limit} |
+                Documentos: ${userLimits.daily_documents}/${userLimits.document_limit}
+            </div>
+        </div>
+    `;
+
+    // Insertar al inicio del chat container
+    const chatContainer = document.querySelector('.chat-container');
+    if (chatContainer) {
+        chatContainer.insertBefore(limitInfo, chatContainer.firstChild);
     }
 }
 
@@ -326,6 +428,12 @@ async function deleteChatSession(sessionId) {
  * Crear nueva sesión de chat
  */
 async function createNewChat() {
+    // Verificar límites para usuarios FREE
+    if (!canPerformAction('send_message')) {
+        showLimitExceededModal('message');
+        return;
+    }
+
     // Siempre limpiar contexto para nuevas conversaciones
     resetContextToGeneral(true);
     await createNewChatSession();
@@ -568,6 +676,12 @@ function renderMessage(message) {
  */
 async function sendMessage(messageText = null) {
     if (!currentSessionId) return;
+
+    // Verificar límites para usuarios FREE
+    if (!canPerformAction('send_message')) {
+        showLimitExceededModal('message');
+        return;
+    }
 
     const messageInput = document.getElementById('message-input');
     const message = messageText || messageInput?.value?.trim() || '';
@@ -2945,6 +3059,12 @@ function setupChatDropZone() {
 
 async function uploadChatAttachments(files) {
     try {
+        // Verificar límites para usuarios FREE
+        if (!canPerformAction('upload_document')) {
+            showLimitExceededModal('document');
+            return;
+        }
+
         // Filtrar tipos no permitidos
         const validFiles = files.filter(isValidFile);
         const rejected = files.filter(f => !isValidFile(f));
