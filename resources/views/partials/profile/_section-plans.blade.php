@@ -8,7 +8,20 @@
 
         <!-- Planes disponibles -->
         <div class="plans-grid">
-            @foreach($plans as $plan)
+            @forelse($plans as $plan)
+            @php
+                $currencySymbols = [
+                    'MXN' => '$',
+                    'USD' => '$',
+                    'EUR' => '€',
+                ];
+                $currencySymbol = $currencySymbols[$plan->currency] ?? $plan->currency;
+                $billingLabel = $plan->billing_cycle_days === 30
+                    ? 'mes'
+                    : $plan->billing_cycle_days . ' días';
+                $features = collect($plan->features ?? []);
+                $isFreePlan = (float) $plan->price === 0.0;
+            @endphp
             <div class="plan-card @if($plan->code === 'basico') popular @endif" data-plan-id="{{ $plan->id }}">
                 @if($plan->code === 'basico')
                 <div class="plan-badge">Popular</div>
@@ -17,23 +30,29 @@
                 <div class="plan-header">
                     <h3 class="plan-name">{{ $plan->name }}</h3>
                     <div class="plan-price">
-                        <span class="currency">$</span>
-                        <span class="amount">{{ number_format($plan->price, 0, ',', '.') }}</span>
-                        <span class="period">/ mes</span>
+                        @if($isFreePlan)
+                            <span class="amount amount-free">Gratis</span>
+                        @else
+                            <span class="currency">{{ $currencySymbol }}</span>
+                            <span class="amount">{{ number_format($plan->price, 0, ',', '.') }}</span>
+                            <span class="period">/ {{ $billingLabel }}</span>
+                        @endif
                     </div>
                     <p class="plan-description">{{ $plan->description }}</p>
                 </div>
 
                 <div class="plan-features">
                     <ul>
-                        @foreach($plan->features as $feature)
+                        @forelse($features as $feature)
                         <li>
                             <svg class="feature-check" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 01-1.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                             </svg>
                             {{ $feature }}
                         </li>
-                        @endforeach
+                        @empty
+                        <li class="feature-empty">Pronto agregaremos más detalles de este plan.</li>
+                        @endforelse
                     </ul>
                 </div>
 
@@ -53,13 +72,17 @@
                             Plan Gratuito
                         </button>
                     @else
-                        <button class="plan-btn primary" onclick="selectPlan({{ $plan->id }}, '{{ $plan->name }}', {{ $plan->price }})">
+                        <button class="plan-btn primary" onclick="selectPlan({{ $plan->id }}, @js($plan->name), {{ $plan->price }}, @js($plan->currency), {{ $plan->billing_cycle_days }})">
                             Seleccionar Plan
                         </button>
                     @endif
                 </div>
             </div>
-            @endforeach
+            @empty
+            <div class="plan-empty-state">
+                <p>No hay planes activos disponibles en este momento. Vuelve a intentarlo más tarde.</p>
+            </div>
+            @endforelse
         </div>
 
         <!-- Estado de suscripción actual -->
@@ -87,7 +110,9 @@
             <div class="selected-plan-info">
                 <h4 id="selected-plan-name"></h4>
                 <div class="selected-plan-price">
-                    <span>$</span><span id="selected-plan-price"></span><span>/mes</span>
+                    <span id="selected-plan-price-currency"></span>
+                    <span id="selected-plan-price"></span>
+                    <span id="selected-plan-price-period"></span>
                 </div>
             </div>
             <p>¿Deseas proceder con la suscripción a este plan?</p>
@@ -196,6 +221,12 @@
     margin: 0 0.25rem;
 }
 
+.plan-price .amount-free {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #10b981;
+}
+
 .plan-price .period {
     font-size: 1rem;
     color: #e2e8f0;
@@ -221,12 +252,34 @@
     font-size: 0.95rem;
 }
 
+.plan-features .feature-empty {
+    color: rgba(226, 232, 240, 0.75);
+    font-style: italic;
+    padding-left: 0;
+    display: block;
+}
+
 .feature-check {
     width: 1.25rem;
     height: 1.25rem;
     color: #10b981;
     margin-right: 0.75rem;
     flex-shrink: 0;
+}
+
+.plan-empty-state {
+    grid-column: 1 / -1;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px dashed rgba(255, 255, 255, 0.25);
+    border-radius: 1rem;
+    padding: 2rem;
+    text-align: center;
+    color: #e2e8f0;
+    font-size: 1rem;
+}
+
+.plan-empty-state p {
+    margin: 0;
 }
 
 .plan-action {
@@ -346,6 +399,14 @@
     font-size: 1.5rem;
     font-weight: 700;
     color: #3b82f6;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.35rem;
+}
+
+.selected-plan-price.is-free {
+    color: #10b981;
 }
 
 .modal-body p {
@@ -396,31 +457,90 @@
 </style>
 
 <script>
-let selectedPlanId = null;
+const planSelectionModal = document.getElementById('plan-selection-modal');
+const selectedPlanNameEl = document.getElementById('selected-plan-name');
+const selectedPlanPriceEl = document.getElementById('selected-plan-price');
+const selectedPlanCurrencyEl = document.getElementById('selected-plan-price-currency');
+const selectedPlanPeriodEl = document.getElementById('selected-plan-price-period');
+const selectedPlanPriceContainer = document.querySelector('.selected-plan-price');
 
-function selectPlan(planId, planName, planPrice) {
+const PLAN_CURRENCY_SYMBOLS = {
+    MXN: '$',
+    USD: '$',
+    EUR: '€'
+};
+
+const PLAN_CURRENCY_LOCALES = {
+    MXN: 'es-MX',
+    USD: 'en-US',
+    EUR: 'es-ES'
+};
+
+let selectedPlanId = null;
+let selectedPlanPeriodLabel = 'mes';
+
+function formatPlanPrice(value, currency) {
+    const locale = PLAN_CURRENCY_LOCALES[currency] || 'es-ES';
+    const amount = Number(value) || 0;
+    const hasDecimals = Math.abs(amount % 1) > 0;
+    return new Intl.NumberFormat(locale, {
+        minimumFractionDigits: hasDecimals ? 2 : 0,
+        maximumFractionDigits: hasDecimals ? 2 : 0,
+    }).format(amount);
+}
+
+function selectPlan(planId, planName, planPrice, planCurrency, planBillingCycleDays) {
     selectedPlanId = planId;
-    document.getElementById('selected-plan-name').textContent = planName;
-    document.getElementById('selected-plan-price').textContent = new Intl.NumberFormat('es-CL').format(planPrice);
-    document.getElementById('plan-selection-modal').style.display = 'flex';
+    const billingDays = Number(planBillingCycleDays);
+    const normalizedBillingDays = Number.isFinite(billingDays) && billingDays > 0 ? billingDays : 30;
+    selectedPlanPeriodLabel = normalizedBillingDays === 30 ? 'mes' : `${normalizedBillingDays} días`;
+
+    const numericPrice = Number(planPrice) || 0;
+    const isFree = numericPrice === 0;
+    const currencySymbol = PLAN_CURRENCY_SYMBOLS[planCurrency] || planCurrency;
+
+    if (selectedPlanNameEl) {
+        selectedPlanNameEl.textContent = planName;
+    }
+
+    if (selectedPlanPriceEl) {
+        if (isFree) {
+            selectedPlanPriceEl.textContent = 'Gratis';
+        } else {
+            selectedPlanPriceEl.textContent = formatPlanPrice(numericPrice, planCurrency);
+        }
+    }
+
+    if (selectedPlanCurrencyEl) {
+        selectedPlanCurrencyEl.textContent = isFree ? '' : currencySymbol;
+    }
+
+    if (selectedPlanPeriodEl) {
+        selectedPlanPeriodEl.textContent = isFree ? '' : `/ ${selectedPlanPeriodLabel}`;
+    }
+
+    if (selectedPlanPriceContainer) {
+        selectedPlanPriceContainer.classList.toggle('is-free', isFree);
+    }
+
+    if (planSelectionModal) {
+        planSelectionModal.style.display = 'flex';
+    }
 }
 
 function closePlanModal() {
-    document.getElementById('plan-selection-modal').style.display = 'none';
+    if (planSelectionModal) {
+        planSelectionModal.style.display = 'none';
+    }
     selectedPlanId = null;
+    selectedPlanPeriodLabel = 'mes';
 }
 
 function confirmPlanSelection() {
     if (!selectedPlanId) return;
 
-    console.log('Creating preference for plan ID:', selectedPlanId);
-    console.log('Current URL:', window.location.href);
-    console.log('Base URL:', window.location.origin);
+    const createPreferenceUrl = `${window.location.origin}/subscription/create-preference`;
 
-    const createPreferenceUrl = window.location.origin + '/subscription/create-preference';
-    console.log('Request URL:', createPreferenceUrl);
-
-    // Crear preferencia de pago
     fetch(createPreferenceUrl, {
         method: 'POST',
         headers: {
@@ -432,17 +552,13 @@ function confirmPlanSelection() {
         })
     })
     .then(response => {
-        console.log('Response status:', response.status);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         return response.json();
     })
     .then(data => {
-        console.log('Response data:', data);
         if (data.success) {
-            console.log('Redirecting to:', data.checkout_url);
-            // Redirigir a MercadoPago
             window.location.href = data.checkout_url;
         } else {
             alert('Error al crear la preferencia de pago: ' + (data.error || 'Error desconocido'));
@@ -457,10 +573,12 @@ function confirmPlanSelection() {
     });
 }
 
-// Cerrar modal al hacer clic fuera
-document.getElementById('plan-selection-modal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closePlanModal();
-    }
-});
+if (planSelectionModal) {
+    planSelectionModal.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closePlanModal();
+        }
+    });
+}
+
 </script>
