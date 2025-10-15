@@ -15,18 +15,19 @@ class PlansSeeder extends Seeder
         $plans = [
             [
                 'code' => 'free',
-                'name' => 'Freemium',
-                'description' => 'Perfecto para empezar con reuniones inteligentes sin compromiso.',
+                'name' => 'Plan Free',
+                'description' => 'Gratis para siempre.',
                 'price' => 0.00, // Gratuito
                 'currency' => 'MXN', // Peso mexicano
                 'billing_cycle_days' => 30,
                 'is_active' => true,
                 'features' => [
-                    '10 reuniones mensuales gratuitas',
-                    'Transcripción básica con IA',
-                    'Resúmenes automáticos',
-                    'Almacenamiento 1GB',
-                    'Soporte por email'
+                    'Hasta 5 reuniones al mes',
+                    'Duración máxima de 30 minutos por reunión',
+                    '3 consultas al asistente y análisis de 1 documento por día',
+                    'Subida de audio de hasta 50 MB',
+                    'Transcripciones disponibles durante 7 días',
+                    'Exportar documentos'
                 ]
             ],
             [
