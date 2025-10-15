@@ -27,7 +27,23 @@ class MercadoPagoService
         }
 
         MercadoPagoConfig::setAccessToken($this->accessToken);
-        MercadoPagoConfig::setRuntimeEnviroment(MercadoPagoConfig::LOCAL);
+
+        // Forzar configuración de sandbox para tokens de TEST
+        if (str_starts_with($this->accessToken, 'TEST-')) {
+            MercadoPagoConfig::setRuntimeEnviroment(MercadoPagoConfig::LOCAL);
+
+            // Log para confirmar configuración
+            Log::info('MercadoPago: Using TEST environment', [
+                'token_prefix' => substr($this->accessToken, 0, 10) . '...',
+                'environment' => 'SANDBOX/LOCAL'
+            ]);
+        } else {
+            MercadoPagoConfig::setRuntimeEnviroment(MercadoPagoConfig::SERVER);
+            Log::info('MercadoPago: Using PRODUCTION environment', [
+                'token_prefix' => substr($this->accessToken, 0, 10) . '...',
+                'environment' => 'PRODUCTION/SERVER'
+            ]);
+        }
 
         $this->preferenceClient = new PreferenceClient();
         $this->paymentClient = new PaymentClient();
@@ -56,6 +72,14 @@ class MercadoPagoService
                 "payer" => [
                     "name" => $user->full_name,
                     "email" => $user->email,
+                    "address" => [
+                        "zip_code" => "11000",
+                        "street_name" => "Test Street"
+                    ],
+                    "identification" => [
+                        "type" => "RFC",
+                        "number" => "XAXX010101000"
+                    ]
                 ],
                 "payment_methods" => [
                     "excluded_payment_methods" => [],
@@ -65,13 +89,14 @@ class MercadoPagoService
                     "installments" => 12,
                 ],
                 "back_urls" => [
-                    "success" => url('/payment/success'),
-                    "failure" => url('/payment/failure'),
-                    "pending" => url('/payment/pending')
+                    "success" => config('app.url') . '/payment/success',
+                    "failure" => config('app.url') . '/payment/failure',
+                    "pending" => config('app.url') . '/payment/pending'
                 ],
                 "external_reference" => $externalReference,
                 // "notification_url" => "http://127.0.0.1:8000/webhook/mercadopago", // Comentado para desarrollo local
                 "expires" => false,
+                "site_id" => "MLM", // Forzar México
                 "metadata" => [
                     "user_id" => $user->id,
                     "plan_id" => $plan->id,
@@ -79,7 +104,25 @@ class MercadoPagoService
                 ]
             ];
 
+            // Log de la preferencia antes de crearla
+            Log::info('MercadoPago: Creating preference with data', [
+                'external_reference' => $externalReference,
+                'plan_code' => $plan->code,
+                'plan_price' => $plan->price,
+                'plan_currency' => $plan->currency,
+                'user_email' => $user->email,
+                'site_id' => 'MLM',
+                'access_token_prefix' => substr($this->accessToken, 0, 10) . '...'
+            ]);
+
             $preference = $this->preferenceClient->create($preferenceData);
+
+            // Log después de crear la preferencia
+            Log::info('MercadoPago: Preference created successfully', [
+                'preference_id' => $preference->id,
+                'init_point' => $preference->init_point,
+                'sandbox_init_point' => $preference->sandbox_init_point
+            ]);
 
             // Crear registro de pago pendiente
             $payment = Payment::create([

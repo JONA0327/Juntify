@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✅ Plan Basic - Límites Implementados</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        h1 {
+            color: #1e293b;
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        .implementation-section {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .implementation-section h3 {
+            margin-top: 0;
+            color: #1e293b;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        .feature-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            border: 2px solid #e2e8f0;
+            transition: all 0.2s;
+        }
+        .feature-card:hover {
+            border-color: #3b82f6;
+            transform: translateY(-2px);
+        }
+        .feature-card h4 {
+            color: #1e293b;
+            margin: 0 0 0.5rem;
+            font-size: 1.1rem;
+        }
+        .limits-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .limits-table th,
+        .limits-table td {
+            border: 1px solid #e2e8f0;
+            padding: 0.75rem;
+            text-align: left;
+        }
+        .limits-table th {
+            background: #1e293b;
+            color: #f9fafb;
+            font-weight: 600;
+        }
+        .plan-free {
+            background: #fef2f2;
+            color: #991b1b;
+        }
+        .plan-basic {
+            background: #eff6ff;
+            color: #1e40af;
+            font-weight: 600;
+        }
+        .plan-premium {
+            background: #ecfdf5;
+            color: #065f46;
+        }
+        .implementation-list {
+            background: #ecfdf5;
+            border: 1px solid #d1fae5;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .implementation-list li {
+            margin: 0.5rem 0;
+            color: #065f46;
+        }
+        .tech-stack {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: 'Courier New', monospace;
+        }
+        .tech-stack h4 {
+            color: #60a5fa;
+            margin: 0 0 0.5rem;
+        }
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            margin: 0.5rem 0.5rem 0.5rem 0;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+        .btn-success {
+            background: #10b981;
+        }
+        .btn-success:hover {
+            background: #059669;
+        }
+        .btn-test {
+            background: #f59e0b;
+        }
+        .btn-test:hover {
+            background: #d97706;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+        .status-implemented {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status-enhanced {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✅ Plan Basic - Límites Implementados</h1>
+
+        <div class="implementation-section">
+            <h3>📋 Resumen de Límites</h3>
+            <table class="limits-table">
+                <thead>
+                    <tr>
+                        <th>Plan</th>
+                        <th>Contenedores</th>
+                        <th>Reuniones/Contenedor</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="plan-free">
+                        <td>Free</td>
+                        <td>0 contenedores</td>
+                        <td>N/A</td>
+                        <td>❌ Sin acceso</td>
+                    </tr>
+                    <tr class="plan-basic">
+                        <td>Basic</td>
+                        <td>3 contenedores</td>
+                        <td>10 reuniones máximo</td>
+                        <td>✅ Implementado</td>
+                    </tr>
+                    <tr class="plan-premium">
+                        <td>Business+</td>
+                        <td>999 contenedores</td>
+                        <td>999 reuniones</td>
+                        <td>✅ Ilimitado</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="implementation-section">
+            <h3>🚀 Funcionalidades Implementadas</h3>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>🔐 Control de Acceso <span class="status-badge status-implemented">Frontend</span></h4>
+                    <p>Función <code>canCreateContainers()</code> que verifica si el usuario puede crear contenedores basado en su plan/rol.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>📊 Límites Dinámicos <span class="status-badge status-implemented">Frontend</span></h4>
+                    <p>Función <code>getContainerLimits()</code> que devuelve límites específicos por plan (3 contenedores, 10 reuniones para Basic).</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>🔍 Verificación de Límites <span class="status-badge status-implemented">Frontend</span></h4>
+                    <p>Función <code>canCreateMoreContainers()</code> que verifica si el usuario puede crear más contenedores basado en el conteo actual.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>🚫 Bloqueo de Creación <span class="status-badge status-enhanced">Backend</span></h4>
+                    <p>Validación en <code>ContainerController::store()</code> que impide crear más de 3 contenedores en Plan Basic.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>📝 Límite de Reuniones <span class="status-badge status-implemented">Backend</span></h4>
+                    <p>Validación en <code>ContainerController::addMeeting()</code> que impide agregar más de 10 reuniones por contenedor en Plan Basic.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>💬 Mensajes Informativos <span class="status-badge status-enhanced">Frontend</span></h4>
+                    <p>Modales actualizados con información precisa sobre planes disponibles y límites específicos.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="implementation-section">
+            <h3>🔧 Archivos Modificados</h3>
+
+            <div class="tech-stack">
+                <h4>Frontend (JavaScript)</h4>
+                <ul>
+                    <li>global-vars.blade.php - Nuevas funciones de límites</li>
+                    <li>reuniones_v2.js - Verificación antes de crear contenedores</li>
+                    <li>reuniones_v2.js - Verificación antes de agregar reuniones</li>
+                </ul>
+            </div>
+
+            <div class="tech-stack">
+                <h4>Backend (PHP)</h4>
+                <ul>
+                    <li>ContainerController.php::store() - Límite de 3 contenedores</li>
+                    <li>ContainerController.php::addMeeting() - Límite de 10 reuniones</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="implementation-section">
+            <h3>✅ Casos de Uso Cubiertos</h3>
+
+            <div class="implementation-list">
+                <ul>
+                    <li><strong>Plan Free:</strong> No puede crear contenedores - muestra modal de upgrade</li>
+                    <li><strong>Plan Basic (0-2 contenedores):</strong> Puede crear contenedores hasta llegar a 3</li>
+                    <li><strong>Plan Basic (3 contenedores):</strong> No puede crear más - muestra modal con límite alcanzado</li>
+                    <li><strong>Plan Basic (0-9 reuniones en contenedor):</strong> Puede agregar reuniones hasta llegar a 10</li>
+                    <li><strong>Plan Basic (10 reuniones en contenedor):</strong> No puede agregar más reuniones</li>
+                    <li><strong>Planes superiores:</strong> Límites muy altos (prácticamente ilimitados)</li>
+                    <li><strong>Usuarios con organización:</strong> Límites amplios independientemente del plan personal</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="implementation-section">
+            <h3>🎯 Flujo de Validación</h3>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>1. Creación de Contenedores</h4>
+                    <p><strong>Frontend:</strong> <code>canCreateContainers()</code> → <code>canCreateMoreContainers()</code><br>
+                    <strong>Backend:</strong> Conteo de contenedores existentes + validación de límite</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>2. Agregar Reuniones</h4>
+                    <p><strong>Frontend:</strong> <code>getContainerLimits()</code> → verificación de conteo actual<br>
+                    <strong>Backend:</strong> Conteo de reuniones en contenedor + validación de límite</p>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 2rem;">
+            <a href="http://127.0.0.1:8000/reuniones" class="btn btn-success">
+                Probar en Reuniones
+            </a>
+            <a href="http://127.0.0.1:8000/test-basic-limits.html" class="btn btn-test">
+                Test de Límites
+            </a>
+            <a href="http://127.0.0.1:8000/debug-basic-modal.html" class="btn">
+                Debug Modal
+            </a>
+        </div>
+
+        <div class="implementation-section">
+            <h3>🚀 Estado Final</h3>
+            <p><strong>El Plan Basic ahora tiene acceso completo a contenedores con límites apropiados:</strong></p>
+            <ul>
+                <li>✅ <strong>Puede crear contenedores</strong> (máximo 3)</li>
+                <li>✅ <strong>Puede agregar reuniones</strong> (máximo 10 por contenedor)</li>
+                <li>✅ <strong>Validación en frontend y backend</strong></li>
+                <li>✅ <strong>Mensajes de error informativos</strong></li>
+                <li>✅ <strong>Modal de upgrade se cierra correctamente</strong></li>
+            </ul>
+            <p><em>Los usuarios con rol "basic" ahora pueden usar contenedores sin problemas, respetando los límites establecidos.</em></p>
+        </div>
+    </div>
+</body>
+</html>

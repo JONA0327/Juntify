@@ -13,6 +13,10 @@ var segmentEndHandler = typeof window.segmentEndHandler !== 'undefined' ? window
 var selectedSegmentIndex = typeof window.selectedSegmentIndex !== 'undefined' ? window.selectedSegmentIndex : null;
 var segmentsModified = typeof window.segmentsModified !== 'undefined' ? window.segmentsModified : false;
 
+// Variable para almacenar datos de contenedores
+var containersData = window.containersData || [];
+window.containersData = containersData;
+
 var contactsFeatures = window.contactsFeatures || {};
 if (typeof contactsFeatures.showChat === 'undefined') {
     contactsFeatures.showChat = true;
@@ -2503,6 +2507,25 @@ function attachContainerEventListeners() {
 
 async function addMeetingToContainer(meetingId, containerId) {
     try {
+        // Verificar límites antes de agregar
+        const limits = window.getContainerLimits ? window.getContainerLimits() : { maxMeetingsPerContainer: 999 };
+
+        // Buscar el contenedor actual para contar sus reuniones
+        const currentContainer = containersData ? containersData.find(c => c.id == containerId) : null;
+        const currentMeetingCount = currentContainer ? (currentContainer.meetings_count || 0) : 0;
+
+        if (currentMeetingCount >= limits.maxMeetingsPerContainer) {
+            showNotification(`Límite alcanzado: máximo ${limits.maxMeetingsPerContainer} reuniones por contenedor para tu plan`, 'error');
+            return false;
+        }
+
+        console.log('🔍 Verificando límite de reuniones por contenedor:', {
+            containerId,
+            currentCount: currentMeetingCount,
+            maxAllowed: limits.maxMeetingsPerContainer,
+            canAdd: currentMeetingCount < limits.maxMeetingsPerContainer
+        });
+
         const response = await fetch(`/api/content-containers/${containerId}/meetings`, {
             method: 'POST',
             headers: {
@@ -4183,6 +4206,8 @@ async function loadContainers() {
 
         if (data.success) {
             containers = data.containers;
+            containersData = data.containers; // También actualizar containersData
+            window.containersData = containersData; // Hacer disponible globalmente
             renderContainers();
         } else {
             throw new Error(data.message || 'Error al cargar contenedores');
@@ -4241,20 +4266,54 @@ function renderContainers() {
 }
 
 function openCreateContainerModal() {
-    // Verificar si es plan FREE y bloquear la creación de contenedores
-    const hasPremium = window.hasPremiumAccess ? window.hasPremiumAccess() : false;
+    console.log('🎯 [openCreateContainerModal] Iniciando verificación de acceso...');
 
-    if (!hasPremium) {
-        console.log('🚫 Usuario sin acceso premium - bloqueando creación de contenedores');
+    // Verificar que las variables globales están disponibles
+    console.log('🔍 [openCreateContainerModal] Variables globales:', {
+        userRole: window.userRole,
+        userPlanCode: window.userPlanCode,
+        userBelongsToOrganization: window.userBelongsToOrganization,
+        canCreateContainers: typeof window.canCreateContainers
+    });
+
+    // Verificar acceso básico a contenedores
+    const canCreateContainers = window.canCreateContainers ? window.canCreateContainers() : false;
+
+    console.log('🎯 [openCreateContainerModal] Resultado de canCreateContainers:', canCreateContainers);
+
+    if (!canCreateContainers) {
+        console.log('🚫 [openCreateContainerModal] Usuario sin acceso - mostrando modal de upgrade');
 
         // Mostrar modal específico para contenedores
         showUpgradeModal({
-            title: 'Contenedores disponibles en planes superiores',
-            message: 'La creación de contenedores está disponible para los planes: <strong>Negocios</strong> y <strong>Enterprise</strong>.',
+            title: 'Contenedores disponibles desde Plan Basic',
+            message: 'La creación de contenedores está disponible para los planes: <strong>Basic</strong>, <strong>Business</strong> y <strong>Enterprise</strong>.',
             icon: 'lock'
         });
         return;
     }
+
+    // Verificar límites de contenedores
+    const currentContainerCount = containersData ? containersData.length : 0;
+    const canCreateMore = window.canCreateMoreContainers ? window.canCreateMoreContainers(currentContainerCount) : true;
+    const limits = window.getContainerLimits ? window.getContainerLimits() : { maxContainers: 999 };
+
+    if (!canCreateMore) {
+        console.log('📦 Límite de contenedores alcanzado');
+
+        showUpgradeModal({
+            title: 'Límite de contenedores alcanzado',
+            message: `Has alcanzado el límite de <strong>${limits.maxContainers} contenedores</strong> para tu plan. Actualiza a un plan superior para crear más contenedores.`,
+            icon: 'lock'
+        });
+        return;
+    }
+
+    console.log('✅ Usuario puede crear contenedores', {
+        currentCount: currentContainerCount,
+        maxAllowed: limits.maxContainers,
+        remaining: limits.maxContainers - currentContainerCount
+    });
 
     isEditMode = false;
     currentContainer = null;
@@ -6029,5 +6088,24 @@ function showUpgradeModal(options = {}) {
     console.log('✅ Modal configurado. Display:', modal.style.display);
 }
 
-// Hacer función global
+// Función global para cerrar modal
+function closeUpgradeModal() {
+    console.log('🔒 [reuniones_v2] Cerrando modal de upgrade...');
+
+    const modal = document.getElementById('postpone-locked-modal');
+
+    if (modal) {
+        modal.style.setProperty('display', 'none', 'important');
+        modal.style.setProperty('visibility', 'hidden', 'important');
+        modal.style.setProperty('opacity', '0', 'important');
+        modal.classList.remove('show', 'active');
+        document.body.style.setProperty('overflow', '', 'important');
+        console.log('✅ [reuniones_v2] Modal cerrado correctamente');
+    } else {
+        console.warn('⚠️ [reuniones_v2] Modal no encontrado para cerrar');
+    }
+}
+
+// Hacer funciones globales
 window.showUpgradeModal = showUpgradeModal;
+window.closeUpgradeModal = closeUpgradeModal;

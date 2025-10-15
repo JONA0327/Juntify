@@ -296,6 +296,31 @@ Route::middleware(['auth'])->group(function () {
         return view('test-create-preference');
     })->middleware('auth');
 
+    // Debug route para verificar planes
+    Route::get('/debug-plans', function () {
+        $plans = App\Models\Plan::where('is_active', true)->orderBy('price')->get();
+        return view('debug-plans', compact('plans'));
+    });
+
+    // Ruta de prueba para MercadoPago
+    Route::get('/mercadopago-test', function () {
+        return view('mercadopago-test');
+    })->middleware('auth');
+
+    // Debug para el flujo de profile payment
+    Route::get('/debug-profile-payment', function () {
+        return view('debug-profile-payment');
+    })->middleware('auth');
+
+    // Simulador de flujo de pago
+    Route::get('/simulate-payment-flow', function () {
+        return view('simulate-payment-flow');
+    })->middleware('auth');
+
+    // Sistema de prueba de pagos
+    Route::get('/payment-test', [App\Http\Controllers\PaymentTestController::class, 'selectPlan'])->middleware('auth')->name('payment-test.select');
+    Route::post('/payment-test/simulate', [App\Http\Controllers\PaymentTestController::class, 'simulateSuccess'])->middleware('auth')->name('payment-test.simulate');
+
     // Estados de pago
     Route::get('/payment/success', [SubscriptionPaymentController::class, 'success'])->name('payment.success');
     Route::get('/payment/failure', [SubscriptionPaymentController::class, 'failure'])->name('payment.failure');

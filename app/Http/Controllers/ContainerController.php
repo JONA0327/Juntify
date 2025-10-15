@@ -364,7 +364,37 @@ class ContainerController extends Controller
             ->where('username', $user->username)
             ->firstOrFail();
 
-        MeetingContentRelation::firstOrCreate([
+        // Verificar límites de reuniones por contenedor para Plan Basic
+        $planCode = strtolower((string) ($user->plan_code ?? 'free'));
+        $role = strtolower((string) ($user->roles ?? 'free'));
+        $isBasicPlan = $role === 'basic' || in_array($planCode, ['basic', 'basico'], true) || str_contains($planCode, 'basic');
+
+        if ($isBasicPlan && !$container->group_id) { // Solo aplicar límite a contenedores personales
+            $currentMeetingsCount = MeetingContentRelation::where('container_id', $container->id)->count();
+
+            if ($currentMeetingsCount >= 10) {
+                Log::info("Plan Basic meeting limit reached for container {$id} - current count: {$currentMeetingsCount}");
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El Plan Basic permite máximo 10 reuniones por contenedor.'
+                ], 403);
+            }
+        }
+
+        // Verificar si la reunión ya está en el contenedor
+        $existingRelation = MeetingContentRelation::where([
+            'container_id' => $container->id,
+            'meeting_id' => $meeting->id,
+        ])->first();
+
+        if ($existingRelation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta reunión ya está en el contenedor.'
+            ], 400);
+        }
+
+        MeetingContentRelation::create([
             'container_id' => $container->id,
             'meeting_id' => $meeting->id,
         ]);

@@ -75,6 +75,111 @@
             return planCode !== '' && !isRestrictedPlan && !isRestrictedRole;
         };
 
+        // Función específica para verificar si el usuario puede crear contenedores
+        window.canCreateContainers = function() {
+            const planCode = (window.userPlanCode || '').toString().toLowerCase();
+            const role = (window.userRole || '').toString().toLowerCase();
+
+            console.log('🚀 [canCreateContainers] Iniciando verificación:', {
+                planCode: planCode || 'UNDEFINED',
+                role: role || 'UNDEFINED',
+                userBelongsToOrganization: window.userBelongsToOrganization
+            });
+
+            // Si pertenece a una organización, puede crear contenedores
+            if (window.userBelongsToOrganization) {
+                console.log('✅ [canCreateContainers] Acceso aprobado por organización');
+                return true;
+            }
+
+            // Verificación específica para BASIC
+            if (role === 'basic' || planCode === 'basic' || planCode === 'basico') {
+                console.log('✅ [canCreateContainers] Usuario BASIC detectado - PUEDE crear contenedores');
+                return true;
+            }
+
+            // Plan FREE no puede crear contenedores
+            const freePlans = ['free', 'freemium'];
+            const isFree = freePlans.includes(role) || freePlans.includes(planCode);
+
+            if (isFree) {
+                console.log('❌ [canCreateContainers] Usuario FREE - NO puede crear contenedores');
+                return false;
+            }
+
+            // Planes superiores pueden crear contenedores
+            const premiumPlans = ['negocios', 'business', 'enterprise', 'founder', 'developer', 'superadmin'];
+            const isPremium = premiumPlans.includes(role) || premiumPlans.includes(planCode);
+
+            if (isPremium) {
+                console.log('✅ [canCreateContainers] Usuario PREMIUM - PUEDE crear contenedores');
+                return true;
+            }
+
+            // Por defecto, denegar acceso
+            console.log('❌ [canCreateContainers] Acceso denegado por defecto');
+            return false;
+        };
+
+        // Función para obtener límites de contenedores por plan
+        window.getContainerLimits = function() {
+            const planCode = (window.userPlanCode || '').toString().toLowerCase();
+            const role = (window.userRole || '').toString().toLowerCase();
+
+            // Si pertenece a una organización, límites amplios
+            if (window.userBelongsToOrganization) {
+                return {
+                    maxContainers: 50,
+                    maxMeetingsPerContainer: 100
+                };
+            }
+
+            // Plan BASIC: 3 contenedores, 10 reuniones por contenedor
+            const basicPlans = ['basic', 'basico'];
+            const isBasicByPlan = basicPlans.some(value => value && (planCode === value || planCode.includes(value)));
+            const isBasicByRole = basicPlans.some(value => value && (role === value || role.includes(value)));
+
+            if (isBasicByPlan || isBasicByRole) {
+                return {
+                    maxContainers: 3,
+                    maxMeetingsPerContainer: 10
+                };
+            }
+
+            // Planes superiores: límites altos
+            const premiumPlans = ['negocios', 'business', 'enterprise', 'founder', 'developer', 'superadmin'];
+            const isPremiumByPlan = premiumPlans.some(value => value && (planCode === value || planCode.includes(value)));
+            const isPremiumByRole = premiumPlans.some(value => value && (role === value || role.includes(value)));
+
+            if (isPremiumByPlan || isPremiumByRole) {
+                return {
+                    maxContainers: 999, // Prácticamente ilimitado
+                    maxMeetingsPerContainer: 999
+                };
+            }
+
+            // Plan FREE: sin contenedores
+            return {
+                maxContainers: 0,
+                maxMeetingsPerContainer: 0
+            };
+        };
+
+        // Función para verificar si puede crear más contenedores
+        window.canCreateMoreContainers = function(currentContainerCount = 0) {
+            const limits = window.getContainerLimits();
+            const canCreateBasic = window.canCreateContainers();
+
+            console.log('🔍 Verificando límite de contenedores:', {
+                currentCount: currentContainerCount,
+                maxAllowed: limits.maxContainers,
+                canCreateBasic,
+                canCreateMore: canCreateBasic && currentContainerCount < limits.maxContainers
+            });
+
+            return canCreateBasic && currentContainerCount < limits.maxContainers;
+        };
+
         // Función global showUpgradeModal
         if (typeof window.showUpgradeModal === 'undefined') {
             const ensureModalEventListeners = (modal) => {

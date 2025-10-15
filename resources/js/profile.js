@@ -421,7 +421,10 @@ function checkNavigateToPlans() {
   // Verificar Laravel session flash (desde redirección)
   const shouldNavigateFlash = document.querySelector('meta[name="navigate-to-plans"]')?.getAttribute('content') === 'true';
 
-  if (shouldNavigateSession === 'true' || shouldNavigateFlash) {
+  // Verificar si hay un modal de éxito de pago
+  const paymentSuccessModal = document.getElementById('payment-success-modal');
+
+  if (shouldNavigateSession === 'true' || shouldNavigateFlash || paymentSuccessModal) {
     console.log('🎯 Navegando automáticamente a la sección de planes...');
 
     // Limpiar el flag de sessionStorage
@@ -436,6 +439,14 @@ function checkNavigateToPlans() {
         // Simular click en el enlace de planes
         plansLink.click();
         console.log('✅ Sección de planes activada');
+
+        // Si hay modal de éxito de pago, mostrarlo después de navegar
+        if (paymentSuccessModal) {
+          setTimeout(() => {
+            paymentSuccessModal.classList.add('active');
+            console.log('✅ Modal de éxito de pago mostrado');
+          }, 500);
+        }
       } else {
         console.warn('⚠️ No se encontró el enlace de la sección de planes');
       }

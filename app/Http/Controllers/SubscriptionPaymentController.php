@@ -65,6 +65,13 @@ class SubscriptionPaymentController extends Controller
             $result = $this->mercadoPagoService->createPreferenceForPlan($plan, $user);
             Log::info('CreatePreference: MercadoPago service result', ['result' => $result]);
 
+            // Log adicional para debugging
+            Log::info('CreatePreference: URLs generated', [
+                'init_point' => $result['init_point'] ?? 'N/A',
+                'sandbox_init_point' => $result['sandbox_init_point'] ?? 'N/A',
+                'using_checkout_url' => $result['sandbox_init_point'] ?? 'N/A'
+            ]);
+
             if ($result['success']) {
                 return response()->json([
                     'success' => true,
@@ -95,18 +102,37 @@ class SubscriptionPaymentController extends Controller
     }
 
     /**
-     * Página de éxito del pago
+     * Página de éxito del pago - Redirige al perfil con modal
      */
     public function success(Request $request)
     {
         $externalReference = $request->get('external_reference');
         $paymentStatus = null;
 
+        // Obtener información del pago
         if ($externalReference) {
             $paymentStatus = $this->mercadoPagoService->getPaymentStatus($externalReference);
         }
 
-        return view('subscription.payment-success', compact('paymentStatus'));
+        // Buscar el pago en la base de datos para obtener más detalles
+        $payment = Payment::where('external_reference', $externalReference)->first();
+
+        if ($payment && $payment->plan) {
+            return redirect()->route('profile.show')->with([
+                'payment_success' => true,
+                'payment_plan' => $payment->plan->name,
+                'payment_amount' => $payment->amount,
+                'payment_currency' => $payment->currency,
+                'payment_reference' => $externalReference,
+                'payment_simulated' => $request->get('simulated', false)
+            ])->with('success', '¡Pago procesado exitosamente! Tu suscripción ha sido activada.');
+        }
+
+        // Fallback si no se encuentra el pago
+        return redirect()->route('profile.show')->with([
+            'payment_success' => true,
+            'payment_simulated' => $request->get('simulated', false)
+        ])->with('success', '¡Pago procesado exitosamente!');
     }
 
     /**

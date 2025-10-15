@@ -77,9 +77,7 @@
                             <button id="create-container-btn" class="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-5 py-3 bg-slate-800/50 backdrop-blur-custom border border-slate-700/50 rounded-xl text-slate-200 font-medium hover:bg-slate-700/50 hover:border-slate-600/50 transition-all duration-200 group shadow-lg shadow-black/10">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400 group-hover:text-slate-300 transition-colors duration-200" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
                                 <span>Nuevo Contenedor</span>
-                            </button>
-
-                            <button class="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 font-semibold rounded-xl hover:from-yellow-500 hover:to-yellow-600 transition-all duration-200 shadow-lg shadow-yellow-400/25 hover:shadow-yellow-400/40 transform hover:scale-105">
+                            </button>                            <button class="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 font-semibold rounded-xl hover:from-yellow-500 hover:to-yellow-600 transition-all duration-200 shadow-lg shadow-yellow-400/25 hover:shadow-yellow-400/40 transform hover:scale-105">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
@@ -269,10 +267,43 @@
         // Define fallback handlers only if the global helpers are not available
         if (typeof window.closeUpgradeModal === 'undefined') {
             window.closeUpgradeModal = function() {
-                const modal = document.getElementById('postpone-locked-modal');
+                console.log('🔒 Cerrando modal de upgrade...');
+
+                // Intentar múltiples IDs posibles
+                const possibleIds = ['postpone-locked-modal', 'upgrade-modal', 'container-modal'];
+                let modal = null;
+
+                for (const id of possibleIds) {
+                    modal = document.getElementById(id);
+                    if (modal) {
+                        console.log('🔍 Modal encontrado:', id);
+                        break;
+                    }
+                }
+
+                // También buscar por clase
+                if (!modal) {
+                    modal = document.querySelector('.modal[style*="display: flex"], .modal.show, .modal.active');
+                    if (modal) {
+                        console.log('🔍 Modal encontrado por clase/estilo');
+                    }
+                }
+
                 if (modal) {
-                    modal.style.display = 'none';
-                    document.body.style.overflow = '';
+                    // Resetear todos los estilos posibles
+                    modal.style.setProperty('display', 'none', 'important');
+                    modal.style.setProperty('visibility', 'hidden', 'important');
+                    modal.style.setProperty('opacity', '0', 'important');
+                    modal.classList.remove('show', 'active');
+
+                    // Resetear scroll del body
+                    document.body.style.setProperty('overflow', '', 'important');
+                    document.body.style.setProperty('overflow-y', '', 'important');
+
+                    console.log('✅ Modal cerrado correctamente');
+                } else {
+                    console.warn('⚠️ No se encontró ningún modal para cerrar');
+                    console.log('🔍 Modales disponibles:', document.querySelectorAll('.modal, [id*="modal"]'));
                 }
             };
         }

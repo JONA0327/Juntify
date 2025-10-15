@@ -58,9 +58,12 @@
 
                 <div class="plan-action">
                     @php
-                        $userSubscription = $user->subscriptions()->active()->first();
-                        $isCurrentPlan = $userSubscription && $userSubscription->plan_id === $plan->id;
-                        $isFree = $plan->code === 'free';
+                        // TODO: Implementar verificación de suscripción cuando esté disponible
+                        // $userSubscription = $user->subscriptions()->active()->first();
+                        // $isCurrentPlan = $userSubscription && $userSubscription->plan_id === $plan->id;
+                        $userSubscription = null;
+                        $isCurrentPlan = false;
+                        $isFree = in_array($plan->code, ['free', 'freemium']);
                     @endphp
 
                     @if($isCurrentPlan)
@@ -86,8 +89,12 @@
         </div>
 
         <!-- Estado de suscripción actual -->
-        @if($user->subscriptions()->active()->first())
-        @php $currentSubscription = $user->subscriptions()->active()->first(); @endphp
+        @php
+            // TODO: Implementar verificación de suscripción cuando esté disponible
+            // $currentSubscription = $user->subscriptions()->active()->first();
+            $currentSubscription = null;
+        @endphp
+        @if($currentSubscription)
         <div class="current-subscription">
             <h3>Tu Suscripción Actual</h3>
             <div class="subscription-info">

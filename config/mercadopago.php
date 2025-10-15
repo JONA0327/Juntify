@@ -8,4 +8,8 @@ return [
     'failure_url' => env('APP_URL').'/payment/failure',
     'pending_url' => env('APP_URL').'/payment/pending',
     'auto_approve_window_minutes' => env('MP_AUTO_APPROVE_WINDOW', 30),
+
+    // Modo de prueba para desarrollo - Bypass del sandbox problemático
+    'bypass_mode' => env('MERCADO_PAGO_BYPASS_MODE', false),
+    'simulate_success' => env('MERCADO_PAGO_SIMULATE_SUCCESS', true),
 ];
