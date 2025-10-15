@@ -14,7 +14,8 @@ class PlansSeeder extends Seeder
     {
         $plans = [
             [
-                'code' => 'free',
+                'code' => 'freemium',
+                'legacy_codes' => ['free'],
                 'name' => 'Plan Free',
                 'description' => 'Gratis para siempre',
                 'price' => 0.00, // Gratuito
@@ -33,6 +34,7 @@ class PlansSeeder extends Seeder
             ],
             [
                 'code' => 'basico',
+                'legacy_codes' => ['basic'],
                 'name' => 'Plan Basic',
                 'description' => 'Pago mensual',
                 'price' => 499.00, // Precio en pesos mexicanos
@@ -52,6 +54,7 @@ class PlansSeeder extends Seeder
             ],
             [
                 'code' => 'negocios',
+                'legacy_codes' => ['business'],
                 'name' => 'Negocios',
                 'description' => 'Analítica avanzada y dashboards ejecutivos sin compromisos anuales.',
                 'price' => 999.00, // Precio en pesos mexicanos
@@ -70,6 +73,7 @@ class PlansSeeder extends Seeder
             ],
             [
                 'code' => 'empresas',
+                'legacy_codes' => ['enterprise'],
                 'name' => 'Empresas',
                 'description' => 'Control total, seguridad avanzada y soporte dedicado bajo demanda.',
                 'price' => 2999.00, // Precio en pesos mexicanos
@@ -89,10 +93,18 @@ class PlansSeeder extends Seeder
         ];
 
         foreach ($plans as $planData) {
-            Plan::updateOrCreate(
-                ['code' => $planData['code']],
-                $planData
-            );
+            $legacyCodes = $planData['legacy_codes'] ?? [];
+            unset($planData['legacy_codes']);
+
+            $plan = Plan::whereIn('code', array_merge([$planData['code']], $legacyCodes))->first();
+
+            if ($plan) {
+                $plan->fill($planData);
+                $plan->code = $planData['code'];
+                $plan->save();
+            } else {
+                Plan::create($planData);
+            }
         }
     }
 }
