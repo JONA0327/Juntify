@@ -281,7 +281,15 @@ async function handleSendMessage(e) {
 
         if (response.status === 403) {
             // Límite alcanzado
-            const errorData = await response.json();
+            try {
+                const errorData = await response.json();
+                if (errorData?.message) {
+                    console.warn('Límite al enviar mensaje:', errorData.message);
+                }
+            } catch (parseError) {
+                console.warn('No se pudo interpretar la respuesta del límite de mensajes.', parseError);
+            }
+
             showLimitExceededModal('sendMessage');
             await loadUserLimits(); // Recargar límites actualizados
             return;
@@ -305,8 +313,13 @@ async function handleSendMessage(e) {
         }
     } catch (error) {
         console.error('Error al enviar mensaje:', error);
-        showError('Error al comunicarse con el asistente');
-        addMessageToChat('assistant', 'Lo siento, hubo un error al procesar tu mensaje. Por favor, inténtalo de nuevo.');
+        if (isLimitErrorMessage(error?.message)) {
+            showLimitExceededModal('sendMessage');
+            await loadUserLimits();
+        } else {
+            showError('Error al comunicarse con el asistente');
+            addMessageToChat('assistant', 'Lo siento, hubo un error al procesar tu mensaje. Por favor, inténtalo de nuevo.');
+        }
     } finally {
         isLoading = false;
         updateSendButton(false);
@@ -319,6 +332,14 @@ async function handleSendMessage(e) {
             sendBtn.disabled = !currentInput.value.trim();
         }
     }
+}
+
+function isLimitErrorMessage(message) {
+    if (!message) return false;
+    const normalized = message.toLowerCase();
+    return normalized.includes('límite diario') ||
+        normalized.includes('límite de consultas') ||
+        normalized.includes('límite de documentos');
 }
 
 /**
@@ -575,20 +596,34 @@ function canPerformAction(action) {
  * Mostrar modal cuando se exceden los límites
  */
 function showLimitExceededModal(action) {
+    const limits = userLimits || {};
     let title = 'Límite alcanzado';
     let message = '';
 
-    if (!userLimits) return;
+    const messageLimit = limits.maxDailyMessages ?? limits.message_limit ?? limits.max_daily_messages;
+    const documentLimit = limits.maxDailyDocuments ?? limits.document_limit ?? limits.max_daily_documents;
 
     switch (action) {
         case 'sendMessage':
         case 'createSession':
+        case 'message':
+        case 'send_message':
             title = 'Límite de consultas diarias alcanzado';
-            message = `Has alcanzado el límite de ${userLimits.maxDailyMessages} consultas diarias del plan FREE.<br><br>Actualiza tu plan para tener acceso ilimitado a conversaciones con IA.`;
+            if (messageLimit) {
+                message = `Has alcanzado el límite de ${messageLimit} consultas diarias del plan FREE.<br><br>Actualiza tu plan para tener acceso ilimitado a conversaciones con IA.`;
+            } else {
+                message = 'Has alcanzado el límite diario de consultas del plan FREE.<br><br>Actualiza tu plan para tener acceso ilimitado a conversaciones con IA.';
+            }
             break;
         case 'uploadDocument':
+        case 'document':
+        case 'upload_document':
             title = 'Límite de documentos alcanzado';
-            message = `Has alcanzado el límite diario de ${userLimits.maxDailyDocuments} documento. Los usuarios FREE pueden subir hasta ${userLimits.maxDailyDocuments} documento por día.<br><br>Actualiza tu plan para tener acceso ilimitado.`;
+            if (documentLimit) {
+                message = `Has alcanzado el límite diario de ${documentLimit} documento. Los usuarios FREE pueden subir hasta ${documentLimit} documento por día.<br><br>Actualiza tu plan para tener acceso ilimitado.`;
+            } else {
+                message = 'Has alcanzado el límite diario de documentos del plan FREE.<br><br>Actualiza tu plan para tener acceso ilimitado.';
+            }
             break;
     }
 

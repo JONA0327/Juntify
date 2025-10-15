@@ -177,14 +177,29 @@ function canPerformAction(action) {
  * Mostrar modal de límites excedidos
  */
 function showLimitExceededModal(type) {
+    const limits = userLimits || {};
     let title, message;
 
-    if (type === 'message') {
+    const messageLimit = limits.message_limit ?? limits.maxDailyMessages ?? limits.max_daily_messages;
+    const documentLimit = limits.document_limit ?? limits.maxDailyDocuments ?? limits.max_daily_documents;
+
+    if (type === 'message' || type === 'sendMessage' || type === 'send_message') {
         title = 'Límite de consultas alcanzado';
-        message = `Has alcanzado el límite diario de ${userLimits.message_limit} consultas. Los usuarios FREE pueden realizar hasta ${userLimits.message_limit} consultas por día.`;
-    } else if (type === 'document') {
+        if (messageLimit) {
+            message = `Has alcanzado el límite diario de ${messageLimit} consultas. Los usuarios FREE pueden realizar hasta ${messageLimit} consultas por día.`;
+        } else {
+            message = 'Has alcanzado el límite diario de consultas de tu plan FREE.';
+        }
+    } else if (type === 'document' || type === 'uploadDocument' || type === 'upload_document') {
         title = 'Límite de documentos alcanzado';
-        message = `Has alcanzado el límite diario de ${userLimits.document_limit} documento. Los usuarios FREE pueden subir hasta ${userLimits.document_limit} documento por día.`;
+        if (documentLimit) {
+            message = `Has alcanzado el límite diario de ${documentLimit} documento. Los usuarios FREE pueden subir hasta ${documentLimit} documento por día.`;
+        } else {
+            message = 'Has alcanzado el límite diario de documentos de tu plan FREE.';
+        }
+    } else {
+        title = 'Límite alcanzado';
+        message = 'Has alcanzado uno de los límites de tu plan FREE. Actualiza tu plan para continuar.';
     }
 
     // Usar la función global si está disponible
@@ -197,6 +212,12 @@ function showLimitExceededModal(type) {
     } else {
         alert(title + '\n\n' + message + '\n\nActualiza tu plan para tener acceso ilimitado.');
     }
+}
+
+function isLimitErrorMessage(message) {
+    if (!message) return false;
+    const normalized = message.toLowerCase();
+    return normalized.includes('límite diario') || normalized.includes('límite de consultas') || normalized.includes('límite de documentos');
 }
 
 /**
@@ -727,6 +748,21 @@ async function sendMessage(messageText = null) {
             })
         });
 
+        if (response.status === 403) {
+            try {
+                const errorData = await response.json();
+                if (errorData?.message) {
+                    console.warn('Límite al enviar mensaje:', errorData.message);
+                }
+            } catch (parseError) {
+                console.warn('No se pudo interpretar la respuesta del límite de mensajes.', parseError);
+            }
+
+            showLimitExceededModal('message');
+            await loadUserLimits();
+            return;
+        }
+
         const data = await response.json();
         if (data.success) {
             // Agregar respuesta de la IA
@@ -742,7 +778,12 @@ async function sendMessage(messageText = null) {
 
     } catch (error) {
         console.error('Error sending message:', error);
-        showNotification('Error al enviar mensaje', 'error');
+        if (isLimitErrorMessage(error?.message)) {
+            showLimitExceededModal('message');
+            await loadUserLimits();
+        } else {
+            showNotification('Error al enviar mensaje', 'error');
+        }
     } finally {
         isLoading = false;
         updateSendButton(false);
