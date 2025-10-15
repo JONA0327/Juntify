@@ -211,13 +211,28 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // MercadoPago SDK
-const mp = new MercadoPago('{{ config("mercadopago.public_key") }}');
+const mercadoPagoPublicKey = '{{ config("mercadopago.public_key") }}';
+const mp = typeof window !== 'undefined' && window.MercadoPago
+    ? new MercadoPago(mercadoPagoPublicKey, { locale: 'es-AR' })
+    : null;
+
+if (!mp) {
+    console.warn('MercadoPago SDK no está disponible. Verifica que el script se haya cargado correctamente.');
+}
 
 // Seleccionar plan
 function selectPlan(planId, planName, price) {
+    if (!mp) {
+        alert('No se pudo iniciar MercadoPago. Recarga la página e intenta nuevamente.');
+        return;
+    }
+
     // Mostrar modal de carga
-    document.getElementById('loadingModal').classList.remove('hidden');
-    document.getElementById('loadingModal').classList.add('flex');
+    const loadingModal = document.getElementById('loadingModal');
+    if (loadingModal) {
+        loadingModal.classList.remove('hidden');
+        loadingModal.classList.add('flex');
+    }
 
     // Crear preferencia
     fetch('{{ route("subscription.create-preference") }}', {
@@ -237,15 +252,19 @@ function selectPlan(planId, planName, price) {
             window.location.href = data.init_point;
         } else {
             alert('Error: ' + data.error);
-            document.getElementById('loadingModal').classList.add('hidden');
-            document.getElementById('loadingModal').classList.remove('flex');
+            if (loadingModal) {
+                loadingModal.classList.add('hidden');
+                loadingModal.classList.remove('flex');
+            }
         }
     })
     .catch(error => {
         console.error('Error:', error);
         alert('Error al procesar el pago');
-        document.getElementById('loadingModal').classList.add('hidden');
-        document.getElementById('loadingModal').classList.remove('flex');
+        if (loadingModal) {
+            loadingModal.classList.add('hidden');
+            loadingModal.classList.remove('flex');
+        }
     });
 }
 
