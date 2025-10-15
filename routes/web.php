@@ -291,6 +291,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/subscription/plans', [SubscriptionPaymentController::class, 'index'])->name('subscription.plans');
     Route::post('/subscription/create-preference', [SubscriptionPaymentController::class, 'createPreference'])->name('subscription.create-preference');
 
+    // Ruta de test temporal
+    Route::get('/test-create-preference', function () {
+        return view('test-create-preference');
+    })->middleware('auth');
+
     // Estados de pago
     Route::get('/payment/success', [SubscriptionPaymentController::class, 'success'])->name('payment.success');
     Route::get('/payment/failure', [SubscriptionPaymentController::class, 'failure'])->name('payment.failure');

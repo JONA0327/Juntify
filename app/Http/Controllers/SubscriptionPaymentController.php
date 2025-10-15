@@ -33,36 +33,63 @@ class SubscriptionPaymentController extends Controller
      */
     public function createPreference(Request $request)
     {
-        $request->validate([
-            'plan_id' => 'required|exists:plans,id'
-        ]);
+        Log::info('CreatePreference: Start', ['request' => $request->all()]);
 
-        $plan = Plan::findOrFail($request->plan_id);
-        $user = Auth::user();
-
-        // Verificar si el usuario ya tiene una suscripción activa
-        $activeSubscription = $user->subscriptions()->active()->first();
-        if ($activeSubscription) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Ya tienes una suscripción activa'
-            ], 400);
-        }
-
-        $result = $this->mercadoPagoService->createPreferenceForPlan($plan, $user);
-
-        if ($result['success']) {
-            return response()->json([
-                'success' => true,
-                'preference_id' => $result['preference_id'],
-                'checkout_url' => $result['sandbox_init_point'], // Usar sandbox para desarrollo
-                'init_point' => $result['init_point'],
-                'sandbox_init_point' => $result['sandbox_init_point']
+        try {
+            $request->validate([
+                'plan_id' => 'required|exists:plans,id'
             ]);
-        } else {
+
+            Log::info('CreatePreference: Validation passed');
+
+            $plan = Plan::findOrFail($request->plan_id);
+            $user = Auth::user();
+
+            Log::info('CreatePreference: Plan and user loaded', [
+                'plan' => $plan->toArray(),
+                'user_id' => $user->id
+            ]);
+
+            // Verificar si el usuario ya tiene una suscripción activa
+            // TODO: Implementar verificación de suscripción activa cuando esté disponible
+            // $activeSubscription = $user->subscriptions()->active()->first();
+            // if ($activeSubscription) {
+            //     Log::info('CreatePreference: User has active subscription');
+            //     return response()->json([
+            //         'success' => false,
+            //         'error' => 'Ya tienes una suscripción activa'
+            //     ], 400);
+            // }
+
+            Log::info('CreatePreference: About to call MercadoPago service');
+            $result = $this->mercadoPagoService->createPreferenceForPlan($plan, $user);
+            Log::info('CreatePreference: MercadoPago service result', ['result' => $result]);
+
+            if ($result['success']) {
+                return response()->json([
+                    'success' => true,
+                    'preference_id' => $result['preference_id'],
+                    'checkout_url' => $result['sandbox_init_point'], // Usar sandbox para desarrollo
+                    'init_point' => $result['init_point'],
+                    'sandbox_init_point' => $result['sandbox_init_point']
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'error' => $result['error']
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('CreatePreference: Exception caught', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'error' => $result['error']
+                'error' => 'Error interno del servidor: ' . $e->getMessage()
             ], 500);
         }
     }
