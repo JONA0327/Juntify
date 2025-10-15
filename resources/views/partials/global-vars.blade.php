@@ -66,6 +66,71 @@
 
         // Función global showUpgradeModal
         if (typeof window.showUpgradeModal === 'undefined') {
+            const ensureModalEventListeners = (modal) => {
+                if (!modal || modal._listenersAdded) {
+                    return;
+                }
+
+                const overlay = modal.querySelector('.modal-overlay');
+                const closeBtn = modal.querySelector('#modal-close-btn');
+                const cancelBtn = modal.querySelector('#modal-cancel-btn');
+                const plansBtn = modal.querySelector('#modal-plans-btn');
+                const content = modal.querySelector('.modal-content');
+
+                modal._overlayHandler = function(e) {
+                    console.log('🔒 Click en overlay - cerrando modal');
+                    window.closeUpgradeModal();
+                };
+
+                modal._closeBtnHandler = function(e) {
+                    console.log('🔒 Click en X - cerrando modal');
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.closeUpgradeModal();
+                };
+
+                modal._cancelBtnHandler = function(e) {
+                    console.log('🔒 Click en Cerrar - cerrando modal');
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.closeUpgradeModal();
+                };
+
+                modal._plansBtnHandler = function(e) {
+                    console.log('📋 Click en Ver Planes');
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.goToPlans();
+                };
+
+                modal._contentHandler = function(e) {
+                    e.stopPropagation();
+                };
+
+                if (overlay) {
+                    overlay.addEventListener('click', modal._overlayHandler);
+                }
+
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', modal._closeBtnHandler);
+                }
+
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', modal._cancelBtnHandler);
+                }
+
+                if (plansBtn) {
+                    plansBtn.addEventListener('click', modal._plansBtnHandler);
+                }
+
+                if (content) {
+                    content.addEventListener('click', modal._contentHandler);
+                }
+
+                modal._listenersAdded = true;
+                console.log('✅ Event listeners agregados al modal');
+            };
+
             window.showUpgradeModal = function(options = {}) {
                 console.log('🚀 INICIANDO showUpgradeModal global...');
 
@@ -107,83 +172,24 @@
                     `;
                     document.body.appendChild(modal);
 
-                    // Agregar event listeners después de crear el DOM (solo una vez)
-                    setTimeout(() => {
-                        if (modal._listenersAdded) {
-                            console.log('🔄 Event listeners ya agregados, omitiendo...');
-                            return;
-                        }
-
-                        const overlay = modal.querySelector('.modal-overlay');
-                        const closeBtn = modal.querySelector('#modal-close-btn');
-                        const cancelBtn = modal.querySelector('#modal-cancel-btn');
-                        const plansBtn = modal.querySelector('#modal-plans-btn');
-                        const content = modal.querySelector('.modal-content');
-
-                        // Definir handlers y almacenar referencias
-                        modal._overlayHandler = function(e) {
-                            console.log('🔒 Click en overlay - cerrando modal');
-                            window.closeUpgradeModal();
-                        };
-
-                        modal._closeBtnHandler = function(e) {
-                            console.log('🔒 Click en X - cerrando modal');
-                            e.preventDefault();
-                            e.stopPropagation();
-                            window.closeUpgradeModal();
-                        };
-
-                        modal._cancelBtnHandler = function(e) {
-                            console.log('🔒 Click en Cerrar - cerrando modal');
-                            e.preventDefault();
-                            e.stopPropagation();
-                            window.closeUpgradeModal();
-                        };
-
-                        modal._plansBtnHandler = function(e) {
-                            console.log('� Click en Ver Planes');
-                            e.preventDefault();
-                            e.stopPropagation();
-                            window.goToPlans();
-                        };
-
-                        modal._contentHandler = function(e) {
-                            e.stopPropagation();
-                        };
-
-                        // Agregar event listeners
-                        if (overlay) {
-                            overlay.addEventListener('click', modal._overlayHandler);
-                        }
-
-                        if (closeBtn) {
-                            closeBtn.addEventListener('click', modal._closeBtnHandler);
-                        }
-
-                        if (cancelBtn) {
-                            cancelBtn.addEventListener('click', modal._cancelBtnHandler);
-                        }
-
-                        if (plansBtn) {
-                            plansBtn.addEventListener('click', modal._plansBtnHandler);
-                        }
-
-                        if (content) {
-                            content.addEventListener('click', modal._contentHandler);
-                        }
-
-                        // Marcar como agregados
-                        modal._listenersAdded = true;
-                        console.log('✅ Event listeners agregados al modal por primera vez');
-                    }, 10);
+                    // Asegurarse de que los listeners estén presentes en el modal recién creado
+                    requestAnimationFrame(() => ensureModalEventListeners(modal));
                 } else {
                     // Actualizar contenido del modal existente
                     modal.querySelector('#modal-title').innerHTML = config.title;
                     modal.querySelector('#modal-message').innerHTML = config.message;
 
-                    // No agregar event listeners si el modal ya existe
+                    // Restaurar visibilidad del botón de cierre si se había ocultado
+                    const closeBtn = modal.querySelector('#modal-close-btn');
+                    if (closeBtn) {
+                        closeBtn.style.display = config.hideCloseButton ? 'none' : '';
+                    }
+
                     console.log('🔄 Reutilizando modal existente');
                 }
+
+                // Asegurar listeners también para modales reutilizados
+                ensureModalEventListeners(modal);
 
                 // Mostrar modal
                 modal.style.display = 'flex';
@@ -242,6 +248,11 @@
                     }
 
                     modal._listenersAdded = false;
+                    modal._overlayHandler = null;
+                    modal._closeBtnHandler = null;
+                    modal._cancelBtnHandler = null;
+                    modal._plansBtnHandler = null;
+                    modal._contentHandler = null;
                     console.log('🧹 Event listeners removidos');
                 }
 
