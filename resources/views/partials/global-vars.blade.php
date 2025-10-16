@@ -45,6 +45,12 @@
             }
         }
         // Variables del plan del usuario y pertenencia a organización
+        @php
+            $planService = app(\App\Services\PlanLimitService::class);
+            $driveAllowed = auth()->check() ? $planService->userCanUseDrive(auth()->user()) : false;
+            $tempRetention = auth()->check() ? $planService->getTemporaryRetentionDays(auth()->user()) : 7;
+        @endphp
+
         if (typeof window.userPlanCode === 'undefined') {
             @if(auth()->check())
                 window.userPlanCode = @json(auth()->user()->plan_code ?? 'free');
@@ -59,20 +65,17 @@
                 (window.userRole && ['admin', 'superadmin', 'founder', 'developer'].includes(window.userRole)));
         }
 
+        if (typeof window.userCanUseDrive === 'undefined') {
+            window.userCanUseDrive = @json($driveAllowed);
+        }
+
+        if (typeof window.tempRetentionDays === 'undefined') {
+            window.tempRetentionDays = @json($tempRetention);
+        }
+
         // Función helper para verificar si el usuario tiene acceso a funciones premium
         window.hasPremiumAccess = function() {
-            const planCode = (window.userPlanCode || '').toString().toLowerCase();
-            const role = (window.userRole || '').toString().toLowerCase();
-            const restrictedValues = ['free', 'basic', 'basico'];
-
-            const isRestrictedPlan = restrictedValues.some(value => value && (planCode === value || planCode.includes(value)));
-            const isRestrictedRole = restrictedValues.includes(role);
-
-            if (window.userBelongsToOrganization) {
-                return true;
-            }
-
-            return planCode !== '' && !isRestrictedPlan && !isRestrictedRole;
+            return !!window.userCanUseDrive;
         };
 
         // Función específica para verificar si el usuario puede crear contenedores

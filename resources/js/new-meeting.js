@@ -1672,17 +1672,29 @@ function saveAudioTemporarily(blob, name, onProgress) {
                 console.log('✅ [TempSave] Audio guardado temporalmente:', response);
 
                 if (response?.success) {
-                    showSuccess(`Reunión guardada temporalmente. Se eliminará automáticamente en 7 días. Actualiza tu plan para guardar permanentemente en Drive.`);
+                    const retentionDays = Number(response?.retention_days ?? window.tempRetentionDays ?? 7);
+                    const retentionLabel = `${retentionDays} ${retentionDays === 1 ? 'día' : 'días'}`;
+                    const storageReason = response?.storage_reason || (!window.userCanUseDrive ? 'plan_restricted' : 'drive_not_connected');
+                    const baseMessage = storageReason === 'drive_not_connected'
+                        ? `Conecta tu Google Drive para conservarla permanentemente.`
+                        : `Actualiza tu plan para guardarla permanentemente en Drive.`;
+
+                    showSuccess(`Reunión guardada temporalmente. Se eliminará automáticamente en ${retentionLabel}. ${baseMessage}`);
+
+                    const modalMessage = storageReason === 'drive_not_connected'
+                        ? `Tu reunión se guardó correctamente pero <strong>se eliminará en ${retentionLabel}</strong>. Conecta tu cuenta de Google Drive para moverla a tu almacenamiento permanente.`
+                        : `Tu reunión se guardó correctamente pero <strong>se eliminará en ${retentionLabel}</strong>. Actualiza a un plan superior para guardar permanentemente en Google Drive y acceder a todas las funciones premium.`;
 
                     // Mostrar modal específico para guardado temporal después de 3 segundos
                     setTimeout(() => {
                         showUpgradeModal({
                             title: 'Reunión guardada temporalmente',
-                            message: 'Tu reunión se guardó correctamente pero <strong>se eliminará en 7 días</strong>. Actualiza a un plan superior para guardar permanentemente en Google Drive y acceder a todas las funciones premium.',
+                            message: modalMessage,
                             icon: 'file'
                         });
                     }, 3000);
-                }                if (window.notifications) {
+                }
+                if (window.notifications) {
                     window.notifications.refresh();
                 }
 

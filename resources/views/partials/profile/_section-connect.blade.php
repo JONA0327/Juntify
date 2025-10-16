@@ -28,12 +28,22 @@
                     </div>
                 </div>
                 <div class="info-item">
-                    <span class="info-value">Debes reconectar tu cuenta de Google.</span>
+                    @if($driveLocked)
+                        <span class="info-value">Tu plan actual no permite conectar Google Drive. Las reuniones nuevas se guardarán temporalmente durante {{ $tempRetentionDays }} {{ $tempRetentionDays === 1 ? 'día' : 'días' }}.</span>
+                    @else
+                        <span class="info-value">Debes reconectar tu cuenta de Google.</span>
+                    @endif
                 </div>
                 <div class="action-buttons">
-                    <a href="{{ route('google.reauth') }}" class="btn btn-primary">
-                        🔗 Conectar Drive y Calendar
-                    </a>
+                    @if($driveLocked)
+                        <button type="button" class="btn btn-secondary" id="connect-drive-btn" data-drive-locked="true">
+                            🔒 Disponible en planes Business y Enterprise
+                        </button>
+                    @else
+                        <button type="button" class="btn btn-primary" id="connect-drive-btn" data-drive-locked="false">
+                            🔗 Conectar Drive y Calendar
+                        </button>
+                    @endif
                 </div>
             </div>
         @else
@@ -79,6 +89,13 @@
                 <div class="info-item">
                     <span class="info-label">Última sincronización</span>
                     <span class="info-value">{{ $lastSync->format('d/m/Y H:i:s') }}</span>
+                </div>
+                @endif
+                @if($driveLocked)
+                <div class="info-item">
+                    <span class="info-value" style="color: #f97316;">
+                        Tu plan actual ya no permite nuevas conexiones de Drive. Las reuniones recientes se guardarán temporalmente durante {{ $tempRetentionDays }} {{ $tempRetentionDays === 1 ? 'día' : 'días' }} hasta que actualices tu plan.
+                    </span>
                 </div>
                 @endif
                 <div class="action-buttons">

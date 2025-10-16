@@ -329,6 +329,13 @@ let finalDrivePath = '';
 let finalAudioDuration = 0;
 let finalSpeakerCount = 0;
 let finalTasks = [];
+let finalDriveType = 'personal';
+let finalStorageType = 'drive';
+let finalStorageReason = null;
+let finalRetentionDays = null;
+let finalExpiresAt = null;
+let finalTimeRemaining = null;
+let completionTempInterval = null;
 
 function ensureSaveProgressLog() {
     const section = document.querySelector('#step-saving .progress-section');
@@ -2124,6 +2131,13 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
     resetUI();
     appendSaveLogMessage('Iniciando guardado de resultados');
 
+    finalStorageType = 'drive';
+    finalStorageReason = null;
+    finalRetentionDays = null;
+    finalExpiresAt = null;
+    finalTimeRemaining = null;
+    finalDriveType = driveType;
+
     // Informar al usuario sobre el tipo de drive seleccionado
     const driveTypeText = driveType === 'organization' ? 'Drive Organizacional' : 'Drive Personal';
     appendSaveLogMessage(`📁 Tipo de Drive: ${driveTypeText}`);
@@ -2247,6 +2261,23 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
             finalAudioDuration = result.audio_duration || 0;
             finalSpeakerCount = result.speaker_count || 0;
             finalTasks = result.tasks || [];
+            finalStorageType = result.storage || 'drive';
+            finalStorageReason = result.storage_reason || null;
+            finalRetentionDays = typeof result.retention_days !== 'undefined' ? result.retention_days : null;
+            finalExpiresAt = result.expires_at || null;
+            finalTimeRemaining = result.time_remaining || null;
+            finalDriveType = result.drive_type || driveType;
+
+            if (finalStorageType === 'temp') {
+                finalDrivePath = 'Almacenamiento temporal';
+                appendSaveLogMessage('💾 El audio se guardó temporalmente en Juntify.');
+                if (finalStorageReason === 'drive_not_connected') {
+                    appendSaveLogMessage('🔌 Conecta tu Google Drive desde el perfil para moverlo de forma permanente.');
+                } else {
+                    appendSaveLogMessage('🚀 Actualiza tu plan para guardarlo permanentemente en Google Drive.');
+                }
+                finalDriveType = 'temp';
+            }
             // Debug: show how tasks are structured right after analysis
             try {
                 const t = finalTasks;
@@ -2375,6 +2406,23 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
             finalAudioDuration = result.audio_duration || 0;
             finalSpeakerCount = result.speaker_count || 0;
             finalTasks = result.tasks || [];
+            finalStorageType = result.storage || 'drive';
+            finalStorageReason = result.storage_reason || null;
+            finalRetentionDays = typeof result.retention_days !== 'undefined' ? result.retention_days : null;
+            finalExpiresAt = result.expires_at || null;
+            finalTimeRemaining = result.time_remaining || null;
+            finalDriveType = result.drive_type || driveType;
+
+            if (finalStorageType === 'temp') {
+                finalDrivePath = 'Almacenamiento temporal';
+                appendSaveLogMessage('💾 El audio se guardó temporalmente en Juntify.');
+                if (finalStorageReason === 'drive_not_connected') {
+                    appendSaveLogMessage('🔌 Conecta tu Google Drive desde el perfil para moverlo de forma permanente.');
+                } else {
+                    appendSaveLogMessage('🚀 Actualiza tu plan para guardarlo permanentemente en Google Drive.');
+                }
+                finalDriveType = 'temp';
+            }
             // Debug (alt path): show task structure too
             try {
                 const t = finalTasks;
@@ -2421,7 +2469,12 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                 audioDuration: finalAudioDuration,
                 speakerCount: finalSpeakerCount,
                 tasks: finalTasks,
-                driveType: driveType // Pasar el tipo de drive seleccionado
+                driveType: finalDriveType,
+                storageType: finalStorageType,
+                storageReason: finalStorageReason,
+                retentionDays: finalRetentionDays,
+                expiresAt: finalExpiresAt,
+                timeRemaining: finalTimeRemaining,
             });
         }, 500);
 
@@ -2442,7 +2495,62 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
 
 // ===== PASO 8: COMPLETADO =====
 
-function showCompletion({ drivePath, audioDuration, speakerCount, tasks, driveType }) {
+function stopCompletionTempCountdown() {
+    if (completionTempInterval) {
+        clearInterval(completionTempInterval);
+        completionTempInterval = null;
+    }
+}
+
+function startCompletionTempCountdown(expiresAt, targetEl) {
+    stopCompletionTempCountdown();
+    if (!expiresAt || !targetEl) {
+        return;
+    }
+
+    const updateCountdown = () => {
+        const expiration = new Date(expiresAt);
+        if (Number.isNaN(expiration.getTime())) {
+            targetEl.textContent = '';
+            return;
+        }
+
+        const diff = expiration.getTime() - Date.now();
+        if (diff <= 0) {
+            targetEl.textContent = 'Expirada';
+            stopCompletionTempCountdown();
+            return;
+        }
+
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        if (hours > 0) {
+            targetEl.textContent = `${hours}h ${minutes}m`;
+        } else if (minutes > 0) {
+            targetEl.textContent = `${minutes}m ${seconds}s`;
+        } else {
+            targetEl.textContent = `${seconds}s`;
+        }
+    };
+
+    updateCountdown();
+    completionTempInterval = setInterval(updateCountdown, 1000);
+}
+
+function showCompletion({
+    drivePath,
+    audioDuration,
+    speakerCount,
+    tasks,
+    driveType,
+    storageType = 'drive',
+    storageReason = null,
+    retentionDays = null,
+    expiresAt = null,
+    timeRemaining = null,
+}) {
     processingFinished = true;
     cancelAutomaticTranscriptionRetry(true);
     showStep(8);
@@ -2458,9 +2566,46 @@ function showCompletion({ drivePath, audioDuration, speakerCount, tasks, driveTy
 
     const pathEl = document.getElementById('completion-drive-path');
     if (pathEl) {
-        // Mejorar el mensaje para mostrar el tipo de drive
-        const driveTypeText = driveType === 'organization' ? 'Drive Organizacional' : 'Drive Personal';
-        pathEl.textContent = `${driveTypeText}: ${drivePath || ''}`;
+        if (storageType === 'temp') {
+            pathEl.textContent = 'Almacenamiento temporal (Juntify)';
+        } else {
+            const driveTypeText = driveType === 'organization' ? 'Drive Organizacional' : 'Drive Personal';
+            pathEl.textContent = `${driveTypeText}: ${drivePath || ''}`;
+        }
+    }
+
+    const tempWarningEl = document.getElementById('completion-temp-warning');
+    if (tempWarningEl) {
+        if (storageType === 'temp') {
+            tempWarningEl.classList.remove('hidden');
+
+            const retentionEl = document.getElementById('completion-temp-retention');
+            if (retentionEl) {
+                const days = Number(retentionDays ?? window.tempRetentionDays ?? 7);
+                retentionEl.textContent = `${days} ${days === 1 ? 'día' : 'días'}`;
+            }
+
+            const actionEl = document.getElementById('completion-temp-action');
+            if (actionEl) {
+                actionEl.textContent = storageReason === 'drive_not_connected'
+                    ? 'Conecta tu Google Drive desde tu perfil para guardarla permanentemente.'
+                    : 'Actualiza tu plan para guardarla permanentemente en Google Drive.';
+            }
+
+            const countdownEl = document.getElementById('completion-temp-countdown');
+            if (countdownEl) {
+                if (expiresAt) {
+                    startCompletionTempCountdown(expiresAt, countdownEl);
+                } else if (timeRemaining) {
+                    countdownEl.textContent = timeRemaining;
+                } else {
+                    countdownEl.textContent = '';
+                }
+            }
+        } else {
+            tempWarningEl.classList.add('hidden');
+            stopCompletionTempCountdown();
+        }
     }
 
     const durationEl = document.getElementById('completion-audio-duration');

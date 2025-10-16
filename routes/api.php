@@ -266,6 +266,7 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('/transcriptions-temp', [App\Http\Controllers\TranscriptionTempController::class, 'index'])->name('api.transcriptions-temp.index');
         Route::post('/transcriptions-temp', [App\Http\Controllers\TranscriptionTempController::class, 'store'])->name('api.transcriptions-temp.store');
         Route::get('/transcriptions-temp/{transcription}', [App\Http\Controllers\TranscriptionTempController::class, 'show'])->name('api.transcriptions-temp.show');
+        Route::get('/transcriptions-temp/{transcription}/audio', [App\Http\Controllers\TranscriptionTempController::class, 'streamAudio'])->name('api.transcriptions-temp.audio');
         Route::delete('/transcriptions-temp/{transcription}', [App\Http\Controllers\TranscriptionTempController::class, 'destroy'])->name('api.transcriptions-temp.destroy');
         Route::post('/transcriptions-temp/clean-expired', [App\Http\Controllers\TranscriptionTempController::class, 'cleanExpired'])->name('api.transcriptions-temp.clean-expired');
     });

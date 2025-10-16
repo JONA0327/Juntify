@@ -100,4 +100,61 @@ class PlanLimitService
         }
         return $limits['used_this_month'] < $limits['max_meetings_per_month'];
     }
+
+    /**
+     * Determine if the current user is allowed to store meetings directly in Drive.
+     * Only Business/Enterprise level roles (and internal elevated roles) can use Drive storage.
+     */
+    public function userCanUseDrive(User $user): bool
+    {
+        $role = strtolower((string) ($user->roles ?? ''));
+        $planCode = strtolower((string) ($user->plan_code ?? ''));
+
+        $allowedRoles = [
+            'business',
+            'buisness', // Variante común con error ortográfico
+            'negocios',
+            'enterprise',
+            'enterprice', // Variante utilizada en algunas cuentas antiguas
+            'developer',
+            'superadmin',
+        ];
+
+        if ($role !== '' && in_array($role, $allowedRoles, true)) {
+            return true;
+        }
+
+        if ($planCode !== '' && in_array($planCode, $allowedRoles, true)) {
+            return true;
+        }
+
+        foreach ($allowedRoles as $allowed) {
+            if (!$allowed) {
+                continue;
+            }
+            if ($role !== '' && str_contains($role, $allowed)) {
+                return true;
+            }
+            if ($planCode !== '' && str_contains($planCode, $allowed)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get how many days a temporary transcription should be retained for the given user.
+     */
+    public function getTemporaryRetentionDays(User $user): int
+    {
+        $role = strtolower((string) ($user->roles ?? ''));
+        $planCode = strtolower((string) ($user->plan_code ?? ''));
+
+        $isBasic = $role === 'basic'
+            || in_array($planCode, ['basic', 'basico'], true)
+            || str_contains($planCode, 'basic');
+
+        return $isBasic ? 15 : 7;
+    }
 }

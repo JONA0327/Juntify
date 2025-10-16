@@ -1044,6 +1044,19 @@
                     <audio id="meeting-audio-player" controls class="w-full">
                         Tu navegador no soporta el elemento de audio.
                     </audio>
+                    <div id="meeting-modal-temp-warning" class="temp-modal-warning hidden mt-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                            <p class="warning-title">Guardado temporal</p>
+                            <p class="warning-text">
+                                El audio se conservará durante <strong id="meeting-modal-temp-retention"></strong>.
+                                Se eliminará en <strong id="meeting-modal-temp-countdown"></strong>.
+                                <span id="meeting-modal-temp-action"></span>
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Resumen -->
@@ -1103,6 +1116,9 @@ function closeMeetingModal() {
     if (audioPlayer) {
         audioPlayer.pause();
     }
+    if (typeof stopMeetingTempCountdown === 'function') {
+        stopMeetingTempCountdown();
+    }
 }
 
 // Función para abrir modal de reunión
@@ -1147,6 +1163,10 @@ function openMeetingModal(meetingId) {
             // Configurar audio con fallback a endpoint de streaming
             const audioSection = document.getElementById('meeting-audio-section');
             const audioPlayer = document.getElementById('meeting-audio-player');
+            const tempWarning = document.getElementById('meeting-modal-temp-warning');
+            const tempCountdown = document.getElementById('meeting-modal-temp-countdown');
+            const tempRetentionEl = document.getElementById('meeting-modal-temp-retention');
+            const tempActionEl = document.getElementById('meeting-modal-temp-action');
             // Limpiar estado previo
             audioPlayer.pause();
             audioPlayer.removeAttribute('src');
@@ -1184,6 +1204,34 @@ function openMeetingModal(meetingId) {
                 } else if (fallbackUrl) {
                     audioPlayer.src = fallbackUrl;
                     try { audioPlayer.load(); } catch (_) {}
+                }
+            }
+
+            if (tempWarning) {
+                const canShowTemp = meeting.storage_type === 'temp' && (typeof isBasicOrFreeRole === 'function' ? isBasicOrFreeRole() : ((window.userRole || '').toString().toLowerCase() === 'basic' || (window.userRole || '').toString().toLowerCase() === 'free'));
+                if (canShowTemp) {
+                    tempWarning.classList.remove('hidden');
+                    if (tempRetentionEl) {
+                        const retentionDays = Number(meeting.retention_days ?? window.tempRetentionDays ?? 7);
+                        tempRetentionEl.textContent = `${retentionDays} ${retentionDays === 1 ? 'día' : 'días'}`;
+                    }
+                    if (tempActionEl) {
+                        tempActionEl.textContent = meeting.storage_reason === 'drive_not_connected'
+                            ? 'Conecta tu Google Drive desde tu perfil para guardarla permanentemente.'
+                            : 'Actualiza tu plan para guardarla permanentemente en Google Drive.';
+                    }
+                    if (tempCountdown) {
+                        if (typeof startMeetingTempCountdown === 'function' && meeting.expires_at) {
+                            startMeetingTempCountdown(meeting.expires_at, tempCountdown);
+                        } else if (meeting.time_remaining) {
+                            tempCountdown.textContent = meeting.time_remaining;
+                        }
+                    }
+                } else {
+                    tempWarning.classList.add('hidden');
+                    if (typeof stopMeetingTempCountdown === 'function') {
+                        stopMeetingTempCountdown();
+                    }
                 }
             }
 

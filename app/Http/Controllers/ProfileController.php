@@ -11,6 +11,7 @@ use App\Services\GoogleDriveService;
 use App\Services\GoogleCalendarService;
 use App\Services\GoogleTokenRefreshService;
 use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Services\PlanLimitService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,9 @@ class ProfileController extends Controller
     public function show(GoogleDriveService $drive, GoogleAuthController $auth, GoogleTokenRefreshService $tokenService)
     {
         $user = Auth::user();
+        $planService = app(PlanLimitService::class);
+        $driveLocked = !$planService->userCanUseDrive($user);
+        $tempRetentionDays = $planService->getTemporaryRetentionDays($user);
 
         // Usar el nuevo servicio para verificar y renovar automáticamente el token
         $connectionStatus = $tokenService->checkConnectionStatus($user);
@@ -54,7 +58,7 @@ class ProfileController extends Controller
             // Obtener planes para la sección de suscripciones
             $plans = Plan::where('is_active', true)->orderBy('price')->get();
 
-            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans'));
+            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans', 'driveLocked', 'tempRetentionDays'));
         }
 
         $driveConnected = $connectionStatus['drive_connected'];
@@ -288,7 +292,7 @@ class ProfileController extends Controller
         // Obtener planes para la sección de suscripciones
         $plans = Plan::where('is_active', true)->orderBy('price')->get();
 
-        return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans'));
+            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans', 'driveLocked', 'tempRetentionDays'));
     }
 
     /**
