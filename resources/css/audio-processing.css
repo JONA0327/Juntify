@@ -1139,6 +1139,43 @@ body {
     margin-bottom: 3rem;
 }
 
+.completion-temp-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin: 0 auto 2rem;
+    max-width: 540px;
+    background: rgba(251, 191, 36, 0.12);
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    color: #fcd34d;
+    text-align: left;
+}
+
+.completion-temp-warning .warning-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+    color: #fbbf24;
+}
+
+.completion-temp-warning .warning-title {
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    color: #fde68a;
+    font-size: 1rem;
+}
+
+.completion-temp-warning .warning-text {
+    color: #fef3c7;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.completion-temp-warning strong {
+    color: #fff7d6;
+}
+
 .checkmark-circle {
     width: 120px;
     height: 120px;

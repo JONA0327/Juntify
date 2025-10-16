@@ -14,6 +14,7 @@ use App\Models\TaskLaravel;
 use App\Models\SharedMeeting;
 use App\Models\User;
 use App\Models\KeyPoint;
+use App\Models\TranscriptionTemp;
 
 use App\Models\Task;
 use Carbon\Carbon;
@@ -219,7 +220,33 @@ class MeetingController extends Controller
                     ];
                 });
 
+            $tempMeetings = TranscriptionTemp::where('user_id', $user->id)
+                ->notExpired()
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($temp) {
+                    $metadata = $temp->metadata ?? [];
+                    return [
+                        'id' => 'temp-' . $temp->id,
+                        'meeting_name' => $temp->title,
+                        'created_at' => $temp->created_at,
+                        'audio_folder' => 'Almacenamiento temporal',
+                        'transcript_folder' => 'Almacenamiento temporal',
+                        'is_legacy' => false,
+                        'source' => 'transcriptions_temp',
+                        'storage_type' => 'temp',
+                        'storage_reason' => $metadata['storage_reason'] ?? null,
+                        'drive_type' => $metadata['drive_type'] ?? null,
+                        'expires_at' => optional($temp->expires_at)->toIso8601String(),
+                        'time_remaining' => $temp->time_remaining,
+                        'retention_days' => $metadata['retention_days'] ?? null,
+                        'duration' => $this->formatDurationSeconds($temp->duration),
+                        'temp_audio_url' => route('api.transcriptions-temp.audio', ['transcription' => $temp->id]),
+                    ];
+                });
+
             $meetings = $legacyMeetings
+                ->concat($tempMeetings)
                 ->sortByDesc('created_at')
                 ->map(function ($meeting) {
                     $meeting['created_at'] = $meeting['created_at'] instanceof Carbon
@@ -369,6 +396,11 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
+            $idString = (string) $id;
+            if (str_starts_with($idString, 'temp-') || str_starts_with($idString, 'temp_')) {
+                $tempId = (int) preg_replace('/^temp[-_]/', '', $idString);
+                return $this->respondWithTemporaryMeeting($tempId, $user, null);
+            }
             $sharedAccess = SharedMeeting::where('meeting_id', $id)
                 ->where('shared_with', $user->id)
                 ->where('status', 'accepted')
@@ -407,6 +439,16 @@ class MeetingController extends Controller
 
             // Intentar buscar una reunión legacy primero
             $legacyMeeting = TranscriptionLaravel::where('id', $id)->first();
+
+            if (!$legacyMeeting && ctype_digit((string) $id)) {
+                $tempRecord = TranscriptionTemp::where('id', (int) $id)
+                    ->where('user_id', $user->id)
+                    ->notExpired()
+                    ->first();
+                if ($tempRecord) {
+                    return $this->respondWithTemporaryMeeting((int) $id, $user, $tempRecord);
+                }
+            }
 
             // Verificar si el usuario tiene acceso a esta reunión legacy
             $hasLegacyAccess = false;
@@ -1063,6 +1105,76 @@ class MeetingController extends Controller
                 'message' => 'Error al eliminar la reunión: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    private function respondWithTemporaryMeeting(int $tempId, User $user, ?TranscriptionTemp $tempRecord = null): JsonResponse
+    {
+        $meeting = $tempRecord ?? TranscriptionTemp::where('id', $tempId)
+            ->where('user_id', $user->id)
+            ->notExpired()
+            ->first();
+
+        if (!$meeting) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Reunión temporal no encontrada o expirada',
+            ], 404);
+        }
+
+        $metadata = $meeting->metadata ?? [];
+        $segments = $metadata['transcription_segments'] ?? [];
+        $keyPoints = $metadata['key_points'] ?? [];
+        $summary = $metadata['summary'] ?? $meeting->description ?? 'Reunión guardada temporalmente.';
+
+        return response()->json([
+            'success' => true,
+            'meeting' => [
+                'id' => 'temp-' . $meeting->id,
+                'meeting_name' => $meeting->title,
+                'is_temporary' => true,
+                'storage_type' => 'temp',
+                'created_at' => $meeting->created_at->format('d/m/Y H:i'),
+                'audio_path' => route('api.transcriptions-temp.audio', ['transcription' => $meeting->id]),
+                'transcript_path' => null,
+                'summary' => $summary,
+                'key_points' => $keyPoints,
+                'transcription' => $segments,
+                'tasks' => [],
+                'speakers' => [],
+                'segments' => $segments,
+                'audio_folder' => 'Almacenamiento temporal',
+                'transcript_folder' => 'Almacenamiento temporal',
+                'needs_encryption' => false,
+                'expires_at' => optional($meeting->expires_at)->toIso8601String(),
+                'time_remaining' => $meeting->time_remaining,
+                'duration' => $this->formatDurationSeconds($meeting->duration),
+                'retention_days' => $metadata['retention_days'] ?? null,
+                'storage_reason' => $metadata['storage_reason'] ?? null,
+                'drive_type' => $metadata['drive_type'] ?? null,
+            ],
+        ]);
+    }
+
+    private function formatDurationSeconds($seconds): ?string
+    {
+        if ($seconds === null) {
+            return null;
+        }
+
+        $seconds = (int) round($seconds);
+        if ($seconds <= 0) {
+            return '00:00';
+        }
+
+        $hours = intdiv($seconds, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+        $remainingSeconds = $seconds % 60;
+
+        if ($hours > 0) {
+            return sprintf('%02d:%02d:%02d', $hours, $minutes, $remainingSeconds);
+        }
+
+        return sprintf('%02d:%02d', $minutes, $remainingSeconds);
     }
 
     /**

@@ -486,6 +486,20 @@
                         </div>
                     </div>
 
+                    <div id="completion-temp-warning" class="completion-temp-warning hidden">
+                        <div class="warning-icon">⚠️</div>
+                        <div class="warning-content">
+                            <p class="warning-title">Guardado temporal</p>
+                            <p class="warning-text">
+                                Tu reunión se almacenó temporalmente por
+                                <strong id="completion-temp-retention"></strong>.
+                                El audio se eliminará en
+                                <strong id="completion-temp-countdown"></strong>.
+                                <span id="completion-temp-action"></span>
+                            </p>
+                        </div>
+                    </div>
+
                     <div class="completion-summary">
                         <div class="summary-item">
                             <x-icon name="folder" class="summary-icon" />

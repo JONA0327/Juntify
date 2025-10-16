@@ -17,6 +17,28 @@
     </div>
 </div>
 
+<!-- Modal: Drive bloqueado por plan -->
+<div class="modal" id="drive-locked-modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">
+                <span class="modal-icon">🔒</span>
+                Función disponible en planes superiores
+            </h3>
+        </div>
+        <div class="modal-body">
+            <p class="modal-description">
+                La conexión con Google Drive está disponible únicamente para los planes <strong>Business</strong> y <strong>Enterprise</strong> (incluye roles internos Developer y Superadmin).
+                Tus reuniones se guardarán temporalmente durante <strong><span id="drive-locked-retention"></span></strong> antes de eliminar el audio.
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('drive-locked-modal')">Entendido</button>
+            <a href="/profile#section-plans" class="btn btn-primary">Ver planes disponibles</a>
+        </div>
+    </div>
+</div>
+
 <!-- Modal eliminar cuenta -->
 <div class="modal" id="delete-account-modal">
     <div class="modal-content">

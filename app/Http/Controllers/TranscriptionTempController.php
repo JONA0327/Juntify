@@ -11,7 +11,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Services\AudioConversionService;
 use App\Services\TranscriptionService;
+use App\Services\PlanLimitService;
 use App\Models\PendingRecording;
+use Illuminate\Support\Str;
 
 class TranscriptionTempController extends Controller
 {
@@ -31,6 +33,7 @@ class TranscriptionTempController extends Controller
             $user = Auth::user();
             $audioFile = $request->file('audioFile');
 
+            $planService = app(PlanLimitService::class);
             $planCode = strtolower((string) ($user->plan_code ?? 'free'));
             $role = strtolower((string) ($user->roles ?? 'free'));
             $isBasic = $role === 'basic' || in_array($planCode, ['basic', 'basico'], true) || str_contains($planCode, 'basic');
@@ -58,9 +61,13 @@ class TranscriptionTempController extends Controller
             $audioSize = $audioFile->getSize();
 
             // Generar nombre único para el archivo .ju
-            $juFileName = 'temp_transcriptions/' . $user->id . '/' . uniqid() . '_' . $validated['meetingName'] . '.ju';
+            $juBaseName = Str::slug($validated['meetingName'] ?? 'reunion');
+            if (!$juBaseName) {
+                $juBaseName = 'reunion';
+            }
+            $juFileName = 'temp_transcriptions/' . $user->id . '/' . uniqid() . '_' . $juBaseName . '.ju';
 
-            $expiresInDays = $isBasic ? 15 : 7;
+            $expiresInDays = $planService->getTemporaryRetentionDays($user);
             $expiresAt = Carbon::now()->addDays($expiresInDays);
 
             // Crear registro temporal
@@ -76,7 +83,10 @@ class TranscriptionTempController extends Controller
                 'metadata' => [
                     'original_filename' => $audioFile->getClientOriginalName(),
                     'mime_type' => $audioFile->getMimeType(),
-                    'plan_type' => $isBasic ? 'basic_temp' : ($isFree ? 'free_temp' : 'standard_temp')
+                    'plan_type' => $isBasic ? 'basic_temp' : ($isFree ? 'free_temp' : 'standard_temp'),
+                    'storage_type' => 'temp',
+                    'retention_days' => $expiresInDays,
+                    'storage_reason' => $planService->userCanUseDrive($user) ? 'drive_not_connected' : 'plan_restricted',
                 ]
             ]);
 
@@ -90,7 +100,8 @@ class TranscriptionTempController extends Controller
                 'metadata' => [
                     'temp_transcription_id' => $transcriptionTemp->id,
                     'is_temporary' => true,
-                    'storage_type' => 'temp'
+                    'storage_type' => 'temp',
+                    'retention_days' => $expiresInDays,
                 ]
             ]);
 
@@ -103,9 +114,19 @@ class TranscriptionTempController extends Controller
 
             return response()->json([
                 'success' => true,
+                'storage' => 'temp',
+                'storage_reason' => $planService->userCanUseDrive($user) ? 'drive_not_connected' : 'plan_restricted',
+                'drive_path' => 'Almacenamiento temporal',
+                'retention_days' => $expiresInDays,
+                'expires_at' => $expiresAt->toIso8601String(),
+                'time_remaining' => $transcriptionTemp->time_remaining,
                 'data' => $transcriptionTemp,
                 'pending_recording' => $pendingRecording->id,
-                'message' => 'Reunión guardada temporalmente. Se eliminará automáticamente en 7 días.'
+                'message' => sprintf(
+                    'Reunión guardada temporalmente. El audio se eliminará automáticamente en %d %s.',
+                    $expiresInDays,
+                    $expiresInDays === 1 ? 'día' : 'días'
+                ),
             ]);
 
         } catch (\Exception $e) {
@@ -217,6 +238,54 @@ class TranscriptionTempController extends Controller
     }
 
     /**
+     * Stream the stored temporary audio file for playback
+     */
+    public function streamAudio($id)
+    {
+        try {
+            $user = Auth::user();
+
+            $transcription = TranscriptionTemp::where('user_id', $user->id)
+                ->where('id', $id)
+                ->notExpired()
+                ->first();
+
+            if (!$transcription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Reunión temporal no encontrada o expirada'
+                ], 404);
+            }
+
+            if (!Storage::disk('local')->exists($transcription->audio_path)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Archivo de audio no disponible'
+                ], 404);
+            }
+
+            $fullPath = Storage::disk('local')->path($transcription->audio_path);
+            $mime = $transcription->metadata['audio_mime'] ?? 'audio/ogg';
+
+            return response()->file($fullPath, [
+                'Content-Type' => $mime,
+                'Content-Disposition' => 'inline; filename="' . basename($fullPath) . '"'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al transmitir audio temporal', [
+                'error' => $e->getMessage(),
+                'id' => $id,
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al transmitir el audio temporal'
+            ], 500);
+        }
+    }
+
+    /**
      * Delete a temporary transcription
      */
     public function destroy($id)
@@ -236,12 +305,8 @@ class TranscriptionTempController extends Controller
             }
 
             // Eliminar archivos físicos
-            if (Storage::exists($transcription->audio_path)) {
-                Storage::delete($transcription->audio_path);
-            }
-
-            if (Storage::exists($transcription->transcription_path)) {
-                Storage::delete($transcription->transcription_path);
+            if (Storage::disk('local')->exists($transcription->audio_path)) {
+                Storage::disk('local')->delete($transcription->audio_path);
             }
 
             // Eliminar registro
@@ -282,12 +347,8 @@ class TranscriptionTempController extends Controller
             $deletedCount = 0;
             foreach ($expiredTranscriptions as $transcription) {
                 // Eliminar archivos físicos
-                if (Storage::exists($transcription->audio_path)) {
-                    Storage::delete($transcription->audio_path);
-                }
-
-                if (Storage::exists($transcription->transcription_path)) {
-                    Storage::delete($transcription->transcription_path);
+                if (Storage::disk('local')->exists($transcription->audio_path)) {
+                    Storage::disk('local')->delete($transcription->audio_path);
                 }
 
                 $transcription->delete();

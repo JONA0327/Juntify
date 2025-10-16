@@ -12,6 +12,10 @@ var currentSegmentIndex = typeof window.currentSegmentIndex !== 'undefined' ? wi
 var segmentEndHandler = typeof window.segmentEndHandler !== 'undefined' ? window.segmentEndHandler : null;
 var selectedSegmentIndex = typeof window.selectedSegmentIndex !== 'undefined' ? window.selectedSegmentIndex : null;
 var segmentsModified = typeof window.segmentsModified !== 'undefined' ? window.segmentsModified : false;
+var tempCountdownInterval = typeof window.tempCountdownInterval !== 'undefined' ? window.tempCountdownInterval : null;
+var meetingTempCountdownInterval = typeof window.meetingTempCountdownInterval !== 'undefined' ? window.meetingTempCountdownInterval : null;
+window.tempCountdownInterval = tempCountdownInterval;
+window.meetingTempCountdownInterval = meetingTempCountdownInterval;
 
 // Variable para almacenar datos de contenedores
 var containersData = window.containersData || [];
@@ -105,6 +109,15 @@ function parseSegmentsFromText(transcriptionText) {
     });
 
     return segments;
+}
+
+function isBasicOrFreeRole() {
+    const role = (window.userRole || '').toString().toLowerCase();
+    const planCode = (window.userPlanCode || '').toString().toLowerCase();
+    if (role === 'basic' || planCode === 'basic' || planCode === 'basico' || planCode.includes('basic')) {
+        return true;
+    }
+    return role === 'free' || planCode === 'free' || planCode.includes('free');
 }
 
 function toNumberOrNull(value) {
@@ -2002,12 +2015,103 @@ function renderMeetings(items, targetSelector, emptyMessage, cardCreator = creat
 
     container.innerHTML = meetingsHtml;
     attachMeetingEventListeners();
+    initializeTempCountdowns();
+}
+
+function calculateRemainingTime(expiresAt) {
+    if (!expiresAt) {
+        return { expired: true, text: '' };
+    }
+    const expiration = new Date(expiresAt);
+    if (Number.isNaN(expiration.getTime())) {
+        return { expired: true, text: '' };
+    }
+    const diff = expiration.getTime() - Date.now();
+    if (diff <= 0) {
+        return { expired: true, text: 'Expirada' };
+    }
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    if (hours > 0) {
+        return { expired: false, text: `${hours}h ${minutes}m` };
+    }
+    if (minutes > 0) {
+        return { expired: false, text: `${minutes}m ${seconds}s` };
+    }
+    return { expired: false, text: `${seconds}s` };
+}
+
+function updateTempCountdowns() {
+    const countdowns = document.querySelectorAll('.temp-countdown-value');
+    countdowns.forEach(span => {
+        const expiresAt = span.dataset.expiresAt;
+        const remaining = calculateRemainingTime(expiresAt);
+        span.textContent = remaining.text;
+        if (remaining.expired) {
+            span.classList.add('expired');
+        } else {
+            span.classList.remove('expired');
+        }
+    });
+}
+
+function initializeTempCountdowns() {
+    if (tempCountdownInterval) {
+        clearInterval(tempCountdownInterval);
+    }
+    const countdowns = document.querySelectorAll('.temp-countdown-value');
+    if (!countdowns.length) {
+        tempCountdownInterval = null;
+        window.tempCountdownInterval = null;
+        return;
+    }
+    updateTempCountdowns();
+    tempCountdownInterval = setInterval(updateTempCountdowns, 1000);
+    window.tempCountdownInterval = tempCountdownInterval;
+}
+
+function startMeetingTempCountdown(expiresAt, targetEl) {
+    stopMeetingTempCountdown();
+    if (!expiresAt || !targetEl) return;
+
+    const update = () => {
+        const remaining = calculateRemainingTime(expiresAt);
+        targetEl.textContent = remaining.text;
+        if (remaining.expired) {
+            stopMeetingTempCountdown();
+        }
+    };
+
+    update();
+    meetingTempCountdownInterval = setInterval(update, 1000);
+    window.meetingTempCountdownInterval = meetingTempCountdownInterval;
+}
+
+function stopMeetingTempCountdown() {
+    if (meetingTempCountdownInterval) {
+        clearInterval(meetingTempCountdownInterval);
+        meetingTempCountdownInterval = null;
+        window.meetingTempCountdownInterval = null;
+    }
 }
 
 // ===============================================
 // CREACIÓN DE TARJETA DE REUNIÓN
 // ===============================================
 function createMeetingCard(meeting) {
+    const isTempMeeting = (meeting.storage_type && meeting.storage_type === 'temp') || meeting.source === 'transcriptions_temp';
+    const showTempCountdown = isTempMeeting && isBasicOrFreeRole();
+    const countdownHtml = showTempCountdown ? `
+                    <div class="temp-countdown-badge">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l2 2m6-2a8 8 0 11-16 0 8 8 0 0116 0z" />
+                        </svg>
+                        <span>Se eliminará en <strong class="temp-countdown-value" data-temp-countdown="${meeting.id}" data-expires-at="${meeting.expires_at || ''}">${meeting.time_remaining || ''}</strong></span>
+                    </div>` : '';
+    const audioFolder = isTempMeeting ? 'Almacenamiento temporal' : meeting.audio_folder;
+    const transcriptFolder = isTempMeeting ? 'Almacenamiento temporal' : meeting.transcript_folder;
     return `
         <div class="meeting-card" data-meeting-id="${meeting.id}" draggable="true">
             <div class="meeting-card-header">
@@ -2024,6 +2128,7 @@ function createMeetingCard(meeting) {
                         </svg>
                         ${meeting.created_at}
                     </p>
+                    ${countdownHtml}
 
                     <div class="meeting-folders">
                         <div class="folder-info">
@@ -2031,14 +2136,14 @@ function createMeetingCard(meeting) {
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             <span>Transcripción:</span>
-                            <span class="folder-name">${escapeHtml(meeting.transcript_folder)}</span>
+                            <span class="folder-name">${escapeHtml(transcriptFolder)}</span>
                         </div>
                         <div class="folder-info">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728" />
                             </svg>
                             <span>Audio:</span>
-                            <span class="folder-name">${escapeHtml(meeting.audio_folder)}</span>
+                            <span class="folder-name">${escapeHtml(audioFolder)}</span>
                         </div>
                     </div>
                 </div>
@@ -2845,6 +2950,19 @@ function showMeetingModal(meeting) {
         meeting.transcription = meeting.segments.map(s => s.text).join(' ');
     }
 
+    const isTempMeeting = meeting.storage_type === 'temp';
+    const showTempWarning = isTempMeeting && isBasicOrFreeRole();
+    const tempModalWarning = `
+                            <div class="temp-modal-warning ${showTempWarning ? '' : 'hidden'}" id="meeting-temp-warning">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div>
+                                    <p class="warning-title">Guardado temporal</p>
+                                    <p class="warning-text">El audio se eliminará en <strong id="meeting-temp-countdown">${meeting.time_remaining || ''}</strong>.</p>
+                                </div>
+                            </div>`;
+
     // Calcular número de participantes automáticamente basándose en hablantes únicos
     let participantCount = 0;
     if (Array.isArray(meeting.segments) && meeting.segments.length > 0) {
@@ -2911,6 +3029,7 @@ function showMeetingModal(meeting) {
                                 <audio id="meeting-audio" preload="metadata" controls style="display:none;width:100%;accent-color:#fbbf24;background:rgba(30,41,59,.6);border:1px solid #475569;border-radius:8px;"></audio>
                                 ${!audioSrc ? '<p class="text-slate-400 text-sm mt-2">Audio no disponible para esta reunión</p>' : ''}
                             </div>
+                            ${tempModalWarning}
                         </div>
                         <div class="modal-section">
                             <h3 class="section-title">
@@ -2975,6 +3094,20 @@ function showMeetingModal(meeting) {
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     const modal = document.getElementById('meetingModal');
+    const tempWarningEl = document.getElementById('meeting-temp-warning');
+    if (tempWarningEl) {
+        if (showTempWarning && meeting.expires_at) {
+            tempWarningEl.classList.remove('hidden');
+            const countdownEl = document.getElementById('meeting-temp-countdown');
+            if (countdownEl) {
+                countdownEl.dataset.expiresAt = meeting.expires_at;
+                startMeetingTempCountdown(meeting.expires_at, countdownEl);
+            }
+        } else {
+            tempWarningEl.classList.add('hidden');
+            stopMeetingTempCountdown();
+        }
+    }
     document.body.style.overflow = 'hidden';
     requestAnimationFrame(() => {
         modal.classList.add('active');
@@ -3533,6 +3666,8 @@ async function closeMeetingModal() {
         }
         segmentsModified = false;
     }
+
+    stopMeetingTempCountdown();
 
     const modal = document.getElementById('meetingModal');
     if (modal) {

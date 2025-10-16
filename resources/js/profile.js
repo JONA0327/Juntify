@@ -65,24 +65,53 @@ document.addEventListener('click', e => {
   }
 });
 
+function showDriveLockedModal() {
+  const modal = document.getElementById('drive-locked-modal');
+  const retentionEl = document.getElementById('drive-locked-retention');
+  const days = Number(window.tempRetentionDays || 7);
+
+  if (retentionEl) {
+    retentionEl.textContent = `${days} ${days === 1 ? 'día' : 'días'}`;
+  }
+
+  if (!modal) {
+    alert('La conexión con Drive está disponible solo para planes Business y Enterprise.');
+    return;
+  }
+
+  modal.style.display = 'flex';
+  modal.style.alignItems = 'center';
+  modal.style.justifyContent = 'center';
+  modal.style.visibility = 'visible';
+  modal.style.opacity = '1';
+  document.body.style.overflow = 'hidden';
+}
+
 /**
  * Llama al endpoint para autorizar Google Drive
  */
-function connectDrive() {
+function connectDrive(event) {
+  if (event && typeof event.preventDefault === 'function') {
+    event.preventDefault();
+  }
+
+  if (!window.userCanUseDrive) {
+    showDriveLockedModal();
+    return;
+  }
+
   const modal = document.getElementById('drive-loading-modal');
   if (modal) modal.classList.add('show');
 
   axios.get('/drive/status')
     .then(res => {
       if (!res.data.connected) {
-        alert('Conecta tu cuenta de drive para crear una carpeta');
         window.location.href = '/auth/google/redirect';
       } else {
         window.location.reload();
       }
     })
     .catch(() => {
-      alert('Error verificando Drive');
       window.location.href = '/auth/google/redirect';
     })
     .finally(() => {

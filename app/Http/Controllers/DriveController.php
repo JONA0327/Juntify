@@ -32,6 +32,9 @@ use RuntimeException;
 use App\Models\TranscriptionLaravel;
 use App\Models\TaskLaravel;
 use Illuminate\Support\Str;
+use App\Models\TranscriptionTemp;
+use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class DriveController extends Controller
 {
@@ -1140,10 +1143,13 @@ class DriveController extends Controller
         }
 
         $user = Auth::user();
-    $organizationFolder = $user->organizationFolder;
+        $planService = app(PlanLimitService::class);
+        $canUseDrive = $planService->userCanUseDrive($user);
+        $organizationFolder = $user->organizationFolder;
+        $token = GoogleToken::where('username', $user->username)->first();
 
         // Determinar si usar Drive organizacional basado en driveType
-        $driveType = $v['driveType'] ?? 'personal'; // Default a personal si no se especifica
+        $driveType = $v['driveType'] ?? 'personal';
         $useOrgDrive = false;
 
         Log::info('saveResults: Drive type selection', [
@@ -1153,26 +1159,47 @@ class DriveController extends Controller
             'rootFolder_param' => $v['rootFolder'] ?? null
         ]);
 
+        $hasDriveConnection = $driveType === 'organization' ? (bool) $organizationFolder : (bool) $token;
+        if (!$canUseDrive || !$hasDriveConnection) {
+            return $this->storeTemporaryResult(
+                $user,
+                $v,
+                $request,
+                $respondWithCleanup,
+                $cleanupChunkedUpload,
+                $mimeToExt,
+                $maxAudioBytes,
+                [
+                    'reason' => $canUseDrive ? 'drive_not_connected' : 'plan_restricted',
+                    'drive_type' => $driveType,
+                ]
+            );
+        }
+
         if ($driveType === 'organization' && $organizationFolder) {
             $useOrgDrive = true;
-                Log::info('saveResults: Using organization drive', [
-                    'orgFolderId' => $organizationFolder->google_id
-                ]);
-        } elseif ($driveType === 'organization' && !$organizationFolder) {
-            Log::warning('saveResults: Organization drive requested but no organization folder found', [
-                'username' => $user->username
+            Log::info('saveResults: Using organization drive', [
+                'orgFolderId' => $organizationFolder->google_id
             ]);
-            return $respondWithCleanup([
-                'message' => 'No tienes acceso a Drive organizacional o no está configurado'
-            ], 403);
         }
 
         if ($useOrgDrive) {
             $rootFolder = $organizationFolder; // OrganizationFolder model
         } else {
-            $token = GoogleToken::where('username', $user->username)->first();
             if (!$token) {
-                return $respondWithCleanup(['message' => 'Token de Google no encontrado'], 400);
+                return $this->storeTemporaryResult(
+                    $user,
+                    $v,
+                    $request,
+                    $respondWithCleanup,
+                    $cleanupChunkedUpload,
+                    $mimeToExt,
+                    $maxAudioBytes,
+                    [
+                        'reason' => $canUseDrive ? 'drive_not_connected' : 'plan_restricted',
+                        'drive_type' => $driveType,
+                    ]
+                );
             }
 
             // Resolución del root personal (prioridad): recordings_folder_id del token -> rootFolder parámetro -> primer root en BD
@@ -1199,7 +1226,15 @@ class DriveController extends Controller
                     ->first();
             }
             if (!$rootFolder) {
-                return $respondWithCleanup(['message' => 'Carpeta principal no encontrada o no configurada'], 400);
+                return $this->storeTemporaryResult(
+                    $user,
+                    $v,
+                    $request,
+                    $respondWithCleanup,
+                    $cleanupChunkedUpload,
+                    $mimeToExt,
+                    $maxAudioBytes
+                );
             }
         }
 
@@ -1746,6 +1781,189 @@ class DriveController extends Controller
                 'upload_id' => $uploadId,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    private function storeTemporaryResult(
+        User $user,
+        array $validated,
+        Request $request,
+        callable $respondWithCleanup,
+        callable $cleanupChunkedUpload,
+        array $mimeToExt,
+        int $maxAudioBytes,
+        array $context = []
+    ) {
+        try {
+            $audioUploadId = $validated['audioUploadId'] ?? null;
+            $audioFile = $request->file('audioFile');
+            $audioMime = strtolower((string)($validated['audioMimeType'] ?? ''));
+            $tmp = null;
+            $storageReason = $context['reason'] ?? null;
+            $driveTypeContext = $context['drive_type'] ?? ($validated['driveType'] ?? 'personal');
+
+            if ($audioUploadId) {
+                $resolvedUpload = $this->resolveChunkedAudioUpload($audioUploadId);
+                if (!$resolvedUpload) {
+                    return $respondWithCleanup([
+                        'message' => 'El archivo de audio temporal no está disponible o expiró. Vuelve a subir el audio e inténtalo de nuevo.'
+                    ], 422);
+                }
+
+                $sourcePath = $resolvedUpload['path'];
+                if (filesize($sourcePath) > $maxAudioBytes) {
+                    return $respondWithCleanup([
+                        'message' => 'Archivo de audio demasiado grande (máx. 200 MB)'
+                    ], 422);
+                }
+
+                $tmp = tempnam(sys_get_temp_dir(), 'aud');
+                if (!@copy($sourcePath, $tmp)) {
+                    return $respondWithCleanup([
+                        'message' => 'No se pudo preparar el audio temporal'
+                    ], 500);
+                }
+                $audioMime = $resolvedUpload['mime'] ?: $audioMime;
+            } elseif ($audioFile instanceof UploadedFile) {
+                if ($audioFile->getSize() > $maxAudioBytes) {
+                    return $respondWithCleanup([
+                        'message' => 'Archivo de audio demasiado grande (máx. 200 MB)'
+                    ], 422);
+                }
+
+                $tmp = tempnam(sys_get_temp_dir(), 'aud');
+                file_put_contents($tmp, file_get_contents($audioFile->getRealPath()));
+                $audioMime = strtolower($audioFile->getMimeType() ?: $audioFile->getClientMimeType() ?: $audioMime);
+            } else {
+                $b64 = $validated['audioData'] ?? '';
+                if (str_contains($b64, ',')) {
+                    [, $b64] = explode(',', $b64, 2);
+                }
+                $raw = base64_decode($b64);
+                if ($raw === false) {
+                    return $respondWithCleanup([
+                        'message' => 'Audio inválido o corrupto'
+                    ], 422);
+                }
+                if (strlen($raw) > $maxAudioBytes) {
+                    return $respondWithCleanup([
+                        'message' => 'Archivo de audio demasiado grande (máx. 200 MB)'
+                    ], 422);
+                }
+
+                $tmp = tempnam(sys_get_temp_dir(), 'aud');
+                file_put_contents($tmp, $raw);
+            }
+
+            if (!$tmp) {
+                return $respondWithCleanup([
+                    'message' => 'No se pudo procesar el audio temporal'
+                ], 422);
+            }
+
+            $normalizedMime = $audioMime ?: 'audio/ogg';
+            $extension = $mimeToExt[$normalizedMime] ?? null;
+            if (!$extension && $audioFile instanceof UploadedFile) {
+                $extension = strtolower($audioFile->getClientOriginalExtension());
+            }
+            if (!$extension || strlen($extension) > 6) {
+                $extension = 'ogg';
+            }
+
+            $baseName = Str::slug($validated['meetingName'] ?? 'reunion');
+            if (!$baseName) {
+                $baseName = 'reunion';
+            }
+            $baseName = Str::limit($baseName, 60, '');
+            $audioFileName = $baseName . '_' . uniqid() . '.' . $extension;
+
+            $audioDirectory = 'temp_audio/' . $user->id;
+            Storage::disk('local')->makeDirectory($audioDirectory);
+            $audioStoragePath = $audioDirectory . '/' . $audioFileName;
+            Storage::disk('local')->put($audioStoragePath, file_get_contents($tmp));
+            $audioSize = Storage::disk('local')->size($audioStoragePath);
+
+            $analysis = is_array($validated['analysisResults']) ? $validated['analysisResults'] : [];
+            $transcriptionData = $validated['transcriptionData'];
+            $payload = [
+                'segments' => $transcriptionData,
+                'summary' => $analysis['summary'] ?? null,
+                'keyPoints' => $analysis['keyPoints'] ?? [],
+            ];
+            $encrypted = Crypt::encryptString(json_encode($payload));
+
+            $juDirectory = 'temp_transcriptions/' . $user->id;
+            Storage::disk('local')->makeDirectory($juDirectory);
+            $juFileName = $baseName . '_' . uniqid() . '.ju';
+            $juStoragePath = $juDirectory . '/' . $juFileName;
+            Storage::disk('local')->put($juStoragePath, $encrypted);
+
+            $duration = 0;
+            $speakers = [];
+            foreach ($transcriptionData as $segment) {
+                if (isset($segment['end']) && $segment['end'] > $duration) {
+                    $duration = $segment['end'];
+                }
+                if (!empty($segment['speaker'])) {
+                    $speakers[$segment['speaker']] = true;
+                }
+            }
+            $speakerCount = count($speakers);
+
+            $retentionDays = app(PlanLimitService::class)->getTemporaryRetentionDays($user);
+            $expiresAt = Carbon::now()->addDays($retentionDays);
+
+            $tempMeeting = TranscriptionTemp::create([
+                'user_id' => $user->id,
+                'title' => $validated['meetingName'],
+                'description' => $analysis['summary'] ?? null,
+                'audio_path' => $audioStoragePath,
+                'transcription_path' => $juStoragePath,
+                'audio_size' => $audioSize,
+                'duration' => $duration,
+                'expires_at' => $expiresAt,
+                'metadata' => [
+                    'analysis' => $analysis,
+                    'segments_count' => count($transcriptionData),
+                    'speaker_count' => $speakerCount,
+                    'storage_type' => 'temp',
+                    'retention_days' => $retentionDays,
+                    'audio_mime' => $normalizedMime,
+                    'transcription_segments' => $transcriptionData,
+                    'key_points' => $analysis['keyPoints'] ?? [],
+                    'summary' => $analysis['summary'] ?? null,
+                    'storage_reason' => $storageReason,
+                    'drive_type' => $driveTypeContext,
+                ],
+            ]);
+
+            if ($tmp && file_exists($tmp)) {
+                @unlink($tmp);
+            }
+
+            return $respondWithCleanup([
+                'saved' => true,
+                'storage' => 'temp',
+                'storage_reason' => $storageReason,
+                'storage_path' => $audioStoragePath,
+                'drive_type' => $driveTypeContext,
+                'drive_path' => 'Almacenamiento temporal',
+                'audio_duration' => $duration,
+                'speaker_count' => $speakerCount,
+                'expires_at' => optional($tempMeeting->expires_at)->toIso8601String(),
+                'time_remaining' => $tempMeeting->time_remaining,
+                'retention_days' => $retentionDays,
+                'temp_meeting_id' => $tempMeeting->id,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('storeTemporaryResult failed', [
+                'error' => $e->getMessage(),
+                'user' => $user->username,
+            ]);
+
+            return $respondWithCleanup([
+                'message' => 'Error al guardar la reunión temporal'
+            ], 500);
         }
     }
 }
