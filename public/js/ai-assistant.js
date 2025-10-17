@@ -17,6 +17,10 @@ let selectedFiles = [];
 let selectedDocuments = [];
 // Mapa de nombres de documentos por id para mostrar chips legibles
 const documentNameById = new Map();
+// Metadatos completos de documentos para mostrar estados en chips y mensajes
+const documentMetadataById = new Map();
+// Mensajes de estado en el chat asociados a documentos en subida/procesamiento
+const documentStatusMessages = new Map();
 // Seguimiento de documentos en procesamiento para actualizar UI cuando terminen
 const pendingDocIds = new Set();
 let pendingDocWatcher = null;
@@ -59,26 +63,44 @@ function ensurePendingDocWatcher() {
             let anyStateChange = false;
             data.documents.forEach(doc => {
                 if (!doc || !doc.id) return;
-                if (doc && doc.name) documentNameById.set(Number(doc.id), String(doc.name));
+                cacheDocuments([doc]);
+                const numericId = Number(doc.id);
+                const statusMessage = documentStatusMessages.get(numericId);
+
+                if (statusMessage) {
+                    updateUploadStatusMessage(statusMessage, doc.processing_status || 'processing', doc);
+                    if (doc.processing_status === 'completed') {
+                        addDocIdToSessionContext(numericId);
+                        removePendingDoc(numericId);
+                        documentStatusMessages.delete(numericId);
+                    } else if (doc.processing_status === 'failed') {
+                        removePendingDoc(numericId);
+                        documentStatusMessages.delete(numericId);
+                    }
+                    anyStateChange = true;
+                    return;
+                }
+
+                if (doc && doc.name) documentNameById.set(numericId, String(doc.name));
                 if (doc.processing_status === 'completed') {
-                    const name = documentNameById.get(Number(doc.id)) || doc.name || 'Documento';
+                    const name = documentNameById.get(numericId) || doc.name || 'Documento';
                     addMessageToChat({
                         role: 'assistant',
                         content: `El documento "${name}" ya está cargado y listo para usar en esta conversación.`,
                         created_at: new Date().toISOString(),
                     });
-                    addDocIdToSessionContext(Number(doc.id));
-                    removePendingDoc(Number(doc.id));
+                    addDocIdToSessionContext(numericId);
+                    removePendingDoc(numericId);
                     anyStateChange = true;
                 } else if (doc.processing_status === 'failed') {
-                    const name = documentNameById.get(Number(doc.id)) || doc.name || 'Documento';
+                    const name = documentNameById.get(numericId) || doc.name || 'Documento';
                     const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : '';
                     addMessageToChat({
                         role: 'assistant',
                         content: `Hubo un error procesando el documento "${name}".${hint}`,
                         created_at: new Date().toISOString(),
                     });
-                    removePendingDoc(Number(doc.id));
+                    removePendingDoc(numericId);
                     anyStateChange = true;
                 }
             });
@@ -585,32 +607,32 @@ function updateSessionInfo(session) {
     }
 
     // Sincronizar el contexto global con el de la sesión actual
+    const contextData = session.context_data !== undefined ? session.context_data : {};
     currentContext = {
         type: session.context_type || 'general',
         id: session.context_id || null,
-        data: (session.context_data && typeof session.context_data === 'object') ? session.context_data : {}
+        data: contextData,
     };
     // Refrescar indicador visual del contexto
     updateContextIndicator();
 
-    // Si el backend devuelve context_data, mantener doc_ids sincronizados
-    if (session.context_data && typeof session.context_data === 'object') {
-        const docIds = Array.isArray(session.context_data.doc_ids) ? session.context_data.doc_ids : [];
-        if (Array.isArray(docIds)) {
-            selectedDocuments = [...new Set(docIds.map(Number).filter(n => Number.isFinite(n)))];
-            renderContextDocs();
-        }
+    // Mantener doc_ids sincronizados desde el contexto
+    let contextDocIds = [];
+    if (Array.isArray(contextData)) {
+        contextDocIds = contextData;
+    } else if (contextData && typeof contextData === 'object') {
+        contextDocIds = Array.isArray(contextData.doc_ids) ? contextData.doc_ids : [];
+    }
+    if (Array.isArray(contextDocIds)) {
+        selectedDocuments = [...new Set(contextDocIds.map(Number).filter(n => Number.isFinite(n)))];
     }
 
-    // Precargar nombres si el backend los envía (opcional)
+    // Precargar nombres y estados si el backend los envía (opcional)
     if (Array.isArray(session.recent_documents)) {
-        session.recent_documents.forEach(d => {
-            if (d && d.id && d.name) {
-                documentNameById.set(Number(d.id), String(d.name));
-            }
-        });
-        renderContextDocs();
+        cacheDocuments(session.recent_documents);
     }
+
+    renderContextDocs();
 }
 
 /**
@@ -813,6 +835,7 @@ function addMessageToChat(message) {
     }
 
     scrollToBottom();
+    return newMessage;
 }
 
 /**
@@ -1622,10 +1645,11 @@ async function loadSelectedContext() {
                     const data = await resp.json();
                     if (data && data.success) {
                         const docs = Array.isArray(data.documents) ? data.documents : [];
-                        docs.forEach(d => { if (d && d.id && d.name) documentNameById.set(Number(d.id), String(d.name)); });
+                        cacheDocuments(docs);
                         // Añadir al contexto explícito
                         const ids = docs.map(d => Number(d.id)).filter(Boolean);
                         selectedDocuments = Array.from(new Set([...(selectedDocuments || []), ...ids]));
+                        renderContextDocs();
                         // Esperar hasta 20s a que terminen de procesar antes de fijar el contexto mixto
                         if (ids.length > 0) {
                             try {
@@ -1636,9 +1660,7 @@ async function loadSelectedContext() {
                                 });
                                 const waitData = await waitResp.json().catch(() => ({ success: false }));
                                 const finished = (waitData && waitData.success ? waitData.documents : docs) || [];
-                                finished.forEach(doc => {
-                                    if (doc && doc.id && doc.name) documentNameById.set(Number(doc.id), String(doc.name));
-                                });
+                                cacheDocuments(finished);
                             } catch (_) { /* ignore */ }
                         }
                     }
@@ -1692,8 +1714,10 @@ async function attachDriveDocsAndSetContext(driveIds) {
         }
         // Registrar nombres y doc_ids, y esperar procesamiento antes de fijar contexto
         const docs = Array.isArray(data.documents) ? data.documents : [];
+        cacheDocuments(docs);
         const ids = [];
-        docs.forEach(d => { if (d && d.id) { ids.push(Number(d.id)); if (d.name) documentNameById.set(Number(d.id), String(d.name)); } });
+        docs.forEach(d => { if (d && d.id) { ids.push(Number(d.id)); } });
+        renderContextDocs();
         if (ids.length > 0) {
             try {
                 // Esperar hasta 20s a que terminen (poll interno en backend)
@@ -1704,9 +1728,7 @@ async function attachDriveDocsAndSetContext(driveIds) {
                 });
                 const waitData = await waitResp.json().catch(() => ({ success: false }));
                 const finished = (waitData && waitData.success ? waitData.documents : docs) || [];
-                finished.forEach(doc => {
-                    if (doc && doc.id && doc.name) documentNameById.set(Number(doc.id), String(doc.name));
-                });
+                cacheDocuments(finished);
             } catch (_) { /* ignore */ }
         }
         selectedDocuments = Array.from(new Set([...(selectedDocuments || []), ...ids]));
@@ -2232,6 +2254,8 @@ async function uploadDocuments() {
                     // Refrescar sesiones y mensajes para reflejar actividad reciente
                     try { await loadChatSessions(); } catch (_) {}
                     try { await loadMessages(); } catch (_) {}
+            cacheDocuments(data.documents);
+            renderContextDocs();
                     // Refrescar sesiones y mensajes para reflejar actividad reciente
                     try { await loadChatSessions(); } catch (_) {}
                     try { await loadMessages(); } catch (_) {}
@@ -3098,107 +3122,239 @@ function setupDetailsTabs() {
 /**
  * Configurar zona de drop para archivos
  */
-function setupChatDropZone() {
-    const dropZone = document.getElementById('messages-container');
-    if (!dropZone) return;
-
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('drag-over');
-    });
-
-    dropZone.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('drag-over');
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('drag-over');
-
-        const files = Array.from(e.dataTransfer.files || []);
-        if (files.length > 0) {
-            uploadChatAttachments(files);
-        }
-    });
-}
-
-async function uploadChatAttachments(files) {
-    try {
-        // Verificar límites para usuarios FREE
-        if (!canPerformAction('upload_document')) {
-            showLimitExceededModal('document');
-            return;
-        }
-
-        // Filtrar tipos no permitidos
-        const validFiles = files.filter(isValidFile);
-        const rejected = files.filter(f => !isValidFile(f));
-        if (rejected.length) {
-            showNotification(`Se omitieron ${rejected.length} archivo(s) no permitidos. Tipos válidos: PDF, JPG/JPEG, PNG, XLSX, DOCX, PPTX.`, 'warning');
-        }
-        if (!validFiles.length) return;
-
-        const formData = new FormData();
-        validFiles.forEach(file => formData.append('files[]', file));
-
-        // Mantener la sesión actual (no crear otra)
-        if (currentSessionId) {
-            formData.append('session_id', String(currentSessionId));
-        }
-
-        // Mostrar mensajes de carga en el chat por cada archivo
+    const statusEntries = [];
         validFiles.forEach(file => {
-            addMessageToChat({
-                role: 'assistant',
-                content: `Cargando documento "${file.name}"…`,
-                created_at: new Date().toISOString(),
+            formData.append('files[]', file);
+            const statusRef = createUploadStatusMessage(file.name);
+            statusEntries.push({
+                originalName: file.name,
+                statusRef,
+                matched: false,
             });
         });
 
-        const response = await fetch('/api/ai-assistant/documents/upload', {
-            method: 'POST',
-            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
-            body: formData
-        });
+        const uploaded = Array.isArray(data.documents) ? data.documents : [];
+        cacheDocuments(uploaded);
 
-        const data = await response.json();
-        if (!data.success) {
-            throw new Error(data.message || 'No se pudo subir el archivo');
+        const entryById = new Map();
+        uploaded.forEach(doc => {
+            if (!doc) return;
+        const entry = matchStatusEntry(statusEntries, doc);
+        if (!entry) return;
+        entry.matched = true;
+
+        let numericId = null;
+        if (doc.id) {
+            numericId = Number(doc.id);
+            entryById.set(numericId, entry);
+            if (entry.statusRef) {
+                entry.statusRef.docId = numericId;
+            }
         }
 
-        showNotification('Archivo(s) subido(s), procesando…', 'success');
-    const uploaded = Array.isArray(data.documents) ? data.documents : [];
-        // Pre-cargar nombres
-        uploaded.forEach(d => { if (d && d.id && d.name) documentNameById.set(Number(d.id), String(d.name)); });
-        const docIds = uploaded.map(d => d && (d.id ?? d.document_id)).filter(Boolean);
-        // Esperar brevemente a que terminen de procesarse (si ya están listos, seguirá de inmediato)
-        if (docIds.length > 0) {
-            try {
-                    const waitResp = await fetch('/api/ai-assistant/documents/wait', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                    },
-                    body: JSON.stringify({ ids: docIds, timeout_ms: 8000 })
-                });
-                const waitData = await waitResp.json().catch(() => ({ success: false }));
-                const finishedDocs = (waitData && waitData.success ? waitData.documents : uploaded) || [];
-                finishedDocs.forEach(doc => {
-                    const status = doc.processing_status || 'processing';
-                    if (doc && doc.id && doc.name) documentNameById.set(Number(doc.id), String(doc.name));
-                    const name = (doc && doc.id && documentNameById.get(Number(doc.id))) || doc.name || 'Documento';
-                    if (status === 'completed') {
-                        addMessageToChat({
-                            role: 'assistant',
-                            content: `El documento "${name}" ya está cargado y listo para usar en esta conversación.`,
-                            created_at: new Date().toISOString(),
-                        });
-                        // Añadir a doc_ids del contexto y persistir en la sesión
-                        if (doc && doc.id) {
-                            addDocIdToSessionContext(Number(doc.id));
+        const state = (doc.processing_status === 'failed') ? 'failed' : (doc.processing_status === 'completed' ? 'completed' : 'processing');
+        if (entry.statusRef && numericId !== null) {
+            documentStatusMessages.set(numericId, entry.statusRef);
+            updateUploadStatusMessage(entry.statusRef, state, doc);
+        } else if (entry.statusRef) {
+            updateUploadStatusMessage(entry.statusRef, state, doc);
+        }
+
+        if (numericId !== null) {
+            if (state === 'completed') {
+                addDocIdToSessionContext(numericId);
+                removePendingDoc(numericId);
+                if (entry.statusRef) {
+                    documentStatusMessages.delete(numericId);
+                }
+            } else if (state === 'failed') {
+                removePendingDoc(numericId);
+                if (entry.statusRef) {
+                    documentStatusMessages.delete(numericId);
+                }
+            } else {
+                addPendingDoc(numericId);
+                if (entry.statusRef) {
+                    documentStatusMessages.set(numericId, entry.statusRef);
+                }
+            }
+        }
+        });
+
+        const docIds = uploaded.map(doc => doc && doc.id).filter(Boolean).map(Number);
+                const waitResp = await fetch('/api/ai-assistant/documents/wait', {
+                cacheDocuments(finishedDocs);
+
+                    if (!doc || !doc.id) return;
+                    const numericId = Number(doc.id);
+                    const entry = entryById.get(numericId) || matchStatusEntry(statusEntries, doc);
+                    if (!entry) return;
+
+                    const status = (doc.processing_status === 'failed') ? 'failed' : (doc.processing_status === 'completed' ? 'completed' : 'processing');
+                    if (entry.statusRef) {
+                        documentStatusMessages.set(numericId, entry.statusRef);
+                        updateUploadStatusMessage(entry.statusRef, status, doc);
+                    }
+
+                        addDocIdToSessionContext(numericId);
+                        removePendingDoc(numericId);
+                        if (entry.statusRef) {
+                            documentStatusMessages.delete(numericId);
+                        removePendingDoc(numericId);
+                        if (entry.statusRef) {
+                            documentStatusMessages.delete(numericId);
                         }
+                        addPendingDoc(numericId);
+                        if (entry.statusRef) {
+                            documentStatusMessages.set(numericId, entry.statusRef);
+                        }
+            } catch (_) { /* ignore */ }
+
+        renderContextDocs();
+        showNotification('Archivo(s) subido(s), procesando…', 'success');
+        await loadUserLimits();
+        const errorMessage = error?.message || 'Error al subir adjuntos';
+        showNotification(errorMessage, 'error');
+        statusEntries.forEach(entry => {
+            if (entry.statusRef) {
+                updateUploadStatusMessage(entry.statusRef, 'failed', null, errorMessage);
+            }
+        });
+        const doc = documentMetadataById.get(Number(id));
+        const name = (doc && (doc.name || doc.original_filename)) || documentNameById.get(Number(id));
+        const label = name ? `${escapeHtml(String(name))}` : `Doc #${id}`;
+        const status = doc ? String(doc.processing_status || '') : '';
+        const statusLabel = doc && doc.status_label ? escapeHtml(String(doc.status_label)) : '';
+        const stepLabel = doc && doc.step_label ? escapeHtml(String(doc.step_label)) : '';
+        const statusHtml = statusLabel ? `<span class="doc-status-text">${statusLabel}${stepLabel ? ` • ${stepLabel}` : ''}</span>` : '';
+
+        <span class="doc-chip ${status}" data-doc-id="${id}">
+            <span class="doc-chip-name">${label}</span>
+            ${statusHtml}
+function cacheDocuments(documents) {
+    if (!Array.isArray(documents)) return;
+    documents.forEach(doc => {
+        if (!doc || !doc.id) return;
+        const numericId = Number(doc.id);
+        const name = doc.name || doc.original_filename || `Documento ${numericId}`;
+        documentNameById.set(numericId, String(name));
+        documentMetadataById.set(numericId, doc);
+    });
+}
+
+function createUploadStatusMessage(fileName) {
+    const messageElement = addMessageToChat({
+        role: 'assistant',
+        content: '',
+        created_at: new Date().toISOString(),
+    });
+    if (!messageElement) return null;
+
+    const textElement = messageElement.querySelector('.message-text');
+    if (!textElement) return null;
+
+    const sanitizedName = escapeHtml(String(fileName || 'Documento'));
+    const statusMessage = {
+        element: messageElement,
+        textElement,
+        originalName: fileName,
+        safeName: sanitizedName,
+        quotedName: `&quot;${sanitizedName}&quot;`,
+    };
+
+    updateUploadStatusMessage(statusMessage, 'uploading');
+    return statusMessage;
+}
+
+function updateUploadStatusMessage(statusMessage, state, doc = null, customError = '') {
+    if (!statusMessage || !statusMessage.textElement) return;
+
+    const safeName = statusMessage.safeName || escapeHtml(String(statusMessage.originalName || 'Documento'));
+    const quotedName = statusMessage.quotedName || `&quot;${safeName}&quot;`;
+    let iconHtml = '<span class="inline-spinner"></span>';
+    let title = 'Procesando documento';
+    let description = `${quotedName}`;
+
+    switch (state) {
+        case 'uploading':
+        case 'pending':
+            title = 'Subiendo documento';
+            description = `${quotedName}…`;
+            break;
+        case 'processing': {
+            iconHtml = '<span class="inline-spinner"></span>';
+            const statusLabel = doc && doc.status_label ? escapeHtml(String(doc.status_label)) : 'Procesando documento';
+            const stepLabel = doc && doc.step_label ? escapeHtml(String(doc.step_label)) : '';
+            title = statusLabel;
+            description = stepLabel ? `${quotedName} • ${stepLabel}` : `${quotedName}`;
+            break;
+        }
+        case 'completed':
+            iconHtml = '✅';
+            title = 'Documento listo';
+            description = `${quotedName} ya está disponible.`;
+            break;
+        case 'failed': {
+            iconHtml = '⚠️';
+            title = 'Error al procesar';
+            const errorText = customError || (doc && doc.processing_error ? String(doc.processing_error) : 'No se pudo procesar el documento.');
+            description = `${quotedName} • ${escapeHtml(errorText)}`;
+            break;
+        }
+        default:
+            title = 'Procesando documento';
+            description = `${quotedName}`;
+    }
+
+    statusMessage.textElement.innerHTML = `
+        <div class="document-status-message ${state}">
+            <div class="status-icon">${iconHtml}</div>
+            <div class="status-body">
+                <div class="status-title">${title}</div>
+                <div class="status-description">${description}</div>
+            </div>
+        </div>
+    `;
+}
+
+function matchStatusEntry(entries, doc) {
+    if (!Array.isArray(entries) || !doc) return null;
+    const originalName = doc.original_filename || doc.name || null;
+    let fallback = null;
+    for (const entry of entries) {
+        if (entry.matched) continue;
+        if (!fallback && entry.statusRef) {
+            fallback = entry;
+        }
+        if (originalName && entry.originalName === originalName) {
+            return entry;
+        }
+    }
+    return fallback || entries.find(entry => !entry.matched) || null;
+}
+
+    let data = currentContext.data;
+    let docIds;
+
+    if (Array.isArray(data)) {
+        docIds = data.map(Number).filter(n => Number.isFinite(n));
+        data = { doc_ids: [...docIds] };
+    } else {
+        data = (data && typeof data === 'object') ? { ...data } : {};
+        docIds = Array.isArray(data.doc_ids) ? [...data.doc_ids] : [];
+    }
+
+    let data = currentContext.data;
+    let docIds;
+
+    if (Array.isArray(data)) {
+        docIds = data.map(Number).filter(n => Number.isFinite(n));
+        data = { doc_ids: [...docIds] };
+    } else {
+        data = (data && typeof data === 'object') ? { ...data } : {};
+        docIds = Array.isArray(data.doc_ids) ? [...data.doc_ids] : [];
+    }
+
                     } else if (status === 'failed') {
                         const hint = doc.processing_error ? ` Detalle: ${doc.processing_error}` : ' Sugerencia: si es un PDF escaneado, habilita OCR o sube una versión con texto seleccionable.';
                         addMessageToChat({
