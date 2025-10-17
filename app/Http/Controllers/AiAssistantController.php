@@ -2602,6 +2602,44 @@ class AiAssistantController extends Controller
                 $number = !empty($matches[2][$i]) ? (int) $matches[2][$i] : null;
 
                 if (strlen($name) >= 3) { // Evitar matches muy cortos
+                    // Si el texto capturado es puramente numérico (p.ej. "#14"),
+                    // tratarlo como un ID directo de reunión para abarcar tanto reuniones
+                    // temporales como legacy que no estaban en el contexto.
+                    if ($number === null && ctype_digit($name)) {
+                        $directId = (int) $name;
+                        if ($directId > 0) {
+                            $tempMeeting = $this->getTempMeetingIfAccessible($directId, $user);
+                            if ($tempMeeting) {
+                                $references[] = [
+                                    'type' => 'meeting',
+                                    'id' => $directId,
+                                    'source' => 'auto_detection',
+                                    'pattern' => 'hashtag_numeric_id',
+                                    'context_data' => [
+                                        'source' => 'transcriptions_temp',
+                                        'is_temporary' => true,
+                                    ],
+                                ];
+                                continue;
+                            }
+
+                            $meeting = $this->getMeetingIfAccessible($directId, [], $user);
+                            if ($meeting) {
+                                $references[] = [
+                                    'type' => 'meeting',
+                                    'id' => $directId,
+                                    'source' => 'auto_detection',
+                                    'pattern' => 'hashtag_numeric_id',
+                                    'context_data' => [
+                                        'source' => 'transcriptions_laravel',
+                                        'is_temporary' => false,
+                                    ],
+                                ];
+                                continue;
+                            }
+                        }
+                    }
+
                     $foundMeetings = $this->findMeetingsByNamePattern($name, $number, $user);
                     foreach ($foundMeetings as $meeting) {
                         $references[] = [
