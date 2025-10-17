@@ -9,6 +9,7 @@ use App\Models\AiMeetingDocument;
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 use App\Models\TranscriptionLaravel;
+use App\Models\TranscriptionTemp;
 use App\Models\SharedMeeting;
 use App\Models\User;
 use App\Models\Chat;
@@ -61,8 +62,8 @@ class AiAssistantController extends Controller
     private function hasPremiumAccess($user = null): bool
     {
         $user = $user ?: Auth::user();
-        $planCode = strtolower((string) ($user->plan_code ?? 'free'));
         $role = strtolower((string) ($user->roles ?? 'free'));
+        $planCode = $role; // En este sistema, el plan se determina por el rol
 
         $organizationId = session('organizationId');
         $hasOrganizationalRole = in_array($role, ['admin', 'superadmin', 'founder', 'developer'], true);
@@ -162,8 +163,8 @@ class AiAssistantController extends Controller
     {
         $user = $user ?: Auth::user();
 
-        $planCode = strtolower((string) ($user->plan_code ?? 'free'));
         $role = strtolower((string) ($user->roles ?? 'free'));
+        $planCode = $role; // En este sistema, el plan se determina por el rol
 
         $dailyMessages = $this->getDailyMessageCount($user);
         $dailyDocuments = $this->getDailyDocumentCount($user);
@@ -243,7 +244,7 @@ class AiAssistantController extends Controller
 
         return response()->json(array_merge([
             'success' => true,
-            'user_plan' => $limits['planCode'] ?? ($user->plan_code ?? 'free'),
+            'user_plan' => $limits['planCode'] ?? ($user->roles ?? 'free'),
         ], $limits, [
             'limits' => $limits,
         ]));
@@ -612,10 +613,23 @@ class AiAssistantController extends Controller
     public function preloadMeeting(Request $request, int $meetingId): JsonResponse
     {
         $user = Auth::user();
+        $source = $request->input('source', 'transcriptions_laravel');
 
-        // Cargar reunión; preferimos por username del solicitante, pero el flujo de tryDownloadJuContent
-        // intentará usar distintos credenciales si aplica (org token, service account, owner token, etc.).
-        $meeting = TranscriptionLaravel::where('id', $meetingId)->first();
+        $meeting = null;
+        $isTemporary = false;
+
+        // Determinar el tipo de reunión según el source
+        if ($source === 'transcriptions_temp') {
+            $meeting = TranscriptionTemp::where('id', $meetingId)
+                ->where('user_id', $user->id)
+                ->notExpired()
+                ->first();
+            $isTemporary = true;
+        } else {
+            // Para transcriptions_laravel, shared, container
+            $meeting = TranscriptionLaravel::where('id', $meetingId)->first();
+        }
+
         if (! $meeting) {
             return response()->json([
                 'success' => false,
@@ -627,18 +641,25 @@ class AiAssistantController extends Controller
         $error = null;
 
         try {
-            // Descargar + parsear y cachear permanentemente el .ju
-            $content = $this->tryDownloadJuContent($meeting);
-            if ((!$content || $content === '') && empty($meeting->transcript_drive_id)) {
-                // Intentar localizar .ju por contenedores relacionados
-                $containers = $meeting->containers()->with(['group', 'group.organization'])->get();
-                foreach ($containers as $container) {
-                    $found = $this->locateJuForMeeting($meeting, $container);
-                    if ($found) {
-                        $meeting->transcript_drive_id = $found;
-                        $meeting->save();
-                        $content = $this->tryDownloadJuContent($meeting);
-                        break;
+            $content = null;
+
+            if ($isTemporary) {
+                // Para reuniones temporales, obtener contenido del archivo .ju local
+                $content = $this->getTempMeetingContent($meeting);
+            } else {
+                // Descargar + parsear y cachear permanentemente el .ju
+                $content = $this->tryDownloadJuContent($meeting);
+                if ((!$content || $content === '') && empty($meeting->transcript_drive_id)) {
+                    // Intentar localizar .ju por contenedores relacionados
+                    $containers = $meeting->containers()->with(['group', 'group.organization'])->get();
+                    foreach ($containers as $container) {
+                        $found = $this->locateJuForMeeting($meeting, $container);
+                        if ($found) {
+                            $meeting->transcript_drive_id = $found;
+                            $meeting->save();
+                            $content = $this->tryDownloadJuContent($meeting);
+                            break;
+                        }
                     }
                 }
             }
@@ -901,9 +922,9 @@ class AiAssistantController extends Controller
     {
         $user = Auth::user();
 
-        // Verificar límites para usuarios FREE
-        $limits = $this->checkFreePlanLimits($user);
-        if (!$limits['allowed'] && !$limits['can_send_message']) {
+        // Verificar límites para usuarios
+        $limits = $this->resolvePlanLimits($user);
+        if (!$limits['allowed'] && !$limits['canSendMessage']) {
             return response()->json([
                 'success' => false,
                 'error' => 'limit_exceeded',
@@ -1251,9 +1272,9 @@ class AiAssistantController extends Controller
     {
         $user = Auth::user();
 
-        // Verificar límites para usuarios FREE
-        $limits = $this->checkFreePlanLimits($user);
-        if (!$limits['allowed'] && !$limits['can_send_message']) {
+        // Verificar límites para usuarios
+        $limits = $this->resolvePlanLimits($user);
+        if (!$limits['allowed'] && !$limits['canSendMessage']) {
             return response()->json([
                 'success' => false,
                 'error' => 'limit_exceeded',
@@ -1351,6 +1372,73 @@ class AiAssistantController extends Controller
                 // Guardar menciones en el mensaje del usuario para que el frontend pueda mostrarlas
                 $userMessage->metadata = array_merge($userMessage->metadata ?? [], [ 'mentions' => $mentions ]);
                 $userMessage->save();
+
+                // NUEVA FUNCIONALIDAD: Precargar automáticamente el contenido de reuniones y contenedores mencionados
+                foreach ($mentions as $mention) {
+                    if (!is_array($mention)) continue;
+                    $type = $mention['type'] ?? null;
+                    $id = $mention['id'] ?? null;
+                    if (!$type || $id === null) continue;
+
+                    try {
+                        if ($type === 'meeting') {
+                            // Determinar si es reunión temporal o normal
+                            $isTemporary = false;
+                            $meeting = null;
+
+                            // Primero intentar como reunión temporal
+                            try {
+                                if (\Illuminate\Support\Facades\Schema::hasTable('transcriptions_temp')) {
+                                    $tempMeeting = \App\Models\TranscriptionTemp::where('id', $id)
+                                        ->where('user_id', $user->id)
+                                        ->notExpired()
+                                        ->first();
+                                    if ($tempMeeting) {
+                                        $meeting = $tempMeeting;
+                                        $isTemporary = true;
+                                    }
+                                }
+                            } catch (\Throwable $e) { /* ignore */ }
+
+                            // Si no es temporal, intentar como reunión normal
+                            if (!$meeting) {
+                                $meeting = \App\Models\TranscriptionLaravel::where('id', $id)->first();
+                                $isTemporary = false;
+                            }
+
+                            if ($meeting) {
+                                \Log::info('Precargando contenido de reunión mencionada', [
+                                    'meeting_id' => $id,
+                                    'is_temporary' => $isTemporary,
+                                    'title' => $mention['title'] ?? 'Sin título'
+                                ]);
+                                $this->ensureMeetingContentLoaded($meeting, $isTemporary);
+                            }
+
+                        } elseif ($type === 'container') {
+                            // Precargar contenido del contenedor
+                            $container = \App\Models\MeetingContentContainer::where('id', $id)
+                                ->where('is_active', true)
+                                ->with(['meetings'])
+                                ->first();
+
+                            if ($container) {
+                                \Log::info('Precargando contenido de contenedor mencionado', [
+                                    'container_id' => $id,
+                                    'title' => $mention['title'] ?? 'Sin título',
+                                    'meetings_count' => $container->meetings->count()
+                                ]);
+                                $this->preloadContainerMeetingsContent($container);
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        \Log::warning('Error al precargar contenido mencionado', [
+                            'type' => $type,
+                            'id' => $id,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
             } catch (\Throwable $e) {
                 Log::warning('No se pudieron aplicar menciones al contexto', [
                     'session_id' => $session->id,
@@ -1482,6 +1570,57 @@ class AiAssistantController extends Controller
                 ];
             });
 
+        // Reuniones temporales
+        $temp = collect();
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('transcriptions_temp')) {
+                $temp = TranscriptionTemp::where('user_id', $user->id)
+                    ->notExpired()
+                    ->orderByDesc('created_at')
+                    ->get()
+                    ->map(function (TranscriptionTemp $meeting) {
+                        // Obtener contenido para determinar capacidades
+                        $content = $this->getTempMeetingContent($meeting);
+                        $hasTranscription = false;
+                        $hasTasks = false;
+                        $taskCount = 0;
+
+                        if ($content) {
+                            $data = json_decode($content, true);
+                            if ($data) {
+                                $hasTranscription = !empty($data['transcription']);
+                                $hasTasks = !empty($data['tasks']) && is_array($data['tasks']);
+                                $taskCount = $hasTasks ? count($data['tasks']) : 0;
+                            }
+                        }
+
+                        return [
+                            'id' => $meeting->id,
+                            'meeting_name' => $meeting->title,
+                            'title' => $meeting->title . ' (Temporal)',
+                            'source' => 'transcriptions_temp',
+                            'is_legacy' => false,
+                            'is_shared' => false,
+                            'shared_by' => null,
+                            'is_temporary' => true,
+                            'expires_at' => optional($meeting->expires_at)->toIso8601String(),
+                            'created_at' => optional($meeting->created_at)->toIso8601String(),
+                            'updated_at' => optional($meeting->updated_at)->toIso8601String(),
+                            'has_transcription' => $hasTranscription,
+                            'has_tasks' => $hasTasks,
+                            'task_count' => $taskCount,
+                            'has_audio' => !empty($meeting->audio_path),
+                            'transcript_drive_id' => null,
+                            'transcript_download_url' => null,
+                            'audio_drive_id' => null,
+                            'audio_download_url' => null,
+                        ];
+                    });
+            }
+        } catch (\Throwable $e) {
+            // Ignorar si la tabla no existe
+        }
+
         // Reuniones compartidas contigo (aceptadas)
         $shared = collect();
         try {
@@ -1586,11 +1725,12 @@ class AiAssistantController extends Controller
             // Ignorar si las tablas/relaciones no existen
         }
 
-        // Unir propias + compartidas, eliminar duplicados por id priorizando propias
+        // Unir propias + temporales + compartidas + contenedores
         $byId = [];
-        foreach ($own as $item) { $byId[$item['id']] = $item; }
-        foreach ($shared as $item) { if (!isset($byId[$item['id']])) { $byId[$item['id']] = $item; } }
-        foreach ($containerMeetings as $item) { if (!isset($byId[$item['id']])) { $byId[$item['id']] = $item; } }
+        foreach ($own as $item) { $byId[$item['source'] . '_' . $item['id']] = $item; }
+        foreach ($temp as $item) { $byId[$item['source'] . '_' . $item['id']] = $item; }
+        foreach ($shared as $item) { $key = $item['source'] . '_' . $item['id']; if (!isset($byId[$key])) { $byId[$key] = $item; } }
+        foreach ($containerMeetings as $item) { $key = $item['source'] . '_' . $item['id']; if (!isset($byId[$key])) { $byId[$key] = $item; } }
         $meetings = collect(array_values($byId))
             ->sortByDesc(function($m) { return $m['created_at'] ?? null; })
             ->values();
@@ -1645,9 +1785,9 @@ class AiAssistantController extends Controller
     {
         $user = Auth::user();
 
-        // Verificar límites para usuarios FREE
-        $limits = $this->checkFreePlanLimits($user);
-        if (!$limits['allowed'] && !$limits['can_upload_document']) {
+        // Verificar límites para usuarios
+        $limits = $this->resolvePlanLimits($user);
+        if (!$limits['allowed'] && !$limits['canUploadDocument']) {
             return response()->json([
                 'success' => false,
                 'error' => 'limit_exceeded',
@@ -2209,6 +2349,32 @@ class AiAssistantController extends Controller
             Log::info('gatherContext: menciones ignoradas por error', [ 'error' => $e->getMessage() ]);
         }
 
+        // NUEVA FUNCIONALIDAD: Detección automática de referencias a reuniones específicas
+        // Buscar patrones como "#Kualifin #1", "reunión 14", "Kualifin Nuevo cliente", etc.
+        try {
+            $detectedReferences = $this->detectMeetingReferencesInQuery($query, $session);
+            if (!empty($detectedReferences)) {
+                foreach ($detectedReferences as $ref) {
+                    try {
+                        if ($ref['type'] === 'meeting') {
+                            $meetingSession = $this->createVirtualSession($session, 'meeting', $ref['id'], null, $ref['context_data'] ?? []);
+                            $additional = array_merge($additional, $this->buildMeetingContextFragments($meetingSession, $query));
+                        } elseif ($ref['type'] === 'container') {
+                            $containerSession = $this->createVirtualSession($session, 'container', $ref['id']);
+                            $additional = array_merge($additional, $this->buildContainerContextFragments($containerSession, $query));
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('Error procesando referencia detectada automáticamente', [
+                            'reference' => $ref,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::info('gatherContext: detección automática ignorada por error', ['error' => $e->getMessage()]);
+        }
+
         // Añadir fragmentos de documentos si el usuario se refiere a "imagen", "pdf", "documento", etc.
         try {
             [$requestedTypes, $isGenericDocs] = $this->detectDocumentTypesFromQuery($query);
@@ -2226,6 +2392,314 @@ class AiAssistantController extends Controller
         }
 
         return array_values(array_merge($contextFragments, $additional));
+    }
+
+    /**
+     * Detectar referencias automáticas a reuniones en el texto del usuario
+     * Soporta patrones como:
+     * - "#Kualifin #1" o "#Kualifin Nuevo cliente"
+     * - "reunión 14" o "reunion 14"
+     * - "Kualifin Nuevo cliente"
+     * - "meeting 14"
+     * - Nombres exactos de reuniones
+     */
+    private function detectMeetingReferencesInQuery(string $query, AiChatSession $session): array
+    {
+        $user = Auth::user();
+        $references = [];
+        $qLower = Str::lower($query);
+
+        // Patrón 1: Referencias numéricas directas como "reunión 14", "meeting 14"
+        if (preg_match_all('/(?:reuni[oó]n|meeting|reunion)\s*#?(\d+)/ui', $query, $matches)) {
+            foreach ($matches[1] as $meetingId) {
+                $id = (int) $meetingId;
+                if ($id > 0) {
+                    // Verificar si existe como reunión temporal
+                    $tempMeeting = $this->getTempMeetingIfAccessible($id, $user);
+                    if ($tempMeeting) {
+                        $references[] = [
+                            'type' => 'meeting',
+                            'id' => $id,
+                            'source' => 'auto_detection',
+                            'pattern' => 'numeric_reference',
+                            'context_data' => [
+                                'source' => 'transcriptions_temp',
+                                'is_temporary' => true
+                            ]
+                        ];
+                        continue;
+                    }
+
+                    // Si no es temporal, verificar reunión normal
+                    $meeting = $this->getMeetingIfAccessible($id, [], $user);
+                    if ($meeting) {
+                        $references[] = [
+                            'type' => 'meeting',
+                            'id' => $id,
+                            'source' => 'auto_detection',
+                            'pattern' => 'numeric_reference',
+                            'context_data' => [
+                                'source' => 'transcriptions_laravel',
+                                'is_temporary' => false
+                            ]
+                        ];
+                    }
+                }
+            }
+        }
+
+        // Patrón 2: Referencias con hashtag como "#Kualifin #1" o "#Kualifin Nuevo cliente"
+        if (preg_match_all('/#([^#\s]+(?:\s+[^#\s]+)*?)(?:\s*#(\d+))?/ui', $query, $matches)) {
+            for ($i = 0; $i < count($matches[0]); $i++) {
+                $name = trim($matches[1][$i]);
+                $number = !empty($matches[2][$i]) ? (int) $matches[2][$i] : null;
+
+                if (strlen($name) >= 3) { // Evitar matches muy cortos
+                    $foundMeetings = $this->findMeetingsByNamePattern($name, $number, $user);
+                    foreach ($foundMeetings as $meeting) {
+                        $references[] = [
+                            'type' => 'meeting',
+                            'id' => $meeting['id'],
+                            'source' => 'auto_detection',
+                            'pattern' => 'hashtag_reference',
+                            'context_data' => $meeting['context_data']
+                        ];
+                    }
+                }
+            }
+        }
+
+        // Patrón 2b: Referencias con hashtag en corchetes como "[#Planeacion APP Networking #1]"
+        if (preg_match_all('/\[#([^\]]+)\]/ui', $query, $matches)) {
+            foreach ($matches[1] as $fullName) {
+                $fullName = trim($fullName);
+                if (strlen($fullName) >= 3) {
+                    // Buscar exactamente por el nombre completo primero
+                    $foundMeetings = $this->findMeetingsByExactName($fullName, $user);
+
+                    // Si no encuentra por nombre exacto, intentar con patrón flexible
+                    if (empty($foundMeetings)) {
+                        $foundMeetings = $this->findMeetingsByNamePattern($fullName, null, $user);
+                    }
+
+                    foreach ($foundMeetings as $meeting) {
+                        // Evitar duplicados
+                        $exists = false;
+                        foreach ($references as $existing) {
+                            if ($existing['type'] === 'meeting' && $existing['id'] === $meeting['id']) {
+                                $exists = true;
+                                break;
+                            }
+                        }
+
+                        if (!$exists) {
+                            $references[] = [
+                                'type' => 'meeting',
+                                'id' => $meeting['id'],
+                                'source' => 'auto_detection',
+                                'pattern' => 'bracketed_hashtag_reference',
+                                'context_data' => $meeting['context_data']
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+
+        // Patrón 3: Nombres de reuniones sin hashtag (búsqueda por similitud)
+        $words = preg_split('/\s+/', $qLower);
+        $potentialNames = [];
+
+        // Buscar secuencias de palabras que podrían ser nombres de reuniones
+        for ($i = 0; $i < count($words); $i++) {
+            for ($len = 2; $len <= min(5, count($words) - $i); $len++) {
+                $phrase = implode(' ', array_slice($words, $i, $len));
+                if (strlen($phrase) >= 6) { // Mínimo 6 caracteres
+                    $potentialNames[] = $phrase;
+                }
+            }
+        }
+
+        foreach ($potentialNames as $phrase) {
+            $foundMeetings = $this->findMeetingsByNamePattern($phrase, null, $user, true);
+            foreach ($foundMeetings as $meeting) {
+                // Evitar duplicados
+                $exists = false;
+                foreach ($references as $existing) {
+                    if ($existing['type'] === 'meeting' && $existing['id'] === $meeting['id']) {
+                        $exists = true;
+                        break;
+                    }
+                }
+                if (!$exists) {
+                    $references[] = [
+                        'type' => 'meeting',
+                        'id' => $meeting['id'],
+                        'source' => 'auto_detection',
+                        'pattern' => 'name_similarity',
+                        'context_data' => $meeting['context_data']
+                    ];
+                }
+            }
+        }
+
+        return array_slice($references, 0, 5); // Limitar a 5 referencias para evitar sobrecarga
+    }
+
+    /**
+     * Buscar reuniones por nombre exacto
+     */
+    private function findMeetingsByExactName(string $exactName, $user): array
+    {
+        $results = [];
+        $exactName = trim($exactName);
+
+        if (strlen($exactName) < 3) {
+            return $results;
+        }
+
+        // Buscar en reuniones Laravel (Drive) - busqueda exacta
+        try {
+            $laravelMeetings = TranscriptionLaravel::where('meeting_name', $exactName)
+                ->where('username', $user->username)
+                ->get();
+
+            foreach ($laravelMeetings as $meeting) {
+                $results[] = [
+                    'id' => $meeting->id,
+                    'name' => $meeting->meeting_name,
+                    'source' => 'transcriptions_laravel',
+                    'context_data' => [
+                        'source' => 'transcriptions_laravel',
+                        'is_temporary' => false
+                    ]
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::warning('Error buscando reuniones Laravel por nombre exacto', ['error' => $e->getMessage()]);
+        }
+
+        // Buscar en reuniones temporales - busqueda exacta
+        try {
+            $tempMeetings = TranscriptionTemp::where('title', $exactName)
+                ->where('user_id', $user->id)
+                ->get();
+
+            foreach ($tempMeetings as $meeting) {
+                $results[] = [
+                    'id' => $meeting->id,
+                    'name' => $meeting->title,
+                    'source' => 'transcriptions_temp',
+                    'context_data' => [
+                        'source' => 'transcriptions_temp',
+                        'is_temporary' => true
+                    ]
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::warning('Error buscando reuniones temp por nombre exacto', ['error' => $e->getMessage()]);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Buscar reuniones por patrón de nombre
+     */
+    private function findMeetingsByNamePattern(string $pattern, ?int $number, $user, bool $fuzzyMatch = false): array
+    {
+        $results = [];
+        $pattern = trim($pattern);
+
+        if (strlen($pattern) < 3) {
+            return $results;
+        }
+
+        // Buscar en reuniones temporales
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('transcriptions_temp')) {
+                $tempQuery = \App\Models\TranscriptionTemp::where('user_id', $user->id)
+                    ->notExpired();
+
+                if ($number) {
+                    $tempQuery->where('id', $number);
+                } else {
+                    if ($fuzzyMatch) {
+                        $tempQuery->where('title', 'LIKE', '%' . $pattern . '%');
+                    } else {
+                        $tempQuery->where('title', 'LIKE', $pattern . '%');
+                    }
+                }
+
+                $tempMeetings = $tempQuery->get();
+                foreach ($tempMeetings as $meeting) {
+                    $results[] = [
+                        'id' => $meeting->id,
+                        'title' => $meeting->title,
+                        'context_data' => [
+                            'source' => 'transcriptions_temp',
+                            'is_temporary' => true
+                        ]
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Error buscando reuniones temporales por patrón', ['error' => $e->getMessage()]);
+        }
+
+        // Buscar en reuniones normales
+        try {
+            $query = \App\Models\TranscriptionLaravel::query();
+
+            if ($number) {
+                $query->where('id', $number);
+            } else {
+                if ($fuzzyMatch) {
+                    $query->where('meeting_name', 'LIKE', '%' . $pattern . '%');
+                } else {
+                    $query->where('meeting_name', 'LIKE', $pattern . '%');
+                }
+            }
+
+            $meetings = $query->limit(10)->get();
+            foreach ($meetings as $meeting) {
+                // Verificar acceso básico
+                if ($this->getMeetingIfAccessible($meeting->id, [], $user)) {
+                    $results[] = [
+                        'id' => $meeting->id,
+                        'title' => $meeting->meeting_name,
+                        'context_data' => [
+                            'source' => 'transcriptions_laravel',
+                            'is_temporary' => false
+                        ]
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Error buscando reuniones normales por patrón', ['error' => $e->getMessage()]);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Crear una sesión virtual para construir contexto
+     */
+    private function createVirtualSession(AiChatSession $baseSession, string $contextType, ?int $contextId, ?array $docIds = null, array $extraContextData = []): AiChatSession
+    {
+        $virtual = new AiChatSession();
+        $virtual->id = $baseSession->id;
+        $virtual->username = $baseSession->username;
+        $virtual->context_type = $contextType;
+        $virtual->context_id = $contextId;
+
+        $contextData = array_merge([
+            'doc_ids' => $docIds ?? []
+        ], $extraContextData);
+
+        $virtual->context_data = $contextData;
+
+        return $virtual;
     }
 
     /**
@@ -2369,20 +2843,6 @@ class AiAssistantController extends Controller
         return $fragments;
     }
 
-    private function createVirtualSession(AiChatSession $base, string $type, $contextId = null, $contextData = []): AiChatSession
-    {
-        $virtual = AiChatSession::make([
-            'username' => $base->username,
-            'context_type' => $type,
-            'context_id' => $contextId,
-            'context_data' => $contextData,
-        ]);
-
-        $virtual->id = $base->id;
-
-        return $virtual;
-    }
-
     private function buildContainerContextFragments(AiChatSession $session, string $query = ''): array
     {
         $fragments = [];
@@ -2414,11 +2874,16 @@ class AiAssistantController extends Controller
                     return [];
                 }
 
+                // Precargar el contenido de todas las reuniones del contenedor
+                $preloadResults = $this->preloadContainerMeetingsContent($container);
+
                 $fragments[] = [
                     'text' => sprintf(
-                        'Contenedor "%s" con %d reuniones registradas.',
+                        'Contenedor "%s" con %d reuniones registradas. Contenido precargado: %d exitosas, %d fallidas.',
                         $container->name,
-                        (int)($container->meetings_count ?? $container->meetings()->count())
+                        (int)($container->meetings_count ?? $container->meetings()->count()),
+                        $preloadResults['preloaded'],
+                        $preloadResults['failed']
                     ),
                     'source_id' => 'container:' . $container->id,
                     'content_type' => 'container_overview',
@@ -2887,111 +3352,128 @@ class AiAssistantController extends Controller
         if (! $session->context_id) {
             return [];
         }
-        // Intentar construir contexto SIN depender de tablas transcriptions/key_points
-        $loadKeyPoints = Schema::hasTable('key_points');
-
-        $withRelations = [];
-        if ($loadKeyPoints) {
-            $withRelations['keyPoints'] = fn ($relation) => $relation->ordered()->limit(5);
-        }
 
         $user = Auth::user();
-
         if (! $user) {
             return [];
         }
 
-        $meeting = $this->getMeetingIfAccessible((int) $session->context_id, $withRelations, $user);
-
         $fragments = [];
 
-        if ($meeting) {
-            if (! $loadKeyPoints && ! $meeting->relationLoaded('keyPoints')) {
-                $meeting->setRelation('keyPoints', collect());
+        // Verificar si es una reunión temporal basándose en context_data
+        $contextData = is_array($session->context_data) ? $session->context_data : [];
+        $isTemporary = ($contextData['source'] ?? '') === 'transcriptions_temp' ||
+                      ($contextData['is_temporary'] ?? false);
+
+        if ($isTemporary) {
+            // Manejar reunión temporal
+            $tempMeeting = $this->getTempMeetingIfAccessible((int) $session->context_id, $user);
+
+            if ($tempMeeting) {
+                // Asegurar que el contenido esté precargado
+                $this->ensureMeetingContentLoaded($tempMeeting, true);
+
+                $tempFragments = $this->buildFragmentsFromTempMeeting($tempMeeting, $query);
+                $fragments = array_merge($fragments, $tempFragments);
+            }
+        } else {
+            // Manejar reunión normal (código existente)
+            $loadKeyPoints = Schema::hasTable('key_points');
+
+            $withRelations = [];
+            if ($loadKeyPoints) {
+                $withRelations['keyPoints'] = fn ($relation) => $relation->ordered()->limit(5);
             }
 
-            // 1) Prefer .ju file content to avoid DB transcriptions dependency
-            $juFragments = $this->buildFragmentsFromJu($meeting, $query);
-            if (!empty($juFragments)) {
-                $fragments = array_merge($fragments, $juFragments);
-            }
+            $meeting = $this->getMeetingIfAccessible((int) $session->context_id, $withRelations, $user);
 
-            // 2) Add key points if available (table exists)
-            foreach ($meeting->keyPoints as $index => $point) {
-                $fragments[] = [
-                    'text' => $point->point_text,
-                    'source_id' => 'meeting:' . $meeting->id . ':keypoint:' . $point->id,
-                    'content_type' => 'meeting_key_point',
-                    'location' => $this->buildLegacyMeetingLocation($meeting, [
-                        'section' => 'key_point',
-                        'order' => $point->order_num,
-                        'point_id' => $point->id,
-                    ]),
-                    'similarity' => null,
-                    'citation' => 'meeting:' . $meeting->id . ' punto ' . ($index + 1),
-                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
-                        'key_point' => true,
-                        'order' => $point->order_num,
-                        'point_id' => $point->id,
-                    ]),
-                ];
-            }
+            if ($meeting) {
+                // Asegurar que el contenido esté precargado
+                $this->ensureMeetingContentLoaded($meeting, false);
 
-            // 3) Include meeting tasks from tasks_laravel
-            try {
-                // Todas las tareas de la reunión, no solo las del usuario
-                $tasks = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
-                    ->orderByDesc('updated_at')
-                    ->limit(30)
-                    ->get();
-                foreach ($tasks as $t) {
-                    $desc = $t->descripcion ? ("\n" . trim((string)$t->descripcion)) : '';
-                    $metaBits = [];
-                    if ($t->prioridad) { $metaBits[] = 'prioridad ' . $t->prioridad; }
-                    if ($t->fecha_inicio) { $metaBits[] = 'inicio ' . $t->fecha_inicio; }
-                    if ($t->fecha_limite) { $metaBits[] = 'vence ' . $t->fecha_limite; }
-                    if ($t->hora_limite) { $metaBits[] = 'hora ' . $t->hora_limite; }
-                    if ($t->asignado) { $metaBits[] = 'asignado a ' . $t->asignado; }
-                    $metaTxt = empty($metaBits) ? '' : (' (' . implode('; ', $metaBits) . ')');
+                if (! $loadKeyPoints && ! $meeting->relationLoaded('keyPoints')) {
+                    $meeting->setRelation('keyPoints', collect());
+                }
+
+                // 1) Prefer .ju file content to avoid DB transcriptions dependency
+                $juFragments = $this->buildFragmentsFromJu($meeting, $query);
+                if (!empty($juFragments)) {
+                    $fragments = array_merge($fragments, $juFragments);
+                }
+
+                // 2) Add key points if available (table exists)
+                foreach ($meeting->keyPoints as $index => $point) {
                     $fragments[] = [
-                        'text' => '- ' . trim((string)$t->tarea) . $metaTxt . $desc,
-                        'source_id' => 'meeting:' . $meeting->id . ':task:' . $t->id,
-                        'content_type' => 'meeting_task',
-                        'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'tasks', 'task_id' => $t->id]),
+                        'text' => $point->point_text,
+                        'source_id' => 'meeting:' . $meeting->id . ':keypoint:' . $point->id,
+                        'content_type' => 'meeting_key_point',
+                        'location' => $this->buildLegacyMeetingLocation($meeting, [
+                            'section' => 'key_point',
+                            'order' => $point->order_num,
+                            'point_id' => $point->id,
+                        ]),
                         'similarity' => null,
-                        'citation' => 'task:' . $t->id,
-                        'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['task_id' => $t->id]),
+                        'citation' => 'meeting:' . $meeting->id . ' punto ' . ($index + 1),
+                        'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                            'key_point' => true,
+                            'order' => $point->order_num,
+                            'point_id' => $point->id,
+                        ]),
                     ];
                 }
-            } catch (\Throwable $e) { /* ignore tasks inclusion */ }
 
-            return $fragments;
-        }
+                // 3) Include meeting tasks from tasks_laravel
+                try {
+                    // Todas las tareas de la reunión, no solo las del usuario
+                    $tasks = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
+                        ->orderByDesc('updated_at')
+                        ->limit(30)
+                        ->get();
+                    foreach ($tasks as $t) {
+                        $desc = $t->descripcion ? ("\n" . trim((string)$t->descripcion)) : '';
+                        $metaBits = [];
+                        if ($t->prioridad) { $metaBits[] = 'prioridad ' . $t->prioridad; }
+                        if ($t->fecha_inicio) { $metaBits[] = 'inicio ' . $t->fecha_inicio; }
+                        if ($t->fecha_limite) { $metaBits[] = 'vence ' . $t->fecha_limite; }
+                        if ($t->hora_limite) { $metaBits[] = 'hora ' . $t->hora_limite; }
+                        if ($t->asignado) { $metaBits[] = 'asignado a ' . $t->asignado; }
+                        $metaTxt = empty($metaBits) ? '' : (' (' . implode('; ', $metaBits) . ')');
+                        $fragments[] = [
+                            'text' => '- ' . trim((string)$t->tarea) . $metaTxt . $desc,
+                            'source_id' => 'meeting:' . $meeting->id . ':task:' . $t->id,
+                            'content_type' => 'meeting_task',
+                            'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'tasks', 'task_id' => $t->id]),
+                            'similarity' => null,
+                            'citation' => 'task:' . $t->id,
+                            'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['task_id' => $t->id]),
+                        ];
+                    }
+                } catch (\Throwable $e) { /* ignore tasks inclusion */ }
 
-        $legacy = $this->getMeetingIfAccessible((int) $session->context_id, [], $user);
-        if ($legacy) {
-            if (! empty($legacy->transcript_download_url)) {
-                $fragments[] = [
-                    'text' => sprintf('Transcripción disponible en: %s', $legacy->transcript_download_url),
-                    'source_id' => 'meeting:' . $legacy->id . ':transcript',
-                    'content_type' => 'meeting_transcript_link',
-                    'location' => $this->buildLegacyMeetingLocation($legacy, ['section' => 'transcript_link']),
-                    'similarity' => null,
-                    'citation' => 'meeting:' . $legacy->id . ' transcript',
-                    'metadata' => $this->buildLegacyMeetingMetadata($legacy, ['resource' => 'transcript']),
-                ];
-            }
+                // 4) Add legacy links if available
+                if (! empty($meeting->transcript_download_url)) {
+                    $fragments[] = [
+                        'text' => sprintf('Transcripción disponible en: %s', $meeting->transcript_download_url),
+                        'source_id' => 'meeting:' . $meeting->id . ':transcript',
+                        'content_type' => 'meeting_transcript_link',
+                        'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'transcript_link']),
+                        'similarity' => null,
+                        'citation' => 'meeting:' . $meeting->id . ' transcript',
+                        'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['resource' => 'transcript']),
+                    ];
+                }
 
-            if (! empty($legacy->audio_download_url)) {
-                $fragments[] = [
-                    'text' => sprintf('Audio disponible en: %s', $legacy->audio_download_url),
-                    'source_id' => 'meeting:' . $legacy->id . ':audio',
-                    'content_type' => 'meeting_audio_link',
-                    'location' => $this->buildLegacyMeetingLocation($legacy, ['section' => 'audio_link']),
-                    'similarity' => null,
-                    'citation' => 'meeting:' . $legacy->id . ' audio',
-                    'metadata' => $this->buildLegacyMeetingMetadata($legacy, ['resource' => 'audio']),
-                ];
+                if (! empty($meeting->audio_download_url)) {
+                    $fragments[] = [
+                        'text' => sprintf('Audio disponible en: %s', $meeting->audio_download_url),
+                        'source_id' => 'meeting:' . $meeting->id . ':audio',
+                        'content_type' => 'meeting_audio_link',
+                        'location' => $this->buildLegacyMeetingLocation($meeting, ['section' => 'audio_link']),
+                        'similarity' => null,
+                        'citation' => 'meeting:' . $meeting->id . ' audio',
+                        'metadata' => $this->buildLegacyMeetingMetadata($meeting, ['resource' => 'audio']),
+                    ];
+                }
             }
         }
 
@@ -3013,6 +3495,156 @@ class AiAssistantController extends Controller
         }
 
         return $this->userCanAccessMeeting($meeting, $user) ? $meeting : null;
+    }
+
+    private function getTempMeetingIfAccessible(int $meetingId, User $user): ?TranscriptionTemp
+    {
+        $meeting = TranscriptionTemp::where('id', $meetingId)
+            ->where('user_id', $user->id)
+            ->notExpired()
+            ->first();
+
+        return $meeting;
+    }
+
+    /**
+     * Construye fragmentos a partir del contenido de una reunión temporal
+     */
+    private function buildFragmentsFromTempMeeting(TranscriptionTemp $meeting, string $query): array
+    {
+        $fragments = [];
+
+        try {
+            // Obtener contenido del archivo .ju
+            $content = $this->getTempMeetingContent($meeting);
+
+            if (!$content) {
+                return [];
+            }
+
+            // Descifrar el contenido
+            $parsed = $this->decryptJuFile($content);
+            $data = $parsed['data'] ?? [];
+
+            // Extraer segmentos de la conversación
+            if (isset($data['segments']) && is_array($data['segments'])) {
+                foreach ($data['segments'] as $index => $segment) {
+                    if (isset($segment['text']) && isset($segment['speaker'])) {
+                        $text = trim($segment['text']);
+                        if (empty($text)) continue;
+
+                        // Agregar contexto del speaker y tiempo si está disponible
+                        $speakerInfo = $segment['speaker'];
+                        if (isset($segment['time'])) {
+                            $speakerInfo .= " ({$segment['time']})";
+                        }
+
+                        $fragments[] = [
+                            'text' => "{$speakerInfo}: {$text}",
+                            'source_id' => "temp_meeting:{$meeting->id}:segment:{$index}",
+                            'content_type' => 'temp_meeting_segment',
+                            'location' => $this->buildTemporaryMeetingMetadata($meeting, $content),
+                            'relevance_score' => $this->calculateTextRelevance($text, $query)
+                        ];
+                    }
+                }
+            }
+
+            // Agregar resumen si existe
+            if (isset($data['summary']) && !empty($data['summary'])) {
+                $fragments[] = [
+                    'text' => $data['summary'],
+                    'source_id' => "temp_meeting:{$meeting->id}:summary",
+                    'content_type' => 'temp_meeting_summary',
+                    'location' => $this->buildTemporaryMeetingMetadata($meeting, $content),
+                    'relevance_score' => $this->calculateTextRelevance($data['summary'], $query)
+                ];
+            }
+
+            // Agregar puntos clave si existen
+            if (isset($data['key_points']) && is_array($data['key_points'])) {
+                foreach ($data['key_points'] as $index => $point) {
+                    $fragments[] = [
+                        'text' => $point,
+                        'source_id' => "temp_meeting:{$meeting->id}:key_point:{$index}",
+                        'content_type' => 'temp_meeting_key_point',
+                        'location' => $this->buildTemporaryMeetingMetadata($meeting, $content),
+                        'relevance_score' => $this->calculateTextRelevance($point, $query)
+                    ];
+                }
+            }
+
+            // Agregar tareas si existen
+            if (isset($data['tasks']) && is_array($data['tasks'])) {
+                foreach ($data['tasks'] as $index => $task) {
+                    $taskText = '';
+                    if (is_array($task)) {
+                        $taskText = ($task['tarea'] ?? $task['task'] ?? $task['title'] ?? '') . ': ' .
+                                  ($task['descripcion'] ?? $task['description'] ?? '');
+                    } else {
+                        $taskText = (string) $task;
+                    }
+
+                    if (!empty(trim($taskText))) {
+                        $fragments[] = [
+                            'text' => $taskText,
+                            'source_id' => "temp_meeting:{$meeting->id}:task:{$index}",
+                            'content_type' => 'temp_meeting_task',
+                            'location' => $this->buildTemporaryMeetingMetadata($meeting, $content),
+                            'relevance_score' => $this->calculateTextRelevance($taskText, $query)
+                        ];
+                    }
+                }
+            }
+
+            // Ordenar por relevancia si hay query
+            if (!empty($query) && !empty($fragments)) {
+                usort($fragments, function($a, $b) {
+                    return ($b['relevance_score'] ?? 0) <=> ($a['relevance_score'] ?? 0);
+                });
+            }
+
+            return $fragments;
+
+        } catch (\Exception $e) {
+            \Log::error('Error building fragments from temp meeting', [
+                'meeting_id' => $meeting->id,
+                'error' => $e->getMessage()
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * Calcula una puntuación de relevancia simple basada en coincidencias de palabras
+     */
+    private function calculateTextRelevance(string $text, string $query): float
+    {
+        if (empty($query)) {
+            return 1.0;
+        }
+
+        $text = strtolower($text);
+        $query = strtolower($query);
+
+        // Dividir query en palabras
+        $queryWords = preg_split('/\s+/', $query);
+        $queryWords = array_filter($queryWords, function($word) {
+            return strlen($word) > 2; // Ignorar palabras muy cortas
+        });
+
+        if (empty($queryWords)) {
+            return 1.0;
+        }
+
+        $score = 0.0;
+        foreach ($queryWords as $word) {
+            if (strpos($text, $word) !== false) {
+                $score += 1.0;
+            }
+        }
+
+        return $score / count($queryWords);
     }
 
     private function userCanAccessMeeting(TranscriptionLaravel $meeting, User $user): bool
@@ -3598,6 +4230,48 @@ class AiAssistantController extends Controller
         return $this->filterArray(array_merge($base, $extra));
     }
 
+    private function buildTemporaryMeetingMetadata(TranscriptionTemp $meeting, ?string $content = null): array
+    {
+        // Si no se proporciona contenido, intentar obtenerlo
+        if (is_null($content)) {
+            $content = $this->getTempMeetingContent($meeting);
+        }
+
+        $hasTranscription = false;
+        $hasTasks = false;
+        $taskCount = 0;
+        $contentLength = 0;
+
+        if ($content) {
+            $data = json_decode($content, true);
+            if ($data) {
+                $hasTranscription = !empty($data['transcription']);
+                $hasTasks = !empty($data['tasks']) && is_array($data['tasks']);
+                $taskCount = $hasTasks ? count($data['tasks']) : 0;
+                $contentLength = strlen($content);
+            }
+        }
+
+        $base = [
+            'source' => 'transcriptions_temp',
+            'temp_meeting_id' => $meeting->id,
+            'meeting_name' => $meeting->title,
+            'title' => $meeting->title,
+            'created_at' => optional($meeting->created_at)->toIso8601String(),
+            'updated_at' => optional($meeting->updated_at)->toIso8601String(),
+            'expires_at' => optional($meeting->expires_at)->toIso8601String(),
+            'has_transcription' => $hasTranscription,
+            'has_tasks' => $hasTasks,
+            'task_count' => $taskCount,
+            'content_length' => $contentLength,
+            'has_audio' => !empty($meeting->audio_path),
+            'is_temporary' => true,
+            'storage_type' => 'temp'
+        ];
+
+        return $this->filterArray($base);
+    }
+
     private function filterArray(array $data): array
     {
         return array_filter($data, function ($value) {
@@ -4137,5 +4811,162 @@ class AiAssistantController extends Controller
         } finally {
             @unlink($absolute);
         }
+    }
+
+    /**
+     * Obtener el contenido de una reunión temporal desde el archivo .ju local
+     */
+    private function getTempMeetingContent(TranscriptionTemp $meeting): ?string
+    {
+        try {
+            // Buscar el archivo .ju basándose en el patrón de nombres
+            $userDir = "temp_transcriptions/{$meeting->user_id}";
+            $titleSlug = \Illuminate\Support\Str::slug($meeting->title);
+
+            // Buscar archivos .ju que coincidan con el título
+            $pattern = $userDir . "/*{$titleSlug}*.ju";
+            $files = glob(storage_path("app/{$pattern}"));
+
+            if (empty($files)) {
+                // Buscar por cualquier archivo que contenga "kualifin" si el título lo contiene
+                if (str_contains(strtolower($meeting->title), 'kualifin')) {
+                    $pattern = $userDir . "/*kualifin*.ju";
+                    $files = glob(storage_path("app/{$pattern}"));
+                }
+            }
+
+            if (empty($files)) {
+                return null;
+            }
+
+            // Tomar el archivo más reciente si hay múltiples
+            $latestFile = end($files);
+
+            // Leer el contenido del archivo .ju
+            $content = file_get_contents($latestFile);
+
+            if (empty($content)) {
+                return null;
+            }
+
+            return $content;
+        } catch (\Exception $e) {
+            \Log::error('Error al obtener contenido de reunión temporal', [
+                'meeting_id' => $meeting->id,
+                'ju_path' => $meeting->ju_content_path,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Forzar la precarga del contenido de una reunión (normal o temporal)
+     * Asegura que el contenido .ju esté disponible en caché
+     */
+    private function ensureMeetingContentLoaded($meeting, bool $isTemporary = false): bool
+    {
+        try {
+            if ($isTemporary) {
+                // Para reuniones temporales, verificar que el contenido esté disponible
+                $content = $this->getTempMeetingContent($meeting);
+                return !empty($content);
+            } else {
+                // Para reuniones normales, usar el servicio de caché
+                /** @var MeetingJuCacheService $cache */
+                $cache = app(MeetingJuCacheService::class);
+                $cached = $cache->getCachedParsed((int)$meeting->id);
+
+                if (!empty($cached)) {
+                    return true; // Ya está en caché
+                }
+
+                // Intentar descargar y cachear el contenido
+                $content = $this->tryDownloadJuContent($meeting);
+                if (empty($content) && empty($meeting->transcript_drive_id)) {
+                    // Intentar localizar .ju por contenedores relacionados
+                    $containers = $meeting->containers()->with(['group', 'group.organization'])->get();
+                    foreach ($containers as $container) {
+                        $found = $this->locateJuForMeeting($meeting, $container);
+                        if ($found) {
+                            $meeting->transcript_drive_id = $found;
+                            $meeting->save();
+                            $content = $this->tryDownloadJuContent($meeting);
+                            break;
+                        }
+                    }
+                }
+
+                if (!empty($content)) {
+                    $parsed = $this->decryptJuFile($content);
+                    $normalized = $this->processTranscriptData($parsed['data'] ?? []);
+                    $cache->setCachedParsed((int)$meeting->id, $normalized, (string)$meeting->transcript_drive_id, $parsed['raw'] ?? null);
+                    return true;
+                } else {
+                    // Al menos construir fragmentos vacíos para indicar que se intentó
+                    $this->buildFragmentsFromJu($meeting, '');
+                    return false;
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Error al precargar contenido de reunión', [
+                'meeting_id' => $meeting->id,
+                'is_temporary' => $isTemporary,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Precargar el contenido de múltiples reuniones de un contenedor
+     */
+    private function preloadContainerMeetingsContent($container): array
+    {
+        $user = Auth::user();
+        $preloadedCount = 0;
+        $failedCount = 0;
+        $results = [];
+
+        foreach ($container->meetings as $meeting) {
+            $success = $this->ensureMeetingContentLoaded($meeting, false);
+            if ($success) {
+                $preloadedCount++;
+                $results[] = ['meeting_id' => $meeting->id, 'status' => 'success'];
+            } else {
+                $failedCount++;
+                $results[] = ['meeting_id' => $meeting->id, 'status' => 'failed'];
+            }
+        }
+
+        // También verificar reuniones temporales relacionadas con el usuario
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('transcriptions_temp')) {
+                $tempMeetings = \App\Models\TranscriptionTemp::where('user_id', $user->id)
+                    ->notExpired()
+                    ->get();
+
+                foreach ($tempMeetings as $tempMeeting) {
+                    // Verificar si la reunión temporal está relacionada con este contenedor
+                    // (esto podría requerir lógica adicional según tu estructura de datos)
+                    $success = $this->ensureMeetingContentLoaded($tempMeeting, true);
+                    if ($success) {
+                        $preloadedCount++;
+                        $results[] = ['meeting_id' => $tempMeeting->id, 'status' => 'success_temp'];
+                    } else {
+                        $failedCount++;
+                        $results[] = ['meeting_id' => $tempMeeting->id, 'status' => 'failed_temp'];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Error al precargar reuniones temporales', ['error' => $e->getMessage()]);
+        }
+
+        return [
+            'preloaded' => $preloadedCount,
+            'failed' => $failedCount,
+            'details' => $results
+        ];
     }
 }

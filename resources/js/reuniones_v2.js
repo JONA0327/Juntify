@@ -2121,7 +2121,7 @@ function createMeetingCard(meeting) {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                     </div>
-                    <h3 class="meeting-title">${escapeHtml(meeting.meeting_name)}</h3>
+                    <h3 class="meeting-title">${escapeHtml(meeting.meeting_name || meeting.title || 'Reunión sin título')}</h3>
                     <p class="meeting-date">
                         <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -2396,7 +2396,7 @@ function createContainerMeetingCard(meeting) {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                     </div>
-                    <h3 class="meeting-title">${escapeHtml(meeting.meeting_name)}</h3>
+                    <h3 class="meeting-title">${escapeHtml(meeting.meeting_name || meeting.title || 'Reunión sin título')}</h3>
                     <p class="meeting-date">
                         <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -2465,7 +2465,7 @@ function createOrgContainerMeetingCard(meeting) {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                     </div>
-                    <h3 class="meeting-title">${escapeHtml(meeting.meeting_name)}</h3>
+                    <h3 class="meeting-title">${escapeHtml(meeting.meeting_name || meeting.title || 'Reunión sin título')}</h3>
                     <p class="meeting-date">
                         <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -3010,7 +3010,7 @@ function showMeetingModal(meeting) {
             <div class="modal-content">
                 <div class="modal-header">
                     <div class="modal-title-section">
-                        <h2 class="modal-title" id="modalTitle">${escapeHtml(meeting.meeting_name)}</h2>
+                        <h2 class="modal-title" id="modalTitle">${escapeHtml(meeting.meeting_name || meeting.title || 'Reunión sin título')}</h2>
                         <p class="modal-subtitle">${meeting.meeting_date || meeting.created_at} • ${meeting.duration || ''} • ${participantCount} participantes</p>
                     </div>
                     <button class="close-btn" onclick="closeMeetingModal()">

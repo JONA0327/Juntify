@@ -1157,7 +1157,7 @@ function openMeetingModal(meetingId) {
             const meeting = data.meeting;
 
             // Actualizar título y fecha
-            document.getElementById('meeting-modal-title').textContent = meeting.meeting_name || 'Reunión sin título';
+            document.getElementById('meeting-modal-title').textContent = meeting.meeting_name || meeting.title || 'Reunión sin título';
             document.getElementById('meeting-modal-date').textContent = meeting.created_at || '';
 
             // Configurar audio con fallback a endpoint de streaming

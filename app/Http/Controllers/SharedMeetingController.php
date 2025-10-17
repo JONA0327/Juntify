@@ -717,7 +717,7 @@ class SharedMeetingController extends Controller
                     'success' => true,
                     'meeting' => [
                         'id' => $meetingIdPrefix . $shared->meeting_id,
-                        'meeting_name' => $meeting->title ?? '',
+                        'meeting_name' => $meeting->title ?? 'Reunión sin título',
                         'meeting_date' => $meeting->created_at ? $meeting->created_at->format('d/m/Y H:i') : '',
                         'summary' => $meetingData['summary'] ?? ($meeting->metadata['summary'] ?? ''),
                         'key_points' => $meetingData['key_points'] ?? ($meeting->metadata['key_points'] ?? []),

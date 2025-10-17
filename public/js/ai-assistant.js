@@ -1104,7 +1104,13 @@ async function preloadMentionDatasets() {
     } catch (e) { /* ignore */ }
     // Reuniones y contenedores ya se cargan bajo demanda en modales, pero intentamos un fetch ligero si aún vacíos
     try {
-        if (!allMeetings.length) { const r = await fetch('/api/ai-assistant/meetings'); const j = await r.json(); if (j && j.success) allMeetings = j.meetings || []; }
+        if (!allMeetings.length) {
+            const r = await fetch('/api/ai-assistant/meetings');
+            const j = await r.json();
+            if (j && j.success) {
+                allMeetings = j.meetings || [];
+            }
+        }
     } catch (e) { /* ignore */ }
     try {
         if (!allContainers.length) { const r = await fetch('/api/ai-assistant/containers'); const j = await r.json(); if (j && j.success) allContainers = j.containers || []; }
@@ -1511,14 +1517,23 @@ async function loadSelectedContext() {
         } else if (serializedItems.length === 1 && serializedItems[0].type === 'meeting') {
             // Precargar .ju antes de fijar el contexto de una reunión
             const meetingId = serializedItems[0].id;
+            const meeting = allMeetings.find(m => m.id === meetingId);
             try {
                 const csrf = document.querySelector('meta[name="csrf-token"]').content;
+                const requestBody = {};
+                // Si es una reunión temporal, enviar el source correcto
+                if (meeting && meeting.source) {
+                    requestBody.source = meeting.source;
+                }
                 await fetch(`/api/ai-assistant/meetings/${meetingId}/preload`, {
                     method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': csrf }
+                    headers: {
+                        'X-CSRF-TOKEN': csrf,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
                 }).then(r => r.json()).catch(() => ({}));
             } catch (_) { /* ignore */ }
-            const meeting = allMeetings.find(m => m.id === meetingId);
             currentContext = {
                 type: 'meeting',
                 id: meetingId,
@@ -1578,9 +1593,19 @@ async function loadSelectedContext() {
             for (const meetingId of meetings) {
                 try {
                     const csrf = document.querySelector('meta[name="csrf-token"]').content;
+                    const meeting = allMeetings.find(m => m.id === meetingId);
+                    const requestBody = {};
+                    // Si es una reunión temporal, enviar el source correcto
+                    if (meeting && meeting.source) {
+                        requestBody.source = meeting.source;
+                    }
                     await fetch(`/api/ai-assistant/meetings/${meetingId}/preload`, {
                         method: 'POST',
-                        headers: { 'X-CSRF-TOKEN': csrf }
+                        headers: {
+                            'X-CSRF-TOKEN': csrf,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestBody)
                     }).then(r => r.json()).catch(() => ({}));
                 } catch (_) { /* ignore */ }
             }

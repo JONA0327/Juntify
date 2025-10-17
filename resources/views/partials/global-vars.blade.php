@@ -404,8 +404,8 @@
             console.log('🚫 Mostrando modal de tareas bloqueadas');
 
             window.showUpgradeModal({
-                title: 'Límite de documentos alcanzado',
-                message: 'Has alcanzado el límite diario de 1 documento. Los usuarios FREE pueden subir hasta 1 documento por día.<br><br>Actualiza tu plan para tener acceso ilimitado.',
+                title: 'Gestión de tareas no disponible',
+                message: 'La gestión de tareas está disponible para los planes <strong>Business</strong> y <strong>Enterprise</strong>.<br><br>Actualiza tu plan para acceder a esta funcionalidad.',
                 icon: 'lock',
                 hideCloseButton: false
             });

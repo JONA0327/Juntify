@@ -185,10 +185,13 @@ class TranscriptionTempController extends Controller
                 $transcription->is_temporary = true;
                 $transcription->storage_type = 'temp';
 
+                // Mapear title a meeting_name para compatibilidad con frontend
+                $transcription->meeting_name = $transcription->title;
+
                 // Merge tasks from database with JSON tasks for compatibility
                 $dbTasks = collect();
-                if ($transcription->relationLoaded('tasks')) {
-                    $dbTasks = $transcription->tasks->map(function($task) {
+                if ($transcription->relationLoaded('tasks') && $transcription->tasks) {
+                    $dbTasks = collect($transcription->tasks)->map(function($task) {
                         return [
                             'id' => $task->id,
                             'tarea' => $task->tarea,
@@ -284,6 +287,9 @@ class TranscriptionTempController extends Controller
                 });
             }            // Use database tasks if available, otherwise fall back to JSON
             $transcription->tasks_data = $dbTasks->isNotEmpty() ? $dbTasks->toArray() : ($transcription->tasks ?? []);
+
+            // Mapear title a meeting_name para compatibilidad con frontend
+            $transcription->meeting_name = $transcription->title;
 
             return response()->json([
                 'success' => true,

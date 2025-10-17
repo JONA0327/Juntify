@@ -39,7 +39,7 @@
                         <h1 class="text-2xl font-bold mb-4">Tareas bloqueadas para tu plan actual</h1>
 
                         <p class="text-slate-400 mb-6">
-                            Las tareas están disponibles para los planes: <strong class="text-white">Negocios</strong> y <strong class="text-white">Enterprise</strong>.
+                            Las tareas están disponibles para los planes: <strong class="text-white">Business</strong> y <strong class="text-white">Enterprise</strong>.
                         </p>
 
                         <p class="text-slate-400 mb-8">
@@ -73,7 +73,7 @@
             </div>
             <div class="modal-body">
                 <p class="modal-description">
-                    Las tareas están disponibles para los planes: <strong>Negocios</strong> y <strong>Enterprise</strong>.
+                    Las tareas están disponibles para los planes: <strong>Business</strong> y <strong>Enterprise</strong>.
                 </p>
             </div>
             <div class="modal-footer">
