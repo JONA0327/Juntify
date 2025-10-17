@@ -1832,7 +1832,7 @@ function showPendingMeetingsModal(pendingMeetings) {
                                         </div>
 
                                         <div class="pending-card-actions">
-                                            <button class="analyze-btn primary" onclick="analyzePendingMeeting(${meeting.id})" data-meeting-id="${meeting.id}">
+                                            <button class="analyze-btn primary" onclick="analyzePendingMeeting('${meeting.id}')" data-meeting-id="${meeting.id}">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                                 </svg>
@@ -2149,33 +2149,33 @@ function createMeetingCard(meeting) {
                 </div>
 
                 <div class="meeting-actions">
-                    <button class="icon-btn view-btn" onclick="openMeetingModal(${meeting.id})" title="Ver reunión">
+                    <button class="icon-btn view-btn" onclick="openMeetingModal('${meeting.id}')" title="Ver reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
                     </button>
-                    <button class="icon-btn container-btn" onclick="openContainerSelectModal(${meeting.id})" title="Añadir a contenedor">
+                    <button class="icon-btn container-btn" onclick="openContainerSelectModal('${meeting.id}')" title="Añadir a contenedor">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12z" />
                         </svg>
                     </button>
-                    <button class="share-btn icon-btn" onclick="document.getElementById('shareModal') && openShareModal(${meeting.id})" aria-label="Compartir reunión" title="Compartir reunión">
+                    <button class="share-btn icon-btn" onclick="document.getElementById('shareModal') && openShareModal('${meeting.id}')" aria-label="Compartir reunión" title="Compartir reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
                         </svg>
                     </button>
-                    <button class="icon-btn edit-btn" onclick="editMeetingName(${meeting.id})" title="Editar nombre de reunión">
+                    <button class="icon-btn edit-btn" onclick="editMeetingName('${meeting.id}')" title="Editar nombre de reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                         </svg>
                     </button>
-                    <button class="icon-btn delete-btn" onclick="deleteMeeting(${meeting.id})" title="Eliminar reunión">
+                    <button class="icon-btn delete-btn" onclick="deleteMeeting('${meeting.id}')" title="Eliminar reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
-                    <button class="download-btn icon-btn" onclick="openDownloadModal(${meeting.id})" title="Descargar reunión">
+                    <button class="download-btn icon-btn" onclick="openDownloadModal('${meeting.id}')" title="Descargar reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
                         </svg>
@@ -2228,17 +2228,23 @@ function createSharedMeetingCard(shared) {
                 </div>
 
                 <div class="meeting-actions">
-                    <button class="icon-btn container-btn" onclick="openContainerSelectModal(${meetingId})" title="Añadir a contenedor">
+                    <button class="icon-btn view-btn" onclick="openMeetingModal('${meetingId}', '${sharedId}')" title="Ver reunión">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                    </button>
+                    <button class="icon-btn container-btn" onclick="openContainerSelectModal('${meetingId}')" title="Añadir a contenedor">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12z" />
                         </svg>
                     </button>
-                    <button class="download-btn icon-btn" onclick="openDownloadModal(${meetingId}, ${sharedId})" title="Descargar reunión">
+                    <button class="download-btn icon-btn" onclick="openDownloadModal('${meetingId}', '${sharedId}')" title="Descargar reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
                         </svg>
                     </button>
-                    <button class="icon-btn delete-btn" onclick="openUnlinkSharedModal(${sharedId})" title="Quitar de compartidas">
+                    <button class="icon-btn delete-btn" onclick="openUnlinkSharedModal('${sharedId}')" title="Quitar de compartidas">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -2294,7 +2300,7 @@ function openUnlinkSharedModal(sharedId) {
                             </svg>
                             Cancelar
                         </button>
-                        <button id="confirm-unlink-btn" class="modal-btn danger" onclick="confirmUnlinkSharedMeeting(${sharedId})">
+                        <button id="confirm-unlink-btn" class="modal-btn danger" onclick="confirmUnlinkSharedMeeting('${sharedId}')">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
@@ -2416,28 +2422,28 @@ function createContainerMeetingCard(meeting) {
                 </div>
 
                 <div class="meeting-actions flex flex-row flex-wrap items-center justify-between gap-2 mt-4 w-full px-2">
-                    <button class="icon-btn remove-btn" onclick="removeMeetingFromContainer(${meeting.id})" title="Quitar del contenedor">
+                    <button class="icon-btn remove-btn" onclick="removeMeetingFromContainer('${meeting.id}')" title="Quitar del contenedor">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-9 0a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2H9l-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2h3" />
                         </svg>
                     </button>
-                        <button class="share-btn icon-btn" onclick="openShareModal(${meeting.id})" aria-label="Compartir reunión" title="Compartir reunión">
+                        <button class="share-btn icon-btn" onclick="openShareModal('${meeting.id}')" aria-label="Compartir reunión" title="Compartir reunión">
 
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
                         </svg>
                     </button>
-                    <button class="icon-btn edit-btn" onclick="editMeetingName(${meeting.id})" title="Editar nombre de reunión">
+                    <button class="icon-btn edit-btn" onclick="editMeetingName('${meeting.id}')" title="Editar nombre de reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                         </svg>
                     </button>
-                    <button class="icon-btn delete-btn" onclick="deleteMeeting(${meeting.id})" title="Eliminar reunión">
+                    <button class="icon-btn delete-btn" onclick="deleteMeeting('${meeting.id}')" title="Eliminar reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
-                    <button class="download-btn icon-btn" onclick="openDownloadModal(${meeting.id})" title="Descargar reunión">
+                    <button class="download-btn icon-btn" onclick="openDownloadModal('${meeting.id}')" title="Descargar reunión">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
                         </svg>
@@ -2496,7 +2502,7 @@ function createOrgContainerMeetingCard(meeting) {
                 </div>
 
                 <div class="meeting-actions flex flex-row flex-wrap items-center justify-between gap-2 mt-4 w-full px-2">
-                    <button class="download-btn icon-btn" onclick="openDownloadModal(${meeting.id})" title="Descargar reunión (PDF)">
+                    <button class="download-btn icon-btn" onclick="openDownloadModal('${meeting.id}')" title="Descargar reunión (PDF)">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
                         </svg>
@@ -2533,7 +2539,7 @@ function createContainerCard(container) {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                     </button>
-                    <button onclick="event.stopPropagation(); deleteContainer(${container.id})" class="delete-btn" title="Eliminar contenedor">
+                    <button onclick="event.stopPropagation(); deleteContainer('${container.id}')" class="delete-btn" title="Eliminar contenedor">
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
@@ -2859,7 +2865,10 @@ async function openMeetingModal(meetingId, sharedMeetingId = null) {
         // Mostrar modal de loading inmediatamente
         showModalLoadingState();
 
-        const response = await fetch(`/api/meetings/${meetingId}`, {
+        // Use the appropriate endpoint based on whether this is a shared meeting
+        const endpoint = sharedMeetingId ? `/api/shared-meetings/show/${sharedMeetingId}` : `/api/meetings/${meetingId}`;
+
+        const response = await fetch(endpoint, {
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'Accept': 'application/json',
@@ -2890,11 +2899,19 @@ async function openMeetingModal(meetingId, sharedMeetingId = null) {
             // Solo usar meeting.segments (proveniente del .ju). Si no existen segmentos, mostrar error o mensaje vacío.
             if (!Array.isArray(meeting.segments) || meeting.segments.length === 0) {
                 meeting.segments = [];
-                if (typeof meeting.transcription !== 'string' || !meeting.transcription.trim()) {
+                // Verificar si transcription es una string antes de usar trim
+                if (typeof meeting.transcription !== 'string' || !meeting.transcription || !meeting.transcription.trim()) {
                     meeting.transcription = '';
                 }
-            } else if (!meeting.transcription || !meeting.transcription.trim()) {
-                meeting.transcription = meeting.segments.map(s => s.text).join(' ');
+            } else {
+                // Verificar si transcription es válida antes de usar trim
+                const hasValidTranscription = meeting.transcription &&
+                    typeof meeting.transcription === 'string' &&
+                    meeting.transcription.trim();
+
+                if (!hasValidTranscription) {
+                    meeting.transcription = meeting.segments.map(s => s.text || '').join(' ');
+                }
             }
 
             updateLoadingStep(2); // Paso 2
@@ -2994,7 +3011,7 @@ function showMeetingModal(meeting) {
                 <div class="modal-header">
                     <div class="modal-title-section">
                         <h2 class="modal-title" id="modalTitle">${escapeHtml(meeting.meeting_name)}</h2>
-                        <p class="modal-subtitle">${meeting.created_at} • ${meeting.duration || ''} • ${participantCount} participantes</p>
+                        <p class="modal-subtitle">${meeting.meeting_date || meeting.created_at} • ${meeting.duration || ''} • ${participantCount} participantes</p>
                     </div>
                     <button class="close-btn" onclick="closeMeetingModal()">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -3139,7 +3156,17 @@ function showMeetingModal(meeting) {
         const loadingBar = document.getElementById('audio-loading-bar');
     const origin = typeof location !== 'undefined' ? location.origin : '';
     // Cache-busting param to avoid stale cached 404s on re-open
-    const fallbackUrl = meeting?.id ? `/api/meetings/${meeting.id}/audio?ts=${Date.now()}` : null;
+    // Determinar el endpoint correcto según el tipo de reunión
+    let fallbackUrl = null;
+    if (meeting?.id) {
+        const isTemporaryMeeting = String(meeting.id).startsWith('temp-') || meeting.storage_type === 'temp';
+        if (isTemporaryMeeting) {
+            const actualId = String(meeting.id).replace('temp-', '');
+            fallbackUrl = `/api/transcriptions-temp/${actualId}/audio?ts=${Date.now()}`;
+        } else {
+            fallbackUrl = `/api/meetings/${meeting.id}/audio?ts=${Date.now()}`;
+        }
+    }
         const resolvedFallbackUrl = fallbackUrl && origin ? new URL(fallbackUrl, origin).href : null;
         const isExternalAudio = !!(audioSrc && origin && !audioSrc.startsWith(origin));
         let triedFallback = false;
@@ -3167,16 +3194,25 @@ function showMeetingModal(meeting) {
 
         const bufferedDownload = async () => {
             try {
-                const resp = await fetch(audioSrc, { redirect: 'follow' });
+                const resp = await fetch(audioSrc, {
+                    redirect: 'follow',
+                    credentials: 'same-origin'
+                });
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 const total = parseInt(resp.headers.get('Content-Length') || '0', 10);
                 if (total > 0 && total > 150 * 1024 * 1024) {
-                    // Muy grande: usar streaming normal
-                    meetingAudioPlayer.src = audioSrc;
-                    attachError();
-                    meetingAudioPlayer.addEventListener('loadedmetadata', finalizePlayer, { once: true });
-                    meetingAudioPlayer.load();
-                    return;
+                    // Muy grande: para audios temporales no podemos usar streaming directo
+                    if (audioSrc && audioSrc.includes('/api/transcriptions-temp/')) {
+                        if (loadingEl) loadingEl.innerHTML = `<p class="text-red-400 text-sm">Archivo muy grande para almacenamiento temporal</p>`;
+                        return;
+                    } else {
+                        // Para otros audios usar streaming normal
+                        meetingAudioPlayer.src = audioSrc;
+                        attachError();
+                        meetingAudioPlayer.addEventListener('loadedmetadata', finalizePlayer, { once: true });
+                        meetingAudioPlayer.load();
+                        return;
+                    }
                 }
                 const reader = resp.body.getReader();
                 const chunks = [];
@@ -3201,7 +3237,30 @@ function showMeetingModal(meeting) {
                 meetingAudioPlayer.load();
             } catch (e) {
                 console.error('[audio] Error descarga previa', e);
-                meetingAudioPlayer.src = audioSrc; // fallback directo
+
+                // Para audios temporales, intentar descargar con credenciales como fallback
+                if (audioSrc && audioSrc.includes('/api/transcriptions-temp/')) {
+                    try {
+                        const tempResp = await fetch(audioSrc, {
+                            redirect: 'follow',
+                            credentials: 'same-origin'
+                        });
+                        if (tempResp.ok) {
+                            const tempBlob = await tempResp.blob();
+                            const tempObjUrl = URL.createObjectURL(tempBlob);
+                            meetingAudioPlayer.src = tempObjUrl;
+                        } else {
+                            throw new Error('Temp audio fallback failed: ' + tempResp.status);
+                        }
+                    } catch (tempError) {
+                        console.error('[audio] Temp audio fallback failed', tempError);
+                        if (loadingEl) loadingEl.innerHTML = `<p class="text-red-400 text-sm">No se pudo cargar el audio temporal</p>`;
+                        return;
+                    }
+                } else {
+                    meetingAudioPlayer.src = audioSrc; // fallback directo para otros audios
+                }
+
                 attachError();
                 meetingAudioPlayer.addEventListener('loadedmetadata', finalizePlayer, { once: true });
                 try { meetingAudioPlayer.load(); } catch (_) {}
@@ -4028,7 +4087,7 @@ function showEditNameModal(meetingId, currentName) {
                             </svg>
                             Cancelar
                         </button>
-                        <button class="modal-btn primary" onclick="confirmEditMeetingName(${meetingId})">
+                        <button class="modal-btn primary" onclick="confirmEditMeetingName('${meetingId}')")
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                             </svg>
@@ -4086,18 +4145,22 @@ async function confirmEditMeetingName(meetingId) {
 
     try {
         closeEditNameModal();
-        showNotification('Actualizando nombre en Drive y base de datos...', 'info');
 
-        const response = await fetch(`/api/meetings/${meetingId}/name`, {
+        // Detect if it's a temporary meeting
+        const isTemporary = String(meetingId).startsWith('temp-');
+        const actualId = isTemporary ? String(meetingId).replace('temp-', '') : meetingId;
+        const endpoint = isTemporary ? `/api/transcriptions-temp/${actualId}/name` : `/api/meetings/${meetingId}/name`;
+
+        showNotification(isTemporary ? 'Actualizando nombre...' : 'Actualizando nombre en Drive y base de datos...', 'info');
+
+        const response = await fetch(endpoint, {
             method: 'PUT',
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({
-                name: newName
-            })
+            body: JSON.stringify(isTemporary ? { name: newName } : { name: newName })
         });
 
         if (!response.ok) {
@@ -4107,7 +4170,7 @@ async function confirmEditMeetingName(meetingId) {
         const data = await response.json();
 
         if (data.success) {
-            showNotification('Nombre actualizado correctamente en Drive y base de datos', 'success');
+            showNotification(isTemporary ? 'Nombre actualizado correctamente' : 'Nombre actualizado correctamente en Drive y base de datos', 'success');
             // Recargar la lista de reuniones para reflejar los cambios
             loadMyMeetings();
         } else {
@@ -4191,7 +4254,7 @@ function showDeleteConfirmationModal(meetingId) {
                             </svg>
                             Cancelar
                         </button>
-                        <button class="modal-btn danger" onclick="confirmDeleteMeeting(${meetingId})">
+                        <button class="modal-btn danger" onclick="confirmDeleteMeeting('${meetingId}')")
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
@@ -4225,9 +4288,14 @@ async function confirmDeleteMeeting(meetingId) {
     closeDeleteConfirmationModal();
 
     try {
-        showNotification('Eliminando archivos de Drive...', 'info');
+        // Detect if it's a temporary meeting
+        const isTemporary = String(meetingId).startsWith('temp-');
+        const actualId = isTemporary ? String(meetingId).replace('temp-', '') : meetingId;
+        const endpoint = isTemporary ? `/api/transcriptions-temp/${actualId}` : `/api/meetings/${meetingId}`;
 
-        const response = await fetch(`/api/meetings/${meetingId}`, {
+        showNotification(isTemporary ? 'Eliminando reunión temporal...' : 'Eliminando archivos de Drive...', 'info');
+
+        const response = await fetch(endpoint, {
             method: 'DELETE',
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
@@ -4247,7 +4315,7 @@ async function confirmDeleteMeeting(meetingId) {
         const data = await response.json();
 
         if (data.success) {
-            showNotification('Reunión eliminada correctamente de Drive y base de datos', 'success');
+            showNotification(isTemporary ? 'Reunión temporal eliminada correctamente' : 'Reunión eliminada correctamente de Drive y base de datos', 'success');
             // Recargar la lista de reuniones
             loadMyMeetings();
             closeMeetingModal();

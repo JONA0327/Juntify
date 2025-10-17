@@ -14,9 +14,11 @@ use App\Services\TranscriptionService;
 use App\Services\PlanLimitService;
 use App\Models\PendingRecording;
 use Illuminate\Support\Str;
+use App\Traits\MeetingContentParsing;
 
 class TranscriptionTempController extends Controller
 {
+    use MeetingContentParsing;
     /**
      * Store a new temporary transcription (receives audio file)
      */
@@ -38,6 +40,15 @@ class TranscriptionTempController extends Controller
             $role = strtolower((string) ($user->roles ?? 'free'));
             $isBasic = $role === 'basic' || in_array($planCode, ['basic', 'basico'], true) || str_contains($planCode, 'basic');
             $isFree = $role === 'free' || $planCode === 'free' || str_contains($planCode, 'free');
+
+            // Check meeting limits
+            $limits = $planService->getLimitsForUser($user);
+            if ($limits['max_meetings_per_month'] !== null && $limits['remaining'] !== null && $limits['remaining'] <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Has alcanzado el límite mensual de reuniones para tu plan (' . $limits['max_meetings_per_month'] . ' reuniones). Actualiza tu plan para continuar.'
+                ], 429);
+            }
 
             $maxSizeMb = null;
             $planLabel = 'tu plan';
@@ -89,6 +100,17 @@ class TranscriptionTempController extends Controller
                     'storage_reason' => $planService->userCanUseDrive($user) ? 'drive_not_connected' : 'plan_restricted',
                 ]
             ]);
+
+            // Increment monthly usage (no decrement when deleted)
+            \App\Models\MonthlyMeetingUsage::incrementUsage(
+                $user->id,
+                $user->current_organization_id,
+                [
+                    'meeting_id' => $transcriptionTemp->id,
+                    'meeting_name' => $validated['meetingName'],
+                    'type' => 'temporary'
+                ]
+            );
 
             // Crear pending recording para procesamiento
             $pendingRecording = PendingRecording::create([
@@ -150,7 +172,8 @@ class TranscriptionTempController extends Controller
         try {
             $user = Auth::user();
 
-            $transcriptions = TranscriptionTemp::where('user_id', $user->id)
+            $transcriptions = TranscriptionTemp::with('tasks')
+                ->where('user_id', $user->id)
                 ->notExpired()
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -161,6 +184,26 @@ class TranscriptionTempController extends Controller
                 $transcription->is_expired = $transcription->isExpired();
                 $transcription->is_temporary = true;
                 $transcription->storage_type = 'temp';
+
+                // Merge tasks from database with JSON tasks for compatibility
+                $dbTasks = collect();
+                if ($transcription->relationLoaded('tasks')) {
+                    $dbTasks = $transcription->tasks->map(function($task) {
+                        return [
+                            'id' => $task->id,
+                            'tarea' => $task->tarea,
+                            'descripcion' => $task->descripcion,
+                            'prioridad' => $task->prioridad,
+                            'asignado' => $task->asignado,
+                            'fecha_limite' => $task->fecha_limite,
+                            'hora_limite' => $task->hora_limite,
+                            'progreso' => $task->progreso,
+                        ];
+                    });
+                }
+
+                // Use database tasks if available, otherwise fall back to JSON
+                $transcription->tasks_data = $dbTasks->isNotEmpty() ? $dbTasks->toArray() : ($transcription->tasks ?? []);
 
                 // Formatear tamaño del archivo
                 if ($transcription->audio_size) {
@@ -218,6 +261,30 @@ class TranscriptionTempController extends Controller
                 ], 404);
             }
 
+            // Merge tasks from database with JSON tasks for compatibility
+            $dbTasks = collect();
+
+            // Load tasks manually to avoid eager loading issues
+            $taskModels = \App\Models\TaskLaravel::where('meeting_id', $transcription->id)
+                ->where('meeting_type', 'temporary')
+                ->get();
+
+            if ($taskModels->isNotEmpty()) {
+                $dbTasks = $taskModels->map(function($task) {
+                    return [
+                        'id' => $task->id,
+                        'tarea' => $task->tarea,
+                        'descripcion' => $task->descripcion,
+                        'prioridad' => $task->prioridad,
+                        'asignado' => $task->asignado,
+                        'fecha_limite' => $task->fecha_limite,
+                        'hora_limite' => $task->hora_limite,
+                        'progreso' => $task->progreso,
+                    ];
+                });
+            }            // Use database tasks if available, otherwise fall back to JSON
+            $transcription->tasks_data = $dbTasks->isNotEmpty() ? $dbTasks->toArray() : ($transcription->tasks ?? []);
+
             return response()->json([
                 'success' => true,
                 'data' => $transcription
@@ -244,20 +311,41 @@ class TranscriptionTempController extends Controller
     {
         try {
             $user = Auth::user();
+            \Log::info('StreamAudio: Request for ID ' . $id . ' by user ' . $user->id);
 
+            // First try to find as owner
             $transcription = TranscriptionTemp::where('user_id', $user->id)
                 ->where('id', $id)
                 ->notExpired()
                 ->first();
 
+            // If not found as owner, check if it's a shared meeting
             if (!$transcription) {
+                $sharedMeeting = \App\Models\SharedMeeting::where('meeting_id', $id)
+                    ->where('meeting_type', 'temporary')
+                    ->where('shared_with', $user->id)
+                    ->where('status', 'accepted')
+                    ->first();
+
+                if ($sharedMeeting) {
+                    $transcription = TranscriptionTemp::where('id', $id)
+                        ->notExpired()
+                        ->first();
+                }
+            }
+
+            if (!$transcription) {
+                \Log::warning('StreamAudio: Transcription not found for ID ' . $id);
                 return response()->json([
                     'success' => false,
                     'message' => 'Reunión temporal no encontrada o expirada'
                 ], 404);
             }
 
+            \Log::info('StreamAudio: Found transcription, audio_path: ' . $transcription->audio_path);
+
             if (!Storage::disk('local')->exists($transcription->audio_path)) {
+                \Log::error('StreamAudio: Audio file does not exist: ' . $transcription->audio_path);
                 return response()->json([
                     'success' => false,
                     'message' => 'Archivo de audio no disponible'
@@ -266,6 +354,8 @@ class TranscriptionTempController extends Controller
 
             $fullPath = Storage::disk('local')->path($transcription->audio_path);
             $mime = $transcription->metadata['audio_mime'] ?? 'audio/ogg';
+
+            \Log::info('StreamAudio: Serving file: ' . $fullPath);
 
             return response()->file($fullPath, [
                 'Content-Type' => $mime,
@@ -304,6 +394,12 @@ class TranscriptionTempController extends Controller
                 ], 404);
             }
 
+            // Eliminar tareas asociadas en tasks_laravel
+            $deletedTasksCount = \App\Models\TaskLaravel::where('meeting_id', $transcription->id)
+                ->where('meeting_type', 'temporary')
+                ->where('username', $user->username)
+                ->delete();
+
             // Eliminar archivos físicos
             if (Storage::disk('local')->exists($transcription->audio_path)) {
                 Storage::disk('local')->delete($transcription->audio_path);
@@ -314,7 +410,8 @@ class TranscriptionTempController extends Controller
 
             Log::info("Transcripción temporal eliminada", [
                 'id' => $id,
-                'user_id' => $user->id
+                'user_id' => $user->id,
+                'deleted_tasks' => $deletedTasksCount
             ]);
 
             return response()->json([
@@ -345,7 +442,14 @@ class TranscriptionTempController extends Controller
             $expiredTranscriptions = TranscriptionTemp::expired()->get();
 
             $deletedCount = 0;
+            $deletedTasksCount = 0;
             foreach ($expiredTranscriptions as $transcription) {
+                // Eliminar tareas asociadas en tasks_laravel
+                $tasksDeleted = \App\Models\TaskLaravel::where('meeting_id', $transcription->id)
+                    ->where('meeting_type', 'temporary')
+                    ->delete();
+                $deletedTasksCount += $tasksDeleted;
+
                 // Eliminar archivos físicos
                 if (Storage::disk('local')->exists($transcription->audio_path)) {
                     Storage::disk('local')->delete($transcription->audio_path);
@@ -356,7 +460,8 @@ class TranscriptionTempController extends Controller
             }
 
             Log::info("Transcripciones temporales expiradas eliminadas", [
-                'count' => $deletedCount
+                'count' => $deletedCount,
+                'deleted_tasks' => $deletedTasksCount
             ]);
 
             return response()->json([
@@ -374,5 +479,372 @@ class TranscriptionTempController extends Controller
                 'message' => 'Error al limpiar transcripciones expiradas'
             ], 500);
         }
+    }
+
+    public function updateTasks($id, Request $request)
+    {
+        try {
+            $user = Auth::user();
+
+            $transcription = TranscriptionTemp::where('user_id', $user->id)
+                ->where('id', $id)
+                ->notExpired()
+                ->first();
+
+            if (!$transcription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Reunión temporal no encontrada o expirada'
+                ], 404);
+            }
+
+            $validated = $request->validate([
+                'tasks' => 'nullable|array',
+                'tasks.*.tarea' => 'nullable|string|max:255',
+                'tasks.*.descripcion' => 'nullable|string',
+                'tasks.*.prioridad' => 'nullable|string|in:baja,media,alta,urgente',
+                'tasks.*.asignado' => 'nullable|string|max:255',
+                'tasks.*.fecha_limite' => 'nullable|date',
+                'tasks.*.hora_limite' => 'nullable|string',
+                'tasks.*.progreso' => 'nullable|integer|between:0,100',
+            ]);
+
+            // Primero eliminar tareas existentes para esta reunión temporal
+            \App\Models\TaskLaravel::where('meeting_id', $transcription->id)
+                ->where('meeting_type', 'temporary')
+                ->where('username', $user->username)
+                ->delete();
+
+            // Crear nuevas tareas en tasks_laravel
+            $savedTasks = [];
+            foreach ($validated['tasks'] ?? [] as $taskData) {
+                if (!empty($taskData['tarea'])) {
+                    $task = \App\Models\TaskLaravel::create([
+                        'username' => $user->username,
+                        'meeting_id' => $transcription->id,
+                        'meeting_type' => 'temporary',
+                        'tarea' => $taskData['tarea'],
+                        'descripcion' => $taskData['descripcion'] ?? null,
+                        'prioridad' => $taskData['prioridad'] ?? 'media',
+                        'asignado' => $taskData['asignado'] ?? null,
+                        'fecha_limite' => $taskData['fecha_limite'] ?? null,
+                        'hora_limite' => $taskData['hora_limite'] ?? null,
+                        'progreso' => $taskData['progreso'] ?? 0,
+                        'assigned_user_id' => null,
+                        'assignment_status' => 'pending',
+                    ]);
+                    $savedTasks[] = $task;
+                }
+            }
+
+            // También guardar en el JSON del modelo para compatibilidad
+            $transcription->tasks = $validated['tasks'] ?? [];
+            $transcription->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tareas guardadas exitosamente',
+                'tasks' => array_map(function($task) {
+                    return [
+                        'id' => $task->id,
+                        'meeting_id' => $task->meeting_id,
+                        'meeting_type' => $task->meeting_type,
+                        'tarea' => $task->tarea,
+                        'descripcion' => $task->descripcion,
+                        'prioridad' => $task->prioridad,
+                        'asignado' => $task->asignado,
+                        'fecha_limite' => $task->fecha_limite,
+                        'hora_limite' => $task->hora_limite,
+                        'progreso' => $task->progreso,
+                    ];
+                }, $savedTasks),
+                'tasks_count' => count($savedTasks)
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar tareas de transcripción temporal', [
+                'user_id' => Auth::id(),
+                'transcription_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al guardar las tareas: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update the name of a temporary meeting
+     */
+    public function updateName(Request $request, $id)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+            ]);
+
+            $user = Auth::user();
+            $transcription = TranscriptionTemp::where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (!$transcription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Reunión temporal no encontrada'
+                ], 404);
+            }
+
+            $transcription->update([
+                'meeting_name' => $validated['name']
+            ]);
+
+            Log::info('Nombre de reunión temporal actualizado', [
+                'user_id' => $user->id,
+                'transcription_id' => $id,
+                'old_name' => $transcription->getOriginal('meeting_name'),
+                'new_name' => $validated['name']
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Nombre actualizado correctamente',
+                'meeting' => [
+                    'id' => $transcription->id,
+                    'meeting_name' => $transcription->meeting_name,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar nombre de transcripción temporal', [
+                'user_id' => Auth::id(),
+                'transcription_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el nombre'
+            ], 500);
+        }
+    }
+
+    /**
+     * Analyze temporary transcription and generate tasks
+     */
+    public function analyzeAndGenerateTasks($id)
+    {
+        try {
+            $user = Auth::user();
+
+            $transcription = TranscriptionTemp::where('user_id', $user->id)
+                ->where('id', $id)
+                ->notExpired()
+                ->first();
+
+            if (!$transcription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Reunión temporal no encontrada o expirada'
+                ], 404);
+            }
+
+            // Check if transcription file exists
+            if (!$transcription->transcription_path || !Storage::disk('local')->exists($transcription->transcription_path)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Archivo de transcripción no disponible'
+                ], 404);
+            }
+
+            // Read and process transcription content
+            $content = Storage::disk('local')->get($transcription->transcription_path);
+
+            // Use MeetingContentParsing trait to decrypt and extract data
+            $result = $this->decryptJuFile($content);
+            $data = $this->extractMeetingDataFromJson($result['data'] ?? []);
+
+            // If no tasks in current data, try to generate them from transcription
+            if (empty($data['tasks']) && !empty($data['segments'])) {
+                Log::info('No tasks found in transcription, attempting to generate from segments', [
+                    'transcription_id' => $id,
+                    'segments_count' => count($data['segments'])
+                ]);
+
+                // Build transcription text from segments for analysis
+                $transcriptionText = '';
+                foreach ($data['segments'] as $segment) {
+                    $speaker = $segment['speaker'] ?? 'Participante';
+                    $text = $segment['text'] ?? '';
+                    if (!empty($text)) {
+                        $transcriptionText .= "{$speaker}: {$text}\n";
+                    }
+                }
+
+                if (!empty($transcriptionText)) {
+                    // Try to analyze with AI service
+                    try {
+                        $analysisService = app(\App\Services\OpenAIService::class);
+                        $analysisResults = $analysisService->analyzeTranscription($transcriptionText);
+
+                        if (!empty($analysisResults['tasks'])) {
+                            $data['tasks'] = $analysisResults['tasks'];
+                            Log::info('Generated tasks from AI analysis', [
+                                'transcription_id' => $id,
+                                'tasks_count' => count($analysisResults['tasks'])
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('AI analysis failed, using manual task extraction', [
+                            'transcription_id' => $id,
+                            'error' => $e->getMessage()
+                        ]);
+
+                        // Fallback: simple keyword-based task extraction
+                        $data['tasks'] = $this->extractTasksFromText($transcriptionText);
+                    }
+                }
+            }
+
+            $tasks = $data['tasks'] ?? [];
+            if (empty($tasks)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudieron generar tareas a partir de la transcripción'
+                ]);
+            }
+
+            // Create tasks in database
+            $tasksCreated = 0;
+            foreach ($tasks as $taskData) {
+                $taskInfo = $this->parseTaskData($taskData);
+
+                if (empty($taskInfo['tarea'])) {
+                    continue;
+                }
+
+                // Check if task already exists
+                $existingTask = \App\Models\TaskLaravel::where('meeting_id', $transcription->id)
+                    ->where('meeting_type', 'temporary')
+                    ->where('username', $user->username)
+                    ->where('tarea', $taskInfo['tarea'])
+                    ->first();
+
+                if ($existingTask) {
+                    continue;
+                }
+
+                // Create new task
+                \App\Models\TaskLaravel::create([
+                    'username' => $user->username,
+                    'meeting_id' => $transcription->id,
+                    'meeting_type' => 'temporary',
+                    'tarea' => $taskInfo['tarea'],
+                    'descripcion' => $taskInfo['descripcion'],
+                    'prioridad' => $taskInfo['prioridad'],
+                    'asignado' => $taskInfo['asignado'],
+                    'fecha_limite' => $taskInfo['fecha_limite'],
+                    'hora_limite' => $taskInfo['hora_limite'],
+                    'progreso' => $taskInfo['progreso'],
+                    'assigned_user_id' => null,
+                    'assignment_status' => 'pending',
+                ]);
+
+                $tasksCreated++;
+            }
+
+            Log::info('Tasks generated for temporary transcription', [
+                'transcription_id' => $id,
+                'tasks_created' => $tasksCreated
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Se generaron {$tasksCreated} tareas exitosamente",
+                'tasks_created' => $tasksCreated
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error analyzing temporary transcription', [
+                'transcription_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al analizar la transcripción: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Extract tasks from text using keyword-based approach
+     */
+    private function extractTasksFromText($text): array
+    {
+        $tasks = [];
+        $lines = explode("\n", $text);
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line)) continue;
+
+            // Look for task-related keywords
+            if (preg_match('/\b(tarea|task|acción|action|pendiente|todo|debe|should|necesita|need|realizar|do|hacer|make)\b/i', $line)) {
+                // Remove speaker prefix
+                $cleanLine = preg_replace('/^[^:]+:\s*/', '', $line);
+                if (strlen($cleanLine) > 10 && strlen($cleanLine) < 200) {
+                    $tasks[] = $cleanLine;
+                }
+            }
+        }
+
+        // Limit to reasonable number of tasks
+        return array_slice($tasks, 0, 10);
+    }
+
+    /**
+     * Parse task data into standardized format
+     */
+    private function parseTaskData($taskData): array
+    {
+        $defaults = [
+            'tarea' => '',
+            'descripcion' => null,
+            'prioridad' => 'media',
+            'asignado' => null,
+            'fecha_limite' => null,
+            'hora_limite' => null,
+            'progreso' => 0,
+        ];
+
+        if (is_string($taskData)) {
+            return array_merge($defaults, [
+                'tarea' => substr(trim($taskData), 0, 255)
+            ]);
+        }
+
+        if (is_array($taskData)) {
+            return array_merge($defaults, [
+                'tarea' => substr($taskData['tarea'] ?? $taskData['text'] ?? $taskData['title'] ?? $taskData['name'] ?? '', 0, 255),
+                'descripcion' => $taskData['descripcion'] ?? $taskData['description'] ?? $taskData['desc'] ?? null,
+                'prioridad' => $taskData['prioridad'] ?? $taskData['priority'] ?? 'media',
+                'asignado' => $taskData['asignado'] ?? $taskData['assigned'] ?? $taskData['assignee'] ?? null,
+                'fecha_limite' => $taskData['fecha_limite'] ?? $taskData['due_date'] ?? $taskData['deadline'] ?? null,
+                'hora_limite' => $taskData['hora_limite'] ?? $taskData['due_time'] ?? null,
+                'progreso' => $taskData['progreso'] ?? $taskData['progress'] ?? 0,
+            ]);
+        }
+
+        return $defaults;
     }
 }

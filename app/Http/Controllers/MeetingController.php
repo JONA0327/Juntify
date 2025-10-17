@@ -1139,7 +1139,7 @@ class MeetingController extends Controller
                 'summary' => $summary,
                 'key_points' => $keyPoints,
                 'transcription' => $segments,
-                'tasks' => [],
+                'tasks' => $meeting->tasks ?? [],
                 'speakers' => [],
                 'segments' => $segments,
                 'audio_folder' => 'Almacenamiento temporal',
@@ -3156,6 +3156,17 @@ class MeetingController extends Controller
                 'transcript_download_url' => $transcriptUrl,
             ]);
 
+            // Increment monthly usage (no decrement when deleted)
+            \App\Models\MonthlyMeetingUsage::incrementUsage(
+                $user->id,
+                $user->current_organization_id,
+                [
+                    'meeting_id' => $transcription->id,
+                    'meeting_name' => $newMeetingName,
+                    'type' => 'regular'
+                ]
+            );
+
             // Registrar actividad de organización si aplica
             try {
                 $orgId = $user->current_organization_id;
@@ -3443,13 +3454,32 @@ class MeetingController extends Controller
                     ->exists();
             }
 
-            // Validar y obtener la reunión; si es acceso compartido o por contenedor, no filtrar por username
-            if ($sharedAccess || $containerAccess) {
-                $meeting = TranscriptionLaravel::where('id', $id)->firstOrFail();
-            } else {
-                $meeting = TranscriptionLaravel::where('id', $id)
-                    ->where('username', $user->username)
+            // Detectar si es una reunión temporal
+            if (strpos($id, 'temp-') === 0) {
+                $tempId = substr($id, 5); // Remover 'temp-' prefix
+                $tempMeeting = TranscriptionTemp::where('id', $tempId)
+                    ->where('user_id', $user->id)
+                    ->notExpired()
                     ->firstOrFail();
+
+                // Crear objeto compatible con el resto del método
+                $meeting = (object) [
+                    'id' => $id,
+                    'meeting_name' => $tempMeeting->title,
+                    'created_at' => $tempMeeting->created_at,
+                    'is_temporary' => true,
+                    'temp_meeting' => $tempMeeting
+                ];
+            } else {
+                // Validar y obtener la reunión; si es acceso compartido o por contenedor, no filtrar por username
+                if ($sharedAccess || $containerAccess) {
+                    $meeting = TranscriptionLaravel::where('id', $id)->firstOrFail();
+                } else {
+                    $meeting = TranscriptionLaravel::where('id', $id)
+                        ->where('username', $user->username)
+                        ->firstOrFail();
+                }
+                $meeting->is_temporary = false;
             }
 
             // Validar request
@@ -3466,31 +3496,44 @@ class MeetingController extends Controller
             // Usar la fecha real de created_at de la base de datos
             $realCreatedAt = $meeting->created_at;
 
-            // Verificar si la reunión pertenece a una organización
-            $hasOrganization = $meeting->containers()->exists();
-            $organizationName = null;
-            $organizationLogo = null;
-            if ($hasOrganization) {
-                $container = $meeting->containers()->with('group.organization')->first();
-                if ($container && $container->group && $container->group->organization) {
-                    $organizationName = $container->group->organization->name
-                        ?? $container->group->organization->nombre_organizacion
-                        ?? 'Organización';
-                    $organizationLogo = $container->group->organization->imagen ?? null;
+            // Las reuniones temporales no tienen organización
+            if ($meeting->is_temporary) {
+                $hasOrganization = false;
+                $organizationName = null;
+                $organizationLogo = null;
+            } else {
+                // Verificar si la reunión pertenece a una organización
+                $hasOrganization = $meeting->containers()->exists();
+                $organizationName = null;
+                $organizationLogo = null;
+                if ($hasOrganization) {
+                    $container = $meeting->containers()->with('group.organization')->first();
+                    if ($container && $container->group && $container->group->organization) {
+                        $organizationName = $container->group->organization->name
+                            ?? $container->group->organization->nombre_organizacion
+                            ?? 'Organización';
+                        $organizationLogo = $container->group->organization->imagen ?? null;
+                    }
                 }
             }
 
             // Crear el HTML para el PDF
             // Si se solicitó la sección de tareas, usar siempre las tareas de la BD y mapear a columnas específicas
             if (in_array('tasks', $sections)) {
-                // Usar el username del dueño de la reunión (también en acceso por contenedor)
-                $taskUsername = $meeting->username ?? $user->username;
+                if ($meeting->is_temporary) {
+                    // Para reuniones temporales, usar las tareas guardadas en JSON
+                    $tempTasks = $meeting->temp_meeting->tasks ?? [];
+                    $dbTasks = collect($tempTasks);
+                } else {
+                    // Usar el username del dueño de la reunión (también en acceso por contenedor)
+                    $taskUsername = $meeting->username ?? $user->username;
 
-                $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
-                    ->where('username', $taskUsername)
-                    ->get(['tarea', 'descripcion', 'fecha_inicio', 'fecha_limite', 'progreso', 'asignado']);
+                    $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
+                        ->where('username', $taskUsername)
+                        ->get(['tarea', 'descripcion', 'fecha_inicio', 'fecha_limite', 'progreso', 'asignado']);
+                }
 
-                $mapped = $dbTasks->map(function($t) {
+                $mapped = $dbTasks->map(function($t) use ($meeting) {
                     $formatDate = function($v) {
                         if (!$v) return 'Sin asignar';
                         if ($v instanceof \Carbon\Carbon) return $v->format('Y-m-d');
@@ -3498,17 +3541,34 @@ class MeetingController extends Controller
                         return trim((string)$v) !== '' ? (string)$v : 'Sin asignar';
                     };
 
-                    $progress = (isset($t->progreso) && is_numeric($t->progreso)) ? intval($t->progreso) : 0;
+                    if ($meeting->is_temporary) {
+                        // Para reuniones temporales, t es un array
+                        $t = is_array($t) ? (object) $t : $t;
+                        $progress = (isset($t->progress) && is_numeric($t->progress)) ? intval($t->progress) : 0;
 
-                    return [
-                        'from_db' => true,
-                        'tarea' => $t->tarea ?? 'Sin nombre',
-                        'descripcion' => $t->descripcion ?? '',
-                        'fecha_inicio' => $formatDate($t->fecha_inicio),
-                        'fecha_limite' => $formatDate($t->fecha_limite),
-                        'asignado' => ($t->asignado && trim((string)$t->asignado) !== '') ? (string)$t->asignado : 'Sin asignar',
-                        'progreso' => $progress . '%',
-                    ];
+                        return [
+                            'from_db' => false,
+                            'tarea' => $t->title ?? $t->tarea ?? 'Sin nombre',
+                            'descripcion' => $t->description ?? $t->descripcion ?? '',
+                            'fecha_inicio' => $formatDate($t->start_date ?? $t->fecha_inicio ?? null),
+                            'fecha_limite' => $formatDate($t->due_date ?? $t->fecha_limite ?? null),
+                            'asignado' => ($t->assigned_to ?? $t->asignado ?? null) ? (string)($t->assigned_to ?? $t->asignado) : 'Sin asignar',
+                            'progreso' => $progress . '%',
+                        ];
+                    } else {
+                        // Para reuniones normales, t es un objeto Eloquent
+                        $progress = (isset($t->progreso) && is_numeric($t->progreso)) ? intval($t->progreso) : 0;
+
+                        return [
+                            'from_db' => true,
+                            'tarea' => $t->tarea ?? 'Sin nombre',
+                            'descripcion' => $t->descripcion ?? '',
+                            'fecha_inicio' => $formatDate($t->fecha_inicio),
+                            'fecha_limite' => $formatDate($t->fecha_limite),
+                            'asignado' => ($t->asignado && trim((string)$t->asignado) !== '') ? (string)$t->asignado : 'Sin asignar',
+                            'progreso' => $progress . '%',
+                        ];
+                    }
                 })->toArray();
 
                 $data['tasks'] = $mapped;
@@ -3590,12 +3650,31 @@ class MeetingController extends Controller
                     ->exists();
             }
 
-            if ($sharedAccess || $containerAccess) {
-                $meeting = TranscriptionLaravel::where('id', $id)->firstOrFail();
-            } else {
-                $meeting = TranscriptionLaravel::where('id', $id)
-                    ->where('username', $user->username)
+            // Detectar si es una reunión temporal
+            if (strpos($id, 'temp-') === 0) {
+                $tempId = substr($id, 5); // Remover 'temp-' prefix
+                $tempMeeting = TranscriptionTemp::where('id', $tempId)
+                    ->where('user_id', $user->id)
+                    ->notExpired()
                     ->firstOrFail();
+
+                // Crear objeto compatible con el resto del método
+                $meeting = (object) [
+                    'id' => $id,
+                    'meeting_name' => $tempMeeting->title,
+                    'created_at' => $tempMeeting->created_at,
+                    'is_temporary' => true,
+                    'temp_meeting' => $tempMeeting
+                ];
+            } else {
+                if ($sharedAccess || $containerAccess) {
+                    $meeting = TranscriptionLaravel::where('id', $id)->firstOrFail();
+                } else {
+                    $meeting = TranscriptionLaravel::where('id', $id)
+                        ->where('username', $user->username)
+                        ->firstOrFail();
+                }
+                $meeting->is_temporary = false;
             }
 
             $request->validate([
@@ -3609,46 +3688,76 @@ class MeetingController extends Controller
             $meetingName = $meeting->meeting_name;
             $realCreatedAt = $meeting->created_at;
 
-            $hasOrganization = $meeting->containers()->exists();
-            $organizationName = null;
-            $organizationLogo = null;
-            if ($hasOrganization) {
-                $container = $meeting->containers()->with('group.organization')->first();
-                if ($container && $container->group && $container->group->organization) {
-                    $organizationName = $container->group->organization->name
-                        ?? $container->group->organization->nombre_organizacion
-                        ?? 'Organización';
-                    $organizationLogo = $container->group->organization->imagen ?? null;
+            // Las reuniones temporales no tienen organización
+            if ($meeting->is_temporary) {
+                $hasOrganization = false;
+                $organizationName = null;
+                $organizationLogo = null;
+            } else {
+                $hasOrganization = $meeting->containers()->exists();
+                $organizationName = null;
+                $organizationLogo = null;
+                if ($hasOrganization) {
+                    $container = $meeting->containers()->with('group.organization')->first();
+                    if ($container && $container->group && $container->group->organization) {
+                        $organizationName = $container->group->organization->name
+                            ?? $container->group->organization->nombre_organizacion
+                            ?? 'Organización';
+                        $organizationLogo = $container->group->organization->imagen ?? null;
+                    }
                 }
             }
 
             // Si se solicitó la sección de tareas, usar siempre las tareas de la BD y mapear a columnas específicas
             if (in_array('tasks', $sections)) {
-                // Usar el username del dueño de la reunión (también en acceso por contenedor)
-                $taskUsername = $meeting->username ?? $user->username;
+                if ($meeting->is_temporary) {
+                    // Para reuniones temporales, usar las tareas guardadas en JSON
+                    $tempTasks = $meeting->temp_meeting->tasks ?? [];
+                    $dbTasks = collect($tempTasks);
+                } else {
+                    // Usar el username del dueño de la reunión (también en acceso por contenedor)
+                    $taskUsername = $meeting->username ?? $user->username;
 
-                $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
-                    ->where('username', $taskUsername)
-                    ->get(['tarea', 'descripcion', 'fecha_inicio', 'fecha_limite', 'progreso', 'asignado']);
+                    $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
+                        ->where('username', $taskUsername)
+                        ->get(['tarea', 'descripcion', 'fecha_inicio', 'fecha_limite', 'progreso', 'asignado']);
+                }
 
-                $mapped = $dbTasks->map(function($t) {
+                $mapped = $dbTasks->map(function($t) use ($meeting) {
                     $formatDate = function($v) {
                         if (!$v) return 'Sin asignar';
                         if ($v instanceof \Carbon\Carbon) return $v->format('Y-m-d');
                         return trim((string)$v) !== '' ? (string)$v : 'Sin asignar';
                     };
 
-                    $progress = (isset($t->progreso) && is_numeric($t->progreso)) ? intval($t->progreso) : 0;
+                    if ($meeting->is_temporary) {
+                        // Para reuniones temporales, t es un array
+                        $t = is_array($t) ? (object) $t : $t;
+                        $progress = (isset($t->progress) && is_numeric($t->progress)) ? intval($t->progress) : 0;
 
-                    return [
-                        'from_db' => true,
-                        'tarea' => $t->tarea ?? 'Sin nombre',
-                        'descripcion' => $t->descripcion ?? '',
-                        'fecha_inicio' => $formatDate($t->fecha_inicio),
-                        'fecha_limite' => $formatDate($t->fecha_limite),
-                        'asignado' => ($t->asignado && trim((string)$t->asignado) !== '') ? (string)$t->asignado : 'Sin asignar',
-                        'progreso' => $progress . '%',
-                    ];
+                        return [
+                            'from_db' => false,
+                            'tarea' => $t->title ?? $t->tarea ?? 'Sin nombre',
+                            'descripcion' => $t->description ?? $t->descripcion ?? '',
+                            'fecha_inicio' => $formatDate($t->start_date ?? $t->fecha_inicio ?? null),
+                            'fecha_limite' => $formatDate($t->due_date ?? $t->fecha_limite ?? null),
+                            'asignado' => ($t->assigned_to ?? $t->asignado ?? null) ? (string)($t->assigned_to ?? $t->asignado) : 'Sin asignar',
+                            'progreso' => $progress . '%',
+                        ];
+                    } else {
+                        // Para reuniones normales, t es un objeto Eloquent
+                        $progress = (isset($t->progreso) && is_numeric($t->progreso)) ? intval($t->progreso) : 0;
+
+                        return [
+                            'from_db' => true,
+                            'tarea' => $t->tarea ?? 'Sin nombre',
+                            'descripcion' => $t->descripcion ?? '',
+                            'fecha_inicio' => $formatDate($t->fecha_inicio),
+                            'fecha_limite' => $formatDate($t->fecha_limite),
+                            'asignado' => ($t->asignado && trim((string)$t->asignado) !== '') ? (string)$t->asignado : 'Sin asignar',
+                            'progreso' => $progress . '%',
+                        ];
+                    }
                 })->toArray();
 
                 $data['tasks'] = $mapped;

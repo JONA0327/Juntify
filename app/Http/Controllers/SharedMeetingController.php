@@ -20,6 +20,8 @@ use App\Services\GoogleServiceAccount;
 
 class SharedMeetingController extends Controller
 {
+    use \App\Traits\MeetingContentParsing;
+
     // ------------------------------------------------------------------
     // NUEVAS FUNCIONALIDADES (Outgoing Shares)
     // getOutgoingShares(): Lista reuniones que el usuario actual ha compartido
@@ -41,21 +43,34 @@ class SharedMeetingController extends Controller
                 ]);
             }
 
-            $sharesQuery = SharedMeeting::with(['meeting','sharedWithUser'])
+            $sharesQuery = SharedMeeting::with(['meeting', 'temporaryMeeting', 'sharedWithUser'])
                 ->where('shared_by', Auth::id())
-                ->whereHas('meeting')
                 ->orderByDesc('shared_at')
                 ->get();
 
             $shares = $sharesQuery->map(function($share) {
-                $legacy = $share->meeting;
-                $with = $share->sharedWithUser; // dynamic relation we will add via accessor if needed
+                // Get the appropriate meeting based on type
+                if ($share->meeting_type === 'temporary') {
+                    $meeting = $share->temporaryMeeting;
+                    $meetingIdPrefix = 'temp-';
+                } else {
+                    $meeting = $share->meeting;
+                    $meetingIdPrefix = '';
+                }
+
+                // Skip if the meeting doesn't exist (deleted or expired)
+                if (!$meeting) {
+                    return null;
+                }
+
+                $with = $share->sharedWithUser;
                 $sharedWithName = $with?->full_name ?? $with?->username ?? $with?->name ?? 'Usuario';
                 return [
                     'id' => $share->id,
-                    'meeting_id' => $share->meeting_id,
-                    'title' => $legacy?->meeting_name ?? 'Reunión',
+                    'meeting_id' => $meetingIdPrefix . $share->meeting_id,
+                    'title' => $meeting->meeting_name ?? 'Reunión',
                     'status' => $share->status,
+                    'meeting_type' => $share->meeting_type,
                     'shared_with' => [
                         'id' => $with?->id,
                         'name' => $sharedWithName,
@@ -63,9 +78,10 @@ class SharedMeetingController extends Controller
                     ],
                     'shared_at' => $share->shared_at,
                     'responded_at' => $share->responded_at,
-                    'is_legacy' => true,
+                    'expires_at' => $share->meeting_type === 'temporary' ? $meeting->expires_at : null,
+                    'is_legacy' => $share->meeting_type === 'regular',
                 ];
-            });
+            })->filter(); // Remove null entries (deleted meetings)
 
             return response()->json([
                 'success' => true,
@@ -217,18 +233,37 @@ class SharedMeetingController extends Controller
                 ->pluck('contact_id')
                 ->toArray();
 
-            $legacyMeeting = TranscriptionLaravel::find($request->meeting_id);
+            // Check if it's a temporary meeting
+            $meetingId = $request->meeting_id;
+            $isTemporary = str_starts_with((string)$meetingId, 'temp-');
+            $actualMeetingId = $isTemporary ? str_replace('temp-', '', $meetingId) : $meetingId;
+            $meetingType = $isTemporary ? 'temporary' : 'regular';
 
-            if (!$legacyMeeting) {
+            if ($isTemporary) {
+                $meeting = \App\Models\TranscriptionTemp::where('id', $actualMeetingId)
+                    ->where('user_id', Auth::id())
+                    ->first();
+            } else {
+                $meeting = TranscriptionLaravel::find($actualMeetingId);
+            }
+
+            if (!$meeting) {
                 throw new \RuntimeException('Meeting not found');
             }
 
-            $meetingTitle = $legacyMeeting->meeting_name ?? 'Reunión';
+            // Get meeting title based on type
+            if ($isTemporary) {
+                $meetingTitle = $meeting->title ?? 'Reunión temporal';
+            } else {
+                $meetingTitle = $meeting->meeting_name ?? 'Reunión';
+            }
+
             $sharedWith = [];
 
             foreach ($validContactIds as $contactId) {
                 // Verificar si ya se compartió con este contacto
-                $existingShare = SharedMeeting::where('meeting_id', $legacyMeeting->id)
+                $existingShare = SharedMeeting::where('meeting_id', $actualMeetingId)
+                    ->where('meeting_type', $meetingType)
                     ->where('shared_with', $contactId)
                     ->first();
 
@@ -244,7 +279,8 @@ class SharedMeetingController extends Controller
 
                 // Crear el registro de reunión compartida
                 $sharedMeeting = SharedMeeting::create([
-                    'meeting_id' => $legacyMeeting->id,
+                    'meeting_id' => $actualMeetingId,
+                    'meeting_type' => $meetingType,
                     'shared_by' => Auth::id(),
                     'shared_with' => $contactId,
                     'message' => $request->message,
@@ -266,7 +302,8 @@ class SharedMeetingController extends Controller
                     'title' => 'Nueva reunión compartida',
                     'message' => $currentUserName . ' ha compartido la reunión "' . $meetingTitle . '" contigo.',
                     'data' => json_encode([
-                        'meeting_id' => $legacyMeeting->id,
+                        'meeting_id' => $actualMeetingId,
+                        'meeting_type' => $meetingType,
                         'shared_meeting_id' => $sharedMeeting->id,
                         'meeting_title' => $meetingTitle,
                         'shared_by_name' => $currentUserName,
@@ -328,10 +365,9 @@ class SharedMeetingController extends Controller
                 'action' => $request->action
             ]);
             // Buscar la invitación por id y usuario, sin forzar estado inicialmente
-            $sharedMeeting = SharedMeeting::with(['meeting', 'sharedBy'])
+            $sharedMeeting = SharedMeeting::with(['meeting', 'temporaryMeeting', 'sharedBy'])
                 ->where('id', $request->shared_meeting_id)
                 ->where('shared_with', Auth::id())
-                ->whereHas('meeting')
                 ->first();
 
             if (!$sharedMeeting) {
@@ -340,6 +376,17 @@ class SharedMeetingController extends Controller
                     'user_id' => Auth::id()
                 ]);
                 return response()->json(['error' => 'Invitación no encontrada'], 404);
+            }
+
+            // Get the appropriate meeting based on type
+            if ($sharedMeeting->meeting_type === 'temporary') {
+                $meeting = $sharedMeeting->temporaryMeeting;
+            } else {
+                $meeting = $sharedMeeting->meeting;
+            }
+
+            if (!$meeting) {
+                return response()->json(['error' => 'La reunión ya no está disponible'], 404);
             }
 
             Log::info('respondToInvitation:loadedSharedMeeting', [
@@ -386,8 +433,8 @@ class SharedMeetingController extends Controller
                 } catch (\Throwable $e) { /* ignore */ }
             }
 
-            // If accepted, ensure Drive permissions are in place for the recipient
-            if ($status === 'accepted') {
+            // If accepted, ensure Drive permissions are in place for the recipient (only for regular meetings)
+            if ($status === 'accepted' && $sharedMeeting->meeting_type === 'regular') {
                 try {
                     $this->grantDriveAccessForShare($sharedMeeting);
                 } catch (\Throwable $e) {
@@ -398,8 +445,7 @@ class SharedMeetingController extends Controller
                 }
             }
 
-            $legacy = $sharedMeeting->meeting;
-            $meetingTitle = $legacy?->meeting_name ?? 'Reunión';
+            $meetingTitle = $meeting->meeting_name ?? 'Reunión';
 
             // Eliminar la notificación de invitación al responder (aceptar/rechazar)
             $this->deleteInviteNotification($request->notification_id, $sharedMeeting);
@@ -418,6 +464,7 @@ class SharedMeetingController extends Controller
                 'message' => $responderName . ' ' . $actionText . ' la reunión "' . $meetingTitle . '".',
                 'data' => json_encode([
                     'meeting_id' => $sharedMeeting->meeting_id,
+                    'meeting_type' => $sharedMeeting->meeting_type,
                     'shared_meeting_id' => $sharedMeeting->id,
                     'action' => $status,
                     'responded_by_name' => $responderName
@@ -513,15 +560,26 @@ class SharedMeetingController extends Controller
                 ]);
             }
 
-            $sharedMeetingsQuery = SharedMeeting::with(['meeting', 'sharedBy'])
+            $sharedMeetingsQuery = SharedMeeting::with(['meeting', 'temporaryMeeting', 'sharedBy'])
                 ->where('shared_with', Auth::id())
                 ->where('status', 'accepted')
-                ->whereHas('meeting')
                 ->orderBy('shared_at', 'desc')
                 ->get();
 
             $sharedMeetings = $sharedMeetingsQuery->map(function ($shared) {
-                $legacy = $shared->meeting;
+                // Get the appropriate meeting based on type
+                if ($shared->meeting_type === 'temporary') {
+                    $meeting = $shared->temporaryMeeting;
+                    $meetingIdPrefix = 'temp-';
+                } else {
+                    $meeting = $shared->meeting;
+                    $meetingIdPrefix = '';
+                }
+
+                // Skip if the meeting doesn't exist (deleted or expired)
+                if (!$meeting) {
+                    return null;
+                }
 
                 $sharedBy = $shared->sharedBy;
                 $sharedByName = $sharedBy?->full_name
@@ -529,13 +587,23 @@ class SharedMeetingController extends Controller
                     ?? $sharedBy?->name
                     ?? 'Usuario';
 
+                // Get meeting title based on type
+                if ($shared->meeting_type === 'temporary') {
+                    $meetingTitle = $meeting->title ?? 'Reunión temporal';
+                    $audioPath = $meeting->audio_path ? "/api/transcriptions-temp/{$meeting->id}/audio" : null;
+                } else {
+                    $meetingTitle = $meeting->meeting_name ?? 'Reunión compartida';
+                    $audioPath = $meeting->audio_path ?? null;
+                }
+
                 return [
                     'id' => $shared->id,
-                    'meeting_id' => $shared->meeting_id,
-                    'title' => $legacy?->meeting_name ?? 'Reunión compartida',
-                    'date' => $legacy?->created_at,
+                    'meeting_id' => $meetingIdPrefix . $shared->meeting_id,
+                    'title' => $meetingTitle,
+                    'date' => $meeting->created_at ? $meeting->created_at->format('d/m/Y H:i') : '',
                     'duration' => null,
                     'summary' => null,
+                    'audio_path' => $audioPath,
                     'shared_by' => [
                         'id' => $sharedBy?->id,
                         'name' => $sharedByName,
@@ -543,10 +611,12 @@ class SharedMeetingController extends Controller
                     ],
                     'shared_at' => $shared->shared_at,
                     'message' => $shared->message,
-                    'audio_drive_id' => $legacy?->audio_drive_id,
-                    'transcript_drive_id' => $legacy?->transcript_drive_id,
+                    'meeting_type' => $shared->meeting_type,
+                    'audio_drive_id' => $shared->meeting_type === 'regular' ? $meeting->audio_drive_id : null,
+                    'transcript_drive_id' => $shared->meeting_type === 'regular' ? $meeting->transcript_drive_id : null,
+                    'expires_at' => $shared->meeting_type === 'temporary' ? $meeting->expires_at : null,
                 ];
-            });
+            })->filter(); // Remove null entries (deleted meetings)
 
             return response()->json([
                 'success' => true,
@@ -585,6 +655,179 @@ class SharedMeetingController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al eliminar de compartidas'
+            ], 500);
+        }
+    }
+
+    /**
+     * Show a shared meeting (both regular and temporary)
+     */
+    public function showSharedMeeting($sharedId): JsonResponse
+    {
+        try {
+            $shared = SharedMeeting::with(['meeting.tasks', 'temporaryMeeting', 'sharedBy'])
+                ->where('id', $sharedId)
+                ->where('shared_with', Auth::id())
+                ->where('status', 'accepted')
+                ->first();
+
+            if (!$shared) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Reunión compartida no encontrada'
+                ], 404);
+            }
+
+            // Get the appropriate meeting based on type
+            if ($shared->meeting_type === 'temporary') {
+                $meeting = $shared->temporaryMeeting;
+                $meetingIdPrefix = 'temp-';
+            } else {
+                $meeting = $shared->meeting;
+                $meetingIdPrefix = '';
+            }
+
+            if (!$meeting) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La reunión ya no está disponible'
+                ], 404);
+            }
+
+            $sharedBy = $shared->sharedBy;
+            $sharedByName = $sharedBy?->full_name ?? $sharedBy?->username ?? $sharedBy?->name ?? 'Usuario';
+
+            // For temporary meetings, load complete data from .ju file
+            if ($shared->meeting_type === 'temporary') {
+                // Load complete meeting data from .ju file
+                $meetingData = [];
+                if ($meeting->transcription_path && \Storage::disk('local')->exists($meeting->transcription_path)) {
+                    try {
+                        $encryptedContent = \Storage::disk('local')->get($meeting->transcription_path);
+                        // Decrypt the .ju file content using the proper method
+                        $result = $this->decryptJuFile($encryptedContent);
+                        $meetingData = $result['data'] ?? [];
+                    } catch (\Exception $e) {
+                        \Log::warning('Could not load/decrypt .ju file for temporary meeting: ' . $e->getMessage());
+                        $meetingData = [];
+                    }
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'meeting' => [
+                        'id' => $meetingIdPrefix . $shared->meeting_id,
+                        'meeting_name' => $meeting->title ?? '',
+                        'meeting_date' => $meeting->created_at ? $meeting->created_at->format('d/m/Y H:i') : '',
+                        'summary' => $meetingData['summary'] ?? ($meeting->metadata['summary'] ?? ''),
+                        'key_points' => $meetingData['key_points'] ?? ($meeting->metadata['key_points'] ?? []),
+                        'transcription' => $meetingData['transcription'] ?? ($meeting->metadata['transcription'] ?? ''),
+                        'segments' => $meetingData['segments'] ?? ($meeting->metadata['segments'] ?? []),
+                        'tasks' => is_string($meeting->tasks) ? json_decode($meeting->tasks, true) : $meeting->tasks,
+                        'meeting_type' => $shared->meeting_type,
+                        'expires_at' => $meeting->expires_at,
+                        'audio_path' => $meeting->audio_path ? "/api/transcriptions-temp/{$meeting->id}/audio" : null,
+                        'shared_by' => [
+                            'name' => $sharedByName,
+                            'email' => $sharedBy?->email ?? ''
+                        ],
+                        'shared_at' => $shared->shared_at,
+                        'message' => $shared->message,
+                    ],
+                ]);
+            } else {
+                // For regular meetings - try to load content from .ju file if available
+                $meetingData = [];
+
+                // First ensure the recipient has access to Drive files
+                try {
+                    $this->grantDriveAccessForShare($shared);
+                } catch (\Exception $e) {
+                    \Log::warning('Could not grant Drive access for shared meeting: ' . $e->getMessage());
+                }
+
+                // Now try to download and decrypt the .ju file from Drive
+                if (!empty($meeting->transcript_drive_id)) {
+                    try {
+                        // First try without impersonation (in case recipient already has access)
+                        $sa = app(\App\Services\GoogleServiceAccount::class);
+                        $driveService = $sa->getDrive();
+
+                        try {
+                            $fileContent = $driveService->files->get($meeting->transcript_drive_id, ['alt' => 'media']);
+                            $encryptedContent = $fileContent->getBody()->getContents();
+                        } catch (\Exception $directAccessError) {
+                            \Log::info("Direct access failed, trying with impersonation: " . $directAccessError->getMessage());
+
+                            // If direct access fails, try impersonating the sharer
+                            if ($sharedBy && $sharedBy->email) {
+                                try {
+                                    $sa->impersonate($sharedBy->email);
+                                    $driveService = $sa->getDrive();
+                                    $fileContent = $driveService->files->get($meeting->transcript_drive_id, ['alt' => 'media']);
+                                    $encryptedContent = $fileContent->getBody()->getContents();
+                                } catch (\Throwable $impersonationError) {
+                                    \Log::warning('Impersonation also failed: ' . $impersonationError->getMessage());
+                                    throw $impersonationError;
+                                }
+                            } else {
+                                throw $directAccessError;
+                            }
+                        }
+
+                        // Decrypt the .ju file content
+                        $result = $this->decryptJuFile($encryptedContent);
+                        $meetingData = $result['data'] ?? [];
+
+                        \Log::info("Successfully loaded .ju file from Drive for meeting {$meeting->id}");
+                    } catch (\Exception $e) {
+                        \Log::warning('Could not load/decrypt .ju file from Drive for regular meeting: ' . $e->getMessage());
+                        $meetingData = [];
+                    }
+                }
+
+                // Load tasks from database if not in .ju file or if .ju file has empty tasks
+                $tasksFromDb = [];
+                $tasksFromJu = $meetingData['tasks'] ?? null;
+
+                // Use database tasks if .ju file has no tasks or empty array
+                if (empty($tasksFromJu) || (is_array($tasksFromJu) && count($tasksFromJu) === 0)) {
+                    $tasksFromDb = \App\Models\TaskLaravel::where('meeting_id', $meeting->id)
+                        ->where('username', $meeting->username) // Use meeting owner's username
+                        ->get()
+                        ->toArray();
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'meeting' => [
+                        'id' => $meetingIdPrefix . $shared->meeting_id,
+                        'meeting_name' => $meeting->meeting_name ?? '',
+                        'meeting_date' => $meeting->created_at ? $meeting->created_at->format('d/m/Y H:i') : '',
+                        // Use data from .ju file if available, otherwise fallback to database
+                        'summary' => $meetingData['summary'] ?? ($meeting->summary ?? ''),
+                        'key_points' => $meetingData['key_points'] ?? ($meeting->key_points ?? []),
+                        'transcription' => $meetingData['transcription'] ?? ($meeting->transcription ?? ''),
+                        'segments' => $meetingData['segments'] ?? [],
+                        'tasks' => !empty($tasksFromDb) ? $tasksFromDb : $tasksFromJu,
+                        'meeting_type' => $shared->meeting_type,
+                        'expires_at' => null,
+                        'audio_path' => $meeting->audio_path ?? null,
+                        'shared_by' => [
+                            'name' => $sharedByName,
+                            'email' => $sharedBy?->email ?? ''
+                        ],
+                        'shared_at' => $shared->shared_at,
+                        'message' => $shared->message,
+                    ],
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error showing shared meeting: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar la reunión compartida'
             ], 500);
         }
     }

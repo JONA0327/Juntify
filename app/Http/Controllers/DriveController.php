@@ -1536,6 +1536,17 @@ class DriveController extends Controller
                     'transcript_download_url' => $transcriptUrl,
                 ]);
 
+                // Increment monthly usage (no decrement when deleted)
+                \App\Models\MonthlyMeetingUsage::incrementUsage(
+                    Auth::user()->id,
+                    Auth::user()->current_organization_id,
+                    [
+                        'meeting_id' => $meeting->id,
+                        'meeting_name' => $meetingName,
+                        'type' => 'uploaded'
+                    ]
+                );
+
                 // Registrar actividad de organización si aplica
                 try {
                     $actor = Auth::user();
@@ -1936,6 +1947,17 @@ class DriveController extends Controller
                     'drive_type' => $driveTypeContext,
                 ],
             ]);
+
+            // Increment monthly usage (no decrement when deleted)
+            \App\Models\MonthlyMeetingUsage::incrementUsage(
+                $user->id,
+                $user->current_organization_id,
+                [
+                    'meeting_id' => $tempMeeting->id,
+                    'meeting_name' => $validated['meetingName'],
+                    'type' => 'temporary_uploaded'
+                ]
+            );
 
             if ($tmp && file_exists($tmp)) {
                 @unlink($tmp);

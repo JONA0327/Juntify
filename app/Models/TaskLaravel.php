@@ -14,6 +14,7 @@ class TaskLaravel extends Model
     protected $fillable = [
         'username',
         'meeting_id',
+        'meeting_type',
         'tarea',
         'prioridad',
         'fecha_inicio',

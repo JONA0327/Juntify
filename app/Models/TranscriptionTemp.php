@@ -19,17 +19,25 @@ class TranscriptionTemp extends Model
         'audio_size',
         'duration',
         'expires_at',
-        'metadata'
+        'metadata',
+        'tasks'
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
-        'metadata' => 'array'
+        'metadata' => 'array',
+        'tasks' => 'array'
     ];
 
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function tasks()
+    {
+        return $this->hasMany(TaskLaravel::class, 'meeting_id')
+            ->where('meeting_type', 'temporary');
     }
 
     // Obtener tiempo restante en formato legible

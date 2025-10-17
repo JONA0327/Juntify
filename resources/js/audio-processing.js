@@ -2131,16 +2131,12 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
     resetUI();
     appendSaveLogMessage('Iniciando guardado de resultados');
 
-    finalStorageType = 'drive';
+    finalStorageType = 'drive'; // Se actualizará con la respuesta del servidor
     finalStorageReason = null;
     finalRetentionDays = null;
     finalExpiresAt = null;
     finalTimeRemaining = null;
     finalDriveType = driveType;
-
-    // Informar al usuario sobre el tipo de drive seleccionado
-    const driveTypeText = driveType === 'organization' ? 'Drive Organizacional' : 'Drive Personal';
-    appendSaveLogMessage(`📁 Tipo de Drive: ${driveTypeText}`);
 
     const transcription = transcriptionData;
     const analysis = analysisResults;
@@ -2268,15 +2264,21 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
             finalTimeRemaining = result.time_remaining || null;
             finalDriveType = result.drive_type || driveType;
 
+            // Mostrar información del tipo de almacenamiento
             if (finalStorageType === 'temp') {
                 finalDrivePath = 'Almacenamiento temporal';
-                appendSaveLogMessage('💾 El audio se guardó temporalmente en Juntify.');
+                appendSaveLogMessage('� Tipo de Almacenamiento: Temporal (Juntify)');
+                appendSaveLogMessage('�💾 El audio se guardó temporalmente en Juntify.');
                 if (finalStorageReason === 'drive_not_connected') {
                     appendSaveLogMessage('🔌 Conecta tu Google Drive desde el perfil para moverlo de forma permanente.');
                 } else {
                     appendSaveLogMessage('🚀 Actualiza tu plan para guardarlo permanentemente en Google Drive.');
                 }
                 finalDriveType = 'temp';
+            } else {
+                // Almacenamiento en Drive
+                const driveTypeText = finalDriveType === 'organization' ? 'Drive Organizacional' : 'Drive Personal';
+                appendSaveLogMessage(`📁 Tipo de Drive: ${driveTypeText}`);
             }
             // Debug: show how tasks are structured right after analysis
             try {
@@ -2413,15 +2415,21 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
             finalTimeRemaining = result.time_remaining || null;
             finalDriveType = result.drive_type || driveType;
 
+            // Mostrar información del tipo de almacenamiento
             if (finalStorageType === 'temp') {
                 finalDrivePath = 'Almacenamiento temporal';
-                appendSaveLogMessage('💾 El audio se guardó temporalmente en Juntify.');
+                appendSaveLogMessage('� Tipo de Almacenamiento: Temporal (Juntify)');
+                appendSaveLogMessage('�💾 El audio se guardó temporalmente en Juntify.');
                 if (finalStorageReason === 'drive_not_connected') {
                     appendSaveLogMessage('🔌 Conecta tu Google Drive desde el perfil para moverlo de forma permanente.');
                 } else {
                     appendSaveLogMessage('🚀 Actualiza tu plan para guardarlo permanentemente en Google Drive.');
                 }
                 finalDriveType = 'temp';
+            } else {
+                // Almacenamiento en Drive
+                const driveTypeText = finalDriveType === 'organization' ? 'Drive Organizacional' : 'Drive Personal';
+                appendSaveLogMessage(`📁 Tipo de Drive: ${driveTypeText}`);
             }
             // Debug (alt path): show task structure too
             try {

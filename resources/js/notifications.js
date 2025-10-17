@@ -33,7 +33,7 @@ const Notifications = (() => {
                         </div>
                     `;
                 } else if (n.type === 'meeting_share_request') {
-                    li.className = 'invitation-item p-3 bg-slate-700/50 rounded-lg mb-2';
+                    li.className = 'invitation-item p-3 bg-slate-700 rounded-lg mb-2';
                     li.innerHTML = `
                         <div class="flex items-start gap-3">
                             <div class="flex-shrink-0 w-8 h-8 bg-yellow-400/20 rounded-lg flex items-center justify-center">

@@ -21,6 +21,9 @@ class Kernel extends ConsoleKernel
         // $schedule->command('inspire')->hourly();
         $schedule->command('activities:cleanup')->cron('0 0 1 * *');
         $schedule->command('plans:expire')->dailyAt('02:00');
+
+        // Reset monthly meeting usage counters on 1st of each month at 3:00 AM
+        $schedule->command('meetings:reset-monthly-usage --force')->cron('0 3 1 * *');
     }
 
     /**

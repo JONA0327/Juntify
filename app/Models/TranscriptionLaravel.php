@@ -47,4 +47,9 @@ class TranscriptionLaravel extends Model
         return $this->hasMany(KeyPoint::class, 'meeting_id');
     }
 
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(TaskLaravel::class, 'meeting_id');
+    }
+
 }

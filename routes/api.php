@@ -267,6 +267,9 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('/transcriptions-temp', [App\Http\Controllers\TranscriptionTempController::class, 'store'])->name('api.transcriptions-temp.store');
         Route::get('/transcriptions-temp/{transcription}', [App\Http\Controllers\TranscriptionTempController::class, 'show'])->name('api.transcriptions-temp.show');
         Route::get('/transcriptions-temp/{transcription}/audio', [App\Http\Controllers\TranscriptionTempController::class, 'streamAudio'])->name('api.transcriptions-temp.audio');
+        Route::put('/transcriptions-temp/{transcription}/name', [App\Http\Controllers\TranscriptionTempController::class, 'updateName'])->name('api.transcriptions-temp.name.update');
+        Route::patch('/transcriptions-temp/{transcription}/tasks', [App\Http\Controllers\TranscriptionTempController::class, 'updateTasks'])->name('api.transcriptions-temp.tasks.update');
+        Route::post('/transcriptions-temp/{transcription}/analyze-tasks', [App\Http\Controllers\TranscriptionTempController::class, 'analyzeAndGenerateTasks'])->name('api.transcriptions-temp.analyze-tasks');
         Route::delete('/transcriptions-temp/{transcription}', [App\Http\Controllers\TranscriptionTempController::class, 'destroy'])->name('api.transcriptions-temp.destroy');
         Route::post('/transcriptions-temp/clean-expired', [App\Http\Controllers\TranscriptionTempController::class, 'cleanExpired'])->name('api.transcriptions-temp.clean-expired');
     });
@@ -334,6 +337,7 @@ Route::middleware(['web', 'auth'])->group(function () {
           Route::post('/shared-meetings/respond', [SharedMeetingController::class, 'respondToInvitation'])->name('api.shared-meetings.respond');
           // Versioned endpoint to avoid clashing with legacy shared meetings list
           Route::get('/shared-meetings/v2', [SharedMeetingController::class, 'getSharedMeetings'])->name('api.shared-meetings.v2');
+          Route::get('/shared-meetings/show/{id}', [SharedMeetingController::class, 'showSharedMeeting'])->name('api.shared-meetings.show');
           // Outgoing shares (those I have shared)
           Route::get('/shared-meetings/outgoing', [SharedMeetingController::class, 'getOutgoingShares'])->name('api.shared-meetings.outgoing');
           Route::delete('/shared-meetings/outgoing/{id}', [SharedMeetingController::class, 'revokeOutgoingShare'])->name('api.shared-meetings.outgoing.revoke');

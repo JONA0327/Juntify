@@ -663,6 +663,60 @@ async function rebuildDriveSelectOptions() {
     }
 }
 
+// ===== CONFIGURACIÓN DE EVENT LISTENERS PARA MODALS =====
+function setupModalEventListeners() {
+    console.log('🔧 Configurando event listeners para modals...');
+
+    // Event listeners para modal de descarte de grabación
+    const discardModal = document.getElementById('discard-recording-modal');
+    if (discardModal) {
+        const confirmBtn = discardModal.querySelector('#confirm-discard-btn');
+        const cancelBtn = discardModal.querySelector('#cancel-discard-btn');
+
+        if (confirmBtn && !confirmBtn.hasAttribute('data-listener-added')) {
+            confirmBtn.addEventListener('click', () => {
+                // Esta función ya existe en el código
+                if (typeof confirmDiscardRecording === 'function') {
+                    confirmDiscardRecording();
+                }
+            });
+            confirmBtn.setAttribute('data-listener-added', 'true');
+        }
+
+        if (cancelBtn && !cancelBtn.hasAttribute('data-listener-added')) {
+            cancelBtn.addEventListener('click', () => {
+                closeDiscardRecordingModal();
+            });
+            cancelBtn.setAttribute('data-listener-added', 'true');
+        }
+    }
+
+    // Event listeners para modal de navegación durante grabación
+    const navModal = document.getElementById('recording-navigation-modal');
+    if (navModal) {
+        const stayBtn = navModal.querySelector('#stay-recording-btn');
+        const leaveBtn = navModal.querySelector('#leave-recording-btn');
+
+        if (stayBtn && !stayBtn.hasAttribute('data-listener-added')) {
+            stayBtn.addEventListener('click', () => {
+                closeRecordingNavigationModal();
+            });
+            stayBtn.setAttribute('data-listener-added', 'true');
+        }
+
+        if (leaveBtn && !leaveBtn.hasAttribute('data-listener-added')) {
+            leaveBtn.addEventListener('click', () => {
+                if (typeof confirmLeaveRecording === 'function') {
+                    confirmLeaveRecording();
+                }
+            });
+            leaveBtn.setAttribute('data-listener-added', 'true');
+        }
+    }
+
+    console.log('✅ Event listeners para modals configurados');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // Limpiar estado de descarte de audio al llegar a nueva reunión
     try {
@@ -722,10 +776,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             MAX_DURATION_MS = minutes * 60 * 1000;
             WARN_BEFORE_MINUTES = Number(limits.warn_before_minutes || 5);
 
-            console.log(`⏱️ Configuración de tiempo:
-                - Duración máxima: ${minutes} minutos (${MAX_DURATION_MS}ms)
-                - Advertencia: ${WARN_BEFORE_MINUTES} minutos antes
-                - Umbral advertencia: ${MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000}ms`);
+            console.log('⏱️ Configuración de tiempo:\n' +
+                `                - Duración máxima: ${minutes} minutos (${MAX_DURATION_MS}ms)\n` +
+                `                - Advertencia: ${WARN_BEFORE_MINUTES} minutos antes\n` +
+                `                - Umbral advertencia: ${MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000}ms`);
             // Actualizar mensajes de UI
             const hintAudio = document.getElementById('max-duration-hint-audio');
             const hintMeeting = document.getElementById('max-duration-hint-meeting');

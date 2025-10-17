@@ -4,8 +4,10 @@ namespace App\Services;
 
 use App\Models\PlanLimit;
 use App\Models\TranscriptionLaravel;
+use App\Models\TranscriptionTemp;
 use App\Models\User;
 use App\Models\Organization;
+use App\Models\MonthlyMeetingUsage;
 use Carbon\Carbon;
 
 class PlanLimitService
@@ -41,21 +43,8 @@ class PlanLimitService
         $allowPost   = $plan?->allow_postpone ?? true;
         $warnBefore  = $plan?->warn_before_minutes ?? 5;
 
-        // Calculate used this month (personal by default)
-        $startOfMonth = Carbon::now()->startOfMonth();
-        $endOfMonth   = Carbon::now()->endOfMonth();
-        // Contar reuniones del usuario este mes, estén o no en contenedores propios
-        $used = TranscriptionLaravel::where('username', $user->username)
-            ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
-            ->where(function($q) use ($user) {
-                // Reuniones que NO están en ningún contenedor (inbox)
-                $q->whereDoesntHave('containers')
-                  // O reuniones que están en contenedores cuyo owner es el usuario
-                  ->orWhereHas('containers', function($c) use ($user) {
-                      $c->where('username', $user->username);
-                  });
-            })
-            ->count();
+        // Use the new monthly usage tracking system
+        $used = MonthlyMeetingUsage::getCurrentMonthCount($user->id);
 
         // Organization-shared monthly quota for collaborators/administrators (non-owner)
         $orgRole = $this->getUserOrganizationRole($user);
@@ -73,11 +62,8 @@ class PlanLimitService
                     $maxMeetings = $ownerMaxMeetings; // share owner's monthly cap
                 }
 
-                // Aggregate used by all members of the organization within the month
-                $memberUsernames = $org->users()->pluck('username');
-                $used = TranscriptionLaravel::whereIn('username', $memberUsernames)
-                    ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
-                    ->count();
+                // Use organization-level usage tracking
+                $used = MonthlyMeetingUsage::getCurrentMonthCount($user->id, $user->current_organization_id);
             }
         }
 

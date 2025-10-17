@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Shared Temporary Meeting Debug</title>
+</head>
+<body>
+    <h1>Test de Reunión Compartida Temporal</h1>
+
+    <h2>1. Verificar respuesta del backend</h2>
+    <button id="testBackend">Probar API Backend</button>
+    <pre id="backendResult"></pre>
+
+    <h2>2. Verificar construcción de fallback URL</h2>
+    <button id="testFallback">Probar Lógica de Fallback</button>
+    <pre id="fallbackResult"></pre>
+
+    <script>
+        document.getElementById('testBackend').addEventListener('click', async function() {
+            try {
+                const response = await fetch('/api/shared-meetings/show/2', {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                const data = await response.json();
+                document.getElementById('backendResult').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('backendResult').textContent = 'Error: ' + error.message;
+            }
+        });
+
+        document.getElementById('testFallback').addEventListener('click', function() {
+            // Simular la lógica de fallback que acabamos de corregir
+            const testMeetings = [
+                { id: 'temp-1', storage_type: 'temp' },
+                { id: '1', storage_type: null },
+                { id: 'temp-5', storage_type: 'temp' }
+            ];
+
+            let results = [];
+
+            testMeetings.forEach(meeting => {
+                let fallbackUrl = null;
+                if (meeting?.id) {
+                    const isTemporaryMeeting = String(meeting.id).startsWith('temp-') || meeting.storage_type === 'temp';
+                    if (isTemporaryMeeting) {
+                        const actualId = String(meeting.id).replace('temp-', '');
+                        fallbackUrl = `/api/transcriptions-temp/${actualId}/audio?ts=${Date.now()}`;
+                    } else {
+                        fallbackUrl = `/api/meetings/${meeting.id}/audio?ts=${Date.now()}`;
+                    }
+                }
+
+                results.push({
+                    meeting: meeting,
+                    fallbackUrl: fallbackUrl
+                });
+            });
+
+            document.getElementById('fallbackResult').textContent = JSON.stringify(results, null, 2);
+        });
+    </script>
+</body>
+</html>

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\TranscriptionLaravel;
+use App\Models\TranscriptionTemp;
 use App\Models\User;
 
 class SharedMeeting extends Model
@@ -16,6 +17,7 @@ class SharedMeeting extends Model
 
     protected $fillable = [
         'meeting_id',
+        'meeting_type',
         'shared_by',
         'shared_with',
         'status',
@@ -33,6 +35,11 @@ class SharedMeeting extends Model
     public function meeting(): BelongsTo
     {
         return $this->belongsTo(TranscriptionLaravel::class, 'meeting_id');
+    }
+
+    public function temporaryMeeting(): BelongsTo
+    {
+        return $this->belongsTo(TranscriptionTemp::class, 'meeting_id');
     }
 
     public function sharedBy(): BelongsTo
