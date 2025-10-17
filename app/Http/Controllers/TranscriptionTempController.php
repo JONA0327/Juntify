@@ -725,6 +725,7 @@ class TranscriptionTempController extends Controller
 
             // Create tasks in database
             $tasksCreated = 0;
+            $normalizedTasks = [];
             foreach ($tasks as $taskData) {
                 $taskInfo = $this->parseTaskData($taskData);
 
@@ -744,7 +745,7 @@ class TranscriptionTempController extends Controller
                 }
 
                 // Create new task
-                \App\Models\TaskLaravel::create([
+                $createdTask = \App\Models\TaskLaravel::create([
                     'username' => $user->username,
                     'meeting_id' => $transcription->id,
                     'meeting_type' => 'temporary',
@@ -760,6 +761,33 @@ class TranscriptionTempController extends Controller
                 ]);
 
                 $tasksCreated++;
+
+                $normalizedTasks[] = [
+                    'id' => $createdTask->id,
+                    'tarea' => $createdTask->tarea,
+                    'descripcion' => $createdTask->descripcion,
+                    'prioridad' => $createdTask->prioridad,
+                    'asignado' => $createdTask->asignado,
+                    'fecha_limite' => $createdTask->fecha_limite,
+                    'hora_limite' => $createdTask->hora_limite,
+                    'progreso' => $createdTask->progreso,
+                ];
+            }
+
+            // Guardar representación normalizada en el JSON para compatibilidad con vistas antiguas
+            if (!empty($normalizedTasks)) {
+                $transcription->tasks = array_map(function ($task) {
+                    return [
+                        'tarea' => $task['tarea'],
+                        'descripcion' => $task['descripcion'],
+                        'prioridad' => $task['prioridad'],
+                        'asignado' => $task['asignado'],
+                        'fecha_limite' => $task['fecha_limite'],
+                        'hora_limite' => $task['hora_limite'],
+                        'progreso' => $task['progreso'],
+                    ];
+                }, $normalizedTasks);
+                $transcription->save();
             }
 
             Log::info('Tasks generated for temporary transcription', [

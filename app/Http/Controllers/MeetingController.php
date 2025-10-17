@@ -1112,7 +1112,12 @@ class MeetingController extends Controller
         $meeting = $tempRecord ?? TranscriptionTemp::where('id', $tempId)
             ->where('user_id', $user->id)
             ->notExpired()
+            ->with('user')
             ->first();
+
+        if ($meeting && $meeting->relationLoaded('user') === false) {
+            $meeting->load('user');
+        }
 
         if (!$meeting) {
             return response()->json([
@@ -1122,6 +1127,25 @@ class MeetingController extends Controller
         }
 
         $metadata = $meeting->metadata ?? [];
+        $ownerUsername = optional($meeting->user)->username ?? $user->username;
+        $dbTasks = TaskLaravel::where('meeting_id', $meeting->id)
+            ->where('meeting_type', 'temporary')
+            ->where('username', $ownerUsername)
+            ->get()
+            ->map(function (TaskLaravel $task) {
+                return [
+                    'id' => $task->id,
+                    'tarea' => $task->tarea,
+                    'descripcion' => $task->descripcion,
+                    'prioridad' => $task->prioridad,
+                    'asignado' => $task->asignado,
+                    'fecha_limite' => $task->fecha_limite,
+                    'hora_limite' => $task->hora_limite,
+                    'progreso' => $task->progreso,
+                ];
+            });
+
+        $tasksData = $dbTasks->isNotEmpty() ? $dbTasks->toArray() : ($meeting->tasks ?? []);
         $segments = $metadata['transcription_segments'] ?? [];
         $keyPoints = $metadata['key_points'] ?? [];
         $summary = $metadata['summary'] ?? $meeting->description ?? 'Reunión guardada temporalmente.';
@@ -1139,7 +1163,7 @@ class MeetingController extends Controller
                 'summary' => $summary,
                 'key_points' => $keyPoints,
                 'transcription' => $segments,
-                'tasks' => $meeting->tasks ?? [],
+                'tasks' => $tasksData,
                 'speakers' => [],
                 'segments' => $segments,
                 'audio_folder' => 'Almacenamiento temporal',
@@ -3190,39 +3214,91 @@ class MeetingController extends Controller
 
             // 4b. Procesar y guardar tareas en la BD (con parseo robusto y upsert)
             if (!empty($analysisResults['tasks']) && is_array($analysisResults['tasks'])) {
+                $normalizeDate = function ($value) {
+                    if (!is_string($value)) {
+                        return null;
+                    }
+
+                    $s = trim($value);
+                    if ($s === '') {
+                        return null;
+                    }
+
+                    $lower = strtolower($s);
+                    if (in_array($lower, ['no definida', 'no asignado', 'sin fecha'])) {
+                        return null;
+                    }
+
+                    if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $s, $m)) {
+                        return $m[3] . '-' . $m[2] . '-' . $m[1];
+                    }
+
+                    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) {
+                        return $s;
+                    }
+
+                    try {
+                        return Carbon::parse($s)->format('Y-m-d');
+                    } catch (\Throwable $e) {
+                        return null;
+                    }
+                };
+
+                $normalizeTime = function ($value) {
+                    if (!is_string($value)) {
+                        return null;
+                    }
+
+                    $s = trim($value);
+                    if ($s === '') {
+                        return null;
+                    }
+
+                    if (preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', $s, $m)) {
+                        $hour = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+                        return $hour . ':' . $m[2];
+                    }
+
+                    try {
+                        return Carbon::parse($s)->format('H:i');
+                    } catch (\Throwable $e) {
+                        return null;
+                    }
+                };
+
                 foreach ($analysisResults['tasks'] as $rawTask) {
-                    // Prefer explicit mapping per user request
-                    // incoming shape example: { id, text, context, assignee, dueDate }
+                    if (is_array($rawTask) || is_object($rawTask)) {
+                        $rawTask = (array) $rawTask;
+                    } else {
+                        $rawTask = ['text' => (string) $rawTask];
+                    }
+
+                    $title = (string)($rawTask['tarea'] ?? $rawTask['text'] ?? $rawTask['title'] ?? $rawTask['name'] ?? '');
+                    $title = substr($title, 0, 255);
+
+                    if ($title === '') {
+                        continue;
+                    }
+
                     $payload = [
                         'username' => $user->username,
                         'meeting_id' => $transcription->id,
-                        'tarea' => substr((string)($rawTask['text'] ?? ''), 0, 255) ?: 'Sin nombre',
-                        'descripcion' => (string)($rawTask['context'] ?? ''),
-                        'asignado' => (string)($rawTask['assignee'] ?? null),
-                        'fecha_inicio' => null,
-                        'fecha_limite' => null,
-                        'hora_limite' => null,
-                        'prioridad' => null,
-                        'progreso' => 0,
+                        'meeting_type' => 'temporary',
+                        'tarea' => $title,
+                        'descripcion' => isset($rawTask['context']) ? (string) $rawTask['context'] : ($rawTask['descripcion'] ?? $rawTask['description'] ?? null),
+                        'asignado' => isset($rawTask['assignee']) ? (string) $rawTask['assignee'] : ($rawTask['asignado'] ?? $rawTask['assigned'] ?? null),
+                        'fecha_inicio' => $normalizeDate($rawTask['startDate'] ?? $rawTask['start_date'] ?? $rawTask['fecha_inicio'] ?? null),
+                        'fecha_limite' => $normalizeDate($rawTask['dueDate'] ?? $rawTask['due_date'] ?? $rawTask['deadline'] ?? null),
+                        'hora_limite' => $normalizeTime($rawTask['dueTime'] ?? $rawTask['hora_limite'] ?? $rawTask['time'] ?? null),
+                        'prioridad' => isset($rawTask['priority']) ? substr((string) $rawTask['priority'], 0, 20) : ($rawTask['prioridad'] ?? 'media'),
+                        'progreso' => isset($rawTask['progress']) && is_numeric($rawTask['progress']) ? (int) $rawTask['progress'] : 0,
+                        'assigned_user_id' => null,
+                        'assignment_status' => 'pending',
                     ];
 
-                    // Map dueDate (string like '2025-08-27' or 'No definida') to fecha_inicio
-                    $due = $rawTask['dueDate'] ?? null;
-                    if (is_string($due)) {
-                        const1: {
-                            $s = trim($due);
-                            if ($s !== '' && strtolower($s) !== 'no definida' && strtolower($s) !== 'no asignado') {
-                                // support dd/mm/yyyy and yyyy-mm-dd
-                                if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $s, $m)) {
-                                    $payload['fecha_inicio'] = $m[3] . '-' . $m[2] . '-' . $m[1];
-                                } elseif (preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) {
-                                    $payload['fecha_inicio'] = $s;
-                                }
-                            }
-                        }
-                    }
                     // Evitar duplicados: si ya existe una tarea con mismo meeting_id, username y tarea, actualizarla
                     $existing = TaskLaravel::where('meeting_id', $payload['meeting_id'])
+                        ->where('meeting_type', 'temporary')
                         ->where('username', $payload['username'])
                         ->where('tarea', $payload['tarea'])
                         ->first();
@@ -3251,6 +3327,7 @@ class MeetingController extends Controller
             $audioDuration = 0;
             $speakerCount = 0;
             $tasks = TaskLaravel::where('meeting_id', $transcription->id)
+                ->where('meeting_type', 'temporary')
                 ->where('username', $user->username)
                 ->get();
 
