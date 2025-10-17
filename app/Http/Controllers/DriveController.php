@@ -1948,6 +1948,48 @@ class DriveController extends Controller
                 ],
             ]);
 
+            $createdTaskModels = [];
+            if (!empty($analysis['tasks']) && is_array($analysis['tasks'])) {
+                foreach ($analysis['tasks'] as $rawTask) {
+                    $taskInfo = $this->parseRawTaskForDb($rawTask);
+
+                    if (empty($taskInfo['tarea'])) {
+                        continue;
+                    }
+
+                    $createdTaskModels[] = TaskLaravel::create([
+                        'username' => $user->username,
+                        'meeting_id' => $tempMeeting->id,
+                        'meeting_type' => 'temporary',
+                        'tarea' => $taskInfo['tarea'],
+                        'descripcion' => $taskInfo['descripcion'],
+                        'prioridad' => $taskInfo['prioridad'] ?? 'media',
+                        'asignado' => $taskInfo['asignado'] ?? null,
+                        'fecha_inicio' => $taskInfo['fecha_inicio'] ?? null,
+                        'fecha_limite' => $taskInfo['fecha_limite'] ?? null,
+                        'hora_limite' => $taskInfo['hora_limite'] ?? null,
+                        'progreso' => $taskInfo['progreso'] ?? 0,
+                        'assigned_user_id' => null,
+                        'assignment_status' => 'pending',
+                    ]);
+                }
+            }
+
+            if (!empty($createdTaskModels)) {
+                $tempMeeting->tasks = array_map(static function (TaskLaravel $task) {
+                    return [
+                        'tarea' => $task->tarea,
+                        'descripcion' => $task->descripcion,
+                        'prioridad' => $task->prioridad,
+                        'asignado' => $task->asignado,
+                        'fecha_limite' => optional($task->fecha_limite)->toDateString(),
+                        'hora_limite' => $task->hora_limite,
+                        'progreso' => $task->progreso,
+                    ];
+                }, $createdTaskModels);
+                $tempMeeting->save();
+            }
+
             // Increment monthly usage (no decrement when deleted)
             \App\Models\MonthlyMeetingUsage::incrementUsage(
                 $user->id,
@@ -1976,6 +2018,18 @@ class DriveController extends Controller
                 'time_remaining' => $tempMeeting->time_remaining,
                 'retention_days' => $retentionDays,
                 'temp_meeting_id' => $tempMeeting->id,
+                'tasks' => array_map(static function (TaskLaravel $task) {
+                    return [
+                        'id' => $task->id,
+                        'tarea' => $task->tarea,
+                        'descripcion' => $task->descripcion,
+                        'prioridad' => $task->prioridad,
+                        'asignado' => $task->asignado,
+                        'fecha_limite' => optional($task->fecha_limite)->toDateString(),
+                        'hora_limite' => $task->hora_limite,
+                        'progreso' => $task->progreso,
+                    ];
+                }, $createdTaskModels),
             ]);
         } catch (\Throwable $e) {
             Log::error('storeTemporaryResult failed', [
