@@ -33,6 +33,7 @@ use App\Services\EmbeddingSearch;
 use App\Services\GoogleServiceAccount;
 use App\Services\MeetingJuCacheService;
 use App\Models\AiMeetingJuCache;
+use App\Models\AiDailyUsage;
 use App\Models\TaskLaravel;
 use Google\Service\Exception as GoogleServiceException;
 use RuntimeException;
@@ -91,6 +92,36 @@ class AiAssistantController extends Controller
         return str_contains($planCode, 'basic');
     }
 
+    private function isBusinessPlan(string $planCode, string $role): bool
+    {
+        $candidates = ['business', 'negocios'];
+
+        if (in_array($role, $candidates, true)) {
+            return true;
+        }
+
+        if (in_array($planCode, $candidates, true)) {
+            return true;
+        }
+
+        return str_contains($planCode, 'business') || str_contains($planCode, 'negocio');
+    }
+
+    private function isEnterprisePlan(string $planCode, string $role): bool
+    {
+        $candidates = ['enterprise', 'empresas'];
+
+        if (in_array($role, $candidates, true)) {
+            return true;
+        }
+
+        if (in_array($planCode, $candidates, true)) {
+            return true;
+        }
+
+        return str_contains($planCode, 'enterprise') || str_contains($planCode, 'empresa');
+    }
+
     private function isFreePlan(string $planCode, string $role): bool
     {
         if (in_array($role, ['free'], true)) {
@@ -130,17 +161,49 @@ class AiAssistantController extends Controller
     /**
      * Contar mensajes del usuario en el día actual
      */
+    private function getDailyUsageRecord($user = null): AiDailyUsage
+    {
+        $user = $user ?: Auth::user();
+        $date = now()->toDateString();
+
+        return AiDailyUsage::firstOrCreate(
+            ['user_id' => $user->id, 'usage_date' => $date],
+            ['message_count' => 0, 'document_count' => 0]
+        );
+    }
+
+    private function incrementDailyUsage($user = null, string $field = 'message_count', int $amount = 1): void
+    {
+        $user = $user ?: Auth::user();
+
+        if (!in_array($field, ['message_count', 'document_count'], true)) {
+            return;
+        }
+
+        $usage = $this->getDailyUsageRecord($user);
+        $usage->increment($field, max(1, (int) $amount));
+    }
+
     private function getDailyMessageCount($user = null): int
     {
         $user = $user ?: Auth::user();
         $today = now()->startOfDay();
+        $usage = $this->getDailyUsageRecord($user);
 
-        return AiChatMessage::whereHas('session', function($query) use ($user) {
+        $dbCount = AiChatMessage::whereHas('session', function($query) use ($user) {
             $query->where('username', $user->username);
         })
         ->where('role', 'user')
         ->where('created_at', '>=', $today)
         ->count();
+
+        $count = max((int) $usage->message_count, $dbCount);
+        if ($count !== (int) $usage->message_count) {
+            $usage->message_count = $count;
+            $usage->save();
+        }
+
+        return $count;
     }
 
     /**
@@ -150,10 +213,19 @@ class AiAssistantController extends Controller
     {
         $user = $user ?: Auth::user();
         $today = now()->startOfDay();
+        $usage = $this->getDailyUsageRecord($user);
 
-        return AiDocument::where('username', $user->username)
+        $dbCount = AiDocument::where('username', $user->username)
         ->where('created_at', '>=', $today)
         ->count();
+
+        $count = max((int) $usage->document_count, $dbCount);
+        if ($count !== (int) $usage->document_count) {
+            $usage->document_count = $count;
+            $usage->save();
+        }
+
+        return $count;
     }
 
     /**
@@ -171,8 +243,12 @@ class AiAssistantController extends Controller
 
         $isBasicPlan = $this->isBasicPlan($planCode, $role);
         $isFreePlan = $this->isFreePlan($planCode, $role);
+        $isBusinessPlan = $this->isBusinessPlan($planCode, $role);
+        $isEnterprisePlan = $this->isEnterprisePlan($planCode, $role);
 
-        if ($this->hasPremiumAccess($user) && !$isFreePlan && !$isBasicPlan) {
+        if ($isEnterprisePlan) {
+            $maxMessages = 35;
+            $maxDocuments = 15;
             $planName = $this->getPlanDisplayName($planCode, $role);
 
             return [
@@ -182,11 +258,31 @@ class AiAssistantController extends Controller
                 'planName' => $planName,
                 'dailyMessageCount' => $dailyMessages,
                 'dailyDocumentCount' => $dailyDocuments,
-                'maxDailyMessages' => null,
-                'maxDailyDocuments' => null,
-                'canSendMessage' => true,
-                'canCreateSession' => true,
-                'canUploadDocument' => true,
+                'maxDailyMessages' => $maxMessages,
+                'maxDailyDocuments' => $maxDocuments,
+                'canSendMessage' => $dailyMessages < $maxMessages,
+                'canCreateSession' => $dailyMessages < $maxMessages,
+                'canUploadDocument' => $dailyDocuments < $maxDocuments,
+            ];
+        }
+
+        if ($isBusinessPlan) {
+            $maxMessages = 25;
+            $maxDocuments = 10;
+            $planName = $this->getPlanDisplayName($planCode, $role);
+
+            return [
+                'allowed' => true,
+                'planRole' => $role,
+                'planCode' => $planCode,
+                'planName' => $planName,
+                'dailyMessageCount' => $dailyMessages,
+                'dailyDocumentCount' => $dailyDocuments,
+                'maxDailyMessages' => $maxMessages,
+                'maxDailyDocuments' => $maxDocuments,
+                'canSendMessage' => $dailyMessages < $maxMessages,
+                'canCreateSession' => $dailyMessages < $maxMessages,
+                'canUploadDocument' => $dailyDocuments < $maxDocuments,
             ];
         }
 
@@ -207,6 +303,24 @@ class AiAssistantController extends Controller
                 'canSendMessage' => $dailyMessages < $maxMessages,
                 'canCreateSession' => $dailyMessages < $maxMessages,
                 'canUploadDocument' => $dailyDocuments < $maxDocuments,
+            ];
+        }
+
+        if ($this->hasPremiumAccess($user) && !$isFreePlan && !$isBasicPlan && !$isBusinessPlan && !$isEnterprisePlan) {
+            $planName = $this->getPlanDisplayName($planCode, $role);
+
+            return [
+                'allowed' => true,
+                'planRole' => $role,
+                'planCode' => $planCode,
+                'planName' => $planName,
+                'dailyMessageCount' => $dailyMessages,
+                'dailyDocumentCount' => $dailyDocuments,
+                'maxDailyMessages' => null,
+                'maxDailyDocuments' => null,
+                'canSendMessage' => true,
+                'canCreateSession' => true,
+                'canUploadDocument' => true,
             ];
         }
 
@@ -924,7 +1038,7 @@ class AiAssistantController extends Controller
 
         // Verificar límites para usuarios
         $limits = $this->resolvePlanLimits($user);
-        if (!$limits['allowed'] && !$limits['canSendMessage']) {
+        if (!$limits['canSendMessage']) {
             return response()->json([
                 'success' => false,
                 'error' => 'limit_exceeded',
@@ -1274,7 +1388,7 @@ class AiAssistantController extends Controller
 
         // Verificar límites para usuarios
         $limits = $this->resolvePlanLimits($user);
-        if (!$limits['allowed'] && !$limits['canSendMessage']) {
+        if (!$limits['canSendMessage']) {
             return response()->json([
                 'success' => false,
                 'error' => 'limit_exceeded',
@@ -1321,6 +1435,8 @@ class AiAssistantController extends Controller
             'content' => $request->content,
             'attachments' => $request->attachments ?? []
         ]);
+
+        $this->incrementDailyUsage($user, 'message_count');
 
         // Aplicar menciones al contexto de la sesión y guardar en metadata del mensaje
         $mentions = Arr::wrap($request->input('mentions', []));
@@ -1787,7 +1903,7 @@ class AiAssistantController extends Controller
 
         // Verificar límites para usuarios
         $limits = $this->resolvePlanLimits($user);
-        if (!$limits['allowed'] && !$limits['canUploadDocument']) {
+        if (!$limits['canUploadDocument']) {
             return response()->json([
                 'success' => false,
                 'error' => 'limit_exceeded',
@@ -1826,6 +1942,15 @@ class AiAssistantController extends Controller
             $documents = [];
             foreach ($files as $file) {
                 if (! $file) continue;
+                $limits = $this->resolvePlanLimits($user);
+                if (!$limits['canUploadDocument']) {
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'limit_exceeded',
+                        'message' => 'Has alcanzado el límite diario de documentos. Los usuarios FREE pueden subir hasta 1 documento por día.',
+                        'limits' => $limits,
+                    ], 403);
+                }
                 $originalName = $file->getClientOriginalName();
                 $mimeType = $file->getMimeType();
                 $fileSize = $file->getSize();
@@ -1849,6 +1974,8 @@ class AiAssistantController extends Controller
                         'created_via' => 'assistant_upload',
                     ]),
                 ]);
+
+                $this->incrementDailyUsage($user, 'document_count');
 
                 $this->processDocumentInBackground($document);
 
@@ -2021,6 +2148,17 @@ class AiAssistantController extends Controller
     public function attachDriveDocuments(Request $request): JsonResponse
     {
         $user = Auth::user();
+        $limits = $this->resolvePlanLimits($user);
+
+        if (!$limits['canUploadDocument']) {
+            return response()->json([
+                'success' => false,
+                'error' => 'limit_exceeded',
+                'message' => 'Has alcanzado el límite diario de documentos. Los usuarios FREE pueden subir hasta 1 documento por día.',
+                'limits' => $limits,
+            ], 403);
+        }
+
         $validated = $request->validate([
             'drive_file_ids' => 'required|array|min:1',
             'drive_file_ids.*' => 'string',
@@ -2038,15 +2176,21 @@ class AiAssistantController extends Controller
 
             $attached = [];
             foreach ($driveIds as $fileId) {
-                // Buscar si ya existe para este usuario
-                $existing = AiDocument::where('username', $user->username)
+                $document = AiDocument::where('username', $user->username)
                     ->where('drive_file_id', $fileId)
                     ->first();
 
-                if ($existing) {
-                    $document = $existing;
-                } else {
-                    // Obtener info del archivo para nombre/mime/size
+                if (!$document) {
+                    $limits = $this->resolvePlanLimits($user);
+                    if (!$limits['canUploadDocument']) {
+                        return response()->json([
+                            'success' => false,
+                            'error' => 'limit_exceeded',
+                            'message' => 'Has alcanzado el límite diario de documentos. Los usuarios FREE pueden subir hasta 1 documento por día.',
+                            'limits' => $limits,
+                        ], 403);
+                    }
+
                     $info = $this->googleDriveService->getFileInfo($fileId);
                     $name = $info->getName() ?: ('Archivo ' . $fileId);
                     $mime = $info->getMimeType() ?: 'application/octet-stream';
@@ -2058,7 +2202,6 @@ class AiAssistantController extends Controller
                         'original_filename' => $name,
                         'document_type' => $this->getDocumentType($mime, $name),
                         'mime_type' => $mime,
-                        // file_size es NOT NULL en la tabla; usar 0 si Drive no reporta tamaño (p.ej. algunos tipos)
                         'file_size' => $size !== null ? (int) $size : 0,
                         'drive_file_id' => $fileId,
                         'drive_folder_id' => null,
@@ -2071,18 +2214,22 @@ class AiAssistantController extends Controller
                         ],
                     ]);
 
-                    // Lanzar procesamiento (descarga/extracción)
+                    $this->incrementDailyUsage($user, 'document_count');
+
                     $this->processDocumentInBackground($document);
                 }
 
-                // Si se envía session_id, agregarlos a doc_ids del contexto
                 if ($sessionId) {
-                    $session = AiChatSession::where('id', $sessionId)->where('username', $user->username)->first();
+                    $session = AiChatSession::where('id', $sessionId)
+                        ->where('username', $user->username)
+                        ->first();
                     if ($session) {
                         try {
                             $contextData = is_array($session->context_data) ? $session->context_data : [];
                             $docIds = \Illuminate\Support\Arr::get($contextData, 'doc_ids', []);
-                            if (!is_array($docIds)) { $docIds = []; }
+                            if (!is_array($docIds)) {
+                                $docIds = [];
+                            }
                             if (!in_array($document->id, $docIds, true)) {
                                 $docIds[] = $document->id;
                                 $contextData['doc_ids'] = array_values($docIds);
