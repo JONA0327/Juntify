@@ -4295,12 +4295,47 @@ class AiAssistantController extends Controller
 
     private function buildDocumentContextFragments(AiChatSession $session): array
     {
-        $documentIds = Arr::wrap($session->context_data ?? []);
+        $contextData = is_array($session->context_data) ? $session->context_data : [];
+
+        // Extraer los IDs de documentos asegurándonos de soportar distintos formatos
+        $documentIds = [];
+        foreach (['doc_ids', 'document_ids', 'documents', 'ids'] as $key) {
+            if (array_key_exists($key, $contextData)) {
+                $documentIds = $contextData[$key];
+                break;
+            }
+        }
+
+        // Si el contexto es un arreglo simple (legado), usarlo directamente
+        if (empty($documentIds) && ! empty($contextData) && array_values($contextData) === $contextData) {
+            $documentIds = $contextData;
+        }
+
+        // En última instancia, permitir usar context_id cuando se trate de sesiones sólo de documentos
+        if (empty($documentIds) && $session->context_id) {
+            $documentIds = [$session->context_id];
+        }
+
+        $documentIds = collect(Arr::wrap($documentIds))
+            ->flatten()
+            ->filter(fn ($value) => is_numeric($value))
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn ($value) => $value > 0)
+            ->unique()
+            ->values()
+            ->all();
+
         if (empty($documentIds)) {
             return [];
         }
 
-        $documents = AiDocument::whereIn('id', $documentIds)->limit(8)->get();
+        $documentsQuery = AiDocument::whereIn('id', $documentIds);
+        if (! empty($documentIds)) {
+            $order = implode(',', $documentIds);
+            $documentsQuery->orderByRaw("FIELD(id, {$order})");
+        }
+
+        $documents = $documentsQuery->limit(8)->get();
         $fragments = [];
 
         foreach ($documents as $document) {
