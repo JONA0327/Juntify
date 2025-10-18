@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('ai_daily_usage', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('user_id');
+            $table->string('user_id'); // Cambio a string para UUID
             $table->date('usage_date');
             $table->unsignedInteger('message_count')->default(0);
             $table->unsignedInteger('document_count')->default(0);
