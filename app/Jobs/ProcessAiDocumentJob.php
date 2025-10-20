@@ -51,40 +51,139 @@ class ProcessAiDocumentJob implements ShouldQueue
         $tempFile = null;
 
         try {
-            $token = $this->resolveAccessToken($document);
-            if (! $token) {
-                throw new RuntimeException('No hay credenciales válidas para acceder a Google Drive.');
+            if ($document->is_temporary && isset($document->document_metadata['file_content'])) {
+                // Para archivos temporales, usar contenido guardado en metadata
+                $document->update(['processing_progress' => 10, 'processing_step' => 'reading_temporary']);
+                $fileContents = base64_decode($document->document_metadata['file_content']);
+
+                if ($fileContents === false) {
+                    throw new RuntimeException('No se pudo decodificar el contenido del archivo temporal.');
+                }
+            } else if ($document->is_temporary && isset($document->document_metadata['large_file']) && $document->document_metadata['large_file'] === true) {
+                // Para archivos grandes temporales, procesar desde archivo
+                $document->update(['processing_progress' => 10, 'processing_step' => 'reading_large_temporary']);
+                $fileContents = $this->handleLargeTemporaryFile($document);
+
+                if ($fileContents === false) {
+                    throw new RuntimeException('No se pudo procesar el archivo temporal grande.');
+                }
+            } else {
+                // Para archivos permanentes, descargar desde Google Drive
+                $token = $this->resolveAccessToken($document);
+                if (! $token) {
+                    throw new RuntimeException('No hay credenciales válidas para acceder a Google Drive.');
+                }
+
+                $driveService->setAccessToken($token);
+                $document->update(['processing_progress' => 10, 'processing_step' => 'downloading']);
+                $fileContents = $driveService->downloadFileContent($document->drive_file_id);
+
+                if ($fileContents === null) {
+                    throw new RuntimeException('No se pudo descargar el archivo desde Google Drive.');
+                }
             }
 
-            $driveService->setAccessToken($token);
-            $document->update(['processing_progress' => 10, 'processing_step' => 'downloading']);
-            $fileContents = $driveService->downloadFileContent($document->drive_file_id);
-
-            if ($fileContents === null) {
-                throw new RuntimeException('No se pudo descargar el archivo desde Google Drive.');
-            }
-
-            $tempFile = $this->storeTemporaryFile($document, $fileContents);
             $document->update(['processing_progress' => 20, 'processing_step' => 'extracting']);
 
-            $extracted = $extractorService->extract(
-                $tempFile['absolute_path'],
-                $document->mime_type ?? 'application/octet-stream',
-                $document->original_filename
-            );
+            if ($document->is_temporary) {
+                // Para archivos temporales, extraer texto usando el contenido disponible
+                $tempFile = $this->storeTemporaryFile($document, $fileContents);
 
-            $text = $extracted['text'] ?? '';
-            if (trim($text) === '') {
-                throw new RuntimeException('El documento no contiene texto utilizable.');
+                try {
+                    $extracted = $extractorService->extract(
+                        $tempFile['absolute_path'],
+                        $document->mime_type ?? 'application/octet-stream',
+                        $document->original_filename
+                    );
+
+                    $text = $extracted['text'] ?? '';
+
+                    // Si no se extrajo texto, usar placeholder pero intentar OCR básico
+                    if (trim($text) === '') {
+                        $extension = strtolower(pathinfo($document->original_filename, PATHINFO_EXTENSION));
+                        $text = "[DOCUMENTO TEMPORAL] Archivo {$extension}: {$document->original_filename}\n";
+                        $text .= "Tamaño: " . number_format($document->file_size) . " bytes\n";
+                        $text .= "No se pudo extraer texto del documento. Puede requerir OCR manual.";
+
+                        $extracted = [
+                            'text' => $text,
+                            'metadata' => [
+                                'temporary_file' => true,
+                                'file_type' => $extension,
+                                'extraction_method' => 'temporary_fallback',
+                                'chatgpt_ready' => false,
+                                'extraction_failed' => true,
+                            ]
+                        ];
+                    } else {
+                        // Éxito en extracción
+                        $extracted['metadata']['temporary_file'] = true;
+                        $extracted['metadata']['chatgpt_ready'] = true;
+                        $extracted['metadata']['extraction_method'] = 'temporary_extracted';
+                    }
+
+                } catch (\Exception $e) {
+                    // Si falla la extracción, usar placeholder
+                    $extension = strtolower(pathinfo($document->original_filename, PATHINFO_EXTENSION));
+                    $text = "[DOCUMENTO TEMPORAL] Archivo {$extension}: {$document->original_filename}\n";
+                    $text .= "Tamaño: " . number_format($document->file_size) . " bytes\n";
+                    $text .= "Error en extracción: " . $e->getMessage();
+
+                    $extracted = [
+                        'text' => $text,
+                        'metadata' => [
+                            'temporary_file' => true,
+                            'file_type' => $extension,
+                            'extraction_method' => 'temporary_error',
+                            'chatgpt_ready' => false,
+                            'extraction_error' => $e->getMessage(),
+                        ]
+                    ];
+                }
+
+                // Limpiar archivo temporal
+                $this->cleanupTemporaryFile($tempFile);
+
+            } else {
+                // Para archivos permanentes, usar extracción normal
+                $tempFile = $this->storeTemporaryFile($document, $fileContents);
+                $extracted = $extractorService->extract(
+                    $tempFile['absolute_path'],
+                    $document->mime_type ?? 'application/octet-stream',
+                    $document->original_filename
+                );
+
+                $text = $extracted['text'] ?? '';
+                if (trim($text) === '') {
+                    throw new RuntimeException('El documento no contiene texto utilizable.');
+                }
             }
 
             $document->update(['processing_progress' => 60, 'processing_step' => 'chunking']);
-            $chunkResult = $chunkerService->chunk($text);
-            $chunks = $chunkResult['chunks'] ?? [];
-            $normalizedText = $chunkResult['normalized_text'] ?? '';
 
-            if (empty($chunks)) {
-                throw new RuntimeException('No se pudieron generar fragmentos del documento.');
+            if ($document->is_temporary) {
+                // Para archivos temporales, crear un chunk simple
+                $chunks = [[
+                    'index' => 0,
+                    'text' => $text,
+                    'normalized_text' => $text,
+                    'tokens' => strlen($text) / 4, // Aproximación simple
+                    'metadata' => [
+                        'page' => 1,
+                        'temporary_document' => true,
+                        'ready_for_chatgpt' => true,
+                    ]
+                ]];
+                $normalizedText = $text;
+            } else {
+                // Para archivos permanentes, usar chunking normal
+                $chunkResult = $chunkerService->chunk($text);
+                $chunks = $chunkResult['chunks'] ?? [];
+                $normalizedText = $chunkResult['normalized_text'] ?? '';
+
+                if (empty($chunks)) {
+                    throw new RuntimeException('No se pudieron generar fragmentos del documento.');
+                }
             }
 
             $useEmbeddings = (bool) env('AI_ASSISTANT_USE_EMBEDDINGS', false);
@@ -178,7 +277,7 @@ class ProcessAiDocumentJob implements ShouldQueue
 
             $this->fail($exception);
         } finally {
-            if ($tempFile) {
+            if ($tempFile && !$document->is_temporary) {
                 $this->cleanupTemporaryFile($tempFile);
             }
         }
@@ -244,5 +343,88 @@ class ProcessAiDocumentJob implements ShouldQueue
                 }
             }
         }
+    }
+
+    /**
+     * Maneja archivos temporales grandes de manera optimizada para memoria
+     */
+    private function handleLargeTemporaryFile(AiDocument $document): string
+    {
+        Log::info('Procesando archivo temporal grande', [
+            'document_id' => $document->id,
+            'file_size' => $document->file_size
+        ]);
+
+        $metadata = $document->document_metadata ?? [];
+        $filePath = $metadata['temp_file_path'] ?? $metadata['file_path'] ?? null;
+
+        if (!$filePath || !file_exists($filePath)) {
+            throw new RuntimeException('Archivo temporal grande no encontrado en: ' . $filePath);
+        }
+
+        // Leer el archivo en chunks para evitar problemas de memoria
+        $fileContents = '';
+        $handle = fopen($filePath, 'rb');
+
+        if (!$handle) {
+            throw new RuntimeException('No se pudo abrir el archivo temporal: ' . $filePath);
+        }
+
+        try {
+            $chunkSize = 2 * 1024 * 1024; // 2MB chunks
+            while (!feof($handle)) {
+                $chunk = fread($handle, $chunkSize);
+                if ($chunk === false) {
+                    throw new RuntimeException('Error leyendo chunk del archivo');
+                }
+                $fileContents .= $chunk;
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        // Para archivos muy grandes, NO guardamos contenido base64 para evitar MySQL limits
+        $base64Size = strlen($fileContents) * 4 / 3; // Tamaño aproximado en base64
+
+        if ($base64Size > 16 * 1024 * 1024) { // >16MB en base64 puede causar problemas MySQL
+            Log::info('Archivo muy grande - no se guardará contenido base64 para evitar límites MySQL', [
+                'document_id' => $document->id,
+                'content_size' => strlen($fileContents),
+                'base64_size_mb' => round($base64Size / 1024 / 1024, 2)
+            ]);
+
+            // Solo actualizar metadata sin contenido base64
+            unset($metadata['temp_file_path']);
+            unset($metadata['file_path']);
+            $metadata['large_file_processed'] = true;
+            $metadata['content_too_large_for_db'] = true;
+            $metadata['original_size_mb'] = round(strlen($fileContents) / 1024 / 1024, 2);
+
+            $document->update([
+                'document_metadata' => $metadata,
+                'processing_progress' => 15,
+                'processing_step' => 'large_file_no_db_storage'
+            ]);
+        } else {
+            // Para archivos que caben en MySQL, guardar contenido base64
+            $metadata['file_content'] = base64_encode($fileContents);
+            unset($metadata['temp_file_path']);
+            unset($metadata['file_path']);
+            unset($metadata['large_file']);
+
+            $document->update([
+                'document_metadata' => $metadata,
+                'processing_progress' => 15,
+                'processing_step' => 'large_file_processed'
+            ]);
+        }
+
+        // Limpiar archivo temporal del sistema
+        if (file_exists($filePath)) {
+            unlink($filePath);
+            Log::info('Archivo temporal limpiado', ['file_path' => $filePath]);
+        }
+
+        return $fileContents;
     }
 }

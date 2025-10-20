@@ -1,0 +1,11 @@
+Hola, este es un documento de prueba para el sistema temporal.
+
+Este documento contiene información importante sobre el proyecto Juntify.
+
+El sistema ahora puede:
+1. Guardar archivos temporalmente en la base de datos
+2. Procesar el contenido sin herramientas OCR complejas
+3. Incluir el contenido en el contexto de ChatGPT
+4. Permitir que los usuarios Basic y Free adjunten archivos sin usar Google Drive
+
+¡Funciona perfectamente!

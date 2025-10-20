@@ -1400,6 +1400,8 @@ class AiAssistantController extends Controller
         $request->validate([
             'content' => 'required|string',
             'attachments' => 'nullable|array',
+            'attached_files' => 'nullable|array', // IDs de archivos adjuntos temporales
+            'attached_files.*' => 'integer',
             // Mentions: [{ type: document|meeting|container, id: int, title?: string }]
             'mentions' => 'nullable|array',
             'mentions.*.type' => 'required_with:mentions|string|in:document,meeting,container',
@@ -1558,6 +1560,54 @@ class AiAssistantController extends Controller
             } catch (\Throwable $e) {
                 Log::warning('No se pudieron aplicar menciones al contexto', [
                     'session_id' => $session->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // Procesar archivos adjuntos temporales
+        $attachedFiles = $request->input('attached_files', []);
+        if (!empty($attachedFiles)) {
+            try {
+                // Verificar que los archivos existen y pertenecen al usuario
+                $validFiles = AiDocument::whereIn('id', $attachedFiles)
+                    ->where('username', $user->username)
+                    ->where('is_temporary', true)
+                    ->where('session_id', $sessionId)
+                    ->get();
+
+                if ($validFiles->count() > 0) {
+                    $contextData = is_array($session->context_data) ? $session->context_data : [];
+                    $existingDocIds = Arr::get($contextData, 'doc_ids', []);
+                    if (!is_array($existingDocIds)) { $existingDocIds = []; }
+
+                    // Agregar archivos adjuntos al contexto
+                    $newDocIds = $validFiles->pluck('id')->toArray();
+                    $contextData['doc_ids'] = array_values(array_unique(array_merge($existingDocIds, $newDocIds)));
+
+                    // Marcar como archivos adjuntos en el contexto
+                    $contextData['attached_files'] = $newDocIds;
+
+                    $session->context_data = $contextData;
+                    $session->save();
+
+                    // Guardar información de archivos adjuntos en el mensaje
+                    $userMessage->metadata = array_merge($userMessage->metadata ?? [], [
+                        'attached_files' => $validFiles->map(function($file) {
+                            return [
+                                'id' => $file->id,
+                                'name' => $file->original_filename,
+                                'type' => $file->document_type,
+                                'size' => $file->file_size
+                            ];
+                        })->toArray()
+                    ]);
+                    $userMessage->save();
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Error al procesar archivos adjuntos', [
+                    'session_id' => $session->id,
+                    'attached_files' => $attachedFiles,
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -1899,6 +1949,11 @@ class AiAssistantController extends Controller
      */
     public function uploadDocument(Request $request): JsonResponse
     {
+        // Aumentar límites de tiempo y memoria para subida de archivos grandes
+        set_time_limit(600); // 10 minutos
+        ini_set('memory_limit', '1024M'); // 1GB
+        ini_set('max_execution_time', 600);
+
         $user = Auth::user();
 
         // Verificar límites para usuarios
@@ -1917,13 +1972,19 @@ class AiAssistantController extends Controller
             'files.*' => 'sometimes|file|max:102400|mimes:pdf,jpg,jpeg,png,xlsx,docx,pptx',
             'drive_folder_id' => 'nullable|string',
             'drive_type' => 'sometimes|in:personal,organization',
-            'session_id' => 'nullable|integer'
+            'session_id' => 'nullable|integer',
+            'temporary' => 'nullable|boolean'
         ]);
 
         try {
             $driveType = $request->input('drive_type', 'personal');
             $folderId = $request->input('drive_folder_id');
             $sessionId = (int) $request->input('session_id');
+
+            // TODOS LOS ROLES ahora usan almacenamiento temporal por defecto
+            // Solo se permite permanente si se solicita explícitamente con temporary=false
+            $requestedTemporary = $request->boolean('temporary', true); // Por defecto temporal
+            $isTemporary = $requestedTemporary;
 
             $files = [];
             if ($request->hasFile('files')) {
@@ -1951,32 +2012,122 @@ class AiAssistantController extends Controller
                         'limits' => $limits,
                     ], 403);
                 }
+
                 $originalName = $file->getClientOriginalName();
                 $mimeType = $file->getMimeType();
                 $fileSize = $file->getSize();
-
                 $documentType = $this->getDocumentType($mimeType, $originalName);
-                $driveResult = $this->uploadToGoogleDrive($file, $folderId, $driveType, $user);
 
-                $document = AiDocument::create([
-                    'username' => $user->username,
-                    'name' => pathinfo($originalName, PATHINFO_FILENAME),
-                    'original_filename' => $originalName,
-                    'document_type' => $documentType,
-                    'mime_type' => $mimeType,
-                    'file_size' => $fileSize,
-                    'drive_file_id' => $driveResult['file_id'],
-                    'drive_folder_id' => $driveResult['folder_id'],
-                    'drive_type' => $driveType,
-                    'processing_status' => 'pending',
-                    'document_metadata' => array_merge((array) ($driveResult['metadata'] ?? []), [
-                        'created_in_session' => $sessionId ? (string) $sessionId : null,
-                        'created_via' => 'assistant_upload',
-                    ]),
-                ]);
+                if ($isTemporary) {
+                    // MODO TEMPORAL: Guardar directamente en BD sin usar Google Drive (para todos los roles)
+
+                    $filePath = $file->getRealPath();
+
+                    // Para archivos grandes (>20MB), mover el archivo temporal y procesar en job
+                    if ($fileSize > 20 * 1024 * 1024) { // 20MB
+                        Log::info('Archivo grande detectado - procesamiento diferido', [
+                            'filename' => $originalName,
+                            'size' => $fileSize,
+                            'size_mb' => round($fileSize / 1024 / 1024, 2)
+                        ]);
+
+                        // Crear directorio temporal si no existe
+                        $tempDir = storage_path('app/temp-uploads');
+                        if (!is_dir($tempDir)) {
+                            mkdir($tempDir, 0755, true);
+                        }
+
+                        // Mover archivo a ubicación temporal persistente
+                        $tempFileName = 'temp_' . uniqid() . '_' . time() . '.' . $file->getClientOriginalExtension();
+                        $tempFilePath = $tempDir . DIRECTORY_SEPARATOR . $tempFileName;
+
+                        if (!move_uploaded_file($file->getRealPath(), $tempFilePath)) {
+                            throw new \Exception('No se pudo mover el archivo temporal');
+                        }
+
+                        // Crear documento sin contenido base64
+                        $document = AiDocument::create([
+                            'username' => $user->username,
+                            'name' => pathinfo($originalName, PATHINFO_FILENAME),
+                            'original_filename' => $originalName,
+                            'document_type' => $documentType,
+                            'mime_type' => $mimeType,
+                            'file_size' => $fileSize,
+                            'drive_file_id' => 'temp_' . uniqid(),
+                            'drive_folder_id' => null,
+                            'drive_type' => 'temp', // Cambiado de 'temporary' a 'temp'
+                            'processing_status' => 'pending',
+                            'is_temporary' => true,
+                            'session_id' => $sessionId,
+                            'extracted_text' => '',
+                            'document_metadata' => [
+                                'temporary_file' => true,
+                                'large_file' => true,
+                                'temp_file_path' => $tempFilePath,
+                                'created_in_session' => $sessionId ? (string) $sessionId : null,
+                                'created_via' => 'assistant_chat_upload',
+                            ],
+                        ]);
+
+                        Log::info('Archivo grande guardado para procesamiento', [
+                            'document_id' => $document->id,
+                            'temp_path' => $tempFilePath
+                        ]);
+
+                    } else {
+                        // Para archivos pequeños (<20MB), procesar normalmente
+                        $fileContent = file_get_contents($filePath);
+
+                        $document = AiDocument::create([
+                            'username' => $user->username,
+                            'name' => pathinfo($originalName, PATHINFO_FILENAME),
+                            'original_filename' => $originalName,
+                            'document_type' => $documentType,
+                            'mime_type' => $mimeType,
+                            'file_size' => $fileSize,
+                            'drive_file_id' => 'temp_' . uniqid(),
+                            'drive_folder_id' => null,
+                            'drive_type' => 'temp', // Cambiado de 'temporary' a 'temp'
+                            'processing_status' => 'pending',
+                            'is_temporary' => true,
+                            'session_id' => $sessionId,
+                            'extracted_text' => '',
+                            'document_metadata' => [
+                                'temporary_file' => true,
+                                'file_content' => base64_encode($fileContent),
+                                'created_in_session' => $sessionId ? (string) $sessionId : null,
+                                'created_via' => 'assistant_chat_upload',
+                            ],
+                        ]);
+
+                        // Liberar memoria inmediatamente
+                        unset($fileContent);
+                    }
+                } else {
+                    // MODO PERMANENTE: Subir a Google Drive (solo si se solicita explícitamente)
+                    $driveResult = $this->uploadToGoogleDrive($file, $folderId, $driveType, $user);
+
+                    $document = AiDocument::create([
+                        'username' => $user->username,
+                        'name' => pathinfo($originalName, PATHINFO_FILENAME),
+                        'original_filename' => $originalName,
+                        'document_type' => $documentType,
+                        'mime_type' => $mimeType,
+                        'file_size' => $fileSize,
+                        'drive_file_id' => $driveResult['file_id'],
+                        'drive_folder_id' => $driveResult['folder_id'],
+                        'drive_type' => $driveType,
+                        'processing_status' => 'pending',
+                        'is_temporary' => false,
+                        'session_id' => $sessionId,
+                        'document_metadata' => array_merge((array) ($driveResult['metadata'] ?? []), [
+                            'created_in_session' => $sessionId ? (string) $sessionId : null,
+                            'created_via' => 'assistant_upload',
+                        ]),
+                    ]);
+                }
 
                 $this->incrementDailyUsage($user, 'document_count');
-
                 $this->processDocumentInBackground($document);
 
                 if ($sessionId) {
@@ -2043,6 +2194,55 @@ class AiAssistantController extends Controller
             'success' => true,
             'documents' => $documents
         ]);
+    }
+
+    /**
+     * Eliminar documento temporal
+     */
+    public function deleteDocument($documentId): JsonResponse
+    {
+        $user = Auth::user();
+
+        try {
+            $document = AiDocument::where('id', $documentId)
+                ->where('username', $user->username)
+                ->first();
+
+            if (!$document) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Documento no encontrado'
+                ], 404);
+            }
+
+            // Solo permitir eliminar archivos temporales desde el chat
+            if (!$document->is_temporary) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo se pueden eliminar archivos temporales desde el chat'
+                ], 403);
+            }
+
+            // Eliminar el documento
+            $document->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Documento eliminado correctamente'
+            ]);
+
+        } catch (\Throwable $e) {
+            Log::error('Error deleting AI document', [
+                'document_id' => $documentId,
+                'username' => $user->username,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar el documento'
+            ], 500);
+        }
     }
 
     /**
@@ -2376,6 +2576,50 @@ class AiAssistantController extends Controller
                 $explicitDocIds = array_values(array_unique(array_map('intval', array_filter($ids, fn($v) => is_numeric($v)))));
             }
         } catch (\Throwable $e) {}
+
+        // Incluir contenido de archivos temporales adjuntos directamente
+        $temporaryFileFragments = [];
+        try {
+            if (!empty($explicitDocIds)) {
+                $temporaryDocs = \App\Models\AiDocument::whereIn('id', $explicitDocIds)
+                    ->where('username', $session->username)
+                    ->where('is_temporary', true)
+                    ->get();
+
+                foreach ($temporaryDocs as $doc) {
+                    // Verificar que el documento tiene contenido base64
+                    $metadata = $doc->document_metadata ?? [];
+                    $fileContent = $metadata['file_content'] ?? null;
+
+                    if ($fileContent) {
+                        $temporaryFileFragments[] = [
+                            'text' => "[ARCHIVO ADJUNTO: {$doc->original_filename}]\n" .
+                                     "Este documento está disponible para análisis. Puedes pedirme que lo lea, analice o extraiga información específica.\n" .
+                                     "Tipo: " . strtoupper(pathinfo($doc->original_filename, PATHINFO_EXTENSION)) . "\n" .
+                                     "Tamaño: " . number_format($doc->file_size) . " bytes\n\n" .
+                                     "[CONTENIDO BASE64 DISPONIBLE PARA CHATGPT]",
+                            'citation' => "doc:{$doc->id}",
+                            'source_id' => "document_{$doc->id}",
+                            'content_type' => 'temporary_document',
+                            'similarity' => 1.0, // Alta prioridad
+                            'metadata' => [
+                                'document_id' => $doc->id,
+                                'filename' => $doc->original_filename,
+                                'file_type' => pathinfo($doc->original_filename, PATHINFO_EXTENSION),
+                                'is_temporary' => true,
+                                'has_base64_content' => true,
+                                'base64_content' => $fileContent, // Incluir contenido para ChatGPT
+                            ]
+                        ];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Error al incluir archivos temporales en contexto', [
+                'session_id' => $session->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
         if ($useEmbeddings && !empty($apiKey)) {
             /** @var EmbeddingSearch $search */
             $search = app(EmbeddingSearch::class);
@@ -2538,7 +2782,7 @@ class AiAssistantController extends Controller
             Log::info('gatherContext: ignorando doc-type inferidos por error', ['error' => $e->getMessage()]);
         }
 
-        return array_values(array_merge($contextFragments, $additional));
+        return array_values(array_merge($temporaryFileFragments, $contextFragments, $additional));
     }
 
     /**

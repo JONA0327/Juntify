@@ -75,43 +75,15 @@ class ExtractorService
 
     private function extractPlainText(string $filePath): array
     {
-        $content = "";
-        $mimeType = mime_content_type($filePath) ?: "text/plain";
-        
-        // Try different approaches based on file type
-        if (str_contains($mimeType, "text/") || 
-            str_contains($mimeType, "application/json") ||
-            str_contains($mimeType, "application/xml")) {
-            
-            $content = file_get_contents($filePath);
-            
-        } elseif (str_contains($mimeType, "application/csv") || 
-                  pathinfo($filePath, PATHINFO_EXTENSION) === "csv") {
-            
-            // Handle CSV files
-            $handle = fopen($filePath, "r");
-            if ($handle !== false) {
-                while (($data = fgetcsv($handle)) !== false) {
-                    $content .= implode(" ", $data) . "\n";
-                }
-                fclose($handle);
-            }
-            
-        } else {
-            // Fallback: try to read as text anyway
-            $content = @file_get_contents($filePath) ?: "";
-        }
-        
-        // Clean up content
-        $text = $this->normalizeText($content);
-        
+        $contents = File::get($filePath);
+        $text = $this->normalizeText($contents ?? '');
+
         return [
-            "text" => $text,
-            "metadata" => [
-                "detected_type" => $mimeType,
-                "engine" => "php_native_improved",
-                "file_size" => filesize($filePath)
-            ]
+            'text' => $text,
+            'metadata' => [
+                'detected_type' => 'text/plain',
+                'original_bytes' => File::size($filePath),
+            ],
         ];
     }
 
@@ -1140,35 +1112,5 @@ class ExtractorService
             // Vision fallback failed; ignore and return null
             return null;
         }
-    }
-
-    
-    /**
-     * Basic PDF text extraction fallback
-     */
-    private function extractPdfBasic(string $filePath): string
-    {
-        try {
-            $content = file_get_contents($filePath);
-            
-            // Very basic PDF text extraction using regex
-            // This is not reliable but better than nothing
-            if (preg_match_all('/\((.*?)\)/', $content, $matches)) {
-                $text = implode(' ', $matches[1]);
-                $text = str_replace(['\\n', '\\r', '\\t'], ['\n', '\r', '\t'], $text);
-                return $this->normalizeText($text);
-            }
-            
-            // Try to find text between stream markers
-            if (preg_match_all('/stream\s*(.*?)\s*endstream/s', $content, $matches)) {
-                $text = implode(' ', $matches[1]);
-                return $this->normalizeText($text);
-            }
-            
-        } catch (\Throwable $e) {
-            // Ignore errors
-        }
-        
-        return '';
     }
 }

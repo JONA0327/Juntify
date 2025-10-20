@@ -257,7 +257,10 @@ Route::middleware(['auth'])->group(function () {
 
             // Gestión de documentos
             Route::get('/documents', [AiAssistantController::class, 'getDocuments'])->name('api.ai-assistant.documents');
-            Route::post('/documents/upload', [AiAssistantController::class, 'uploadDocument'])->name('api.ai-assistant.documents.upload');
+            Route::post('/documents/upload', [AiAssistantController::class, 'uploadDocument'])
+                ->name('api.ai-assistant.documents.upload')
+                ->middleware('upload.increase.limits');
+            Route::delete('/documents/{id}', [AiAssistantController::class, 'deleteDocument'])->name('api.ai-assistant.documents.delete');
 
             // Límites del plan
             Route::get('/limits', [AiAssistantController::class, 'getLimits'])->name('api.ai-assistant.limits');
@@ -335,5 +338,10 @@ Route::middleware(['auth'])->group(function () {
 
 // Webhook de MercadoPago (sin middleware auth)
 Route::post('/webhook/mercadopago', [SubscriptionPaymentController::class, 'webhook'])->name('payment.webhook');
+
+// Ruta de prueba para barra de progreso (TEMPORAL - REMOVER EN PRODUCCIÓN)
+Route::get('/test-progress', function () {
+    return view('test-progress');
+})->name('test.progress');
 
 

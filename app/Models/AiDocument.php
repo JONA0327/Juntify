@@ -28,6 +28,8 @@ class AiDocument extends Model
         'processing_step',
         'processing_error',
         'document_metadata',
+        'is_temporary',
+        'session_id',
     ];
 
     protected $casts = [
@@ -35,6 +37,7 @@ class AiDocument extends Model
         'document_metadata' => 'array',
         'file_size' => 'integer',
         'processing_progress' => 'integer',
+        'is_temporary' => 'boolean',
     ];
 
     public function user(): BelongsTo

@@ -92,6 +92,11 @@
             </div>
         </div>
 
+        <!-- Contenedor de archivos adjuntos y progreso -->
+        <div id="attachments-container" class="attachments-container" style="display: none;">
+            <!-- Archivos adjuntos se mostrarán aquí -->
+        </div>
+
         <!-- Área de entrada de texto -->
         <div class="input-area">
             <form id="chat-form" class="chat-form">
