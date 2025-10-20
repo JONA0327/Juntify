@@ -1146,6 +1146,10 @@ function displayAttachedFile(file) {
     fileElement.className = 'attached-file';
     fileElement.setAttribute('data-file-id', file.id);
 
+    const handleLine = file.reference_handle
+        ? `<div class="file-handle">${file.reference_handle}</div>`
+        : '';
+
     fileElement.innerHTML = `
         <div class="file-info">
             <div class="file-icon">
@@ -1153,6 +1157,7 @@ function displayAttachedFile(file) {
             </div>
             <div class="file-details">
                 <div class="file-name">${file.original_filename}</div>
+                ${handleLine}
                 <div class="file-size">${formatFileSize(file.file_size)}</div>
             </div>
         </div>

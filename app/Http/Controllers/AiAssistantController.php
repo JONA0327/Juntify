@@ -1398,7 +1398,8 @@ class AiAssistantController extends Controller
         }
 
         $request->validate([
-            'content' => 'required|string',
+            'content' => 'required_without:message|string',
+            'message' => 'required_without:content|string',
             'attachments' => 'nullable|array',
             'attached_files' => 'nullable|array', // IDs de archivos adjuntos temporales
             'attached_files.*' => 'integer',
@@ -1411,6 +1412,7 @@ class AiAssistantController extends Controller
 
         // Modo offline opcional: responder sin llamar a OpenAI
         $offline = filter_var(env('AI_ASSISTANT_OFFLINE', false), FILTER_VALIDATE_BOOLEAN);
+        $messageContent = (string) ($request->input('content') ?? $request->input('message') ?? '');
         // Validar API Key de OpenAI antes de continuar (si no estamos offline)
         $apiKey = OpenAiConfig::apiKey();
         if (!$offline && empty($apiKey)) {
@@ -1434,7 +1436,7 @@ class AiAssistantController extends Controller
         $userMessage = AiChatMessage::create([
             'session_id' => $session->id,
             'role' => 'user',
-            'content' => $request->content,
+            'content' => $messageContent,
             'attachments' => $request->attachments ?? []
         ]);
 
@@ -1442,6 +1444,17 @@ class AiAssistantController extends Controller
 
         // Aplicar menciones al contexto de la sesión y guardar en metadata del mensaje
         $mentions = Arr::wrap($request->input('mentions', []));
+        $autoDetectedMentions = $this->detectDocumentHandleMentions($user->username, $messageContent);
+        if (!empty($autoDetectedMentions)) {
+            $mentions = array_merge($mentions, $autoDetectedMentions);
+        }
+        $autoDetectedHandles = collect($autoDetectedMentions)
+            ->pluck('handle')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
         if (!empty($mentions)) {
             try {
                 $contextData = is_array($session->context_data) ? $session->context_data : [];
@@ -1470,6 +1483,8 @@ class AiAssistantController extends Controller
                             'type' => $type,
                             'id' => (int) $id,
                             'title' => $m['title'] ?? null,
+                            'handle' => $m['handle'] ?? null,
+                            'auto_detected' => (bool) ($m['auto_detected'] ?? false),
                         ];
                     }
                 }
@@ -1489,6 +1504,14 @@ class AiAssistantController extends Controller
 
                 // Guardar menciones en el mensaje del usuario para que el frontend pueda mostrarlas
                 $userMessage->metadata = array_merge($userMessage->metadata ?? [], [ 'mentions' => $mentions ]);
+                if (!empty($autoDetectedHandles)) {
+                    $existingHandlesMeta = $userMessage->metadata['detected_document_handles'] ?? [];
+                    if (!is_array($existingHandlesMeta)) { $existingHandlesMeta = []; }
+                    $userMessage->metadata['detected_document_handles'] = array_values(array_unique(array_merge(
+                        $existingHandlesMeta,
+                        $autoDetectedHandles
+                    )));
+                }
                 $userMessage->save();
 
                 // NUEVA FUNCIONALIDAD: Precargar automáticamente el contenido de reuniones y contenedores mencionados
@@ -1614,7 +1637,7 @@ class AiAssistantController extends Controller
         }
 
         if ($isFirstUserMessage) {
-            $derivedTitle = $this->deriveSessionTitle($request->content, $session->title);
+            $derivedTitle = $this->deriveSessionTitle($messageContent, $session->title);
 
             if ($derivedTitle && $derivedTitle !== $session->title) {
                 $session->title = $derivedTitle;
@@ -1624,25 +1647,25 @@ class AiAssistantController extends Controller
 
         // Si estamos en modo offline, generar una respuesta básica usando solo el contexto
         if ($offline) {
-            $contextFragments = $this->gatherContext($session, $request->content);
+            $contextFragments = $this->gatherContext($session, $messageContent);
             $snippet = '';
             if (!empty($contextFragments)) {
                 $texts = array_map(fn($f) => $f['text'] ?? '', array_slice($contextFragments, 0, 3));
                 $snippet = implode("\n- ", array_filter($texts));
             }
-            $content = "(Modo offline) Puedo ayudarte a analizar esta conversación basándome en el contexto disponible.\n\nResumen de contexto:\n- " . ($snippet ?: 'No hay fragmentos de contexto disponibles.') . "\n\nHaz tu pregunta específica y te orientaré con la información encontrada.";
+            $offlineReply = "(Modo offline) Puedo ayudarte a analizar esta conversación basándome en el contexto disponible.\n\nResumen de contexto:\n- " . ($snippet ?: 'No hay fragmentos de contexto disponibles.') . "\n\nHaz tu pregunta específica y te orientaré con la información encontrada.";
 
             $assistantMessage = AiChatMessage::create([
                 'session_id' => $session->id,
                 'role' => 'assistant',
-                'content' => $content,
+                'content' => $offlineReply,
                 'metadata' => [
                     'offline' => true,
                 ],
             ]);
         } else {
             // Procesar con IA y generar respuesta
-            $assistantMessage = $this->processAiResponse($session, $request->content, $request->attachments ?? []);
+            $assistantMessage = $this->processAiResponse($session, $messageContent, $request->attachments ?? []);
         }
 
         // Actualizar actividad de la sesión
@@ -1665,6 +1688,93 @@ class AiAssistantController extends Controller
                 'last_activity' => $session->last_activity,
             ],
         ]);
+    }
+
+    /**
+     * Detecta referencias a documentos usando el formato @referencia dentro del mensaje del usuario.
+     *
+     * @return array<int, array{type:string,id:int,title:?string,handle:?string,auto_detected:bool}>
+     */
+    private function detectDocumentHandleMentions(string $username, string $content): array
+    {
+        if (trim($content) === '') {
+            return [];
+        }
+
+        $matches = [];
+        if (! preg_match_all('/(?<![\\w@])@([A-Za-z0-9][A-Za-z0-9_\-]{1,60})/', $content, $matches)) {
+            return [];
+        }
+
+        $rawHandles = collect($matches[0] ?? [])
+            ->map(fn ($handle) => Str::lower($handle))
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($rawHandles)) {
+            return [];
+        }
+
+        $documents = AiDocument::byUser($username)
+            ->processed()
+            ->orderByDesc('updated_at')
+            ->limit(120)
+            ->get();
+
+        if ($documents->isEmpty()) {
+            return [];
+        }
+
+        $handleMap = [];
+        foreach ($documents as $doc) {
+            $metadata = is_array($doc->document_metadata) ? $doc->document_metadata : [];
+            $handles = [];
+            if (! empty($metadata['reference_handle'])) {
+                $handles[] = (string) $metadata['reference_handle'];
+            }
+            if (! empty($metadata['handles']) && is_array($metadata['handles'])) {
+                $handles = array_merge($handles, $metadata['handles']);
+            }
+
+            foreach ($handles as $handle) {
+                $normalized = Str::lower((string) $handle);
+                if ($normalized === '') {
+                    continue;
+                }
+                $handleMap[$normalized] = [
+                    'document' => $doc,
+                    'handle' => (string) $handle,
+                ];
+            }
+        }
+
+        if (empty($handleMap)) {
+            return [];
+        }
+
+        $mentions = [];
+        foreach ($rawHandles as $handle) {
+            if (! isset($handleMap[$handle])) {
+                continue;
+            }
+
+            /** @var AiDocument $document */
+            $document = $handleMap[$handle]['document'];
+            $resolvedHandle = $handleMap[$handle]['handle'];
+
+            $mentions[] = [
+                'type' => 'document',
+                'id' => (int) $document->id,
+                'title' => $document->name
+                    ?? $document->original_filename
+                    ?? ('Documento ' . $document->id),
+                'handle' => $resolvedHandle,
+                'auto_detected' => true,
+            ];
+        }
+
+        return $mentions;
     }
 
     /**
@@ -2474,6 +2584,7 @@ class AiAssistantController extends Controller
     {
         $status = (string) ($document->processing_status ?? 'pending');
         $step = (string) ($document->processing_step ?? '');
+        $metadata = is_array($document->document_metadata) ? $document->document_metadata : [];
 
         $statusLabels = [
             'pending' => 'En cola',
@@ -2507,6 +2618,13 @@ class AiAssistantController extends Controller
             'step_label' => $step ? ($stepLabels[$step] ?? ucfirst($step)) : null,
             'has_text' => $document->hasText(),
             'created_at' => $document->created_at,
+            'summary' => $metadata['summary'] ?? null,
+            'key_points' => is_array($metadata['key_points'] ?? null) ? $metadata['key_points'] : [],
+            'topics' => is_array($metadata['topics'] ?? null) ? $metadata['topics'] : [],
+            'reference_handle' => $metadata['reference_handle'] ?? null,
+            'language' => $metadata['language'] ?? null,
+            'analysis' => $metadata['analysis'] ?? null,
+            'context_preview' => $metadata['context_preview'] ?? null,
         ];
     }
 
@@ -4592,6 +4710,10 @@ class AiAssistantController extends Controller
                 continue;
             }
 
+            $metadata = is_array($document->document_metadata) ? $document->document_metadata : [];
+            $referenceHandle = $metadata['reference_handle'] ?? null;
+            $topics = is_array($metadata['topics'] ?? null) ? $metadata['topics'] : [];
+
             $fragments[] = [
                 'text' => $text,
                 'source_id' => 'document:' . $document->id . ':overview',
@@ -4601,10 +4723,15 @@ class AiAssistantController extends Controller
                     'document_id' => $document->id,
                     'title' => $title,
                     'url' => $document->drive_file_id ? sprintf('https://drive.google.com/file/d/%s/view', $document->drive_file_id) : null,
+                    'handle' => $referenceHandle,
                 ]),
                 'similarity' => null,
                 'citation' => 'doc:' . $document->id . ' resumen',
-                'metadata' => ['summary' => (bool) $summary],
+                'metadata' => [
+                    'summary' => (bool) $summary,
+                    'reference_handle' => $referenceHandle,
+                    'topics' => $topics,
+                ],
             ];
         }
 
