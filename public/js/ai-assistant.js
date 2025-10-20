@@ -3449,6 +3449,12 @@ function renderContextDocs() {
 
     const ids = Array.from(new Set((selectedDocuments || []).map(Number).filter(n => Number.isFinite(n))));
     if (ids.length === 0) {
+
+    if (!currentContext.type || currentContext.type === 'general') {
+        currentContext.type = 'documents';
+    }
+
+    updateContextIndicator();
         bar.style.display = 'none';
         chips.innerHTML = '';
         return;
@@ -3542,18 +3548,24 @@ async function uploadChatAttachments(files) {
         return;
     }
 
-    for (const file of validFiles) {
-        try {
-            const formData = new FormData();
-            formData.append('files[]', file);
+                if (doc && doc.id) {
+                    // Aseguramos que el documento se agregue al contexto inmediatamente
+                    addDocIdToSessionContext(numericId);
 
-            // Mantener la sesión actual
-            if (currentSessionId) {
-                formData.append('session_id', String(currentSessionId));
-            }
+                    if (statusRef) {
+                        documentStatusMessages.set(numericId, statusRef);
+                        const state = (doc.processing_status === 'failed')
+                            ? 'failed'
+                            : (doc.processing_status === 'completed' ? 'completed' : 'processing');
+                        updateUploadStatusMessage(statusRef, state, doc);
 
-            const statusRef = createUploadStatusMessage(file.name);
-
+                        if (state === 'completed') {
+                            documentStatusMessages.delete(numericId);
+                        } else if (state === 'failed') {
+                            documentStatusMessages.delete(numericId);
+                        } else {
+                            addPendingDoc(numericId);
+                        }
             const response = await fetch('/api/ai-assistant/documents/upload', {
                 method: 'POST',
                 headers: {
