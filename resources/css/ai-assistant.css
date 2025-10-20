@@ -250,6 +250,14 @@ button:hover {
     text-overflow: ellipsis;
 }
 
+.file-handle {
+    font-size: 0.75rem;
+    color: #38bdf8;
+    margin-top: 2px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
 .file-size {
     font-size: 0.75rem;
     color: #94a3b8;

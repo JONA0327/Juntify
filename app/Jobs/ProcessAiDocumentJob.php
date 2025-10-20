@@ -6,6 +6,7 @@ use App\Models\AiContextEmbedding;
 use App\Models\AiDocument;
 use App\Models\GoogleToken;
 use App\Services\ChunkerService;
+use App\Services\DocumentAnalysisService;
 use App\Services\EmbeddingService;
 use App\Services\ExtractorService;
 use App\Services\GoogleDriveService;
@@ -33,7 +34,8 @@ class ProcessAiDocumentJob implements ShouldQueue
         GoogleDriveService $driveService,
         ExtractorService $extractorService,
         ChunkerService $chunkerService,
-        EmbeddingService $embeddingService
+        EmbeddingService $embeddingService,
+        DocumentAnalysisService $documentAnalysisService
     ): void {
         $document = AiDocument::find($this->documentId);
 
@@ -186,6 +188,25 @@ class ProcessAiDocumentJob implements ShouldQueue
                 }
             }
 
+            $analysis = $documentAnalysisService->analyze($document, $normalizedText, [
+                'file_path' => $tempFile['absolute_path'] ?? null,
+            ]);
+            $summary = $analysis['summary'] ?? null;
+            $keyPoints = array_slice($analysis['key_points'] ?? [], 0, 10);
+            $topics = array_slice($analysis['topics'] ?? [], 0, 10);
+            $referenceHandle = $analysis['reference_handle']
+                ?? $documentAnalysisService->generateReferenceHandle($document);
+            $analysisMetadata = [
+                'model' => $analysis['model'] ?? null,
+                'source' => $analysis['source'] ?? null,
+                'language' => $analysis['language'] ?? null,
+                'fallback' => (bool) ($analysis['fallback'] ?? false),
+                'generated_at' => now()->toIso8601String(),
+            ];
+            if (! empty($analysis['raw_response'])) {
+                $analysisMetadata['raw_response_preview'] = Str::limit((string) $analysis['raw_response'], 1800, '…');
+            }
+
             $useEmbeddings = (bool) env('AI_ASSISTANT_USE_EMBEDDINGS', false);
             $embeddingModel = config('services.openai.embedding_model', 'text-embedding-3-small');
             $embeddings = [];
@@ -197,7 +218,21 @@ class ProcessAiDocumentJob implements ShouldQueue
                 $document->update(['processing_progress' => 75, 'processing_step' => 'indexing']);
             }
 
-            DB::transaction(function () use ($document, $chunks, $normalizedText, $embeddings, $extracted, $embeddingModel, $useEmbeddings) {
+            DB::transaction(function () use (
+                $document,
+                $chunks,
+                $normalizedText,
+                $embeddings,
+                $extracted,
+                $embeddingModel,
+                $useEmbeddings,
+                $summary,
+                $keyPoints,
+                $topics,
+                $analysisMetadata,
+                $referenceHandle,
+                $analysis
+            ) {
                 if ($useEmbeddings) {
                     AiContextEmbedding::where('content_type', 'document_text')
                         ->where('content_id', (string) $document->id)
@@ -242,12 +277,33 @@ class ProcessAiDocumentJob implements ShouldQueue
                     }
                 }
 
+                $existingMetadata = (array) $document->document_metadata ?: [];
+                $existingMetadata['chunks'] = $lightChunks;
+                if ($summary !== null) {
+                    $existingMetadata['summary'] = $summary;
+                } elseif (! array_key_exists('summary', $existingMetadata)) {
+                    $existingMetadata['summary'] = null;
+                }
+                $existingMetadata['key_points'] = $keyPoints;
+                $existingMetadata['topics'] = $topics;
+                $language = $analysis['language'] ?? ($existingMetadata['language'] ?? null);
+                $existingMetadata['language'] = $language;
+                $existingMetadata['analysis'] = array_filter($analysisMetadata, function ($value) {
+                    return $value !== null;
+                });
+                $existingMetadata['context_preview'] = Str::limit($normalizedText, 1200, '…');
+                $existingMetadata['reference_handle'] = $referenceHandle;
+                $existingHandles = [];
+                if (isset($existingMetadata['handles']) && is_array($existingMetadata['handles'])) {
+                    $existingHandles = $existingMetadata['handles'];
+                }
+                $existingHandles[] = $referenceHandle;
+                $existingMetadata['handles'] = array_values(array_unique(array_filter($existingHandles)));
+
                 $document->update([
                     'extracted_text' => $normalizedText,
                     'ocr_metadata' => $extracted['metadata'] ?? [],
-                    'document_metadata' => array_merge((array) $document->document_metadata ?: [], [
-                        'chunks' => $lightChunks,
-                    ]),
+                    'document_metadata' => $existingMetadata,
                     'processing_status' => 'completed',
                     'processing_error' => null,
                     'processing_progress' => 100,
