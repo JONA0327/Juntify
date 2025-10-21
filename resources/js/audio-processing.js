@@ -53,6 +53,13 @@ function getPlanUploadLimitMb() {
     const planCode = (window.userPlanCode || '').toString().toLowerCase();
     const role = (window.userRole || '').toString().toLowerCase();
 
+    const businessKeywords = ['negocios', 'business', 'buisness', 'negocio'];
+    const isBusiness = businessKeywords.some(keyword => keyword && (role.includes(keyword) || planCode.includes(keyword)));
+
+    if (isBusiness) {
+        return 100;
+    }
+
     if (role === 'basic' || planCode === 'basic' || planCode === 'basico' || planCode.includes('basic')) {
         return 60;
     }

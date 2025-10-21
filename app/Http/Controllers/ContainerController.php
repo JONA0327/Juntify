@@ -195,17 +195,32 @@ class ContainerController extends Controller
                 $planCode = strtolower((string) ($user->plan_code ?? 'free'));
                 $role = strtolower((string) ($user->roles ?? 'free'));
                 $isBasicPlan = $role === 'basic' || in_array($planCode, ['basic', 'basico'], true) || str_contains($planCode, 'basic');
+                $isBusinessPlan = $role === 'negocios'
+                    || in_array($planCode, ['negocios', 'business', 'buisness'], true)
+                    || str_contains($planCode, 'negocio')
+                    || str_contains($role, 'business');
+
+                $maxPersonalContainers = null;
+                $planLabel = null;
 
                 if ($isBasicPlan) {
+                    $maxPersonalContainers = 3;
+                    $planLabel = 'Plan Basic';
+                } elseif ($isBusinessPlan) {
+                    $maxPersonalContainers = 10;
+                    $planLabel = 'Plan Business';
+                }
+
+                if ($maxPersonalContainers !== null) {
                     $personalContainers = MeetingContentContainer::where('username', $user->username)
                         ->whereNull('group_id')
                         ->where('is_active', true)
                         ->count();
 
-                    if ($personalContainers >= 3) {
+                    if ($personalContainers >= $maxPersonalContainers) {
                         return response()->json([
                             'success' => false,
-                            'message' => 'El Plan Basic permite crear hasta 3 contenedores personales.',
+                            'message' => sprintf('%s permite crear hasta %d contenedores personales.', $planLabel, $maxPersonalContainers),
                         ], 403);
                     }
                 }
@@ -369,15 +384,33 @@ class ContainerController extends Controller
         $role = strtolower((string) ($user->roles ?? 'free'));
         $isBasicPlan = $role === 'basic' || in_array($planCode, ['basic', 'basico'], true) || str_contains($planCode, 'basic');
 
-        if ($isBasicPlan && !$container->group_id) { // Solo aplicar límite a contenedores personales
-            $currentMeetingsCount = MeetingContentRelation::where('container_id', $container->id)->count();
+        $isBusinessPlan = $role === 'negocios'
+            || in_array($planCode, ['negocios', 'business', 'buisness'], true)
+            || str_contains($planCode, 'negocio')
+            || str_contains($role, 'business');
 
-            if ($currentMeetingsCount >= 10) {
-                Log::info("Plan Basic meeting limit reached for container {$id} - current count: {$currentMeetingsCount}");
-                return response()->json([
-                    'success' => false,
-                    'message' => 'El Plan Basic permite máximo 10 reuniones por contenedor.'
-                ], 403);
+        if (!$container->group_id) { // Solo aplicar límite a contenedores personales
+            $maxMeetingsPerContainer = null;
+            $planLabel = null;
+
+            if ($isBasicPlan) {
+                $maxMeetingsPerContainer = 10;
+                $planLabel = 'Plan Basic';
+            } elseif ($isBusinessPlan) {
+                $maxMeetingsPerContainer = 10;
+                $planLabel = 'Plan Business';
+            }
+
+            if ($maxMeetingsPerContainer !== null) {
+                $currentMeetingsCount = MeetingContentRelation::where('container_id', $container->id)->count();
+
+                if ($currentMeetingsCount >= $maxMeetingsPerContainer) {
+                    Log::info("{$planLabel} meeting limit reached for container {$id} - current count: {$currentMeetingsCount}");
+                    return response()->json([
+                        'success' => false,
+                        'message' => sprintf('%s permite máximo %d reuniones por contenedor.', $planLabel, $maxMeetingsPerContainer)
+                    ], 403);
+                }
             }
         }
 

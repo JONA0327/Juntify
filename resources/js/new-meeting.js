@@ -55,10 +55,14 @@ function getUserPlanInfo() {
     const role = (window.userRole || '').toString().toLowerCase();
     const isBasic = role === 'basic' || planCode === 'basic' || planCode === 'basico' || planCode.includes('basic');
     const isFree = role === 'free' || planCode === '' || planCode === 'free' || planCode.includes('free');
+    const businessKeywords = ['negocios', 'business', 'buisness', 'negocio'];
+    const isBusiness = businessKeywords.some(keyword => keyword && (role.includes(keyword) || planCode.includes(keyword)));
 
     let planName = 'tu plan actual';
     if (isBasic) {
         planName = 'Plan Basic';
+    } else if (isBusiness) {
+        planName = 'Plan Business';
     } else if (isFree) {
         planName = 'Plan Free';
     }
@@ -67,6 +71,7 @@ function getUserPlanInfo() {
         planCode,
         role,
         isBasic,
+        isBusiness,
         isFree,
         planName,
         belongsToOrg: !!window.userBelongsToOrganization,
@@ -74,8 +79,8 @@ function getUserPlanInfo() {
 }
 
 function getUploadLimitBytes(planInfo, hasPremium) {
-    if (hasPremium) {
-        return null;
+    if (planInfo.isBusiness) {
+        return 100 * 1024 * 1024;
     }
 
     if (planInfo.isBasic) {
@@ -84,6 +89,10 @@ function getUploadLimitBytes(planInfo, hasPremium) {
 
     if (planInfo.isFree) {
         return 50 * 1024 * 1024;
+    }
+
+    if (hasPremium) {
+        return null;
     }
 
     return null;
