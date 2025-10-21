@@ -17,6 +17,7 @@ use App\Models\TranscriptionLaravel;
 use App\Services\GoogleDriveService;
 use Illuminate\Support\Str;
 use App\Traits\MeetingContentParsing;
+use Illuminate\Support\Facades\DB;
 
 class TranscriptionTempController extends Controller
 {
@@ -941,19 +942,58 @@ class TranscriptionTempController extends Controller
                 ], 400);
             }
 
+            // Prepare tasks already stored in the temporal meeting so we can preserve their IDs
+            $existingTaskModels = \App\Models\TaskLaravel::where('meeting_id', $transcription->id)
+                ->where('meeting_type', 'temporary')
+                ->get();
+
+            $normalizedTaskPayloads = [];
+            if ($existingTaskModels->isNotEmpty()) {
+                $normalizedTaskPayloads = $existingTaskModels->map(static function ($task) {
+                    return [
+                        'tarea' => $task->tarea,
+                        'descripcion' => $task->descripcion,
+                        'prioridad' => $task->prioridad,
+                        'asignado' => $task->asignado,
+                        'fecha_inicio' => optional($task->fecha_inicio)->format('Y-m-d'),
+                        'fecha_limite' => optional($task->fecha_limite)->format('Y-m-d'),
+                        'hora_limite' => $task->hora_limite,
+                        'progreso' => $task->progreso,
+                    ];
+                })->values()->all();
+            } elseif (is_array($transcription->tasks)) {
+                foreach ($transcription->tasks as $taskData) {
+                    if (empty($taskData)) {
+                        continue;
+                    }
+
+                    if (is_object($taskData)) {
+                        $taskData = (array) $taskData;
+                    }
+
+                    $parsedTask = $this->parseTaskData($taskData);
+                    if (!empty($parsedTask['tarea'])) {
+                        $normalizedTaskPayloads[] = $parsedTask;
+                    }
+                }
+            }
+
             // Create Audio and Transcriptions folders if they don't exist
-            $audioFolderId = $driveService->createFolderIfNotExists('Audio', $targetParentId);
+            $audioFolderId = $driveService->createFolderIfNotExists('Audios', $targetParentId);
             $transcriptionsFolderId = $driveService->createFolderIfNotExists('Transcripciones', $targetParentId);
 
             $audioFileId = null;
             $transcriptionFileId = null;
 
+            $audioStoragePath = $transcription->audio_path;
+            $juStoragePath = $transcription->ju_path ?? $transcription->transcription_path;
+
             // Upload audio file to Drive if exists
-            if ($transcription->audio_path && Storage::exists($transcription->audio_path)) {
+            if ($audioStoragePath && Storage::exists($audioStoragePath)) {
                 try {
-                    $audioContent = Storage::get($transcription->audio_path);
-                    $audioFileName = $transcription->title . '_audio.' . pathinfo($transcription->audio_path, PATHINFO_EXTENSION);
-                    
+                    $audioContent = Storage::get($audioStoragePath);
+                    $audioFileName = $transcription->title . '_audio.' . pathinfo($audioStoragePath, PATHINFO_EXTENSION);
+
                     $audioFileId = $driveService->uploadFile(
                         $audioFileName,
                         $audioContent,
@@ -974,11 +1014,11 @@ class TranscriptionTempController extends Controller
             }
 
             // Upload .ju file to Drive if exists
-            if ($transcription->ju_path && Storage::exists($transcription->ju_path)) {
+            if ($juStoragePath && Storage::exists($juStoragePath)) {
                 try {
-                    $juContent = Storage::get($transcription->ju_path);
+                    $juContent = Storage::get($juStoragePath);
                     $juFileName = $transcription->title . '.ju';
-                    
+
                     $transcriptionFileId = $driveService->uploadFile(
                         $juFileName,
                         $juContent,
@@ -998,50 +1038,68 @@ class TranscriptionTempController extends Controller
                 }
             }
 
-            // Create permanent meeting record in TranscriptionLaravel
-            $permanentMeeting = TranscriptionLaravel::create([
-                'user_id' => $user->id,
-                'organization_id' => $driveType === 'organization' ? $user->current_organization_id : null,
-                'title' => $transcription->title,
-                'description' => $transcription->description,
-                'audio_drive_id' => $audioFileId,
-                'transcript_drive_id' => $transcriptionFileId,
-                'summary' => $transcription->summary,
-                'key_points' => $transcription->key_points,
-                'tasks' => $transcription->tasks,
-                'duration' => $transcription->duration,
-                'speaker_count' => $transcription->speaker_count,
-                'status' => 'completed',
-                'created_at' => $transcription->created_at,
-                'updated_at' => now(),
-            ]);
+            // Create permanent meeting record in TranscriptionLaravel and preserve/update tasks
+            $permanentMeeting = DB::transaction(function () use (
+                $user,
+                $driveType,
+                $transcription,
+                $audioFileId,
+                $transcriptionFileId,
+                $normalizedTaskPayloads,
+                $existingTaskModels
+            ) {
+                $meeting = TranscriptionLaravel::create([
+                    'user_id' => $user->id,
+                    'organization_id' => $driveType === 'organization' ? $user->current_organization_id : null,
+                    'title' => $transcription->title,
+                    'description' => $transcription->description,
+                    'audio_drive_id' => $audioFileId,
+                    'transcript_drive_id' => $transcriptionFileId,
+                    'summary' => $transcription->summary,
+                    'key_points' => $transcription->key_points,
+                    'tasks' => $normalizedTaskPayloads,
+                    'duration' => $transcription->duration,
+                    'speaker_count' => $transcription->speaker_count,
+                    'status' => 'completed',
+                    'created_at' => $transcription->created_at,
+                    'updated_at' => now(),
+                ]);
 
-            // Copy tasks if they exist
-            if ($transcription->tasks) {
-                foreach ($transcription->tasks as $taskData) {
-                    if (is_array($taskData) && isset($taskData['tarea'])) {
-                        $permanentMeeting->taskLaravels()->create([
-                            'user_id' => $user->id,
-                            'organization_id' => $driveType === 'organization' ? $user->current_organization_id : null,
+                if ($existingTaskModels->isNotEmpty()) {
+                    foreach ($existingTaskModels as $taskModel) {
+                        $taskModel->meeting_id = $meeting->id;
+                        $taskModel->meeting_type = 'permanent';
+                        $taskModel->save();
+                    }
+                } elseif (!empty($normalizedTaskPayloads)) {
+                    foreach ($normalizedTaskPayloads as $taskData) {
+                        \App\Models\TaskLaravel::create([
+                            'username' => $user->username,
+                            'meeting_id' => $meeting->id,
+                            'meeting_type' => 'permanent',
                             'tarea' => $taskData['tarea'],
                             'descripcion' => $taskData['descripcion'] ?? null,
                             'prioridad' => $taskData['prioridad'] ?? 'media',
                             'asignado' => $taskData['asignado'] ?? null,
+                            'fecha_inicio' => $taskData['fecha_inicio'] ?? null,
                             'fecha_limite' => $taskData['fecha_limite'] ?? null,
                             'hora_limite' => $taskData['hora_limite'] ?? null,
                             'progreso' => $taskData['progreso'] ?? 0,
-                            'estado' => 'pendiente',
+                            'assigned_user_id' => null,
+                            'assignment_status' => 'pending',
                         ]);
                     }
                 }
-            }
+
+                return $meeting;
+            });
 
             // Delete temporary files from storage
-            if ($transcription->audio_path && Storage::exists($transcription->audio_path)) {
-                Storage::delete($transcription->audio_path);
+            if ($audioStoragePath && Storage::exists($audioStoragePath)) {
+                Storage::delete($audioStoragePath);
             }
-            if ($transcription->ju_path && Storage::exists($transcription->ju_path)) {
-                Storage::delete($transcription->ju_path);
+            if ($juStoragePath && Storage::exists($juStoragePath)) {
+                Storage::delete($juStoragePath);
             }
 
             // Delete temporary transcription record
