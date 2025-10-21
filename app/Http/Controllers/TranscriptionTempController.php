@@ -1135,7 +1135,7 @@ class TranscriptionTempController extends Controller
             ]);
 
             // Copy tasks from TaskLaravel table if they exist (related to this temp transcription)
-            $tempTasks = $transcription->tasks; // Uses the existing relationship
+            $tempTasks = $transcription->tasks()->get(); // Ensure we get Eloquent models
             foreach ($tempTasks as $tempTask) {
                 $permanentMeeting->tasks()->create([
                     'user_id' => $user->id,
@@ -1153,8 +1153,9 @@ class TranscriptionTempController extends Controller
             }
 
             // Also copy tasks from JSON field if they exist
-            if ($transcription->tasks) {
-                foreach ($transcription->tasks as $taskData) {
+            $jsonTasks = $transcription->getAttribute('tasks') ?? [];
+            if (!empty($jsonTasks)) {
+                foreach ($jsonTasks as $taskData) {
                     if (is_array($taskData) && isset($taskData['tarea'])) {
                         $permanentMeeting->tasks()->create([
                             'user_id' => $user->id,
