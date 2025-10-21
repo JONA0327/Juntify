@@ -55,7 +55,7 @@ class PlansSeeder extends Seeder
             [
                 'code' => 'negocios',
                 'legacy_codes' => ['business'],
-                'name' => 'Negocios',
+                'name' => 'Plan Business',
                 'description' => 'Pago mensual con analítica avanzada y límites claros para equipos en crecimiento.',
                 'price' => 999.00, // Precio en pesos mexicanos
                 'currency' => 'MXN', // Peso mexicano
@@ -72,7 +72,7 @@ class PlansSeeder extends Seeder
                     'Exportar documentos',
                     'Compartir reuniones',
                     'Acceso a 10 contenedores con máximo de 10 reuniones por contenedor',
-                    'Sin acceso a creación de organizaciones'
+                    'Acceso al modo posponer reunión'
                 ]
             ],
             [
@@ -85,7 +85,7 @@ class PlansSeeder extends Seeder
                 'billing_cycle_days' => 30,
                 'is_active' => true,
                 'features' => [
-                    'Todo lo del plan Negocios',
+                    'Todo lo del Plan Business',
                     'Implementación personalizada',
                     'Seguridad empresarial y cumplimiento',
                     'Análisis predictivo avanzado',

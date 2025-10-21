@@ -558,8 +558,8 @@ function inferPlanName(planCode, planRole) {
         freemium: 'Plan Free',
         basic: 'Plan Basic',
         basico: 'Plan Basic',
-        negocios: 'Plan Negocios',
-        business: 'Plan Negocios',
+        negocios: 'Plan Business',
+        business: 'Plan Business',
         enterprise: 'Plan Enterprise',
         empresas: 'Plan Empresas',
     };
