@@ -56,13 +56,12 @@ class PlansSeeder extends Seeder
                 'code' => 'negocios',
                 'legacy_codes' => ['business'],
                 'name' => 'Plan Business',
-                'description' => 'Pago mensual con límites claros para equipos en crecimiento.',
+                'description' => 'Plan mensual',
                 'price' => 999.00, // Precio en pesos mexicanos
                 'currency' => 'MXN', // Peso mexicano
                 'billing_cycle_days' => 30,
                 'is_active' => true,
                 'features' => [
-                    'Pago mensual',
                     'Hasta 30 reuniones al mes',
                     'Duración máxima de 2 horas por reunión',
                     'Subida de audio de hasta 100 MB',

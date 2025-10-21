@@ -37,9 +37,8 @@
       "name": "Plan Business",
       "price": "$999",
       "period": "por mes (facturación anual)",
-      "description": "Pago mensual con límites claros para equipos en crecimiento.",
+      "description": "Plan mensual",
       "features": [
-        "Pago mensual",
         "Hasta 30 reuniones al mes",
         "Duración máxima de 2 horas por reunión",
         "Subida de audio de hasta 100 MB",
@@ -107,9 +106,8 @@
       "name": "Plan Business",
       "price": "$999",
       "period": "por mes",
-      "description": "Pago mensual con límites claros para equipos en crecimiento.",
+      "description": "Plan mensual",
       "features": [
-        "Pago mensual",
         "Hasta 30 reuniones al mes",
         "Duración máxima de 2 horas por reunión",
         "Subida de audio de hasta 100 MB",
