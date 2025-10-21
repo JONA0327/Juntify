@@ -1138,6 +1138,7 @@ class TranscriptionTempController extends Controller
             $tempTasks = $transcription->tasks()->get(); // Ensure we get Eloquent models
             foreach ($tempTasks as $tempTask) {
                 $permanentMeeting->tasks()->create([
+                    'username' => $user->username,
                     'user_id' => $user->id,
                     'organization_id' => $driveType === 'organization' ? $user->current_organization_id : null,
                     'tarea' => $tempTask->tarea,
@@ -1158,6 +1159,7 @@ class TranscriptionTempController extends Controller
                 foreach ($jsonTasks as $taskData) {
                     if (is_array($taskData) && isset($taskData['tarea'])) {
                         $permanentMeeting->tasks()->create([
+                            'username' => $user->username,
                             'user_id' => $user->id,
                             'organization_id' => $driveType === 'organization' ? $user->current_organization_id : null,
                             'tarea' => $taskData['tarea'],
