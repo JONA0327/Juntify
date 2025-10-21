@@ -37,7 +37,7 @@
       "name": "Plan Business",
       "price": "$999",
       "period": "por mes (facturación anual)",
-      "description": "Para organizaciones que necesitan analítica profunda y alineación entre equipos.",
+      "description": "Pago mensual con límites claros para equipos en crecimiento.",
       "features": [
         "Pago mensual",
         "Hasta 30 reuniones al mes",
@@ -107,7 +107,7 @@
       "name": "Plan Business",
       "price": "$999",
       "period": "por mes",
-      "description": "Analítica avanzada y dashboards ejecutivos sin compromisos anuales.",
+      "description": "Pago mensual con límites claros para equipos en crecimiento.",
       "features": [
         "Pago mensual",
         "Hasta 30 reuniones al mes",

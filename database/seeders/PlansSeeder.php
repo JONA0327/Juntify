@@ -56,7 +56,7 @@ class PlansSeeder extends Seeder
                 'code' => 'negocios',
                 'legacy_codes' => ['business'],
                 'name' => 'Plan Business',
-                'description' => 'Pago mensual con analítica avanzada y límites claros para equipos en crecimiento.',
+                'description' => 'Pago mensual con límites claros para equipos en crecimiento.',
                 'price' => 999.00, // Precio en pesos mexicanos
                 'currency' => 'MXN', // Peso mexicano
                 'billing_cycle_days' => 30,
