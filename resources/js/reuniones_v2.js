@@ -6391,14 +6391,20 @@ window.closeUpgradeModal = closeUpgradeModal;
 
 // Funciones para exportar a Drive
 async function handleExportToDrive(meetingId) {
+    // Obtener ID real si es temporal
+    const actualId = String(meetingId).replace('temp-', '');
+
+    const exportBtn = document.getElementById('meeting-modal-export-drive-btn');
+    const defaultButtonMarkup = `
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M6.94 14.036c-.233.624-.43 1.2-.606 1.783.96-.697 2.101-1.139 3.418-1.304 2.513-.314 4.746-1.973 5.876-4.058l-1.456-1.455 1.413-1.415 1-1.001c.43-.43.915-1.224 1.428-2.368-5.593.867-9.018 4.292-10.073 9.818zM17 9v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h10a2 2 0 012 2z"/>
+        </svg>
+        Exportar a Drive
+    `;
+    let originalText = exportBtn ? exportBtn.innerHTML : null;
+
     try {
-        // Obtener ID real si es temporal
-        const actualId = String(meetingId).replace('temp-', '');
-        
-        // Mostrar loading en el botón
-        const exportBtn = document.getElementById('meeting-modal-export-drive-btn');
         if (exportBtn) {
-            const originalText = exportBtn.innerHTML;
             exportBtn.disabled = true;
             exportBtn.innerHTML = `
                 <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -6406,55 +6412,62 @@ async function handleExportToDrive(meetingId) {
                 </svg>
                 Exportando...
             `;
-            
-            // Hacer la solicitud de exportación
-            const response = await fetch(`/api/transcriptions-temp/${actualId}/export-to-drive`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    drive_type: 'personal' // Puedes cambiar esto por 'organization' si es necesario
-                })
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Éxito - mostrar mensaje y cerrar modal
-                alert('¡Reunión exportada exitosamente a Google Drive! Los archivos temporales han sido eliminados.');
-                closeMeetingModal();
-                
-                // Actualizar la lista de reuniones
-                if (typeof fetchMeetings === 'function') {
-                    fetchMeetings();
-                }
-            } else if (data.show_upgrade_modal) {
-                // Usuario no tiene permisos - mostrar modal de actualización
-                handleShowUpgradeModal();
-            } else {
-                // Error
-                alert('Error al exportar a Drive: ' + (data.message || 'Error desconocido'));
-                exportBtn.disabled = false;
-                exportBtn.innerHTML = originalText;
-            }
         }
+
+        const response = await fetch(`/api/transcriptions-temp/${actualId}/export-to-drive`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                drive_type: 'personal' // Puedes cambiar esto por 'organization' si es necesario
+            })
+        });
+
+        let data = null;
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            data = await response.json();
+        } else {
+            const rawText = await response.text();
+            console.error('❌ [reuniones_v2] Respuesta no JSON al exportar a Drive', {
+                status: response.status,
+                bodyPreview: rawText?.substring(0, 200)
+            });
+            throw new Error(rawText || `Respuesta inesperada del servidor (estado ${response.status})`);
+        }
+
+        if (data.success) {
+            alert('¡Reunión exportada exitosamente a Google Drive! Los archivos temporales han sido eliminados.');
+            closeMeetingModal();
+
+            if (typeof fetchMeetings === 'function') {
+                fetchMeetings();
+            }
+            return;
+        }
+
+        if (data.show_upgrade_modal) {
+            handleShowUpgradeModal();
+            return;
+        }
+
+        console.error('❌ [reuniones_v2] Error al exportar a Drive', {
+            status: response.status,
+            payload: data
+        });
+        alert('Error al exportar a Drive: ' + (data.message || `Error desconocido (estado ${response.status})`));
     } catch (error) {
         console.error('Error exporting to Drive:', error);
-        alert('Error al exportar a Drive. Por favor, inténtalo de nuevo.');
-        
-        // Restaurar botón
-        const exportBtn = document.getElementById('meeting-modal-export-drive-btn');
-        if (exportBtn) {
-            exportBtn.disabled = false;
-            exportBtn.innerHTML = `
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M6.94 14.036c-.233.624-.43 1.2-.606 1.783.96-.697 2.101-1.139 3.418-1.304 2.513-.314 4.746-1.973 5.876-4.058l-1.456-1.455 1.413-1.415 1-1.001c.43-.43.915-1.224 1.428-2.368-5.593.867-9.018 4.292-10.073 9.818zM17 9v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h10a2 2 0 012 2z"/>
-                </svg>
-                Exportar a Drive
-            `;
+        const message = error?.message || 'Por favor, inténtalo de nuevo.';
+        alert('Error al exportar a Drive: ' + message);
+    } finally {
+        const button = document.getElementById('meeting-modal-export-drive-btn');
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = originalText || defaultButtonMarkup;
         }
     }
 }
