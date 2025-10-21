@@ -270,7 +270,6 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::put('/transcriptions-temp/{transcription}/name', [App\Http\Controllers\TranscriptionTempController::class, 'updateName'])->name('api.transcriptions-temp.name.update');
         Route::patch('/transcriptions-temp/{transcription}/tasks', [App\Http\Controllers\TranscriptionTempController::class, 'updateTasks'])->name('api.transcriptions-temp.tasks.update');
         Route::post('/transcriptions-temp/{transcription}/analyze-tasks', [App\Http\Controllers\TranscriptionTempController::class, 'analyzeAndGenerateTasks'])->name('api.transcriptions-temp.analyze-tasks');
-        Route::post('/transcriptions-temp/{transcription}/export-to-drive', [App\Http\Controllers\TranscriptionTempController::class, 'exportToDrive'])->name('api.transcriptions-temp.export-to-drive');
         Route::delete('/transcriptions-temp/{transcription}', [App\Http\Controllers\TranscriptionTempController::class, 'destroy'])->name('api.transcriptions-temp.destroy');
         Route::post('/transcriptions-temp/clean-expired', [App\Http\Controllers\TranscriptionTempController::class, 'cleanExpired'])->name('api.transcriptions-temp.clean-expired');
     });
