@@ -56,19 +56,23 @@ class PlansSeeder extends Seeder
                 'code' => 'negocios',
                 'legacy_codes' => ['business'],
                 'name' => 'Negocios',
-                'description' => 'Analítica avanzada y dashboards ejecutivos sin compromisos anuales.',
+                'description' => 'Pago mensual con analítica avanzada y límites claros para equipos en crecimiento.',
                 'price' => 999.00, // Precio en pesos mexicanos
                 'currency' => 'MXN', // Peso mexicano
                 'billing_cycle_days' => 30,
                 'is_active' => true,
                 'features' => [
-                    'Todo lo del Plan Basic',
-                    'IA avanzada para análisis de conversaciones',
-                    'Análisis de sentimientos y temas',
-                    'Dashboards ejecutivos en tiempo real',
-                    'Integraciones avanzadas',
-                    'API personalizable',
-                    'Capacitación incluida'
+                    'Pago mensual',
+                    'Hasta 30 reuniones al mes',
+                    'Duración máxima de 2 horas por reunión',
+                    'Subida de audio de hasta 100 MB',
+                    'Transcripciones y audios almacenados en Google Drive con transcripción encriptada',
+                    '25 consultas al asistente y análisis de hasta 10 documentos por día',
+                    'Acceso a herramienta de tareas',
+                    'Exportar documentos',
+                    'Compartir reuniones',
+                    'Acceso a 10 contenedores con máximo de 10 reuniones por contenedor',
+                    'Sin acceso a creación de organizaciones'
                 ]
             ],
             [

@@ -137,6 +137,17 @@
                 };
             }
 
+            const businessPlans = ['negocios', 'business', 'buisness'];
+            const isBusinessByPlan = businessPlans.some(value => value && (planCode === value || planCode.includes(value)));
+            const isBusinessByRole = businessPlans.some(value => value && (role === value || role.includes(value)));
+
+            if (isBusinessByPlan || isBusinessByRole) {
+                return {
+                    maxContainers: 10,
+                    maxMeetingsPerContainer: 10
+                };
+            }
+
             // Plan BASIC: 3 contenedores, 10 reuniones por contenedor
             const basicPlans = ['basic', 'basico'];
             const isBasicByPlan = basicPlans.some(value => value && (planCode === value || planCode.includes(value)));

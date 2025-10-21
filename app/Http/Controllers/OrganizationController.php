@@ -190,8 +190,17 @@ class OrganizationController extends Controller
             'current_organization_id' => $user->current_organization_id,
         ]);
 
-        if (in_array($user->roles, ['free', 'basic'])) {
-            Log::warning('[OrganizationController@store] Bloqueado por plan', ['user_id' => $user->id, 'role' => $user->roles]);
+        $role = strtolower((string) ($user->roles ?? ''));
+        $planCode = strtolower((string) ($user->plan_code ?? ''));
+        $blockedRoles = ['free', 'freemium', 'basic', 'basico', 'negocios', 'business', 'buisness'];
+        $blockedPlanCodes = ['basic', 'basico', 'negocios', 'business', 'buisness'];
+
+        if (in_array($role, $blockedRoles, true) || in_array($planCode, $blockedPlanCodes, true)) {
+            Log::warning('[OrganizationController@store] Bloqueado por plan', [
+                'user_id' => $user->id,
+                'role' => $user->roles,
+                'plan_code' => $user->plan_code,
+            ]);
             return response()->json(['message' => 'Tu plan actual no permite crear organizaciones'], 403);
         }
 
