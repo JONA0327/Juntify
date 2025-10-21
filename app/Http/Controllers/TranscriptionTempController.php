@@ -195,19 +195,16 @@ class TranscriptionTempController extends Controller
 
                 // Merge tasks from database with JSON tasks for compatibility
                 $dbTasks = collect();
-                if ($transcription->relationLoaded('tasks') && $transcription->tasks) {
-                    $dbTasks = collect($transcription->tasks)->map(function($task) {
-                        return [
-                            'id' => $task->id,
-                            'tarea' => $task->tarea,
-                            'descripcion' => $task->descripcion,
-                            'prioridad' => $task->prioridad,
-                            'asignado' => $task->asignado,
-                            'fecha_limite' => $task->fecha_limite,
-                            'hora_limite' => $task->hora_limite,
-                            'progreso' => $task->progreso,
-                        ];
-                    });
+                if ($transcription->relationLoaded('tasks')) {
+                    $relatedTasks = $transcription->getRelationValue('tasks');
+                    if ($relatedTasks instanceof \Illuminate\Support\Collection && $relatedTasks->isNotEmpty()) {
+                        $dbTasks = $relatedTasks->map(function ($task) {
+                            $normalized = $this->normalizeTaskForExport($task);
+                            $normalized['id'] = $task->id ?? ($normalized['id'] ?? null);
+
+                            return $normalized;
+                        });
+                    }
                 }
 
                 // Use database tasks if available, otherwise fall back to JSON
@@ -278,19 +275,15 @@ class TranscriptionTempController extends Controller
                 ->get();
 
             if ($taskModels->isNotEmpty()) {
-                $dbTasks = $taskModels->map(function($task) {
-                    return [
-                        'id' => $task->id,
-                        'tarea' => $task->tarea,
-                        'descripcion' => $task->descripcion,
-                        'prioridad' => $task->prioridad,
-                        'asignado' => $task->asignado,
-                        'fecha_limite' => $task->fecha_limite,
-                        'hora_limite' => $task->hora_limite,
-                        'progreso' => $task->progreso,
-                    ];
+                $dbTasks = $taskModels->map(function ($task) {
+                    $normalized = $this->normalizeTaskForExport($task);
+                    $normalized['id'] = $task->id ?? ($normalized['id'] ?? null);
+
+                    return $normalized;
                 });
-            }            // Use database tasks if available, otherwise fall back to JSON
+            }
+
+            // Use database tasks if available, otherwise fall back to JSON
             $transcription->tasks_data = $dbTasks->isNotEmpty() ? $dbTasks->toArray() : ($transcription->tasks ?? []);
 
             // Mapear title a meeting_name para compatibilidad con frontend
@@ -849,6 +842,88 @@ class TranscriptionTempController extends Controller
 
         // Limit to reasonable number of tasks
         return array_slice($tasks, 0, 10);
+    }
+
+    private function normalizeTaskForExport($taskData): array
+    {
+        if ($taskData instanceof \App\Models\TaskLaravel) {
+            return [
+                'tarea' => $taskData->tarea,
+                'descripcion' => $taskData->descripcion,
+                'prioridad' => $taskData->prioridad,
+                'asignado' => $taskData->asignado,
+                'fecha_inicio' => $this->normalizeDateValue($taskData->fecha_inicio),
+                'fecha_limite' => $this->normalizeDateValue($taskData->fecha_limite),
+                'hora_limite' => $taskData->hora_limite,
+                'progreso' => $taskData->progreso,
+            ];
+        }
+
+        if (is_object($taskData)) {
+            $taskData = (array) $taskData;
+        }
+
+        if (is_array($taskData)) {
+            return [
+                'tarea' => substr((string) ($taskData['tarea'] ?? $taskData['text'] ?? $taskData['title'] ?? $taskData['name'] ?? ''), 0, 255),
+                'descripcion' => $taskData['descripcion'] ?? $taskData['description'] ?? $taskData['desc'] ?? null,
+                'prioridad' => $taskData['prioridad'] ?? $taskData['priority'] ?? 'media',
+                'asignado' => $taskData['asignado'] ?? $taskData['assigned'] ?? $taskData['assignee'] ?? null,
+                'fecha_inicio' => $this->normalizeDateValue($taskData['fecha_inicio'] ?? $taskData['start_date'] ?? null),
+                'fecha_limite' => $this->normalizeDateValue($taskData['fecha_limite'] ?? $taskData['due_date'] ?? $taskData['deadline'] ?? null),
+                'hora_limite' => $taskData['hora_limite'] ?? $taskData['due_time'] ?? null,
+                'progreso' => (int) ($taskData['progreso'] ?? $taskData['progress'] ?? 0),
+            ];
+        }
+
+        if (is_string($taskData)) {
+            return [
+                'tarea' => substr(trim($taskData), 0, 255),
+                'descripcion' => null,
+                'prioridad' => 'media',
+                'asignado' => null,
+                'fecha_inicio' => null,
+                'fecha_limite' => null,
+                'hora_limite' => null,
+                'progreso' => 0,
+            ];
+        }
+
+        return [
+            'tarea' => '',
+            'descripcion' => null,
+            'prioridad' => 'media',
+            'asignado' => null,
+            'fecha_inicio' => null,
+            'fecha_limite' => null,
+            'hora_limite' => null,
+            'progreso' => 0,
+        ];
+    }
+
+    private function normalizeDateValue($value): ?string
+    {
+        if (empty($value)) {
+            return null;
+        }
+
+        if ($value instanceof Carbon) {
+            return $value->format('Y-m-d');
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return Carbon::instance($value)->format('Y-m-d');
+        }
+
+        if (is_string($value)) {
+            try {
+                return Carbon::parse($value)->format('Y-m-d');
+            } catch (\Exception $e) {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     /**
