@@ -34,12 +34,12 @@
     },
     {
       "id": "business",
-      "name": "Negocios",
-      "price": "$899",
+      "name": "Plan Business",
+      "price": "$999",
       "period": "por mes (facturación anual)",
       "description": "Para organizaciones que necesitan analítica profunda y alineación entre equipos.",
       "features": [
-        "Facturación anual (equivalente a pago mensual)",
+        "Pago mensual",
         "Hasta 30 reuniones al mes",
         "Duración máxima de 2 horas por reunión",
         "Subida de audio de hasta 100 MB",
@@ -49,7 +49,7 @@
         "Exportar documentos",
         "Compartir reuniones",
         "Acceso a 10 contenedores con máximo de 10 reuniones por contenedor",
-        "Sin acceso a creación de organizaciones"
+        "Acceso al modo posponer reunión"
       ]
     },
     {
@@ -104,8 +104,8 @@
     },
     {
       "id": "business",
-      "name": "Negocios",
-      "price": "$1,099",
+      "name": "Plan Business",
+      "price": "$999",
       "period": "por mes",
       "description": "Analítica avanzada y dashboards ejecutivos sin compromisos anuales.",
       "features": [
@@ -119,7 +119,7 @@
         "Exportar documentos",
         "Compartir reuniones",
         "Acceso a 10 contenedores con máximo de 10 reuniones por contenedor",
-        "Sin acceso a creación de organizaciones"
+        "Acceso al modo posponer reunión"
       ]
     },
     {
