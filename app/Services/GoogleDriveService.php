@@ -118,6 +118,34 @@ class GoogleDriveService
     }
 
     /**
+     * Create a folder if it doesn't exist, or return existing folder ID
+     */
+    public function createFolderIfNotExists(string $name, ?string $parentId = null): string
+    {
+        // Search for existing folder with the same name and parent
+        $query = "mimeType='application/vnd.google-apps.folder' and name='" . addslashes($name) . "' and trashed=false";
+        if ($parentId) {
+            $query .= " and '" . $parentId . "' in parents";
+        }
+
+        $results = $this->drive->files->listFiles([
+            'q' => $query,
+            'fields' => 'files(id,name)',
+            'supportsAllDrives' => true,
+            'includeItemsFromAllDrives' => true,
+        ]);
+
+        $files = $results->getFiles();
+        if (count($files) > 0) {
+            // Folder already exists, return its ID
+            return $files[0]->getId();
+        }
+
+        // Folder doesn't exist, create it
+        return $this->createFolder($name, $parentId);
+    }
+
+    /**
      * @param string|null $query
      * @return DriveFile[]
      */

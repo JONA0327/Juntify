@@ -1055,6 +1055,15 @@
                                 Se eliminará en <strong id="meeting-modal-temp-countdown"></strong>.
                                 <span id="meeting-modal-temp-action"></span>
                             </p>
+                            <!-- Botón de exportar a Drive -->
+                            <div class="flex gap-2 mt-3">
+                                <button id="meeting-modal-export-drive-btn" class="export-drive-btn hidden px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M6.94 14.036c-.233.624-.43 1.2-.606 1.783.96-.697 2.101-1.139 3.418-1.304 2.513-.314 4.746-1.973 5.876-4.058l-1.456-1.455 1.413-1.415 1-1.001c.43-.43.915-1.224 1.428-2.368-5.593.867-9.018 4.292-10.073 9.818zM17 9v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h10a2 2 0 012 2z"/>
+                                    </svg>
+                                    Exportar a Drive
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

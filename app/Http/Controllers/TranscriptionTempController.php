@@ -13,6 +13,8 @@ use App\Services\AudioConversionService;
 use App\Services\TranscriptionService;
 use App\Services\PlanLimitService;
 use App\Models\PendingRecording;
+use App\Models\TranscriptionLaravel;
+use App\Services\GoogleDriveService;
 use Illuminate\Support\Str;
 use App\Traits\MeetingContentParsing;
 
@@ -880,5 +882,192 @@ class TranscriptionTempController extends Controller
         }
 
         return $defaults;
+    }
+
+    /**
+     * Export temporary transcription to Google Drive
+     */
+    public function exportToDrive(Request $request, $id)
+    {
+        try {
+            $user = Auth::user();
+            
+            // Check if user can use Drive
+            $planService = app(PlanLimitService::class);
+            if (!$planService->userCanUseDrive($user)) {
+                return response()->json([
+                    'success' => false,
+                    'show_upgrade_modal' => true,
+                    'message' => 'Tu plan actual no incluye almacenamiento en Google Drive. Actualiza a Plan Business o superior para acceder a esta funcionalidad.'
+                ], 403);
+            }
+
+            // Get the temporary transcription
+            $transcription = TranscriptionTemp::where('user_id', $user->id)
+                ->where('id', $id)
+                ->first();
+
+            if (!$transcription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Transcripción temporal no encontrada.'
+                ], 404);
+            }
+
+            // Get drive type preference
+            $driveType = $request->input('drive_type', 'personal'); // 'personal' or 'organization'
+            
+            // Initialize Drive service
+            $driveService = app(GoogleDriveService::class);
+            
+            // Determine target folder based on drive type
+            $targetParentId = null;
+            if ($driveType === 'organization' && $user->current_organization_id) {
+                $org = $user->currentOrganization;
+                if ($org && $org->drive_folder_id) {
+                    $targetParentId = $org->drive_folder_id;
+                }
+            }
+            
+            if (!$targetParentId) {
+                // Use user's personal drive folder
+                $targetParentId = $user->drive_folder_id;
+            }
+
+            if (!$targetParentId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró carpeta de destino en Google Drive. Configura tu integración con Drive primero.'
+                ], 400);
+            }
+
+            // Create Audio and Transcriptions folders if they don't exist
+            $audioFolderId = $driveService->createFolderIfNotExists('Audio', $targetParentId);
+            $transcriptionsFolderId = $driveService->createFolderIfNotExists('Transcripciones', $targetParentId);
+
+            $audioFileId = null;
+            $transcriptionFileId = null;
+
+            // Upload audio file to Drive if exists
+            if ($transcription->audio_path && Storage::exists($transcription->audio_path)) {
+                try {
+                    $audioContent = Storage::get($transcription->audio_path);
+                    $audioFileName = $transcription->title . '_audio.' . pathinfo($transcription->audio_path, PATHINFO_EXTENSION);
+                    
+                    $audioFileId = $driveService->uploadFile(
+                        $audioFileName,
+                        $audioContent,
+                        'audio/*',
+                        $audioFolderId
+                    );
+                    
+                    Log::info('Audio uploaded to Drive', [
+                        'temp_id' => $transcription->id,
+                        'audio_file_id' => $audioFileId
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to upload audio to Drive', [
+                        'temp_id' => $transcription->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Upload .ju file to Drive if exists
+            if ($transcription->ju_path && Storage::exists($transcription->ju_path)) {
+                try {
+                    $juContent = Storage::get($transcription->ju_path);
+                    $juFileName = $transcription->title . '.ju';
+                    
+                    $transcriptionFileId = $driveService->uploadFile(
+                        $juFileName,
+                        $juContent,
+                        'application/json',
+                        $transcriptionsFolderId
+                    );
+                    
+                    Log::info('Transcription uploaded to Drive', [
+                        'temp_id' => $transcription->id,
+                        'transcription_file_id' => $transcriptionFileId
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to upload transcription to Drive', [
+                        'temp_id' => $transcription->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Create permanent meeting record in TranscriptionLaravel
+            $permanentMeeting = TranscriptionLaravel::create([
+                'user_id' => $user->id,
+                'organization_id' => $driveType === 'organization' ? $user->current_organization_id : null,
+                'title' => $transcription->title,
+                'description' => $transcription->description,
+                'audio_drive_id' => $audioFileId,
+                'transcript_drive_id' => $transcriptionFileId,
+                'summary' => $transcription->summary,
+                'key_points' => $transcription->key_points,
+                'tasks' => $transcription->tasks,
+                'duration' => $transcription->duration,
+                'speaker_count' => $transcription->speaker_count,
+                'status' => 'completed',
+                'created_at' => $transcription->created_at,
+                'updated_at' => now(),
+            ]);
+
+            // Copy tasks if they exist
+            if ($transcription->tasks) {
+                foreach ($transcription->tasks as $taskData) {
+                    if (is_array($taskData) && isset($taskData['tarea'])) {
+                        $permanentMeeting->taskLaravels()->create([
+                            'user_id' => $user->id,
+                            'organization_id' => $driveType === 'organization' ? $user->current_organization_id : null,
+                            'tarea' => $taskData['tarea'],
+                            'descripcion' => $taskData['descripcion'] ?? null,
+                            'prioridad' => $taskData['prioridad'] ?? 'media',
+                            'asignado' => $taskData['asignado'] ?? null,
+                            'fecha_limite' => $taskData['fecha_limite'] ?? null,
+                            'hora_limite' => $taskData['hora_limite'] ?? null,
+                            'progreso' => $taskData['progreso'] ?? 0,
+                            'estado' => 'pendiente',
+                        ]);
+                    }
+                }
+            }
+
+            // Delete temporary files from storage
+            if ($transcription->audio_path && Storage::exists($transcription->audio_path)) {
+                Storage::delete($transcription->audio_path);
+            }
+            if ($transcription->ju_path && Storage::exists($transcription->ju_path)) {
+                Storage::delete($transcription->ju_path);
+            }
+
+            // Delete temporary transcription record
+            $transcription->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Reunión exportada exitosamente a Google Drive y eliminada del almacenamiento temporal.',
+                'permanent_meeting_id' => $permanentMeeting->id,
+                'audio_drive_id' => $audioFileId,
+                'transcription_drive_id' => $transcriptionFileId,
+                'drive_type' => $driveType
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error exporting temp transcription to Drive', [
+                'temp_id' => $id,
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al exportar a Google Drive: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

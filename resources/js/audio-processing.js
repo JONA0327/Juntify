@@ -2623,6 +2623,23 @@ function showCompletion({
         }
     }
 
+    // Configurar botones de exportar/actualizar para reuniones temporales
+    if (storageType === 'temp') {
+        const exportBtn = document.getElementById('completion-export-drive-btn');
+        const upgradeBtn = document.getElementById('completion-upgrade-btn');
+        
+        // Obtener el meeting ID del contexto global o la respuesta
+        const meetingId = window.currentTempMeetingId || window.currentProcessingId;
+        
+        if (exportBtn && window.canUseDrive && window.canUseDrive()) {
+            exportBtn.classList.remove('hidden');
+            exportBtn.onclick = () => handleCompletionExportToDrive(meetingId);
+        } else if (upgradeBtn) {
+            upgradeBtn.classList.remove('hidden');
+            upgradeBtn.onclick = () => handleCompletionShowUpgradeModal();
+        }
+    }
+
     const durationEl = document.getElementById('completion-audio-duration');
     if (durationEl) durationEl.textContent = `${formatTime((audioDuration || 0) * 1000)} minutos`;
 
@@ -3082,3 +3099,119 @@ function diagnoseSynchronizationIssues(segments, originalUtterances) {
 window.clearDiscardState = clearDiscardState; // Función para limpiar estado de descarte
 // Hacer accesible la transcripción para otros scripts o para depuración
 window.transcriptionData = transcriptionData;
+
+// ===== FUNCIONES PARA EXPORTAR A DRIVE =====
+
+// Funciones para verificar permisos de Drive
+window.canUseDrive = function() {
+    const role = (window.userRole || '').toString().toLowerCase();
+    const planCode = (window.userPlanCode || '').toString().toLowerCase();
+    
+    const allowedRoles = [
+        'business', 'buisness', 'negocios',
+        'enterprise', 'enterprice',
+        'developer', 'founder', 'superadmin'
+    ];
+
+    if (role !== '' && allowedRoles.includes(role)) {
+        return true;
+    }
+
+    if (planCode !== '' && allowedRoles.includes(planCode)) {
+        return true;
+    }
+
+    for (const allowed of allowedRoles) {
+        if (allowed && ((role !== '' && role.includes(allowed)) || (planCode !== '' && planCode.includes(allowed)))) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
+async function handleCompletionExportToDrive(meetingId) {
+    try {
+        if (!meetingId) {
+            console.error('No meeting ID available for export');
+            alert('Error: No se pudo identificar la reunión para exportar.');
+            return;
+        }
+
+        // Obtener ID real si es temporal
+        const actualId = String(meetingId).replace('temp-', '');
+        
+        // Mostrar loading en el botón
+        const exportBtn = document.getElementById('completion-export-drive-btn');
+        if (exportBtn) {
+            const originalText = exportBtn.innerHTML;
+            exportBtn.disabled = true;
+            exportBtn.innerHTML = `
+                <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Exportando...
+            `;
+            
+            // Hacer la solicitud de exportación
+            const response = await fetch(`/api/transcriptions-temp/${actualId}/export-to-drive`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    drive_type: 'personal'
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Éxito - mostrar mensaje y redirigir
+                alert('¡Reunión exportada exitosamente a Google Drive! Los archivos temporales han sido eliminados.');
+                
+                // Redirigir a la página de reuniones
+                window.location.href = '/app/dashboard';
+            } else if (data.show_upgrade_modal) {
+                // Usuario no tiene permisos - mostrar modal de actualización
+                handleCompletionShowUpgradeModal();
+            } else {
+                // Error
+                alert('Error al exportar a Drive: ' + (data.message || 'Error desconocido'));
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = originalText;
+            }
+        }
+    } catch (error) {
+        console.error('Error exporting to Drive:', error);
+        alert('Error al exportar a Drive. Por favor, inténtalo de nuevo.');
+        
+        // Restaurar botón
+        const exportBtn = document.getElementById('completion-export-drive-btn');
+        if (exportBtn) {
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = `
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6.94 14.036c-.233.624-.43 1.2-.606 1.783.96-.697 2.101-1.139 3.418-1.304 2.513-.314 4.746-1.973 5.876-4.058l-1.456-1.455 1.413-1.415 1-1.001c.43-.43.915-1.224 1.428-2.368-5.593.867-9.018 4.292-10.073 9.818zM17 9v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h10a2 2 0 012 2z"/>
+                </svg>
+                Exportar a Drive
+            `;
+        }
+    }
+}
+
+function handleCompletionShowUpgradeModal() {
+    // Mostrar modal de actualización de plan
+    if (typeof showUpgradeModal === 'function') {
+        showUpgradeModal();
+    } else {
+        // Fallback - mostrar mensaje simple
+        alert('Tu plan actual no incluye almacenamiento en Google Drive. Actualiza a Plan Business o superior para acceder a esta funcionalidad.');
+    }
+}
+
+// Hacer funciones globales
+window.handleCompletionExportToDrive = handleCompletionExportToDrive;
+window.handleCompletionShowUpgradeModal = handleCompletionShowUpgradeModal;

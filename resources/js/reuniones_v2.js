@@ -120,6 +120,38 @@ function isBasicOrFreeRole() {
     return role === 'free' || planCode === 'free' || planCode.includes('free');
 }
 
+function canUseDrive() {
+    const role = (window.userRole || '').toString().toLowerCase();
+    const planCode = (window.userPlanCode || '').toString().toLowerCase();
+    
+    const allowedRoles = [
+        'business',
+        'buisness', // Variante común con error ortográfico
+        'negocios',
+        'enterprise',
+        'enterprice', // Variante utilizada en algunas cuentas antiguas
+        'developer',
+        'founder',
+        'superadmin',
+    ];
+
+    if (role !== '' && allowedRoles.includes(role)) {
+        return true;
+    }
+
+    if (planCode !== '' && allowedRoles.includes(planCode)) {
+        return true;
+    }
+
+    for (const allowed of allowedRoles) {
+        if (allowed && ((role !== '' && role.includes(allowed)) || (planCode !== '' && planCode.includes(allowed)))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function toNumberOrNull(value) {
     if (typeof value === 'number' && Number.isFinite(value)) {
         return value;
@@ -2968,7 +3000,35 @@ function showMeetingModal(meeting) {
     }
 
     const isTempMeeting = meeting.storage_type === 'temp';
-    const showTempWarning = isTempMeeting && isBasicOrFreeRole();
+    const showTempWarning = isTempMeeting && (isBasicOrFreeRole() || canUseDrive());
+    const userCanUseDrive = canUseDrive();
+    
+    // Generar el botón de exportar solo si es una reunión temporal
+    let exportButton = '';
+    if (isTempMeeting) {
+        if (userCanUseDrive) {
+            exportButton = `
+                <div class="flex gap-2 mt-3">
+                    <button id="meeting-modal-export-drive-btn" class="export-drive-btn px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M6.94 14.036c-.233.624-.43 1.2-.606 1.783.96-.697 2.101-1.139 3.418-1.304 2.513-.314 4.746-1.973 5.876-4.058l-1.456-1.455 1.413-1.415 1-1.001c.43-.43.915-1.224 1.428-2.368-5.593.867-9.018 4.292-10.073 9.818zM17 9v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h10a2 2 0 012 2z"/>
+                        </svg>
+                        Exportar a Drive
+                    </button>
+                </div>`;
+        } else {
+            exportButton = `
+                <div class="flex gap-2 mt-3">
+                    <button id="meeting-modal-upgrade-btn" class="upgrade-plan-btn px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        Actualizar Plan
+                    </button>
+                </div>`;
+        }
+    }
+    
     const tempModalWarning = `
                             <div class="temp-modal-warning ${showTempWarning ? '' : 'hidden'}" id="meeting-temp-warning">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2977,6 +3037,7 @@ function showMeetingModal(meeting) {
                                 <div>
                                     <p class="warning-title">Guardado temporal</p>
                                     <p class="warning-text">El audio se eliminará en <strong id="meeting-temp-countdown">${meeting.time_remaining || ''}</strong>.</p>
+                                    ${exportButton}
                                 </div>
                             </div>`;
 
@@ -3148,6 +3209,21 @@ function showMeetingModal(meeting) {
             }
         });
     });
+
+    // Event listeners para botones de exportar/actualizar
+    const exportBtn = document.getElementById('meeting-modal-export-drive-btn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', async () => {
+            await handleExportToDrive(meeting.id);
+        });
+    }
+
+    const upgradeBtn = document.getElementById('meeting-modal-upgrade-btn');
+    if (upgradeBtn) {
+        upgradeBtn.addEventListener('click', () => {
+            handleShowUpgradeModal();
+        });
+    }
 
     // Configuración de reproductor de audio nativo (barra del sistema)
     meetingAudioPlayer = document.getElementById('meeting-audio');
@@ -6312,3 +6388,90 @@ function closeUpgradeModal() {
 // Hacer funciones globales
 window.showUpgradeModal = showUpgradeModal;
 window.closeUpgradeModal = closeUpgradeModal;
+
+// Funciones para exportar a Drive
+async function handleExportToDrive(meetingId) {
+    try {
+        // Obtener ID real si es temporal
+        const actualId = String(meetingId).replace('temp-', '');
+        
+        // Mostrar loading en el botón
+        const exportBtn = document.getElementById('meeting-modal-export-drive-btn');
+        if (exportBtn) {
+            const originalText = exportBtn.innerHTML;
+            exportBtn.disabled = true;
+            exportBtn.innerHTML = `
+                <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Exportando...
+            `;
+            
+            // Hacer la solicitud de exportación
+            const response = await fetch(`/api/transcriptions-temp/${actualId}/export-to-drive`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    drive_type: 'personal' // Puedes cambiar esto por 'organization' si es necesario
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Éxito - mostrar mensaje y cerrar modal
+                alert('¡Reunión exportada exitosamente a Google Drive! Los archivos temporales han sido eliminados.');
+                closeMeetingModal();
+                
+                // Actualizar la lista de reuniones
+                if (typeof fetchMeetings === 'function') {
+                    fetchMeetings();
+                }
+            } else if (data.show_upgrade_modal) {
+                // Usuario no tiene permisos - mostrar modal de actualización
+                handleShowUpgradeModal();
+            } else {
+                // Error
+                alert('Error al exportar a Drive: ' + (data.message || 'Error desconocido'));
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = originalText;
+            }
+        }
+    } catch (error) {
+        console.error('Error exporting to Drive:', error);
+        alert('Error al exportar a Drive. Por favor, inténtalo de nuevo.');
+        
+        // Restaurar botón
+        const exportBtn = document.getElementById('meeting-modal-export-drive-btn');
+        if (exportBtn) {
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = `
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6.94 14.036c-.233.624-.43 1.2-.606 1.783.96-.697 2.101-1.139 3.418-1.304 2.513-.314 4.746-1.973 5.876-4.058l-1.456-1.455 1.413-1.415 1-1.001c.43-.43.915-1.224 1.428-2.368-5.593.867-9.018 4.292-10.073 9.818zM17 9v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h10a2 2 0 012 2z"/>
+                </svg>
+                Exportar a Drive
+            `;
+        }
+    }
+}
+
+function handleShowUpgradeModal() {
+    // Cerrar modal actual
+    closeMeetingModal();
+    
+    // Mostrar modal de actualización de plan
+    if (typeof showUpgradeModal === 'function') {
+        showUpgradeModal();
+    } else {
+        // Fallback - mostrar mensaje simple
+        alert('Tu plan actual no incluye almacenamiento en Google Drive. Actualiza a Plan Business o superior para acceder a esta funcionalidad.');
+    }
+}
+
+// Hacer funciones globales
+window.handleExportToDrive = handleExportToDrive;
+window.handleShowUpgradeModal = handleShowUpgradeModal;
