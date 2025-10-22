@@ -183,10 +183,6 @@
                         </div>
                     </div>
 
-                    <div class="transcription-segments" id="transcription-segments">
-                        <!-- Los segmentos se generarán dinámicamente -->
-                    </div>
-
                     <div class="editor-actions">
                         <button class="btn btn-secondary" onclick="goBackToRecording()">
                             ← Volver a grabar
@@ -194,6 +190,10 @@
                         <button class="btn btn-primary" onclick="saveTranscriptionAndContinue()">
                             Guardar cambios y continuar →
                         </button>
+                    </div>
+
+                    <div class="transcription-segments" id="transcription-segments">
+                        <!-- Los segmentos se generarán dinámicamente -->
                     </div>
                 </div>
             </div>
