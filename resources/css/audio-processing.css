@@ -1153,6 +1153,10 @@ body {
     text-align: left;
 }
 
+.completion-temp-warning.hidden {
+    display: none;
+}
+
 .completion-temp-warning .warning-icon {
     font-size: 1.5rem;
     line-height: 1;
