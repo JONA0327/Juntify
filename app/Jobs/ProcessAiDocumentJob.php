@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
+use function str_starts_with;
 
 class ProcessAiDocumentJob implements ShouldQueue
 {
@@ -47,6 +48,22 @@ class ProcessAiDocumentJob implements ShouldQueue
             'processing_progress' => 5,
             'processing_step' => 'preparing',
         ]);
+
+        if ($this->isTemporaryDriveIdentifier($document->drive_file_id)) {
+            $document->update([
+                'processing_status' => 'failed',
+                'processing_error' => 'El archivo todavía no está disponible en Google Drive. Intenta la carga nuevamente desde la aplicación.',
+                'processing_step' => 'error',
+                'processing_progress' => 0,
+            ]);
+
+            Log::warning('Skipping AI document processing due to temporary Drive identifier', [
+                'document_id' => $document->id,
+                'drive_file_id' => $document->drive_file_id,
+            ]);
+
+            return;
+        }
 
         $tempFile = null;
 
@@ -244,5 +261,15 @@ class ProcessAiDocumentJob implements ShouldQueue
                 }
             }
         }
+    }
+
+    private function isTemporaryDriveIdentifier(?string $driveId): bool
+    {
+        if (!is_string($driveId) || $driveId === '') {
+            return true;
+        }
+
+        return str_starts_with($driveId, 'temp_')
+            || str_starts_with($driveId, 'temp-');
     }
 }
