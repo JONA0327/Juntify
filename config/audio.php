@@ -20,4 +20,10 @@ return [
     'use_python_script' => env('AUDIO_USE_PYTHON', false),
     // Binario de Python
     'python_bin' => env('PYTHON_BIN', 'python3'),
+
+    // Modo de procesamiento para transcripciones fragmentadas: "sync" procesa en la
+    // misma petición HTTP (útil en entornos donde no corre un worker de colas) y
+    // "queue" delega a un job asíncrono. Por defecto usamos "sync" para evitar
+    // que las cargas queden detenidas indefinidamente si no hay worker.
+    'chunked_processing_mode' => env('AUDIO_CHUNKED_PROCESSING', 'sync'),
 ];

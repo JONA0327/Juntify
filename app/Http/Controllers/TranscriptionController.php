@@ -583,7 +583,19 @@ class TranscriptionController extends Controller
             'status' => 'queued',
         ]);
 
-        ProcessChunkedTranscription::dispatch($uploadId, $trackingId);
+        $processingMode = strtolower(config('audio.chunked_processing_mode', 'sync'));
+
+        if ($processingMode === 'queue') {
+            ProcessChunkedTranscription::dispatch($uploadId, $trackingId);
+        } else {
+            Log::info('Processing chunked transcription synchronously', [
+                'upload_id' => $uploadId,
+                'tracking_id' => $trackingId,
+                'mode' => $processingMode,
+            ]);
+
+            ProcessChunkedTranscription::dispatchSync($uploadId, $trackingId);
+        }
 
         return response()->json([
             'tracking_id' => $trackingId,
