@@ -189,17 +189,57 @@ class AiChatService
             $context = $selected;
         }
 
-        // Sort by similarity desc when available
-        usort($context, function ($a, $b) {
-            $sa = is_numeric($a['similarity'] ?? null) ? (float) $a['similarity'] : -INF;
-            $sb = is_numeric($b['similarity'] ?? null) ? (float) $b['similarity'] : -INF;
-            if ($sa === $sb) return 0;
-            return $sa < $sb ? 1 : -1;
-        });
+        $focusedSegments = [];
+        $otherTranscriptionSegments = [];
+        $nonTranscriptionFragments = [];
 
-        $context = array_slice($context, 0, max(1, $maxFragments));
+        foreach ($context as $index => $frag) {
+            if (! is_array($frag)) {
+                continue;
+            }
+
+            $metadata = $frag['metadata'] ?? [];
+            $contentType = (string) ($frag['content_type'] ?? '');
+            $isTranscription = ($metadata['transcription_segment'] ?? false)
+                || Str::contains($contentType, 'transcription_segment')
+                || Str::contains($contentType, 'meeting_transcription_segment');
+
+            if ($isTranscription) {
+                $frag['_original_index'] = $index; // Preservar el orden natural del diálogo
+                if (!empty($metadata['focused_speaker'])) {
+                    $focusedSegments[] = $frag;
+                } else {
+                    $otherTranscriptionSegments[] = $frag;
+                }
+                continue;
+            }
+
+            $nonTranscriptionFragments[] = $frag;
+        }
+
+        if (!empty($focusedSegments) || !empty($otherTranscriptionSegments)) {
+            usort($focusedSegments, fn($a, $b) => ($a['_original_index'] ?? 0) <=> ($b['_original_index'] ?? 0));
+            usort($otherTranscriptionSegments, fn($a, $b) => ($a['_original_index'] ?? 0) <=> ($b['_original_index'] ?? 0));
+
+            $nonTranscriptionFragments = $this->sortFragmentsBySimilarity($nonTranscriptionFragments);
+
+            $combined = array_merge($focusedSegments, $otherTranscriptionSegments);
+            $remainingSlots = $maxFragments - count($combined);
+            if ($remainingSlots > 0) {
+                $combined = array_merge($combined, array_slice($nonTranscriptionFragments, 0, $remainingSlots));
+            }
+
+            $context = $combined;
+        } else {
+            $context = $this->sortFragmentsBySimilarity($context);
+            $context = array_slice($context, 0, max(1, $maxFragments));
+        }
 
         return array_map(function ($frag) use ($fragmentTextLimit) {
+            if (isset($frag['_original_index'])) {
+                unset($frag['_original_index']);
+            }
+
             $text = (string) ($frag['text'] ?? '');
             if ($fragmentTextLimit > 0 && Str::length($text) > $fragmentTextLimit) {
                 $text = Str::limit($text, $fragmentTextLimit, '…');
@@ -208,7 +248,6 @@ class AiChatService
             $minimalLoc = [];
             if (is_array($loc)) {
                 $minimalLoc['type'] = $loc['type'] ?? null;
-                // Preserve a couple of useful identifiers
                 foreach (['title','name','meeting_id','document_id','chat_id','timestamp','page','url'] as $k) {
                     if (isset($loc[$k]) && $loc[$k] !== null && $loc[$k] !== '') {
                         $minimalLoc[$k] = $loc[$k];
@@ -223,6 +262,21 @@ class AiChatService
                 'location' => $minimalLoc ?: null,
             ], fn($v) => $v !== null);
         }, $context);
+    }
+
+    private function sortFragmentsBySimilarity(array $fragments): array
+    {
+        usort($fragments, function ($a, $b) {
+            $sa = is_numeric($a['similarity'] ?? null) ? (float) $a['similarity'] : -INF;
+            $sb = is_numeric($b['similarity'] ?? null) ? (float) $b['similarity'] : -INF;
+            if ($sa === $sb) {
+                return 0;
+            }
+
+            return $sa < $sb ? 1 : -1;
+        });
+
+        return $fragments;
     }
 
     private function extractMeetingId(array $frag): ?string
