@@ -110,6 +110,14 @@ function clearErrors() {
   document.querySelectorAll('.form-input').forEach(i=> i.classList.remove('error','success'));
   document.querySelectorAll('.error-message').forEach(e=>{ e.style.display='none'; e.textContent=''; });
   document.querySelectorAll('.success-message').forEach(s=>{ s.style.display='none'; s.textContent=''; });
+  const legalLabel = document.querySelector('.legal-label');
+  if (legalLabel) {
+    legalLabel.classList.remove('error');
+  }
+  const legalCheckbox = document.getElementById('legalAcceptance');
+  if (legalCheckbox) {
+    legalCheckbox.classList.remove('error');
+  }
 }
 
 // ———————————————————
@@ -122,7 +130,8 @@ function validateForm() {
         fn = document.getElementById('fullName'),
         m  = document.getElementById('email'),
         p  = document.getElementById('password'),
-        pc = document.getElementById('passwordConfirmation');
+        pc = document.getElementById('passwordConfirmation'),
+        legal = document.getElementById('legalAcceptance');
   if(!u.value.trim()){ showError('username','Usuario requerido'); ok=false; }
   else if(u.value.length<3){ showError('username','Min 3 caracteres'); ok=false; }
   if(!fn.value.trim()){ showError('fullName','Nombre completo requerido'); ok=false; }
@@ -134,6 +143,21 @@ function validateForm() {
   if(!pc.value){ showError('passwordConfirmation','Confirma contraseña'); ok=false; }
   else if(p.value!==pc.value){ showError('passwordConfirmation','No coinciden'); ok=false; }
   else showSuccess('passwordConfirmation','¡Coinciden!');
+  if(legal){
+    const legalError = document.getElementById('legalAcceptanceError');
+    if(!legal.checked){
+      if(legalError){
+        legalError.textContent='Debes aceptar las condiciones legales para continuar.';
+        legalError.style.display='block';
+      }
+      legal.classList.add('error');
+      const legalLabel = document.querySelector('.legal-label');
+      if(legalLabel){ legalLabel.classList.add('error'); }
+      ok = false;
+    } else {
+      legal.classList.remove('error');
+    }
+  }
   return ok;
 }
 
@@ -313,6 +337,22 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if (data.errors) {
           if (data.errors.username) msg += data.errors.username + '\n';
           if (data.errors.email) msg += data.errors.email + '\n';
+          if (data.errors.legal_acceptance) {
+            msg += data.errors.legal_acceptance + '\n';
+            const legalError = document.getElementById('legalAcceptanceError');
+            const legalCheckbox = document.getElementById('legalAcceptance');
+            const legalLabel = document.querySelector('.legal-label');
+            if (legalError) {
+              legalError.textContent = data.errors.legal_acceptance;
+              legalError.style.display = 'block';
+            }
+            if (legalCheckbox) {
+              legalCheckbox.classList.add('error');
+            }
+            if (legalLabel) {
+              legalLabel.classList.add('error');
+            }
+          }
         }
         showRegisterModal(msg.trim() || 'El usuario o correo ya existen.');
         // Limpiar campos del formulario

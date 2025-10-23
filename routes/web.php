@@ -39,6 +39,9 @@ Route::get('/', function () {
     return view('index');
 });
 
+Route::view('/condiciones-de-uso', 'legal.terms')->name('legal.terms');
+Route::view('/politica-de-privacidad', 'legal.privacy')->name('legal.privacy');
+
 // Rutas de Auth
 Route::get('/login',    [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login',   [LoginController::class, 'login']);

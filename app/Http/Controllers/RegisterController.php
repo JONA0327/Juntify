@@ -47,6 +47,7 @@ class RegisterController extends Controller
             'password_hash'               => 'required|string',
             'password_confirmation_hash'  => 'required|string|same:password_hash',
             'role'                        => 'nullable|string|max:200',
+            'legal_acceptance'            => 'accepted',
         ]);
 
         $user = User::create([
@@ -56,6 +57,7 @@ class RegisterController extends Controller
             'email'      => $data['email'],
             'password'   => $data['password_hash'],           // hash de bcryptjs
             'roles'      => $data['role'] ?? 'free',          // guardamos string
+            'legal_accepted_at' => now(),
         ]);
 
         auth()->login($user);

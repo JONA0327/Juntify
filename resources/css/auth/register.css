@@ -137,6 +137,51 @@
             margin-top: 1rem;
         }
 
+        .legal-checkbox {
+            background: rgba(15, 23, 42, 0.35);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            margin-top: 1rem;
+        }
+
+        .legal-checkbox input[type="checkbox"] {
+            accent-color: #3b82f6;
+            width: 1.1rem;
+            height: 1.1rem;
+            margin-right: 0.75rem;
+        }
+
+        .legal-checkbox .legal-label {
+            display: flex;
+            align-items: flex-start;
+            color: #cbd5e1;
+            font-size: 0.85rem;
+            gap: 0.75rem;
+        }
+
+        .legal-checkbox .legal-label.error span {
+            color: #fca5a5;
+        }
+
+        .legal-checkbox input[type="checkbox"].error {
+            outline: 2px solid #f87171;
+            outline-offset: 2px;
+        }
+
+        .legal-checkbox a {
+            color: #60a5fa;
+            text-decoration: underline;
+        }
+
+        .legal-checkbox a:hover {
+            color: #93c5fd;
+        }
+
+        .legal-checkbox .error {
+            color: #f87171;
+        }
+
         .btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 15px 40px rgba(59, 130, 246, 0.5);
