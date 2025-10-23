@@ -247,8 +247,8 @@ class AiAssistantController extends Controller
         $isEnterprisePlan = $this->isEnterprisePlan($planCode, $role);
 
         if ($isEnterprisePlan) {
-            $maxMessages = 35;
-            $maxDocuments = 15;
+            $maxMessages = 40;
+            $maxDocuments = 20;
             $planName = $this->getPlanDisplayName($planCode, $role);
 
             return [

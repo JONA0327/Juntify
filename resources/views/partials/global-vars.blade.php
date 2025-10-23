@@ -137,54 +137,85 @@
         };
 
         // Función para obtener límites de contenedores por plan
-        window.getContainerLimits = function() {
-            const planCode = (window.userPlanCode || '').toString().toLowerCase();
-            const role = (window.userRole || '').toString().toLowerCase();
+        window.getContainerLimits = function(options = {}) {
+            const planCodeRaw = (window.userPlanCode || '').toString();
+            const roleRaw = (window.userRole || '').toString();
+            const planCode = planCodeRaw.toLowerCase();
+            const role = roleRaw.toLowerCase();
+            const belongsToOrg = Boolean(window.userBelongsToOrganization);
+            const isCompany = typeof options.isCompany === 'boolean'
+                ? options.isCompany
+                : (options.scope === 'organization');
 
-            // Si pertenece a una organización, límites amplios
-            if (window.userBelongsToOrganization) {
+            const matchAny = (value, targets) => targets.some(target => target && (value === target || value.includes(target)));
+            const isPlanType = (targets) => matchAny(planCode, targets) || matchAny(role, targets);
+
+            const basicPlans = ['basic', 'basico'];
+            const businessPlans = ['negocios', 'business', 'buisness'];
+            const enterprisePlans = ['enterprise', 'empresas', 'empresa', 'enterprice'];
+            const premiumRoles = ['founder', 'developer', 'superadmin'];
+
+            const isBasic = isPlanType(basicPlans);
+            const isBusiness = isPlanType(businessPlans);
+            const isEnterprise = isPlanType(enterprisePlans);
+            const hasPremiumRole = isPlanType(premiumRoles);
+
+            if (isCompany) {
+                if (isEnterprise) {
+                    return {
+                        maxContainers: Number.POSITIVE_INFINITY,
+                        maxMeetingsPerContainer: 10
+                    };
+                }
+
+                if (belongsToOrg || hasPremiumRole || isBusiness) {
+                    return {
+                        maxContainers: 50,
+                        maxMeetingsPerContainer: 100
+                    };
+                }
+
                 return {
-                    maxContainers: 50,
-                    maxMeetingsPerContainer: 100
+                    maxContainers: 0,
+                    maxMeetingsPerContainer: 0
                 };
             }
 
-            const businessPlans = ['negocios', 'business', 'buisness'];
-            const isBusinessByPlan = businessPlans.some(value => value && (planCode === value || planCode.includes(value)));
-            const isBusinessByRole = businessPlans.some(value => value && (role === value || role.includes(value)));
+            if (isEnterprise) {
+                return {
+                    maxContainers: 10,
+                    maxMeetingsPerContainer: 15
+                };
+            }
 
-            if (isBusinessByPlan || isBusinessByRole) {
+            if (isBusiness) {
                 return {
                     maxContainers: 10,
                     maxMeetingsPerContainer: 10
                 };
             }
 
-            // Plan BASIC: 3 contenedores, 10 reuniones por contenedor
-            const basicPlans = ['basic', 'basico'];
-            const isBasicByPlan = basicPlans.some(value => value && (planCode === value || planCode.includes(value)));
-            const isBasicByRole = basicPlans.some(value => value && (role === value || role.includes(value)));
-
-            if (isBasicByPlan || isBasicByRole) {
+            if (isBasic) {
                 return {
                     maxContainers: 3,
                     maxMeetingsPerContainer: 10
                 };
             }
 
-            // Planes superiores: límites altos
-            const premiumPlans = ['negocios', 'business', 'enterprise', 'founder', 'developer', 'superadmin'];
-            const isPremiumByPlan = premiumPlans.some(value => value && (planCode === value || planCode.includes(value)));
-            const isPremiumByRole = premiumPlans.some(value => value && (role === value || role.includes(value)));
-
-            if (isPremiumByPlan || isPremiumByRole) {
+            if (hasPremiumRole) {
                 return {
-                    maxContainers: 999, // Prácticamente ilimitado
+                    maxContainers: 999,
                     maxMeetingsPerContainer: 999
                 };
             }
 
-            // Plan FREE: sin contenedores
+            if (belongsToOrg) {
+                return {
+                    maxContainers: 50,
+                    maxMeetingsPerContainer: 100
+                };
+            }
+
             return {
                 maxContainers: 0,
                 maxMeetingsPerContainer: 0
@@ -192,18 +223,24 @@
         };
 
         // Función para verificar si puede crear más contenedores
-        window.canCreateMoreContainers = function(currentContainerCount = 0) {
-            const limits = window.getContainerLimits();
+        window.canCreateMoreContainers = function(currentContainerCount = 0, options = {}) {
+            const limits = window.getContainerLimits(options);
             const canCreateBasic = window.canCreateContainers();
+            const maxAllowedRaw = limits.maxContainers;
+            const maxAllowed = Number.isFinite(maxAllowedRaw) ? maxAllowedRaw : Number.POSITIVE_INFINITY;
+            const remaining = Number.isFinite(maxAllowedRaw)
+                ? Math.max(0, maxAllowedRaw - currentContainerCount)
+                : '∞';
 
             console.log('🔍 Verificando límite de contenedores:', {
                 currentCount: currentContainerCount,
-                maxAllowed: limits.maxContainers,
+                maxAllowed: maxAllowedRaw,
                 canCreateBasic,
-                canCreateMore: canCreateBasic && currentContainerCount < limits.maxContainers
+                canCreateMore: canCreateBasic && currentContainerCount < maxAllowed,
+                remaining
             });
 
-            return canCreateBasic && currentContainerCount < limits.maxContainers;
+            return canCreateBasic && currentContainerCount < maxAllowed;
         };
 
         // Función global showUpgradeModal

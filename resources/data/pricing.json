@@ -58,13 +58,21 @@
       "period": "por mes (facturación anual)",
       "description": "La máxima personalización para grandes corporaciones con necesidades globales.",
       "features": [
-        "Todo lo del plan Negocios",
-        "Implementación personalizada",
-        "Seguridad empresarial y cumplimiento",
-        "Análisis predictivo avanzado",
-        "Integraciones ilimitadas",
-        "Gerente de cuenta dedicado",
-        "SLA garantizado 99.9%"
+        "Pago mensual (para organizaciones)",
+        "Hasta 40 reuniones al mes (10 más que el Business)",
+        "Duración máxima de 2 horas por reunión",
+        "Subida de audio de hasta el máximo permitido",
+        "Transcripciones y audios almacenados en Drive organizacional con transcripciones encriptadas",
+        "40 consultas al asistente y análisis de hasta 20 documentos por día",
+        "Acceso completo a la herramienta de tareas",
+        "Permite posponer reuniones",
+        "Exportar documentos",
+        "Compartir reuniones",
+        "Acceso a 10 contenedores personales con máximo de 15 reuniones por contenedor",
+        "Contenedores organizacionales ilimitados (máximo 10 reuniones por contenedor)",
+        "Conexión de una cuenta Drive para la organización",
+        "Creación de organización en Juntify",
+        "Permite crear grupos dentro de la organización para organizar reuniones"
       ]
     }
   ],
@@ -127,13 +135,21 @@
       "period": "por mes",
       "description": "Control total, seguridad avanzada y soporte dedicado bajo demanda.",
       "features": [
-        "Todo lo del plan Negocios",
-        "Implementación personalizada",
-        "Seguridad empresarial y cumplimiento",
-        "Análisis predictivo avanzado",
-        "Integraciones ilimitadas",
-        "Gerente de cuenta dedicado",
-        "SLA garantizado 99.9%"
+        "Pago mensual (para organizaciones)",
+        "Hasta 40 reuniones al mes (10 más que el Business)",
+        "Duración máxima de 2 horas por reunión",
+        "Subida de audio de hasta el máximo permitido",
+        "Transcripciones y audios almacenados en Drive organizacional con transcripciones encriptadas",
+        "40 consultas al asistente y análisis de hasta 20 documentos por día",
+        "Acceso completo a la herramienta de tareas",
+        "Permite posponer reuniones",
+        "Exportar documentos",
+        "Compartir reuniones",
+        "Acceso a 10 contenedores personales con máximo de 15 reuniones por contenedor",
+        "Contenedores organizacionales ilimitados (máximo 10 reuniones por contenedor)",
+        "Conexión de una cuenta Drive para la organización",
+        "Creación de organización en Juntify",
+        "Permite crear grupos dentro de la organización para organizar reuniones"
       ]
     }
   ],
