@@ -45,15 +45,6 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a href="#" class="nav-link" data-section="notifications">
-                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 10v-.25A2.75 2.75 0 0011.75 7h-.5A2.75 2.75 0 008.5 9.75v.25c0 2.827-1.842 5.222-4.5 6v1.25h15v-1.25c-2.658-.778-4.5-3.173-4.5-6z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.25a2.25 2.25 0 01-4.5 0" />
-                    </svg>
-                    Notificaciones
-                </a>
-            </li>
-            <li class="nav-item">
                 <a href="#" class="nav-link" data-section="about">
                     <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h1.5m-1.5 0v5.25m.75-9.75h.008v.008H12" />
