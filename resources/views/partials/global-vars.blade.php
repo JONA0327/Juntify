@@ -69,6 +69,18 @@
             window.userCanUseDrive = @json($driveAllowed);
         }
 
+        if (typeof window.userIsBusinessPlan === 'undefined') {
+            @php
+                $role = strtolower((string) (auth()->user()->roles ?? ''));
+                $planCode = strtolower((string) (auth()->user()->plan_code ?? ''));
+                $isBusinessPlan = $role === 'business' || $planCode === 'business' ||
+                                 $role === 'negocios' || $planCode === 'negocios' ||
+                                 str_contains($role, 'business') || str_contains($planCode, 'business') ||
+                                 str_contains($role, 'negocio') || str_contains($planCode, 'negocio');
+            @endphp
+            window.userIsBusinessPlan = @json($isBusinessPlan);
+        }
+
         if (typeof window.tempRetentionDays === 'undefined') {
             window.tempRetentionDays = @json($tempRetention);
         }

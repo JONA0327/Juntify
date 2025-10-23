@@ -22,7 +22,10 @@ class UserPlanService
                 ?? $user->roles
                 ?? 'free');
 
-            $role = (string) (data_get($metadata, 'role') ?? $user->roles ?? 'free');
+            $role = (string) (data_get($metadata, 'role')
+                ?? $this->mapPlanCodeToRole(data_get($metadata, 'plan_code'))
+                ?? $user->roles
+                ?? 'free');
             $startsAt = Carbon::parse(
                 data_get($metadata, 'starts_at')
                 ?? data_get($paymentData, 'paid_at')
@@ -83,9 +86,24 @@ class UserPlanService
                 PlanPurchase::create($purchasePayload);
             }
 
+            // Actualizar usuario con el nuevo plan y rol
             $user->roles = $role;
             $user->plan_expires_at = $expiresAt;
+
+            // Actualizar también las columnas plan y plan_code
+            $planCode = data_get($metadata, 'plan_code') ?? $this->mapRoleToPlanCode($role);
+            $user->plan = $this->mapRoleToPlan($role);
+            $user->plan_code = $planCode;
+
             $user->save();
+
+            Log::info('User plan activated', [
+                'user_id' => $user->id,
+                'role' => $role,
+                'plan' => $user->plan,
+                'plan_code' => $user->plan_code,
+                'expires_at' => $expiresAt?->toDateTimeString()
+            ]);
 
             return $userPlan;
         });
@@ -171,16 +189,32 @@ class UserPlanService
 
                 if ($plan->expires_at && $plan->expires_at->lessThanOrEqualTo($graceLimit)) {
                     if ($user->roles !== 'free') {
-                        $user->roles = 'free';
-                    }
-                    $user->plan_expires_at = null;
-                    $user->save();
+                        $oldRole = $user->roles;
+                        $oldPlan = $user->plan;
+                        $oldPlanCode = $user->plan_code;
 
-                    Log::info('Plan expirado. Usuario degradado a free.', [
-                        'user_id' => $user->id,
-                        'plan_id' => $plan->plan_id,
-                        'expired_at' => $plan->expires_at,
-                    ]);
+                        // Actualizar todas las columnas relacionadas con el plan
+                        $user->roles = 'free';
+                        $user->plan = 'free';
+                        $user->plan_code = 'free';
+                        $user->plan_expires_at = null;
+                        $user->save();
+
+                        Log::info('Plan expirado. Usuario degradado completamente a free.', [
+                            'user_id' => $user->id,
+                            'plan_id' => $plan->plan_id,
+                            'old_role' => $oldRole,
+                            'old_plan' => $oldPlan,
+                            'old_plan_code' => $oldPlanCode,
+                            'new_role' => 'free',
+                            'new_plan' => 'free',
+                            'new_plan_code' => 'free',
+                            'expired_at' => $plan->expires_at,
+                        ]);
+                    } else {
+                        $user->plan_expires_at = null;
+                        $user->save();
+                    }
                 } else {
                     $user->plan_expires_at = $plan->expires_at;
                     $user->save();
@@ -191,5 +225,61 @@ class UserPlanService
         }
 
         return $processed;
+    }
+
+    /**
+     * Mapea el código del plan al rol del usuario
+     */
+    private function mapPlanCodeToRole(?string $planCode): ?string
+    {
+        if (!$planCode) return null;
+
+        return match($planCode) {
+            'free', 'gratis' => 'free',
+            'basic', 'basico' => 'basic', // Acepta ambos pero normaliza a basic
+            'business', 'negocios' => 'business', // Acepta ambos pero normaliza a business
+            'enterprise', 'empresas' => 'enterprise', // Acepta ambos pero normaliza a enterprise
+            // Roles especiales mantienen su mismo código
+            'developer' => 'developer',
+            'founder' => 'founder',
+            'superadmin' => 'superadmin',
+            default => $planCode // fallback al código del plan
+        };
+    }
+
+    /**
+     * Mapea el rol del usuario al código del plan
+     */
+    private function mapRoleToPlanCode(string $role): string
+    {
+        return match($role) {
+            'free' => 'free',
+            'basic' => 'basic',
+            'business' => 'business',
+            'enterprise' => 'enterprise',
+            // Roles especiales mantienen su código
+            'developer' => 'developer',
+            'founder' => 'founder',
+            'superadmin' => 'superadmin',
+            default => $role // fallback al rol
+        };
+    }
+
+    /**
+     * Mapea el rol del usuario al nombre del plan
+     */
+    private function mapRoleToPlan(string $role): string
+    {
+        return match($role) {
+            'free' => 'free',
+            'basic' => 'basic',
+            'business' => 'basic', // Los usuarios business también tienen plan basic
+            'enterprise' => 'basic', // Los usuarios enterprise también tienen plan basic
+            // Roles especiales - su plan es igual al rol (no necesitan comprar)
+            'developer' => 'developer',
+            'founder' => 'founder',
+            'superadmin' => 'superadmin',
+            default => 'free' // fallback a free
+        };
     }
 }

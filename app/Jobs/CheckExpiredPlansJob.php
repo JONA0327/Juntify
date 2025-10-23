@@ -39,9 +39,16 @@ class CheckExpiredPlansJob implements ShouldQueue
             ->get();
 
         foreach ($usersWithExpiredPlans as $user) {
-            // Cambiar rol a free
+            // Cambiar todas las columnas relacionadas con el plan
             $oldRole = $user->roles;
-            $user->update(['roles' => 'free']);
+            $oldPlan = $user->plan;
+            $oldPlanCode = $user->plan_code;
+
+            $user->update([
+                'roles' => 'free',
+                'plan' => 'free',
+                'plan_code' => 'free'
+            ]);
 
             // Marcar suscripciones activas como canceladas
             $user->subscriptions()
@@ -52,11 +59,15 @@ class CheckExpiredPlansJob implements ShouldQueue
                     'cancelled_at' => now()
                 ]);
 
-            Log::info('User plan expired and role updated', [
+            Log::info('User plan expired and all fields updated', [
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'old_role' => $oldRole,
+                'old_plan' => $oldPlan,
+                'old_plan_code' => $oldPlanCode,
                 'new_role' => 'free',
+                'new_plan' => 'free',
+                'new_plan_code' => 'free',
                 'expired_at' => $user->plan_expires_at
             ]);
 
@@ -83,8 +94,13 @@ class CheckExpiredPlansJob implements ShouldQueue
 
             if ($activeSubscriptions === 0 && $user->roles !== 'free') {
                 $oldRole = $user->roles;
+                $oldPlan = $user->plan;
+                $oldPlanCode = $user->plan_code;
+
                 $user->update([
                     'roles' => 'free',
+                    'plan' => 'free',
+                    'plan_code' => 'free',
                     'plan_expires_at' => null
                 ]);
 
@@ -92,6 +108,11 @@ class CheckExpiredPlansJob implements ShouldQueue
                     'user_id' => $user->id,
                     'email' => $user->email,
                     'old_role' => $oldRole,
+                    'old_plan' => $oldPlan,
+                    'old_plan_code' => $oldPlanCode,
+                    'new_role' => 'free',
+                    'new_plan' => 'free',
+                    'new_plan_code' => 'free',
                     'subscription_id' => $subscription->id
                 ]);
 

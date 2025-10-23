@@ -100,7 +100,8 @@ class MercadoPagoService
                 "metadata" => [
                     "user_id" => $user->id,
                     "plan_id" => $plan->id,
-                    "plan_code" => $plan->code
+                    "plan_code" => $plan->code,
+                    "role" => $this->mapPlanCodeToRole($plan->code)
                 ]
             ];
 
@@ -345,5 +346,19 @@ class MercadoPagoService
             ]);
             return null;
         }
+    }
+
+    /**
+     * Mapea el código del plan al rol del usuario
+     */
+    private function mapPlanCodeToRole(string $planCode): string
+    {
+        return match($planCode) {
+            'free', 'gratis' => 'free',
+            'basic', 'basico' => 'basic', // Acepta ambos pero normaliza a basic
+            'business', 'negocios' => 'business', // Acepta ambos pero normaliza a business
+            'enterprise', 'empresas' => 'enterprise', // Acepta ambos pero normaliza a enterprise
+            default => $planCode // fallback al código del plan
+        };
     }
 }

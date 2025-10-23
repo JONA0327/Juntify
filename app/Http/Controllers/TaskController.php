@@ -31,6 +31,14 @@ class TaskController extends Controller
             ]);
         }
 
+        // Detectar si es usuario business (solo acceso a calendario, no tablero)
+        $role = strtolower((string) ($user->roles ?? ''));
+        $planCode = strtolower((string) ($user->plan_code ?? ''));
+        $isBusinessPlan = $role === 'business' || $planCode === 'business' ||
+                         $role === 'negocios' || $planCode === 'negocios' ||
+                         str_contains($role, 'business') || str_contains($planCode, 'business') ||
+                         str_contains($role, 'negocio') || str_contains($planCode, 'negocio');
+
         $username = $this->getValidatedUsername();
 
         // Obtener tareas del usuario autenticado o asignadas a él
@@ -77,7 +85,7 @@ class TaskController extends Controller
             })->overdue()->count(),
         ];
 
-        return view('tasks.index', compact('tasks', 'stats'));
+        return view('tasks.index', compact('tasks', 'stats', 'isBusinessPlan'));
     }
 
     /**

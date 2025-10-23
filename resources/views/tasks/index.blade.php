@@ -18,7 +18,8 @@
             apiTasksUpdate: (id) => `/api/tasks-laravel/tasks/${id}`,
             apiTasksDestroy: (id) => `/api/tasks-laravel/tasks/${id}`,
             apiExists: '/api/tasks-laravel/exists',
-            apiImport: (meetingId) => `/api/tasks-laravel/import/${meetingId}`
+            apiImport: (meetingId) => `/api/tasks-laravel/import/${meetingId}`,
+            isBusinessPlan: {{ json_encode($isBusinessPlan ?? false) }}
         };
 
         // Helper opcional para mostrar/ocultar el panel de tareas lateral
@@ -58,7 +59,9 @@
 
                 <div class="mt-6 flex flex-wrap gap-2" role="tablist" aria-label="Vistas de tareas">
                     <button type="button" data-task-view-btn="calendario" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-800/70 text-sm font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500">Calendario</button>
-                    <button type="button" data-task-view-btn="tablero" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/40 text-sm font-medium text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">Tablero</button>
+                    @if(!($isBusinessPlan ?? false))
+                        <button type="button" data-task-view-btn="tablero" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/40 text-sm font-medium text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">Tablero</button>
+                    @endif
                 </div>
 
                 <div id="tasks-layout" class="mt-8 flex flex-col-reverse lg:grid lg:grid-cols-3 lg:gap-8 items-start">
@@ -79,8 +82,9 @@
                             @include('tasks.partials._tabs-reuniones')
                         </div>
                         <!-- Kanban simple por reunión -->
-                        <div id="kanban-board" class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 hidden" data-task-view-targets="tablero" data-task-view-requires-kanban="1">
-                            <div class="flex flex-col gap-6">
+                        @if(!($isBusinessPlan ?? false))
+                            <div id="kanban-board" class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 hidden" data-task-view-targets="tablero" data-task-view-requires-kanban="1">
+                                <div class="flex flex-col gap-6">
                                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                                     <div>
                                         <h3 class="text-lg font-semibold text-slate-100">Tablero Kanban</h3>
@@ -167,6 +171,7 @@
                                 </div>
                             </div>
                         </div>
+                        @endif
                     </div>
 
                     <aside class="col-span-1 w-full" data-task-view-targets="calendario">
@@ -287,6 +292,12 @@
         }
 
         function setTaskMainView(view){
+            // Para usuarios business, solo permitir calendario
+            if (window.taskLaravel && window.taskLaravel.isBusinessPlan && view === 'tablero') {
+                console.log('🚫 Acceso al tablero bloqueado para Plan Business');
+                return;
+            }
+
             currentTaskMainView = ['calendario', 'tablero'].includes(view) ? view : 'calendario';
             refreshTaskViewVisibility();
         }

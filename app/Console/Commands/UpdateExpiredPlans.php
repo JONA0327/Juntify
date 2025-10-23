@@ -173,13 +173,24 @@ class UpdateExpiredPlans extends Command
 
             if (!$dryRun) {
                 $oldRole = $user->roles;
+                $oldPlan = $user->plan;
+                $oldPlanCode = $user->plan_code;
+
+                // Actualizar todas las columnas relacionadas con el plan
                 $user->roles = 'free';
+                $user->plan = 'free';
+                $user->plan_code = 'free';
                 $user->save();
 
                 Log::info("User downgraded to free", [
                     'user_id' => $user->id,
                     'email' => $user->email,
                     'old_role' => $oldRole,
+                    'old_plan' => $oldPlan,
+                    'old_plan_code' => $oldPlanCode,
+                    'new_role' => 'free',
+                    'new_plan' => 'free',
+                    'new_plan_code' => 'free',
                     'expired_at' => $user->plan_expires_at ? $user->plan_expires_at->toDateString() : 'No expiry date',
                     'reason' => $user->plan_expires_at ? 'expired' : 'no_expiry_date'
                 ]);

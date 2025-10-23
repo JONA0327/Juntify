@@ -20,9 +20,13 @@ class CheckExpiredPlan
         $user = Auth::user();
 
         if ($user && $user->isPlanExpired()) {
-            // Si el plan expiró, cambiar rol a free
+            // Si el plan expiró, cambiar todas las columnas relacionadas con el plan
             if ($user->roles !== 'free') {
-                $user->update(['roles' => 'free']);
+                $user->update([
+                    'roles' => 'free',
+                    'plan' => 'free',
+                    'plan_code' => 'free'
+                ]);
 
                 // Si es una petición AJAX, devolver info del plan expirado
                 if ($request->expectsJson()) {

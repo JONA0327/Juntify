@@ -69,7 +69,7 @@
                 <!-- Sección de crear/unirse - solo visible cuando no hay organizaciones -->
                 <div x-show="organizations.length === 0" class="mb-6 flex flex-col items-center w-full max-w-sm mx-auto space-y-4">
                     <h1 class="text-2xl font-semibold text-center">Organización</h1>
-                    @if(!in_array($user->roles, ['free', 'basic']))
+                    @if(!in_array($user->roles, ['free', 'basic', 'business', 'negocios']) && !in_array($user->plan_code, ['basic', 'business', 'negocios']))
                         <button @click="openOrgModal" class="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-medium shadow-lg shadow-black/10 hover:from-yellow-500 hover:to-yellow-400 transition-colors duration-200">Crear organización</button>
                         <div class="flex items-center w-full">
                             <hr class="flex-grow border-slate-700/50">
