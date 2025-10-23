@@ -57,6 +57,13 @@
             Tareas
         </a>
 
+        <a href="{{ route('contacts.index') }}" class="text-slate-200 hover:text-yellow-400 flex items-center gap-3">
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5c2.485 0 4.5 2.015 4.5 4.5s-2.015 4.5-4.5 4.5-4.5-2.015-4.5-4.5S9.515 4.5 12 4.5zM4.5 19.5a7.5 7.5 0 0115 0v.75a.75.75 0 01-.75.75H5.25a.75.75 0 01-.75-.75v-.75z" />
+            </svg>
+            Contactos
+        </a>
+
         <a href="{{ route('organization.index') }}" class="text-slate-200 hover:text-yellow-400 flex items-center gap-3">
             <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M9 13h6M12 21V3.75a.75.75 0 00-.75-.75h-6A.75.75 0 004.5 3.75V21M19.5 21V10.5a.75.75 0 00-.75-.75H15" />

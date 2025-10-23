@@ -115,11 +115,6 @@
                                     class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
                                 Permisos
                             </button>
-                            <button @click="mainTab = 'contacts'"
-                                    :class="mainTab === 'contacts' ? 'bg-yellow-400 text-slate-900' : 'text-slate-400 hover:text-slate-200'"
-                                    class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
-                                Contactos
-                            </button>
                             <button @click="mainTab = 'activity'"
                                     :class="mainTab === 'activity' ? 'bg-yellow-400 text-slate-900' : 'text-slate-400 hover:text-slate-200'"
                                     class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200">
@@ -404,10 +399,6 @@
 
                         </div>
                     </template>
-                </div>
-
-                <div x-show="mainTab === 'contacts'" x-transition class="mt-8" x-cloak>
-                    @include('contacts.index', ['hideChat' => true])
                 </div>
 
                 <!-- Modal confirmación eliminar subcarpeta (Drive) -->

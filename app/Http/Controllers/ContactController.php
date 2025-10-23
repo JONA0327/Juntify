@@ -20,9 +20,7 @@ class ContactController extends Controller
      */
     public function index(): View
     {
-        return view('contacts.index', [
-            'hideChat' => true,
-        ]);
+        return view('contacts.show');
     }
 
     /**
