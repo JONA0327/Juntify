@@ -85,6 +85,14 @@
         {{-- Rol por defecto como string --}}
         <input type="hidden" name="role" value="free">
 
+        <div class="legal-checkbox">
+          <label for="legalAcceptance" class="legal-label">
+            <input type="checkbox" id="legalAcceptance" name="legal_acceptance" value="1" required>
+            <span>Acepto las <a href="{{ route('legal.terms') }}" target="_blank">Condiciones de Uso</a> y la <a href="{{ route('legal.privacy') }}" target="_blank">Política de Privacidad</a>.</span>
+          </label>
+          <div class="error-message" id="legalAcceptanceError"></div>
+        </div>
+
         <button type="submit" class="btn-primary" id="submitBtn">
           Crear Cuenta
         </button>

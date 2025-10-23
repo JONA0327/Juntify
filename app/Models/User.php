@@ -37,6 +37,7 @@ class User extends Authenticatable
         'blocked_permanent',
         'blocked_reason',
         'blocked_by',
+        'legal_accepted_at',
     ];
 
     protected $casts = [
@@ -44,6 +45,7 @@ class User extends Authenticatable
         'blocked_at' => 'datetime',
         'blocked_until' => 'datetime',
         'blocked_permanent' => 'boolean',
+        'legal_accepted_at' => 'datetime',
     ];
 
     protected static function boot()
