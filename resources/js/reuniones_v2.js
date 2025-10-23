@@ -2618,23 +2618,29 @@ function attachContainerEventListeners() {
 
 async function addMeetingToContainer(meetingId, containerId) {
     try {
-        // Verificar límites antes de agregar
-        const limits = window.getContainerLimits ? window.getContainerLimits() : { maxMeetingsPerContainer: 999 };
-
         // Buscar el contenedor actual para contar sus reuniones
         const currentContainer = containersData ? containersData.find(c => c.id == containerId) : null;
+        const isOrganizationContainer = currentContainer ? Boolean(currentContainer.is_company) : false;
+        const limits = window.getContainerLimits
+            ? window.getContainerLimits({ isCompany: isOrganizationContainer })
+            : { maxMeetingsPerContainer: Number.POSITIVE_INFINITY };
+
         const currentMeetingCount = currentContainer ? (currentContainer.meetings_count || 0) : 0;
 
-        if (currentMeetingCount >= limits.maxMeetingsPerContainer) {
-            showNotification(`Límite alcanzado: máximo ${limits.maxMeetingsPerContainer} reuniones por contenedor para tu plan`, 'error');
+        const maxMeetingsRaw = limits.maxMeetingsPerContainer;
+        const maxMeetings = Number.isFinite(maxMeetingsRaw) ? maxMeetingsRaw : Number.POSITIVE_INFINITY;
+
+        if (Number.isFinite(maxMeetings) && currentMeetingCount >= maxMeetings) {
+            showNotification(`Límite alcanzado: máximo ${maxMeetings} reuniones por contenedor para tu plan`, 'error');
             return false;
         }
 
         console.log('🔍 Verificando límite de reuniones por contenedor:', {
             containerId,
             currentCount: currentMeetingCount,
-            maxAllowed: limits.maxMeetingsPerContainer,
-            canAdd: currentMeetingCount < limits.maxMeetingsPerContainer
+            maxAllowed: maxMeetingsRaw,
+            canAdd: currentMeetingCount < maxMeetings,
+            isOrganization: isOrganizationContainer
         });
 
         const response = await fetch(`/api/content-containers/${containerId}/meetings`, {
@@ -4498,15 +4504,24 @@ function openCreateContainerModal() {
 
     // Verificar límites de contenedores
     const currentContainerCount = containersData ? containersData.length : 0;
-    const canCreateMore = window.canCreateMoreContainers ? window.canCreateMoreContainers(currentContainerCount) : true;
-    const limits = window.getContainerLimits ? window.getContainerLimits() : { maxContainers: 999 };
+    const personalLimitOptions = { isCompany: false };
+    const canCreateMore = window.canCreateMoreContainers
+        ? window.canCreateMoreContainers(currentContainerCount, personalLimitOptions)
+        : true;
+    const limits = window.getContainerLimits
+        ? window.getContainerLimits(personalLimitOptions)
+        : { maxContainers: Number.POSITIVE_INFINITY };
+    const maxContainersRaw = limits.maxContainers;
+    const remainingContainers = Number.isFinite(maxContainersRaw)
+        ? Math.max(0, maxContainersRaw - currentContainerCount)
+        : '∞';
 
     if (!canCreateMore) {
         console.log('📦 Límite de contenedores alcanzado');
 
         showUpgradeModal({
             title: 'Límite de contenedores alcanzado',
-            message: `Has alcanzado el límite de <strong>${limits.maxContainers} contenedores</strong> para tu plan. Actualiza a un plan superior para crear más contenedores.`,
+            message: `Has alcanzado el límite de <strong>${Number.isFinite(maxContainersRaw) ? maxContainersRaw : '∞'} contenedores</strong> para tu plan. Actualiza a un plan superior para crear más contenedores.`,
             icon: 'lock'
         });
         return;
@@ -4514,8 +4529,8 @@ function openCreateContainerModal() {
 
     console.log('✅ Usuario puede crear contenedores', {
         currentCount: currentContainerCount,
-        maxAllowed: limits.maxContainers,
-        remaining: limits.maxContainers - currentContainerCount
+        maxAllowed: maxContainersRaw,
+        remaining: remainingContainers
     });
 
     isEditMode = false;

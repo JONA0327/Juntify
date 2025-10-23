@@ -199,6 +199,12 @@ class ContainerController extends Controller
                     || in_array($planCode, ['negocios', 'business', 'buisness'], true)
                     || str_contains($planCode, 'negocio')
                     || str_contains($role, 'business');
+                $isEnterprisePlan = $role === 'enterprise'
+                    || in_array($planCode, ['enterprise', 'empresas', 'empresa', 'enterprice'], true)
+                    || str_contains($planCode, 'enterprise')
+                    || str_contains($planCode, 'empresa')
+                    || str_contains($role, 'enterprise')
+                    || str_contains($role, 'empresa');
 
                 $maxPersonalContainers = null;
                 $planLabel = null;
@@ -209,6 +215,9 @@ class ContainerController extends Controller
                 } elseif ($isBusinessPlan) {
                     $maxPersonalContainers = 10;
                     $planLabel = 'Plan Business';
+                } elseif ($isEnterprisePlan) {
+                    $maxPersonalContainers = 10;
+                    $planLabel = 'Plan Enterprise';
                 }
 
                 if ($maxPersonalContainers !== null) {
@@ -388,6 +397,12 @@ class ContainerController extends Controller
             || in_array($planCode, ['negocios', 'business', 'buisness'], true)
             || str_contains($planCode, 'negocio')
             || str_contains($role, 'business');
+        $isEnterprisePlan = $role === 'enterprise'
+            || in_array($planCode, ['enterprise', 'empresas', 'empresa', 'enterprice'], true)
+            || str_contains($planCode, 'enterprise')
+            || str_contains($planCode, 'empresa')
+            || str_contains($role, 'enterprise')
+            || str_contains($role, 'empresa');
 
         if (!$container->group_id) { // Solo aplicar límite a contenedores personales
             $maxMeetingsPerContainer = null;
@@ -399,6 +414,9 @@ class ContainerController extends Controller
             } elseif ($isBusinessPlan) {
                 $maxMeetingsPerContainer = 10;
                 $planLabel = 'Plan Business';
+            } elseif ($isEnterprisePlan) {
+                $maxMeetingsPerContainer = 15;
+                $planLabel = 'Plan Enterprise';
             }
 
             if ($maxMeetingsPerContainer !== null) {
@@ -409,6 +427,18 @@ class ContainerController extends Controller
                     return response()->json([
                         'success' => false,
                         'message' => sprintf('%s permite máximo %d reuniones por contenedor.', $planLabel, $maxMeetingsPerContainer)
+                    ], 403);
+                }
+            }
+        } else {
+            if ($isEnterprisePlan) {
+                $currentMeetingsCount = MeetingContentRelation::where('container_id', $container->id)->count();
+
+                if ($currentMeetingsCount >= 10) {
+                    Log::info("Plan Enterprise organization meeting limit reached for container {$id} - current count: {$currentMeetingsCount}");
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El Plan Enterprise permite máximo 10 reuniones por contenedor organizacional.'
                     ], 403);
                 }
             }

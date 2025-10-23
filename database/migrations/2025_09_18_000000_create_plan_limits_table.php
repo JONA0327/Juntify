@@ -25,7 +25,7 @@ return new class extends Migration {
             [ 'role' => 'basic',       'max_meetings_per_month' => 15, 'max_duration_minutes' => 60,  'allow_postpone' => false, 'warn_before_minutes' => 5, 'created_at' => $now, 'updated_at' => $now ],
             [ 'role' => 'negocios',    'max_meetings_per_month' => 30, 'max_duration_minutes' => 120, 'allow_postpone' => true,  'warn_before_minutes' => 5, 'created_at' => $now, 'updated_at' => $now ],
             [ 'role' => 'business',    'max_meetings_per_month' => 30, 'max_duration_minutes' => 120, 'allow_postpone' => true,  'warn_before_minutes' => 5, 'created_at' => $now, 'updated_at' => $now ],
-            [ 'role' => 'enterprise',  'max_meetings_per_month' => 50, 'max_duration_minutes' => 120, 'allow_postpone' => true,  'warn_before_minutes' => 5, 'created_at' => $now, 'updated_at' => $now ],
+            [ 'role' => 'enterprise',  'max_meetings_per_month' => 40, 'max_duration_minutes' => 120, 'allow_postpone' => true,  'warn_before_minutes' => 5, 'created_at' => $now, 'updated_at' => $now ],
             [ 'role' => 'founder',     'max_meetings_per_month' => null, 'max_duration_minutes' => 120, 'allow_postpone' => true, 'warn_before_minutes' => 5, 'created_at' => $now, 'updated_at' => $now ],
             [ 'role' => 'developer',   'max_meetings_per_month' => null, 'max_duration_minutes' => 120, 'allow_postpone' => true, 'warn_before_minutes' => 5, 'created_at' => $now, 'updated_at' => $now ],
             [ 'role' => 'superadmin',  'max_meetings_per_month' => null, 'max_duration_minutes' => 120, 'allow_postpone' => true, 'warn_before_minutes' => 5, 'created_at' => $now, 'updated_at' => $now ],
