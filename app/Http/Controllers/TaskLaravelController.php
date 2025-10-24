@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Mail\TaskReactivatedMail;
-use App\Models\Contact;
 use App\Models\Notification;
 use App\Models\SharedMeeting;
 use App\Models\TaskLaravel;
@@ -675,9 +674,13 @@ class TaskLaravelController extends Controller
     /**
      * Aplica el token de Google del usuario autenticado al servicio Calendar.
      */
-    protected function applyCalendarToken(GoogleCalendarService $calendar): ?GoogleToken
+    protected function applyCalendarToken(GoogleCalendarService $calendar, ?User $tokenOwner = null): ?GoogleToken
     {
-        $user = Auth::user();
+        $user = $tokenOwner ?: Auth::user();
+        if (!$user || empty($user->current_organization_id)) {
+            return null;
+        }
+
         $token = GoogleToken::where('username', $user->username)
             ->whereNotNull('access_token')
             ->first();
@@ -739,7 +742,8 @@ class TaskLaravelController extends Controller
         }
 
         // Intentar sincronizar con Google Calendar si hay fecha
-        $this->maybeSyncToCalendar($task, $calendar);
+        $task->loadMissing('assignedUser');
+        $this->maybeSyncToCalendar($task, $calendar, $task->assignedUser);
 
         return response()->json([
             'success' => true,
@@ -792,7 +796,9 @@ class TaskLaravelController extends Controller
         $task->save();
 
         // Sincronizar con Google Calendar en actualizaciones
-        $this->maybeSyncToCalendar($task, $calendar);
+        $task->loadMissing('assignedUser');
+        $calendarUser = $user->id === $task->assigned_user_id ? $user : $task->assignedUser;
+        $this->maybeSyncToCalendar($task, $calendar, $calendarUser);
 
         $this->normalizeAssignmentStatus($task);
 
@@ -818,11 +824,25 @@ class TaskLaravelController extends Controller
      * Si la tarea tiene fecha (con o sin hora), crear/actualizar evento en Google Calendar.
      * Si no tiene fecha, no crea evento (queda pendiente hasta que se agregue una fecha).
      */
-    protected function maybeSyncToCalendar(TaskLaravel $task, GoogleCalendarService $calendar): void
+    protected function maybeSyncToCalendar(TaskLaravel $task, GoogleCalendarService $calendar, ?User $calendarUser = null): void
     {
         try {
+            if (empty($task->assigned_user_id) || $task->assignment_status !== 'accepted') {
+                return;
+            }
+
+            if (!$calendarUser || $calendarUser->id !== $task->assigned_user_id) {
+                $calendarUser = $task->relationLoaded('assignedUser')
+                    ? $task->assignedUser
+                    : $task->assignedUser()->first();
+            }
+
+            if (!$calendarUser || empty($calendarUser->current_organization_id)) {
+                return;
+            }
+
             // Requiere token válido; si no hay, no hace nada
-            if (!$this->applyCalendarToken($calendar)) return;
+            if (!$this->applyCalendarToken($calendar, $calendarUser)) return;
 
             $date = $task->fecha_limite ?: $task->fecha_inicio;
             if (!$date) return; // sin fecha, no se agenda todavía
@@ -894,6 +914,13 @@ class TaskLaravelController extends Controller
             'username' => 'nullable|string'
         ]);
 
+        if (empty($owner->current_organization_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debes pertenecer a una organización para asignar tareas.'
+            ], 403);
+        }
+
         // Resolver destinatario
         $target = null;
         if (!empty($data['user_id'])) {
@@ -905,6 +932,16 @@ class TaskLaravelController extends Controller
         }
         if (!$target) {
             return response()->json(['success' => false, 'message' => 'Destinatario no encontrado'], 404);
+        }
+
+        $targetBelongsToOrg = $target->organizations()
+            ->where('organization_id', $owner->current_organization_id)
+            ->exists();
+        if (!$targetBelongsToOrg || $target->current_organization_id !== $owner->current_organization_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solo puedes asignar tareas a miembros de tu organización.'
+            ], 403);
         }
 
         $displayName = $target->full_name ?: ($target->username ?: $target->email);
@@ -965,110 +1002,49 @@ class TaskLaravelController extends Controller
         $user = Auth::user();
         $search = trim($request->query('q', ''));
 
-        // 1. Contactos del usuario (siempre visible)
-        $contacts = Contact::with('contact:id,full_name,email,username')
-            ->where('user_id', $user->id)
-            ->get()
-            ->filter(fn ($c) => $c->contact)
-            ->map(function ($c) {
-                return [
-                    'id' => $c->contact->id,
-                    'name' => $c->contact->full_name ?: ($c->contact->username ?: $c->contact->email),
-                    'email' => $c->contact->email,
-                    'username' => $c->contact->username,
-                    'source' => 'contact',
-                    'label' => '📧 Contacto',
-                ];
+        if (empty($user->current_organization_id)) {
+            return response()->json([
+                'success' => true,
+                'users' => [],
+                'directory' => [],
+                'search_term' => $search,
+            ]);
+        }
+
+        $orgUsersQuery = User::query()
+            ->where('id', '!=', $user->id)
+            ->where('current_organization_id', $user->current_organization_id)
+            ->whereHas('organizations', function ($q) use ($user) {
+                $q->where('organization_id', $user->current_organization_id);
             });
 
-        // 2. Usuarios de la organización actual (prioritario)
-        $organizationUsers = collect();
-        if (!empty($user->current_organization_id)) {
-            $organizationUsers = User::query()
-                ->where('id', '!=', $user->id)
-                ->where('current_organization_id', $user->current_organization_id)
-                ->select('id', 'full_name', 'email', 'username')
-                ->get()
-                ->map(function ($orgUser) {
-                    return [
-                        'id' => $orgUser->id,
-                        'name' => $orgUser->full_name ?: ($orgUser->username ?: $orgUser->email),
-                        'email' => $orgUser->email,
-                        'username' => $orgUser->username,
-                        'source' => 'organization',
-                        'label' => '🏢 Mi Organización',
-                    ];
-                });
-        }
-
-        // 3. Usuarios de grupos donde el usuario actual es miembro
-        $groupUsers = collect();
-        $userGroups = $user->groups()->pluck('groups.id');
-        if ($userGroups->isNotEmpty()) {
-            $groupUsers = User::query()
-                ->whereHas('groups', function ($q) use ($userGroups) {
-                    $q->whereIn('groups.id', $userGroups);
-                })
-                ->where('id', '!=', $user->id)
-                ->select('id', 'full_name', 'email', 'username')
-                ->get()
-                ->map(function ($groupUser) {
-                    return [
-                        'id' => $groupUser->id,
-                        'name' => $groupUser->full_name ?: ($groupUser->username ?: $groupUser->email),
-                        'email' => $groupUser->email,
-                        'username' => $groupUser->username,
-                        'source' => 'group',
-                        'label' => '👥 Compañeros de Grupo',
-                    ];
-                });
-        }
-
-        // Combinar todos los usuarios conocidos y eliminar duplicados
-        $knownUsers = $contacts->concat($organizationUsers)->concat($groupUsers)
-            ->unique('id')
-            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
-            ->values();
-
-        // 4. Búsqueda en directorio general (solo si hay search)
-        $directoryUsers = collect();
-        if ($search !== '' && strlen($search) >= 2) {
-            $directoryUsers = User::query()
-                ->where('id', '!=', $user->id)
-                ->whereNotIn('id', $knownUsers->pluck('id')->toArray())
-                ->where(function ($q) use ($search) {
-                    $q->where('email', 'like', "%{$search}%")
-                        ->orWhere('username', 'like', "%{$search}%")
-                        ->orWhere('full_name', 'like', "%{$search}%");
-                })
-                ->limit(10)
-                ->get(['id', 'full_name', 'email', 'username'])
-                ->map(function ($directoryUser) {
-                    return [
-                        'id' => $directoryUser->id,
-                        'name' => $directoryUser->full_name ?: ($directoryUser->username ?: $directoryUser->email),
-                        'email' => $directoryUser->email,
-                        'username' => $directoryUser->username,
-                        'source' => 'directory',
-                        'label' => '🔍 Otros Usuarios',
-                    ];
-                });
-        }
-
-        // Filtrar usuarios conocidos si hay búsqueda
-        $filteredKnown = $knownUsers;
         if ($search !== '' && strlen($search) >= 1) {
-            $filteredKnown = $knownUsers->filter(function ($user) use ($search) {
-                return stripos($user['name'], $search) !== false ||
-                       stripos($user['email'], $search) !== false ||
-                       stripos($user['username'] ?? '', $search) !== false;
-            })->values();
+            $orgUsersQuery->where(function ($q) use ($search) {
+                $q->where('email', 'like', "%{$search}%")
+                    ->orWhere('username', 'like', "%{$search}%")
+                    ->orWhere('full_name', 'like', "%{$search}%");
+            });
         }
+
+        $organizationUsers = $orgUsersQuery
+            ->orderByRaw('LOWER(COALESCE(full_name, username, email))')
+            ->get(['id', 'full_name', 'email', 'username'])
+            ->map(function ($orgUser) {
+                return [
+                    'id' => $orgUser->id,
+                    'name' => $orgUser->full_name ?: ($orgUser->username ?: $orgUser->email),
+                    'email' => $orgUser->email,
+                    'username' => $orgUser->username,
+                    'source' => 'organization',
+                    'label' => '🏢 Mi Organización',
+                ];
+            })
+            ->values();
 
         return response()->json([
             'success' => true,
-            'users' => $filteredKnown,
-            'directory' => $directoryUsers->values(),
+            'users' => $organizationUsers,
+            'directory' => [],
             'search_term' => $search,
         ]);
     }
@@ -1116,8 +1092,10 @@ class TaskLaravelController extends Controller
             $task->overdue_notified_at = null;
             $task->save();
 
+            $task->setRelation('assignedUser', $user);
+
             // Intentar crear evento en Calendar si hay fecha/hora
-            $this->maybeSyncToCalendar($task, $calendar);
+            $this->maybeSyncToCalendar($task, $calendar, $user);
 
             if ($owner) {
                 Notification::create([
@@ -1143,6 +1121,7 @@ class TaskLaravelController extends Controller
             $task->asignado = null;
             $task->overdue_notified_at = null;
             $task->save();
+            $task->unsetRelation('assignedUser');
 
             if ($owner) {
                 Notification::create([
@@ -1222,8 +1201,23 @@ class TaskLaravelController extends Controller
 
         if ($action === 'accept') {
             $task->assignment_status = 'accepted';
+            $task->assigned_user_id = $assignedUser->id;
+            $task->asignado = $assignedUser->full_name ?: ($assignedUser->username ?: $assignedUser->email);
             $task->overdue_notified_at = null;
             $task->save();
+
+            $task->setRelation('assignedUser', $assignedUser);
+
+            try {
+                $calendar = app(GoogleCalendarService::class);
+                $this->maybeSyncToCalendar($task, $calendar, $assignedUser);
+            } catch (\Throwable $e) {
+                Log::warning('Calendar sync (email response) failed', [
+                    'task_id' => $task->id,
+                    'user_id' => $assignedUser->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             // Crear notificación para el dueño
             if ($owner) {
@@ -1254,6 +1248,7 @@ class TaskLaravelController extends Controller
             $task->asignado = null;
             $task->overdue_notified_at = null;
             $task->save();
+            $task->unsetRelation('assignedUser');
 
             // Crear notificación para el dueño
             if ($owner) {
