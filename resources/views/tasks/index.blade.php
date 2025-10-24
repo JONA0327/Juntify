@@ -57,6 +57,34 @@
 
                 @include('tasks.partials._header')
 
+                <!-- Filtro por Reunión -->
+                <div id="meetingFilterContainer" class="mt-6 bg-slate-800/30 border border-slate-700/40 rounded-xl p-4 transition-all duration-300" data-task-view-targets="tablero">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-2">
+                                <h3 class="text-sm font-medium text-slate-200">📋 Filtrar tareas por reunión</h3>
+                                <span id="activeFilterBadge" class="hidden px-2 py-1 bg-blue-600/20 border border-blue-400/30 rounded-full text-xs text-blue-300 font-medium">
+                                    🔍 Filtrando
+                                </span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <select id="meetingFilter" class="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[250px]">
+                                    <option value="">🌐 Todas las reuniones</option>
+                                </select>
+                                <button id="clearMeetingFilter" class="px-3 py-2 bg-slate-600 hover:bg-slate-500 text-slate-200 rounded-lg text-sm transition-colors hidden flex items-center gap-1">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                    Limpiar
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs">
+                            <span id="filterStats" class="text-slate-400">Mostrando todas las tareas</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="mt-6 flex flex-wrap gap-2" role="tablist" aria-label="Vistas de tareas">
                     <button type="button" data-task-view-btn="calendario" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-800/70 text-sm font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500">Calendario</button>
                     @if(!($isBusinessPlan ?? false))
@@ -209,6 +237,8 @@
         let currentKanbanTab = 'board';
         let currentKanbanTasks = [];
         let currentTaskMainView = 'calendario';
+        let availableMeetings = [];
+        let currentMeetingFilter = null; // null = todas, number = meeting_id específico
 
         window.lastSelectedMeetingId = window.lastSelectedMeetingId || null;
         window.lastSelectedMeetingName = window.lastSelectedMeetingName || null;
@@ -247,6 +277,75 @@
             } else {
                 kanbanContextLabel.textContent = 'Mostrando tareas de todas tus reuniones y asignaciones.';
                 if (kanbanResetBtn) kanbanResetBtn.classList.add('hidden');
+            }
+        }
+
+        function populateMeetingFilter(meetings) {
+            const select = document.getElementById('meetingFilter');
+            if (!select) return;
+
+            const currentValue = select.value;
+            const totalTasks = meetings.reduce((sum, m) => sum + (m.task_count || 0), 0);
+
+            select.innerHTML = `<option value="">🌐 Todas las reuniones (${totalTasks} tareas)</option>`;
+
+            // Ordenar reuniones por número de tareas (descendente) y luego por nombre
+            meetings
+                .sort((a, b) => {
+                    const countDiff = (b.task_count || 0) - (a.task_count || 0);
+                    return countDiff !== 0 ? countDiff : a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
+                })
+                .forEach(meeting => {
+                    if (!meeting || !meeting.id) return;
+                    const option = document.createElement('option');
+                    option.value = meeting.id;
+                    const taskCount = meeting.task_count || 0;
+                    const taskText = taskCount === 1 ? '1 tarea' : `${taskCount} tareas`;
+                    option.textContent = `📋 ${meeting.name} (${taskText})`;
+                    select.appendChild(option);
+                });
+
+            // Restaurar selección si era válida
+            if (currentValue && Array.from(select.options).some(opt => opt.value === currentValue)) {
+                select.value = currentValue;
+            }
+        }
+
+        function updateFilterStats(tasks, meetings, currentFilter) {
+            const statsEl = document.getElementById('filterStats');
+            const clearBtn = document.getElementById('clearMeetingFilter');
+            const filterBadge = document.getElementById('activeFilterBadge');
+            const filterContainer = document.getElementById('meetingFilterContainer');
+
+            if (!statsEl) return;
+
+            if (currentFilter) {
+                const meeting = meetings.find(m => String(m.id) === String(currentFilter));
+                const meetingName = meeting ? meeting.name : 'Reunión desconocida';
+                const taskCount = tasks.length;
+
+                statsEl.textContent = `📋 ${meetingName}: ${taskCount} tarea${taskCount === 1 ? '' : 's'}`;
+                statsEl.className = 'text-blue-300 font-medium';
+
+                if (clearBtn) clearBtn.classList.remove('hidden');
+                if (filterBadge) filterBadge.classList.remove('hidden');
+                if (filterContainer) {
+                    filterContainer.classList.add('bg-blue-900/20', 'border-blue-600/30');
+                    filterContainer.classList.remove('bg-slate-800/30', 'border-slate-700/40');
+                }
+            } else {
+                const totalTasks = tasks.length;
+                const meetingCount = meetings.length;
+
+                statsEl.textContent = `🌐 ${totalTasks} tarea${totalTasks === 1 ? '' : 's'} en ${meetingCount} reunión${meetingCount === 1 ? '' : 'es'}`;
+                statsEl.className = 'text-slate-400';
+
+                if (clearBtn) clearBtn.classList.add('hidden');
+                if (filterBadge) filterBadge.classList.add('hidden');
+                if (filterContainer) {
+                    filterContainer.classList.remove('bg-blue-900/20', 'border-blue-600/30');
+                    filterContainer.classList.add('bg-slate-800/30', 'border-slate-700/40');
+                }
             }
         }
 
@@ -358,7 +457,11 @@
 
             try {
                 const url = new URL('/api/tasks-laravel/tasks', window.location.origin);
-                if (hasMeeting) {
+
+                // Priorizar filtro de reunión específico sobre la reunión del último contexto
+                if (currentMeetingFilter) {
+                    url.searchParams.set('meeting_id', currentMeetingFilter);
+                } else if (hasMeeting && !currentMeetingFilter) {
                     url.searchParams.set('meeting_id', window.lastSelectedMeetingId);
                 }
 
@@ -383,6 +486,18 @@
                         || (!!t.fecha_limite && progress < 100 && new Date(`${t.fecha_limite}T23:59:59`) < new Date());
                     return { ...t, _progress: progress, _overdue: overdue };
                 });
+
+                // Actualizar filtro de reuniones disponibles
+                if (Array.isArray(json.meetings)) {
+                    availableMeetings = json.meetings.map(m => ({
+                        ...m,
+                        task_count: rawTasks.filter(t => String(t.meeting_id) === String(m.id)).length
+                    }));
+                    populateMeetingFilter(availableMeetings);
+                }
+
+                // Actualizar estadísticas del filtro
+                updateFilterStats(enrichedTasks, availableMeetings, currentMeetingFilter);
 
                 currentKanbanTasks = enrichedTasks;
 
@@ -681,6 +796,33 @@
         });
 
         setTaskMainView('calendario');
+
+        // Event listeners para filtro de reuniones
+        const meetingFilterSelect = document.getElementById('meetingFilter');
+        const clearMeetingFilterBtn = document.getElementById('clearMeetingFilter');
+
+        if (meetingFilterSelect) {
+            meetingFilterSelect.addEventListener('change', async (e) => {
+                const selectedValue = e.target.value;
+                currentMeetingFilter = selectedValue ? parseInt(selectedValue) : null;
+
+                // Limpiar el contexto de reunión seleccionada si hay filtro específico
+                if (currentMeetingFilter) {
+                    window.lastSelectedMeetingId = null;
+                    window.lastSelectedMeetingName = null;
+                }
+
+                await kanbanReload();
+            });
+        }
+
+        if (clearMeetingFilterBtn) {
+            clearMeetingFilterBtn.addEventListener('click', async () => {
+                currentMeetingFilter = null;
+                if (meetingFilterSelect) meetingFilterSelect.value = '';
+                await kanbanReload();
+            });
+        }
 
         const _origLoadTasks = window.loadTasksForMeeting;
         window.loadTasksForMeeting = async function(id, src){

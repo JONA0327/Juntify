@@ -314,29 +314,74 @@ class GoogleDriveService
     public function downloadFileContent(string $fileId): ?string
     {
         try {
+            Log::info('Attempting to download file content from Google Drive', [
+                'file_id' => $fileId,
+                'client_has_token' => $this->client->getAccessToken() !== null
+            ]);
+
             $response = $this->drive->files->get($fileId, [
                 'alt' => 'media',
                 'supportsAllDrives' => true,
             ]);
 
-            Log::info('Google Drive API response type', [
+            Log::info('Google Drive API response received', [
+                'file_id' => $fileId,
                 'type' => gettype($response),
                 'class' => is_object($response) ? get_class($response) : 'not_object'
             ]);
 
-            if ($response instanceof Response) {
+            if ($response instanceof \Psr\Http\Message\ResponseInterface) {
                 $body = $response->getBody();
-                return $body->getContents();
+                $contents = $body->getContents();
+
+                Log::info('Content extracted from PSR response', [
+                    'file_id' => $fileId,
+                    'content_length' => strlen($contents)
+                ]);
+
+                return $contents;
             }
 
-            return (string) $response;
+            // Si es string directo
+            $stringResponse = (string) $response;
+
+            Log::info('Content converted to string', [
+                'file_id' => $fileId,
+                'content_length' => strlen($stringResponse)
+            ]);
+
+            return $stringResponse;
+
         } catch (GoogleServiceException $e) {
+            Log::error('Google Service Exception during download', [
+                'file_id' => $fileId,
+                'code' => $e->getCode(),
+                'message' => $e->getMessage(),
+                'errors' => $e->getErrors()
+            ]);
+
             if ($e->getCode() === 404) {
                 Log::warning('File not found on Google Drive', ['file_id' => $fileId]);
                 return null;
             }
 
+            if ($e->getCode() === 403) {
+                Log::error('Permission denied for Google Drive file', [
+                    'file_id' => $fileId,
+                    'message' => $e->getMessage()
+                ]);
+                throw new GoogleDriveFileException($fileId, 403, 'Sin permisos para acceder al archivo', $e);
+            }
+
             throw new GoogleDriveFileException($fileId, (int) $e->getCode(), $e->getMessage(), $e);
+        } catch (\Throwable $e) {
+            Log::error('Unexpected error during file download', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+                'class' => get_class($e)
+            ]);
+
+            throw $e;
         }
     }
 

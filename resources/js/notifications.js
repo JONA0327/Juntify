@@ -52,6 +52,26 @@ const Notifications = (() => {
                             </div>
                         </div>
                     `;
+                } else if (n.type === 'contact_request') {
+                    li.className = 'invitation-item p-3 bg-slate-700/50 rounded-lg mb-2';
+                    li.innerHTML = `
+                        <div class="flex items-start gap-3">
+                            <div class="flex-shrink-0 w-8 h-8 bg-blue-400/20 rounded-lg flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                            </div>
+                            <div class="flex-grow">
+                                <div class="message text-sm text-slate-200 font-medium">Solicitud de contacto</div>
+                                <div class="message text-sm text-slate-300 mt-1">${n.message}</div>
+                                <div class="meta text-xs text-slate-400 mt-2">De: ${n.sender_name || (n.from_user ? `${n.from_user.name} (${n.from_user.email})` : (n.remitente ? (n.remitente.full_name || n.remitente.username || 'Usuario') : 'Usuario'))}</div>
+                                <div class="actions mt-3 flex gap-2">
+                                    <button class="accept-contact-btn bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded-md transition-colors" data-id="${n.id}">Aceptar</button>
+                                    <button class="reject-contact-btn bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded-md transition-colors" data-id="${n.id}">Rechazar</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
                 } else if (n.type === 'audio_upload') {
                     const name = n.data?.meeting_name || 'Audio';
                     li.className = 'upload-item p-3 bg-slate-700/50 rounded-lg mb-2 flex justify-between items-center';
@@ -128,6 +148,18 @@ const Notifications = (() => {
                 const sharedMeetingId = e.target.dataset.sharedMeetingId;
                 const notificationId = e.target.dataset.id;
                 respondToMeetingShareInvitation(sharedMeetingId, 'reject', notificationId);
+            });
+        });
+        document.querySelectorAll('.accept-contact-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = e.target.dataset.id;
+                respondToContactRequest(id, 'accept');
+            });
+        });
+        document.querySelectorAll('.reject-contact-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const id = e.target.dataset.id;
+                respondToContactRequest(id, 'reject');
             });
         });
         document.querySelectorAll('.dismiss-btn').forEach(btn => {
@@ -248,6 +280,58 @@ const Notifications = (() => {
         }
     }
 
+    async function respondToContactRequest(id, action) {
+        try {
+            const response = await fetch(`/api/contacts/requests/${id}/respond`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ action: action })
+            });
+
+            if (response.status === 401) {
+                showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
+                return;
+            }
+
+            if (!response.ok) {
+                let message = 'Error al responder la solicitud de contacto.';
+                try {
+                    const data = await response.json();
+                    if (data.message) message = data.message;
+                } catch (_) { /* ignore */ }
+                showError(message);
+                return;
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                // Remover notificación de la lista
+                notifications = notifications.filter(n => n.id != id);
+                render();
+
+                // Mostrar mensaje de éxito
+                const actionText = action === 'accept' ? 'aceptada' : 'rechazada';
+                showSuccess(`Solicitud de contacto ${actionText} exitosamente.`);
+
+                // Si se aceptó, refrescar la lista de contactos si existe
+                if (action === 'accept' && typeof loadContacts === 'function') {
+                    loadContacts();
+                }
+            } else {
+                showError(data.message || 'Error al responder la solicitud de contacto.');
+            }
+        } catch (error) {
+            if (import.meta.env.DEV) {
+                console.debug('Error responding to contact request:', error);
+            }
+            showError('Error de conexión al responder la solicitud de contacto.');
+        }
+    }
+
     async function dismissNotification(id) {
         try {
             const response = await fetch(`/api/notifications/${id}`, {
@@ -342,23 +426,36 @@ const Notifications = (() => {
     }
 
     function init() {
-        document.querySelectorAll('.notifications-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => {
-                document.querySelectorAll('.notifications-panel').forEach(panel => {
-                    const willShow = panel.classList.contains('hidden');
-                    panel.classList.toggle('hidden');
-                    if (willShow) {
-                        positionNotificationsPanel(panel, toggle);
+        // Toggle panel al hacer clic en el botón
+        document.querySelectorAll('.notifications-toggle').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const panel = btn.closest('.notifications').querySelector('.notifications-panel');
+
+                // Cerrar todos los otros paneles primero
+                document.querySelectorAll('.notifications-panel').forEach(p => {
+                    if (p !== panel) {
+                        p.classList.add('hidden');
                     }
                 });
+
+                // Toggle el panel actual
+                if (panel.classList.contains('hidden')) {
+                    panel.classList.remove('hidden');
+                    positionNotificationsPanel(panel, btn);
+                } else {
+                    panel.classList.add('hidden');
+                }
             });
         });
 
         // Cerrar al hacer click fuera del panel
         document.addEventListener('click', (e) => {
-            const inside = e.target.closest('.notifications');
-            if (!inside) {
-                document.querySelectorAll('.notifications-panel').forEach(panel => panel.classList.add('hidden'));
+            const notificationsContainer = e.target.closest('.notifications');
+            if (!notificationsContainer) {
+                document.querySelectorAll('.notifications-panel').forEach(panel => {
+                    panel.classList.add('hidden');
+                });
             }
         });
 
@@ -373,22 +470,6 @@ const Notifications = (() => {
             });
         });
 
-
-    // Toggle panel al hacer clic en el botón
-    document.querySelectorAll('.notifications-toggle').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const panel = btn.closest('.notifications').querySelector('.notifications-panel');
-            if (panel.classList.contains('hidden')) {
-                document.querySelectorAll('.notifications-panel').forEach(p => p.classList.add('hidden'));
-                panel.classList.remove('hidden');
-                positionNotificationsPanel(panel, btn);
-            } else {
-                panel.classList.add('hidden');
-            }
-        });
-    });
-
     fetchNotifications();
     }
 
@@ -399,7 +480,8 @@ const Notifications = (() => {
     }
 
     return {
-        refresh: fetchNotifications
+        refresh: fetchNotifications,
+        respondToContactRequest: respondToContactRequest
     };
 })();
 
@@ -447,3 +529,4 @@ function positionNotificationsPanel(panel, toggle) {
 }
 
 window.notifications = Notifications;
+window.respondToContactRequest = Notifications.respondToContactRequest;

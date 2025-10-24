@@ -179,6 +179,10 @@ class OrganizationDocumentsController extends Controller
                     'modifiedTime' => $f->getModifiedTime(),
                     'iconLink' => $f->getIconLink(),
                     'thumbnailLink' => $f->getThumbnailLink(),
+                    'url' => route('containers.files.download', [
+                        'container' => $container->id,
+                        'file' => $f->getId()
+                    ]),
                 ];
             }
             return response()->json(['files' => $out]);

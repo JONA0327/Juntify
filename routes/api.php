@@ -327,6 +327,7 @@ Route::middleware(['web', 'auth'])->group(function () {
           Route::get('/contacts/requests', [ContactController::class, 'requests'])->name('api.contacts.requests');
           Route::post('/contacts', [ContactController::class, 'store'])->name('api.contacts.store');
           Route::post('/contacts/requests/{notification}/respond', [ContactController::class, 'respond'])->name('api.contacts.requests.respond');
+          Route::delete('/contacts/requests/{notification}/cancel', [ContactController::class, 'cancel'])->name('api.contacts.requests.cancel');
           Route::delete('/contacts/{contact}', [ContactController::class, 'destroy'])->name('api.contacts.destroy');
           Route::post('/users/search', [ContactController::class, 'searchUsers'])->name('api.users.search');
 

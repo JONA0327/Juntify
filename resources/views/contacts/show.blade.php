@@ -8,7 +8,7 @@
         'resources/js/reuniones_v2.js',
     ])
     <script>
-        window.contactsFeatures = Object.assign(window.contactsFeatures || {}, { showChat: true });
+        window.contactsFeatures = Object.assign(window.contactsFeatures || {}, { showChat: false });
     </script>
 @endsection
 
@@ -30,10 +30,16 @@
 @section('scripts')
     @parent
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        function waitForLoadContacts() {
             if (typeof loadContacts === 'function') {
                 loadContacts();
+            } else {
+                setTimeout(waitForLoadContacts, 100);
             }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            waitForLoadContacts();
         });
     </script>
 @endsection

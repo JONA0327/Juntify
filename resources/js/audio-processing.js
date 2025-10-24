@@ -833,9 +833,33 @@ async function handleTranscriptionError(e) {
             shouldAutoRetry = true;
             autoRetryReason = 'tiempo de espera del servidor (504)';
         } else if (status >= 500) {
-            userMessage = '⚠️ El servidor encontró un problema inesperado. Intenta nuevamente en unos minutos.';
-            shouldAutoRetry = true;
-            autoRetryReason = `error ${status}`;
+            // Verificar si tenemos un mensaje específico del backend
+            const errorData = e.response.data;
+            if (errorData && errorData.error) {
+                if (errorData.error.includes('API key') || errorData.error.includes('no válida')) {
+                    userMessage = '⚠️ Problema con la configuración del servicio de transcripción. Contacta al administrador.';
+                    shouldDownloadBackup = true;
+                } else if (errorData.error.includes('Límite de solicitudes')) {
+                    userMessage = '⚠️ Se ha excedido el límite de transcripciones. Intenta nuevamente en unos minutos.';
+                    shouldAutoRetry = true;
+                    autoRetryReason = 'límite de API excedido';
+                } else if (errorData.error.includes('Formato de archivo')) {
+                    userMessage = '❌ El formato del archivo de audio no es compatible con el servicio de transcripción.';
+                    shouldDiscardAudio = true;
+                    shouldDownloadBackup = true;
+                } else if (errorData.error.includes('créditos') || errorData.error.includes('account balance')) {
+                    userMessage = '⚠️ El servicio de transcripción no tiene créditos suficientes. Contacta al administrador.';
+                    shouldDownloadBackup = true;
+                } else {
+                    userMessage = `⚠️ Error del servicio de transcripción: ${errorData.error}`;
+                    shouldAutoRetry = true;
+                    autoRetryReason = `error de transcripción (${status})`;
+                }
+            } else {
+                userMessage = '⚠️ El servidor encontró un problema inesperado. Intenta nuevamente en unos minutos.';
+                shouldAutoRetry = true;
+                autoRetryReason = `error ${status}`;
+            }
         } else if (status === 422 || status === 415) {
             userMessage = '❌ El formato del audio no es válido o supera los límites permitidos.';
             shouldDiscardAudio = true;

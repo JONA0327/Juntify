@@ -49,14 +49,29 @@
                                         <p id="detailsTaskDueTime" class="text-slate-100 mt-1"></p>
                                     </div>
                                 </div>
-                                <div class="grid grid-cols-2 gap-4">
+                                <div class="grid grid-cols-1 gap-4">
                                     <div>
                                         <label class="text-sm font-medium text-slate-300">Asignado a:</label>
-                                        <p id="detailsTaskAssignee" class="text-slate-100 mt-1"></p>
-                                    </div>
-                                    <div>
-                                        <label class="text-sm font-medium text-slate-300">Estado de asignación:</label>
-                                        <span id="detailsAssignmentStatus" class="inline-block mt-1 px-2 py-1 rounded text-xs bg-slate-600/40 text-slate-200">Sin asignar</span>
+                                        <div id="detailsTaskAssigneeContainer" class="mt-2">
+                                            <div id="detailsTaskAssigneeInfo" class="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg border border-slate-600/50 hidden">
+                                                <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                                    <span id="detailsAssigneeInitials">--</span>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <p id="detailsTaskAssignee" class="text-slate-100 font-medium"></p>
+                                                    <p id="detailsAssigneeEmail" class="text-slate-400 text-sm truncate"></p>
+                                                </div>
+                                                <div class="flex-shrink-0">
+                                                    <span id="detailsAssignmentStatus" class="inline-block px-2 py-1 rounded text-xs bg-slate-600/40 text-slate-200">Sin asignar</span>
+                                                </div>
+                                            </div>
+                                            <div id="detailsNoAssignee" class="flex items-center gap-2 p-3 bg-slate-700/20 rounded-lg border border-slate-600/30 text-slate-400">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                                </svg>
+                                                <span>Sin asignar - Usa los controles de abajo para asignar</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-2 gap-4 mt-4">
@@ -84,13 +99,21 @@
                                 <button id="completeTaskBtn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
                                     Marcar Completada
                                 </button>
-                                <div id="assignControls" class="flex flex-col sm:flex-row sm:items-center gap-2 ml-auto">
-                                    <select id="assigneeSelector" class="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm min-w-[180px]">
-                                        <option value="">Selecciona contacto o miembro</option>
-                                    </select>
-                                    <input id="assigneeInput" type="text" placeholder="usuario o email" list="assigneeSuggestions" class="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm" />
-                                    <datalist id="assigneeSuggestions"></datalist>
-                                    <button id="assignTaskBtn" class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm">Asignar</button>
+                                <div id="assignControls" class="flex flex-col gap-3 ml-auto">
+                                    <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                                        <select id="assigneeSelector" class="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm min-w-[200px]">
+                                            <option value="">Selecciona usuario para asignar</option>
+                                        </select>
+                                        <span class="text-slate-400 text-sm">o</span>
+                                        <input id="assigneeInput" type="text" placeholder="buscar por nombre, email..." list="assigneeSuggestions" class="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm min-w-[200px]" />
+                                        <datalist id="assigneeSuggestions"></datalist>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <input id="assignmentMessage" type="text" placeholder="Mensaje opcional para el usuario..." class="flex-1 px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-slate-100 text-sm" maxlength="200" />
+                                        <button id="assignTaskBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">
+                                            📤 Asignar
+                                        </button>
+                                    </div>
                                 </div>
                                 <div id="assignmentResponseControls" class="flex items-center gap-2">
                                     <button id="acceptTaskBtn" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm">Aceptar</button>
@@ -194,19 +217,50 @@ function populateAssigneeSelector(users, currentId) {
     if (!select) return;
 
     const previousValue = currentId ? String(currentId) : '';
-    select.innerHTML = '<option value="">Selecciona contacto o miembro</option>';
+    select.innerHTML = '<option value="">Selecciona usuario para asignar</option>';
 
-    users.forEach(user => {
-        if (!user || !user.id) return;
-        const option = document.createElement('option');
-        option.value = user.id;
-        const sourceLabel = user.source === 'organization' ? 'Organización' : 'Contacto';
-        option.textContent = `${user.name || user.email} (${sourceLabel})`;
-        option.dataset.email = user.email || '';
-        option.dataset.source = user.source || '';
-        select.appendChild(option);
+    // Agrupar usuarios por fuente para mejor organización
+    const grouped = users.reduce((acc, user) => {
+        const source = user.source || 'other';
+        if (!acc[source]) acc[source] = [];
+        acc[source].push(user);
+        return acc;
+    }, {});
+
+    // Orden de prioridad de las fuentes
+    const sourceOrder = ['organization', 'group', 'contact', 'directory', 'other'];
+
+    sourceOrder.forEach(sourceKey => {
+        const sourceUsers = grouped[sourceKey];
+        if (!sourceUsers || sourceUsers.length === 0) return;
+
+        // Agregar grupo si hay usuarios de múltiples fuentes
+        if (Object.keys(grouped).length > 1) {
+            const groupOption = document.createElement('option');
+            groupOption.disabled = true;
+            groupOption.style.fontWeight = 'bold';
+            groupOption.style.backgroundColor = '#374151';
+            groupOption.style.color = '#d1d5db';
+            groupOption.textContent = `── ${sourceUsers[0].label || sourceKey.toUpperCase()} ──`;
+            select.appendChild(groupOption);
+        }
+
+        // Agregar usuarios del grupo
+        sourceUsers.forEach(user => {
+            if (!user || !user.id) return;
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = `${user.name || user.email}`;
+            option.dataset.email = user.email || '';
+            option.dataset.username = user.username || '';
+            option.dataset.source = user.source || '';
+            option.dataset.label = user.label || '';
+            option.title = `${user.name || user.email} - ${user.email || ''}`;
+            select.appendChild(option);
+        });
     });
 
+    // Seleccionar valor previo si existe
     if (previousValue && Array.from(select.options).some(opt => opt.value === previousValue)) {
         select.value = previousValue;
     } else {
@@ -218,13 +272,14 @@ function populateAssigneeSelector(users, currentId) {
 
 async function fetchDirectorySuggestions(query) {
     const normalized = query.trim().toLowerCase();
-    if (normalized.length < 3) {
+    if (normalized.length < 2) {
         populateAssigneeSuggestions([]);
         return;
     }
 
     if (directorySearchCache.has(normalized)) {
-        populateAssigneeSuggestions(directorySearchCache.get(normalized));
+        const cached = directorySearchCache.get(normalized);
+        populateAssigneeSuggestions(cached.known || [], cached.directory || []);
         return;
     }
 
@@ -238,24 +293,40 @@ async function fetchDirectorySuggestions(query) {
             }
         });
         const data = await response.json();
-        const suggestions = Array.isArray(data.directory) ? data.directory : [];
-        directorySearchCache.set(normalized, suggestions);
-        populateAssigneeSuggestions(suggestions);
+
+        const knownUsers = Array.isArray(data.users) ? data.users : [];
+        const directoryUsers = Array.isArray(data.directory) ? data.directory : [];
+
+        directorySearchCache.set(normalized, { known: knownUsers, directory: directoryUsers });
+        populateAssigneeSuggestions(knownUsers, directoryUsers);
     } catch (error) {
         console.error('Error loading directory suggestions:', error);
-        populateAssigneeSuggestions([]);
+        populateAssigneeSuggestions([], []);
     }
 }
 
-function populateAssigneeSuggestions(users) {
+function populateAssigneeSuggestions(knownUsers = [], directoryUsers = []) {
     const dataList = document.getElementById('assigneeSuggestions');
     if (!dataList) return;
+
     dataList.innerHTML = '';
-    users.forEach(user => {
+
+    // Primero agregar usuarios conocidos (organización, grupos, contactos)
+    knownUsers.forEach(user => {
         if (!user) return;
         const option = document.createElement('option');
         option.value = user.email || user.username || '';
-        option.label = user.name ? `${user.name} (${user.email || user.username || ''})` : (user.email || user.username || '');
+        const labelPrefix = user.label ? `${user.label} ` : '';
+        option.label = `${labelPrefix}${user.name || user.email || user.username}`;
+        dataList.appendChild(option);
+    });
+
+    // Luego agregar usuarios del directorio
+    directoryUsers.forEach(user => {
+        if (!user) return;
+        const option = document.createElement('option');
+        option.value = user.email || user.username || '';
+        option.label = `🔍 ${user.name || user.email || user.username} (${user.email || user.username})`;
         dataList.appendChild(option);
     });
 }
@@ -267,8 +338,8 @@ function scheduleDirectorySearch(value) {
     }
 
     const normalized = (value || '').trim();
-    if (normalized.length < 3) {
-        directorySearchTimeout = setTimeout(() => populateAssigneeSuggestions([]), 0);
+    if (normalized.length < 2) {
+        directorySearchTimeout = setTimeout(() => populateAssigneeSuggestions([], []), 0);
         return;
     }
 
@@ -422,9 +493,31 @@ function populateTaskDetails(task) {
     document.getElementById('detailsTaskDueTime').textContent = task.hora_limite || 'No definida';
     document.getElementById('detailsMeetingName').textContent = task.meeting_name || 'Sin reunión';
 
-    // Asignación
-    const assigneeName = (task.assigned_user && task.assigned_user.name) || task.asignado || 'No asignado';
-    document.getElementById('detailsTaskAssignee').textContent = assigneeName;
+    // Asignación - Información del usuario asignado
+    const assigneeInfo = document.getElementById('detailsTaskAssigneeInfo');
+    const noAssignee = document.getElementById('detailsNoAssignee');
+
+    if (task.assigned_user || task.asignado) {
+        // Hay usuario asignado - mostrar información
+        const assigneeName = (task.assigned_user && task.assigned_user.full_name) ||
+                             (task.assigned_user && task.assigned_user.name) ||
+                             task.asignado || 'Usuario';
+        const assigneeEmail = (task.assigned_user && task.assigned_user.email) || '';
+
+        // Generar iniciales para el avatar
+        const initials = assigneeName.split(' ').map(word => word.charAt(0)).join('').substring(0, 2).toUpperCase();
+
+        document.getElementById('detailsTaskAssignee').textContent = assigneeName;
+        document.getElementById('detailsAssigneeEmail').textContent = assigneeEmail;
+        document.getElementById('detailsAssigneeInitials').textContent = initials || '??';
+
+        assigneeInfo.classList.remove('hidden');
+        noAssignee.classList.add('hidden');
+    } else {
+        // No hay usuario asignado
+        assigneeInfo.classList.add('hidden');
+        noAssignee.classList.remove('hidden');
+    }
     const assignmentStatusEl = document.getElementById('detailsAssignmentStatus');
     const statusKey = task.assignment_status || (task.assigned_user_id ? 'accepted' : null);
     const assignmentStatus = assignmentStatusStyles[statusKey] || { text: 'Sin asignar', class: 'bg-slate-600/40 text-slate-200' };
@@ -459,6 +552,8 @@ function populateTaskDetails(task) {
         assignBtn.onclick = async () => {
             const selectedId = assigneeSelector ? assigneeSelector.value : '';
             const manualValue = (assigneeInput?.value || '').trim();
+            const messageInput = document.getElementById('assignmentMessage');
+            const message = messageInput ? messageInput.value.trim() : '';
             const payload = {};
 
             if (selectedId) {
@@ -474,6 +569,15 @@ function populateTaskDetails(task) {
                 return;
             }
 
+            // Agregar mensaje si se proporcionó
+            if (message) {
+                payload.message = message;
+            }
+
+            // Deshabilitar botón durante la asignación
+            assignBtn.disabled = true;
+            assignBtn.textContent = '📤 Enviando...';
+
             try {
                 const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/assign`, window.location.origin), {
                     method: 'POST',
@@ -487,8 +591,15 @@ function populateTaskDetails(task) {
                 if (data.success) {
                     if (assigneeInput) assigneeInput.value = '';
                     if (assigneeSelector) assigneeSelector.value = '';
-                    populateAssigneeSuggestions([]);
-                    alert('Solicitud de asignación enviada');
+                    if (messageInput) messageInput.value = '';
+                    populateAssigneeSuggestions([], []);
+
+                    // Mostrar notificación de éxito
+                    const successMsg = message
+                        ? 'Solicitud de asignación enviada con tu mensaje personalizado'
+                        : 'Solicitud de asignación enviada - El usuario recibirá un email';
+                    alert(successMsg);
+
                     loadTaskDetails(task.id);
                     if (typeof kanbanReload === 'function') kanbanReload();
                 } else {
@@ -497,6 +608,10 @@ function populateTaskDetails(task) {
             } catch (error) {
                 console.error('Error assigning task:', error);
                 alert('Error al asignar la tarea');
+            } finally {
+                // Restaurar botón
+                assignBtn.disabled = false;
+                assignBtn.textContent = '📤 Asignar';
             }
         };
     }

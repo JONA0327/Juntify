@@ -173,23 +173,154 @@ class ContainerFileController extends Controller
     public function download(MeetingContentContainer $container, string $file)
     {
         $this->authorizeAccess($container);
+
+        Log::info('Download attempt started', [
+            'container_id' => $container->id,
+            'file_id' => $file,
+            'user_id' => auth()->id()
+        ]);
+
+        // Asegurar token de Google
+        $this->setUserDriveToken();
+
         try {
-            $contents = $this->driveService->downloadFileContent($file);
-            if ($contents === null) abort(404);
-            // Intentar obtener metadata para nombre/mime
+            // Primero verificar que el archivo existe y obtener metadata
             $meta = null;
             try {
-                $meta = $this->driveService->getDrive()->files->get($file, ['fields' => 'id,name,mimeType']);
+                $meta = $this->driveService->getDrive()->files->get($file, [
+                    'fields' => 'id,name,mimeType,size,parents,capabilities',
+                    'supportsAllDrives' => true
+                ]);
+
+                Log::info('File metadata retrieved', [
+                    'file_id' => $file,
+                    'name' => $meta->getName(),
+                    'size' => $meta->getSize(),
+                    'mime' => $meta->getMimeType(),
+                    'parents' => $meta->getParents()
+                ]);
+
             } catch (\Throwable $e) {
-                Log::warning('download: could not fetch metadata', ['file_id'=>$file,'error'=>$e->getMessage()]);
+                Log::error('Failed to get file metadata', [
+                    'file_id' => $file,
+                    'error' => $e->getMessage(),
+                    'code' => $e->getCode()
+                ]);
+                abort(404, 'Archivo no encontrado o sin permisos');
             }
-            $name = $meta?->getName() ?: ($file.'.bin');
-            $mime = $meta?->getMimeType() ?: 'application/octet-stream';
-            return response()->streamDownload(function() use ($contents) { echo $contents; }, $name, [ 'Content-Type' => $mime ]);
+
+            if (!$meta) {
+                Log::error('No metadata found for file', ['file_id' => $file]);
+                abort(404, 'Archivo no encontrado');
+            }
+
+            // Intentar descargar el contenido
+            $contents = $this->driveService->downloadFileContent($file);
+
+            if ($contents === null) {
+                Log::error('Download returned null content', ['file_id' => $file]);
+                abort(404, 'No se pudo descargar el archivo');
+            }
+
+            Log::info('File content downloaded successfully', [
+                'file_id' => $file,
+                'content_length' => strlen($contents)
+            ]);
+
+            $name = $meta->getName() ?: ($file.'.bin');
+            $mime = $meta->getMimeType() ?: 'application/octet-stream';
+
+            return response()->streamDownload(function() use ($contents) {
+                echo $contents;
+            }, $name, [
+                'Content-Type' => $mime,
+                'Content-Length' => strlen($contents),
+                'Content-Disposition' => 'attachment; filename="' . $name . '"'
+            ]);
+
         } catch (\Throwable $e) {
-            Log::error('download: failed', ['file_id'=>$file,'error'=>$e->getMessage()]);
-            abort(404);
+            Log::error('Download failed with exception', [
+                'file_id' => $file,
+                'container_id' => $container->id,
+                'error' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            abort(500, 'Error al descargar el archivo: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Debug download issues
+     */
+    public function debugDownload(MeetingContentContainer $container, string $file)
+    {
+        $this->authorizeAccess($container);
+        $this->setUserDriveToken();
+
+        $debug = [
+            'container_id' => $container->id,
+            'file_id' => $file,
+            'user_id' => auth()->id(),
+            'user_has_token' => auth()->user()->googleToken !== null,
+            'client_has_token' => $this->driveService->getClient()->getAccessToken() !== null,
+            'steps' => []
+        ];
+
+        try {
+            $debug['steps'][] = 'Iniciando debug de descarga';
+
+            // Verificar metadata del archivo
+            $meta = $this->driveService->getDrive()->files->get($file, [
+                'fields' => 'id,name,mimeType,size,parents,capabilities,permissions',
+                'supportsAllDrives' => true
+            ]);
+
+            $debug['file_info'] = [
+                'name' => $meta->getName(),
+                'size' => $meta->getSize(),
+                'mime' => $meta->getMimeType(),
+                'parents' => $meta->getParents()
+            ];
+
+            $capabilities = $meta->getCapabilities();
+            if ($capabilities) {
+                $debug['capabilities'] = [
+                    'canDownload' => $capabilities->canDownload,
+                    'canRead' => $capabilities->canRead ?? null,
+                    'canEdit' => $capabilities->canEdit ?? null
+                ];
+            }
+
+            $debug['steps'][] = 'Metadata obtenida correctamente';
+
+            // Intentar descarga
+            $content = $this->driveService->downloadFileContent($file);
+
+            $debug['download_result'] = [
+                'success' => $content !== null,
+                'content_length' => $content ? strlen($content) : 0,
+                'content_type' => gettype($content)
+            ];
+
+            if ($content) {
+                $debug['steps'][] = 'Descarga exitosa';
+                $debug['sample_content'] = substr($content, 0, 100) . '...';
+            } else {
+                $debug['steps'][] = 'Descarga falló - contenido null';
+            }
+
+        } catch (\Throwable $e) {
+            $debug['error'] = [
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'class' => get_class($e)
+            ];
+            $debug['steps'][] = 'Error durante debug: ' . $e->getMessage();
+        }
+
+        return response()->json($debug, 200, [], JSON_PRETTY_PRINT);
     }
 
     protected function authorizeAccess(MeetingContentContainer $container): void

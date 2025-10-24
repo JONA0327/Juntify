@@ -285,15 +285,41 @@ class TranscriptionController extends Controller
         }
 
         if (!$transcription->successful()) {
+            $responseData = $transcription->json();
+            $responseText = $transcription->body();
+            $statusCode = $transcription->status();
+
             Log::error('Transcription request failed', [
-                'status' => $transcription->status(),
-                'response' => $transcription->json(),
+                'status' => $statusCode,
+                'response_json' => $responseData,
+                'response_text' => $responseText,
+                'config_sent' => $transcriptionConfig,
+                'api_key_configured' => !empty(config('services.assemblyai.api_key')),
             ]);
+
             $failedPath = $this->saveFailedAudio($filePath);
+
+            // Proporcionar mensajes más específicos según el error
+            $errorMessage = 'Error en el servicio de transcripción';
+
+            // Verificar si es un problema de saldo
+            if (isset($responseData['error']) && str_contains($responseData['error'], 'account balance is negative')) {
+                $errorMessage = 'La cuenta de AssemblyAI no tiene créditos suficientes. Contacta al administrador para recargar la cuenta.';
+            } elseif ($statusCode === 401) {
+                $errorMessage = 'API key de AssemblyAI no válida o expirada';
+            } elseif ($statusCode === 400) {
+                $errorMessage = 'Formato de archivo de audio no compatible o datos inválidos';
+            } elseif ($statusCode === 429) {
+                $errorMessage = 'Límite de solicitudes excedido en AssemblyAI';
+            } elseif ($statusCode >= 500) {
+                $errorMessage = 'Error interno del servicio AssemblyAI';
+            }
+
             return response()->json([
-                'error'        => 'Transcription request failed',
-                'details'      => $transcription->json(),
+                'error'        => $errorMessage,
+                'details'      => $responseData ?: $responseText,
                 'failed_audio' => $failedPath,
+                'status_code'  => $statusCode,
             ], 500);
         }
 

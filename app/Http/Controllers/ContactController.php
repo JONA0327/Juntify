@@ -461,5 +461,40 @@ class ContactController extends Controller
             'users' => $users,
         ]);
     }
+
+    /**
+     * Cancela una solicitud de contacto enviada.
+     */
+    public function cancel(Request $request, Notification $notification): JsonResponse
+    {
+        $user = Auth::user();
+
+        // Verificar que el usuario es quien envió la solicitud
+        if ($notification->remitente !== $user->id || $notification->type !== 'contact_request') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solicitud no válida',
+            ], 404);
+        }
+
+        // Verificar que la solicitud está pendiente
+        if ($notification->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'La solicitud ya fue procesada',
+            ], 400);
+        }
+
+        $notification->delete();
+
+        // Invalidar caché para ambos usuarios
+        Cache::forget('contact_requests_'.$user->id);
+        Cache::forget('contact_requests_'.$notification->emisor);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Solicitud cancelada correctamente',
+        ]);
+    }
 }
 

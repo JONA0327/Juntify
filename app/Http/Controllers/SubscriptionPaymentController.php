@@ -65,27 +65,35 @@ class SubscriptionPaymentController extends Controller
             $result = $this->mercadoPagoService->createPreferenceForPlan($plan, $user);
             Log::info('CreatePreference: MercadoPago service result', ['result' => $result]);
 
-            // Log adicional para debugging
-            Log::info('CreatePreference: URLs generated', [
-                'init_point' => $result['init_point'] ?? 'N/A',
-                'sandbox_init_point' => $result['sandbox_init_point'] ?? 'N/A',
-                'using_checkout_url' => $result['sandbox_init_point'] ?? 'N/A'
-            ]);
-
-            if ($result['success']) {
-                return response()->json([
-                    'success' => true,
-                    'preference_id' => $result['preference_id'],
-                    'checkout_url' => $result['sandbox_init_point'], // Usar sandbox para desarrollo
-                    'init_point' => $result['init_point'],
-                    'sandbox_init_point' => $result['sandbox_init_point']
-                ]);
-            } else {
+            if (!$result['success']) {
                 return response()->json([
                     'success' => false,
                     'error' => $result['error']
                 ], 500);
             }
+
+            // --- INICIO DE LA CORRECCIÓN ---
+            // Determinar si estamos en modo de prueba
+            $isTestMode = str_starts_with(config('mercadopago.access_token'), 'TEST-');
+
+            // Elegir la URL correcta basado en el modo
+            $checkout_url = $isTestMode ? $result['sandbox_init_point'] : $result['init_point'];
+
+            Log::info('CreatePreference: URLs generated', [
+                'is_test_mode' => $isTestMode,
+                'checkout_url_selected' => $checkout_url, // Esta es la URL que se usará
+                'init_point' => $result['init_point'] ?? 'N/A',
+                'sandbox_init_point' => $result['sandbox_init_point'] ?? 'N/A'
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'preference_id' => $result['preference_id'],
+                'checkout_url' => $checkout_url, // <-- USA LA VARIABLE CORREGIDA
+                'init_point' => $result['init_point'],
+                'sandbox_init_point' => $result['sandbox_init_point']
+            ]);
+            // --- FIN DE LA CORRECCIÓN ---
         } catch (\Exception $e) {
             Log::error('CreatePreference: Exception caught', [
                 'message' => $e->getMessage(),
@@ -221,6 +229,81 @@ class SubscriptionPaymentController extends Controller
             'is_pending' => $paymentStatus['is_pending'],
             'is_rejected' => $paymentStatus['is_rejected']
         ]);
+    }
+
+    /**
+     * Simular pago exitoso para desarrollo
+     */
+    public function simulateSuccess(Request $request)
+    {
+        if (!config('mercadopago.bypass_mode', false)) {
+            abort(404);
+        }
+
+        $paymentId = $request->get('payment_id');
+
+        if (!$paymentId) {
+            return redirect('/payment/failure')->with('error', 'Payment ID no encontrado');
+        }
+
+        try {
+            $payment = Payment::find($paymentId);
+
+            if (!$payment) {
+                return redirect('/payment/failure')->with('error', 'Pago no encontrado');
+            }
+
+            // Simular pago exitoso
+            $payment->update([
+                'status' => Payment::STATUS_APPROVED,
+                'mp_payment_id' => 'FAKE_MP_' . uniqid(),
+                'mp_status' => 'approved',
+                'processed_at' => now()
+            ]);
+
+            // Activar plan del usuario
+            $user = $payment->user;
+            $plan = $payment->plan;
+
+            if ($user && $plan) {
+                $user->update([
+                    'plan' => $plan->code,
+                    'plan_code' => $plan->code,
+                    'roles' => $this->mapPlanCodeToRole($plan->code),
+                    'plan_expires_at' => now()->addDays(30)
+                ]);
+            }
+
+            Log::info('Simulated payment success', [
+                'payment_id' => $payment->id,
+                'user_id' => $user->id ?? 'N/A',
+                'plan_code' => $plan->code ?? 'N/A'
+            ]);
+
+            return redirect('/payment/success')->with('message', 'Pago simulado exitosamente (Modo de desarrollo)');
+
+        } catch (\Exception $e) {
+            Log::error('Error simulating payment', [
+                'payment_id' => $paymentId,
+                'error' => $e->getMessage()
+            ]);
+
+            return redirect('/payment/failure')->with('error', 'Error al simular pago');
+        }
+    }
+
+    /**
+     * Mapear código de plan a rol
+     */
+    private function mapPlanCodeToRole(string $planCode): string
+    {
+        return match($planCode) {
+            'free', 'gratis' => 'free',
+            'basic', 'basico' => 'basic',
+            'business', 'negocios' => 'business',
+            'enterprise', 'empresas' => 'enterprise',
+            default => 'free'
+        };
     }
 
     /**

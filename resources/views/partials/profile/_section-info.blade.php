@@ -57,7 +57,14 @@
             <div class="info-item">
                 <span class="info-label">Tipo de plan</span>
                 <span class="status-badge status-{{ strtolower($user->roles ?? 'free') }}">
-                    {{ ucfirst($user->roles ?? 'free') }}
+                    @php
+                        $planName = 'Free';
+                        if ($user->plan && $user->plan !== 'free') {
+                            $plan = \App\Models\Plan::where('code', $user->plan)->first();
+                            $planName = $plan ? $plan->name : ucfirst($user->plan);
+                        }
+                    @endphp
+                    {{ $planName }}
                 </span>
             </div>
             <div class="info-item">

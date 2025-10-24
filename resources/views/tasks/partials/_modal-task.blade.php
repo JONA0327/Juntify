@@ -71,14 +71,107 @@
                     </div>
 
                     <!-- Asignar a -->
-                    <div class="mb-4">
+                    <div class="mb-4" x-data="userAssignmentComponent()">
                         <label for="taskAssignee" class="block text-sm font-medium text-slate-300 mb-2">
                             Asignar a
                         </label>
-                        <input type="text" id="taskAssignee" name="assignee"
-                               class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                               placeholder="Username del usuario (opcional)">
-                        <p class="text-xs text-slate-400 mt-1">Deja vacío para asignarte la tarea a ti mismo</p>
+
+                        <!-- Campo de búsqueda -->
+                        <div class="relative">
+                            <input type="text"
+                                   id="taskAssignee"
+                                   x-model="searchTerm"
+                                   @input="searchUsers()"
+                                   @focus="showDropdown = true"
+                                   @blur="handleBlur()"
+                                   class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="Buscar por nombre o correo..."
+                                   autocomplete="off">
+
+                            <!-- Input oculto para el valor real -->
+                            <input type="hidden" name="assignee" x-model="selectedUserId">
+
+                            <!-- Dropdown de resultados -->
+                            <div x-show="showDropdown && (users.length > 0 || directoryUsers.length > 0)"
+                                 x-transition
+                                 class="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-64 overflow-y-auto">
+
+                                <!-- Usuario asignado actualmente -->
+                                <template x-if="currentAssignedUser && !searchTerm">
+                                    <div class="p-3 border-b border-slate-600">
+                                        <div class="text-xs font-medium text-slate-400 mb-2">Asignado actualmente:</div>
+                                        <div class="flex items-center gap-2 p-2 bg-blue-600/20 border border-blue-500/30 rounded-lg">
+                                            <div class="w-2 h-2 bg-green-400 rounded-full"></div>
+                                            <div class="flex-1 min-w-0">
+                                                <div class="font-medium text-slate-100 truncate" x-text="currentAssignedUser.name"></div>
+                                                <div class="text-xs text-slate-400 truncate" x-text="currentAssignedUser.email"></div>
+                                            </div>
+                                            <button type="button" @click="removeAssignment()" class="text-red-400 hover:text-red-300">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Usuarios conocidos -->
+                                <template x-for="user in users" :key="user.id">
+                                    <div @mousedown.prevent="selectUser(user)"
+                                         class="px-3 py-2 hover:bg-slate-700 cursor-pointer border-b border-slate-700 last:border-b-0">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium text-sm"
+                                                 x-text="(user.name || user.email).charAt(0).toUpperCase()"></div>
+                                            <div class="flex-1 min-w-0">
+                                                <div class="font-medium text-slate-100 truncate" x-text="user.name || user.email"></div>
+                                                <div class="text-xs text-slate-400 truncate" x-text="user.email"></div>
+                                                <div class="text-xs text-blue-400" x-text="user.label"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Separador si hay usuarios de directorio -->
+                                <template x-if="users.length > 0 && directoryUsers.length > 0">
+                                    <div class="border-t border-slate-600"></div>
+                                </template>
+
+                                <!-- Usuarios del directorio -->
+                                <template x-for="user in directoryUsers" :key="user.id">
+                                    <div @mousedown.prevent="selectUser(user)"
+                                         class="px-3 py-2 hover:bg-slate-700 cursor-pointer border-b border-slate-700 last:border-b-0">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-8 h-8 bg-gradient-to-br from-gray-500 to-gray-600 rounded-full flex items-center justify-center text-white font-medium text-sm"
+                                                 x-text="(user.name || user.email).charAt(0).toUpperCase()"></div>
+                                            <div class="flex-1 min-w-0">
+                                                <div class="font-medium text-slate-100 truncate" x-text="user.name || user.email"></div>
+                                                <div class="text-xs text-slate-400 truncate" x-text="user.email"></div>
+                                                <div class="text-xs text-amber-400" x-text="user.label"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Estado de carga -->
+                                <template x-if="loading">
+                                    <div class="p-3 text-center text-slate-400">
+                                        <svg class="animate-spin h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    </div>
+                                </template>
+
+                                <!-- Sin resultados -->
+                                <template x-if="!loading && users.length === 0 && directoryUsers.length === 0 && searchTerm.length >= 2">
+                                    <div class="p-3 text-center text-slate-400">
+                                        No se encontraron usuarios
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <p class="text-xs text-slate-400 mt-1">Busca por nombre o correo. Deja vacío para asignarte la tarea a ti mismo</p>
                     </div>
 
                     <!-- Botones -->
@@ -146,7 +239,16 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
                 }
 
                 document.getElementById('taskPriority').value = (t.prioridad || 'media');
-                document.getElementById('taskAssignee').value = t.asignado || '';
+
+                // Configurar asignación de usuario
+                const assignmentComponent = Alpine.$data(document.querySelector('[x-data*="userAssignmentComponent"]'));
+                if (assignmentComponent && t.assigned_user) {
+                    assignmentComponent.setCurrentAssignment(
+                        t.assigned_user.id,
+                        t.assigned_user.full_name || t.assigned_user.username,
+                        t.assigned_user.email
+                    );
+                }
             })
             .catch(error => {
                 console.error('Error cargando tarea:', error);
@@ -157,6 +259,12 @@ function openTaskModal(taskId = null, source = (window.lastSelectedMeetingSource
         modalTitle.textContent = 'Crear Nueva Tarea';
         submitBtn.textContent = 'Crear Tarea';
         form.reset();
+
+        // Reset del componente de asignación
+        const assignmentComponent = Alpine.$data(document.querySelector('[x-data*="userAssignmentComponent"]'));
+        if (assignmentComponent) {
+            assignmentComponent.removeAssignment();
+        }
     }
 
     modal.classList.remove('hidden');
@@ -187,7 +295,7 @@ document.getElementById('taskForm').addEventListener('submit', function(e) {
             fecha_inicio: null,
             fecha_limite: entries.due_date || null,
             hora_limite: entries.due_time || null,
-            asignado: entries.assignee || null
+            assigned_user_id: entries.assignee || null
         };
         if (!isEdit) {
             payload.meeting_id = window.lastSelectedMeetingId;
@@ -241,4 +349,94 @@ document.getElementById('taskModal').addEventListener('click', function(e) {
         closeTaskModal();
     }
 });
+
+// Componente Alpine.js para asignación de usuarios
+function userAssignmentComponent() {
+    return {
+        searchTerm: '',
+        selectedUserId: '',
+        users: [],
+        directoryUsers: [],
+        loading: false,
+        showDropdown: false,
+        currentAssignedUser: null,
+        searchTimeout: null,
+
+        init() {
+            // Cargar usuarios iniciales
+            this.loadInitialUsers();
+        },
+
+        async loadInitialUsers() {
+            try {
+                const response = await fetch('/api/tasks-laravel/assignable-users');
+                const data = await response.json();
+                if (data.success) {
+                    this.users = data.users || [];
+                }
+            } catch (error) {
+                console.error('Error cargando usuarios:', error);
+            }
+        },
+
+        async searchUsers() {
+            clearTimeout(this.searchTimeout);
+
+            if (this.searchTerm.length < 2) {
+                await this.loadInitialUsers();
+                return;
+            }
+
+            this.searchTimeout = setTimeout(async () => {
+                this.loading = true;
+                try {
+                    const response = await fetch(`/api/tasks-laravel/assignable-users?q=${encodeURIComponent(this.searchTerm)}`);
+                    const data = await response.json();
+                    if (data.success) {
+                        this.users = data.users || [];
+                        this.directoryUsers = data.directory || [];
+                    }
+                } catch (error) {
+                    console.error('Error en búsqueda:', error);
+                } finally {
+                    this.loading = false;
+                }
+            }, 300);
+        },
+
+        selectUser(user) {
+            this.selectedUserId = user.id;
+            this.searchTerm = user.name || user.email;
+            this.showDropdown = false;
+            this.currentAssignedUser = user;
+        },
+
+        removeAssignment() {
+            this.selectedUserId = '';
+            this.searchTerm = '';
+            this.currentAssignedUser = null;
+        },
+
+        handleBlur() {
+            // Pequeño delay para permitir clicks en el dropdown
+            setTimeout(() => {
+                this.showDropdown = false;
+            }, 200);
+        },
+
+        setCurrentAssignment(userId, userName, userEmail) {
+            if (userId) {
+                this.selectedUserId = userId;
+                this.searchTerm = userName || userEmail;
+                this.currentAssignedUser = {
+                    id: userId,
+                    name: userName || userEmail,
+                    email: userEmail
+                };
+            } else {
+                this.removeAssignment();
+            }
+        }
+    }
+}
 </script>

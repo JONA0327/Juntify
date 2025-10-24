@@ -1,16 +1,3 @@
-<!-- Sección: Mis Compras -->
-<div class="content-section" id="section-purchases" style="display: none;">
-    <div class="info-card">
-        <h2 class="card-title">
-            <span class="card-icon">🛒</span>
-            Historial de Compras
-        </h2>
-        <p style="color: #cbd5e1; text-align: center; padding: 2rem;">
-            No tienes compras registradas aún.
-        </p>
-    </div>
-</div>
-
 <!-- Sección: Notificaciones -->
 <div class="content-section" id="section-notifications" style="display: none;">
     <div class="info-card">

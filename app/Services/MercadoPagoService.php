@@ -54,6 +54,34 @@ class MercadoPagoService
      */
     public function createPreferenceForPlan(Plan $plan, User $user): array
     {
+        // Modo bypass para desarrollo cuando MercadoPago sandbox tiene problemas
+        if (config('mercadopago.bypass_mode', false)) {
+            Log::info('MercadoPago: Bypass mode enabled - Simulating successful preference creation');
+
+            $fakePreferenceId = 'FAKE_PREF_' . uniqid();
+            $fakeExternalReference = 'plan_' . $plan->code . '_user_' . $user->id . '_' . time();
+
+            // Crear registro de pago pendiente
+            $payment = Payment::create([
+                'user_id' => $user->id,
+                'plan_id' => $plan->id,
+                'external_reference' => $fakeExternalReference,
+                'status' => Payment::STATUS_PENDING,
+                'amount' => $plan->price,
+                'currency' => $plan->currency,
+                'description' => "Plan {$plan->name} - Juntify (BYPASS MODE)"
+            ]);
+
+            return [
+                'success' => true,
+                'preference_id' => $fakePreferenceId,
+                'init_point' => route('payment.simulate-success') . '?payment_id=' . $payment->id,
+                'sandbox_init_point' => route('payment.simulate-success') . '?payment_id=' . $payment->id,
+                'external_reference' => $fakeExternalReference,
+                'payment_id' => $payment->id
+            ];
+        }
+
         try {
             $externalReference = 'plan_' . $plan->code . '_user_' . $user->id . '_' . time();
 

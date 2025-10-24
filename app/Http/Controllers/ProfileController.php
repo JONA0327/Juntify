@@ -7,6 +7,7 @@ use App\Models\Folder;
 use App\Models\Subfolder;
 use App\Models\GoogleToken;
 use App\Models\Plan;
+use App\Models\Payment;
 use App\Services\GoogleDriveService;
 use App\Services\GoogleCalendarService;
 use App\Services\GoogleTokenRefreshService;
@@ -58,7 +59,13 @@ class ProfileController extends Controller
             // Obtener planes para la sección de suscripciones
             $plans = Plan::where('is_active', true)->orderBy('price')->get();
 
-            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans', 'driveLocked', 'tempRetentionDays'));
+            // Obtener historial de pagos del usuario
+            $userPayments = Payment::where('user_id', $user->id)
+                                 ->orderBy('created_at', 'desc')
+                                 ->take(10)
+                                 ->get();
+
+            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans', 'driveLocked', 'tempRetentionDays', 'userPayments'));
         }
 
         $driveConnected = $connectionStatus['drive_connected'];
@@ -292,7 +299,13 @@ class ProfileController extends Controller
         // Obtener planes para la sección de suscripciones
         $plans = Plan::where('is_active', true)->orderBy('price')->get();
 
-            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans', 'driveLocked', 'tempRetentionDays'));
+        // Obtener historial de pagos del usuario
+        $userPayments = Payment::where('user_id', $user->id)
+                             ->orderBy('created_at', 'desc')
+                             ->take(10)
+                             ->get();
+
+            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans', 'driveLocked', 'tempRetentionDays', 'userPayments'));
     }
 
     /**
@@ -340,5 +353,99 @@ class ProfileController extends Controller
         $request->session()->regenerateToken();
 
         return Redirect::to('/');
+    }
+
+    /**
+     * Download payment receipt
+     */
+    public function downloadReceipt(Request $request, Payment $payment)
+    {
+        // Verificar que el pago pertenece al usuario autenticado
+        if ($payment->user_id !== $request->user()->id) {
+            abort(403, 'No tienes permiso para descargar este recibo.');
+        }
+
+        // Verificar que el pago esté aprobado
+        if ($payment->status !== 'approved') {
+            abort(404, 'El recibo no está disponible para pagos no aprobados.');
+        }
+
+        // Crear contenido del recibo (simple HTML para este ejemplo)
+        $receiptContent = $this->generateReceiptContent($payment);
+
+        // Crear respuesta de descarga
+        $filename = "recibo-pago-{$payment->id}.html";
+
+        return response($receiptContent, 200, [
+            'Content-Type' => 'text/html',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
+    }
+
+    /**
+     * Generate receipt content
+     */
+    private function generateReceiptContent(Payment $payment)
+    {
+        $user = $payment->user;
+        $createdAt = Carbon::parse($payment->created_at)->format('d/m/Y H:i:s');
+
+        return "
+        <!DOCTYPE html>
+        <html lang='es'>
+        <head>
+            <meta charset='UTF-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>Recibo de Pago - Juntify</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
+                .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; }
+                .logo { font-size: 28px; font-weight: bold; color: #3b82f6; margin-bottom: 10px; }
+                .receipt-info { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin: 30px 0; }
+                .info-section h3 { color: #3b82f6; margin-bottom: 15px; }
+                .info-item { margin: 8px 0; }
+                .info-item strong { color: #1f2937; }
+                .amount { text-align: center; margin: 40px 0; padding: 20px; background: #f8fafc; border-radius: 8px; }
+                .amount-value { font-size: 36px; font-weight: bold; color: #059669; }
+                .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 20px; }
+                .status-approved { background: #dcfce7; color: #16a34a; padding: 4px 12px; border-radius: 20px; font-weight: 500; }
+            </style>
+        </head>
+        <body>
+            <div class='header'>
+                <div class='logo'>Juntify</div>
+                <h2>Comprobante de Pago</h2>
+                <p>Recibo #" . str_pad($payment->id, 8, '0', STR_PAD_LEFT) . "</p>
+            </div>
+
+            <div class='receipt-info'>
+                <div class='info-section'>
+                    <h3>Información del Cliente</h3>
+                    <div class='info-item'><strong>Nombre:</strong> {$user->name}</div>
+                    <div class='info-item'><strong>Email:</strong> {$user->email}</div>
+                    <div class='info-item'><strong>Usuario:</strong> {$user->username}</div>
+                </div>
+
+                <div class='info-section'>
+                    <h3>Información del Pago</h3>
+                    <div class='info-item'><strong>Fecha:</strong> {$createdAt}</div>
+                    <div class='info-item'><strong>Estado:</strong> <span class='status-approved'>Aprobado</span></div>
+                    <div class='info-item'><strong>Método:</strong> " . ucfirst($payment->payment_method ?? 'MercadoPago') . "</div>
+                    " . ($payment->external_id ? "<div class='info-item'><strong>ID Externo:</strong> {$payment->external_id}</div>" : "") . "
+                </div>
+            </div>
+
+            <div class='amount'>
+                <div class='info-item'><strong>Concepto:</strong> " . ($payment->description ?: ($payment->plan_name ?? 'Plan Enterprise')) . "</div>
+                <div class='amount-value'>$" . number_format($payment->amount, 2) . " " . ($payment->currency ?? 'MXN') . "</div>
+            </div>
+
+            <div class='footer'>
+                <p><strong>Juntify</strong> - Plataforma de Reuniones Virtuales</p>
+                <p>Este comprobante certifica que el pago ha sido procesado exitosamente.</p>
+                <p>Generado automáticamente el " . now()->format('d/m/Y H:i:s') . "</p>
+            </div>
+        </body>
+        </html>";
     }
 }

@@ -382,9 +382,33 @@ class TaskLaravelController extends Controller
             ];
         })->values();
 
+        // Obtener reuniones disponibles para filtrado
+        $meetingsQuery = TaskLaravel::query();
+        $this->scopeVisibleTasks($meetingsQuery, $user);
+        $availableMeetings = $meetingsQuery
+            ->with('meeting:id,meeting_name')
+            ->whereNotNull('meeting_id')
+            ->select('meeting_id')
+            ->distinct()
+            ->get()
+            ->map(function ($task) {
+                return [
+                    'id' => $task->meeting_id,
+                    'name' => $task->meeting->meeting_name ?? 'Sin nombre',
+                    'task_count' => null // Se calculará en el frontend
+                ];
+            })
+            ->filter(function ($meeting) {
+                return !empty($meeting['name']);
+            })
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
         return response()->json([
             'success' => true,
             'tasks' => $tasksPayload,
+            'meetings' => $availableMeetings,
+            'current_meeting_id' => $meetingId,
             'stats' => [
                 'total' => $total,
                 'pending' => $pending,
@@ -471,7 +495,7 @@ class TaskLaravelController extends Controller
     public function show(int $id): JsonResponse
     {
         $user = Auth::user();
-        $task = TaskLaravel::with(['meeting:id,meeting_name', 'assignedUser:id,full_name,email'])
+        $task = TaskLaravel::with(['meeting:id,meeting_name', 'assignedUser:id,full_name,username,email'])
             ->where('id', $id)
             ->firstOrFail();
 
@@ -499,8 +523,10 @@ class TaskLaravelController extends Controller
         $taskArr['meeting_name'] = $task->meeting->meeting_name ?? null;
         $taskArr['assigned_user'] = $task->assignedUser ? [
             'id' => $task->assignedUser->id,
-            'name' => $task->assignedUser->full_name ?? $task->assignedUser->email,
+            'full_name' => $task->assignedUser->full_name,
+            'username' => $task->assignedUser->username,
             'email' => $task->assignedUser->email,
+            'name' => $task->assignedUser->full_name ?? $task->assignedUser->username ?? $task->assignedUser->email,
         ] : null;
         $taskArr['owner_username'] = $task->username;
 
@@ -775,6 +801,18 @@ class TaskLaravelController extends Controller
             'read' => false,
         ]);
 
+        // Enviar notificación por email
+        try {
+            $message = $request->input('message'); // Mensaje opcional del asignador
+            \Mail::to($target->email)->send(new \App\Mail\TaskAssignedMail($task, $owner, $target, $message));
+        } catch (\Exception $e) {
+            \Log::warning('Failed to send task assignment email', [
+                'task_id' => $task->id,
+                'target_email' => $target->email,
+                'error' => $e->getMessage()
+            ]);
+        }
+
         return response()->json([
             'success' => true,
             'notification_id' => $notif->id,
@@ -788,45 +826,77 @@ class TaskLaravelController extends Controller
         $user = Auth::user();
         $search = trim($request->query('q', ''));
 
-        $contacts = Contact::with('contact:id,full_name,email')
+        // 1. Contactos del usuario (siempre visible)
+        $contacts = Contact::with('contact:id,full_name,email,username')
             ->where('user_id', $user->id)
             ->get()
             ->filter(fn ($c) => $c->contact)
             ->map(function ($c) {
                 return [
                     'id' => $c->contact->id,
-                    'name' => $c->contact->full_name ?? $c->contact->email,
+                    'name' => $c->contact->full_name ?: ($c->contact->username ?: $c->contact->email),
                     'email' => $c->contact->email,
+                    'username' => $c->contact->username,
                     'source' => 'contact',
+                    'label' => '📧 Contacto',
                 ];
             });
 
+        // 2. Usuarios de la organización actual (prioritario)
         $organizationUsers = collect();
         if (!empty($user->current_organization_id)) {
             $organizationUsers = User::query()
                 ->where('id', '!=', $user->id)
                 ->where('current_organization_id', $user->current_organization_id)
-                ->select('id', 'full_name', 'email')
+                ->select('id', 'full_name', 'email', 'username')
                 ->get()
                 ->map(function ($orgUser) {
                     return [
                         'id' => $orgUser->id,
-                        'name' => $orgUser->full_name ?? $orgUser->email,
+                        'name' => $orgUser->full_name ?: ($orgUser->username ?: $orgUser->email),
                         'email' => $orgUser->email,
+                        'username' => $orgUser->username,
                         'source' => 'organization',
+                        'label' => '🏢 Mi Organización',
                     ];
                 });
         }
 
-        $combined = $contacts->concat($organizationUsers)
+        // 3. Usuarios de grupos donde el usuario actual es miembro
+        $groupUsers = collect();
+        $userGroups = $user->groups()->pluck('groups.id');
+        if ($userGroups->isNotEmpty()) {
+            $groupUsers = User::query()
+                ->whereHas('groups', function ($q) use ($userGroups) {
+                    $q->whereIn('groups.id', $userGroups);
+                })
+                ->where('id', '!=', $user->id)
+                ->select('id', 'full_name', 'email', 'username')
+                ->get()
+                ->map(function ($groupUser) {
+                    return [
+                        'id' => $groupUser->id,
+                        'name' => $groupUser->full_name ?: ($groupUser->username ?: $groupUser->email),
+                        'email' => $groupUser->email,
+                        'username' => $groupUser->username,
+                        'source' => 'group',
+                        'label' => '👥 Compañeros de Grupo',
+                    ];
+                });
+        }
+
+        // Combinar todos los usuarios conocidos y eliminar duplicados
+        $knownUsers = $contacts->concat($organizationUsers)->concat($groupUsers)
             ->unique('id')
             ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
             ->values();
 
+        // 4. Búsqueda en directorio general (solo si hay search)
         $directoryUsers = collect();
-        if ($search !== '') {
+        if ($search !== '' && strlen($search) >= 2) {
             $directoryUsers = User::query()
                 ->where('id', '!=', $user->id)
+                ->whereNotIn('id', $knownUsers->pluck('id')->toArray())
                 ->where(function ($q) use ($search) {
                     $q->where('email', 'like', "%{$search}%")
                         ->orWhere('username', 'like', "%{$search}%")
@@ -841,14 +911,26 @@ class TaskLaravelController extends Controller
                         'email' => $directoryUser->email,
                         'username' => $directoryUser->username,
                         'source' => 'directory',
+                        'label' => '🔍 Otros Usuarios',
                     ];
                 });
         }
 
+        // Filtrar usuarios conocidos si hay búsqueda
+        $filteredKnown = $knownUsers;
+        if ($search !== '' && strlen($search) >= 1) {
+            $filteredKnown = $knownUsers->filter(function ($user) use ($search) {
+                return stripos($user['name'], $search) !== false ||
+                       stripos($user['email'], $search) !== false ||
+                       stripos($user['username'] ?? '', $search) !== false;
+            })->values();
+        }
+
         return response()->json([
             'success' => true,
-            'users' => $combined,
+            'users' => $filteredKnown,
             'directory' => $directoryUsers->values(),
+            'search_term' => $search,
         ]);
     }
 
@@ -947,6 +1029,134 @@ class TaskLaravelController extends Controller
         return response()->json([
             'success' => true,
             'task' => $this->withTaskRelations($task),
+        ]);
+    }
+
+    /**
+     * Responder a una asignación de tarea desde el enlace del email (sin autenticación previa)
+     * GET /tasks/{task}/respond/{action}?token={user_id}
+     */
+    public function respondByEmail(Request $request, int $taskId, string $action)
+    {
+        $task = TaskLaravel::findOrFail($taskId);
+        $task->loadMissing('meeting');
+
+        // Validar que la acción sea válida
+        if (!in_array($action, ['accept', 'reject'])) {
+            abort(400, 'Acción no válida');
+        }
+
+        // Verificar token básico (user_id) si está presente
+        $userId = $request->query('token');
+        if ($userId && $task->assigned_user_id !== $userId) {
+            abort(403, 'Token no válido para esta tarea');
+        }
+
+        // Si no hay token, mostrar formulario de autenticación
+        if (!$userId || !$task->assigned_user_id) {
+            return view('tasks.email-response', [
+                'task' => $task,
+                'action' => $action,
+                'actionText' => $action === 'accept' ? 'aceptar' : 'rechazar',
+                'needsAuth' => true
+            ]);
+        }
+
+        $assignedUser = User::find($task->assigned_user_id);
+        if (!$assignedUser) {
+            abort(404, 'Usuario no encontrado');
+        }
+
+        // Verificar que la tarea esté en estado pending
+        if ($task->assignment_status !== 'pending') {
+            return view('tasks.email-response', [
+                'task' => $task,
+                'action' => $action,
+                'actionText' => $action === 'accept' ? 'aceptar' : 'rechazar',
+                'alreadyResponded' => true,
+                'currentStatus' => $task->assignment_status
+            ]);
+        }
+
+        // Obtener el dueño de la tarea
+        $owner = User::where('username', $task->username)->first();
+
+        if ($action === 'accept') {
+            $task->assignment_status = 'accepted';
+            $task->overdue_notified_at = null;
+            $task->save();
+
+            // Crear notificación para el dueño
+            if ($owner) {
+                Notification::create([
+                    'remitente' => $assignedUser->id,
+                    'emisor' => $owner->id,
+                    'user_id' => $owner->id,
+                    'from_user_id' => $assignedUser->id,
+                    'type' => 'task_assign_response',
+                    'title' => 'Tarea aceptada',
+                    'message' => sprintf('%s aceptó la tarea "%s"',
+                        $assignedUser->full_name ?: $assignedUser->username,
+                        $task->tarea
+                    ),
+                    'status' => 'accepted',
+                    'data' => ['task_id' => $task->id],
+                    'read' => false,
+                ]);
+            }
+
+            $message = 'Has aceptado exitosamente la tarea. Puedes verla en tu panel de tareas en Juntify.';
+
+        } else { // reject
+            $reason = $request->query('reason', 'No se especificó motivo');
+
+            $task->assignment_status = 'rejected';
+            $task->assigned_user_id = null;
+            $task->asignado = null;
+            $task->overdue_notified_at = null;
+            $task->save();
+
+            // Crear notificación para el dueño
+            if ($owner) {
+                Notification::create([
+                    'remitente' => $assignedUser->id,
+                    'emisor' => $owner->id,
+                    'user_id' => $owner->id,
+                    'from_user_id' => $assignedUser->id,
+                    'type' => 'task_assign_response',
+                    'title' => 'Tarea rechazada',
+                    'message' => sprintf('%s rechazó la tarea "%s". Motivo: %s',
+                        $assignedUser->full_name ?: $assignedUser->username,
+                        $task->tarea,
+                        $reason
+                    ),
+                    'status' => 'rejected',
+                    'data' => ['task_id' => $task->id, 'reason' => $reason],
+                    'read' => false,
+                ]);
+
+                // Enviar email de rechazo al dueño
+                try {
+                    \Mail::to($owner->email)->send(new \App\Mail\TaskRejectedMail($task, $owner, $assignedUser, $reason));
+                } catch (\Exception $e) {
+                    \Log::warning('Failed to send task rejection email', [
+                        'task_id' => $task->id,
+                        'owner_email' => $owner->email,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            $message = 'Has rechazado la tarea. El dueño ha sido notificado.';
+        }
+
+        return view('tasks.email-response', [
+            'task' => $task,
+            'action' => $action,
+            'actionText' => $action === 'accept' ? 'aceptada' : 'rechazada',
+            'success' => true,
+            'message' => $message,
+            'user' => $assignedUser
         ]);
     }
 

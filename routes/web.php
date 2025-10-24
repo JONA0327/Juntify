@@ -28,10 +28,14 @@ use App\Http\Controllers\Admin\PanelController;
 use App\Http\Controllers\SubscriptionPaymentController;
 
 // Rutas de archivos de contenedor (deben ir antes de otros grupos pero dentro de PHP)
-Route::middleware(['web','auth'])->group(function() {
-    Route::get('/containers/{container}/files', [ContainerFileController::class, 'index'])->name('containers.files.index');
-    Route::post('/containers/{container}/files', [ContainerFileController::class, 'store'])->name('containers.files.store');
+Route::middleware(['web'])->group(function () {
     Route::get('/containers/{container}/files/{file}', [ContainerFileController::class, 'download'])->name('containers.files.download');
+    Route::get('/containers/{container}/files/{file}/debug', [ContainerFileController::class, 'debugDownload'])->name('containers.files.debug');
+
+    // Rutas públicas para responder a asignaciones de tareas por email
+    Route::get('/tasks/{task}/respond/{action}', [TaskLaravelController::class, 'respondByEmail'])
+        ->name('tasks.respond')
+        ->where('action', 'accept|reject');
 });
 
 
@@ -70,6 +74,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])
         ->name('profile.destroy');
+    Route::get('/profile/payment/{payment}/receipt', [ProfileController::class, 'downloadReceipt'])
+        ->name('profile.payment.receipt');
 
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
 
@@ -328,6 +334,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/payment/success', [SubscriptionPaymentController::class, 'success'])->name('payment.success');
     Route::get('/payment/failure', [SubscriptionPaymentController::class, 'failure'])->name('payment.failure');
     Route::get('/payment/pending', [SubscriptionPaymentController::class, 'pending'])->name('payment.pending');
+
+    // Simulación de pago exitoso (desarrollo)
+    Route::get('/payment/simulate-success', [SubscriptionPaymentController::class, 'simulateSuccess'])->name('payment.simulate-success');
 
     // API para verificar estado
     Route::post('/payment/check-status', [SubscriptionPaymentController::class, 'checkPaymentStatus'])->name('payment.check-status');

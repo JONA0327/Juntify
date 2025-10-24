@@ -501,6 +501,36 @@ function closeModal(id) {
   el.classList.remove('show');
 }
 
+/**
+ * Función para mostrar una sección específica del perfil
+ */
+function showSection(sectionName) {
+  // Actualizar navegación
+  document.querySelectorAll('.sidebar-nav .nav-link')
+    .forEach(l => l.classList.remove('active'));
+
+  const targetLink = document.querySelector(`.sidebar-nav .nav-link[data-section="${sectionName}"]`);
+  if (targetLink) {
+    targetLink.classList.add('active');
+  }
+
+  // Mostrar sección correspondiente
+  document.querySelectorAll('.content-section').forEach(sec => {
+    sec.style.display = (sec.id === `section-${sectionName}`) ? 'block' : 'none';
+  });
+
+  // Mostrar/ocultar la tarjeta de bienvenida
+  const welcomeCard = document.getElementById('welcome-card');
+  if (welcomeCard) {
+    welcomeCard.style.display = (sectionName === 'info') ? 'flex' : 'none';
+  }
+
+  // Cerrar sidebar en móvil
+  if (window.innerWidth <= 768) {
+    closeSidebar();
+  }
+}
+
 // Exponer funciones para handlers inline (si aún usas onclick en HTML)
 window.toggleSidebar       = toggleSidebar;
 window.closeSidebar        = closeSidebar;
@@ -513,3 +543,4 @@ window.setMainFolder       = setMainFolder;
 window.addSubfolderToList = addSubfolderToList;
 window.openModal          = openModal;
 window.closeModal         = closeModal;
+window.showSection         = showSection;

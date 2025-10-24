@@ -617,9 +617,13 @@ async function loadContacts() {
 
     try {
         const response = await fetch('/api/contacts', {
+            method: 'GET',
+            credentials: 'same-origin',
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
             }
         });
         if (!response.ok) throw new Error('Error al cargar contactos');
@@ -649,10 +653,10 @@ async function loadContacts() {
 
         renderContacts(data.contacts || [], data.users || []);
 
-        // Después de cargar los contactos, verificar mensajes no leídos
-        if (isChatEnabled()) {
-            await checkUnreadMessagesForContacts();
-        }
+        // Chat deshabilitado temporalmente para evitar errores 404
+        // if (isChatEnabled()) {
+        //     await checkUnreadMessagesForContacts();
+        // }
     } catch (error) {
         console.error('Error loading contacts:', error);
         if (list) list.innerHTML = '<div class="text-center py-8 text-red-400">Error al cargar contactos</div>';
@@ -691,17 +695,6 @@ function renderContacts(contacts, users) {
             for (const contact of contacts) {
                 const contactElement = document.createElement('div');
                 contactElement.className = 'contact-card';
-                const chatButtonHtml = isChatEnabled() ?
-                            `<button onclick="startChat('${contact.id}')"
-                                    class="relative p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/20 transform hover:scale-105"
-                                    title="Iniciar chat"
-                                    id="chat-btn-${contact.id}">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.418 8-9.899 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.418-8 9.899-8s9.899 3.582 9.899 8z"></path>
-                                </svg>
-                                <div id="unread-indicator-${contact.id}" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-slate-800 hidden"></div>
-                            </button>`
-                            : '';
                 contactElement.innerHTML = `
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
@@ -714,7 +707,6 @@ function renderContacts(contacts, users) {
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
-                            ${chatButtonHtml}
                             <button onclick="deleteContact('${contact.contact_record_id}')"
                                     class="p-2 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-red-500/20 transform hover:scale-105"
                                     title="Eliminar contacto">
@@ -851,9 +843,13 @@ async function loadContactRequests() {
 
     try {
         const response = await fetch('/api/contacts/requests', {
+            method: 'GET',
+            credentials: 'same-origin',
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
             }
         });
         if (!response.ok) throw new Error('Error al cargar solicitudes');
@@ -928,6 +924,13 @@ function renderContactRequests(received, sent) {
                                 <span class="inline-block bg-yellow-500/20 text-yellow-300 text-xs px-2 py-1 rounded-full mt-1">Pendiente</span>
                             </div>
                         </div>
+                        <div class="flex gap-2">
+                            <button onclick="cancelContactRequest('${request.id}')"
+                                    class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all"
+                                    title="Cancelar solicitud">
+                                Cancelar
+                            </button>
+                        </div>
                     </div>
                 `;
                 sentList.appendChild(requestElement);
@@ -991,10 +994,12 @@ async function searchUser(query) {
     try {
         const response = await fetch('/api/users/search', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify({ query })
         });
@@ -1083,10 +1088,12 @@ async function sendContactRequest(event) {
     try {
         const response = await fetch('/api/contacts', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify({
                 email: selectedUser.email
@@ -1117,10 +1124,12 @@ async function respondContactRequest(id, action) {
     try {
         const response = await fetch(`/api/contacts/requests/${id}/respond`, {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify({ action })
         });
@@ -1136,14 +1145,93 @@ async function respondContactRequest(id, action) {
     }
 }
 
+function showCancelConfirmModal(id) {
+    // Crear el modal
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-gray-800 rounded-lg p-6 max-w-md mx-4">
+            <h3 class="text-lg font-semibold text-white mb-4">Cancelar Solicitud</h3>
+            <p class="text-gray-300 mb-6">¿Estás seguro de que deseas cancelar esta solicitud de contacto?</p>
+            <div class="flex justify-end space-x-3">
+                <button id="cancelModalCancel" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
+                    Cancelar
+                </button>
+                <button id="cancelModalConfirm" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors">
+                    Sí, cancelar solicitud
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Agregar al DOM
+    document.body.appendChild(modal);
+
+    // Función para cerrar el modal
+    const closeModal = () => {
+        document.body.removeChild(modal);
+    };
+
+    // Event listeners
+    modal.querySelector('#cancelModalCancel').addEventListener('click', closeModal);
+    modal.querySelector('#cancelModalConfirm').addEventListener('click', () => {
+        closeModal();
+        executeCancelContactRequest(id);
+    });
+
+    // Cerrar al hacer clic en el fondo
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+
+    // Cerrar con ESC
+    const handleEsc = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', handleEsc);
+        }
+    };
+    document.addEventListener('keydown', handleEsc);
+}
+
+async function executeCancelContactRequest(id) {
+    try {
+        const response = await fetch(`/api/contacts/requests/${id}/cancel`, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
+            }
+        });
+        if (!response.ok) throw new Error('Error al cancelar solicitud');
+        await loadContacts();
+        showNotification('Solicitud cancelada correctamente', 'success');
+    } catch (error) {
+        console.error('Error canceling contact request:', error);
+        showNotification('Error al cancelar la solicitud', 'error');
+    }
+}
+
+async function cancelContactRequest(id) {
+    showCancelConfirmModal(id);
+}
+
 async function deleteContact(id) {
     if (!confirm('¿Estás seguro de que deseas eliminar este contacto?')) return;
     try {
         const response = await fetch(`/api/contacts/${id}`, {
             method: 'DELETE',
+            credentials: 'same-origin',
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
             }
         });
         if (!response.ok) throw new Error('Error al eliminar contacto');
@@ -5867,16 +5955,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e) {
         console.error('[reuniones_v2] Error applying fallback globals', e);
     }
-    console.log('🚀 [reuniones_v2] Iniciando aplicación...');
-    console.log('🔍 [reuniones_v2] Variables globales:', {
-        userRole: window.userRole || document.body.dataset.userRole,
-        organizationId: window.currentOrganizationId || document.body.dataset.organizationId,
-        bodyDatasets: Object.keys(document.body.dataset),
-        windowVars: Object.keys(window).filter(k => k.includes('user') || k.includes('org'))
-    });
+    // console.log('🚀 [reuniones_v2] Iniciando aplicación...');
+    // console.log('🔍 [reuniones_v2] Variables globales:', {
+    //     userRole: window.userRole || document.body.dataset.userRole,
+    //     organizationId: window.currentOrganizationId || document.body.dataset.organizationId,
+    //     bodyDatasets: Object.keys(document.body.dataset),
+    //     windowVars: Object.keys(window).filter(k => k.includes('user') || k.includes('org'))
+    // });
 
     const driveSelect = document.getElementById('drive-select');
-    console.log('🔍 [reuniones_v2] Drive select element found:', !!driveSelect);
+    // console.log('🔍 [reuniones_v2] Drive select element found:', !!driveSelect);
 
     if (driveSelect) {
         driveSelect.addEventListener('change', () => {
@@ -6327,3 +6415,6 @@ function closeUpgradeModal() {
 // Hacer funciones globales
 window.showUpgradeModal = showUpgradeModal;
 window.closeUpgradeModal = closeUpgradeModal;
+window.loadContacts = loadContacts;
+window.respondContactRequest = respondContactRequest;
+window.cancelContactRequest = cancelContactRequest;
