@@ -19,7 +19,9 @@
             apiTasksDestroy: (id) => `/api/tasks-laravel/tasks/${id}`,
             apiExists: '/api/tasks-laravel/exists',
             apiImport: (meetingId) => `/api/tasks-laravel/import/${meetingId}`,
-            isBusinessPlan: {{ json_encode($isBusinessPlan ?? false) }}
+            isBusinessPlan: {{ json_encode($isBusinessPlan ?? false) }},
+            taskAccessMode: {{ json_encode($taskAccessMode ?? 'full') }},
+            restrictApproved: {{ json_encode(($taskAccessMode ?? 'full') === 'organization_only') }}
         };
 
         // Helper opcional para mostrar/ocultar el panel de tareas lateral
@@ -142,8 +144,12 @@
                                             <div class="kanban-col-header px-3 py-2 rounded border border-blue-400/40 bg-gradient-to-r from-blue-500/20 to-blue-500/0 text-sm font-semibold text-blue-200 uppercase tracking-wide">Completadas</div>
                                             <div class="kanban-list min-h-[220px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'completed')"></div>
                                         </div>
-                                        <div class="kanban-col" data-status="approved">
-                                            <div class="kanban-col-header px-3 py-2 rounded border border-emerald-400/50 bg-gradient-to-r from-emerald-500/20 to-emerald-500/0 text-sm font-semibold text-emerald-200 uppercase tracking-wide">Aprobadas</div>
+                                        <div class="kanban-col" data-status="approved" data-locked="{{ ($taskAccessMode ?? 'full') === 'organization_only' ? '1' : '0' }}">
+                                            <div class="kanban-col-header px-3 py-2 rounded border border-emerald-400/50 bg-gradient-to-r from-emerald-500/20 to-emerald-500/0 text-sm font-semibold text-emerald-200 uppercase tracking-wide">Aprobadas
+                                                @if(($taskAccessMode ?? 'full') === 'organization_only')
+                                                    <span class="kanban-locked-badge">Solo dueño</span>
+                                                @endif
+                                            </div>
                                             <div class="kanban-list min-h-[220px] p-2 bg-slate-900/30 rounded border border-slate-700/30" ondragover="kanbanAllowDrop(event)" ondrop="kanbanDrop(event, 'approved')"></div>
                                         </div>
                                     </div>
@@ -247,6 +253,9 @@
         if (kanbanBoardElement && !kanbanBoardElement.dataset.hasKanban) {
             kanbanBoardElement.dataset.hasKanban = '0';
         }
+
+        const kanbanApprovedColumn = document.querySelector('#kanban-board .kanban-col[data-status="approved"]');
+        const restrictApprovedMoves = !!(kanbanApprovedColumn && kanbanApprovedColumn.dataset.locked === '1') || !!(window.taskLaravel?.restrictApproved);
 
         const kanbanContextLabel = document.getElementById('kanban-context-label');
         const kanbanResetBtn = document.getElementById('kanban-reset-btn');
@@ -414,6 +423,11 @@
             ev.preventDefault();
             const allowedStatuses = ['pending', 'in_progress', 'completed', 'approved'];
             if (!allowedStatuses.includes(status)) return;
+
+            if (restrictApprovedMoves && status === 'approved') {
+                alert('Solo el dueño de la tarea puede marcarla como aprobada.');
+                return;
+            }
 
             const id = ev.dataTransfer.getData('text/plain');
             if (!id) return;

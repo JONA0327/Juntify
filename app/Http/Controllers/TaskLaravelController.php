@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use App\Services\GoogleDriveService;
+use App\Services\Tasks\TaskAccessService;
 use App\Traits\GoogleDriveHelpers;
 use App\Traits\MeetingContentParsing;
 use Carbon\Carbon;
@@ -26,18 +27,22 @@ class TaskLaravelController extends Controller
     use GoogleDriveHelpers, MeetingContentParsing;
 
     protected $googleDriveService;
+    protected TaskAccessService $taskAccessService;
 
-    public function __construct(GoogleDriveService $googleDriveService)
+    public function __construct(GoogleDriveService $googleDriveService, TaskAccessService $taskAccessService)
     {
         $this->googleDriveService = $googleDriveService;
+        $this->taskAccessService = $taskAccessService;
     }
 
     protected function scopeVisibleTasks($query, User $user)
     {
-        return $query->where(function ($q) use ($user) {
+        $query->where(function ($q) use ($user) {
             $q->where('username', $user->username)
               ->orWhere('assigned_user_id', $user->id);
         });
+
+        return $this->taskAccessService->applyVisibilityScope($query, $user);
     }
 
     protected function ensureTaskAccess(TaskLaravel $task, User $user): void
@@ -45,6 +50,40 @@ class TaskLaravelController extends Controller
         if ($task->username !== $user->username && $task->assigned_user_id !== $user->id) {
             abort(403, 'No tienes permisos para ver esta tarea');
         }
+
+        $context = $this->taskAccessService->getContext($user);
+        if (!$context->hasAccess()) {
+            abort(403, 'No tienes permisos para ver esta tarea');
+        }
+
+        if ($context->mode === 'organization_only' && !$this->taskAccessService->taskBelongsToOrganization($task, $context->organizationId)) {
+            abort(403, 'No tienes permisos para ver esta tarea');
+        }
+    }
+
+    protected function mapAssignableUser(User $user, string $source, string $label): array
+    {
+        $context = $this->taskAccessService->getContext($user);
+
+        $restrictedMessage = null;
+        if (!$context->hasAccess()) {
+            $restrictedMessage = 'Este usuario no puede ver tareas por su plan.';
+        } elseif ($context->mode === 'organization_only') {
+            $restrictedMessage = 'Este usuario solo puede ver tareas dentro de su organización.';
+        }
+
+        return [
+            'id' => $user->id,
+            'name' => $user->full_name ?: ($user->username ?: $user->email),
+            'email' => $user->email,
+            'username' => $user->username,
+            'source' => $source,
+            'label' => $label,
+            'task_access' => $context->mode,
+            'restricted_message' => $restrictedMessage,
+            'organization_id' => $context->organizationId,
+            'organization_role' => $context->organizationRole,
+        ];
     }
 
     protected function normalizeAssignmentStatus(TaskLaravel $task): void
@@ -312,6 +351,7 @@ class TaskLaravelController extends Controller
     {
         $user = Auth::user();
         $meetingId = $request->query('meeting_id');
+        $context = $this->taskAccessService->getContext($user);
 
         $query = TaskLaravel::query();
         $this->scopeVisibleTasks($query, $user);
@@ -415,6 +455,11 @@ class TaskLaravelController extends Controller
                 'in_progress' => $inProgress,
                 'completed' => $completed,
                 'overdue' => $overdue,
+            ],
+            'access' => [
+                'mode' => $context->mode,
+                'restrict_approved' => $context->restrictsApprovedColumn(),
+                'kanban_locked' => $context->blocksKanban(),
             ],
         ]);
     }
@@ -586,6 +631,15 @@ class TaskLaravelController extends Controller
             'prioridad' => $data['prioridad'] ?? null,
             'progreso' => $data['progreso'] ?? 0,
         ]);
+
+        $context = $this->taskAccessService->getContext($user);
+        if ($context->mode === 'organization_only'
+            && !$this->taskAccessService->meetingBelongsToOrganization((int) $payload['meeting_id'], $context->organizationId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solo puedes crear tareas para reuniones dentro de tu organización.',
+            ], 403);
+        }
 
         // upsert safeguard by (meeting_id, tarea)
         $existing = TaskLaravel::where('meeting_id', $payload['meeting_id'])
@@ -768,6 +822,20 @@ class TaskLaravelController extends Controller
             return response()->json(['success' => false, 'message' => 'Destinatario no encontrado'], 404);
         }
 
+        $eligibility = $this->taskAccessService->userCanReceiveTask($target, $task);
+        if (!$eligibility['allowed']) {
+            $message = match ($eligibility['reason']) {
+                'outside_organization' => 'Esta tarea no pertenece a la organización de este usuario.',
+                'organization_missing' => 'Este usuario no tiene una organización activa para trabajar con tareas.',
+                default => 'Este usuario no puede ver tareas por su plan.',
+            };
+
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+            ], 422);
+        }
+
         $displayName = $target->full_name ?: ($target->username ?: $target->email);
         $task->asignado = $displayName;
         $task->assigned_user_id = $target->id;
@@ -827,19 +895,12 @@ class TaskLaravelController extends Controller
         $search = trim($request->query('q', ''));
 
         // 1. Contactos del usuario (siempre visible)
-        $contacts = Contact::with('contact:id,full_name,email,username')
+        $contacts = Contact::with('contact:id,full_name,email,username,roles,plan_code,current_organization_id')
             ->where('user_id', $user->id)
             ->get()
             ->filter(fn ($c) => $c->contact)
             ->map(function ($c) {
-                return [
-                    'id' => $c->contact->id,
-                    'name' => $c->contact->full_name ?: ($c->contact->username ?: $c->contact->email),
-                    'email' => $c->contact->email,
-                    'username' => $c->contact->username,
-                    'source' => 'contact',
-                    'label' => '📧 Contacto',
-                ];
+                return $this->mapAssignableUser($c->contact, 'contact', '📧 Contacto');
             });
 
         // 2. Usuarios de la organización actual (prioritario)
@@ -848,18 +909,9 @@ class TaskLaravelController extends Controller
             $organizationUsers = User::query()
                 ->where('id', '!=', $user->id)
                 ->where('current_organization_id', $user->current_organization_id)
-                ->select('id', 'full_name', 'email', 'username')
+                ->select('id', 'full_name', 'email', 'username', 'roles', 'plan_code', 'current_organization_id')
                 ->get()
-                ->map(function ($orgUser) {
-                    return [
-                        'id' => $orgUser->id,
-                        'name' => $orgUser->full_name ?: ($orgUser->username ?: $orgUser->email),
-                        'email' => $orgUser->email,
-                        'username' => $orgUser->username,
-                        'source' => 'organization',
-                        'label' => '🏢 Mi Organización',
-                    ];
-                });
+                ->map(fn ($orgUser) => $this->mapAssignableUser($orgUser, 'organization', '🏢 Mi Organización'));
         }
 
         // 3. Usuarios de grupos donde el usuario actual es miembro
@@ -871,18 +923,9 @@ class TaskLaravelController extends Controller
                     $q->whereIn('groups.id', $userGroups);
                 })
                 ->where('id', '!=', $user->id)
-                ->select('id', 'full_name', 'email', 'username')
+                ->select('id', 'full_name', 'email', 'username', 'roles', 'plan_code', 'current_organization_id')
                 ->get()
-                ->map(function ($groupUser) {
-                    return [
-                        'id' => $groupUser->id,
-                        'name' => $groupUser->full_name ?: ($groupUser->username ?: $groupUser->email),
-                        'email' => $groupUser->email,
-                        'username' => $groupUser->username,
-                        'source' => 'group',
-                        'label' => '👥 Compañeros de Grupo',
-                    ];
-                });
+                ->map(fn ($groupUser) => $this->mapAssignableUser($groupUser, 'group', '👥 Compañeros de Grupo'));
         }
 
         // Combinar todos los usuarios conocidos y eliminar duplicados
@@ -903,17 +946,8 @@ class TaskLaravelController extends Controller
                         ->orWhere('full_name', 'like', "%{$search}%");
                 })
                 ->limit(10)
-                ->get(['id', 'full_name', 'email', 'username'])
-                ->map(function ($directoryUser) {
-                    return [
-                        'id' => $directoryUser->id,
-                        'name' => $directoryUser->full_name ?: ($directoryUser->username ?: $directoryUser->email),
-                        'email' => $directoryUser->email,
-                        'username' => $directoryUser->username,
-                        'source' => 'directory',
-                        'label' => '🔍 Otros Usuarios',
-                    ];
-                });
+                ->get(['id', 'full_name', 'email', 'username', 'roles', 'plan_code', 'current_organization_id'])
+                ->map(fn ($directoryUser) => $this->mapAssignableUser($directoryUser, 'directory', '🔍 Otros Usuarios'));
         }
 
         // Filtrar usuarios conocidos si hay búsqueda
@@ -946,6 +980,22 @@ class TaskLaravelController extends Controller
             abort(403, 'No puedes responder esta asignación');
         }
         $task->loadMissing('meeting');
+
+        $context = $this->taskAccessService->getContext($user);
+        if (!$context->hasAccess()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tu plan actual no permite gestionar tareas.',
+            ], 403);
+        }
+
+        if ($context->mode === 'organization_only'
+            && !$this->taskAccessService->taskBelongsToOrganization($task, $context->organizationId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No puedes gestionar tareas que están fuera de tu organización.',
+            ], 403);
+        }
 
         $data = $request->validate([
             'action' => 'required|in:accept,reject',
@@ -1065,6 +1115,30 @@ class TaskLaravelController extends Controller
         $assignedUser = User::find($task->assigned_user_id);
         if (!$assignedUser) {
             abort(404, 'Usuario no encontrado');
+        }
+
+        $assignedContext = $this->taskAccessService->getContext($assignedUser);
+        if (!$assignedContext->hasAccess()) {
+            return view('tasks.email-response', [
+                'task' => $task,
+                'action' => $action,
+                'actionText' => $action === 'accept' ? 'aceptar' : 'rechazar',
+                'success' => false,
+                'message' => 'Tu plan actual no permite gestionar tareas. Inicia sesión para actualizarlo.',
+                'user' => $assignedUser,
+            ]);
+        }
+
+        if ($assignedContext->mode === 'organization_only'
+            && !$this->taskAccessService->taskBelongsToOrganization($task, $assignedContext->organizationId)) {
+            return view('tasks.email-response', [
+                'task' => $task,
+                'action' => $action,
+                'actionText' => $action === 'accept' ? 'aceptar' : 'rechazar',
+                'success' => false,
+                'message' => 'Esta tarea no pertenece a la organización donde tienes acceso a tareas.',
+                'user' => $assignedUser,
+            ]);
         }
 
         // Verificar que la tarea esté en estado pending

@@ -38,15 +38,14 @@
         @endif
 
         @php
-            // Verificar si el usuario tiene acceso a tareas
             $user = auth()->user();
-            $userPlan = $user->plan_code ?? 'free';
-
-            // Un usuario pertenece a organización si tiene grupos o roles organizacionales
-            $belongsToOrg = $user->groups()->exists() ||
-                           in_array($user->roles ?? '', ['admin', 'superadmin', 'founder', 'developer']);
-
-            $hasTasksAccess = $userPlan !== 'free' || $belongsToOrg;
+            $taskContext = null;
+            $hasTasksAccess = false;
+            if ($user) {
+                $taskAccessService = app(\App\Services\Tasks\TaskAccessService::class);
+                $taskContext = $taskAccessService->getContext($user);
+                $hasTasksAccess = $taskContext->hasAccess();
+            }
         @endphp
         <a href="{{ $hasTasksAccess ? route('tareas.index') : '#' }}"
            class="text-slate-200 hover:text-yellow-400 flex items-center gap-3"

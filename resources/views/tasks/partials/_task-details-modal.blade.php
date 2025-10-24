@@ -212,6 +212,20 @@ async function loadAssignableUsers() {
     return cachedAssignableUsers;
 }
 
+function handleAssigneeAccessWarning(event) {
+    const select = event?.currentTarget;
+    if (!select) return;
+    const selectedOption = select.options[select.selectedIndex];
+    if (!selectedOption) return;
+
+    const access = selectedOption.dataset.taskAccess || 'full';
+    if (access === 'blocked') {
+        const message = selectedOption.dataset.restrictedMessage || 'Este usuario no puede ver tareas por su plan.';
+        alert(message);
+        select.value = '';
+    }
+}
+
 function populateAssigneeSelector(users, currentId) {
     const select = document.getElementById('assigneeSelector');
     if (!select) return;
@@ -255,6 +269,17 @@ function populateAssigneeSelector(users, currentId) {
             option.dataset.username = user.username || '';
             option.dataset.source = user.source || '';
             option.dataset.label = user.label || '';
+            const access = user.task_access || 'full';
+            const restrictedMessage = user.restricted_message || '';
+            option.dataset.taskAccess = access;
+            if (restrictedMessage) {
+                option.dataset.restrictedMessage = restrictedMessage;
+            }
+            if (access === 'blocked') {
+                option.textContent += ' (sin acceso a tareas)';
+            } else if (access === 'organization_only') {
+                option.textContent += ' (solo organización)';
+            }
             option.title = `${user.name || user.email} - ${user.email || ''}`;
             select.appendChild(option);
         });
@@ -268,6 +293,11 @@ function populateAssigneeSelector(users, currentId) {
     }
 
     select.disabled = users.length <= 0;
+
+    if (!select.dataset.accessGuardAttached) {
+        select.addEventListener('change', handleAssigneeAccessWarning);
+        select.dataset.accessGuardAttached = '1';
+    }
 }
 
 async function fetchDirectorySuggestions(query) {
@@ -317,7 +347,15 @@ function populateAssigneeSuggestions(knownUsers = [], directoryUsers = []) {
         const option = document.createElement('option');
         option.value = user.email || user.username || '';
         const labelPrefix = user.label ? `${user.label} ` : '';
-        option.label = `${labelPrefix}${user.name || user.email || user.username}`;
+        const access = user.task_access || 'full';
+        const suffix = access === 'blocked'
+            ? ' (sin acceso a tareas)'
+            : (access === 'organization_only' ? ' (solo organización)' : '');
+        option.label = `${labelPrefix}${user.name || user.email || user.username}${suffix}`;
+        option.dataset.taskAccess = access;
+        if (user.restricted_message) {
+            option.dataset.restrictedMessage = user.restricted_message;
+        }
         dataList.appendChild(option);
     });
 
@@ -326,7 +364,15 @@ function populateAssigneeSuggestions(knownUsers = [], directoryUsers = []) {
         if (!user) return;
         const option = document.createElement('option');
         option.value = user.email || user.username || '';
-        option.label = `🔍 ${user.name || user.email || user.username} (${user.email || user.username})`;
+        const access = user.task_access || 'full';
+        const suffix = access === 'blocked'
+            ? ' (sin acceso a tareas)'
+            : (access === 'organization_only' ? ' (solo organización)' : '');
+        option.label = `🔍 ${user.name || user.email || user.username} (${user.email || user.username})${suffix}`;
+        option.dataset.taskAccess = access;
+        if (user.restricted_message) {
+            option.dataset.restrictedMessage = user.restricted_message;
+        }
         dataList.appendChild(option);
     });
 }
@@ -588,23 +634,23 @@ function populateTaskDetails(task) {
                     body: JSON.stringify(payload)
                 });
                 const data = await response.json();
-                if (data.success) {
-                    if (assigneeInput) assigneeInput.value = '';
-                    if (assigneeSelector) assigneeSelector.value = '';
-                    if (messageInput) messageInput.value = '';
-                    populateAssigneeSuggestions([], []);
-
-                    // Mostrar notificación de éxito
-                    const successMsg = message
-                        ? 'Solicitud de asignación enviada con tu mensaje personalizado'
-                        : 'Solicitud de asignación enviada - El usuario recibirá un email';
-                    alert(successMsg);
-
-                    loadTaskDetails(task.id);
-                    if (typeof kanbanReload === 'function') kanbanReload();
-                } else {
+                if (!response.ok || !data.success) {
                     alert(data.message || 'No se pudo enviar la asignación');
+                    return;
                 }
+
+                if (assigneeInput) assigneeInput.value = '';
+                if (assigneeSelector) assigneeSelector.value = '';
+                if (messageInput) messageInput.value = '';
+                populateAssigneeSuggestions([], []);
+
+                const successMsg = message
+                    ? 'Solicitud de asignación enviada con tu mensaje personalizado'
+                    : 'Solicitud de asignación enviada - El usuario recibirá un email';
+                alert(successMsg);
+
+                loadTaskDetails(task.id);
+                if (typeof kanbanReload === 'function') kanbanReload();
             } catch (error) {
                 console.error('Error assigning task:', error);
                 alert('Error al asignar la tarea');

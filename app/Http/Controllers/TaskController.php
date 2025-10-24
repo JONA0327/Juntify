@@ -4,88 +4,37 @@ namespace App\Http\Controllers;
 
 use App\Models\Task;
 use App\Models\TaskLaravel;
+use App\Services\Tasks\TaskAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Carbon\Carbon;
 
 class TaskController extends Controller
 {
+    public function __construct(private TaskAccessService $taskAccessService)
+    {
+    }
+
     /**
      * Mostrar la vista principal de tareas
      */
     public function index(Request $request)
     {
-        // Verificar acceso a tareas basado en plan y organización
         $user = Auth::user();
-        $userPlan = $user->plan_code ?? 'free';
-        $organizationId = session('organizationId');
-        $hasOrganizationalRole = in_array($user->roles ?? '', ['admin', 'superadmin', 'founder', 'developer']);
-        $belongsToOrg = $organizationId || $hasOrganizationalRole;
-        $hasTasksAccess = $userPlan !== 'free' || $belongsToOrg;
+        $context = $this->taskAccessService->getContext($user);
 
-        // Si no tiene acceso, mostrar vista con modal bloqueado
-        if (!$hasTasksAccess) {
+        if (!$context->hasAccess()) {
             return view('tasks.blocked', [
-                'userPlan' => $userPlan,
-                'belongsToOrganization' => $belongsToOrg
+                'userPlan' => $user->plan_code ?? 'free',
+                'belongsToOrganization' => $context->inOrganization,
+                'organizationRole' => $context->organizationRole,
             ]);
         }
 
-        // Detectar si es usuario business (solo acceso a calendario, no tablero)
-        $role = strtolower((string) ($user->roles ?? ''));
-        $planCode = strtolower((string) ($user->plan_code ?? ''));
-        $isBusinessPlan = $role === 'business' || $planCode === 'business' ||
-                         $role === 'negocios' || $planCode === 'negocios' ||
-                         str_contains($role, 'business') || str_contains($planCode, 'business') ||
-                         str_contains($role, 'negocio') || str_contains($planCode, 'negocio');
-
-        $username = $this->getValidatedUsername();
-
-        // Obtener tareas del usuario autenticado o asignadas a él
-        $query = Task::where(function($q) use ($username) {
-            $q->where('user_id', $username)
-              ->orWhere('assignee', $username);
-    })->with(['user', 'assignedUser', 'meeting']);
-
-        // Filtros
-        if ($request->has('completed') && $request->completed !== 'all') {
-            $completed = $request->completed === 'true';
-            $query->where('completed', $completed);
-        }
-
-        if ($request->has('priority') && $request->priority !== 'all') {
-            $query->where('priority', $request->priority);
-        }
-
-        if ($request->has('date')) {
-            $date = Carbon::parse($request->date);
-            $query->whereDate('due_date', $date);
-        }
-
-        $tasks = $query->orderBy('due_date', 'asc')
-                      ->orderByRaw("FIELD(priority, 'alta', 'media', 'baja')")
-                      ->paginate(20);
-
-        // Estadísticas para el dashboard
-        $stats = [
-            'total' => Task::where(function($q) use ($username) {
-                $q->where('user_id', $username)->orWhere('assignee', $username);
-            })->count(),
-            'pending' => Task::where(function($q) use ($username) {
-                $q->where('user_id', $username)->orWhere('assignee', $username);
-            })->where('completed', false)->count(),
-            'in_progress' => Task::where(function($q) use ($username) {
-                $q->where('user_id', $username)->orWhere('assignee', $username);
-            })->where('completed', false)->where('progress', '>', 0)->count(),
-            'completed' => Task::where(function($q) use ($username) {
-                $q->where('user_id', $username)->orWhere('assignee', $username);
-            })->where('completed', true)->count(),
-            'overdue' => Task::where(function($q) use ($username) {
-                $q->where('user_id', $username)->orWhere('assignee', $username);
-            })->overdue()->count(),
-        ];
-
-        return view('tasks.index', compact('tasks', 'stats', 'isBusinessPlan'));
+        return view('tasks.index', [
+            'isBusinessPlan' => $context->blocksKanban(),
+            'taskAccessMode' => $context->mode,
+            'taskAccessContext' => $context,
+        ]);
     }
 
     /**

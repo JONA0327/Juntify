@@ -126,6 +126,19 @@ class PlanLimitService
             }
         }
 
+        $currentOrgId = $user->current_organization_id ? (int) $user->current_organization_id : null;
+        if ($currentOrgId) {
+            $organizationRelation = $user->organizations()
+                ->where('organization_id', $currentOrgId)
+                ->select('organization_id', 'rol')
+                ->first();
+
+            $orgRole = strtolower((string) ($organizationRelation?->pivot?->rol ?? ''));
+            if (in_array($orgRole, ['invitado', 'colaborador', 'administrador'], true)) {
+                return true;
+            }
+        }
+
         return false;
     }
 
