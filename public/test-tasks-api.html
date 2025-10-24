@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Tasks API</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+</head>
+<body>
+    <h1>Test Tasks API</h1>
+    <div id="results"></div>
+
+    <script>
+    async function testAPI() {
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = 'Testing API...';
+
+        try {
+            const response = await fetch('/api/tasks-laravel/tasks', {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Response data:', data);
+                resultsDiv.innerHTML = `
+                    <h2>Success!</h2>
+                    <p>Status: ${response.status}</p>
+                    <p>Tasks found: ${data.tasks ? data.tasks.length : 'unknown'}</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } else {
+                const errorText = await response.text();
+                console.error('Error response:', errorText);
+                resultsDiv.innerHTML = `
+                    <h2>Error</h2>
+                    <p>Status: ${response.status} ${response.statusText}</p>
+                    <p>Response: ${errorText}</p>
+                `;
+            }
+        } catch (error) {
+            console.error('Network error:', error);
+            resultsDiv.innerHTML = `
+                <h2>Network Error</h2>
+                <p>${error.message}</p>
+            `;
+        }
+    }
+
+    // Test immediately when page loads
+    testAPI();
+    </script>
+</body>
+</html>

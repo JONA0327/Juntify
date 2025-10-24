@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Mail\TaskReactivatedMail;
 use App\Models\Contact;
 use App\Models\Notification;
+use App\Models\SharedMeeting;
 use App\Models\TaskLaravel;
 use App\Models\TranscriptionLaravel;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\JsonResponse;
@@ -36,15 +38,78 @@ class TaskLaravelController extends Controller
     {
         return $query->where(function ($q) use ($user) {
             $q->where('username', $user->username)
-              ->orWhere('assigned_user_id', $user->id);
+              ->orWhere('assigned_user_id', $user->id)
+              ->orWhereIn('meeting_id', function ($subQuery) use ($user) {
+                  // Incluir reuniones donde el usuario tiene acceso a través de contenedores de organización
+                  $subQuery->select('meeting_content_relations.meeting_id')
+                      ->from('meeting_content_relations')
+                      ->join('meeting_content_containers', 'meeting_content_relations.container_id', '=', 'meeting_content_containers.id')
+                      ->join('groups', 'meeting_content_containers.group_id', '=', 'groups.id')
+                      ->leftJoin('group_user', function($join) use ($user) {
+                          $join->on('groups.id', '=', 'group_user.id_grupo')
+                               ->where('group_user.user_id', '=', $user->id);
+                      })
+                      ->leftJoin('organizations', 'groups.id_organizacion', '=', 'organizations.id')
+                      ->where('meeting_content_containers.is_active', true)
+                      ->where(function($query) use ($user) {
+                          $query->where('meeting_content_containers.username', $user->username) // Es creador del contenedor
+                                ->orWhereNotNull('group_user.user_id') // Es miembro del grupo
+                                ->orWhere('organizations.admin_id', $user->id); // Es admin de la organización
+                      });
+              })
+              ->orWhereIn('meeting_id', function ($subQuery) use ($user) {
+                  // Incluir reuniones compartidas aceptadas
+                  $subQuery->select('shared_meetings.meeting_id')
+                      ->from('shared_meetings')
+                      ->where('shared_meetings.shared_with', $user->id)
+                      ->where('shared_meetings.status', 'accepted');
+              });
         });
     }
 
     protected function ensureTaskAccess(TaskLaravel $task, User $user): void
     {
-        if ($task->username !== $user->username && $task->assigned_user_id !== $user->id) {
-            abort(403, 'No tienes permisos para ver esta tarea');
+        // Verificar acceso directo (propietario o asignado)
+        if ($task->username === $user->username || $task->assigned_user_id === $user->id) {
+            return;
         }
+
+        // Verificar acceso a través de contenedores de organización y reuniones compartidas
+        if ($task->meeting_id) {
+            // Verificar acceso a través de contenedores de organización
+            $hasContainerAccess = DB::table('meeting_content_relations')
+                ->join('meeting_content_containers', 'meeting_content_relations.container_id', '=', 'meeting_content_containers.id')
+                ->join('groups', 'meeting_content_containers.group_id', '=', 'groups.id')
+                ->leftJoin('group_user', function($join) use ($user) {
+                    $join->on('groups.id', '=', 'group_user.id_grupo')
+                         ->where('group_user.user_id', '=', $user->id);
+                })
+                ->leftJoin('organizations', 'groups.id_organizacion', '=', 'organizations.id')
+                ->where('meeting_content_relations.meeting_id', $task->meeting_id)
+                ->where('meeting_content_containers.is_active', true)
+                ->where(function($query) use ($user) {
+                    $query->where('meeting_content_containers.username', $user->username) // Es creador del contenedor
+                          ->orWhereNotNull('group_user.user_id') // Es miembro del grupo
+                          ->orWhere('organizations.admin_id', $user->id); // Es admin de la organización
+                })
+                ->exists();
+
+            if ($hasContainerAccess) {
+                return;
+            }
+
+            // Verificar acceso a través de reuniones compartidas
+            $hasSharedAccess = SharedMeeting::where('meeting_id', $task->meeting_id)
+                ->where('shared_with', $user->id)
+                ->where('status', 'accepted')
+                ->exists();
+
+            if ($hasSharedAccess) {
+                return;
+            }
+        }
+
+        abort(403, 'No tienes permisos para ver esta tarea');
     }
 
     protected function normalizeAssignmentStatus(TaskLaravel $task): void
@@ -158,7 +223,38 @@ class TaskLaravelController extends Controller
     {
         $user = Auth::user();
 
-        $meetings = TranscriptionLaravel::where('username', $user->username)
+        // Reuniones donde el usuario es el propietario
+        $ownMeetings = TranscriptionLaravel::where('username', $user->username);
+
+        // Reuniones accesibles a través de contenedores de organización
+        $containerMeetings = TranscriptionLaravel::whereIn('id', function ($query) use ($user) {
+            $query->select('meeting_content_relations.meeting_id')
+                ->from('meeting_content_relations')
+                ->join('meeting_content_containers', 'meeting_content_relations.container_id', '=', 'meeting_content_containers.id')
+                ->join('groups', 'meeting_content_containers.group_id', '=', 'groups.id')
+                ->leftJoin('group_user', function($join) use ($user) {
+                    $join->on('groups.id', '=', 'group_user.id_grupo')
+                         ->where('group_user.user_id', '=', $user->id);
+                })
+                ->leftJoin('organizations', 'groups.id_organizacion', '=', 'organizations.id')
+                ->where('meeting_content_containers.is_active', true)
+                ->where(function($subQuery) use ($user) {
+                    $subQuery->where('meeting_content_containers.username', $user->username) // Es creador del contenedor
+                            ->orWhereNotNull('group_user.user_id') // Es miembro del grupo
+                            ->orWhere('organizations.admin_id', $user->id); // Es admin de la organización
+                });
+        });
+
+        // Reuniones compartidas aceptadas
+        $sharedMeetings = TranscriptionLaravel::whereIn('id', function ($query) use ($user) {
+            $query->select('shared_meetings.meeting_id')
+                ->from('shared_meetings')
+                ->where('shared_meetings.shared_with', $user->id)
+                ->where('shared_meetings.status', 'accepted');
+        });
+
+        // Combinar todas las consultas
+        $meetings = $ownMeetings->union($containerMeetings)->union($sharedMeetings)
             ->orderBy('created_at', 'desc')
             ->get(['id', 'meeting_name', 'created_at', 'transcript_drive_id'])
             ->map(function ($m) {
@@ -180,8 +276,36 @@ class TaskLaravelController extends Controller
     {
         $user = Auth::user();
 
+        // Buscar la reunión verificando acceso directo, contenedores y reuniones compartidas
         $meeting = TranscriptionLaravel::where('id', $meetingId)
-            ->where('username', $user->username)
+            ->where(function ($query) use ($user) {
+                $query->where('username', $user->username)
+                      ->orWhereIn('id', function ($subQuery) use ($user) {
+                          // Incluir reuniones accesibles a través de contenedores de organización
+                          $subQuery->select('meeting_content_relations.meeting_id')
+                              ->from('meeting_content_relations')
+                              ->join('meeting_content_containers', 'meeting_content_relations.container_id', '=', 'meeting_content_containers.id')
+                              ->join('groups', 'meeting_content_containers.group_id', '=', 'groups.id')
+                              ->leftJoin('group_user', function($join) use ($user) {
+                                  $join->on('groups.id', '=', 'group_user.id_grupo')
+                                       ->where('group_user.user_id', '=', $user->id);
+                              })
+                              ->leftJoin('organizations', 'groups.id_organizacion', '=', 'organizations.id')
+                              ->where('meeting_content_containers.is_active', true)
+                              ->where(function($containerQuery) use ($user) {
+                                  $containerQuery->where('meeting_content_containers.username', $user->username) // Es creador del contenedor
+                                        ->orWhereNotNull('group_user.user_id') // Es miembro del grupo
+                                        ->orWhere('organizations.admin_id', $user->id); // Es admin de la organización
+                              });
+                      })
+                      ->orWhereIn('id', function ($subQuery) use ($user) {
+                          // Incluir reuniones compartidas aceptadas
+                          $subQuery->select('shared_meetings.meeting_id')
+                              ->from('shared_meetings')
+                              ->where('shared_meetings.shared_with', $user->id)
+                              ->where('shared_meetings.status', 'accepted');
+                      });
+            })
             ->firstOrFail();
 
         if (empty($meeting->transcript_drive_id)) {
@@ -320,7 +444,7 @@ class TaskLaravelController extends Controller
         }
 
         $tasksQuery = (clone $query)
-            ->with(['assignedUser:id,full_name,email', 'meeting:id,meeting_name'])
+            ->with(['assignedUser:id,full_name,email'])
             ->orderBy('fecha_limite', 'asc')
             ->orderBy('prioridad', 'asc');
 
@@ -345,6 +469,14 @@ class TaskLaravelController extends Controller
 
         $this->syncOverdueNotifications($tasks);
 
+        // Obtener los nombres de las reuniones por separado para evitar problemas con relaciones
+        $meetingIds = $tasks->whereNotNull('meeting_id')->pluck('meeting_id')->unique();
+        $meetings = TranscriptionLaravel::whereIn('id', $meetingIds)
+            ->pluck('meeting_name', 'id')
+            ->map(function ($name) {
+                return trim($name) ?: null;
+            });
+
         $today = Carbon::today();
         $statsQuery = clone $query;
         $total = (clone $statsQuery)->count();
@@ -354,12 +486,12 @@ class TaskLaravelController extends Controller
         $overdue = (clone $statsQuery)->where(function($q){ $q->whereNull('progreso')->orWhere('progreso', '<', 100); })
             ->whereDate('fecha_limite', '<', $today)->count();
 
-        $tasksPayload = $tasks->map(function ($task) {
+        $tasksPayload = $tasks->map(function ($task) use ($meetings) {
             return [
                 'id' => $task->id,
                 'username' => $task->username,
                 'meeting_id' => $task->meeting_id,
-                'meeting_name' => $task->meeting->meeting_name ?? null,
+                'meeting_name' => $task->meeting_id ? ($meetings[$task->meeting_id] ?? null) : null,
                 'tarea' => $task->tarea,
                 'prioridad' => $task->prioridad,
                 'fecha_inicio' => optional($task->fecha_inicio)->toDateString(),
@@ -383,23 +515,30 @@ class TaskLaravelController extends Controller
         })->values();
 
         // Obtener reuniones disponibles para filtrado
+        // Primero obtener los IDs de reuniones únicos de las tareas visibles
         $meetingsQuery = TaskLaravel::query();
         $this->scopeVisibleTasks($meetingsQuery, $user);
-        $availableMeetings = $meetingsQuery
-            ->with('meeting:id,meeting_name')
+        $meetingIds = $meetingsQuery
             ->whereNotNull('meeting_id')
-            ->select('meeting_id')
             ->distinct()
+            ->pluck('meeting_id')
+            ->toArray();
+
+        // Luego obtener la información completa de las reuniones directamente
+        $availableMeetings = TranscriptionLaravel::whereIn('id', $meetingIds)
+            ->whereNotNull('meeting_name')
+            ->where('meeting_name', '!=', '')
+            ->select('id', 'meeting_name')
             ->get()
-            ->map(function ($task) {
+            ->map(function ($meeting) {
                 return [
-                    'id' => $task->meeting_id,
-                    'name' => $task->meeting->meeting_name ?? 'Sin nombre',
+                    'id' => $meeting->id,
+                    'name' => trim($meeting->meeting_name) ?: 'Reunión sin título',
                     'task_count' => null // Se calculará en el frontend
                 ];
             })
             ->filter(function ($meeting) {
-                return !empty($meeting['name']);
+                return !empty($meeting['name']) && $meeting['name'] !== 'Reunión sin título' && $meeting['name'] !== 'Sin nombre';
             })
             ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
             ->values();
