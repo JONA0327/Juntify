@@ -72,10 +72,37 @@
                 }
                 // items ya vienen ordenados desc por API
                 for (const m of items) {
-                    const source = m.source || 'transcriptions_laravel';
+                    const rawMeetingId = m.meeting_id ?? m.id;
+                    const isTemporaryShare = typeof rawMeetingId === 'string' && rawMeetingId.startsWith('temp-');
+                    const normalizedMeetingId = isTemporaryShare ? null : (Number(rawMeetingId) || rawMeetingId);
+                    const source = m.source
+                        || (m.meeting_type === 'temporary' ? 'shared-temporary' : 'transcriptions_laravel');
+                    const displayName = m.meeting_name
+                        || m.title
+                        || m.name
+                        || 'Reunión';
+                    const createdAt = m.created_at
+                        || m.date
+                        || m.shared_at
+                        || '';
+                    const transcriptInfo = m.transcript_folder
+                        || m.transcript_path
+                        || (m.transcript_drive_id ? `ID: ${m.transcript_drive_id}` : '');
+                    const audioInfo = m.audio_folder
+                        || m.audio_path
+                        || (m.audio_drive_id ? `ID: ${m.audio_drive_id}` : '');
+                    const sharedBy = m.shared_by?.name || m.shared_by?.email || null;
+                    const hasJu = (m.has_ju === true)
+                        || (!!m.transcript_drive_id)
+                        || (typeof m.transcript_folder === 'string' && m.transcript_folder.trim() !== '');
                     const card = document.createElement('div');
                     card.className = 'meeting-card cursor-pointer';
-                    card.setAttribute('data-meeting-id', m.id);
+                    if (normalizedMeetingId !== null && normalizedMeetingId !== undefined && normalizedMeetingId !== '') {
+                        card.setAttribute('data-meeting-id', normalizedMeetingId);
+                    }
+                    if (m.meeting_id && m.id && m.meeting_id !== m.id) {
+                        card.setAttribute('data-shared-id', m.id);
+                    }
                     card.setAttribute('data-source', source);
                     card.setAttribute('draggable', 'true');
                     card.innerHTML = `
@@ -84,41 +111,56 @@
                                 <div class="meeting-icon">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                 </div>
-                                <h3 class="meeting-title">${escapeHtml(m.meeting_name)}</h3>
+                                <h3 class="meeting-title">${escapeHtml(displayName)}</h3>
                                 <p class="meeting-date">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="inline w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                    ${escapeHtml(m.created_at)}
+                                    ${escapeHtml(createdAt)}
                                 </p>
                                 <div class="meeting-folders">
-                                    <div class="folder-info">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                        <span>Transcripción:</span>
-                                        <span class="folder-name">${escapeHtml(m.transcript_folder || '')}</span>
-                                    </div>
-                                    <div class="folder-info">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728" /></svg>
-                                        <span>Audio:</span>
-                                        <span class="folder-name">${escapeHtml(m.audio_folder || '')}</span>
-                                    </div>
+                                    ${(transcriptInfo)
+                                        ? `<div class="folder-info">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                            <span>Transcripción:</span>
+                                            <span class="folder-name">${escapeHtml(transcriptInfo)}</span>
+                                        </div>`
+                                        : ''}
+                                    ${(audioInfo)
+                                        ? `<div class="folder-info">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728" /></svg>
+                                            <span>Audio:</span>
+                                            <span class="folder-name">${escapeHtml(audioInfo)}</span>
+                                        </div>`
+                                        : ''}
+                                    ${sharedBy ? `<div class="folder-info">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857M15 7a3 3 0 11-6 0 3 3 0 016 0zM5.5 9a2.5 2.5 0 115 0 2.5 2.5 0 01-5 0zm11 0a2.5 2.5 0 115 0 2.5 2.5 0 01-5 0z" /></svg>
+                                            <span>Compartida por:</span>
+                                            <span class="folder-name">${escapeHtml(sharedBy)}</span>
+                                        </div>` : ''}
                                 </div>
                             </div>
                         </div>
                     `;
 
                     // Click en toda la tarjeta → cargar panel, verificar si hace falta enriquecer y (re)importar si corresponde
-                    const hasJu = !!(m.transcript_drive_id);
                     card.addEventListener('click', async () => {
+                        if (isTemporaryShare || normalizedMeetingId === null || normalizedMeetingId === undefined || normalizedMeetingId === '') {
+                            console.warn('Reunión temporal o sin ID válido, no se pueden cargar tareas automáticamente.');
+                            alert('Las tareas solo están disponibles para reuniones regulares compartidas.');
+                            if (typeof window.showTasksPanel === 'function') window.showTasksPanel(false);
+                            return;
+                        }
+                        const meetingIdForTasks = Number(normalizedMeetingId) || normalizedMeetingId;
                         const src = card.dataset.source || 'transcriptions_laravel';
                         if (src === 'transcriptions_laravel' && !hasJu) {
                             if (typeof openDownloadModal === 'function') {
-                                openDownloadModal(m.id);
+                                openDownloadModal(meetingIdForTasks);
                             }
                         }
-                        window.lastSelectedMeetingId = m.id;
-                        window.lastSelectedMeetingName = m.meeting_name || null;
+                        window.lastSelectedMeetingId = meetingIdForTasks;
+                        window.lastSelectedMeetingName = displayName || null;
                         window.lastSelectedMeetingSource = src;
                         if (window.showTasksPanel) window.showTasksPanel(true);
-                        const current = await fetchTasksForMeeting(m.id, src);
+                        const current = await fetchTasksForMeeting(meetingIdForTasks, src);
                         if (src === 'transcriptions_laravel') {
                             let needImport = false;
                             if (!current.tasks.length) needImport = true;
@@ -127,15 +169,15 @@
                                 needImport = poor;
                             }
                             if (needImport && hasJu) {
-                                const ok = await importTasks(m.id);
+                                const ok = await importTasks(meetingIdForTasks);
                                 if (!ok) return;
-                                const refreshed = await fetchTasksForMeeting(m.id, src);
-                                await renderTasksAfterFetch(m.id, src, refreshed);
+                                const refreshed = await fetchTasksForMeeting(meetingIdForTasks, src);
+                                await renderTasksAfterFetch(meetingIdForTasks, src, refreshed);
                             } else {
-                                await renderTasksAfterFetch(m.id, src, current);
+                                await renderTasksAfterFetch(meetingIdForTasks, src, current);
                             }
                         } else {
-                            await renderTasksAfterFetch(m.id, src, current);
+                            await renderTasksAfterFetch(meetingIdForTasks, src, current);
                         }
                     });
 
