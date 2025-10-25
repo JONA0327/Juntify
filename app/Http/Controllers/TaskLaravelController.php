@@ -651,6 +651,7 @@ class TaskLaravelController extends Controller
             'assigned_user_id',
             'assignment_status',
             'progreso',
+            'meeting_id',
         ]);
 
         // Asegurar formato correcto para fecha límite (YYYY-MM-DD para input HTML5)
