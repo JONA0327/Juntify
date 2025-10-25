@@ -113,6 +113,9 @@
                                         <button id="assignTaskBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">
                                             📤 Asignar
                                         </button>
+                                        <button id="cancelAssignmentBtn" type="button" class="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-slate-100 rounded-lg text-sm font-medium hidden">
+                                            ❌ Cancelar asignación
+                                        </button>
                                     </div>
                                 </div>
                                 <div id="assignmentResponseControls" class="flex items-center gap-2">
@@ -356,6 +359,7 @@ async function setupAssignableControls(task) {
     const assigneeSelector = document.getElementById('assigneeSelector');
     const assigneeInput = document.getElementById('assigneeInput');
     const assignBtn = document.getElementById('assignTaskBtn');
+    const cancelBtn = document.getElementById('cancelAssignmentBtn');
     const acceptBtn = document.getElementById('acceptTaskBtn');
     const rejectBtn = document.getElementById('rejectTaskBtn');
     const reactivateBtn = document.getElementById('reactivateTaskBtn');
@@ -378,6 +382,11 @@ async function setupAssignableControls(task) {
         }
     }
     if (assignBtn) assignBtn.disabled = !isOwner;
+    if (cancelBtn) {
+        const hasAssignee = !!(task.assigned_user_id || task.asignado || task.assignment_status);
+        cancelBtn.classList.toggle('hidden', !(isOwner && hasAssignee));
+        cancelBtn.disabled = !(isOwner && hasAssignee);
+    }
 
     if (responseControls) {
         responseControls.classList.toggle('hidden', !isAssignee);
@@ -612,6 +621,43 @@ function populateTaskDetails(task) {
                 // Restaurar botón
                 assignBtn.disabled = false;
                 assignBtn.textContent = '📤 Asignar';
+            }
+        };
+    }
+
+    if (cancelBtn) {
+        cancelBtn.onclick = async () => {
+            if (!confirm('¿Quieres cancelar la asignación actual y dejar la tarea sin asignar?')) {
+                return;
+            }
+
+            const originalText = cancelBtn.textContent;
+            cancelBtn.disabled = true;
+            cancelBtn.textContent = 'Cancelando...';
+
+            try {
+                const response = await fetch(new URL(`/api/tasks-laravel/tasks/${task.id}/cancel-assignment`, window.location.origin), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '')
+                    }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('La tarea se ha liberado y quedó sin asignar.');
+                    loadTaskDetails(task.id);
+                    if (typeof kanbanReload === 'function') kanbanReload();
+                    if (typeof loadAndRender === 'function') loadAndRender();
+                } else {
+                    alert(data.message || 'No se pudo cancelar la asignación');
+                }
+            } catch (error) {
+                console.error('Error canceling assignment:', error);
+                alert('Ocurrió un error al cancelar la asignación');
+            } finally {
+                cancelBtn.disabled = false;
+                cancelBtn.textContent = originalText;
             }
         };
     }

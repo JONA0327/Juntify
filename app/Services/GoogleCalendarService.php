@@ -65,4 +65,13 @@ class GoogleCalendarService
         $created = $this->calendar->events->insert($calendarId, $event);
         return $created->getId();
     }
+
+    /**
+     * Delete an event from the given calendar. Returns true when the API call succeeds.
+     */
+    public function deleteEvent(string $calendarId, string $eventId): bool
+    {
+        $this->calendar->events->delete($calendarId ?: 'primary', $eventId);
+        return true;
+    }
 }
