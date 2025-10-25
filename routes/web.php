@@ -235,6 +235,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/tasks-laravel/assignable-users', [TaskLaravelController::class, 'assignableUsers'])->name('api.tasks-laravel.assignable-users');
         // Asignaciones y respuestas
         Route::post('/tasks-laravel/tasks/{id}/assign', [TaskLaravelController::class, 'assign'])->name('api.tasks-laravel.tasks.assign');
+        Route::post('/tasks-laravel/tasks/{id}/cancel-assignment', [TaskLaravelController::class, 'cancelAssignment'])->name('api.tasks-laravel.tasks.cancel-assignment');
         Route::post('/tasks-laravel/tasks/{id}/respond', [TaskLaravelController::class, 'respond'])->name('api.tasks-laravel.tasks.respond');
         Route::post('/tasks-laravel/tasks/{id}/reactivate', [TaskLaravelController::class, 'reactivate'])->name('api.tasks-laravel.tasks.reactivate');
         Route::get('/tasks-laravel/calendar', [TaskLaravelController::class, 'calendar'])->name('api.tasks-laravel.calendar');

@@ -809,15 +809,101 @@ class TaskLaravelController extends Controller
     }
 
     /** Eliminar una tarea en tasks_laravel */
-    public function destroy(int $id): JsonResponse
+    public function destroy(int $id, GoogleCalendarService $calendar): JsonResponse
     {
         $user = Auth::user();
         $task = TaskLaravel::findOrFail($id);
         if ($task->username !== $user->username) {
             abort(403, 'Solo el creador puede eliminar la tarea');
         }
+
+        $task->loadMissing('assignedUser');
+        if (!empty($task->google_event_id) && $task->assignedUser) {
+            $removed = $this->removeCalendarEvent($task, $calendar, $task->assignedUser);
+            if (!$removed) {
+                Log::warning('No se pudo eliminar el evento de Calendar al borrar la tarea', [
+                    'task_id' => $task->id,
+                    'event_id' => $task->google_event_id,
+                ]);
+            }
+        }
+
         $task->delete();
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Cancelar la asignación de una tarea y revertirla a estado sin asignar.
+     */
+    public function cancelAssignment(int $id, GoogleCalendarService $calendar): JsonResponse
+    {
+        $owner = Auth::user();
+        $task = TaskLaravel::where('id', $id)
+            ->where('username', $owner->username)
+            ->firstOrFail();
+
+        $task->loadMissing('assignedUser');
+        $assignee = $task->assignedUser;
+
+        $hasAssignment = $task->assigned_user_id || $task->asignado || $task->assignment_status;
+
+        if ($hasAssignment) {
+            if ($assignee) {
+                $removed = $this->removeCalendarEvent($task, $calendar, $assignee);
+                if (!$removed && !empty($task->google_event_id)) {
+                    Log::warning('No se pudo cancelar el evento de Calendar al liberar la tarea', [
+                        'task_id' => $task->id,
+                        'event_id' => $task->google_event_id,
+                    ]);
+                }
+            }
+
+            $task->assigned_user_id = null;
+            $task->asignado = null;
+            $task->assignment_status = null;
+            $task->google_event_id = null;
+            $task->google_calendar_id = null;
+            $task->calendar_synced_at = null;
+            $task->overdue_notified_at = null;
+            $task->save();
+
+            $task->unsetRelation('assignedUser');
+        }
+
+        return response()->json([
+            'success' => true,
+            'task' => $this->withTaskRelations($task),
+        ]);
+    }
+
+    protected function removeCalendarEvent(TaskLaravel $task, GoogleCalendarService $calendar, ?User $calendarUser = null): bool
+    {
+        if (empty($task->google_event_id)) {
+            return false;
+        }
+
+        try {
+            if (!$calendarUser || $calendarUser->id !== $task->assigned_user_id) {
+                $calendarUser = $task->relationLoaded('assignedUser')
+                    ? $task->assignedUser
+                    : $task->assignedUser()->first();
+            }
+
+            if (!$calendarUser || empty($calendarUser->current_organization_id)) {
+                return false;
+            }
+
+            if (!$this->applyCalendarToken($calendar, $calendarUser)) {
+                return false;
+            }
+
+            $calendarId = $task->google_calendar_id ?: 'primary';
+            $calendar->deleteEvent($calendarId, $task->google_event_id);
+            return true;
+        } catch (\Throwable $e) {
+            Log::warning('Calendar delete failed for task '.$task->id.': '.$e->getMessage());
+            return false;
+        }
     }
 
     /**
