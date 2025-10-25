@@ -28,6 +28,7 @@ use Illuminate\Support\Str;
 use App\Services\AiChatService;
 use App\Services\GoogleDriveService;
 use App\Services\GoogleTokenRefreshService;
+use App\Services\PlanLimitService;
 use App\Jobs\ProcessAiDocumentJob;
 use App\Services\EmbeddingSearch;
 use App\Services\GoogleServiceAccount;
@@ -66,9 +67,8 @@ class AiAssistantController extends Controller
         $role = strtolower((string) ($user->roles ?? 'free'));
         $planCode = $role; // En este sistema, el plan se determina por el rol
 
-        $organizationId = session('organizationId');
-        $hasOrganizationalRole = in_array($role, ['admin', 'superadmin', 'founder', 'developer'], true);
-        $belongsToOrg = $organizationId || $hasOrganizationalRole;
+        $planService = app(PlanLimitService::class);
+        $belongsToOrg = $planService->userBelongsToOrganization($user);
 
         $isBasicPlan = $this->isBasicPlan($planCode, $role);
         $isFreePlan = $this->isFreePlan($planCode, $role);

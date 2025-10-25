@@ -16,6 +16,8 @@
             @elseif(isset($organizations) && count($organizations) > 0)
                 // Pick first organization id as a fallback (used on organization page)
                 window.currentOrganizationId = @json(optional($organizations->first())->id);
+            @elseif(auth()->check() && auth()->user()->current_organization_id)
+                window.currentOrganizationId = @json(auth()->user()->current_organization_id);
             @else
                 window.currentOrganizationId = window.currentOrganizationId || null;
             @endif
@@ -49,6 +51,7 @@
             $planService = app(\App\Services\PlanLimitService::class);
             $driveAllowed = auth()->check() ? $planService->userCanUseDrive(auth()->user()) : false;
             $tempRetention = auth()->check() ? $planService->getTemporaryRetentionDays(auth()->user()) : 7;
+            $belongsToOrganization = auth()->check() ? $planService->userBelongsToOrganization(auth()->user()) : false;
         @endphp
 
         if (typeof window.userPlanCode === 'undefined') {
@@ -60,9 +63,7 @@
         }
 
         if (typeof window.userBelongsToOrganization === 'undefined') {
-            // Un usuario pertenece a organización si tiene currentOrganizationId o si tiene roles organizacionales
-            window.userBelongsToOrganization = !!(window.currentOrganizationId ||
-                (window.userRole && ['admin', 'superadmin', 'founder', 'developer'].includes(window.userRole)));
+            window.userBelongsToOrganization = @json($belongsToOrganization);
         }
 
         if (typeof window.userCanUseDrive === 'undefined') {
