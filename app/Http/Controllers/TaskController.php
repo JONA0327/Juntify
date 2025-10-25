@@ -7,6 +7,7 @@ use App\Models\TaskLaravel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
+use App\Services\PlanLimitService;
 
 class TaskController extends Controller
 {
@@ -18,9 +19,8 @@ class TaskController extends Controller
         // Verificar acceso a tareas basado en plan y organización
         $user = Auth::user();
         $userPlan = $user->plan_code ?? 'free';
-        $organizationId = session('organizationId');
-        $hasOrganizationalRole = in_array($user->roles ?? '', ['admin', 'superadmin', 'founder', 'developer']);
-        $belongsToOrg = $organizationId || $hasOrganizationalRole;
+        $planService = app(PlanLimitService::class);
+        $belongsToOrg = $planService->userBelongsToOrganization($user);
         $hasTasksAccess = $userPlan !== 'free' || $belongsToOrg;
 
         // Si no tiene acceso, mostrar vista con modal bloqueado

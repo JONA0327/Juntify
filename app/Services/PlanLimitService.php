@@ -93,6 +93,10 @@ class PlanLimitService
      */
     public function userCanUseDrive(User $user): bool
     {
+        if ($this->userBelongsToOrganization($user)) {
+            return true;
+        }
+
         $role = strtolower((string) ($user->roles ?? ''));
         $planCode = strtolower((string) ($user->plan_code ?? ''));
 
@@ -127,6 +131,19 @@ class PlanLimitService
         }
 
         return false;
+    }
+
+    public function userBelongsToOrganization(User $user): bool
+    {
+        if ($user->current_organization_id) {
+            return true;
+        }
+
+        if ($user->relationLoaded('organizations')) {
+            return $user->organizations->isNotEmpty();
+        }
+
+        return $user->organizations()->exists();
     }
 
     /**
