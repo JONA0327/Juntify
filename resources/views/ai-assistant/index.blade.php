@@ -26,14 +26,30 @@
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
     <div class="flex">
         @include('partials.navbar')
+        @include('partials.mobile-nav')
 
         <main class="w-full pl-24 pt-6" style="margin-top:80px;">
             <!-- Contenedor Centrado -->
             <div class="container mx-auto px-4 py-2 h-screen flex flex-col">
+<!-- Botón menú móvil -->
+<button class="mobile-menu-toggle" id="mobile-menu-toggle" style="display: none;">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+</button>
+
+<!-- Overlay para cerrar sidebar en móvil -->
+<div class="mobile-sidebar-overlay" id="mobile-sidebar-overlay"></div>
+
 <div class="ai-assistant-container">
     <!-- Sidebar de sesiones -->
-    <div class="sessions-sidebar">
+    <div class="sessions-sidebar" id="sessions-sidebar">
         <div class="sessions-header">
+            <button class="mobile-close-btn" id="mobile-close-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
             <h2>Conversaciones</h2>
             <button id="new-chat-btn" class="new-chat-btn">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">

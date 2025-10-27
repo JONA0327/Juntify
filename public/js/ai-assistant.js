@@ -335,6 +335,56 @@ function setupEventListeners() {
 
     // Pestañas de detalles
     setupDetailsTabs();
+
+    // Menú móvil
+    setupMobileMenu();
+}
+
+/**
+ * Configurar menú móvil
+ */
+function setupMobileMenu() {
+    const mobileToggle = document.getElementById('mobile-menu-toggle');
+    const mobileClose = document.getElementById('mobile-close-btn');
+    const sidebar = document.getElementById('sessions-sidebar');
+    const overlay = document.getElementById('mobile-sidebar-overlay');
+
+    if (!mobileToggle || !sidebar || !overlay) return;
+
+    // Abrir sidebar al hacer click en el botón
+    mobileToggle.addEventListener('click', () => {
+        sidebar.classList.add('open');
+        document.body.classList.add('sidebar-open'); // Efecto visual sin overlay
+        mobileToggle.classList.add('hidden'); // Ocultar botón
+        document.body.style.overflow = 'hidden';
+    });
+
+    // Cerrar sidebar al hacer click en el botón de cerrar
+    if (mobileClose) {
+        mobileClose.addEventListener('click', closeMobileSidebar);
+    }
+
+    // Sin event listener del overlay para evitar interferencia con conversaciones
+
+    // Cerrar sidebar con tecla ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+            closeMobileSidebar();
+        }
+    });
+
+    // El cierre automático del sidebar ahora se maneja en setupSessionEventListeners
+
+    function closeMobileSidebar() {
+        console.log('Closing mobile sidebar'); // Debug
+        sidebar.classList.remove('open');
+        document.body.classList.remove('sidebar-open'); // Quitar efecto visual
+        mobileToggle.classList.remove('hidden'); // Mostrar botón
+        document.body.style.overflow = '';
+    }
+
+    // Mantener referencia global para uso en otros lugares
+    window.closeMobileSidebar = closeMobileSidebar;
 }
 
 /**
@@ -392,7 +442,7 @@ function renderChatSessions(sessions) {
 
     sessionsList.innerHTML = sessions.map(session => `
         <div class="chat-session-item ${session.id === currentSessionId ? 'active' : ''}"
-             onclick="loadChatSession(${session.id})">
+             data-session-id="${session.id}">
             <div class="session-info">
                 <div class="session-title">${escapeHtml(session.title)}</div>
                 ${session.last_message ? `
@@ -405,7 +455,7 @@ function renderChatSessions(sessions) {
             </div>
             <button type="button"
                     class="session-delete-btn"
-                    onclick="event.stopPropagation(); deleteChatSession(${session.id});"
+                    data-session-id="${session.id}"
                     aria-label="Eliminar conversación">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -414,6 +464,74 @@ function renderChatSessions(sessions) {
             </button>
         </div>
     `).join('');
+
+    // Agregar event listeners después de renderizar
+    setupSessionEventListeners();
+}
+
+/**
+ * Configurar event listeners para las sesiones
+ */
+function setupSessionEventListeners() {
+    // Event listeners para hacer click en las sesiones
+    document.querySelectorAll('.chat-session-item').forEach(item => {
+        const sessionId = item.dataset.sessionId;
+
+        // Función para manejar la selección de sesión
+        const handleSessionSelect = async (e) => {
+            // No hacer nada si se clickeó el botón de eliminar
+            if (e.target.closest('.session-delete-btn')) {
+                return;
+            }
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            console.log('Selecting session:', sessionId); // Debug
+
+            try {
+                await loadChatSession(parseInt(sessionId));
+                console.log('Session loaded successfully'); // Debug
+
+                // Cerrar automáticamente solo en pantallas muy pequeñas (móviles)
+                if (window.innerWidth <= 480) {
+                    setTimeout(() => {
+                        if (window.closeMobileSidebar) {
+                            console.log('Auto-closing sidebar on small screen'); // Debug
+                            window.closeMobileSidebar();
+                        }
+                    }, 800); // Delay más largo para asegurar que la conversación se cargó
+                }
+
+            } catch (error) {
+                console.error('Error loading session:', error);
+            }
+        };
+
+        // Solo usar click event para evitar conflictos
+        item.addEventListener('click', handleSessionSelect);
+
+        // Feedback visual táctil simple
+        item.addEventListener('touchstart', (e) => {
+            if (!e.target.closest('.session-delete-btn')) {
+                item.classList.add('touching');
+            }
+        }, { passive: true });
+
+        item.addEventListener('touchend', () => {
+            item.classList.remove('touching');
+        }, { passive: true });
+    });
+
+    // Event listeners para los botones de eliminar
+    document.querySelectorAll('.session-delete-btn').forEach(btn => {
+        const sessionId = btn.dataset.sessionId;
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteChatSession(parseInt(sessionId));
+        });
+    });
 }
 
 /**
@@ -561,7 +679,7 @@ async function loadChatSession(sessionId) {
         document.querySelectorAll('.chat-session-item').forEach(item => {
             item.classList.remove('active');
         });
-        document.querySelector(`[onclick="loadChatSession(${sessionId})"]`)?.classList.add('active');
+        document.querySelector(`[data-session-id="${sessionId}"]`)?.classList.add('active');
 
     } catch (error) {
         console.error('Error loading chat session:', error);
