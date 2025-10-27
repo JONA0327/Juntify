@@ -61,19 +61,73 @@ class TaskCommentController extends Controller
             'date'      => now(),
         ]);
 
+        // Enviar notificación si es una respuesta a otro comentario
         if ($parent) {
             $parentUser = User::where('username', $parent->author)->first();
             if ($parentUser && $parentUser->id !== $user->id) {
+                $task->loadMissing('meeting');
+
+                $userName = $user->full_name ?: $user->username;
+                $taskTitle = substr($task->tarea ?? '', 0, 50) . (strlen($task->tarea ?? '') > 50 ? '...' : '');
+                $meetingName = $task->meeting->meeting_name ?? 'Sin reunión';
+
                 Notification::create([
                     'remitente' => $user->id,
                     'emisor'    => $parentUser->id,
+                    'user_id'   => $parentUser->id,
+                    'from_user_id' => $user->id,
                     'status'    => 'pending',
-                    'message'   => 'Tienes una respuesta a tu comentario',
+                    'title'     => 'Respuesta a tu comentario',
+                    'message'   => sprintf('%s respondió a tu comentario en la tarea "%s" de la reunión "%s"',
+                        $userName,
+                        $taskTitle,
+                        $meetingName
+                    ),
                     'type'      => 'task_comment_reply',
                     'data'      => [
                         'task_id'    => $taskId,
                         'comment_id' => $comment->id,
+                        'parent_comment_id' => $parent->id,
+                        'meeting_name' => $meetingName,
+                        'task_title' => $taskTitle,
+                        'reply_text' => substr($data['text'], 0, 100) . (strlen($data['text']) > 100 ? '...' : ''),
                     ],
+                    'read'      => false,
+                ]);
+            }
+        }
+
+        // También notificar al dueño de la tarea si es un comentario principal (no respuesta)
+        if (!$parent) {
+            $taskOwner = User::where('username', $task->username)->first();
+            if ($taskOwner && $taskOwner->id !== $user->id) {
+                $task->loadMissing('meeting');
+
+                $userName = $user->full_name ?: $user->username;
+                $taskTitle = substr($task->tarea ?? '', 0, 50) . (strlen($task->tarea ?? '') > 50 ? '...' : '');
+                $meetingName = $task->meeting->meeting_name ?? 'Sin reunión';
+
+                Notification::create([
+                    'remitente' => $user->id,
+                    'emisor'    => $taskOwner->id,
+                    'user_id'   => $taskOwner->id,
+                    'from_user_id' => $user->id,
+                    'status'    => 'pending',
+                    'title'     => 'Nuevo comentario en tu tarea',
+                    'message'   => sprintf('%s comentó en tu tarea "%s" de la reunión "%s"',
+                        $userName,
+                        $taskTitle,
+                        $meetingName
+                    ),
+                    'type'      => 'task_comment',
+                    'data'      => [
+                        'task_id'    => $taskId,
+                        'comment_id' => $comment->id,
+                        'meeting_name' => $meetingName,
+                        'task_title' => $taskTitle,
+                        'comment_text' => substr($data['text'], 0, 100) . (strlen($data['text']) > 100 ? '...' : ''),
+                    ],
+                    'read'      => false,
                 ]);
             }
         }

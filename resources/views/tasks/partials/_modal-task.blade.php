@@ -172,6 +172,33 @@
                         </div>
 
                         <p class="text-xs text-slate-400 mt-1">Busca por nombre o correo. Deja vacío para asignarte la tarea a ti mismo</p>
+
+                        <!-- Botón para marcar sin asignar -->
+                        <div class="mt-2">
+                            <button type="button" @click="clearAssignment()"
+                                    class="text-sm px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors">
+                                🚫 Marcar sin asignar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Acciones rápidas -->
+                    <div class="mb-4 p-3 bg-slate-700/30 rounded-lg">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Acciones rápidas</label>
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" onclick="clearTaskDates()"
+                                    class="text-xs px-2 py-1 bg-orange-600 hover:bg-orange-500 text-white rounded transition-colors">
+                                🗓️ Quitar fechas
+                            </button>
+                            <button type="button" onclick="clearTaskTime()"
+                                    class="text-xs px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded transition-colors">
+                                ⏰ Quitar hora
+                            </button>
+                            <button type="button" onclick="clearAllTaskSettings()"
+                                    class="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors">
+                                🔄 Restablecer todo
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Botones -->
@@ -424,6 +451,10 @@ function userAssignmentComponent() {
             this.currentAssignedUser = null;
         },
 
+        clearAssignment() {
+            this.removeAssignment();
+        },
+
         handleBlur() {
             // Pequeño delay para permitir clicks en el dropdown
             setTimeout(() => {
@@ -444,6 +475,42 @@ function userAssignmentComponent() {
                 this.removeAssignment();
             }
         }
+    }
+}
+
+// Funciones globales para acciones rápidas
+function clearTaskDates() {
+    const dueDateInput = document.getElementById('taskDueDate');
+    if (dueDateInput) {
+        dueDateInput.value = '';
+    }
+}
+
+function clearTaskTime() {
+    const dueTimeInput = document.getElementById('taskDueTime');
+    if (dueTimeInput) {
+        dueTimeInput.value = '';
+    }
+}
+
+function clearAllTaskSettings() {
+    // Limpiar fechas y horas
+    clearTaskDates();
+    clearTaskTime();
+
+    // Limpiar asignación usando Alpine.js
+    const taskAssigneeComponent = document.querySelector('[x-data*="userAssignmentComponent"]');
+    if (taskAssigneeComponent && taskAssigneeComponent._x_dataStack) {
+        const componentData = taskAssigneeComponent._x_dataStack[0];
+        if (componentData && typeof componentData.clearAssignment === 'function') {
+            componentData.clearAssignment();
+        }
+    }
+
+    // Resetear prioridad a media
+    const prioritySelect = document.getElementById('taskPriority');
+    if (prioritySelect) {
+        prioritySelect.value = 'media';
     }
 }
 </script>

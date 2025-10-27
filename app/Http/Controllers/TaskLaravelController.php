@@ -68,8 +68,13 @@ class TaskLaravelController extends Controller
 
     protected function ensureTaskAccess(TaskLaravel $task, User $user): void
     {
-        // Verificar acceso directo (propietario o asignado)
+        // Verificar acceso directo (propietario de tarea, asignado, o dueño de reunión)
         if ($task->username === $user->username || $task->assigned_user_id === $user->id) {
+            return;
+        }
+
+        // Verificar si es dueño de la reunión
+        if ($task->meeting && $task->meeting->username === $user->username) {
             return;
         }
 
@@ -633,7 +638,7 @@ class TaskLaravelController extends Controller
     public function show(int $id): JsonResponse
     {
         $user = Auth::user();
-        $task = TaskLaravel::with(['meeting:id,meeting_name', 'assignedUser:id,full_name,username,email'])
+        $task = TaskLaravel::with(['meeting:id,meeting_name,username', 'assignedUser:id,full_name,username,email'])
             ->where('id', $id)
             ->firstOrFail();
 
@@ -660,12 +665,12 @@ class TaskLaravelController extends Controller
         }
 
         $taskArr['meeting_name'] = $task->meeting->meeting_name ?? null;
+        $taskArr['meeting_owner_username'] = $task->meeting->username ?? null; // Dueño de la reunión
         $taskArr['assigned_user'] = $task->assignedUser ? [
             'id' => $task->assignedUser->id,
             'full_name' => $task->assignedUser->full_name,
             'username' => $task->assignedUser->username,
             'email' => $task->assignedUser->email,
-            'name' => $task->assignedUser->full_name ?? $task->assignedUser->username ?? $task->assignedUser->email,
         ] : null;
         $taskArr['owner_username'] = $task->username;
 
@@ -757,7 +762,7 @@ class TaskLaravelController extends Controller
     public function update(Request $request, int $id, GoogleCalendarService $calendar): JsonResponse
     {
         $user = Auth::user();
-        $task = TaskLaravel::findOrFail($id);
+        $task = TaskLaravel::with('meeting:id,username')->findOrFail($id);
         $this->ensureTaskAccess($task, $user);
 
         $data = $request->validate([
@@ -771,9 +776,17 @@ class TaskLaravelController extends Controller
             'progreso' => 'nullable|integer|min:0|max:100',
         ]);
 
-        $isOwner = $task->username === $user->username;
+        $isTaskOwner = $task->username === $user->username;
+        $isMeetingOwner = $task->meeting && $task->meeting->username === $user->username;
+        $isOwner = $isTaskOwner || $isMeetingOwner; // Dueño de tarea O dueño de reunión
+        $isAssignee = $task->assigned_user_id === $user->id;
 
-        if (!$isOwner) {
+        // Guardar progreso anterior para notificaciones
+        $previousProgress = $task->progreso ?? 0;
+
+        // Restricciones según el rol
+        if (!$isOwner && $isAssignee) {
+            // Usuario asignado: solo puede actualizar progreso (y debe haber aceptado)
             if ($task->assignment_status === 'pending') {
                 return response()->json(['success' => false, 'message' => 'Debes aceptar la tarea antes de actualizarla'], 403);
             }
@@ -788,13 +801,25 @@ class TaskLaravelController extends Controller
                     'message' => 'Esta tarea está vencida. Pídele al dueño de la reunión que la reabra antes de actualizarla.',
                 ], 423);
             }
+        } else if (!$isOwner && !$isAssignee) {
+            // Usuario sin permisos
+            return response()->json(['success' => false, 'message' => 'No tienes permisos para editar esta tarea'], 403);
         }
+        // Si es dueño (tarea o reunión): puede editar todo sin restricciones
 
         $task->fill($data);
         if (!$this->isTaskOverdue($task)) {
             $task->overdue_notified_at = null;
         }
         $task->save();
+
+        // Notificar al dueño de la reunión si el asignado cambió el progreso
+        if ($isAssignee && !$isOwner && array_key_exists('progreso', $data)) {
+            $newProgress = $task->progreso ?? 0;
+            if ($newProgress != $previousProgress && $task->meeting && $task->meeting->username) {
+                $this->notifyProgressUpdate($task, $user, $previousProgress, $newProgress);
+            }
+        }
 
         // Sincronizar con Google Calendar en actualizaciones
         $task->loadMissing('assignedUser');
@@ -839,9 +864,17 @@ class TaskLaravelController extends Controller
     public function cancelAssignment(int $id, GoogleCalendarService $calendar): JsonResponse
     {
         $owner = Auth::user();
-        $task = TaskLaravel::where('id', $id)
-            ->where('username', $owner->username)
+        $task = TaskLaravel::with(['meeting:id,username'])
+            ->where('id', $id)
             ->firstOrFail();
+
+        // Permitir cancelar si es dueño de la tarea O dueño de la reunión
+        $isTaskOwner = $task->username === $owner->username;
+        $isMeetingOwner = $task->meeting && $task->meeting->username === $owner->username;
+
+        if (!$isTaskOwner && !$isMeetingOwner) {
+            abort(403, 'Solo el dueño de la tarea o de la reunión puede cancelar la asignación');
+        }
 
         $task->loadMissing('assignedUser');
         $assignee = $task->assignedUser;
@@ -1444,6 +1477,62 @@ class TaskLaravelController extends Controller
         return response()->json([
             'success' => true,
             'task' => $this->withTaskRelations($task),
+        ]);
+    }
+
+    /**
+     * Notificar al dueño de la reunión cuando el asignado actualiza el progreso
+     */
+    protected function notifyProgressUpdate(TaskLaravel $task, User $assignee, int $previousProgress, int $newProgress): void
+    {
+        if (!$task->meeting || !$task->meeting->username) {
+            return;
+        }
+
+        // Buscar al dueño de la reunión
+        $meetingOwner = User::where('username', $task->meeting->username)->first();
+        if (!$meetingOwner) {
+            return;
+        }
+
+        // No notificar si el dueño de la reunión es quien hace el cambio
+        if ($meetingOwner->id === $assignee->id) {
+            return;
+        }
+
+        // Determinar el estado de la tarea según el progreso
+        $taskStatus = 'en proceso';
+        if ($newProgress >= 100) {
+            $taskStatus = 'completada';
+        } elseif ($newProgress === 0) {
+            $taskStatus = 'pendiente';
+        }
+
+        Notification::create([
+            'user_id' => $meetingOwner->id,
+            'type' => 'task_progress_updated',
+            'title' => 'Progreso de tarea actualizado',
+            'message' => sprintf(
+                '%s actualizó el progreso de la tarea "%s" de %d%% a %d%% (estado: %s) en la reunión "%s".',
+                $assignee->name ?? $assignee->username,
+                $task->tarea ?? 'Sin título',
+                $previousProgress,
+                $newProgress,
+                $taskStatus,
+                $task->meeting->meeting_name ?? 'Sin nombre'
+            ),
+            'status' => 'pending',
+            'data' => [
+                'task_id' => $task->id,
+                'assignee_id' => $assignee->id,
+                'assignee_name' => $assignee->name ?? $assignee->username,
+                'previous_progress' => $previousProgress,
+                'new_progress' => $newProgress,
+                'task_status' => $taskStatus,
+                'meeting_id' => $task->meeting->id ?? null,
+                'meeting_name' => $task->meeting->meeting_name ?? null,
+            ],
+            'read' => false,
         ]);
     }
 }

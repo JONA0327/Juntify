@@ -27,7 +27,7 @@
             </div>
             <div class="ml-4 flex items-center text-green-400">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 <span class="text-sm font-medium">Ahorra 30% con pago anual</span>
             </div>
@@ -36,8 +36,7 @@
         <!-- Planes -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
             @foreach($plans as $plan)
-            <div class="relative bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 p-8 text-white hover:bg-white/15 transition-all duration-300
-                @if($plan->code === 'basico') ring-2 ring-blue-400 @endif">
+            <div class="relative bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 p-8 text-white hover:bg-white/15 transition-all duration-300 @if($plan->code === 'basico') ring-2 ring-blue-400 @endif">
 
                 @if($plan->code === 'basico')
                 <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
@@ -211,28 +210,13 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // MercadoPago SDK
-const mercadoPagoPublicKey = '{{ config("mercadopago.public_key") }}';
-const mp = typeof window !== 'undefined' && window.MercadoPago
-    ? new MercadoPago(mercadoPagoPublicKey, { locale: 'es-AR' })
-    : null;
-
-if (!mp) {
-    console.warn('MercadoPago SDK no está disponible. Verifica que el script se haya cargado correctamente.');
-}
+const mp = new MercadoPago('{{ config("mercadopago.public_key") }}');
 
 // Seleccionar plan
 function selectPlan(planId, planName, price) {
-    if (!mp) {
-        alert('No se pudo iniciar MercadoPago. Recarga la página e intenta nuevamente.');
-        return;
-    }
-
     // Mostrar modal de carga
-    const loadingModal = document.getElementById('loadingModal');
-    if (loadingModal) {
-        loadingModal.classList.remove('hidden');
-        loadingModal.classList.add('flex');
-    }
+    document.getElementById('loadingModal').classList.remove('hidden');
+    document.getElementById('loadingModal').classList.add('flex');
 
     // Crear preferencia
     fetch('{{ route("subscription.create-preference") }}', {
@@ -252,19 +236,15 @@ function selectPlan(planId, planName, price) {
             window.location.href = data.init_point;
         } else {
             alert('Error: ' + data.error);
-            if (loadingModal) {
-                loadingModal.classList.add('hidden');
-                loadingModal.classList.remove('flex');
-            }
+            document.getElementById('loadingModal').classList.add('hidden');
+            document.getElementById('loadingModal').classList.remove('flex');
         }
     })
     .catch(error => {
         console.error('Error:', error);
         alert('Error al procesar el pago');
-        if (loadingModal) {
-            loadingModal.classList.add('hidden');
-            loadingModal.classList.remove('flex');
-        }
+        document.getElementById('loadingModal').classList.add('hidden');
+        document.getElementById('loadingModal').classList.remove('flex');
     });
 }
 
