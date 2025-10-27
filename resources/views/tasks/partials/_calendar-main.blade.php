@@ -1,5 +1,5 @@
 <!-- Calendario mensual dinámico -->
-<div class="bg-slate-900/50 border border-slate-700/50 rounded-xl p-4">
+<div class="bg-slate-900/50 border border-slate-700/50 rounded-xl p-4 hidden">
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
             <button id="cal-prev" class="btn btn-secondary">Anterior</button>
