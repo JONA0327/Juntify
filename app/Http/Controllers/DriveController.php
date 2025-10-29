@@ -1159,6 +1159,24 @@ class DriveController extends Controller
             'rootFolder_param' => $v['rootFolder'] ?? null
         ]);
 
+        // Usuarios con rol BNI SIEMPRE usan almacenamiento temporal (transcriptions_temp)
+        if ($user->roles === 'BNI') {
+            Log::info('BNI user: Forcing temporary storage instead of Drive', ['user_id' => $user->id]);
+            return $this->storeTemporaryResult(
+                $user,
+                $v,
+                $request,
+                $respondWithCleanup,
+                $cleanupChunkedUpload,
+                $mimeToExt,
+                $maxAudioBytes,
+                [
+                    'reason' => 'bni_role_restriction',
+                    'drive_type' => $driveType,
+                ]
+            );
+        }
+
         $hasDriveConnection = $driveType === 'organization' ? (bool) $organizationFolder : (bool) $token;
         if (!$canUseDrive || !$hasDriveConnection) {
             return $this->storeTemporaryResult(
@@ -1445,7 +1463,14 @@ class DriveController extends Controller
                 'summary'   => $analysis['summary']   ?? null,
                 'keyPoints' => $analysis['keyPoints'] ?? [],
             ];
-            $encrypted = Crypt::encryptString(json_encode($payload));
+            
+            // Para usuarios con rol BNI, no encriptar el archivo .ju
+            if ($user->roles === 'BNI') {
+                $encrypted = json_encode($payload);
+                Log::info('BNI user: Drive .ju file saved without encryption', ['user_id' => $user->id]);
+            } else {
+                $encrypted = Crypt::encryptString(json_encode($payload));
+            }
 
             // 6. Sube los archivos a Drive usando la cuenta de servicio
             try {
@@ -1901,7 +1926,14 @@ class DriveController extends Controller
                 'summary' => $analysis['summary'] ?? null,
                 'keyPoints' => $analysis['keyPoints'] ?? [],
             ];
-            $encrypted = Crypt::encryptString(json_encode($payload));
+            
+            // Para usuarios con rol BNI, no encriptar el archivo .ju
+            if ($user->roles === 'BNI') {
+                $encrypted = json_encode($payload);
+                Log::info('BNI user: .ju file saved without encryption', ['user_id' => $user->id]);
+            } else {
+                $encrypted = Crypt::encryptString(json_encode($payload));
+            }
 
             $juDirectory = 'temp_transcriptions/' . $user->id;
             Storage::disk('local')->makeDirectory($juDirectory);
