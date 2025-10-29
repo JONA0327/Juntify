@@ -1463,7 +1463,7 @@ class DriveController extends Controller
                 'summary'   => $analysis['summary']   ?? null,
                 'keyPoints' => $analysis['keyPoints'] ?? [],
             ];
-            
+
             // Para usuarios con rol BNI, no encriptar el archivo .ju
             if ($user->roles === 'BNI') {
                 $encrypted = json_encode($payload);
@@ -1926,7 +1926,7 @@ class DriveController extends Controller
                 'summary' => $analysis['summary'] ?? null,
                 'keyPoints' => $analysis['keyPoints'] ?? [],
             ];
-            
+
             // Para usuarios con rol BNI, no encriptar el archivo .ju
             if ($user->roles === 'BNI') {
                 $encrypted = json_encode($payload);

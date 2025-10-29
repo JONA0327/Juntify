@@ -15,7 +15,7 @@ echo "=== TESTING BNI ROLE IMPLEMENTATION ===\n\n";
 try {
     // 1. Crear usuario de prueba con rol BNI
     $bniUser = User::where('email', 'bni.test@juntify.com')->first();
-    
+
     if (!$bniUser) {
         echo "Creating BNI test user...\n";
         $bniUser = User::create([
@@ -42,7 +42,7 @@ try {
     // 3. Verificar que existe la tabla transcriptions_temp
     if (DB::getSchemaBuilder()->hasTable('transcriptions_temp')) {
         echo "✅ Table transcriptions_temp exists\n";
-        
+
         // Mostrar estructura de la tabla
         $columns = DB::getSchemaBuilder()->getColumnListing('transcriptions_temp');
         echo "Columns: " . implode(', ', $columns) . "\n\n";
@@ -52,7 +52,7 @@ try {
 
     // 4. Probar la lógica de encriptación condicional
     echo "Testing encryption logic...\n";
-    
+
     $testData = [
         'segments' => [
             ['speaker' => 'Test', 'text' => 'Hello world', 'start' => 0, 'end' => 1]
@@ -75,7 +75,7 @@ try {
 
     // 5. Verificar que se puede desencriptar correctamente
     echo "Testing decryption...\n";
-    
+
     // Probar si el JSON plano se maneja correctamente
     $jsonTest = json_decode($result, true);
     if (json_last_error() === JSON_ERROR_NONE && is_array($jsonTest)) {
@@ -91,7 +91,7 @@ try {
     echo "✅ Modified DriveController to force BNI users to temp storage\n";
     echo "✅ Existing decryption logic handles plain JSON files\n";
     echo "✅ BNI users will store in transcriptions_temp without encryption\n\n";
-    
+
     echo "🎯 READY TO TEST:\n";
     echo "1. Login as BNI user: bni.test@juntify.com / password\n";
     echo "2. Record or upload audio\n";
