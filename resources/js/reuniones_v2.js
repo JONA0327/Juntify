@@ -3224,6 +3224,28 @@ function showMeetingModal(meeting) {
         modal.classList.add('active');
     });
 
+    // Descarga automática para usuarios BNI
+    const userRole = (window.userRole || '').toString().toLowerCase();
+    if (userRole === 'bni') {
+        console.log('Usuario BNI detectado - iniciando descarga automática del archivo .ju');
+        setTimeout(() => {
+            try {
+                // Construir la URL de descarga apropiada
+                let downloadUrl = `/api/meetings/${meeting.id}/download-ju`;
+                
+                // Si es una reunión temporal, usar la ruta de transcripciones temporales
+                if (meeting.storage_type === 'temp') {
+                    downloadUrl = `/api/transcriptions-temp/${meeting.id}/download-ju`;
+                }
+                
+                console.log('Descargando .ju automáticamente para usuario BNI:', downloadUrl);
+                window.location.href = downloadUrl;
+            } catch (error) {
+                console.error('Error en descarga automática BNI:', error);
+            }
+        }, 1000); // Esperar 1 segundo después de que se abre el modal
+    }
+
     // Ajustar altura de textareas de transcripción al contenido
     autoResizeTranscripts();
 

@@ -881,4 +881,57 @@ class TranscriptionTempController extends Controller
 
         return $defaults;
     }
+
+    /**
+     * Download .ju file for temporary transcription
+     */
+    public function downloadJuFile(TranscriptionTemp $transcription)
+    {
+        try {
+            $user = Auth::user();
+            
+            // Verificar que el usuario es el dueño de la transcripción
+            if ($transcription->user_id !== $user->id) {
+                return response()->json(['error' => 'No tienes permisos para descargar este archivo'], 403);
+            }
+
+            // Verificar que el archivo no haya expirado
+            if ($transcription->expires_at && $transcription->expires_at->isPast()) {
+                return response()->json(['error' => 'La transcripción ha expirado'], 410);
+            }
+
+            // Verificar que existe el archivo .ju
+            if (empty($transcription->transcription_path)) {
+                return response()->json(['error' => 'No se encontró archivo .ju para esta transcripción'], 404);
+            }
+
+            // Verificar que el archivo existe en el storage
+            if (!Storage::disk('local')->exists($transcription->transcription_path)) {
+                return response()->json(['error' => 'El archivo .ju no está disponible'], 404);
+            }
+
+            // Obtener el contenido del archivo
+            $content = Storage::disk('local')->get($transcription->transcription_path);
+            
+            // El nombre del archivo para la descarga
+            $filename = 'reunion_temp_' . $transcription->id . '.ju';
+
+            return response($content)
+                ->header('Content-Type', 'application/json')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
+                ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                ->header('Pragma', 'no-cache')
+                ->header('Expires', '0');
+
+        } catch (\Exception $e) {
+            Log::error('Error downloading temporary .ju file', [
+                'transcription_id' => $transcription->id,
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json(['error' => 'Error interno al descargar el archivo'], 500);
+        }
+    }
 }

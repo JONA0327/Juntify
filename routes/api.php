@@ -211,6 +211,7 @@ Route::post('/drive/upload-pending-audio', [DriveController::class, 'uploadPendi
 
 Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/pending-recordings/{pendingRecording}', [PendingRecordingController::class, 'show']);
+    Route::get('/pending-recordings/{pendingRecording}/status', [PendingRecordingController::class, 'status']);
     Route::post('/recordings/chunk', [RecordingChunkController::class, 'storeChunk']);
     Route::post('/recordings/concat', [RecordingChunkController::class, 'concatChunks']);
 });
@@ -267,6 +268,7 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('/transcriptions-temp', [App\Http\Controllers\TranscriptionTempController::class, 'store'])->name('api.transcriptions-temp.store');
         Route::get('/transcriptions-temp/{transcription}', [App\Http\Controllers\TranscriptionTempController::class, 'show'])->name('api.transcriptions-temp.show');
         Route::get('/transcriptions-temp/{transcription}/audio', [App\Http\Controllers\TranscriptionTempController::class, 'streamAudio'])->name('api.transcriptions-temp.audio');
+        Route::get('/transcriptions-temp/{transcription}/download-ju', [App\Http\Controllers\TranscriptionTempController::class, 'downloadJuFile'])->name('api.transcriptions-temp.download-ju');
         Route::put('/transcriptions-temp/{transcription}/name', [App\Http\Controllers\TranscriptionTempController::class, 'updateName'])->name('api.transcriptions-temp.name.update');
         Route::patch('/transcriptions-temp/{transcription}/tasks', [App\Http\Controllers\TranscriptionTempController::class, 'updateTasks'])->name('api.transcriptions-temp.tasks.update');
         Route::post('/transcriptions-temp/{transcription}/analyze-tasks', [App\Http\Controllers\TranscriptionTempController::class, 'analyzeAndGenerateTasks'])->name('api.transcriptions-temp.analyze-tasks');

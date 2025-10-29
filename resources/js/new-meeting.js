@@ -1655,6 +1655,16 @@ function uploadAudioToDrive(blob, name, onProgress) {
                     showSuccess(`Audio subido exitosamente a Drive ${driveTypeName} en: ${folderPath}`);
                 }
 
+                // Descarga automática para usuarios BNI después de subir a Drive
+                const userRole = (window.userRole || '').toString().toLowerCase();
+                if (userRole === 'bni' && response?.pending_recording) {
+                    console.log('Usuario BNI detectado - programando descarga automática después de procesamiento');
+                    // Esperar un momento para que se procese y luego intentar descargar
+                    setTimeout(() => {
+                        checkAndDownloadForBNI(response.pending_recording);
+                    }, 3000);
+                }
+
                 if (response?.pending_recording) {
                     pollPendingRecordingStatus(response.pending_recording);
                 }
@@ -1757,6 +1767,16 @@ function saveAudioTemporarily(blob, name, onProgress) {
                         });
                     }, 3000);
                 }
+                // Descarga automática para usuarios BNI después de guardar temporalmente
+                const userRole = (window.userRole || '').toString().toLowerCase();
+                if (userRole === 'bni' && response?.pending_recording) {
+                    console.log('Usuario BNI detectado - programando descarga automática después de procesamiento temporal');
+                    // Esperar un momento para que se procese y luego intentar descargar
+                    setTimeout(() => {
+                        checkAndDownloadForBNI(response.pending_recording, true);
+                    }, 3000);
+                }
+
                 if (window.notifications) {
                     window.notifications.refresh();
                 }
@@ -3360,4 +3380,64 @@ async function dismissNotification(notificationId) {
     } catch (error) {
         console.warn('📧 [notifications] Failed to dismiss notification:', error);
     }
+}
+
+/**
+ * Verifica el estado del procesamiento y descarga automáticamente para usuarios BNI
+ * @param {string} pendingRecordingId - ID del pending recording
+ * @param {boolean} isTemporary - Si es una transcripción temporal
+ */
+async function checkAndDownloadForBNI(pendingRecordingId, isTemporary = false) {
+    const userRole = (window.userRole || '').toString().toLowerCase();
+    if (userRole !== 'bni') return;
+
+    const maxAttempts = 20; // Máximo 20 intentos (10 minutos)
+    let attempts = 0;
+
+    const checkStatus = async () => {
+        try {
+            attempts++;
+            console.log(`Verificando estado del procesamiento BNI (intento ${attempts}/${maxAttempts})`);
+
+            const response = await fetch(`/api/pending-recordings/${pendingRecordingId}/status`);
+            const data = await response.json();
+
+            if (data.status === 'completed') {
+                console.log('Procesamiento completado para usuario BNI - iniciando descarga automática');
+                
+                // Construir URL de descarga
+                let downloadUrl = `/api/meetings/${data.meeting_id}/download-ju`;
+                
+                if (isTemporary) {
+                    downloadUrl = `/api/transcriptions-temp/${data.meeting_id}/download-ju`;
+                }
+
+                // Iniciar descarga automática
+                setTimeout(() => {
+                    console.log('Descargando .ju automáticamente para usuario BNI:', downloadUrl);
+                    window.location.href = downloadUrl;
+                }, 1000);
+
+                return;
+            } else if (data.status === 'failed') {
+                console.warn('Procesamiento falló - no se puede descargar automáticamente');
+                return;
+            } else if (attempts >= maxAttempts) {
+                console.warn('Tiempo agotado esperando procesamiento - descarga automática cancelada');
+                return;
+            } else {
+                // Continuar verificando cada 30 segundos
+                setTimeout(checkStatus, 30000);
+            }
+
+        } catch (error) {
+            console.error('Error verificando estado para descarga BNI:', error);
+            if (attempts < maxAttempts) {
+                setTimeout(checkStatus, 30000);
+            }
+        }
+    };
+
+    // Iniciar verificación
+    checkStatus();
 }

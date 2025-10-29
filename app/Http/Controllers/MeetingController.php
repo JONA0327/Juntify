@@ -1860,6 +1860,17 @@ class MeetingController extends Controller
     {
         try {
             $user = Auth::user();
+            
+            // Verificar si es una transcripción temporal
+            $tempTranscription = TranscriptionTemp::where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
+                
+            if ($tempTranscription) {
+                // Redirigir a la descarga de transcripciones temporales
+                return app(TranscriptionTempController::class)->downloadJuFile($tempTranscription);
+            }
+            
             // Permitir a receptores de compartidos descargar por ID (sin requerir token del usuario)
             $sharedAccess = SharedMeeting::where('meeting_id', $id)
                 ->where('shared_with', $user->id)
