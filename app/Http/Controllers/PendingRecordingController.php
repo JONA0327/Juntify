@@ -38,7 +38,7 @@ class PendingRecordingController extends Controller
     public function status(Request $request, PendingRecording $pendingRecording): JsonResponse
     {
         $user = $request->user();
-        
+
         // Verificar que el usuario es el dueño del pending recording
         if ($pendingRecording->user_id !== $user->id) {
             abort(403, 'No tienes permisos para ver este registro');
@@ -49,7 +49,7 @@ class PendingRecordingController extends Controller
         if ($pendingRecording->status === 'completed') {
             // Buscar en metadata si hay referencia al meeting/transcripción
             $metadata = $pendingRecording->metadata ?? [];
-            
+
             if (isset($metadata['temp_transcription_id'])) {
                 // Es una transcripción temporal
                 $meetingId = $metadata['temp_transcription_id'];
@@ -59,7 +59,7 @@ class PendingRecordingController extends Controller
                     ->where('username', $user->username)
                     ->orderBy('created_at', 'desc')
                     ->first();
-                
+
                 if ($transcription) {
                     $meetingId = $transcription->id;
                 }

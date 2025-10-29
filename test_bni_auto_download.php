@@ -52,14 +52,14 @@ if ($tempTranscription) {
     echo "   ID: {$tempTranscription->id}\n";
     echo "   Título: {$tempTranscription->title}\n";
     echo "   Archivo .ju: {$tempTranscription->transcription_path}\n";
-    
+
     // Verificar que existe el archivo
     if (\Illuminate\Support\Facades\Storage::disk('local')->exists($tempTranscription->transcription_path)) {
         echo "   ✅ Archivo .ju existe en storage\n";
     } else {
         echo "   ❌ Archivo .ju no existe en storage\n";
     }
-    
+
     echo "   URL de descarga: /api/transcriptions-temp/{$tempTranscription->id}/download-ju\n\n";
 } else {
     echo "⚠️  No se encontraron transcripciones temporales activas para el usuario BNI\n\n";

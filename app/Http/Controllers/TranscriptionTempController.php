@@ -889,7 +889,7 @@ class TranscriptionTempController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             // Verificar que el usuario es el dueño de la transcripción
             if ($transcription->user_id !== $user->id) {
                 return response()->json(['error' => 'No tienes permisos para descargar este archivo'], 403);
@@ -912,7 +912,7 @@ class TranscriptionTempController extends Controller
 
             // Obtener el contenido del archivo
             $content = Storage::disk('local')->get($transcription->transcription_path);
-            
+
             // El nombre del archivo para la descarga
             $filename = 'reunion_temp_' . $transcription->id . '.ju';
 

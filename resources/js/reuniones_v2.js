@@ -333,7 +333,7 @@ function setupEventListeners() {
     });
 
     // Listener para búsqueda
-    const searchInput = document.querySelector('input[placeholder="Buscar en reuniones..."]');
+    const searchInput = document.querySelector('input[placeholder="Buscar por título de reunión..."]');
     if (searchInput) {
         searchInput.addEventListener('input', handleSearch);
     }
@@ -3232,12 +3232,12 @@ function showMeetingModal(meeting) {
             try {
                 // Construir la URL de descarga apropiada
                 let downloadUrl = `/api/meetings/${meeting.id}/download-ju`;
-                
+
                 // Si es una reunión temporal, usar la ruta de transcripciones temporales
                 if (meeting.storage_type === 'temp') {
                     downloadUrl = `/api/transcriptions-temp/${meeting.id}/download-ju`;
                 }
-                
+
                 console.log('Descargando .ju automáticamente para usuario BNI:', downloadUrl);
                 window.location.href = downloadUrl;
             } catch (error) {
@@ -4035,13 +4035,18 @@ function handleSearch(event) {
         return;
     }
 
-    const filtered = currentMeetings.filter(meeting =>
-        meeting.meeting_name.toLowerCase().includes(query) ||
-        (meeting.folder_name && meeting.folder_name.toLowerCase().includes(query)) ||
-        (meeting.preview_text && meeting.preview_text.toLowerCase().includes(query))
-    );
+    // Filtrar principalmente por título de reunión, pero también por carpeta y contenido
+    const filtered = currentMeetings.filter(meeting => {
+        const title = (meeting.meeting_name || '').toLowerCase();
+        const folder = (meeting.folder_name || '').toLowerCase();
+        const preview = (meeting.preview_text || '').toLowerCase();
+        
+        // Priorizar búsqueda por título
+        return title.includes(query) || folder.includes(query) || preview.includes(query);
+    });
 
-    renderMeetings(filtered, '#my-meetings', 'No se encontraron reuniones');
+    const message = filtered.length === 0 ? 'No se encontraron reuniones que coincidan con tu búsqueda' : '';
+    renderMeetings(filtered, '#my-meetings', message);
 }
 
 // ===============================================

@@ -3404,10 +3404,10 @@ async function checkAndDownloadForBNI(pendingRecordingId, isTemporary = false) {
 
             if (data.status === 'completed') {
                 console.log('Procesamiento completado para usuario BNI - iniciando descarga automática');
-                
+
                 // Construir URL de descarga
                 let downloadUrl = `/api/meetings/${data.meeting_id}/download-ju`;
-                
+
                 if (isTemporary) {
                     downloadUrl = `/api/transcriptions-temp/${data.meeting_id}/download-ju`;
                 }
