@@ -159,7 +159,8 @@ class UserPlanService
 
         $role = $role ? strtolower($role) : null;
 
-        return $role !== null && in_array($role, ['founder', 'developer', 'superadmin'], true);
+        // Incluir BNI en roles con permisos ilimitados
+        return $role !== null && in_array($role, ['founder', 'developer', 'superadmin', 'bni'], true);
     }
 
     public function downgradeExpiredPlans(?Carbon $now = null): int
@@ -188,32 +189,40 @@ class UserPlanService
                 }
 
                 if ($plan->expires_at && $plan->expires_at->lessThanOrEqualTo($graceLimit)) {
-                    if ($user->roles !== 'free') {
-                        $oldRole = $user->roles;
-                        $oldPlan = $user->plan;
-                        $oldPlanCode = $user->plan_code;
-
-                        // Actualizar todas las columnas relacionadas con el plan
-                        $user->roles = 'free';
-                        $user->plan = 'free';
-                        $user->plan_code = 'free';
+                    // No degradar usuarios protegidos por bandera o roles especiales
+                    $protectedRoles = ['bni', 'developer', 'founder', 'superadmin'];
+                    if (!empty($user->is_role_protected) || in_array(strtolower($user->roles ?? ''), $protectedRoles, true) || in_array(strtolower($user->plan ?? ''), $protectedRoles, true)) {
+                        // Si ya es free, limpiar expiry; si no, preservar rol
                         $user->plan_expires_at = null;
                         $user->save();
-
-                        Log::info('Plan expirado. Usuario degradado completamente a free.', [
-                            'user_id' => $user->id,
-                            'plan_id' => $plan->plan_id,
-                            'old_role' => $oldRole,
-                            'old_plan' => $oldPlan,
-                            'old_plan_code' => $oldPlanCode,
-                            'new_role' => 'free',
-                            'new_plan' => 'free',
-                            'new_plan_code' => 'free',
-                            'expired_at' => $plan->expires_at,
-                        ]);
                     } else {
-                        $user->plan_expires_at = null;
-                        $user->save();
+                        if ($user->roles !== 'free') {
+                            $oldRole = $user->roles;
+                            $oldPlan = $user->plan;
+                            $oldPlanCode = $user->plan_code;
+
+                            // Actualizar todas las columnas relacionadas con el plan
+                            $user->roles = 'free';
+                            $user->plan = 'free';
+                            $user->plan_code = 'free';
+                            $user->plan_expires_at = null;
+                            $user->save();
+
+                            Log::info('Plan expirado. Usuario degradado completamente a free.', [
+                                'user_id' => $user->id,
+                                'plan_id' => $plan->plan_id,
+                                'old_role' => $oldRole,
+                                'old_plan' => $oldPlan,
+                                'old_plan_code' => $oldPlanCode,
+                                'new_role' => 'free',
+                                'new_plan' => 'free',
+                                'new_plan_code' => 'free',
+                                'expired_at' => $plan->expires_at,
+                            ]);
+                        } else {
+                            $user->plan_expires_at = null;
+                            $user->save();
+                        }
                     }
                 } else {
                     $user->plan_expires_at = $plan->expires_at;
@@ -241,6 +250,7 @@ class UserPlanService
             'enterprise', 'empresas' => 'enterprise', // Acepta ambos pero normaliza a enterprise
             // Roles especiales mantienen su mismo código
             'developer' => 'developer',
+            'bni' => 'bni',
             'founder' => 'founder',
             'superadmin' => 'superadmin',
             default => $planCode // fallback al código del plan
@@ -254,6 +264,7 @@ class UserPlanService
     {
         return match($role) {
             'free' => 'free',
+            'bni' => 'bni',
             'basic' => 'basic',
             'business' => 'business',
             'enterprise' => 'enterprise',
@@ -272,6 +283,7 @@ class UserPlanService
     {
         return match($role) {
             'free' => 'free',
+            'bni' => 'bni',
             'basic' => 'basic',
             'business' => 'basic', // Los usuarios business también tienen plan basic
             'enterprise' => 'basic', // Los usuarios enterprise también tienen plan basic

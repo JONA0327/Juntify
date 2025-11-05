@@ -58,6 +58,46 @@ class User extends Authenticatable
                 $u->{$u->getKeyName()} = (string) Str::uuid();
             }
         });
+
+        // Proteger cambios de roles en usuarios marcados como protegidos
+        static::saving(function ($u) {
+            // Sólo interferir si el registro ya existe
+            if (! $u->exists) {
+                return;
+            }
+
+            try {
+                $original = $u->getOriginal('roles');
+            } catch (\Exception $e) {
+                $original = $u->roles ?? null;
+            }
+
+            // Si el usuario está protegido por bandera y alguien intenta cambiar su rol, revertir el cambio
+            if (!empty($u->is_role_protected) && $u->isDirty('roles') && $original !== null) {
+                // Registrar intento para auditoría
+                try {
+                    \Illuminate\Support\Facades\Log::warning('Attempt to change role on protected user', [
+                        'user_id' => $u->id,
+                        'original_roles' => $original,
+                        'attempted_roles' => $u->roles,
+                        'stack' => array_slice(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5), 0, 5),
+                    ]);
+                } catch (\Exception $e) {
+                    // noop
+                }
+
+                // Mantener la capitalización original
+                $u->roles = $original;
+            }
+
+            // Asimismo, proteger plan y plan_code si está marcado como protegido
+            if (!empty($u->is_role_protected) && $u->isDirty('plan')) {
+                $u->plan = $u->getOriginal('plan');
+            }
+            if (!empty($u->is_role_protected) && $u->isDirty('plan_code')) {
+                $u->plan_code = $u->getOriginal('plan_code');
+            }
+        });
     }
 
     public function googleToken(): HasOne
