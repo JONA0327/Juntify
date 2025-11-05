@@ -33,8 +33,19 @@ class CheckExpiredPlansJob implements ShouldQueue
         $expiredCount = 0;
 
         // Buscar usuarios con planes expirados que no tengan rol 'free'
+        // Excluir roles protegidos que no deben expirar: BNI, developer, founder, superadmin
+        // Usar comparaciones case-insensitive para evitar que variaciones de mayúsculas provoquen degradación
+        $protectedRoles = ['bni', 'developer', 'founder', 'superadmin'];
+        $protectedListSql = "('" . implode("','", $protectedRoles) . "')";
+
         $usersWithExpiredPlans = User::where('plan_expires_at', '<', now())
-            ->where('roles', '!=', 'free')
+            ->where(function ($q) {
+                $q->whereNull('is_role_protected')
+                  ->orWhere('is_role_protected', false);
+            })
+            ->whereRaw("LOWER(roles) != 'free'")
+            ->whereRaw("LOWER(roles) NOT IN $protectedListSql")
+            ->whereRaw("LOWER(plan) NOT IN $protectedListSql")  // También proteger por campo 'plan'
             ->whereNotNull('plan_expires_at')
             ->get();
 
@@ -92,7 +103,11 @@ class CheckExpiredPlansJob implements ShouldQueue
             // Si el usuario no tiene otras suscripciones activas, cambiar a free
             $activeSubscriptions = $user->subscriptions()->where('status', 'active')->count();
 
-            if ($activeSubscriptions === 0 && $user->roles !== 'free') {
+            // Proteger roles que no deben expirar: BNI, developer, founder, superadmin
+            $protectedRoles = ['bni', 'developer', 'founder', 'superadmin'];
+
+            // Si el usuario tiene la bandera is_role_protected activada, no lo degradamos
+            if ($activeSubscriptions === 0 && (empty($user->is_role_protected) || $user->is_role_protected === false) && strtolower($user->roles) !== 'free' && !in_array(strtolower($user->roles), $protectedRoles) && !in_array(strtolower($user->plan), $protectedRoles)) {
                 $oldRole = $user->roles;
                 $oldPlan = $user->plan;
                 $oldPlanCode = $user->plan_code;

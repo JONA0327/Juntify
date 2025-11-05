@@ -26,7 +26,7 @@ class UpdateExpiredPlans extends Command
     /**
      * Roles protegidos que nunca deben ser degradados
      */
-    protected $protectedRoles = ['developer', 'superadmin'];
+    protected $protectedRoles = ['developer', 'superadmin', 'founder', 'bni'];
 
     /**
      * Execute the console command.
@@ -60,7 +60,7 @@ class UpdateExpiredPlans extends Command
     {
         $this->info("\n📅 Procesando usuarios founder...");
 
-        $founders = User::where('roles', 'founder')
+        $founders = User::whereRaw("LOWER(roles) = 'founder'")
             ->where(function($query) use ($now) {
                 $query->whereNull('plan_expires_at')
                       ->orWhere('plan_expires_at', '<', $now);
@@ -101,7 +101,7 @@ class UpdateExpiredPlans extends Command
     {
         $this->info("\n🏢 Procesando usuarios enterprise...");
 
-        $enterprises = User::where('roles', 'enterprise')
+        $enterprises = User::whereRaw("LOWER(roles) = 'enterprise'")
             ->where(function($query) use ($now) {
                 $query->whereNull('plan_expires_at')
                       ->orWhere('plan_expires_at', '<', $now);
@@ -143,13 +143,27 @@ class UpdateExpiredPlans extends Command
         $this->info("\n⏰ Procesando planes vencidos...");
 
         // Usuarios con fecha de expiración vencida
+        // Construir lista lowercase protegida para SQL
+        $lowerProtected = array_map('strtolower', $this->protectedRoles);
+        $lowerProtectedList = "('" . implode("','", $lowerProtected) . "')";
+
         $expiredUsers = User::where('plan_expires_at', '<', $now)
-            ->whereNotIn('roles', array_merge($this->protectedRoles, ['free']))
+            ->where(function ($q) {
+                $q->whereNull('is_role_protected')
+                  ->orWhere('is_role_protected', false);
+            })
+            ->whereRaw("LOWER(roles) NOT IN $lowerProtectedList")
+            ->whereRaw("LOWER(roles) != 'free'")
             ->get();
 
         // Usuarios con roles de pago pero sin fecha de expiración (excepto founder)
         $usersWithoutExpiry = User::whereNull('plan_expires_at')
-            ->whereNotIn('roles', array_merge($this->protectedRoles, ['free', 'founder']))
+            ->where(function ($q) {
+                $q->whereNull('is_role_protected')
+                  ->orWhere('is_role_protected', false);
+            })
+            ->whereRaw("LOWER(roles) NOT IN $lowerProtectedList")
+            ->whereRaw("LOWER(roles) NOT IN ('free','founder')")
             ->get();
 
         $allUsersToDowngrade = $expiredUsers->merge($usersWithoutExpiry);

@@ -20,8 +20,17 @@ class CheckExpiredPlan
         $user = Auth::user();
 
         if ($user && $user->isPlanExpired()) {
+            // Proteger roles que no deben expirar: BNI, developer, founder, superadmin
+            // Usar comparación case-insensitive
+            $protectedRoles = ['bni', 'developer', 'founder', 'superadmin'];
+
             // Si el plan expiró, cambiar todas las columnas relacionadas con el plan
-            if ($user->roles !== 'free') {
+            // No degradar si la bandera is_role_protected está activada
+            if (!empty($user->is_role_protected)) {
+                return $next($request);
+            }
+
+            if (strtolower($user->roles) !== 'free' && !in_array(strtolower($user->roles), $protectedRoles) && !in_array(strtolower($user->plan), $protectedRoles)) {
                 $user->update([
                     'roles' => 'free',
                     'plan' => 'free',

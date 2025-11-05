@@ -38,6 +38,7 @@ class User extends Authenticatable
         'blocked_reason',
         'blocked_by',
         'legal_accepted_at',
+        'is_role_protected',
     ];
 
     protected $casts = [
@@ -46,6 +47,7 @@ class User extends Authenticatable
         'blocked_until' => 'datetime',
         'blocked_permanent' => 'boolean',
         'legal_accepted_at' => 'datetime',
+        'is_role_protected' => 'boolean',
     ];
 
     protected static function boot()
@@ -204,7 +206,13 @@ class User extends Authenticatable
      */
     public function hasProtectedRole(): bool
     {
-        return in_array($this->roles, ['developer', 'superadmin']);
+        // Si la bandera está activada, siempre considerar protegido
+        if (!empty($this->is_role_protected)) {
+            return true;
+        }
+
+        // Además proteger roles conocidos (case-insensitive)
+        return in_array(strtolower($this->roles ?? ''), ['developer', 'superadmin', 'founder', 'bni'], true);
     }
 
     /**

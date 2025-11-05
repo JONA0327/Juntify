@@ -1,0 +1,50 @@
+{
+  "transcription": [
+    {
+      "speaker": "A",
+      "time": "0:00 - 0:15",
+      "text": "Buenos días, vamos a comenzar con la reunión de hoy...",
+      "avatar": "A",
+      "start": 0.0,
+      "end": 15.28,
+      "originalStart": 0,
+      "originalEnd": 15280,
+      "wasInMilliseconds": true
+    },
+    {
+      "speaker": "B",
+      "time": "0:15 - 0:32",
+      "text": "Perfecto, tenemos varios puntos importantes que revisar...",
+      "avatar": "B",
+      "start": 15.28,
+      "end": 32.45,
+      "originalStart": 15280,
+      "originalEnd": 32450,
+      "wasInMilliseconds": true
+    },
+    {
+      "speaker": "A",
+      "time": "0:33 - 0:48",
+      "text": "Exacto, empecemos por el primer tema del día...",
+      "avatar": "A",
+      "start": 33.12,
+      "end": 48.97,
+      "originalStart": 33120,
+      "originalEnd": 48970,
+      "wasInMilliseconds": true
+    }
+  ],
+  "summary": "La reunión se centró en la discusión sobre los procesos operativos de la clínica, incluyendo el manejo de expedientes médicos, sistemas de información, y la necesidad de optimizar los procesos administrativos. Se abordaron temas relacionados con la gestión de datos de pacientes, la integración de sistemas, y las mejoras necesarias para aumentar la eficiencia operativa. Los participantes discutieron implementar una plataforma unificada para el manejo de documentos y reportes.",
+  "keyPoints": [
+    "La clínica ofrece servicios a empresas y particulares con diferentes tipos de exámenes médicos",
+    "Se ha identificado un aumento en la carga de trabajo que requiere optimización de procesos",
+    "La frecuencia de exámenes médicos varía según el tipo de empresa y sus requerimientos específicos",
+    "Se presentan problemas de duplicación de datos y falta de integración entre sistemas",
+    "Es necesario unificar expedientes de diferentes secciones para mejorar la eficiencia",
+    "La generación de reportes es un proceso laborioso que necesita automatización",
+    "La clínica actúa como intermediaria en la comunicación entre empresas y pacientes",
+    "Se discute la necesidad de un sistema más eficiente para el manejo de documentos",
+    "Se sugiere la implementación de una plataforma que permita mejor organización de archivos",
+    "La seguridad de los datos es una preocupación importante en el manejo de información médica"
+  ]
+}

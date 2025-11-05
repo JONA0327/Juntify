@@ -934,4 +934,48 @@ class TranscriptionTempController extends Controller
             return response()->json(['error' => 'Error interno al descargar el archivo'], 500);
         }
     }
+
+    /**
+     * Show web interface for BNI users to view and download their temporary transcriptions
+     */
+    public function webIndex()
+    {
+        try {
+            $user = Auth::user();
+
+            // Si no está autenticado, redirigir a login
+            if (!$user) {
+                return redirect()->route('login');
+            }
+
+            // Permitir acceso si el usuario tiene rol protegido (BNI, developer, founder, superadmin)
+            // o si la bandera is_role_protected está activada. La lógica está centralizada en User::hasProtectedRole().
+            if (!$user->hasProtectedRole()) {
+                return redirect('/')->with('error', 'No tienes permisos para acceder a esta sección');
+            }
+
+            // Obtener las transcripciones temporales del usuario que no hayan expirado
+            $transcriptions = TranscriptionTemp::where('user_id', $user->id)
+                ->where(function ($query) {
+                    $query->whereNull('expires_at')
+                        ->orWhere('expires_at', '>', now());
+                })
+                ->orderBy('created_at', 'desc')
+                ->paginate(20);
+
+            return view('reuniones-bni.index', [
+                'transcriptions' => $transcriptions,
+                'user' => $user
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error loading BNI transcriptions web interface', [
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect('/')->with('error', 'Error al cargar las reuniones BNI');
+        }
+    }
 }

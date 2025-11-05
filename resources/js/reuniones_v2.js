@@ -4040,7 +4040,7 @@ function handleSearch(event) {
         const title = (meeting.meeting_name || '').toLowerCase();
         const folder = (meeting.folder_name || '').toLowerCase();
         const preview = (meeting.preview_text || '').toLowerCase();
-        
+
         // Priorizar búsqueda por título
         return title.includes(query) || folder.includes(query) || preview.includes(query);
     });

@@ -11,6 +11,7 @@ use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\DriveController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\TranscriptionController;
+use App\Http\Controllers\TranscriptionTempController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TaskLaravelController;
@@ -92,6 +93,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/reuniones', [MeetingController::class, 'index'])
         ->middleware('google.refresh')
         ->name('reuniones.index');
+
+    // Reuniones BNI (Almacenamiento Temporal)
+    Route::get('/reuniones-bni', [TranscriptionTempController::class, 'webIndex'])
+        ->name('reuniones.bni.index');
 
     Route::get('/contacts', [ContactController::class, 'index'])->name('contacts.index');
 
