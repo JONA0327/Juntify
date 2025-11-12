@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('group_user', function (Blueprint $table) {
             $table->unsignedInteger('id_grupo');
-            $table->uuid('user_id');
-            $table->string('rol');
+            $table->char('user_id', 36);
+            $table->enum('rol', ['invitado', 'colaborador', 'administrador'])->default('invitado');
             $table->timestamp('created_at')->useCurrent();
             $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
 

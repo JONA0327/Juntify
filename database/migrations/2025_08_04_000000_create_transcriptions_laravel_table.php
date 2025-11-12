@@ -12,9 +12,9 @@ return new class extends Migration
             $table->bigIncrements('id');
             $table->string('username', 255);
             $table->string('meeting_name', 255);
-            $table->string('transcript_drive_id', 255);
+            $table->string('transcript_drive_id', 255)->nullable();
             $table->text('transcript_download_url');
-            $table->string('audio_drive_id', 255);
+            $table->string('audio_drive_id', 255)->nullable();
             $table->text('audio_download_url');
             $table->timestamps();
 

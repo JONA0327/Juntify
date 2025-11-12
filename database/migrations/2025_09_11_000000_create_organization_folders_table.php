@@ -12,7 +12,7 @@ return new class extends Migration
             $table->increments('id');
             $table->unsignedInteger('organization_id');
             $table->unsignedInteger('organization_google_token_id');
-            $table->string('google_id')->unique();
+            $table->string('google_id')->nullable()->unique();
             $table->string('name');
             $table->timestamps();
 

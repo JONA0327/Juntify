@@ -11,13 +11,13 @@ return new class extends Migration
     // Ensure clean state when running this migration alone
     Schema::dropIfExists('organization_activities');
 
-    Schema::create('organization_activities', function (Blueprint $table) {
-            $table->id();
+        Schema::create('organization_activities', function (Blueprint $table) {
+            $table->bigIncrements('id');
             $table->unsignedInteger('organization_id')->nullable();
             $table->unsignedInteger('group_id')->nullable();
             $table->unsignedBigInteger('container_id')->nullable();
-            // users.id is a UUID, so this column must be a UUID as well
-            $table->uuid('user_id')->nullable();
+            $table->char('user_id', 36)->nullable();
+            $table->char('target_user_id', 36)->nullable();
             $table->string('action');
             $table->text('description')->nullable();
             $table->timestamps();
@@ -26,6 +26,7 @@ return new class extends Migration
             $table->foreign('group_id')->references('id')->on('groups')->onDelete('cascade');
             $table->foreign('container_id')->references('id')->on('meeting_content_containers')->onDelete('cascade');
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('target_user_id')->references('id')->on('users')->onDelete('cascade');
         });
     }
 

@@ -11,15 +11,18 @@ return new class extends Migration
         // Crear nueva tabla de contenedores de reuniones con estructura mejorada
         if (!Schema::hasTable('meeting_content_containers')) {
             Schema::create('meeting_content_containers', function (Blueprint $table) {
-                $table->id();
+                $table->bigIncrements('id');
                 $table->string('name');
                 $table->text('description')->nullable();
                 $table->string('username');
+                $table->unsignedBigInteger('group_id')->nullable();
+                $table->string('drive_folder_id')->nullable();
+                $table->json('metadata')->nullable();
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
 
-                $table->index('username');
-                $table->index('is_active');
+                $table->index('username', 'meeting_content_containers_username_index');
+                $table->index('is_active', 'meeting_content_containers_is_active_index');
             });
         }
     }

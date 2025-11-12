@@ -14,25 +14,22 @@ return new class extends Migration
         // Solo crear la tabla si no existe
         if (!Schema::hasTable('shared_meetings')) {
             Schema::create('shared_meetings', function (Blueprint $table) {
-                $table->id();
-                // meeting_id puede apuntar a registros legacy (transcriptions_laravel)
-                // o a otro identificador genérico, por eso lo almacenamos como string.
-                $table->string('meeting_id', 191);
-                // Users.id es UUID, definir columnas como uuid
-                $table->uuid('shared_by'); // Usuario que comparte
-                $table->uuid('shared_with'); // Usuario receptor
+                $table->bigIncrements('id');
+                $table->unsignedInteger('meeting_id');
+                $table->string('meeting_type', 20)->default('regular');
+                $table->char('shared_by', 36);
+                $table->char('shared_with', 36);
                 $table->enum('status', ['pending', 'accepted', 'rejected'])->default('pending');
                 $table->timestamp('shared_at')->useCurrent();
                 $table->timestamp('responded_at')->nullable();
-                $table->text('message')->nullable(); // Mensaje opcional al compartir
+                $table->text('message')->nullable();
+                $table->json('permissions')->nullable();
                 $table->timestamps();
 
-                // FKs
                 $table->foreign('shared_by')->references('id')->on('users')->onDelete('cascade');
                 $table->foreign('shared_with')->references('id')->on('users')->onDelete('cascade');
-
-                // Evitar duplicados: una reunión solo se puede compartir una vez con el mismo usuario
-                $table->unique(['meeting_id', 'shared_with']);
+                $table->index('shared_by');
+                $table->index('shared_with');
             });
         }
     }

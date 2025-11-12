@@ -14,8 +14,11 @@ return new class extends Migration
             $table->text('descripcion')->nullable();
             $table->longText('imagen')->nullable();
             $table->integer('num_miembros')->default(0);
+            $table->char('admin_id', 36)->nullable();
             $table->timestamp('created_at')->useCurrent();
             $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
+
+            $table->foreign('admin_id')->references('id')->on('users')->nullOnDelete();
         });
     }
 
