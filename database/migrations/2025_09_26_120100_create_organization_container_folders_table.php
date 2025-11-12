@@ -14,13 +14,12 @@ return new class extends Migration
         }
 
         Schema::create('organization_container_folders', function (Blueprint $table) {
-            $table->increments('id'); // mantenemos int para consistencia con organizations/groups
+            $table->increments('id');
             $table->unsignedInteger('organization_id');
             $table->unsignedInteger('group_id');
-            // meeting_content_containers.id es BIGINT (id()); usamos unsignedBigInteger aquí para que coincida desde el inicio
-            $table->unsignedBigInteger('container_id');
+            $table->unsignedBigInteger('container_id')->nullable();
             $table->unsignedInteger('organization_group_folder_id')->nullable();
-            $table->string('google_id')->unique();
+            $table->string('google_id');
             $table->string('name');
             $table->string('path_cached')->nullable();
             $table->timestamps();
@@ -29,7 +28,6 @@ return new class extends Migration
             $table->foreign('group_id')->references('id')->on('groups')->onDelete('cascade');
             $table->foreign('container_id')->references('id')->on('meeting_content_containers')->onDelete('cascade');
             $table->foreign('organization_group_folder_id')->references('id')->on('organization_group_folders')->onDelete('set null');
-            $table->unique(['container_id']);
         });
     }
 

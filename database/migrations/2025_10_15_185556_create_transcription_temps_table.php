@@ -22,6 +22,7 @@ return new class extends Migration
             $table->decimal('duration', 10, 2)->default(0); // Duración en segundos con decimales
             $table->datetime('expires_at');
             $table->json('metadata')->nullable();
+            $table->json('tasks')->nullable();
             $table->timestamps();
 
             // Índices para mejorar rendimiento

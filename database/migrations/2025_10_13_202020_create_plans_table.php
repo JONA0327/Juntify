@@ -16,9 +16,9 @@ return new class extends Migration
             $table->string('code')->unique(); // basico, negocios, empresas
             $table->string('name'); // Nombre del plan
             $table->text('description')->nullable(); // Descripción del plan
-            $table->decimal('price', 10, 2); // Precio mensual
-            $table->string('currency', 3)->default('ARS'); // Moneda
-            $table->integer('billing_cycle_days')->default(30); // Días del ciclo de facturación
+            $table->decimal('price', 12, 2); // Precio mensual
+            $table->string('currency', 10)->default('ARS'); // Moneda
+            $table->unsignedInteger('billing_cycle_days')->default(30); // Días del ciclo de facturación
             $table->boolean('is_active')->default(true); // Si está activo
             $table->json('features')->nullable(); // Características del plan
             $table->timestamps();

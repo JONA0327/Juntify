@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('subfolders', function (Blueprint $table) {
             $table->increments('id');
             $table->unsignedInteger('folder_id');
-            $table->string('google_id')->unique();
+            $table->string('google_id')->nullable()->unique();
             $table->string('name');
             $table->timestamps();
 
