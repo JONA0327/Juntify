@@ -159,8 +159,8 @@ class UserPlanService
 
         $role = $role ? strtolower($role) : null;
 
-        // Incluir BNI en roles con permisos ilimitados
-        return $role !== null && in_array($role, ['founder', 'developer', 'superadmin', 'bni'], true);
+    // Roles con permisos ilimitados (BNI ya no es considerado un plan/rol ilimitado)
+    return $role !== null && in_array($role, ['founder', 'developer', 'superadmin'], true);
     }
 
     public function downgradeExpiredPlans(?Carbon $now = null): int
@@ -190,7 +190,7 @@ class UserPlanService
 
                 if ($plan->expires_at && $plan->expires_at->lessThanOrEqualTo($graceLimit)) {
                     // No degradar usuarios protegidos por bandera o roles especiales
-                    $protectedRoles = ['bni', 'developer', 'founder', 'superadmin'];
+                    $protectedRoles = ['developer', 'founder', 'superadmin'];
                     if (!empty($user->is_role_protected) || in_array(strtolower($user->roles ?? ''), $protectedRoles, true) || in_array(strtolower($user->plan ?? ''), $protectedRoles, true)) {
                         // Si ya es free, limpiar expiry; si no, preservar rol
                         $user->plan_expires_at = null;
@@ -250,7 +250,6 @@ class UserPlanService
             'enterprise', 'empresas' => 'enterprise', // Acepta ambos pero normaliza a enterprise
             // Roles especiales mantienen su mismo código
             'developer' => 'developer',
-            'bni' => 'bni',
             'founder' => 'founder',
             'superadmin' => 'superadmin',
             default => $planCode // fallback al código del plan
@@ -264,7 +263,6 @@ class UserPlanService
     {
         return match($role) {
             'free' => 'free',
-            'bni' => 'bni',
             'basic' => 'basic',
             'business' => 'business',
             'enterprise' => 'enterprise',

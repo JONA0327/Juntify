@@ -251,8 +251,8 @@ class User extends Authenticatable
             return true;
         }
 
-        // Además proteger roles conocidos (case-insensitive)
-        return in_array(strtolower($this->roles ?? ''), ['developer', 'superadmin', 'founder', 'bni'], true);
+    // Además proteger roles conocidos (case-insensitive)
+    return in_array(strtolower($this->roles ?? ''), ['developer', 'superadmin', 'founder'], true);
     }
 
     /**

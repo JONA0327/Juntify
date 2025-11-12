@@ -29,7 +29,7 @@ class PlanLimitService
     protected function isUnlimitedRole(?string $role): bool
     {
         if (!$role) return false;
-        return in_array(strtolower($role), ['founder', 'developer', 'superadmin', 'bni']);
+    return in_array(strtolower($role), ['founder', 'developer', 'superadmin']);
     }
 
     public function getLimitsForUser(User $user): array
