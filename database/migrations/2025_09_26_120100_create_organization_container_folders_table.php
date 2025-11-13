@@ -27,7 +27,10 @@ return new class extends Migration
             $table->foreign('organization_id')->references('id')->on('organizations')->onDelete('cascade');
             $table->foreign('group_id')->references('id')->on('groups')->onDelete('cascade');
             $table->foreign('container_id')->references('id')->on('meeting_content_containers')->onDelete('cascade');
-            $table->foreign('organization_group_folder_id')->references('id')->on('organization_group_folders')->onDelete('set null');
+        $table->foreign('organization_group_folder_id', 'org_cont_fldr_group_folder_fk')
+            ->references('id')
+            ->on('organization_group_folders')
+            ->onDelete('set null');
         });
     }
 

@@ -29,7 +29,6 @@ use App\Services\AiChatService;
 use App\Services\GoogleDriveService;
 use App\Services\GoogleTokenRefreshService;
 use App\Services\PlanLimitService;
-use App\Jobs\ProcessAiDocumentJob;
 use App\Services\EmbeddingSearch;
 use App\Services\GoogleServiceAccount;
 use App\Services\MeetingJuCacheService;
@@ -1488,73 +1487,6 @@ class AiAssistantController extends Controller
                 // Guardar menciones en el mensaje del usuario para que el frontend pueda mostrarlas
                 $userMessage->metadata = array_merge($userMessage->metadata ?? [], [ 'mentions' => $mentions ]);
                 $userMessage->save();
-
-                // NUEVA FUNCIONALIDAD: Precargar automáticamente el contenido de reuniones y contenedores mencionados
-                foreach ($mentions as $mention) {
-                    if (!is_array($mention)) continue;
-                    $type = $mention['type'] ?? null;
-                    $id = $mention['id'] ?? null;
-                    if (!$type || $id === null) continue;
-
-                    try {
-                        if ($type === 'meeting') {
-                            // Determinar si es reunión temporal o normal
-                            $isTemporary = false;
-                            $meeting = null;
-
-                            // Primero intentar como reunión temporal
-                            try {
-                                if (\Illuminate\Support\Facades\Schema::hasTable('transcriptions_temp')) {
-                                    $tempMeeting = \App\Models\TranscriptionTemp::where('id', $id)
-                                        ->where('user_id', $user->id)
-                                        ->notExpired()
-                                        ->first();
-                                    if ($tempMeeting) {
-                                        $meeting = $tempMeeting;
-                                        $isTemporary = true;
-                                    }
-                                }
-                            } catch (\Throwable $e) { /* ignore */ }
-
-                            // Si no es temporal, intentar como reunión normal
-                            if (!$meeting) {
-                                $meeting = \App\Models\TranscriptionLaravel::where('id', $id)->first();
-                                $isTemporary = false;
-                            }
-
-                            if ($meeting) {
-                                \Log::info('Precargando contenido de reunión mencionada', [
-                                    'meeting_id' => $id,
-                                    'is_temporary' => $isTemporary,
-                                    'title' => $mention['title'] ?? 'Sin título'
-                                ]);
-                                $this->ensureMeetingContentLoaded($meeting, $isTemporary);
-                            }
-
-                        } elseif ($type === 'container') {
-                            // Precargar contenido del contenedor
-                            $container = \App\Models\MeetingContentContainer::where('id', $id)
-                                ->where('is_active', true)
-                                ->with(['meetings'])
-                                ->first();
-
-                            if ($container) {
-                                \Log::info('Precargando contenido de contenedor mencionado', [
-                                    'container_id' => $id,
-                                    'title' => $mention['title'] ?? 'Sin título',
-                                    'meetings_count' => $container->meetings->count()
-                                ]);
-                                $this->preloadContainerMeetingsContent($container);
-                            }
-                        }
-                    } catch (\Throwable $e) {
-                        \Log::warning('Error al precargar contenido mencionado', [
-                            'type' => $type,
-                            'id' => $id,
-                            'error' => $e->getMessage()
-                        ]);
-                    }
-                }
             } catch (\Throwable $e) {
                 Log::warning('No se pudieron aplicar menciones al contexto', [
                     'session_id' => $session->id,
@@ -1572,28 +1504,10 @@ class AiAssistantController extends Controller
             }
         }
 
-        // Si estamos en modo offline, generar una respuesta básica usando solo el contexto
-        if ($offline) {
-            $contextFragments = $this->gatherContext($session, $request->content);
-            $snippet = '';
-            if (!empty($contextFragments)) {
-                $texts = array_map(fn($f) => $f['text'] ?? '', array_slice($contextFragments, 0, 3));
-                $snippet = implode("\n- ", array_filter($texts));
-            }
-            $content = "(Modo offline) Puedo ayudarte a analizar esta conversación basándome en el contexto disponible.\n\nResumen de contexto:\n- " . ($snippet ?: 'No hay fragmentos de contexto disponibles.') . "\n\nHaz tu pregunta específica y te orientaré con la información encontrada.";
-
-            $assistantMessage = AiChatMessage::create([
-                'session_id' => $session->id,
-                'role' => 'assistant',
-                'content' => $content,
-                'metadata' => [
-                    'offline' => true,
-                ],
-            ]);
-        } else {
-            // Procesar con IA y generar respuesta
-            $assistantMessage = $this->processAiResponse($session, $request->content, $request->attachments ?? []);
-        }
+        // Delegar toda la lógica de contexto/LLM a AiChatService (incluye offline handling internamente)
+        /** @var AiChatService $aiService */
+        $aiService = app(AiChatService::class);
+        $assistantMessage = $aiService->handleMessage($user, $session, $request->content, $request->attachments ?? [], $mentions, $offline);
 
         // Actualizar actividad de la sesión
         $session->updateActivity();
@@ -1913,8 +1827,9 @@ class AiAssistantController extends Controller
         }
 
         $request->validate([
-            'file' => 'sometimes|file|max:102400|mimes:pdf,jpg,jpeg,png,xlsx,docx,pptx', // 100MB max, allowed types only
-            'files.*' => 'sometimes|file|max:102400|mimes:pdf,jpg,jpeg,png,xlsx,docx,pptx',
+            // Allow many office/text/image formats and up to 20MB per file
+            'file' => 'sometimes|file|max:20480|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,jpg,jpeg,png,webp', // 20MB max
+            'files.*' => 'sometimes|file|max:20480|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,jpg,jpeg,png,webp',
             'drive_folder_id' => 'nullable|string',
             'drive_type' => 'sometimes|in:personal,organization',
             'session_id' => 'nullable|integer'
@@ -1956,6 +1871,15 @@ class AiAssistantController extends Controller
                 $fileSize = $file->getSize();
 
                 $documentType = $this->getDocumentType($mimeType, $originalName);
+                // Persist a local copy of the uploaded file so we can extract on-demand later
+                try {
+                    $storedPath = $file->store('ai_documents');
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to store AI uploaded file locally', ['error' => $e->getMessage()]);
+                    $storedPath = null;
+                }
+
+                // Keep uploading to Drive (if configured) but do NOT trigger background processing here.
                 $driveResult = $this->uploadToGoogleDrive($file, $folderId, $driveType, $user);
 
                 $document = AiDocument::create([
@@ -1968,16 +1892,16 @@ class AiAssistantController extends Controller
                     'drive_file_id' => $driveResult['file_id'],
                     'drive_folder_id' => $driveResult['folder_id'],
                     'drive_type' => $driveType,
-                    'processing_status' => 'pending',
+                    // Mark as stored; extraction will be done on-demand by AiContextBuilder/ExtractorService
+                    'processing_status' => 'stored',
                     'document_metadata' => array_merge((array) ($driveResult['metadata'] ?? []), [
                         'created_in_session' => $sessionId ? (string) $sessionId : null,
                         'created_via' => 'assistant_upload',
+                        'local_path' => $storedPath,
                     ]),
                 ]);
 
                 $this->incrementDailyUsage($user, 'document_count');
-
-                $this->processDocumentInBackground($document);
 
                 if ($sessionId) {
                     $session = AiChatSession::where('id', $sessionId)->where('username', $user->username)->first();
@@ -2342,12 +2266,30 @@ class AiAssistantController extends Controller
      */
     private function processAiResponse(AiChatSession $session, string $userMessage, array $attachments = []): AiChatMessage
     {
+        // Gather existing fragments (embeddings/metadata-based) and then enrich with on-demand document context
         $contextFragments = $this->gatherContext($session, $userMessage);
         $systemMessage = $this->generateSystemMessage($session);
 
+        // Build on-demand document context & attachments (images as base64)
+        try {
+            $builder = app(\App\Services\AiContextBuilder::class);
+            $built = $builder->build(Auth::user(), $session, []);
+            $docFragments = $built['fragments'] ?? [];
+            $docAttachments = $built['attachments'] ?? [];
+        } catch (\Throwable $e) {
+            Log::warning('AiContextBuilder failed: ' . $e->getMessage());
+            $docFragments = [];
+            $docAttachments = [];
+        }
+
+        $mergedContext = array_values(array_merge($contextFragments, $docFragments));
+
         /** @var AiChatService $service */
         $service = app(AiChatService::class);
-        $reply = $service->generateReply($session, $systemMessage, $contextFragments);
+        $reply = $service->generateReply($session, $systemMessage, [
+            'fragments' => $mergedContext,
+            'attachments' => $docAttachments,
+        ]);
 
         return AiChatMessage::create([
             'session_id' => $session->id,
@@ -4902,25 +4844,8 @@ class AiAssistantController extends Controller
         return $metadata;
     }
 
-    /**
-     * Procesar documento en background
-     */
-    private function processDocumentInBackground(AiDocument $document): void
-    {
-        $document->update([
-            'processing_status' => 'processing',
-            'processing_error' => null,
-        ]);
-
-        // If the queue driver is 'sync', dispatching will block the request and can cause 504s.
-        // In that case, prefer dispatchAfterResponse so we return JSON immediately and process afterwards.
-        $driver = (string) config('queue.default', 'sync');
-        if ($driver === 'sync') {
-            ProcessAiDocumentJob::dispatchAfterResponse($document->id);
-        } else {
-            ProcessAiDocumentJob::dispatch($document->id);
-        }
-    }
+    // Background processing of documents has been removed in favor of on-demand extraction.
+    // Extraction and processing should be performed by AiContextBuilder/ExtractorService when the chat needs it.
 
     private function associateDocumentToSessionContext(AiDocument $document, AiChatSession $session, string $username): void
     {

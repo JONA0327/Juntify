@@ -9,11 +9,12 @@ use Illuminate\Support\Facades\Crypt;
 class ChatMessage extends Model
 {
     use HasFactory;
+    protected $table = 'conversation_messages';
 
-    public $timestamps = false;
+    public $timestamps = false; // legacy messages used created_at manually
 
     protected $fillable = [
-        'chat_id',
+        'conversation_id',
         'sender_id',
         'body',
         'file_path',

@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class AiChatSession extends Model
 {
     use HasFactory;
+    protected $table = 'conversations';
 
     protected $fillable = [
         'username',

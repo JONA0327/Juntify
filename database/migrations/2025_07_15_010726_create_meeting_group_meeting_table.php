@@ -8,20 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('meeting_group_meeting', function (Blueprint $table) {
-            $table->bigIncrements('id');
-            $table->unsignedBigInteger('meeting_group_id');
-            $table->unsignedBigInteger('meeting_id');
-            $table->char('shared_by', 36)->nullable();
-            $table->timestamps();
-
-            $table->unique(['meeting_group_id', 'meeting_id'], 'meeting_group_meeting_meeting_group_id_meeting_id_unique');
-            $table->foreign('meeting_group_id')->references('id')->on('meeting_groups')->onDelete('cascade');
-            $table->foreign('meeting_id')->references('id')->on('transcriptions_laravel')->onDelete('cascade');
-            $table->foreign('shared_by')->references('id')->on('users')->nullOnDelete();
-            $table->index('meeting_id');
-            $table->index('shared_by');
-        });
+        // No-op migration: creation moved to 2025_08_04_000001_create_meeting_group_meeting_table.php
+        // This prevents attempting to recreate the table if it already exists.
     }
 
     public function down(): void

@@ -1,0 +1,36 @@
+{
+  "name": "jona0327/juntify",
+  "description": "Juntify Laravel application",
+  "type": "project",
+  "require": {
+    "php": "^8.0",
+    "laravel/framework": "^10.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "app/"
+    },
+    "classmap": [
+      "database/seeders",
+      "database/factories"
+    ]
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "post-root-package-install": [
+      "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+    ],
+    "post-install-cmd": [
+      "@php artisan key:generate --ansi"
+    ]
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

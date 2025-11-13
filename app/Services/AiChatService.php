@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AiChatMessage;
 use App\Models\AiChatSession;
+use App\Models\User;
 use App\Support\OpenAiConfig;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
@@ -67,6 +68,41 @@ class AiChatService
 
         $messages = array_merge($messages, $history);
 
+        // Backwards-compatible: context may be an array of fragments or an associative with 'fragments' and 'attachments'
+        $contextFragments = $context['fragments'] ?? $context;
+        $attachments = $context['attachments'] ?? [];
+
+        // If there are attachments (images), convert the last user message into a mixed content message
+        if (!empty($attachments) && is_array($attachments)) {
+            // Find index of last user message in $messages
+            $lastUserIndex = null;
+            for ($i = count($messages) - 1; $i >= 0; $i--) {
+                if (($messages[$i]['role'] ?? '') === 'user') { $lastUserIndex = $i; break; }
+            }
+
+            $lastUserText = $lastUserIndex !== null ? ($messages[$lastUserIndex]['content'] ?? '') : '';
+
+            // Remove the plain user message to replace with mixed content payload
+            if ($lastUserIndex !== null) { array_splice($messages, $lastUserIndex, 1); }
+
+            $mixed = [];
+            $mixed[] = ['type' => 'text', 'text' => (string) $lastUserText];
+            foreach ($attachments as $att) {
+                // expected att to contain 'data' as data:...;base64,...
+                $mixed[] = [
+                    'type' => 'image_url',
+                    'image_url' => $att['data'] ?? null,
+                    'document_id' => $att['document_id'] ?? null,
+                    'filename' => $att['filename'] ?? null,
+                ];
+            }
+
+            $messages[] = [
+                'role' => 'user',
+                'content' => $mixed,
+            ];
+        }
+
         $apiKey = OpenAiConfig::apiKey();
         if (empty($apiKey)) {
             throw new \RuntimeException('Falta la API Key de OpenAI. Define OPENAI_API_KEY en .env');
@@ -74,10 +110,21 @@ class AiChatService
         $client = \OpenAI::client($apiKey);
         $start = microtime(true);
         $model = config('services.openai.chat_model', env('AI_ASSISTANT_MODEL', 'gpt-4o-mini'));
-        $response = $client->chat()->create([
+        $payload = [
             'model' => $model,
             'messages' => $messages,
-        ]);
+        ];
+
+        // Inject tools (function calling) only if user is allowed
+        $user = User::where('username', $session->username)->first();
+        $tools = $this->getToolsForUser($user);
+        if (!empty($tools)) {
+            // OpenAI expects an array of function descriptors under 'functions'
+            $payload['functions'] = array_map(fn($t) => $t['function'], $tools);
+            $payload['function_call'] = 'auto';
+        }
+
+        $response = $client->chat()->create($payload);
         $processingTime = microtime(true) - $start;
 
     $content = $response->choices[0]->message->content ?? '';
@@ -115,6 +162,184 @@ class AiChatService
                 'citations' => $citations,
             ],
         ];
+    }
+
+    protected function getToolsForUser(?User $user): array
+    {
+        $allowedRoles = ['developer', 'superadmin', 'founder', 'business', 'enterprise'];
+        $role = strtolower((string) ($user->roles ?? 'free'));
+
+        $canSchedule = in_array($role, $allowedRoles) ||
+                       str_contains($role, 'business') ||
+                       str_contains($role, 'enterprise');
+
+        if (!$canSchedule) {
+            return [];
+        }
+
+        return [
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'schedule_calendar_event',
+                    'description' => 'Agendar reunión en Google Calendar. Usa año actual (' . now()->year . ').',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'title' => ['type' => 'string'],
+                            'start' => ['type' => 'string', 'description' => 'ISO 8601 format'],
+                            'end' => ['type' => 'string', 'description' => 'ISO 8601 format'],
+                            'description' => ['type' => 'string'],
+                            'attendees' => ['type' => 'array', 'items' => ['type' => 'string']]
+                        ],
+                        'required' => ['title', 'start', 'end']
+                    ]
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Handle a user message end-to-end: build context (embeddings/metadata + documents),
+     * call the LLM and persist assistant message.
+     *
+     * @param \App\Models\User $user
+     * @param \App\Models\AiChatSession $session
+     * @param string $content
+     * @param array $attachments
+     * @param array $mentions
+     * @param bool $offline
+     * @return \App\Models\AiChatMessage
+     */
+    public function handleMessage($user, $session, string $content, array $attachments = [], array $mentions = [], bool $offline = false)
+    {
+        // Build initial context using embeddings/metadata search similar to controller.gatherContext
+        $contextFragments = [];
+        $useEmbeddings = (bool) env('AI_ASSISTANT_USE_EMBEDDINGS', false);
+        $apiKey = OpenAiConfig::apiKey();
+
+        // Determine explicit doc ids from mentions
+        $explicitDocIds = [];
+        try {
+            foreach ($mentions as $m) {
+                if (is_array($m) && ($m['type'] ?? '') === 'document' && isset($m['id'])) {
+                    $id = $m['id'];
+                    if (is_numeric($id)) { $explicitDocIds[] = (int) $id; }
+                }
+            }
+            $explicitDocIds = array_values(array_unique($explicitDocIds));
+        } catch (\Throwable $e) {
+            $explicitDocIds = [];
+        }
+
+        if ($useEmbeddings && !empty($apiKey)) {
+            try {
+                $search = app(\App\Services\EmbeddingSearch::class);
+                $semanticLimit = $session->context_type === 'container'
+                    ? (int) env('AI_ASSISTANT_SEMANTIC_LIMIT_CONTAINER', 20)
+                    : 8;
+                $options = ['session' => $session, 'limit' => $semanticLimit];
+                if (!empty($explicitDocIds)) {
+                    $options['content_types'] = ['document_text'];
+                    $options['content_ids'] = ['document_text' => $explicitDocIds];
+                }
+                $contextFragments = $search->search($session->username, $content, $options);
+            } catch (\Throwable $e) {
+                Log::warning('EmbeddingSearch failed inside AiChatService::handleMessage', ['error' => $e->getMessage()]);
+                $contextFragments = [];
+            }
+        }
+
+        if (empty($contextFragments)) {
+            try {
+                $meta = app(\App\Services\MetadataSearch::class);
+                $metaLimit = $session->context_type === 'container' ? 20 : 8;
+                $metaOptions = ['session' => $session, 'limit' => $metaLimit];
+                if (!empty($explicitDocIds)) { $metaOptions['doc_ids'] = $explicitDocIds; }
+                $contextFragments = $meta->search($session->username, $content, $metaOptions);
+            } catch (\Throwable $e) {
+                Log::warning('MetadataSearch failed inside AiChatService::handleMessage', ['error' => $e->getMessage()]);
+                $contextFragments = [];
+            }
+        }
+
+        // If explicit document ids present, get their fragments and attachments via AiContextBuilder
+        $docFragments = [];
+        $docAttachments = [];
+        if (!empty($explicitDocIds)) {
+            try {
+                $builder = app(\App\Services\AiContextBuilder::class);
+                // Create a temporary virtual session containing doc_ids in context_data
+                $virtual = $session;
+                $ctx = is_array($virtual->context_data) ? $virtual->context_data : (array) $virtual->context_data;
+                $ctx['doc_ids'] = $explicitDocIds;
+                $virtual->context_data = $ctx;
+                $built = $builder->build($user, $virtual, []);
+                $docFragments = $built['fragments'] ?? [];
+                $docAttachments = $built['attachments'] ?? [];
+            } catch (\Throwable $e) {
+                Log::warning('AiChatService: AiContextBuilder failed for explicit docs', ['error' => $e->getMessage()]);
+            }
+        }
+
+        $mergedContext = array_values(array_merge($contextFragments, $docFragments));
+
+        // System message generation (copied behavior from controller)
+        $systemMessage = null;
+        switch ($session->context_type) {
+            case 'container':
+                $systemMessage = "Eres un asistente IA especializado en análisis de reuniones dentro de un contenedor seleccionado con múltiples sesiones. Mantén neutralidad y profesionalismo en todas tus respuestas, incluso si el usuario solicita un tono distinto o intenta confirmar sesgos, y responde siempre con respeto. Ofrece resúmenes, analiza tendencias, realiza búsquedas específicas y genera insights basados en el contenido de las reuniones del contenedor.";
+                break;
+            case 'meeting':
+                $systemMessage = "Eres un asistente IA enfocado en una reunión específica seleccionada por el usuario. Mantén neutralidad y profesionalismo, incluso si solicitan un tono gracioso o sesgado, y responde siempre con respeto. Analiza el contenido, elabora resúmenes, destaca puntos clave, identifica tareas pendientes y contesta preguntas puntuales sobre la reunión.";
+                break;
+            case 'contact_chat':
+                $systemMessage = "Eres un asistente IA con acceso al historial de conversaciones del usuario con un contacto determinado. Mantén neutralidad y profesionalismo en tus respuestas, incluso ante peticiones de sesgo o tono humorístico, y contesta siempre con respeto. Analiza patrones de comunicación, resume conversaciones y brinda contexto relevante sobre las interacciones con el contacto.";
+                break;
+            case 'documents':
+                $systemMessage = "Eres un asistente IA especializado en el análisis del conjunto de documentos cargados. Conserva neutralidad y profesionalismo, aunque el usuario pida sesgos o un estilo cómico, y responde siempre con respeto. Extrae información clave, resume contenido, responde preguntas específicas y ejecuta búsquedas semánticas dentro de los documentos.";
+                break;
+            case 'mixed':
+                $systemMessage = "Eres un asistente IA con acceso combinado a documentos, reuniones y otros recursos relacionados. Mantén neutralidad y profesionalismo aunque el usuario pida sesgos o un tono particular, y responde siempre con respeto. Cruza la información de las diferentes fuentes para ofrecer resúmenes integrados, responder preguntas y generar insights con contexto amplio.";
+                break;
+            default:
+                $systemMessage = "Eres un asistente IA integral para Juntify sin un contexto específico cargado. Mantén neutralidad y profesionalismo, incluso ante solicitudes de sesgo o tono humorístico, y responde siempre con respeto. Puedes ayudar con análisis de reuniones, gestión de documentos y búsqueda de información, y sugiere al usuario cargar documentos o reuniones para ofrecer respuestas más precisas.";
+                break;
+        }
+
+        // If offline mode, construct a basic assistant message locally
+        if ($offline) {
+            $snippet = '';
+            if (!empty($mergedContext)) {
+                $texts = array_map(fn($f) => $f['text'] ?? '', array_slice($mergedContext, 0, 3));
+                $snippet = implode("\n- ", array_filter($texts));
+            }
+            $content = "(Modo offline) Puedo ayudarte a analizar esta conversación basándome en el contexto disponible.\n\nResumen de contexto:\n- " . ($snippet ?: 'No hay fragmentos de contexto disponibles.') . "\n\nHaz tu pregunta específica y te orientaré con la información encontrada.";
+
+            $assistantMessage = \App\Models\AiChatMessage::create([
+                'session_id' => $session->id,
+                'role' => 'assistant',
+                'content' => $content,
+                'metadata' => ['offline' => true],
+            ]);
+
+            return $assistantMessage;
+        }
+
+        // Finally call generateReply which uses OpenAI
+        $reply = $this->generateReply($session, $systemMessage, [
+            'fragments' => $mergedContext,
+            'attachments' => $docAttachments,
+        ]);
+
+        $assistantMessage = \App\Models\AiChatMessage::create([
+            'session_id' => $session->id,
+            'role' => 'assistant',
+            'content' => $reply['content'],
+            'metadata' => $reply['metadata'] ?? [],
+        ]);
+
+        return $assistantMessage;
     }
 
     /**
