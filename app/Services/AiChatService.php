@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\OpenAiConfig;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 // Use the SDK global entrypoint to avoid facade collisions
 
 class AiChatService
