@@ -12,7 +12,7 @@ class AiChatMessage extends Model
     protected $table = 'conversation_messages';
 
     protected $fillable = [
-        'session_id',
+        'conversation_id',
         'role',
         'content',
         'metadata',
@@ -28,7 +28,7 @@ class AiChatMessage extends Model
 
     public function session(): BelongsTo
     {
-        return $this->belongsTo(AiChatSession::class, 'session_id');
+        return $this->belongsTo(AiChatSession::class, 'conversation_id');
     }
 
     public function scopeVisible($query)

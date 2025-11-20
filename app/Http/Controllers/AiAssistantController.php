@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\AiChatSession;
 use App\Models\AiChatMessage;
-use App\Models\AiDocument;
-use App\Models\AiMeetingDocument;
+// use App\Models\AiDocument; // OCR functionality disabled
+// use App\Models\AiMeetingDocument; // OCR functionality disabled
 use App\Models\MeetingContentContainer;
 use App\Models\MeetingContentRelation;
 use App\Models\TranscriptionLaravel;
@@ -45,6 +45,57 @@ class AiAssistantController extends Controller
 {
     use MeetingContentParsing;
     private const DOCUMENTS_FOLDER_NAME = 'Documentos';
+
+    // Método temporal para debug - remover después
+    public function debugMeetingContext(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        $meetingId = $request->input('meeting_id');
+
+        if (!$meetingId) {
+            return response()->json(['error' => 'meeting_id requerido'], 400);
+        }
+
+        Log::info('DEBUG: Iniciando debug de contexto de reunión', ['meeting_id' => $meetingId, 'user' => $user->username]);
+
+        $meeting = TranscriptionLaravel::find($meetingId);
+        if (!$meeting) {
+            return response()->json(['error' => 'Reunión no encontrada'], 404);
+        }
+
+        // Crear sesión temporal para test
+        $session = new AiChatSession();
+        $session->id = 999999; // ID temporal
+        $session->context_type = 'meeting';
+        $session->context_id = $meetingId;
+        $session->username = $user->username;
+
+        try {
+            $fragments = $this->buildMeetingContextFragments($session, 'resumen de la reunión');
+
+            return response()->json([
+                'success' => true,
+                'meeting_id' => $meetingId,
+                'meeting_name' => $meeting->meeting_name,
+                'transcript_drive_id' => $meeting->transcript_drive_id,
+                'fragments_count' => count($fragments),
+                'fragments' => array_map(function($f) {
+                    return [
+                        'source_id' => $f['source_id'] ?? 'N/A',
+                        'content_type' => $f['content_type'] ?? 'N/A',
+                        'text_length' => isset($f['text']) ? strlen($f['text']) : 0,
+                        'text_preview' => isset($f['text']) ? substr($f['text'], 0, 100) . '...' : 'N/A'
+                    ];
+                }, $fragments)
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
 
     private GoogleDriveService $googleDriveService;
     private GoogleTokenRefreshService $googleTokenRefreshService;
@@ -180,7 +231,8 @@ class AiAssistantController extends Controller
         }
 
         $usage = $this->getDailyUsageRecord($user);
-        $usage->increment($field, max(1, (int) $amount));
+        $usage->{$field} = $usage->{$field} + max(1, (int) $amount);
+        $usage->save();
     }
 
     private function getDailyMessageCount($user = null): int
@@ -210,21 +262,8 @@ class AiAssistantController extends Controller
      */
     private function getDailyDocumentCount($user = null): int
     {
-        $user = $user ?: Auth::user();
-        $today = now()->startOfDay();
-        $usage = $this->getDailyUsageRecord($user);
-
-        $dbCount = AiDocument::where('username', $user->username)
-        ->where('created_at', '>=', $today)
-        ->count();
-
-        $count = max((int) $usage->document_count, $dbCount);
-        if ($count !== (int) $usage->document_count) {
-            $usage->document_count = $count;
-            $usage->save();
-        }
-
-        return $count;
+        // Documents functionality disabled, always return 0
+        return 0;
     }
 
     /**
@@ -261,7 +300,7 @@ class AiAssistantController extends Controller
                 'maxDailyDocuments' => $maxDocuments,
                 'canSendMessage' => $dailyMessages < $maxMessages,
                 'canCreateSession' => $dailyMessages < $maxMessages,
-                'canUploadDocument' => $dailyDocuments < $maxDocuments,
+                'canUploadDocument' => false, // OCR functionality disabled
             ];
         }
 
@@ -281,7 +320,7 @@ class AiAssistantController extends Controller
                 'maxDailyDocuments' => $maxDocuments,
                 'canSendMessage' => $dailyMessages < $maxMessages,
                 'canCreateSession' => $dailyMessages < $maxMessages,
-                'canUploadDocument' => $dailyDocuments < $maxDocuments,
+                'canUploadDocument' => false, // OCR functionality disabled
             ];
         }
 
@@ -301,7 +340,7 @@ class AiAssistantController extends Controller
                 'maxDailyDocuments' => $maxDocuments,
                 'canSendMessage' => $dailyMessages < $maxMessages,
                 'canCreateSession' => $dailyMessages < $maxMessages,
-                'canUploadDocument' => $dailyDocuments < $maxDocuments,
+                'canUploadDocument' => false, // OCR functionality disabled
             ];
         }
 
@@ -319,7 +358,7 @@ class AiAssistantController extends Controller
                 'maxDailyDocuments' => null,
                 'canSendMessage' => true,
                 'canCreateSession' => true,
-                'canUploadDocument' => true,
+                'canUploadDocument' => false, // OCR functionality disabled
             ];
         }
 
@@ -338,7 +377,7 @@ class AiAssistantController extends Controller
             'maxDailyDocuments' => $maxDocuments,
             'canSendMessage' => $dailyMessages < $maxMessages,
             'canCreateSession' => $dailyMessages < $maxMessages,
-            'canUploadDocument' => $dailyDocuments < $maxDocuments,
+            'canUploadDocument' => false, // OCR functionality disabled
         ];
     }
 
@@ -978,16 +1017,26 @@ class AiAssistantController extends Controller
     /**
      * Actualiza el contexto de una sesión existente sin crear una nueva
      */
-    public function updateSession(Request $request, int $id): JsonResponse
+    public function updateSession(Request $request, $id): JsonResponse
     {
         $user = Auth::user();
+
+        // Handle null or invalid ID values
+        if ($id === 'null' || $id === null || !is_numeric($id)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'invalid_session_id',
+                'message' => 'ID de sesión inválido'
+            ], 400);
+        }
+
         $validated = $request->validate([
             'context_type' => 'required|in:general,container,meeting,contact_chat,documents,mixed',
             'context_id' => 'nullable',
             'context_data' => 'nullable|array',
         ]);
 
-        $session = AiChatSession::where('id', $id)
+        $session = AiChatSession::where('id', (int) $id)
             ->where('username', $user->username)
             ->firstOrFail();
 
@@ -1075,7 +1124,7 @@ class AiAssistantController extends Controller
         $systemMessage = $this->generateSystemMessage($session);
         if ($systemMessage) {
             AiChatMessage::create([
-                'session_id' => $session->id,
+                'conversation_id' => $session->id,
                 'role' => 'system',
                 'content' => $systemMessage,
                 'is_hidden' => true
@@ -1091,85 +1140,44 @@ class AiAssistantController extends Controller
     /**
      * Eliminar o desactivar una sesión de chat
      */
-    public function deleteSession(Request $request, int $sessionId): JsonResponse
+    public function deleteSession(Request $request, $sessionId): JsonResponse
     {
         $user = Auth::user();
 
+        Log::info('Delete session attempt', [
+            'session_id' => $sessionId,
+            'user' => $user->username,
+            'request_data' => $request->all()
+        ]);
+
+        // Handle null or invalid ID values
+        if ($sessionId === 'null' || $sessionId === null || !is_numeric($sessionId)) {
+            Log::warning('Invalid session ID provided', ['session_id' => $sessionId]);
+            return response()->json([
+                'success' => false,
+                'error' => 'invalid_session_id',
+                'message' => 'ID de sesión inválido'
+            ], 400);
+        }
+
         $session = AiChatSession::byUser($user->username)
-            ->findOrFail($sessionId);
+            ->findOrFail((int) $sessionId);
+
+        Log::info('Session found for deletion', [
+            'session_id' => $session->id,
+            'session_title' => $session->title,
+            'is_active' => $session->is_active
+        ]);
 
         // Por defecto, borra definitivamente a menos que se indique lo contrario
         $forceDelete = $request->has('force_delete')
             ? $request->boolean('force_delete')
             : true;
 
+        $docIdsToDelete = [];
+
         if ($forceDelete) {
-            // 1) Reunir documentos asociados a esta sesión (context_data, items, y metadatos creados por esta sesión)
-            $docIdsFromContext = $this->collectSessionDocumentIds($session);
-            $docIdsFromMetadata = [];
-            try {
-                // Documentos que fueron creados explícitamente dentro de esta sesión (metadato: created_in_session)
-                $metaDocs = AiDocument::byUser($user->username)
-                    ->where('document_metadata->created_in_session', (string) $session->id)
-                    ->pluck('id')
-                    ->all();
-                $docIdsFromMetadata = array_map('intval', $metaDocs);
-            } catch (\Throwable $e) {
-                // Si la BD no soporta whereJson, ignorar silenciosamente
-            }
-            $sessionDocIds = array_values(array_unique(array_filter(array_merge($docIdsFromContext, $docIdsFromMetadata), fn($v) => is_numeric($v))));
-
-            // 2) Verificar si esos documentos están referenciados por OTRAS sesiones activas del mismo usuario
-            $referencedElsewhere = [];
-            if (!empty($sessionDocIds)) {
-                $otherSessions = AiChatSession::byUser($user->username)
-                    ->where('id', '!=', $session->id)
-                    ->active()
-                    ->get();
-                foreach ($otherSessions as $other) {
-                    $ids = $this->collectSessionDocumentIds($other);
-                    if (!empty($ids)) {
-                        $referencedElsewhere = array_merge($referencedElsewhere, $ids);
-                    }
-                    // También intentar capturar docs creados dentro de esa otra sesión
-                    try {
-                        $metaDocsOther = AiDocument::byUser($user->username)
-                            ->where('document_metadata->created_in_session', (string) $other->id)
-                            ->pluck('id')
-                            ->all();
-                        $referencedElsewhere = array_merge($referencedElsewhere, array_map('intval', $metaDocsOther));
-                    } catch (\Throwable $e) {}
-                }
-                $referencedElsewhere = array_values(array_unique(array_filter($referencedElsewhere, fn($v) => is_numeric($v))));
-            }
-
-            $docIdsToDelete = empty($sessionDocIds)
-                ? []
-                : array_values(array_diff($sessionDocIds, $referencedElsewhere));
-
-            // 3) Eliminar embeddings y documentos de esta sesión que no estén usados por otras sesiones
-            if (!empty($docIdsToDelete)) {
-                foreach ($docIdsToDelete as $docId) {
-                    try {
-                        // Embeddings asociados a estos documentos
-                        \App\Models\AiContextEmbedding::where('username', $user->username)
-                            ->where('content_type', 'document_text')
-                            ->where('content_id', (string) $docId)
-                            ->delete();
-
-                        // Borrado del documento (cascade eliminará asignaciones como ai_meeting_documents)
-                        AiDocument::where('id', (int) $docId)
-                            ->where('username', $user->username)
-                            ->delete();
-                    } catch (\Throwable $e) {
-                        Log::warning('No se pudo eliminar completamente un documento al borrar la sesión', [
-                            'session_id' => $session->id,
-                            'document_id' => $docId,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
-                }
-            }
+            // Document cleanup removed since OCR functionality is disabled
 
             // 3.b) Eliminar cache de .ju cifrado (solo para reuniones vinculadas a esta sesión)
             try {
@@ -1209,7 +1217,7 @@ class AiAssistantController extends Controller
         try {
             \App\Models\AiContextEmbedding::where('username', $user->username)
                 ->where('content_type', 'chat_message')
-                ->where('metadata->session_id', (string) $session->id)
+                ->where('metadata->conversation_id', (string) $session->id)
                 ->delete();
         } catch (\Throwable $e) {
             // Ignorar si la BD no soporta el filtro JSON o si no existen
@@ -1231,6 +1239,12 @@ class AiAssistantController extends Controller
                 'title' => 'Nueva conversación',
             ])->save();
         }
+
+        Log::info('Session deletion completed', [
+            'session_id' => $sessionId,
+            'force_delete' => $forceDelete,
+            'documents_deleted' => count($docIdsToDelete ?? [])
+        ]);
 
         return response()->json([
             'success' => true,
@@ -1348,10 +1362,19 @@ class AiAssistantController extends Controller
     {
         $user = Auth::user();
 
-        $session = AiChatSession::byUser($user->username)
-            ->findOrFail($sessionId);
+        // Handle null or invalid ID values
+        if ($sessionId === 'null' || $sessionId === null || !is_numeric($sessionId)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'invalid_session_id',
+                'message' => 'ID de sesión inválido'
+            ], 400);
+        }
 
-        $messages = AiChatMessage::where('session_id', $sessionId)
+        $session = AiChatSession::byUser($user->username)
+            ->findOrFail((int) $sessionId);
+
+        $messages = AiChatMessage::where('conversation_id', $sessionId)
             ->visible()
             ->orderBy('created_at', 'asc')
             ->get()
@@ -1419,8 +1442,17 @@ class AiAssistantController extends Controller
             ], 422);
         }
 
+        // Handle null or invalid ID values
+        if ($sessionId === 'null' || $sessionId === null || !is_numeric($sessionId)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'invalid_session_id',
+                'message' => 'ID de sesión inválido'
+            ], 400);
+        }
+
         $session = AiChatSession::byUser($user->username)
-            ->findOrFail($sessionId);
+            ->findOrFail((int) $sessionId);
 
         $isFirstUserMessage = ! $session->messages()
             ->visible()
@@ -1429,9 +1461,9 @@ class AiAssistantController extends Controller
 
         // Crear mensaje del usuario (temporal, luego añadimos metadata de menciones si aplica)
         $userMessage = AiChatMessage::create([
-            'session_id' => $session->id,
+            'conversation_id' => $session->id,
             'role' => 'user',
-            'content' => $request->content,
+            'content' => $request->input('content'),
             'attachments' => $request->attachments ?? []
         ]);
 
@@ -1496,7 +1528,7 @@ class AiAssistantController extends Controller
         }
 
         if ($isFirstUserMessage) {
-            $derivedTitle = $this->deriveSessionTitle($request->content, $session->title);
+            $derivedTitle = $this->deriveSessionTitle($request->input('content'), $session->title);
 
             if ($derivedTitle && $derivedTitle !== $session->title) {
                 $session->title = $derivedTitle;
@@ -1507,7 +1539,7 @@ class AiAssistantController extends Controller
         // Delegar toda la lógica de contexto/LLM a AiChatService (incluye offline handling internamente)
         /** @var AiChatService $aiService */
         $aiService = app(AiChatService::class);
-        $assistantMessage = $aiService->handleMessage($user, $session, $request->content, $request->attachments ?? [], $mentions, $offline);
+        $assistantMessage = $aiService->handleMessage($user, $session, $request->input('content'), $request->input('attachments', []), $mentions, $offline);
 
         // Actualizar actividad de la sesión
         $session->updateActivity();
@@ -1813,191 +1845,37 @@ class AiAssistantController extends Controller
      */
     public function uploadDocument(Request $request): JsonResponse
     {
-        $user = Auth::user();
+        // Document upload and OCR functionality has been disabled
+        return response()->json([
+            'success' => false,
+            'error' => 'feature_disabled',
+            'message' => 'La funcionalidad de subida de documentos y OCR ha sido deshabilitada.'
+        ], 403);
 
-        // Verificar límites para usuarios
-        $limits = $this->resolvePlanLimits($user);
-        if (!$limits['canUploadDocument']) {
-            return response()->json([
-                'success' => false,
-                'error' => 'limit_exceeded',
-                'message' => 'Has alcanzado el límite diario de documentos. Los usuarios FREE pueden subir hasta 1 documento por día.',
-                'limits' => $limits
-            ], 403);
-        }
-
-        $request->validate([
-            // Allow many office/text/image formats and up to 20MB per file
-            'file' => 'sometimes|file|max:20480|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,jpg,jpeg,png,webp', // 20MB max
-            'files.*' => 'sometimes|file|max:20480|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,jpg,jpeg,png,webp',
-            'drive_folder_id' => 'nullable|string',
-            'drive_type' => 'sometimes|in:personal,organization',
-            'session_id' => 'nullable|integer'
-        ]);
-
-        try {
-            $driveType = $request->input('drive_type', 'personal');
-            $folderId = $request->input('drive_folder_id');
-            $sessionId = (int) $request->input('session_id');
-
-            $files = [];
-            if ($request->hasFile('files')) {
-                $files = $request->file('files');
-            } elseif ($request->hasFile('file')) {
-                $files = [$request->file('file')];
-            }
-
-            if (empty($files)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No se proporcionó ningún archivo para subir.'
-                ], 422);
-            }
-
-            $documents = [];
-            foreach ($files as $file) {
-                if (! $file) continue;
-                $limits = $this->resolvePlanLimits($user);
-                if (!$limits['canUploadDocument']) {
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'limit_exceeded',
-                        'message' => 'Has alcanzado el límite diario de documentos. Los usuarios FREE pueden subir hasta 1 documento por día.',
-                        'limits' => $limits,
-                    ], 403);
-                }
-                $originalName = $file->getClientOriginalName();
-                $mimeType = $file->getMimeType();
-                $fileSize = $file->getSize();
-
-                $documentType = $this->getDocumentType($mimeType, $originalName);
-                // Persist a local copy of the uploaded file so we can extract on-demand later
-                try {
-                    $storedPath = $file->store('ai_documents');
-                } catch (\Throwable $e) {
-                    Log::warning('Failed to store AI uploaded file locally', ['error' => $e->getMessage()]);
-                    $storedPath = null;
-                }
-
-                // Keep uploading to Drive (if configured) but do NOT trigger background processing here.
-                $driveResult = $this->uploadToGoogleDrive($file, $folderId, $driveType, $user);
-
-                $document = AiDocument::create([
-                    'username' => $user->username,
-                    'name' => pathinfo($originalName, PATHINFO_FILENAME),
-                    'original_filename' => $originalName,
-                    'document_type' => $documentType,
-                    'mime_type' => $mimeType,
-                    'file_size' => $fileSize,
-                    'drive_file_id' => $driveResult['file_id'],
-                    'drive_folder_id' => $driveResult['folder_id'],
-                    'drive_type' => $driveType,
-                    // Mark as stored; extraction will be done on-demand by AiContextBuilder/ExtractorService
-                    'processing_status' => 'stored',
-                    'document_metadata' => array_merge((array) ($driveResult['metadata'] ?? []), [
-                        'created_in_session' => $sessionId ? (string) $sessionId : null,
-                        'created_via' => 'assistant_upload',
-                        'local_path' => $storedPath,
-                    ]),
-                ]);
-
-                $this->incrementDailyUsage($user, 'document_count');
-
-                if ($sessionId) {
-                    $session = AiChatSession::where('id', $sessionId)->where('username', $user->username)->first();
-                    if ($session) {
-                        $this->associateDocumentToSessionContext($document, $session, $user->username);
-                        // Agregar el documento al contexto de la sesión (lista doc_ids)
-                        try {
-                            $contextData = is_array($session->context_data) ? $session->context_data : [];
-                            $docIds = \Illuminate\Support\Arr::get($contextData, 'doc_ids', []);
-                            if (!is_array($docIds)) { $docIds = []; }
-                            if (!in_array($document->id, $docIds, true)) {
-                                $docIds[] = $document->id;
-                                $contextData['doc_ids'] = array_values($docIds);
-                                $session->context_data = $contextData;
-                                $session->save();
-                            }
-                        } catch (\Throwable $e) {
-                            Log::warning('No se pudo actualizar doc_ids en el contexto de la sesión', [
-                                'session_id' => $session->id,
-                                'document_id' => $document->id,
-                                'error' => $e->getMessage(),
-                            ]);
-                        }
-                    }
-                }
-
-                $documents[] = $document;
-            }
-
-            return response()->json([
-                'success' => true,
-                'documents' => $documents,
-                'message' => 'Documento(s) subido(s). Procesando contenido...'
-            ]);
-
-        } catch (\Throwable $e) {
-            Log::error('Error uploading AI document', [
-                'username' => $user->username,
-                'drive_type' => $request->drive_type,
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al subir el documento: ' . $e->getMessage()
-            ], 500);
-        }
     }
 
     /**
-     * Obtener documentos del usuario
+     * Obtener documentos del usuario (OCR deshabilitado)
      */
     public function getDocuments(): JsonResponse
     {
-        $user = Auth::user();
-
-        $documents = AiDocument::byUser($user->username)
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($document) => $this->formatDocumentForResponse($document));
-
+        // OCR functionality has been disabled, return empty documents array
         return response()->json([
             'success' => true,
-            'documents' => $documents
+            'documents' => []
         ]);
     }
 
     /**
-     * Esperar hasta que los documentos indicados hayan sido procesados
+     * Esperar hasta que los documentos indicados hayan sido procesados (OCR deshabilitado)
      */
     public function waitDocuments(Request $request): JsonResponse
     {
-        $user = Auth::user();
-        $ids = Arr::wrap($request->input('ids', []));
-        $timeoutMs = (int) ($request->input('timeout_ms', 12000));
-        $pollMs = 400;
-        $deadline = microtime(true) + ($timeoutMs / 1000.0);
-
-        $last = collect();
-        do {
-            $docs = AiDocument::byUser($user->username)
-                ->whereIn('id', $ids)
-                ->get();
-            $last = $docs;
-            $allDone = $docs->every(function ($d) {
-                return in_array($d->processing_status, ['completed','failed'], true);
-            });
-            if ($allDone) break;
-            usleep($pollMs * 1000);
-        } while (microtime(true) < $deadline);
-
-        $documents = $last->map(fn($document) => $this->formatDocumentForResponse($document))->values();
-
+        // Document processing functionality has been disabled
         return response()->json([
             'success' => true,
-            'documents' => $documents,
+            'documents' => [],
+            'message' => 'La funcionalidad de procesamiento de documentos ha sido deshabilitada.'
         ]);
     }
 
@@ -2071,167 +1949,27 @@ class AiAssistantController extends Controller
      */
     public function attachDriveDocuments(Request $request): JsonResponse
     {
-        $user = Auth::user();
-        $limits = $this->resolvePlanLimits($user);
-
-        if (!$limits['canUploadDocument']) {
-            return response()->json([
-                'success' => false,
-                'error' => 'limit_exceeded',
-                'message' => 'Has alcanzado el límite diario de documentos. Los usuarios FREE pueden subir hasta 1 documento por día.',
-                'limits' => $limits,
-            ], 403);
-        }
-
-        $validated = $request->validate([
-            'drive_file_ids' => 'required|array|min:1',
-            'drive_file_ids.*' => 'string',
-            'drive_type' => 'sometimes|in:personal,organization',
-            'session_id' => 'nullable|integer',
-        ]);
-
-        $driveType = (string) ($validated['drive_type'] ?? 'personal');
-        $driveIds = array_values(array_unique(array_filter($validated['drive_file_ids'] ?? [], fn($v) => is_string($v) && $v !== '')));
-        $sessionId = (int) ($validated['session_id'] ?? 0);
-
-        try {
-            $context = $this->resolveDriveContext($driveType, $user);
-            $this->ensureValidAccessToken($driveType, $context);
-
-            $attached = [];
-            foreach ($driveIds as $fileId) {
-                $document = AiDocument::where('username', $user->username)
-                    ->where('drive_file_id', $fileId)
-                    ->first();
-
-                if (!$document) {
-                    $limits = $this->resolvePlanLimits($user);
-                    if (!$limits['canUploadDocument']) {
-                        return response()->json([
-                            'success' => false,
-                            'error' => 'limit_exceeded',
-                            'message' => 'Has alcanzado el límite diario de documentos. Los usuarios FREE pueden subir hasta 1 documento por día.',
-                            'limits' => $limits,
-                        ], 403);
-                    }
-
-                    $info = $this->googleDriveService->getFileInfo($fileId);
-                    $name = $info->getName() ?: ('Archivo ' . $fileId);
-                    $mime = $info->getMimeType() ?: 'application/octet-stream';
-                    $size = $info->getSize();
-
-                    $document = AiDocument::create([
-                        'username' => $user->username,
-                        'name' => pathinfo($name, PATHINFO_FILENAME) ?: $name,
-                        'original_filename' => $name,
-                        'document_type' => $this->getDocumentType($mime, $name),
-                        'mime_type' => $mime,
-                        'file_size' => $size !== null ? (int) $size : 0,
-                        'drive_file_id' => $fileId,
-                        'drive_folder_id' => null,
-                        'drive_type' => $driveType,
-                        'processing_status' => 'pending',
-                        'document_metadata' => [
-                            'attached_from_drive' => true,
-                            'created_in_session' => $sessionId ? (string) $sessionId : null,
-                            'created_via' => 'assistant_attach',
-                        ],
-                    ]);
-
-                    $this->incrementDailyUsage($user, 'document_count');
-
-                    $this->processDocumentInBackground($document);
-                }
-
-                if ($sessionId) {
-                    $session = AiChatSession::where('id', $sessionId)
-                        ->where('username', $user->username)
-                        ->first();
-                    if ($session) {
-                        try {
-                            $contextData = is_array($session->context_data) ? $session->context_data : [];
-                            $docIds = \Illuminate\Support\Arr::get($contextData, 'doc_ids', []);
-                            if (!is_array($docIds)) {
-                                $docIds = [];
-                            }
-                            if (!in_array($document->id, $docIds, true)) {
-                                $docIds[] = $document->id;
-                                $contextData['doc_ids'] = array_values($docIds);
-                                $session->context_data = $contextData;
-                                $session->save();
-                            }
-                        } catch (\Throwable $e) {
-                            Log::warning('No se pudo actualizar doc_ids al adjuntar desde Drive', [
-                                'session_id' => $session->id,
-                                'document_id' => $document->id,
-                                'error' => $e->getMessage(),
-                            ]);
-                        }
-                    }
-                }
-
-                $attached[] = $this->formatDocumentForResponse($document);
-            }
-
-            return response()->json([
-                'success' => true,
-                'documents' => $attached,
-                'message' => 'Documentos de Drive adjuntados correctamente.'
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Error attaching Drive documents for assistant', [
-                'drive_type' => $driveType,
-                'user' => $user?->username,
-                'error' => $e->getMessage(),
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'No se pudieron adjuntar documentos de Drive: ' . $e->getMessage(),
-            ], 500);
-        }
+        return response()->json([
+            'success' => false,
+            'message' => 'La funcionalidad de documentos está deshabilitada.',
+        ], 403);
     }
+
+    // Método formatDocumentForResponse deshabilitado temporalmente
+    private function formatDocumentForResponse_disabled(): array
+    {
+        return [];
+    }
+
+
 
     /**
      * Estandariza la salida de documentos para el front con etiquetas legibles
      */
-    private function formatDocumentForResponse(\App\Models\AiDocument $document): array
+    private function formatDocumentForResponse($document): array
     {
-        $status = (string) ($document->processing_status ?? 'pending');
-        $step = (string) ($document->processing_step ?? '');
-
-        $statusLabels = [
-            'pending' => 'En cola',
-            'processing' => 'Procesando',
-            'completed' => 'Completado',
-            'failed' => 'Error',
-        ];
-
-        $stepLabels = [
-            'preparing' => 'Preparando',
-            'downloading' => 'Descargando',
-            'extracting' => 'Extrayendo texto',
-            'chunking' => 'Dividiendo en fragmentos',
-            'embedding' => 'Generando embeddings',
-            'indexing' => 'Indexando',
-            'done' => 'Listo',
-            'error' => 'Error',
-        ];
-
-        return [
-            'id' => $document->id,
-            'name' => $document->name,
-            'original_filename' => $document->original_filename,
-            'document_type' => $document->document_type,
-            'file_size' => $document->file_size,
-            'processing_status' => $status,
-            'processing_progress' => $document->processing_progress,
-            'processing_step' => $step,
-            'processing_error' => $document->processing_error,
-            'status_label' => $statusLabels[$status] ?? ucfirst($status),
-            'step_label' => $step ? ($stepLabels[$step] ?? ucfirst($step)) : null,
-            'has_text' => $document->hasText(),
-            'created_at' => $document->created_at,
-        ];
+        // Funcionalidad de documentos deshabilitada
+        return [];
     }
 
     /**
@@ -2292,7 +2030,7 @@ class AiAssistantController extends Controller
         ]);
 
         return AiChatMessage::create([
-            'session_id' => $session->id,
+            'conversation_id' => $session->id,
             'role' => 'assistant',
             'content' => $reply['content'],
             'metadata' => $reply['metadata'] ?? []
@@ -2874,12 +2612,8 @@ class AiAssistantController extends Controller
         $user = Auth::user();
         if (!$user) { return ['list' => null, 'fragments' => []]; }
 
-        $query = \App\Models\AiDocument::byUser($session->username)->orderByDesc('created_at');
-        if (!empty($types)) {
-            $query->whereIn('document_type', $types);
-        }
-        $docs = $query->limit(max(1, $limit))->get();
-        if ($docs->isEmpty()) { return ['list' => null, 'fragments' => []]; }
+        // Document functionality disabled
+        return ['list' => null, 'fragments' => []];
 
         $docIds = $docs->pluck('id')->map(fn($v) => (int) $v)->values()->all();
 
@@ -3523,7 +3257,9 @@ class AiAssistantController extends Controller
                 }
 
                 // 1) Prefer .ju file content to avoid DB transcriptions dependency
+                Log::info('buildMeetingContextFragments: Llamando buildFragmentsFromJu', ['meeting_id' => $meeting->id, 'query' => $query]);
                 $juFragments = $this->buildFragmentsFromJu($meeting, $query);
+                Log::info('buildMeetingContextFragments: Fragmentos .ju obtenidos', ['meeting_id' => $meeting->id, 'fragments_count' => count($juFragments)]);
                 if (!empty($juFragments)) {
                     $fragments = array_merge($fragments, $juFragments);
                 }
@@ -3734,7 +3470,7 @@ class AiAssistantController extends Controller
             return $fragments;
 
         } catch (\Exception $e) {
-            \Log::error('Error building fragments from temp meeting', [
+            Log::error('Error building fragments from temp meeting', [
                 'meeting_id' => $meeting->id,
                 'error' => $e->getMessage()
             ]);
@@ -3835,9 +3571,11 @@ class AiAssistantController extends Controller
      */
     private function buildFragmentsFromJu(TranscriptionLaravel $meeting, string $query): array
     {
+        Log::info('buildFragmentsFromJu: Iniciando para reunión', ['meeting_id' => $meeting->id, 'query' => $query]);
         $fragments = [];
 
         $fileId = $meeting->transcript_drive_id;
+        Log::info('buildFragmentsFromJu: transcript_drive_id', ['meeting_id' => $meeting->id, 'file_id' => $fileId]);
         if (! $fileId) {
             // Intentar localizar el .ju cuando no está seteado en la reunión
             try {
@@ -3857,6 +3595,7 @@ class AiAssistantController extends Controller
             }
 
             if (! $fileId) {
+                Log::warning('buildFragmentsFromJu: No se encontró file_id para la reunión', ['meeting_id' => $meeting->id]);
                 return $fragments;
             }
         }
@@ -3864,9 +3603,12 @@ class AiAssistantController extends Controller
         try {
             /** @var MeetingJuCacheService $cache */
             $cache = app(MeetingJuCacheService::class);
+            Log::info('buildFragmentsFromJu: Obteniendo datos del cache', ['meeting_id' => $meeting->id]);
             $data = $cache->getCachedParsed((int)$meeting->id);
+            Log::info('buildFragmentsFromJu: Datos del cache obtenidos', ['meeting_id' => $meeting->id, 'has_data' => !empty($data), 'data_type' => gettype($data)]);
             if (!is_array($data)) {
                 // Descargar y cachear si no existe
+                Log::info('buildFragmentsFromJu: Intentando descargar contenido .ju', ['meeting_id' => $meeting->id, 'file_id' => $fileId]);
                 $content = $this->tryDownloadJuContent($meeting);
                 if (! is_string($content) || $content === '') {
                     // Si falló la descarga, intentar localizar de nuevo por si cambió el contexto
@@ -3884,6 +3626,7 @@ class AiAssistantController extends Controller
                     } catch (\Throwable $e) { /* ignore */ }
 
                     if (! is_string($content) || $content === '') {
+                        Log::warning('buildFragmentsFromJu: No se pudo obtener contenido válido', ['meeting_id' => $meeting->id, 'content_type' => gettype($content), 'content_length' => is_string($content) ? strlen($content) : 'N/A']);
                         return $fragments;
                     }
                 }
@@ -4091,12 +3834,14 @@ class AiAssistantController extends Controller
             }
 
         } catch (\Throwable $e) {
-            Log::warning('buildFragmentsFromJu failed', [
+            Log::error('buildFragmentsFromJu failed', [
                 'meeting_id' => $meeting->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
         }
 
+        Log::info('buildFragmentsFromJu: Terminando', ['meeting_id' => $meeting->id, 'fragments_count' => count($fragments)]);
         return $fragments;
     }
 
@@ -4110,8 +3855,12 @@ class AiAssistantController extends Controller
      */
     private function tryDownloadJuContent(TranscriptionLaravel $meeting): ?string
     {
+        Log::info('tryDownloadJuContent: Iniciando descarga', ['meeting_id' => $meeting->id]);
         $fileId = $meeting->transcript_drive_id;
-        if (! $fileId) { return null; }
+        if (! $fileId) {
+            Log::warning('tryDownloadJuContent: No hay file_id', ['meeting_id' => $meeting->id]);
+            return null;
+        }
 
         // 1) Intentar con token de organizaci f3n de alg fan contenedor vinculado
         try {
@@ -4237,76 +3986,10 @@ class AiAssistantController extends Controller
 
     private function buildDocumentContextFragments(AiChatSession $session): array
     {
-        $contextData = is_array($session->context_data) ? $session->context_data : [];
+        // Document functionality disabled
+        return [];
 
-        // Extraer los IDs de documentos asegurándonos de soportar distintos formatos
-        $documentIds = [];
-        foreach (['doc_ids', 'document_ids', 'documents', 'ids'] as $key) {
-            if (array_key_exists($key, $contextData)) {
-                $documentIds = $contextData[$key];
-                break;
-            }
-        }
 
-        // Si el contexto es un arreglo simple (legado), usarlo directamente
-        if (empty($documentIds) && ! empty($contextData) && array_values($contextData) === $contextData) {
-            $documentIds = $contextData;
-        }
-
-        // En última instancia, permitir usar context_id cuando se trate de sesiones sólo de documentos
-        if (empty($documentIds) && $session->context_id) {
-            $documentIds = [$session->context_id];
-        }
-
-        $documentIds = collect(Arr::wrap($documentIds))
-            ->flatten()
-            ->filter(fn ($value) => is_numeric($value))
-            ->map(fn ($value) => (int) $value)
-            ->filter(fn ($value) => $value > 0)
-            ->unique()
-            ->values()
-            ->all();
-
-        if (empty($documentIds)) {
-            return [];
-        }
-
-        $documentsQuery = AiDocument::whereIn('id', $documentIds);
-        if (! empty($documentIds)) {
-            $order = implode(',', $documentIds);
-            $documentsQuery->orderByRaw("FIELD(id, {$order})");
-        }
-
-        $documents = $documentsQuery->limit(8)->get();
-        $fragments = [];
-
-        foreach ($documents as $document) {
-            $title = $document->name ?? $document->original_filename ?? ('Documento ' . $document->id);
-            $summary = $document->document_metadata['summary'] ?? null;
-            $fallback = $document->extracted_text ? Str::limit($document->extracted_text, 800) : null;
-            $text = $summary ?? $fallback;
-
-            if (! $text) {
-                continue;
-            }
-
-            $fragments[] = [
-                'text' => $text,
-                'source_id' => 'document:' . $document->id . ':overview',
-                'content_type' => 'document_overview',
-                'location' => array_filter([
-                    'type' => 'document',
-                    'document_id' => $document->id,
-                    'title' => $title,
-                    'url' => $document->drive_file_id ? sprintf('https://drive.google.com/file/d/%s/view', $document->drive_file_id) : null,
-                ]),
-                'similarity' => null,
-                'citation' => 'doc:' . $document->id . ' resumen',
-                'metadata' => ['summary' => (bool) $summary],
-            ];
-        }
-
-        return $fragments;
     }
 
     private function buildChatContextFragments(AiChatSession $session): array
@@ -4847,115 +4530,23 @@ class AiAssistantController extends Controller
     // Background processing of documents has been removed in favor of on-demand extraction.
     // Extraction and processing should be performed by AiContextBuilder/ExtractorService when the chat needs it.
 
-    private function associateDocumentToSessionContext(AiDocument $document, AiChatSession $session, string $username): void
+    private function associateDocumentToSessionContext($document, AiChatSession $session, string $username): void
     {
-        if ($session->context_type === 'meeting' && $session->context_id) {
-            AiMeetingDocument::create([
-                'document_id' => $document->id,
-                'meeting_id' => (string) $session->context_id,
-                'meeting_type' => AiMeetingDocument::MEETING_TYPE_LEGACY,
-                'assigned_by_username' => $username,
-                'assignment_note' => 'Cargado desde el asistente',
-            ]);
-            return;
-        }
+        // Document functionality disabled
+        return;
 
-        if ($session->context_type === 'container' && $session->context_id) {
-            // Permitir contenedores organizacionales donde el usuario tenga acceso,
-            // sin restringir al creador únicamente
-            $container = MeetingContentContainer::where('id', $session->context_id)
-                ->where('is_active', true)
-                ->first();
-            if ($container) {
-                // meetings() is a hasManyThrough to TranscriptionLaravel
-                $meetingIds = $container->meetings()->pluck('transcriptions_laravel.id')->all();
-                foreach ($meetingIds as $mid) {
-                    AiMeetingDocument::create([
-                        'document_id' => $document->id,
-                        'meeting_id' => (string) $mid,
-                        'meeting_type' => AiMeetingDocument::MEETING_TYPE_LEGACY,
-                        'assigned_by_username' => $username,
-                        'assignment_note' => 'Cargado desde el asistente (contenedor)',
-                    ]);
-                }
-            }
-        }
     }
 
     public function generateSummaryPdf(Request $request, int $id): JsonResponse
     {
-        $user = Auth::user();
-        $session = AiChatSession::where('id', $id)->where('username', $user->username)->firstOrFail();
+        return response()->json([
+            'success' => false,
+            'message' => 'La funcionalidad de generación de PDF está deshabilitada.',
+        ], 403);
 
-        $fragments = [];
-        if ($session->context_type === 'meeting') {
-            $virtual = $this->createVirtualSession($session, 'meeting', $session->context_id);
-            $fragments = $this->buildMeetingContextFragments($virtual, '');
-        } elseif ($session->context_type === 'container') {
-            $virtual = $this->createVirtualSession($session, 'container', $session->context_id);
-            $fragments = $this->buildContainerContextFragments($virtual);
-        } else {
-            $fragments = $this->gatherContext($session, 'resumen');
-        }
 
-        $title = match ($session->context_type) {
-            'meeting' => 'Resumen de reunión',
-            'container' => 'Resumen del contenedor',
-            default => 'Resumen general',
-        };
 
-        $citations = array_values(array_unique(array_filter(array_map(fn($f) => $f['citation'] ?? null, $fragments))));
 
-        $html = view('ai.summary_pdf', [
-            'title' => $title,
-            'session' => $session,
-            'fragments' => $fragments,
-            'citations' => $citations,
-            'generatedAt' => now(),
-            'user' => $user,
-        ])->render();
-
-        $pdf = app('dompdf.wrapper');
-        $pdf->loadHTML($html)->setPaper('a4', 'portrait');
-
-        $tmpPath = storage_path('app/tmp');
-        if (!is_dir($tmpPath)) @mkdir($tmpPath, 0775, true);
-        $filename = $title . ' - ' . now()->format('Ymd_His') . '.pdf';
-        $absolute = $tmpPath . DIRECTORY_SEPARATOR . $filename;
-        file_put_contents($absolute, $pdf->output());
-
-        try {
-            $driveResult = $this->uploadToGoogleDrive(new \Illuminate\Http\File($absolute), null, $request->input('drive_type', 'personal'), $user);
-
-            $document = AiDocument::create([
-                'username' => $user->username,
-                'name' => pathinfo($filename, PATHINFO_FILENAME),
-                'original_filename' => $filename,
-                'document_type' => 'pdf',
-                'mime_type' => 'application/pdf',
-                'file_size' => @filesize($absolute) ?: null,
-                'drive_file_id' => $driveResult['file_id'],
-                'drive_folder_id' => $driveResult['folder_id'],
-                'drive_type' => $request->input('drive_type', 'personal'),
-                'processing_status' => 'completed',
-                'document_metadata' => [
-                    'summary_generated' => true,
-                    'citations' => $citations,
-                    'created_in_session' => (string) $session->id,
-                    'created_via' => 'assistant_summary_pdf',
-                ],
-            ]);
-
-            $this->associateDocumentToSessionContext($document, $session, $user->username);
-
-            return response()->json([
-                'success' => true,
-                'document' => $document,
-                'message' => 'Resumen PDF generado y guardado en Drive.'
-            ]);
-        } finally {
-            @unlink($absolute);
-        }
     }
 
     /**
@@ -4996,7 +4587,7 @@ class AiAssistantController extends Controller
 
             return $content;
         } catch (\Exception $e) {
-            \Log::error('Error al obtener contenido de reunión temporal', [
+            Log::error('Error al obtener contenido de reunión temporal', [
                 'meeting_id' => $meeting->id,
                 'ju_path' => $meeting->ju_content_path,
                 'error' => $e->getMessage()
@@ -5054,7 +4645,7 @@ class AiAssistantController extends Controller
                 }
             }
         } catch (\Throwable $e) {
-            \Log::error('Error al precargar contenido de reunión', [
+            Log::error('Error al precargar contenido de reunión', [
                 'meeting_id' => $meeting->id,
                 'is_temporary' => $isTemporary,
                 'error' => $e->getMessage()
@@ -5105,7 +4696,7 @@ class AiAssistantController extends Controller
                 }
             }
         } catch (\Throwable $e) {
-            \Log::warning('Error al precargar reuniones temporales', ['error' => $e->getMessage()]);
+            Log::warning('Error al precargar reuniones temporales', ['error' => $e->getMessage()]);
         }
 
         return [

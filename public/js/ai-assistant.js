@@ -539,7 +539,10 @@ function setupSessionEventListeners() {
  */
 async function deleteChatSession(sessionId) {
     try {
+        console.log('Attempting to delete session:', sessionId);
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        console.log('CSRF Token:', csrfToken);
+
         const response = await fetch(`/api/ai-assistant/sessions/${sessionId}`, {
             method: 'DELETE',
             headers: {
@@ -550,11 +553,15 @@ async function deleteChatSession(sessionId) {
             body: JSON.stringify({ force_delete: true })
         });
 
+        console.log('Delete response status:', response.status);
+        console.log('Delete response ok:', response.ok);
+
         if (!response.ok) {
             throw new Error('Respuesta no válida del servidor');
         }
 
         const data = await response.json();
+        console.log('Delete response data:', data);
 
         if (!data.success) {
             throw new Error(data.message || 'No se pudo eliminar la conversación');
@@ -874,6 +881,14 @@ async function sendMessage(messageText = null) {
         selectedFiles = [];
         updateAttachmentsDisplay();
 
+        // Agregar indicador de "escribiendo"
+        const typingMessage = addMessageToChat({
+            role: 'assistant',
+            content: '<div class="typing-indicator"><span></span><span></span><span></span> IA está escribiendo...</div>',
+            created_at: new Date().toISOString(),
+            metadata: { isTyping: true }
+        });
+
         // Enviar al servidor
         const response = await fetch(`/api/ai-assistant/sessions/${currentSessionId}/messages`, {
             method: 'POST',
@@ -905,6 +920,11 @@ async function sendMessage(messageText = null) {
 
         const data = await response.json();
         if (data.success) {
+            // Remover indicador de escribiendo
+            if (typingMessage) {
+                typingMessage.remove();
+            }
+
             // Agregar respuesta de la IA
             addMessageToChat(data.assistant_message);
 
@@ -918,6 +938,12 @@ async function sendMessage(messageText = null) {
 
     } catch (error) {
         console.error('Error sending message:', error);
+
+        // Remover indicador de escribiendo en caso de error
+        if (typingMessage) {
+            typingMessage.remove();
+        }
+
         if (isLimitErrorMessage(error?.message)) {
             showLimitExceededModal('message');
             await loadUserLimits();

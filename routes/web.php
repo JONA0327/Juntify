@@ -293,6 +293,9 @@ Route::middleware(['auth'])->group(function () {
 
             // Límites del plan del usuario
             Route::get('/limits', [AiAssistantController::class, 'getLimits'])->name('api.ai-assistant.limits');
+
+            // Debug temporal - remover después
+            Route::post('/debug/meeting-context', [AiAssistantController::class, 'debugMeetingContext'])->name('api.ai-assistant.debug.meeting-context');
         });
     });
 

@@ -27,7 +27,7 @@ class AiChatService
         $historyLimit = (int) env('AI_ASSISTANT_HISTORY_LIMIT', 12);
         $historyMaxChars = (int) env('AI_ASSISTANT_HISTORY_TEXT_LIMIT', 2000);
 
-        $history = AiChatMessage::where('session_id', $session->id)
+        $history = AiChatMessage::where('conversation_id', $session->id)
             ->orderByDesc('created_at')
             ->limit(max(1, $historyLimit))
             ->get()
@@ -138,10 +138,11 @@ class AiChatService
 
         $citations = $this->extractCitations($content, $context);
         // Fallback: si el modelo no incluyó marcadores [..], adjuntar algunas citas derivadas del contexto (no intrusivo)
-        if (empty($citations) && !empty($context)) {
+        if (empty($citations) && !empty($context) && is_array($context)) {
             $fallback = [];
             $max = min(5, count($context));
             for ($i = 0; $i < $max; $i++) {
+                if (!isset($context[$i])) continue;
                 $frag = $context[$i];
                 $marker = $frag['citation'] ?? ($frag['source_id'] ?? null);
                 if (!$marker) { continue; }
@@ -252,16 +253,8 @@ class AiChatService
         }
 
         if (empty($contextFragments)) {
-            try {
-                $meta = app(\App\Services\MetadataSearch::class);
-                $metaLimit = $session->context_type === 'container' ? 20 : 8;
-                $metaOptions = ['session' => $session, 'limit' => $metaLimit];
-                if (!empty($explicitDocIds)) { $metaOptions['doc_ids'] = $explicitDocIds; }
-                $contextFragments = $meta->search($session->username, $content, $metaOptions);
-            } catch (\Throwable $e) {
-                Log::warning('MetadataSearch failed inside AiChatService::handleMessage', ['error' => $e->getMessage()]);
-                $contextFragments = [];
-            }
+            // MetadataSearch disabled because document functionality is disabled
+            $contextFragments = [];
         }
 
         // If explicit document ids present, get their fragments and attachments via AiContextBuilder
@@ -318,7 +311,7 @@ class AiChatService
             $content = "(Modo offline) Puedo ayudarte a analizar esta conversación basándome en el contexto disponible.\n\nResumen de contexto:\n- " . ($snippet ?: 'No hay fragmentos de contexto disponibles.') . "\n\nHaz tu pregunta específica y te orientaré con la información encontrada.";
 
             $assistantMessage = \App\Models\AiChatMessage::create([
-                'session_id' => $session->id,
+                'conversation_id' => $session->id,
                 'role' => 'assistant',
                 'content' => $content,
                 'metadata' => ['offline' => true],
@@ -334,7 +327,7 @@ class AiChatService
         ]);
 
         $assistantMessage = \App\Models\AiChatMessage::create([
-            'session_id' => $session->id,
+            'conversation_id' => $session->id,
             'role' => 'assistant',
             'content' => $reply['content'],
             'metadata' => $reply['metadata'] ?? [],

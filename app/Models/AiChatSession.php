@@ -35,7 +35,7 @@ class AiChatSession extends Model
 
     public function messages(): HasMany
     {
-        return $this->hasMany(AiChatMessage::class, 'session_id');
+        return $this->hasMany(AiChatMessage::class, 'conversation_id');
     }
 
     public function scopeActive($query)
