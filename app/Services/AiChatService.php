@@ -276,7 +276,20 @@ class AiChatService
             }
         }
 
-        $mergedContext = array_values(array_merge($contextFragments, $docFragments));
+        // Always build contextual fragments (including meeting transcriptions) for the session
+        $sessionFragments = [];
+        $sessionAttachments = [];
+        try {
+            $builder = app(\App\Services\AiContextBuilder::class);
+            $built = $builder->build($user, $session, []);
+            $sessionFragments = $built['fragments'] ?? [];
+            $sessionAttachments = $built['attachments'] ?? [];
+        } catch (\Throwable $e) {
+            Log::info('AiChatService: AiContextBuilder failed for session context', ['error' => $e->getMessage()]);
+        }
+
+        $mergedContext = array_values(array_merge($contextFragments, $docFragments, $sessionFragments));
+        $attachments = array_merge($docAttachments, $sessionAttachments);
 
         // System message generation (copied behavior from controller)
         $systemMessage = null;
@@ -323,7 +336,7 @@ class AiChatService
         // Finally call generateReply which uses OpenAI
         $reply = $this->generateReply($session, $systemMessage, [
             'fragments' => $mergedContext,
-            'attachments' => $docAttachments,
+            'attachments' => $attachments,
         ]);
 
         $assistantMessage = \App\Models\AiChatMessage::create([
