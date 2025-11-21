@@ -55,7 +55,30 @@ class AiChatService
         $fragmentTextLimit = (int) env('AI_ASSISTANT_FRAGMENT_TEXT_LIMIT', 800);
         $includeContextJson = filter_var(env('AI_ASSISTANT_INCLUDE_CONTEXT_JSON', true), FILTER_VALIDATE_BOOLEAN);
 
+        // Detect speaker-focused queries and increase limits significantly
+        $isSpeakerFocused = false;
+        if (isset($context['fragments']) && is_array($context['fragments'])) {
+            foreach ($context['fragments'] as $fragment) {
+                if (isset($fragment['metadata']['focused_speaker']) && $fragment['metadata']['focused_speaker']) {
+                    $isSpeakerFocused = true;
+                    break;
+                }
+            }
+        }
+
+        // For speaker-focused queries, remove limits to allow complete transcription access
+        if ($isSpeakerFocused) {
+            $maxFragments = 9999; // Essentially unlimited for speaker queries
+            $fragmentTextLimit = (int) env('AI_ASSISTANT_FRAGMENT_TEXT_LIMIT_SPEAKER', 1200); // Allow longer fragments
+            \Illuminate\Support\Facades\Log::info('AiChatService: Speaker-focused query detected, removing fragment limits', [
+                'original_max_fragments' => (int) env('AI_ASSISTANT_MAX_CONTEXT_FRAGMENTS', 24),
+                'new_max_fragments' => $maxFragments
+            ]);
+        }
+
     $compactedContext = $this->compactContext($session, $context, $maxFragments, $fragmentTextLimit);
+
+
 
         if ($includeContextJson && ! empty($compactedContext)) {
             $contextJson = json_encode($compactedContext, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -64,6 +87,8 @@ class AiChatService
                     'role' => 'system',
                     'content' => "Contexto relevante (resumido):\n" . $contextJson,
                 ];
+
+
             }
         }
 
@@ -269,6 +294,8 @@ class AiChatService
                 $ctx['doc_ids'] = $explicitDocIds;
                 $virtual->context_data = $ctx;
                 $built = $builder->build($user, $virtual, []);
+
+                // Extract fragments and attachments correctly
                 $docFragments = $built['fragments'] ?? [];
                 $docAttachments = $built['attachments'] ?? [];
             } catch (\Throwable $e) {
@@ -282,14 +309,26 @@ class AiChatService
         try {
             $builder = app(\App\Services\AiContextBuilder::class);
             $built = $builder->build($user, $session, []);
+
+            // Extract fragments and attachments correctly
             $sessionFragments = $built['fragments'] ?? [];
             $sessionAttachments = $built['attachments'] ?? [];
+
+
         } catch (\Throwable $e) {
-            Log::info('AiChatService: AiContextBuilder failed for session context', ['error' => $e->getMessage()]);
+            Log::error('AiChatService: AiContextBuilder failed for session context', [
+                'session_id' => $session->id,
+                'context_type' => $session->context_type,
+                'context_id' => $session->context_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
         }
 
         $mergedContext = array_values(array_merge($contextFragments, $docFragments, $sessionFragments));
         $attachments = array_merge($docAttachments, $sessionAttachments);
+
+
 
         // System message generation (copied behavior from controller)
         $systemMessage = null;
@@ -358,11 +397,22 @@ class AiChatService
      */
     private function compactContext(AiChatSession $session, array $context, int $maxFragments, int $fragmentTextLimit): array
     {
-        if (empty($context)) {
+        // Handle both direct fragments array and structured context array
+        $fragments = [];
+        if (isset($context['fragments']) && is_array($context['fragments'])) {
+            // Structured format: ['fragments' => [...], 'attachments' => [...]]
+            $fragments = $context['fragments'];
+        } elseif (is_array($context)) {
+            // Direct fragments array
+            $fragments = $context;
+        }
+
+        if (empty($fragments)) {
             return [];
         }
 
-        // If container context, use broader limits and ensure at least one overview per meeting
+        // Use fragments instead of context for the rest of the function
+        $context = $fragments;        // If container context, use broader limits and ensure at least one overview per meeting
         if ($session->context_type === 'container') {
             $maxFragments = (int) env('AI_ASSISTANT_MAX_CONTEXT_FRAGMENTS_CONTAINER', 48);
             $fragmentTextLimit = (int) env('AI_ASSISTANT_FRAGMENT_TEXT_LIMIT_CONTAINER', max(400, $fragmentTextLimit));
@@ -436,6 +486,8 @@ class AiChatService
                 || Str::contains($contentType, 'transcription_segment')
                 || Str::contains($contentType, 'meeting_transcription_segment');
 
+
+
             if ($isTranscription) {
                 $frag['_original_index'] = $index; // Preservar el orden natural del diálogo
                 if (!empty($metadata['focused_speaker'])) {
@@ -455,10 +507,47 @@ class AiChatService
 
             $nonTranscriptionFragments = $this->sortFragmentsBySimilarity($nonTranscriptionFragments);
 
-            $combined = array_merge($focusedSegments, $otherTranscriptionSegments);
-            $remainingSlots = $maxFragments - count($combined);
-            if ($remainingSlots > 0) {
-                $combined = array_merge($combined, array_slice($nonTranscriptionFragments, 0, $remainingSlots));
+            // For speaker-focused queries, prioritize focused segments heavily
+            $hasSpeakerFocusedSegments = !empty(array_filter($focusedSegments, function($seg) {
+                return isset($seg['metadata']['focused_speaker']) && $seg['metadata']['focused_speaker'];
+            }));
+
+            \Illuminate\Support\Facades\Log::info('AiChatService: Processing transcription segments', [
+                'total_focused_segments' => count($focusedSegments),
+                'total_other_transcription' => count($otherTranscriptionSegments),
+                'has_speaker_focused' => $hasSpeakerFocusedSegments,
+                'max_fragments' => $maxFragments
+            ]);
+
+            if ($hasSpeakerFocusedSegments) {
+                // Para consultas de participantes específicos, PRIORIDAD ABSOLUTA a transcripciones
+                \Illuminate\Support\Facades\Log::info('AiChatService: Processing speaker-focused segments with unlimited access', [
+                    'focused_segments' => count($focusedSegments),
+                    'other_transcription_segments' => count($otherTranscriptionSegments),
+                    'non_transcription_fragments' => count($nonTranscriptionFragments)
+                ]);
+
+                // TODOS los segmentos focalizados del participante (sin límites)
+                $combined = $focusedSegments;
+
+                // TODOS los otros segmentos de transcripción para contexto completo (sin límites)
+                if (!empty($otherTranscriptionSegments)) {
+                    $combined = array_merge($combined, $otherTranscriptionSegments);
+                }
+
+                // Para consultas de participantes, NO incluir fragmentos no-transcripción
+                // que podrían interferir con las intervenciones específicas del participante
+                // Solo añadir fragmentos críticos si hay muy pocos segmentos de transcripción
+                if (count($combined) < 10 && !empty($nonTranscriptionFragments)) {
+                    $combined = array_merge($combined, array_slice($nonTranscriptionFragments, 0, 5));
+                }
+            } else {
+                // Normal behavior for non-speaker-focused queries
+                $combined = array_merge($focusedSegments, $otherTranscriptionSegments);
+                $remainingSlots = $maxFragments - count($combined);
+                if ($remainingSlots > 0) {
+                    $combined = array_merge($combined, array_slice($nonTranscriptionFragments, 0, $remainingSlots));
+                }
             }
 
             $context = $combined;

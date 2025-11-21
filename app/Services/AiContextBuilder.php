@@ -10,6 +10,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Illuminate\Support\Facades\Log;
+use ReflectionClass;
 
 /**
  * Builds AI context on-demand. Extracts text for documents using ExtractorService
@@ -124,23 +125,94 @@ class AiContextBuilder
             }
         }
 
-        // Optionally include meeting .ju transcriptions via MeetingJuCacheService
+        // Include meeting .ju transcriptions for both meeting and container contexts
         if (($session->context_type ?? '') === 'meeting' && !empty($session->context_id)) {
             try {
-                $mj = app(MeetingJuCacheService::class);
-                $ju = $mj->getTranscriptionForMeeting($session->context_id);
-                if ($ju && is_string($ju) && trim($ju) !== '') {
-                    $out['fragments'][] = [
-                        'text' => Str::limit($ju, 100000),
-                        'citation' => 'meeting:' . $session->context_id,
-                        'location' => ['meeting_id' => $session->context_id],
-                    ];
-                }
+                $fragments = $this->buildMeetingFragments($session->context_id, '', $user);
+                $out['fragments'] = array_merge($out['fragments'], $fragments);
             } catch (\Throwable $e) {
-                // ignore if service not available
+                Log::warning('AiContextBuilder: Failed to build meeting fragments', [
+                    'meeting_id' => $session->context_id,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        } elseif (($session->context_type ?? '') === 'container' && !empty($session->context_id)) {
+            try {
+                $fragments = $this->buildContainerFragments($session->context_id, '', $user);
+                $out['fragments'] = array_merge($out['fragments'], $fragments);
+            } catch (\Throwable $e) {
+                Log::warning('AiContextBuilder: Failed to build container fragments', [
+                    'container_id' => $session->context_id,
+                    'error' => $e->getMessage()
+                ]);
             }
         }
 
         return $out;
+    }
+
+    /**
+     * Build fragments for a single meeting using the same logic as AiAssistantController
+     */
+    private function buildMeetingFragments(int $meetingId, string $query, User $user): array
+    {
+        try {
+            $meeting = \App\Models\TranscriptionLaravel::find($meetingId);
+            if (!$meeting) {
+                Log::warning('AiContextBuilder: Meeting not found', ['meeting_id' => $meetingId]);
+                return [];
+            }
+
+            // Get the controller instance to reuse the buildFragmentsFromJu method
+            $controller = app(\App\Http\Controllers\AiAssistantController::class);
+
+            // Use reflection to call the private method
+            $reflection = new \ReflectionClass($controller);
+            $method = $reflection->getMethod('buildFragmentsFromJu');
+            $method->setAccessible(true);
+
+            return $method->invoke($controller, $meeting, $query);
+        } catch (\Throwable $e) {
+            Log::error('AiContextBuilder: Error building meeting fragments', [
+                'meeting_id' => $meetingId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * Build fragments for all meetings in a container
+     */
+    private function buildContainerFragments(int $containerId, string $query, User $user): array
+    {
+        try {
+            // Get all meetings in the container
+            $meetings = \App\Models\TranscriptionLaravel::whereHas('containerMeeting', function($q) use ($containerId) {
+                $q->where('container_id', $containerId);
+            })->get();
+
+            $allFragments = [];
+            foreach ($meetings as $meeting) {
+                $fragments = $this->buildMeetingFragments($meeting->id, $query, $user);
+                $allFragments = array_merge($allFragments, $fragments);
+            }
+
+            Log::info('AiContextBuilder: Built container fragments', [
+                'container_id' => $containerId,
+                'meetings_count' => $meetings->count(),
+                'fragments_count' => count($allFragments)
+            ]);
+
+            return $allFragments;
+        } catch (\Throwable $e) {
+            Log::error('AiContextBuilder: Error building container fragments', [
+                'container_id' => $containerId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return [];
+        }
     }
 }

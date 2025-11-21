@@ -4,6 +4,152 @@
  * =========================================
  */
 
+// Inject CSS styles for enhanced message formatting - Dark theme
+const messageStyles = `
+<style>
+.meeting-points-list {
+    margin: 12px 0;
+    padding: 0;
+    list-style: none;
+    background: rgba(55, 65, 81, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+    border-left: 4px solid #60a5fa;
+    backdrop-filter: blur(10px);
+}
+
+.meeting-point {
+    margin-bottom: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(75, 85, 99, 0.3);
+    display: block;
+}
+
+.meeting-point:last-child {
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+.meeting-point-title {
+    font-weight: 600;
+    color: #f9fafb;
+    display: block;
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+.meeting-point-description {
+    color: #d1d5db;
+    line-height: 1.5;
+    display: block;
+    font-size: 13px;
+}
+
+.meeting-citation {
+    background: rgba(96, 165, 250, 0.2);
+    color: #93c5fd;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: help;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    margin-left: 4px;
+    transition: all 0.2s ease;
+}
+
+.meeting-citation:hover {
+    background: rgba(96, 165, 250, 0.3);
+    border-color: #60a5fa;
+    color: #bfdbfe;
+}
+
+.meeting-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f9fafb;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid rgba(75, 85, 99, 0.4);
+}
+
+.speaker-summary {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(59, 130, 246, 0.1));
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    color: #93c5fd;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.transcription-segment {
+    background: rgba(31, 41, 55, 0.4);
+    border: 1px solid rgba(75, 85, 99, 0.2);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 8px 0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.transcription-segment .speaker-name {
+    color: #60a5fa;
+    font-weight: 600;
+    margin-right: 8px;
+}
+
+.transcription-segment .transcript-text {
+    color: #e5e7eb;
+    line-height: 1.4;
+}
+
+.meeting-content-line {
+    margin-bottom: 8px;
+    line-height: 1.6;
+    color: #e5e7eb;
+}
+
+.message-spacing {
+    height: 12px;
+}
+
+.message-content .message-bubble {
+    line-height: 1.6;
+}
+
+.assistant .message-bubble {
+    background: rgba(31, 41, 55, 0.7);
+    border: 1px solid rgba(75, 85, 99, 0.3);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    color: #f9fafb;
+    backdrop-filter: blur(10px);
+}
+
+.assistant .message-bubble strong {
+    color: #60a5fa;
+    font-weight: 600;
+}
+
+/* Ajustes para el tema oscuro global */
+.assistant .message-content {
+    color: #f9fafb;
+}
+
+.message-time {
+    color: #9ca3af !important;
+}
+</style>
+`;
+
+// Inject styles into document head if not already present
+if (!document.querySelector('#ai-message-styles')) {
+    const styleElement = document.createElement('div');
+    styleElement.id = 'ai-message-styles';
+    styleElement.innerHTML = messageStyles;
+    document.head.appendChild(styleElement);
+}
+
 // Variables globales
 let currentSessionId = null;
 let currentContext = {
@@ -2709,14 +2855,124 @@ function loadDetailsForContainer(containerId) {
  */
 function formatMessageContent(content) {
     content = content || '';
+
+    // Detectar si es contenido estructurado de reunión
+    const isStructuredMeetingContent = content.includes('**') && (content.includes('[meeting:') || content.includes('- **'));
+
+    if (isStructuredMeetingContent) {
+        return formatStructuredMeetingContent(content);
+    }
+
+    // Formato básico para otros contenidos
     // Convertir URLs a enlaces
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     content = content.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+
+    // Convertir texto en negrita (**texto**)
+    content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
     // Convertir saltos de línea
     content = content.replace(/\n/g, '<br>');
 
     return content;
+}
+
+function formatStructuredMeetingContent(content) {
+    // Dividir el contenido en líneas para procesamiento
+    const lines = content.split('\n');
+    let formattedContent = '';
+    let inList = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        if (!line) {
+            // Línea vacía
+            if (inList) {
+                formattedContent += '</ul>';
+                inList = false;
+            }
+            formattedContent += '<div class="message-spacing"></div>';
+            continue;
+        }
+
+        // Detectar elementos de lista (- **Título**: Descripción)
+        const listItemMatch = line.match(/^-\s*\*\*(.*?)\*\*:?\s*(.*)/);
+        if (listItemMatch) {
+            if (!inList) {
+                formattedContent += '<ul class="meeting-points-list">';
+                inList = true;
+            }
+
+            const title = listItemMatch[1];
+            const description = listItemMatch[2];
+
+            // Procesar citas en la descripción
+            const processedDescription = processCitations(description);
+
+            formattedContent += `
+                <li class="meeting-point">
+                    <span class="meeting-point-title">${escapeHtml(title)}</span>
+                    <span class="meeting-point-description">${processedDescription}</span>
+                </li>
+            `;
+            continue;
+        }
+
+        // Si no es un elemento de lista y estábamos en una lista, cerrarla
+        if (inList) {
+            formattedContent += '</ul>';
+            inList = false;
+        }
+
+        // Procesar líneas normales
+        let processedLine = line;
+
+        // Convertir texto en negrita
+        processedLine = processedLine.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+        // Procesar citas
+        processedLine = processCitations(processedLine);
+
+        // Detectar diferentes tipos de contenido
+        if (processedLine.includes('reunión') && processedLine.includes('"')) {
+            // Título de reunión
+            formattedContent += `<div class="meeting-title">${processedLine}</div>`;
+        } else if (processedLine.match(/Intervenciones de \w+ en la reunión/)) {
+            // Resumen de participante específico
+            formattedContent += `<div class="speaker-summary">${processedLine}</div>`;
+        } else if (processedLine.match(/^\w+:\s/)) {
+            // Transcripción con speaker (formato: "Jonathan: texto...")
+            const speakerMatch = processedLine.match(/^(\w+):\s(.+)$/);
+            if (speakerMatch) {
+                const [, speaker, text] = speakerMatch;
+                formattedContent += `
+                    <div class="transcription-segment">
+                        <span class="speaker-name">${escapeHtml(speaker)}:</span>
+                        <span class="transcript-text">${text}</span>
+                    </div>
+                `;
+            } else {
+                formattedContent += `<div class="meeting-content-line">${processedLine}</div>`;
+            }
+        } else {
+            formattedContent += `<div class="meeting-content-line">${processedLine}</div>`;
+        }
+    }
+
+    // Cerrar lista si terminamos en una
+    if (inList) {
+        formattedContent += '</ul>';
+    }
+
+    return formattedContent;
+}
+
+function processCitations(text) {
+    // Procesar citas como [meeting:129 punto 1]
+    return text.replace(/\[meeting:(\d+)\s+([^\]]+)\]/g, (match, meetingId, citationText) => {
+        return `<span class="meeting-citation" data-meeting-id="${meetingId}" title="Fuente: Reunión ${meetingId} - ${escapeHtml(citationText)}">${escapeHtml(citationText)}</span>`;
+    });
 }
 
 function renderUserMentions(metadata) {

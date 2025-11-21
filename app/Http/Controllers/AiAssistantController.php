@@ -3653,26 +3653,43 @@ class AiAssistantController extends Controller
                 ];
             }
 
-            // Puntos clave
-            foreach (($data['key_points'] ?? []) as $idx => $kp) {
-                $text = is_array($kp) ? ($kp['text'] ?? ($kp['point'] ?? json_encode($kp))) : (string)$kp;
-                if (trim($text) === '') continue;
-                $fragments[] = [
-                    'text' => $text,
-                    'source_id' => 'meeting:' . $meeting->id . ':keypoint:ju:' . ($idx+1),
-                    'content_type' => 'meeting_key_point',
-                    'location' => $this->buildLegacyMeetingLocation($meeting, [
-                        'section' => 'key_point',
-                        'order' => $idx + 1,
-                    ]),
-                    'similarity' => null,
-                    'citation' => 'meeting:' . $meeting->id . ' punto ' . ($idx + 1),
-                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
-                        'key_point' => true,
-                        'order' => $idx + 1,
-                        'source' => 'ju',
-                    ]),
-                ];
+            // Determinar si es una consulta de participante para priorizar transcripciones
+            $isParticipantQuery = false;
+            $keywords = $this->extractQueryKeywords($query);
+
+            // Detección temprana de consulta de participante
+            $tempSpeakerCandidate = null;
+            if (preg_match('/(?:qué|que)\s+dijo\s+([A-ZÁÉÍÓÚÑ][\p{L}]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\p{L}]{2,})*)/ui', $query, $mSp)) {
+                $tempSpeakerCandidate = trim($mSp[1]);
+                $isParticipantQuery = true;
+            } elseif (preg_match('/(?:intervenciones|comentarios|participación)\s+de\s+([A-ZÁÉÍÓÚÑ][\p{L}]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\p{L}]{2,})*)/ui', $query, $mSp)) {
+                $tempSpeakerCandidate = trim($mSp[1]);
+                $isParticipantQuery = true;
+            }
+
+            // Para consultas de participantes específicos, NO incluir puntos clave genéricos
+            // Solo incluir puntos clave si no es una consulta de participante específico
+            if (!$isParticipantQuery) {
+                foreach (($data['key_points'] ?? []) as $idx => $kp) {
+                    $text = is_array($kp) ? ($kp['text'] ?? ($kp['point'] ?? json_encode($kp))) : (string)$kp;
+                    if (trim($text) === '') continue;
+                    $fragments[] = [
+                        'text' => $text,
+                        'source_id' => 'meeting:' . $meeting->id . ':keypoint:ju:' . ($idx+1),
+                        'content_type' => 'meeting_key_point',
+                        'location' => $this->buildLegacyMeetingLocation($meeting, [
+                            'section' => 'key_point',
+                            'order' => $idx + 1,
+                        ]),
+                        'similarity' => null,
+                        'citation' => 'meeting:' . $meeting->id . ' punto ' . ($idx + 1),
+                        'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                            'key_point' => true,
+                            'order' => $idx + 1,
+                            'source' => 'ju',
+                        ]),
+                    ];
+                }
             }
 
             // -------------------------------------------------
@@ -3680,6 +3697,12 @@ class AiAssistantController extends Controller
             // -------------------------------------------------
             $segmentsAll = is_array($data['segments'] ?? null) ? $data['segments'] : [];
             $segmentsSelected = [];
+
+            \Illuminate\Support\Facades\Log::info('buildFragmentsFromJu: Processing transcription segments', [
+                'meeting_id' => $meeting->id,
+                'total_segments' => count($segmentsAll),
+                'query' => $query
+            ]);
             // Derivar lista de participantes potenciales (speakers distintos)
             $participantsSet = [];
             $participantsNormalizedMap = [];
@@ -3728,9 +3751,35 @@ class AiAssistantController extends Controller
                 }
             }
 
-            if (!$speakerCandidate && preg_match('/\b([A-ZÁÉÍÓÚÑ][\p{L}]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\p{L}]{2,})*)\b/u', $query, $mSp)) {
-                $speakerCandidate = trim($mSp[1]);
-                $speakerCandidateNormalized = $this->normalizeSpeakerString($speakerCandidate);
+            // Enhanced speaker detection for common query patterns
+            if (!$speakerCandidate) {
+                // Pattern 1: "¿Qué dijo Jonathan?" or "qué dijo jonathan"
+                if (preg_match('/(?:qué|que)\s+dijo\s+([A-ZÁÉÍÓÚÑ][\p{L}]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\p{L}]{2,})*)/ui', $query, $mSp)) {
+                    $speakerCandidate = trim($mSp[1]);
+                    $speakerCandidateNormalized = $this->normalizeSpeakerString($speakerCandidate);
+                }
+                // Pattern 2: "intervenciones de Jonathan" or "comentarios de jonathan"
+                elseif (preg_match('/(?:intervenciones|comentarios|participación)\s+de\s+([A-ZÁÉÍÓÚÑ][\p{L}]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\p{L}]{2,})*)/ui', $query, $mSp)) {
+                    $speakerCandidate = trim($mSp[1]);
+                    $speakerCandidateNormalized = $this->normalizeSpeakerString($speakerCandidate);
+                }
+                // Pattern 3: "Jonathan dijo" or "según jonathan"
+                elseif (preg_match('/(?:^|\s)([A-ZÁÉÍÓÚÑ][\p{L}]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\p{L}]{2,})*)\s+(?:dijo|mencionó|comentó)/ui', $query, $mSp)) {
+                    $speakerCandidate = trim($mSp[1]);
+                    $speakerCandidateNormalized = $this->normalizeSpeakerString($speakerCandidate);
+                }
+                // Pattern 4: Original pattern for capitalized names
+                elseif (preg_match('/\b([A-ZÁÉÍÓÚÑ][\p{L}]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\p{L}]{2,})*)\b/u', $query, $mSp)) {
+                    $speakerCandidate = trim($mSp[1]);
+                    $speakerCandidateNormalized = $this->normalizeSpeakerString($speakerCandidate);
+                }
+
+                \Illuminate\Support\Facades\Log::info('Speaker detection results', [
+                    'query' => $query,
+                    'speaker_candidate' => $speakerCandidate,
+                    'speaker_normalized' => $speakerCandidateNormalized,
+                    'meeting_id' => $meeting->id
+                ]);
             }
 
             if ($speakerCandidateNormalized && empty($speakerCandidateParts)) {
@@ -3739,40 +3788,74 @@ class AiAssistantController extends Controller
                     fn ($part) => mb_strlen($part) >= 3
                 );
             }
-            $keywords = $this->extractQueryKeywords($query);
 
             if ($speakerCandidate) {
-                // Filtrar segmentos del speaker y, si hay keywords adicionales, que coincidan
+                // BÚSQUEDA DE PARTICIPANTE ESPECÍFICO: incluir TODAS sus intervenciones
+                \Illuminate\Support\Facades\Log::info('Processing speaker-focused query', [
+                    'speaker_candidate' => $speakerCandidate,
+                    'total_segments_available' => count($segmentsAll),
+                    'meeting_id' => $meeting->id
+                ]);
+
                 foreach ($segmentsAll as $seg) {
-                    $txt = is_array($seg) ? ($seg['text'] ?? '') : '';
+                    if (!is_array($seg)) continue;
+                    $txt = (string)($seg['text'] ?? '');
                     if (trim($txt) === '') continue;
                     $speaker = $seg['speaker'] ?? $seg['display_speaker'] ?? '';
-                    if ($speakerCandidateNormalized) {
-                        $speakerNormalized = $this->normalizeSpeakerString((string)$speaker);
-                        $matchesSpeaker = $speakerNormalized !== ''
-                            && str_contains($speakerNormalized, $speakerCandidateNormalized);
-                        if (!$matchesSpeaker && !empty($speakerCandidateParts)) {
-                            foreach ($speakerCandidateParts as $part) {
-                                if ($part !== '' && str_contains($speakerNormalized, $part)) {
-                                    $matchesSpeaker = true;
-                                    break;
-                                }
+
+                    // Matching muy flexible para asegurar que encontremos al participante
+                    $matchesSpeaker = false;
+
+                    // 1. Match exacto case-insensitive
+                    if (strcasecmp($speaker, $speakerCandidate) === 0) {
+                        $matchesSpeaker = true;
+                    }
+
+                    // 2. Match parcial bidireccional
+                    if (!$matchesSpeaker) {
+                        $matchesSpeaker = stripos($speaker, $speakerCandidate) !== false ||
+                                         stripos($speakerCandidate, $speaker) !== false;
+                    }
+
+                    // 3. Match normalizado para nombres con acentos/espacios
+                    if (!$matchesSpeaker && $speakerCandidateNormalized) {
+                        $speakerNormalized = $this->normalizeSpeakerString($speaker);
+                        $matchesSpeaker = $speakerNormalized !== '' && (
+                            str_contains($speakerNormalized, $speakerCandidateNormalized) ||
+                            str_contains($speakerCandidateNormalized, $speakerNormalized)
+                        );
+                    }
+
+                    // 4. Match por partes del nombre (útil para nombres compuestos)
+                    if (!$matchesSpeaker && !empty($speakerCandidateParts)) {
+                        $speakerNormalized = $this->normalizeSpeakerString($speaker);
+                        foreach ($speakerCandidateParts as $part) {
+                            if ($part !== '' && (
+                                stripos($speakerNormalized, $part) !== false ||
+                                stripos($part, $speakerNormalized) !== false
+                            )) {
+                                $matchesSpeaker = true;
+                                break;
                             }
                         }
-                        if (!$matchesSpeaker) {
-                            continue;
-                        }
-                    } elseif ($speaker && stripos((string)$speaker, $speakerCandidate) === false) {
-                        continue;
                     }
-                    $ok = true;
-                    foreach ($keywords as $kw) {
-                        if (stripos($txt, $kw) === false && stripos((string)$speaker, $kw) === false) { $ok = false; break; }
+
+                    if ($matchesSpeaker) {
+                        // INCLUIR TODAS las intervenciones del participante SIN filtros adicionales
+                        $segmentsSelected[] = $seg;
                     }
-                    if ($ok) { $segmentsSelected[] = $seg; }
                 }
-                // En modo focalizado no limitamos a 5, pero ponemos un máximo alto para evitar excesos
-                $segmentsSelected = array_slice($segmentsSelected, 0, 80);
+                // Para búsquedas de participantes específicos, usar transcripción COMPLETA sin límites
+                // No aplicamos ningún límite para permitir acceso total a las intervenciones
+                \Illuminate\Support\Facades\Log::info('AiAssistantController: Speaker-focused query processed', [
+                    'speaker_candidate' => $speakerCandidate,
+                    'total_segments_available' => count($segmentsAll),
+                    'segments_selected_for_speaker' => count($segmentsSelected),
+                    'meeting_id' => $meeting->id,
+                    'sample_speakers' => array_slice(array_unique(array_map(function($seg) {
+                        return $seg['speaker'] ?? $seg['display_speaker'] ?? 'Unknown';
+                    }, $segmentsAll)), 0, 5)
+                ]);
             } else {
                 // Modo estándar previo
                 $segmentsSelected = array_values(array_filter($segmentsAll, function($seg) use ($keywords) {
@@ -3813,6 +3896,35 @@ class AiAssistantController extends Controller
                         'focused_speaker_name' => $speakerCandidate,
                     ]),
                 ];
+            }
+
+            // Add contextual summary for speaker-focused queries
+            if ($speakerCandidate && !empty($segmentsSelected)) {
+                Log::info('Speaker-focused query results', [
+                    'meeting_id' => $meeting->id,
+                    'speaker_candidate' => $speakerCandidate,
+                    'segments_found' => count($segmentsSelected),
+                    'total_segments_available' => count($segmentsAll)
+                ]);
+
+                $speakerSummary = "Intervenciones de {$speakerCandidate} en la reunión (" . count($segmentsSelected) . " fragmentos encontrados):";
+                array_unshift($fragments, [
+                    'text' => $speakerSummary,
+                    'source_id' => 'meeting:' . $meeting->id . ':speaker_summary:' . $speakerCandidate,
+                    'content_type' => 'meeting_speaker_summary',
+                    'location' => $this->buildLegacyMeetingLocation($meeting, [
+                        'section' => 'speaker_summary',
+                        'speaker' => $speakerCandidate,
+                    ]),
+                    'similarity' => null,
+                    'citation' => 'meeting:' . $meeting->id . ' intervenciones de ' . $speakerCandidate,
+                    'metadata' => $this->buildLegacyMeetingMetadata($meeting, [
+                        'speaker_summary' => true,
+                        'target_speaker' => $speakerCandidate,
+                        'segments_count' => count($segmentsSelected),
+                        'source' => 'ju',
+                    ]),
+                ]);
             }
 
             // Agregar fragmento de participantes si se detectan
