@@ -52,8 +52,13 @@ class MercadoPagoService
     /**
      * Crear preferencia de pago para un plan
      */
-    public function createPreferenceForPlan(Plan $plan, User $user): array
+    public function createPreferenceForPlan(Plan $plan, User $user, array $options = []): array
     {
+        $price = (float) ($options['price'] ?? $plan->price);
+        $billingPeriod = $options['billing_period'] ?? 'monthly';
+        $discountPercentage = $options['discount_percentage'] ?? null;
+        $freeMonths = $options['free_months'] ?? null;
+
         // Modo bypass para desarrollo cuando MercadoPago sandbox tiene problemas
         if (config('mercadopago.bypass_mode', false)) {
             Log::info('MercadoPago: Bypass mode enabled - Simulating successful preference creation');
@@ -67,9 +72,14 @@ class MercadoPagoService
                 'plan_id' => $plan->id,
                 'external_reference' => $fakeExternalReference,
                 'status' => Payment::STATUS_PENDING,
-                'amount' => $plan->price,
+                'amount' => $price,
                 'currency' => $plan->currency,
-                'description' => "Plan {$plan->name} - Juntify (BYPASS MODE)"
+                'description' => "Plan {$plan->name} - Juntify (BYPASS MODE)",
+                'metadata' => [
+                    'billing_period' => $billingPeriod,
+                    'discount_percentage' => $discountPercentage,
+                    'free_months' => $freeMonths,
+                ],
             ]);
 
             return [
@@ -92,7 +102,7 @@ class MercadoPagoService
                         "title" => "Plan " . $plan->name . " - Juntify",
                         "description" => $plan->description,
                         "quantity" => 1,
-                        "unit_price" => (float) $plan->price,
+                        "unit_price" => $price,
                         "currency_id" => "MXN", // Usar peso mexicano
                         "category_id" => "digital_content"
                     ]
@@ -129,7 +139,11 @@ class MercadoPagoService
                     "user_id" => $user->id,
                     "plan_id" => $plan->id,
                     "plan_code" => $plan->code,
-                    "role" => $this->mapPlanCodeToRole($plan->code)
+                    "role" => $this->mapPlanCodeToRole($plan->code),
+                    "billing_period" => $billingPeriod,
+                    "discount_percentage" => $discountPercentage,
+                    "free_months" => $freeMonths,
+                    "price_applied" => $price,
                 ]
             ];
 
@@ -137,7 +151,7 @@ class MercadoPagoService
             Log::info('MercadoPago: Creating preference with data', [
                 'external_reference' => $externalReference,
                 'plan_code' => $plan->code,
-                'plan_price' => $plan->price,
+                'plan_price' => $price,
                 'plan_currency' => $plan->currency,
                 'user_email' => $user->email,
                 'site_id' => 'MLM',
@@ -159,9 +173,14 @@ class MercadoPagoService
                 'plan_id' => $plan->id,
                 'external_reference' => $externalReference,
                 'status' => Payment::STATUS_PENDING,
-                'amount' => $plan->price,
+                'amount' => $price,
                 'currency' => $plan->currency,
-                'description' => "Plan {$plan->name} - Juntify"
+                'description' => "Plan {$plan->name} - Juntify",
+                'metadata' => [
+                    'billing_period' => $billingPeriod,
+                    'discount_percentage' => $discountPercentage,
+                    'free_months' => $freeMonths,
+                ],
             ]);
 
             Log::info('MercadoPago preference created', [
