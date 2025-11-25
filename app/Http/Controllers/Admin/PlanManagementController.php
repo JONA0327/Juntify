@@ -11,9 +11,9 @@ use Illuminate\Support\Facades\Log;
 class PlanManagementController extends Controller
 {
     private array $planTemplates = [
-        'freemium' => [
-            'label' => 'Freemium',
-            'default_name' => 'Plan Free',
+        'free' => [
+            'label' => 'Free',
+            'default_name' => 'Free',
             'description' => 'Gratis para siempre',
             'features' => [
                 'Hasta 5 reuniones al mes',
@@ -25,9 +25,9 @@ class PlanManagementController extends Controller
                 'Compartir reuniones',
             ],
         ],
-        'basico' => [
-            'label' => 'Básico',
-            'default_name' => 'Plan Basic',
+        'basic' => [
+            'label' => 'Basic',
+            'default_name' => 'Basic',
             'description' => 'Pago mensual',
             'features' => [
                 'Hasta 15 reuniones al mes',
@@ -40,9 +40,9 @@ class PlanManagementController extends Controller
                 'Acceso a 3 contenedores para almacenar reuniones',
             ],
         ],
-        'negocios' => [
-            'label' => 'Negocios',
-            'default_name' => 'Plan Business',
+        'business' => [
+            'label' => 'Business',
+            'default_name' => 'Business',
             'description' => 'Plan mensual',
             'features' => [
                 'Hasta 30 reuniones al mes',
@@ -57,12 +57,12 @@ class PlanManagementController extends Controller
                 'Acceso al modo posponer reunión',
             ],
         ],
-        'empresas' => [
-            'label' => 'Empresas',
-            'default_name' => 'Empresas',
+        'enterprise' => [
+            'label' => 'Enterprise',
+            'default_name' => 'Enterprise',
             'description' => 'Control total, seguridad avanzada y soporte dedicado bajo demanda.',
             'features' => [
-                'Todo lo del Plan Business',
+                'Todo lo del plan Business',
                 'Implementación personalizada',
                 'Seguridad empresarial y cumplimiento',
                 'Análisis predictivo avanzado',

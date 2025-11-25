@@ -44,7 +44,7 @@
             <div class="content-header">
                 <div>
                     <h1 class="page-title">Administrar planes</h1>
-                    <p class="page-subtitle">Actualiza precios, descuentos y vigencia de planes existentes</p>
+                    <p class="page-subtitle">Actualiza precios, descuentos y vigencia para los planes Free, Basic, Business y Enterprise.</p>
                 </div>
                 <div class="action-buttons">
                     <button class="btn btn-secondary" onclick="window.location.href='{{ route('admin.dashboard') }}'">
@@ -63,7 +63,7 @@
                     <div class="card-header">
                         <div>
                             <h2 class="card-title">Crear o actualizar un plan</h2>
-                            <p class="card-subtitle">Solo puedes modificar los códigos existentes para evitar planes inventados.</p>
+                            <p class="card-subtitle">Solo puedes modificar planes existentes (Free, Basic, Business o Enterprise) para mantener la información consistente.</p>
                         </div>
                     </div>
 
