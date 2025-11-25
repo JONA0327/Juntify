@@ -57,7 +57,9 @@ class ProfileController extends Controller
                 : $connectionStatus['message'];
 
             // Obtener planes para la sección de suscripciones
-            $plans = Plan::where('is_active', true)->orderBy('price')->get();
+            $plans = Plan::where('is_active', true)
+                ->orderByRaw('COALESCE(monthly_price, price) ASC')
+                ->get();
 
             // Obtener historial de pagos del usuario
             $userPayments = Payment::where('user_id', $user->id)
@@ -297,7 +299,9 @@ class ProfileController extends Controller
         }
 
         // Obtener planes para la sección de suscripciones
-        $plans = Plan::where('is_active', true)->orderBy('price')->get();
+        $plans = Plan::where('is_active', true)
+            ->orderByRaw('COALESCE(monthly_price, price) ASC')
+            ->get();
 
         // Obtener historial de pagos del usuario
         $userPayments = Payment::where('user_id', $user->id)

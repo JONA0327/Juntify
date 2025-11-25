@@ -6,6 +6,11 @@
             <p class="plans-subtitle">Elige el plan perfecto para potenciar tus reuniones</p>
         </div>
 
+        <div class="billing-toggle" id="billing-toggle">
+            <button type="button" class="toggle-option active" data-billing-period="monthly">Pago mensual</button>
+            <button type="button" class="toggle-option" data-billing-period="yearly">Pago anual</button>
+        </div>
+
         <!-- Planes disponibles -->
         <div class="plans-grid">
             @forelse($plans as $plan)
@@ -16,13 +21,23 @@
                     'EUR' => '€',
                 ];
                 $currencySymbol = $currencySymbols[$plan->currency] ?? $plan->currency;
-                $billingLabel = $plan->billing_cycle_days === 30
-                    ? 'mes'
-                    : $plan->billing_cycle_days . ' días';
                 $features = collect($plan->features ?? []);
-                $isFreePlan = (float) $plan->price === 0.0;
+                $monthlyPrice = $plan->getMonthlyPrice();
+                $yearlyBase = $plan->getBaseYearlyPrice();
+                $yearlyPrice = $plan->getPriceForPeriod('yearly');
+                $isFreePlan = (float) $monthlyPrice === 0.0;
+                $hasDiscount = ($plan->discount_percentage ?? 0) > 0;
+                $hasFreeMonths = ($plan->free_months ?? 0) > 0;
             @endphp
-            <div class="plan-card @if($plan->code === 'basico') popular @endif" data-plan-id="{{ $plan->id }}">
+            <div class="plan-card @if($plan->code === 'basico') popular @endif"
+                 data-plan-id="{{ $plan->id }}"
+                 data-plan-name="{{ $plan->name }}"
+                 data-currency="{{ $plan->currency }}"
+                 data-monthly-price="{{ $monthlyPrice }}"
+                 data-yearly-price="{{ $yearlyPrice }}"
+                 data-yearly-base="{{ $yearlyBase }}"
+                 data-discount="{{ $plan->discount_percentage ?? 0 }}"
+                 data-free-months="{{ $plan->free_months ?? 0 }}">
                 @if($plan->code === 'basico')
                 <div class="plan-badge">Popular</div>
                 @endif
@@ -30,15 +45,23 @@
                 <div class="plan-header">
                     <h3 class="plan-name">{{ $plan->name }}</h3>
                     <div class="plan-price">
-                        @if($isFreePlan)
-                            <span class="amount amount-free">Gratis</span>
-                        @else
-                            <span class="currency">{{ $currencySymbol }}</span>
-                            <span class="amount">{{ number_format($plan->price, 0, ',', '.') }}</span>
-                            <span class="period">/ {{ $billingLabel }}</span>
-                        @endif
+                        <span class="currency" data-price-currency>{{ $isFreePlan ? '' : $currencySymbol }}</span>
+                        <span class="amount @if($isFreePlan) amount-free @endif" data-price-number>
+                            @if($isFreePlan)
+                                Gratis
+                            @else
+                                {{ number_format($monthlyPrice, 0, ',', '.') }}
+                            @endif
+                        </span>
+                        <span class="period" data-price-period>{{ $isFreePlan ? '' : '/ mes' }}</span>
                     </div>
                     <p class="plan-description">{{ $plan->description }}</p>
+                    <p class="plan-price-detail" data-price-detail>Pago mensual</p>
+                    <p class="plan-offer @if(!$hasDiscount && !$hasFreeMonths) hidden @endif" data-offer-text>
+                        @if($hasDiscount || $hasFreeMonths)
+                            Descuento aplicado al anual
+                        @endif
+                    </p>
                 </div>
 
                 <div class="plan-features">
@@ -75,7 +98,11 @@
                             Plan Gratuito
                         </button>
                     @else
-                        <button class="plan-btn primary" onclick="selectPlan({{ $plan->id }}, @js($plan->name), {{ $plan->price }}, @js($plan->currency), {{ $plan->billing_cycle_days }})">
+                        <button class="plan-btn primary"
+                                data-select-plan
+                                data-plan-id="{{ $plan->id }}"
+                                data-plan-name="{{ $plan->name }}"
+                                data-plan-currency="{{ $plan->currency }}">
                             Seleccionar Plan
                         </button>
                     @endif
@@ -155,6 +182,30 @@
     font-size: 1.2rem;
     color: #e2e8f0;
     opacity: 0.8;
+}
+
+.billing-toggle {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    margin: 1.5rem 0;
+}
+
+.toggle-option {
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    color: #e2e8f0;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.toggle-option.active {
+    background: #3b82f6;
+    color: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);
 }
 
 .plans-grid {
@@ -243,6 +294,22 @@
     color: #e2e8f0;
     font-size: 0.95rem;
     opacity: 0.9;
+}
+
+.plan-price-detail {
+    color: #cbd5e1;
+    font-size: 0.95rem;
+    margin-top: 0.35rem;
+}
+
+.plan-offer {
+    margin-top: 0.25rem;
+    color: #67e8f9;
+    font-weight: 600;
+}
+
+.plan-offer.hidden {
+    display: none;
 }
 
 .plan-features ul {
@@ -470,6 +537,8 @@ const selectedPlanPriceEl = document.getElementById('selected-plan-price');
 const selectedPlanCurrencyEl = document.getElementById('selected-plan-price-currency');
 const selectedPlanPeriodEl = document.getElementById('selected-plan-price-period');
 const selectedPlanPriceContainer = document.querySelector('.selected-plan-price');
+const billingToggleButtons = document.querySelectorAll('#billing-toggle .toggle-option');
+const planCards = document.querySelectorAll('.plan-card');
 
 const PLAN_CURRENCY_SYMBOLS = {
     MXN: '$',
@@ -485,6 +554,8 @@ const PLAN_CURRENCY_LOCALES = {
 
 let selectedPlanId = null;
 let selectedPlanPeriodLabel = 'mes';
+let selectedBillingPeriod = 'monthly';
+let currentBillingPeriod = 'monthly';
 
 function formatPlanPrice(value, currency) {
     const locale = PLAN_CURRENCY_LOCALES[currency] || 'es-ES';
@@ -496,11 +567,10 @@ function formatPlanPrice(value, currency) {
     }).format(amount);
 }
 
-function selectPlan(planId, planName, planPrice, planCurrency, planBillingCycleDays) {
+function selectPlan(planId, planName, planPrice, planCurrency, billingPeriod = 'monthly') {
     selectedPlanId = planId;
-    const billingDays = Number(planBillingCycleDays);
-    const normalizedBillingDays = Number.isFinite(billingDays) && billingDays > 0 ? billingDays : 30;
-    selectedPlanPeriodLabel = normalizedBillingDays === 30 ? 'mes' : `${normalizedBillingDays} días`;
+    selectedBillingPeriod = billingPeriod;
+    selectedPlanPeriodLabel = billingPeriod === 'yearly' ? 'año' : 'mes';
 
     const numericPrice = Number(planPrice) || 0;
     const isFree = numericPrice === 0;
@@ -541,6 +611,7 @@ function closePlanModal() {
     }
     selectedPlanId = null;
     selectedPlanPeriodLabel = 'mes';
+    selectedBillingPeriod = 'monthly';
 }
 
 function confirmPlanSelection() {
@@ -555,7 +626,8 @@ function confirmPlanSelection() {
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
         },
         body: JSON.stringify({
-            plan_id: selectedPlanId
+            plan_id: selectedPlanId,
+            billing_period: selectedBillingPeriod
         })
     })
     .then(response => {
@@ -587,5 +659,94 @@ if (planSelectionModal) {
         }
     });
 }
+
+function updatePlanCardsByPeriod() {
+    planCards.forEach((card) => {
+        const monthlyPrice = Number(card.dataset.monthlyPrice || 0);
+        const yearlyPrice = Number(card.dataset.yearlyPrice || monthlyPrice * 12);
+        const yearlyBase = Number(card.dataset.yearlyBase || yearlyPrice);
+        const discount = Number(card.dataset.discount || 0);
+        const freeMonths = Number(card.dataset.freeMonths || 0);
+        const currency = card.dataset.currency;
+
+        const isYearly = currentBillingPeriod === 'yearly';
+        const price = isYearly ? yearlyPrice : monthlyPrice;
+        const priceCurrencyEl = card.querySelector('[data-price-currency]');
+        const priceNumberEl = card.querySelector('[data-price-number]');
+        const pricePeriodEl = card.querySelector('[data-price-period]');
+        const priceDetailEl = card.querySelector('[data-price-detail]');
+        const offerTextEl = card.querySelector('[data-offer-text]');
+
+        const isFree = Number(price) === 0;
+        const currencySymbol = PLAN_CURRENCY_SYMBOLS[currency] || currency;
+
+        if (priceCurrencyEl) {
+            priceCurrencyEl.textContent = isFree ? '' : currencySymbol;
+        }
+
+        if (priceNumberEl) {
+            priceNumberEl.textContent = isFree ? 'Gratis' : formatPlanPrice(price, currency);
+        }
+
+        if (pricePeriodEl) {
+            pricePeriodEl.textContent = isFree ? '' : isYearly ? '/ año' : '/ mes';
+        }
+
+        if (priceDetailEl) {
+            priceDetailEl.textContent = isYearly ? 'Pago anual' : 'Pago mensual';
+        }
+
+        if (offerTextEl) {
+            if (isYearly && (discount > 0 || freeMonths > 0)) {
+                const details = [];
+                if (discount > 0) {
+                    details.push(`Descuento ${discount}%`);
+                }
+                if (freeMonths > 0) {
+                    details.push(`${freeMonths} mes(es) gratis`);
+                }
+                if (yearlyBase && yearlyBase > price) {
+                    details.push(`Antes ${formatPlanPrice(yearlyBase, currency)}`);
+                }
+                offerTextEl.textContent = details.join(' · ');
+                offerTextEl.classList.remove('hidden');
+            } else {
+                offerTextEl.classList.add('hidden');
+            }
+        }
+
+        const button = card.querySelector('[data-select-plan]');
+        if (button) {
+            button.dataset.billingPeriod = currentBillingPeriod;
+            button.dataset.planPrice = price;
+        }
+    });
+}
+
+billingToggleButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+        const selectedPeriod = button.dataset.billingPeriod;
+        currentBillingPeriod = selectedPeriod;
+        selectedBillingPeriod = selectedPeriod;
+
+        billingToggleButtons.forEach((btn) => btn.classList.toggle('active', btn === button));
+        updatePlanCardsByPeriod();
+    });
+});
+
+document.querySelectorAll('[data-select-plan]').forEach((button) => {
+    button.addEventListener('click', () => {
+        const card = button.closest('.plan-card');
+        const planId = button.dataset.planId || card?.dataset.planId;
+        const planName = button.dataset.planName || card?.dataset.planName;
+        const planCurrency = button.dataset.planCurrency || card?.dataset.currency;
+        const billingPeriod = button.dataset.billingPeriod || currentBillingPeriod;
+        const planPrice = Number(button.dataset.planPrice || card?.dataset.monthlyPrice || 0);
+
+        selectPlan(planId, planName, planPrice, planCurrency, billingPeriod);
+    });
+});
+
+updatePlanCardsByPeriod();
 
 </script>

@@ -37,13 +37,17 @@ class SubscriptionPaymentController extends Controller
 
         try {
             $request->validate([
-                'plan_id' => 'required|exists:plans,id'
+                'plan_id' => 'required|exists:plans,id',
+                'billing_period' => 'nullable|in:monthly,yearly',
             ]);
 
             Log::info('CreatePreference: Validation passed');
 
             $plan = Plan::findOrFail($request->plan_id);
             $user = Auth::user();
+
+            $billingPeriod = $request->input('billing_period', 'monthly');
+            $pricing = $plan->getPriceBreakdown($billingPeriod);
 
             Log::info('CreatePreference: Plan and user loaded', [
                 'plan' => $plan->toArray(),
@@ -62,7 +66,12 @@ class SubscriptionPaymentController extends Controller
             // }
 
             Log::info('CreatePreference: About to call MercadoPago service');
-            $result = $this->mercadoPagoService->createPreferenceForPlan($plan, $user);
+            $result = $this->mercadoPagoService->createPreferenceForPlan($plan, $user, [
+                'price' => $pricing['price'],
+                'billing_period' => $billingPeriod,
+                'discount_percentage' => $plan->discount_percentage,
+                'free_months' => $plan->free_months,
+            ]);
             Log::info('CreatePreference: MercadoPago service result', ['result' => $result]);
 
             if (!$result['success']) {
