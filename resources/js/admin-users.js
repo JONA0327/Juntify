@@ -38,39 +38,6 @@ const hideAlert = () => {
     alertBox.style.display = 'none';
 };
 
-const formatDate = (isoString) => {
-    if (!isoString) return '—';
-    const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) return '—';
-    return date.toLocaleString('es-ES', {
-        dateStyle: 'short',
-        timeStyle: 'short',
-    });
-};
-
-const statusDescriptor = (user) => {
-    if (user.blocked_permanent) {
-        return {
-            text: 'Bloqueado permanentemente',
-            className: 'status-badge status-danger',
-        };
-    }
-
-    if (user.blocked) {
-        return {
-            text: user.blocked_until_human
-                ? `Bloqueado (${user.blocked_until_human})`
-                : 'Bloqueado temporalmente',
-            className: 'status-badge status-warning',
-        };
-    }
-
-    return {
-        text: 'Activo',
-        className: 'status-badge status-success',
-    };
-};
-
 const closeBlockModal = () => {
     blockModal?.classList.remove('show');
     blockModal?.classList.add('hidden');
@@ -108,7 +75,7 @@ const renderUsers = () => {
     if (!usersMap.size) {
         usersTableBody.innerHTML = `
             <tr>
-                <td colspan="10" class="text-center py-6 text-slate-400">No se encontraron usuarios</td>
+                <td colspan="5" class="text-center py-6 text-slate-400">No se encontraron usuarios</td>
             </tr>
         `;
         return;
@@ -120,10 +87,6 @@ const renderUsers = () => {
     usersMap.forEach((user) => {
         const row = document.createElement('tr');
         row.dataset.userId = user.id;
-
-        const idCell = document.createElement('td');
-        idCell.className = 'px-4 py-3 text-slate-500 text-xs uppercase tracking-widest';
-        idCell.textContent = user.id;
 
         const usernameCell = document.createElement('td');
         usernameCell.className = 'px-4 py-3 text-slate-200 font-semibold';
@@ -174,39 +137,6 @@ const renderUsers = () => {
 
         roleCell.appendChild(roleSelect);
 
-        const organizationCell = document.createElement('td');
-        organizationCell.className = 'px-4 py-3 text-slate-300';
-        organizationCell.textContent = user.organization || '—';
-
-        const createdCell = document.createElement('td');
-        createdCell.className = 'px-4 py-3 text-slate-300';
-        createdCell.textContent = formatDate(user.created_at);
-
-        const updatedCell = document.createElement('td');
-        updatedCell.className = 'px-4 py-3 text-slate-300';
-        updatedCell.textContent = formatDate(user.updated_at);
-
-        const statusCell = document.createElement('td');
-        statusCell.className = 'px-4 py-3';
-        const badge = document.createElement('span');
-        const descriptor = statusDescriptor(user);
-        badge.className = descriptor.className;
-        badge.textContent = descriptor.text;
-        const tooltipParts = [];
-        if (user.blocked_reason) {
-            tooltipParts.push(`Motivo: ${user.blocked_reason}`);
-        }
-        if (user.blocked_until_human && !user.blocked_permanent) {
-            tooltipParts.push(`Hasta: ${formatDate(user.blocked_until)}`);
-        }
-        if (user.blocked_by_name) {
-            tooltipParts.push(`Acción registrada por: ${user.blocked_by_name}`);
-        }
-        if (tooltipParts.length) {
-            badge.title = tooltipParts.join('\n');
-        }
-        statusCell.appendChild(badge);
-
         const actionsCell = document.createElement('td');
         actionsCell.className = 'px-4 py-3';
         const actionsWrapper = document.createElement('div');
@@ -236,15 +166,10 @@ const renderUsers = () => {
         actionsWrapper.appendChild(deleteButton);
         actionsCell.appendChild(actionsWrapper);
 
-        row.appendChild(idCell);
         row.appendChild(usernameCell);
         row.appendChild(fullNameCell);
         row.appendChild(emailCell);
         row.appendChild(roleCell);
-        row.appendChild(organizationCell);
-        row.appendChild(createdCell);
-        row.appendChild(updatedCell);
-        row.appendChild(statusCell);
         row.appendChild(actionsCell);
 
         fragment.appendChild(row);
