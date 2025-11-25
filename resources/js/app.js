@@ -2,6 +2,7 @@ import './bootstrap';
 import './notifications';
 import './organization';
 import './utils/auth-interceptors';
+import './tutorial';
 
 import Alpine from 'alpinejs';
 

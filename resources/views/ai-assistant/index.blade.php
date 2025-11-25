@@ -65,7 +65,7 @@
     </div>
 
     <!-- Área principal del chat -->
-    <div class="chat-main">
+    <div class="chat-main" data-tutorial="ai-chat">
         <!-- Header del chat -->
         <div class="chat-header">
             <div class="chat-title">
@@ -109,7 +109,7 @@
         </div>
 
         <!-- Área de entrada de texto -->
-        <div class="input-area">
+        <div class="input-area" data-tutorial="ai-input">
             <form id="chat-form" class="chat-form">
                 <div class="input-container">
                     <textarea
@@ -117,6 +117,7 @@
                         placeholder="Escribe tu mensaje aquí..."
                         rows="1"
                         maxlength="4000"
+                        data-tutorial="message-input"
                     ></textarea>
 
                     <div class="input-actions">

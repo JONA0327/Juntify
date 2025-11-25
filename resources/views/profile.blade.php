@@ -43,9 +43,9 @@
         @include('partials.profile._sidebar')
 
         <!-- Main Content -->
-        <main class="main-content">
+        <main class="main-content" data-tutorial="main-content">
             <!-- Header - Solo visible en la sección de Información -->
-            <div class="content-header" id="welcome-card">
+            <div class="content-header" id="welcome-card" data-tutorial="welcome-header">
                 <div>
                     <h1 class="page-title">Bienvenido, {{ $user->full_name }}</h1>
                     <p class="page-subtitle">Gestiona tu cuenta y configuraciones</p>

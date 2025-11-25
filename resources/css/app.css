@@ -1,3 +1,6 @@
+/* Import tutorial styles */
+@import 'tutorial.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

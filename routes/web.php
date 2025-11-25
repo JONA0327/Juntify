@@ -27,6 +27,7 @@ use App\Http\Controllers\AiAssistantController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\PanelController;
 use App\Http\Controllers\SubscriptionPaymentController;
+use App\Http\Controllers\TutorialController;
 
 // Rutas de archivos de contenedor (deben ir antes de otros grupos pero dentro de PHP)
 Route::middleware(['web'])->group(function () {
@@ -88,6 +89,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', function () {
         return redirect()->route('reuniones.index');
     })->name('dashboard');
+
+    // Tutorial Routes
+    Route::prefix('tutorial')->name('tutorial.')->group(function () {
+        Route::get('/status', [\App\Http\Controllers\TutorialController::class, 'getStatus'])->name('status');
+        Route::post('/progress', [\App\Http\Controllers\TutorialController::class, 'updateProgress'])->name('progress');
+        Route::put('/preferences', [\App\Http\Controllers\TutorialController::class, 'updatePreferences'])->name('preferences');
+        Route::post('/reset', [\App\Http\Controllers\TutorialController::class, 'reset'])->name('reset');
+        Route::get('/config', [\App\Http\Controllers\TutorialController::class, 'getPageConfig'])->name('config');
+        Route::get('/settings', function() {
+            return view('tutorial.settings');
+        })->name('settings');
+    });
 
     // Reuniones - con refresh automático de token
     Route::get('/reuniones', [MeetingController::class, 'index'])

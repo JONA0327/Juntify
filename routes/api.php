@@ -246,6 +246,14 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('/users/notifications/{notification}/respond', [UserController::class, 'respondToNotification'])->name('api.users.notifications.respond');
     });
 
+    // Rutas de Tutorial
+    Route::middleware(['web', 'auth'])->group(function () {
+        Route::get('/tutorial/status', [\App\Http\Controllers\TutorialController::class, 'getStatus'])->name('api.tutorial.status');
+        Route::post('/tutorial/progress', [\App\Http\Controllers\TutorialController::class, 'updateProgress'])->name('api.tutorial.progress');
+        Route::post('/tutorial/preferences', [\App\Http\Controllers\TutorialController::class, 'updatePreferences'])->name('api.tutorial.preferences');
+        Route::post('/tutorial/reset', [\App\Http\Controllers\TutorialController::class, 'reset'])->name('api.tutorial.reset');
+    });
+
     // Rutas de Grupos
     Route::middleware(['web', 'auth'])->group(function () {
         Route::post('/groups', [GroupController::class, 'store'])->name('api.groups.store');

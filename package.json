@@ -20,6 +20,7 @@
         "@ffmpeg/core": "^0.12.10",
         "@ffmpeg/ffmpeg": "^0.12.15",
         "@ffmpeg/util": "^0.12.2",
-        "bcryptjs": "^3.0.2"
+        "bcryptjs": "^3.0.2",
+        "shepherd.js": "^13.0.3"
     }
 }

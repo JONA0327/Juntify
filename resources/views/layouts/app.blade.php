@@ -21,6 +21,7 @@
 
     <!-- Global Scripts -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @stack('styles')
     @yield('head')
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
@@ -34,6 +35,13 @@
     </div>
 
     @yield('modals')
+
+    <!-- Tutorial Component -->
+    @auth
+        <x-tutorial :page="request()->route()->getName() ?? 'general'" />
+    @endauth
+
     @yield('scripts')
+    @stack('scripts')
 </body>
 </html>

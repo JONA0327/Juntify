@@ -38,7 +38,7 @@
         <main class="w-full pt-20 md:pt-24 lg:pl-24 lg:mt-[130px]">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
-                <header class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 pb-12 fade-in">
+                <header class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 pb-12 fade-in" data-tutorial="meetings-header">
                     <div class="flex-1 space-y-6">
                         <div class="space-y-3">
                             <h1 class="text-3xl sm:text-4xl font-bold text-white tracking-tight">Reuniones</h1>
@@ -93,7 +93,7 @@
                     </ul>
                 </nav>
 
-                <div class="fade-in stagger-2" id="meetings-container">
+                <div class="fade-in stagger-2" id="meetings-container" data-tutorial="meetings-list">
                     <div id="my-meetings" class="hidden">
                         @isset($meetings)
                             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

@@ -10,10 +10,10 @@
         <p class="logo-subtitle">Panel de usuario</p>
     </div>
 
-    <nav class="sidebar-nav">
+    <nav class="sidebar-nav" data-tutorial="sidebar">
         <ul>
             <li class="nav-item">
-                <a href="#" class="nav-link active" data-section="info">
+                <a href="#" class="nav-link active" data-section="info" data-tutorial="info-link">
                     <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9A3.75 3.75 0 1112 5.25 3.75 3.75 0 0115.75 9zM18 21H6a2.25 2.25 0 01-2.25-2.25v-1.5a2.25 2.25 0 012.25-2.25h12a2.25 2.25 0 012.25 2.25v1.5A2.25 2.25 0 0118 21z" />
                     </svg>
@@ -21,7 +21,7 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a href="#" class="nav-link" data-section="connect">
+                <a href="#" class="nav-link" data-section="connect" data-tutorial="connect-link">
                     <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 015.657 5.657l-3.536 3.536a4 4 0 01-5.657 0m-3.536-3.536a4 4 0 015.657-5.657l3.536 3.536" />
                     </svg>
@@ -29,7 +29,7 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a href="#" class="nav-link" data-section="plans">
+                <a href="#" class="nav-link" data-section="plans" data-tutorial="plans-link">
                     <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.639 5.033a1 1 0 00.95.69h5.287c.969 0 1.371 1.24.588 1.81l-4.278 3.11a1 1 0 00-.364 1.118l1.64 5.034c.3.921-.755 1.688-1.54 1.118l-4.279-3.11a1 1 0 00-1.175 0l-4.279 3.11c-.784.57-1.838-.197-1.539-1.118l1.639-5.034a1 1 0 00-.364-1.118l-4.278-3.11c-.783-.57-.38-1.81.588-1.81h5.287a1 1 0 00.951-.69l1.639-5.034z" />
                     </svg>
@@ -37,11 +37,19 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a href="#" class="nav-link" data-section="purchases">
+                <a href="#" class="nav-link" data-section="purchases" data-tutorial="purchases-link">
                     <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 2.25h1.386c.51 0 .96.36 1.07.86l.507 2.454a.563.563 0 00.55.436h11.614a.563.563 0 00.551-.436L19.294 3.11a1.125 1.125 0 011.07-.86H21.75M5.25 12.75h14.25m-14.25 0l-.75 3.75m0 0h15.75m-15.75 0L5.25 21m0 0a1.5 1.5 0 103 0m10.5 0a1.5 1.5 0 103 0" />
                     </svg>
                     Mis Compras
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ route('tutorial.settings') }}" class="nav-link">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Tutorial
                 </a>
             </li>
             <li class="nav-item">

@@ -10,14 +10,14 @@
   $hasGroups = auth()->check() && auth()->user()->groups()->exists();
 @endphp
 
-  <header class="header hidden lg:block">
+  <header class="header hidden lg:block" data-tutorial="navigation">
     <nav class="nav">
       <a href="/" class="logo nav-brand">Juntify</a>
 
 
 <ul class="nav-links" id="nav-links">
   <li>
-    <a href="{{ route('reuniones.index') }}">
+    <a href="{{ route('reuniones.index') }}" data-tutorial="meetings-nav">
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v1.5M17.25 3v1.5M3.75 7.5h16.5M21 6.75A2.25 2.25 0 0018.75 4.5H5.25A2.25 2.25 0 003 6.75v12A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V6.75z" />
       </svg>
@@ -43,7 +43,7 @@
   @endphp
   @if($canCreate)
   <li>
-    <a href="{{ route('new-meeting') }}" class="{{ $isNewMeeting ? 'active' : '' }}">
+    <a href="{{ route('new-meeting') }}" class="{{ $isNewMeeting ? 'active' : '' }}" data-tutorial="new-meeting">
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
       </svg>
@@ -72,9 +72,9 @@
     </a>
   </li>
   <li>
-    <a href="{{ route('contacts.index') }}" class="{{ request()->routeIs('contacts.index') ? 'active' : '' }}">
+    <a href="{{ route('contacts.index') }}" class="{{ request()->routeIs('contacts.index') ? 'active' : '' }}" data-tutorial="contacts">
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5c2.485 0 4.5 2.015 4.5 4.5s-2.015 4.5-4.5 4.5-4.5-2.015-4.5-4.5S9.515 4.5 12 4.5zM4.5 19.5a7.5 7.5 0 0115 0v.75a.75.75 0 01-.75.75H5.25a.75.75 0 01-.75-.75v-.75z" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5c2.485 0 4.5 2.015 4.5 4.5s-2.015 4.5-4.5-4.5S9.515 4.5 12 4.5zM4.5 19.5a7.5 7.5 0 0115 0v.75a.75.75 0 01-.75.75H5.25a.75.75 0 01-.75-.75v-.75z" />
       </svg>
       <span class="nav-label">Contactos</span>
     </a>
@@ -90,7 +90,7 @@
   </li>
   @php /* end */ @endphp
   <li>
-    <a href="{{ route('ai-assistant') }}" class="{{ request()->routeIs('ai-assistant') ? 'active' : '' }}">
+    <a href="{{ route('ai-assistant') }}" class="{{ request()->routeIs('ai-assistant') ? 'active' : '' }}" data-tutorial="ai-assistant">
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
         <rect x="5" y="7" width="14" height="10" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
         <circle cx="9" cy="12" r="1" fill="currentColor"/>
