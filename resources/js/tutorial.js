@@ -381,15 +381,36 @@ class JuntifyTutorial {
         ];
     }
 
+    ensureProfileSection(section) {
+        if (this.currentPage !== 'profile') {
+            return Promise.resolve();
+        }
+
+        return new Promise(resolve => {
+            if (typeof window.showSection === 'function') {
+                window.showSection(section);
+            } else {
+                const targetLink = document.querySelector(`.sidebar-nav .nav-link[data-section="${section}"]`);
+                if (targetLink) {
+                    targetLink.click();
+                }
+            }
+
+            // Dar un pequeño tiempo para que se renderice la sección antes de mostrar el paso
+            setTimeout(resolve, 150);
+        });
+    }
+
     getProfileSteps() {
         return [
             {
-                title: 'Panel de Usuario',
-                text: 'Bienvenido a tu panel de usuario. Aquí tienes acceso a todas las funciones principales de Juntify.',
+                title: 'Información del perfil',
+                text: 'Aquí encuentras tu nombre, usuario, correo y organización. También se muestra tu plan actual y la fecha de vencimiento para que sepas cuándo renovar.',
                 attachTo: {
-                    element: '.sidebar, [data-tutorial="sidebar"]',
-                    on: 'right'
+                    element: '[data-tutorial="welcome-header"], [data-tutorial="profile-info-card"]',
+                    on: 'bottom'
                 },
+                beforeShowPromise: () => this.ensureProfileSection('info'),
                 buttons: [
                     {
                         text: 'Siguiente',
@@ -399,52 +420,13 @@ class JuntifyTutorial {
                 ]
             },
             {
-                title: 'Sección Información',
-                text: 'Aquí puedes ver y editar tu información personal: nombre de usuario, correo electrónico, organización y ver tu plan actual.',
+                title: 'Plan y vigencia',
+                text: 'Consulta el plan activo, su estado y la fecha de expiración. Si tu periodo de gracia está por vencer, este panel te avisará para que actualices a tiempo.',
                 attachTo: {
-                    element: '[data-tutorial="info-link"], .nav-link[data-section="info"], .sidebar a[data-section="info"]',
-                    on: 'right'
-                },
-                buttons: [
-                    {
-                        text: 'Anterior',
-                        action: this.tour.back,
-                        classes: 'btn btn-secondary'
-                    },
-                    {
-                        text: 'Siguiente',
-                        action: this.tour.next,
-                        classes: 'btn btn-primary'
-                    }
-                ]
-            },
-            {
-                title: 'Sección Conectar',
-                text: 'Conecta tu cuenta con Google Drive y Google Calendar para sincronizar tus archivos y eventos automáticamente.',
-                attachTo: {
-                    element: '[data-tutorial="connect-link"], .nav-link[data-section="connect"], .sidebar a[data-section="connect"]',
-                    on: 'right'
-                },
-                buttons: [
-                    {
-                        text: 'Anterior',
-                        action: this.tour.back,
-                        classes: 'btn btn-secondary'
-                    },
-                    {
-                        text: 'Siguiente',
-                        action: this.tour.next,
-                        classes: 'btn btn-primary'
-                    }
-                ]
-            },
-            {
-                title: 'Configuración de Carpetas',
-                text: 'Gestiona la organización automática de tus archivos. Juntify crea carpetas específicas para audios, transcripciones y documentos.',
-                attachTo: {
-                    element: '.grid > div, .card, .bg-slate-800',
+                    element: '[data-tutorial="profile-plan-card"]',
                     on: 'top'
                 },
+                beforeShowPromise: () => this.ensureProfileSection('info'),
                 buttons: [
                     {
                         text: 'Anterior',
@@ -459,10 +441,94 @@ class JuntifyTutorial {
                 ]
             },
             {
-                title: 'Botones de Acción',
-                text: 'Utiliza estos botones para conectar servicios, establecer carpetas o realizar otras acciones importantes en tu cuenta.',
+                title: 'Zona de peligro',
+                text: 'Eliminar la cuenta borra permanentemente todas las reuniones, tareas y archivos. Úsalo solo si estás seguro porque no se puede deshacer.',
                 attachTo: {
-                    element: 'button, .btn, input[type="submit"]',
+                    element: '[data-tutorial="danger-zone"]',
+                    on: 'top'
+                },
+                beforeShowPromise: () => this.ensureProfileSection('info'),
+                buttons: [
+                    {
+                        text: 'Anterior',
+                        action: this.tour.back,
+                        classes: 'btn btn-secondary'
+                    },
+                    {
+                        text: 'Siguiente',
+                        action: this.tour.next,
+                        classes: 'btn btn-primary'
+                    }
+                ]
+            },
+            {
+                title: 'Opciones del perfil',
+                text: 'En la barra lateral administra Información, Conectar (Drive y Calendar), Planes disponibles y Mis compras. Cada botón se resalta al seleccionarlo para que ubiques rápidamente la sección.',
+                attachTo: {
+                    element: '[data-tutorial="sidebar"]',
+                    on: 'right'
+                },
+                beforeShowPromise: () => this.ensureProfileSection('info'),
+                buttons: [
+                    {
+                        text: 'Anterior',
+                        action: this.tour.back,
+                        classes: 'btn btn-secondary'
+                    },
+                    {
+                        text: 'Siguiente',
+                        action: this.tour.next,
+                        classes: 'btn btn-primary'
+                    }
+                ]
+            },
+            {
+                title: 'Conecta Drive y Calendar',
+                text: 'Desde esta tarjeta enlazas Google Drive y Calendar. Haz clic en “Conectar Drive y Calendar” para sincronizar tus grabaciones y eventos en la nube.',
+                attachTo: {
+                    element: '[data-tutorial="connect-card"], [data-tutorial="connect-drive-button"]',
+                    on: 'top'
+                },
+                beforeShowPromise: () => this.ensureProfileSection('connect'),
+                buttons: [
+                    {
+                        text: 'Anterior',
+                        action: this.tour.back,
+                        classes: 'btn btn-secondary'
+                    },
+                    {
+                        text: 'Siguiente',
+                        action: this.tour.next,
+                        classes: 'btn btn-primary'
+                    }
+                ]
+            },
+            {
+                title: 'Estructura automática',
+                text: 'Juntify organiza los archivos en carpetas para audios, transcripciones, pendientes y documentos. Puedes cambiar la carpeta principal y guardaremos todo de forma ordenada.',
+                attachTo: {
+                    element: '[data-tutorial="folder-config-card"], [data-tutorial="subfolder-card"]',
+                    on: 'top'
+                },
+                beforeShowPromise: () => this.ensureProfileSection('connect'),
+                buttons: [
+                    {
+                        text: 'Anterior',
+                        action: this.tour.back,
+                        classes: 'btn btn-secondary'
+                    },
+                    {
+                        text: 'Siguiente',
+                        action: this.tour.next,
+                        classes: 'btn btn-primary'
+                    }
+                ]
+            },
+            {
+                title: 'Barra de navegación',
+                text: 'Reuniones muestra las grabaciones guardadas; Nueva reunión inicia una nueva; Tareas (según tu plan) gestiona pendientes del análisis; Contactos y Organización (Enterprise) sirven para compartir y administrar; el Asistente IA responde sobre reuniones; en Perfil ves planes, cuenta y notificaciones.',
+                attachTo: {
+                    element: '[data-tutorial="navigation"]',
                     on: 'bottom'
                 },
                 buttons: [
