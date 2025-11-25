@@ -30,6 +30,7 @@ use App\Http\Controllers\Admin\PlanManagementController;
 use App\Http\Controllers\SubscriptionPaymentController;
 use App\Http\Controllers\TutorialController;
 use App\Models\Analyzer;
+use App\Models\Plan;
 use App\Models\User;
 use Carbon\Carbon;
 
@@ -210,6 +211,10 @@ Route::middleware(['auth'])->group(function () {
         $userCount = User::count();
         $newUsersToday = User::whereDate('created_at', now()->toDateString())->count();
 
+        $planCount = Plan::count();
+        $activePlanCount = Plan::where('is_active', true)->count();
+        $latestPlanUpdate = Plan::max('updated_at');
+
         return view('admin.dashboard', [
             'analyzerCount' => $analyzerCount,
             'systemAnalyzerCount' => $systemAnalyzerCount,
@@ -218,6 +223,11 @@ Route::middleware(['auth'])->group(function () {
                 : 'Sin datos',
             'userCount' => $userCount,
             'newUsersToday' => $newUsersToday,
+            'planCount' => $planCount,
+            'activePlanCount' => $activePlanCount,
+            'latestPlanUpdate' => $latestPlanUpdate
+                ? Carbon::parse($latestPlanUpdate)->diffForHumans()
+                : 'Sin datos',
         ]);
     })->name('admin.dashboard');
 

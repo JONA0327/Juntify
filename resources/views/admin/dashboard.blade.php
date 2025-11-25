@@ -131,6 +131,29 @@
                     </div>
                 </div>
 
+                <!-- Planes -->
+                <div class="info-card admin-card" onclick="window.location.href='/admin/plans/manage'">
+                    <h2 class="card-title">
+                        <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5A2.25 2.25 0 015.25 5.25h13.5A2.25 2.25 0 0121 7.5v9a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 16.5v-9z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 9.75h9m-9 3H12" />
+                        </svg>
+                        Planes
+                    </h2>
+                    <div class="info-item">
+                        <span class="info-label">Total de planes</span>
+                        <span class="info-value">{{ $planCount }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Planes activos</span>
+                        <span class="info-value">{{ $activePlanCount }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Última actualización</span>
+                        <span class="info-value">{{ $latestPlanUpdate }}</span>
+                    </div>
+                </div>
+
                 <!-- Feedback -->
                 <div class="info-card admin-card">
                     <h2 class="card-title">
