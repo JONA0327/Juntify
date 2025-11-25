@@ -28,6 +28,9 @@ use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\PanelController;
 use App\Http\Controllers\SubscriptionPaymentController;
 use App\Http\Controllers\TutorialController;
+use App\Models\Analyzer;
+use App\Models\User;
+use Carbon\Carbon;
 
 // Rutas de archivos de contenedor (deben ir antes de otros grupos pero dentro de PHP)
 Route::middleware(['web'])->group(function () {
@@ -199,7 +202,22 @@ Route::middleware(['auth'])->group(function () {
         if (!in_array($user->roles, ['superadmin', 'developer'])) {
             abort(403, 'No tienes permisos para acceder al panel administrativo');
         }
-        return view('admin.dashboard');
+        $analyzerCount = Analyzer::count();
+        $systemAnalyzerCount = Analyzer::where('is_system', 1)->count();
+        $latestAnalyzerUpdate = Analyzer::max('updated_at');
+
+        $userCount = User::count();
+        $newUsersToday = User::whereDate('created_at', now()->toDateString())->count();
+
+        return view('admin.dashboard', [
+            'analyzerCount' => $analyzerCount,
+            'systemAnalyzerCount' => $systemAnalyzerCount,
+            'latestAnalyzerUpdate' => $latestAnalyzerUpdate
+                ? Carbon::parse($latestAnalyzerUpdate)->diffForHumans()
+                : 'Sin datos',
+            'userCount' => $userCount,
+            'newUsersToday' => $newUsersToday,
+        ]);
     })->name('admin.dashboard');
 
     Route::get('/admin/analyzers', [\App\Http\Controllers\AnalyzerController::class, 'index'])

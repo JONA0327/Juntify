@@ -101,15 +101,15 @@
                     </h2>
                     <div class="info-item">
                         <span class="info-label">Total de analizadores</span>
-                        <span class="info-value">4</span>
+                        <span class="info-value">{{ $analyzerCount }}</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">Analizadores activos</span>
-                        <span class="info-value">4</span>
+                        <span class="info-value">{{ $systemAnalyzerCount }}</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">Último creado</span>
-                        <span class="info-value">Hace 2 días</span>
+                        <span class="info-value">{{ $latestAnalyzerUpdate }}</span>
                     </div>
                 </div>
 
@@ -123,38 +123,11 @@
                     </h2>
                     <div class="info-item">
                         <span class="info-label">Total de usuarios</span>
-                        <span class="info-value">1,247</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Usuarios activos</span>
-                        <span class="info-value">892</span>
+                        <span class="info-value">{{ $userCount }}</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">Nuevos hoy</span>
-                        <span class="info-value">23</span>
-                    </div>
-                </div>
-
-                <!-- Administrar Paneles -->
-                <div class="info-card admin-card" onclick="window.location.href='/admin/panels'">
-                    <h2 class="card-title">
-                        <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5A2.25 2.25 0 015.25 5.25h13.5A2.25 2.25 0 0121 7.5v9a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 16.5v-9z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 8.25l7.5 4.5 7.5-4.5" />
-                        </svg>
-                        Administrar Paneles
-                    </h2>
-                    <div class="info-item">
-                        <span class="info-label">Paneles creados</span>
-                        <span class="info-value">Gestiona empresas</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Asignación de administradores</span>
-                        <span class="info-value">Enterprise / Founder / Developer</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Miembros personalizados</span>
-                        <span class="info-value">Configura roles a medida</span>
+                        <span class="info-value">{{ $newUsersToday }}</span>
                     </div>
                 </div>
 
