@@ -1,9 +1,9 @@
 <!-- Sección: Conectar Servicios -->
-<div class="content-section" id="section-connect" style="display: none;">
+<div class="content-section" id="section-connect" style="display: none;" data-tutorial="connect-section">
     <div class="content-grid">
         @if(!$driveConnected)
             <!-- No conectado -->
-            <div class="info-card">
+            <div class="info-card" data-tutorial="connect-card">
                 <h3 class="card-title">
                     <span style="display: flex; align-items: center; gap: 0.5rem;">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -34,13 +34,13 @@
                         <span class="info-value">Debes reconectar tu cuenta de Google.</span>
                     @endif
                 </div>
-                <div class="action-buttons">
+                <div class="action-buttons" data-tutorial="connect-actions">
                     @if($driveLocked)
-                        <button type="button" class="btn btn-secondary" id="connect-drive-btn" data-drive-locked="true">
+                        <button type="button" class="btn btn-secondary" id="connect-drive-btn" data-drive-locked="true" data-tutorial="connect-drive-button">
                             🔒 Disponible en planes Business y Enterprise
                         </button>
                     @else
-                        <button type="button" class="btn btn-primary" id="connect-drive-btn" data-drive-locked="false">
+                        <button type="button" class="btn btn-primary" id="connect-drive-btn" data-drive-locked="false" data-tutorial="connect-drive-button">
                             🔗 Conectar Drive y Calendar
                         </button>
                     @endif
@@ -48,7 +48,7 @@
             </div>
         @else
             <!-- Conectado - Estado de Drive -->
-            <div class="info-card">
+            <div class="info-card" data-tutorial="connect-card">
                 <h3 class="card-title">
                     <span style="display: flex; align-items: center; gap: 0.5rem;">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -98,7 +98,7 @@
                     </span>
                 </div>
                 @endif
-                <div class="action-buttons">
+                <div class="action-buttons" data-tutorial="connect-actions">
                     <form method="POST" action="{{ route('drive.disconnect') }}">
                         @csrf
                         <button type="submit" class="btn btn-secondary">
@@ -109,7 +109,7 @@
             </div>
 
             <!-- Configuración de Carpetas -->
-            <div class="info-card">
+            <div class="info-card" data-tutorial="folder-config-card">
                 <h3 class="card-title">
                     <span class="card-icon">📁</span>
                     Configuración de Carpetas
@@ -152,7 +152,7 @@
                         style="margin-bottom: 1rem;"
                     >
 
-                    <div class="action-buttons">
+                    <div class="action-buttons" data-tutorial="folder-actions">
                         <button class="btn btn-secondary" id="set-main-folder-btn">
                             ✅ Establecer Carpeta
                         </button>
@@ -162,7 +162,7 @@
 
             <!-- Subcarpetas -->
             @if($folder)
-            <div class="info-card" id="subfolder-card">
+            <div class="info-card" id="subfolder-card" data-tutorial="subfolder-card">
                 <h3 class="card-title">
                     <span class="card-icon">📂</span>
                     Estructura de Carpetas

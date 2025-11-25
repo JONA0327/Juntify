@@ -1,7 +1,7 @@
 <!-- Sección: Información del Usuario -->
 <div class="content-section" id="section-info">
     <div class="content-grid">
-        <div class="info-card">
+        <div class="info-card" data-tutorial="profile-info-card">
             <h2 class="card-title">
                 <span class="card-icon">👤</span>
                 Información Personal
@@ -24,7 +24,7 @@
             </div>
         </div>
 
-        <div class="info-card">
+        <div class="info-card" data-tutorial="profile-plan-card">
             <h2 class="card-title">
                 <span class="card-icon">💎</span>
                 Plan Actual
@@ -85,7 +85,7 @@
             </div>
         </div>
 
-        <div class="info-card danger-zone">
+        <div class="info-card danger-zone" data-tutorial="danger-zone">
             <h2 class="card-title">
                 <span class="card-icon">⚠️</span>
                 Zona Peligrosa
