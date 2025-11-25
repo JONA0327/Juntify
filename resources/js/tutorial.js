@@ -381,6 +381,26 @@ class JuntifyTutorial {
         ];
     }
 
+    ensureProfileSection(section) {
+        if (this.currentPage !== 'profile') {
+            return Promise.resolve();
+        }
+
+        return new Promise(resolve => {
+            if (typeof window.showSection === 'function') {
+                window.showSection(section);
+            } else {
+                const targetLink = document.querySelector(`.sidebar-nav .nav-link[data-section="${section}"]`);
+                if (targetLink) {
+                    targetLink.click();
+                }
+            }
+
+            // Dar un pequeño tiempo para que se renderice la sección antes de mostrar el paso
+            setTimeout(resolve, 150);
+        });
+    }
+
     getProfileSteps() {
         return [
             {
@@ -390,6 +410,7 @@ class JuntifyTutorial {
                     element: '[data-tutorial="welcome-header"], [data-tutorial="profile-info-card"]',
                     on: 'bottom'
                 },
+                beforeShowPromise: () => this.ensureProfileSection('info'),
                 buttons: [
                     {
                         text: 'Siguiente',
@@ -405,6 +426,7 @@ class JuntifyTutorial {
                     element: '[data-tutorial="profile-plan-card"]',
                     on: 'top'
                 },
+                beforeShowPromise: () => this.ensureProfileSection('info'),
                 buttons: [
                     {
                         text: 'Anterior',
@@ -425,6 +447,7 @@ class JuntifyTutorial {
                     element: '[data-tutorial="danger-zone"]',
                     on: 'top'
                 },
+                beforeShowPromise: () => this.ensureProfileSection('info'),
                 buttons: [
                     {
                         text: 'Anterior',
@@ -445,6 +468,7 @@ class JuntifyTutorial {
                     element: '[data-tutorial="sidebar"]',
                     on: 'right'
                 },
+                beforeShowPromise: () => this.ensureProfileSection('info'),
                 buttons: [
                     {
                         text: 'Anterior',
@@ -465,6 +489,7 @@ class JuntifyTutorial {
                     element: '[data-tutorial="connect-card"], [data-tutorial="connect-drive-button"]',
                     on: 'top'
                 },
+                beforeShowPromise: () => this.ensureProfileSection('connect'),
                 buttons: [
                     {
                         text: 'Anterior',
@@ -485,6 +510,7 @@ class JuntifyTutorial {
                     element: '[data-tutorial="folder-config-card"], [data-tutorial="subfolder-card"]',
                     on: 'top'
                 },
+                beforeShowPromise: () => this.ensureProfileSection('connect'),
                 buttons: [
                     {
                         text: 'Anterior',
