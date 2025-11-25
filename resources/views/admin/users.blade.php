@@ -71,21 +71,16 @@
                     <table class="admin-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
                                 <th>Usuario</th>
                                 <th>Nombre completo</th>
                                 <th>Email</th>
                                 <th>Rol</th>
-                                <th>Organización</th>
-                                <th>Creado</th>
-                                <th>Actualizado</th>
-                                <th>Estado</th>
                                 <th class="text-center">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="users-table-body">
                             <tr>
-                                <td colspan="10" class="text-center py-6 text-slate-400">Cargando usuarios...</td>
+                                <td colspan="5" class="text-center py-6 text-slate-400">Cargando usuarios...</td>
                             </tr>
                         </tbody>
                     </table>
