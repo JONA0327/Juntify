@@ -36,11 +36,6 @@
 
     @yield('modals')
 
-    <!-- Tutorial Component -->
-    @auth
-        <x-tutorial :page="request()->route()->getName() ?? 'general'" />
-    @endauth
-
     @yield('scripts')
     @stack('scripts')
 </body>

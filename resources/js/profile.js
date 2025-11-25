@@ -105,7 +105,9 @@ function connectDrive(event) {
 
   axios.get('/drive/status')
     .then(res => {
-      if (!res.data.connected) {
+      const { connected, needs_reauth: needsReauth } = res.data || {};
+
+      if (!connected || needsReauth) {
         window.location.href = '/auth/google/redirect';
       } else {
         window.location.reload();

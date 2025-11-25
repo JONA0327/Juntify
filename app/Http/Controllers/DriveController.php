@@ -377,7 +377,40 @@ class DriveController extends Controller
         if (! $token) {
             return response()->json([
                 'connected' => false,
+                'needs_reauth' => true,
                 'message'   => 'No hay token de Google Drive vinculado a tu cuenta.',
+            ], 200);
+        }
+
+        $client = $this->drive->getClient();
+        $client->setAccessToken($token->getTokenArray());
+
+        $needsReauth = false;
+
+        if (! $token->hasValidAccessToken()) {
+            $needsReauth = true;
+        } elseif ($client->isAccessTokenExpired()) {
+            if ($token->refresh_token) {
+                $newToken = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
+
+                if (! isset($newToken['error']) && isset($newToken['access_token'])) {
+                    $token->updateFromGoogleToken($newToken);
+                    $token->refresh_token = $token->refresh_token ?: ($newToken['refresh_token'] ?? null);
+                    $token->save();
+                    $client->setAccessToken($token->getTokenArray());
+                } else {
+                    $needsReauth = true;
+                }
+            } else {
+                $needsReauth = true;
+            }
+        }
+
+        if ($needsReauth) {
+            return response()->json([
+                'connected' => false,
+                'needs_reauth' => true,
+                'message' => 'Tu sesión de Google expiró. Vuelve a conectar tu cuenta.',
             ], 200);
         }
 
@@ -409,6 +442,7 @@ class DriveController extends Controller
 
         return response()->json([
             'connected'          => true,
+            'needs_reauth'       => false,
             'root_folder'        => $rootFolder?->name,
             'root_folder_id'     => $rootFolder?->google_id,
             'default_root_name'  => $defaultRootName,
