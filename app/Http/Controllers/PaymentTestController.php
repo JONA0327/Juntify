@@ -21,11 +21,15 @@ class PaymentTestController extends Controller
     public function simulateSuccess(Request $request)
     {
         $request->validate([
-            'plan_id' => 'required|exists:plans,id'
+            'plan_id' => 'required|exists:plans,id',
+            'billing_period' => 'nullable|in:monthly,yearly'
         ]);
 
         $plan = Plan::findOrFail($request->plan_id);
         $user = Auth::user();
+
+        $billingPeriod = $request->input('billing_period', 'monthly');
+        $price = $plan->getPriceForPeriod($billingPeriod);
 
         // Crear external reference único
         $externalReference = 'sim_' . $plan->code . '_user_' . $user->id . '_' . time();
@@ -37,7 +41,7 @@ class PaymentTestController extends Controller
             'external_reference' => $externalReference,
             'external_payment_id' => 'sim_payment_' . uniqid(),
             'status' => 'approved', // Simular pago aprobado
-            'amount' => $plan->price,
+            'amount' => $price,
             'currency' => $plan->currency ?? 'MXN',
             'payment_method' => 'credit_card', // Método simulado
             'payer_email' => $user->email,
@@ -49,7 +53,8 @@ class PaymentTestController extends Controller
                 'plan_code' => $plan->code,
                 'simulated' => true,
                 'simulation_time' => now()->toISOString(),
-                'external_reference' => $externalReference
+                'external_reference' => $externalReference,
+                'billing_period' => $billingPeriod,
             ],
             'processed_at' => now()
         ]);
@@ -58,7 +63,7 @@ class PaymentTestController extends Controller
             'external_reference' => $externalReference,
             'user_id' => $user->id,
             'plan_id' => $plan->id,
-            'amount' => $plan->price,
+            'amount' => $price,
             'payment_id' => $payment->id
         ]);
 
@@ -66,7 +71,7 @@ class PaymentTestController extends Controller
         return redirect()->route('profile.show')->with([
             'payment_success' => true,
             'payment_plan' => $plan->name,
-            'payment_amount' => $plan->price,
+            'payment_amount' => $price,
             'payment_currency' => $plan->currency ?? 'MXN',
             'payment_reference' => $externalReference,
             'payment_simulated' => true

@@ -26,6 +26,7 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\AiAssistantController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\PanelController;
+use App\Http\Controllers\Admin\PlanManagementController;
 use App\Http\Controllers\SubscriptionPaymentController;
 use App\Http\Controllers\TutorialController;
 use App\Models\Analyzer;
@@ -240,6 +241,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/panels/list', [PanelController::class, 'list']);
     Route::get('/admin/panels/eligible-admins', [PanelController::class, 'eligibleAdmins']);
     Route::post('/admin/panels', [PanelController::class, 'store']);
+
+    Route::get('/admin/plans/manage', [PlanManagementController::class, 'index'])->name('admin.plans');
+    Route::get('/admin/plans/list', [PlanManagementController::class, 'list']);
+    Route::post('/admin/plans', [PlanManagementController::class, 'store']);
 
     Route::post('/admin/pending-recordings/process', [\App\Http\Controllers\PendingRecordingController::class, 'process'])
         ->name('admin.pending-recordings.process');
