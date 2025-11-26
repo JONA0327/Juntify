@@ -479,6 +479,16 @@
 
     <script>
         let currentEditingPlan = null;
+        const planTemplates = @json($planTemplates);
+
+        function applyTemplateDefaults(planCode) {
+            const template = planTemplates[planCode] || {};
+
+            if (!currentEditingPlan) {
+                document.getElementById('planName').value = template.default_name || '';
+                document.getElementById('planDescription').value = template.description || '';
+            }
+        }
 
         // Función para cargar y mostrar los planes
         function loadPlans() {
@@ -561,14 +571,17 @@
         // Función para abrir el modal (crear nuevo plan)
         function openPlanModal() {
             currentEditingPlan = null;
-            document.getElementById('modalTitle').textContent = 'Crear Plan';
-            document.getElementById('planForm').reset();
-            document.getElementById('planModal').style.display = 'flex';
-            
-            // Enfocar el primer campo
-            setTimeout(() => {
-                document.getElementById('planCode').focus();
-            }, 100);
+                document.getElementById('modalTitle').textContent = 'Crear Plan';
+                document.getElementById('planForm').reset();
+                document.getElementById('planModal').style.display = 'flex';
+
+                const selectedCode = document.getElementById('planCode').value;
+                applyTemplateDefaults(selectedCode);
+
+                // Enfocar el primer campo
+                setTimeout(() => {
+                    document.getElementById('planCode').focus();
+                }, 100);
         }
         
         // Función para editar un plan existente
@@ -593,11 +606,11 @@
                 
                 currentEditingPlan = planId;
                 document.getElementById('modalTitle').textContent = 'Editar Plan';
-                
+
                 // Pre-rellenar el formulario
                 document.getElementById('planCode').value = planData.code;
                 document.getElementById('planName').value = planData.name;
-                document.getElementById('planDescription').value = planData.description || '';
+                document.getElementById('planDescription').value = planData.description || planTemplates[planData.code]?.description || '';
                 document.getElementById('monthlyPrice').value = planData.monthly_price;
                 document.getElementById('yearlyPrice').value = planData.yearly_price || '';
                 document.getElementById('discountPercentage').value = planData.discount_percentage || 0;
@@ -718,7 +731,11 @@
                 closePlanModal();
             }
         });
-        
+
+        document.getElementById('planCode').addEventListener('change', function(e) {
+            applyTemplateDefaults(e.target.value);
+        });
+
         // Cargar planes cuando se carga la página
         document.addEventListener('DOMContentLoaded', function() {
             loadPlans();
