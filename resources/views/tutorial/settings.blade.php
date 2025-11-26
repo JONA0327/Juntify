@@ -1,5 +1,13 @@
 @extends('layouts.app')
 
+@push('styles')
+@vite('resources/css/tutorial-gallery.css')
+@endpush
+
+@push('scripts')
+@vite('resources/js/tutorial-gallery.js')
+@endpush
+
 @section('content')
 <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
     <div class="container mx-auto max-w-4xl px-6 py-8">
@@ -98,6 +106,41 @@
                     </button>
                 </div>
             </form>
+        </div>
+
+        <!-- Tutorial visual con carrusel de imágenes/GIFs -->
+        <div class="tutorial-visual-card" data-tutorial-gallery>
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                    <h2 class="text-xl font-semibold text-white">Tutorial visual</h2>
+                    <p class="text-sm text-slate-400">Recorre cada sección de la barra de navegación con pasos en imágenes o GIFs.</p>
+                </div>
+                <span class="tutorial-indicator" data-gallery-indicator>Preparando pasos...</span>
+            </div>
+
+            <div class="tutorial-nav" data-gallery-nav></div>
+
+            <div class="tutorial-stage mt-3">
+                <div data-gallery-slide></div>
+            </div>
+
+            <div class="tutorial-controls">
+                <button type="button" class="tutorial-arrow" data-gallery-prev>
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Anterior
+                </button>
+
+                <div class="tutorial-dots" data-gallery-dots></div>
+
+                <button type="button" class="tutorial-arrow" data-gallery-next>
+                    Siguiente
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+            </div>
         </div>
 
         <!-- Tutorial Sections Guide -->
