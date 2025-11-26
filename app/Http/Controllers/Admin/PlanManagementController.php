@@ -138,6 +138,69 @@ class PlanManagementController extends Controller
         ]);
     }
 
+    public function update(Request $request, $id): JsonResponse
+    {
+        $plan = Plan::findOrFail($id);
+        
+        $validated = $request->validate([
+            'code' => 'required|string|max:255',
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'currency' => 'required|string|max:10',
+            'monthly_price' => 'required|numeric|min:0',
+            'yearly_price' => 'nullable|numeric|min:0',
+            'discount_percentage' => 'nullable|numeric|min:0|max:95',
+            'free_months' => 'nullable|integer|min:0|max:12',
+            'enabled' => 'required|boolean',
+        ]);
+
+        $plan->update([
+            'code' => $validated['code'],
+            'name' => $validated['name'],
+            'description' => $validated['description'],
+            'currency' => $validated['currency'],
+            'price' => $validated['monthly_price'],
+            'monthly_price' => $validated['monthly_price'],
+            'yearly_price' => $validated['yearly_price'],
+            'discount_percentage' => $validated['discount_percentage'] ?? 0,
+            'free_months' => $validated['free_months'] ?? 0,
+            'is_active' => $validated['enabled'],
+        ]);
+
+        Log::info('Plan actualizado desde panel administrativo', [
+            'plan_id' => $plan->id,
+            'code' => $plan->code,
+            'is_active' => $plan->is_active,
+            'monthly_price' => $plan->monthly_price,
+            'yearly_price' => $plan->yearly_price,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Plan actualizado exitosamente',
+            'plan' => $this->formatPlan($plan->fresh()),
+        ]);
+    }
+
+    public function destroy($id): JsonResponse
+    {
+        $plan = Plan::findOrFail($id);
+        $planName = $plan->name;
+        
+        Log::info('Eliminando plan desde panel administrativo', [
+            'plan_id' => $plan->id,
+            'code' => $plan->code,
+            'name' => $plan->name,
+        ]);
+
+        $plan->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Plan \"{$planName}\" eliminado exitosamente",
+        ]);
+    }
+
     private function formatPlan(Plan $plan): array
     {
         $yearlyBreakdown = $plan->getPriceBreakdown('yearly');

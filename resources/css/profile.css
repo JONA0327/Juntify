@@ -933,7 +933,9 @@ body {
 .admin-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 720px;
+  min-width: 800px;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .admin-table thead {
@@ -947,12 +949,49 @@ body {
   font-size: 0.75rem;
   letter-spacing: 0.05em;
   color: #94a3b8;
-  padding: 0.75rem 1rem;
+  padding: 1rem 1.25rem;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .admin-table td {
   border-top: 1px solid rgba(148, 163, 184, 0.15);
-  padding: 0.85rem 1rem;
+  padding: 1rem 1.25rem;
+  color: #e2e8f0;
+  vertical-align: middle;
+  word-wrap: break-word;
+  max-width: 200px;
+}
+
+.admin-table td:first-child {
+  font-weight: 600;
+  color: #f1f5f9;
+  min-width: 120px;
+}
+
+.admin-table td:nth-child(2),
+.admin-table td:nth-child(3) {
+  text-align: right;
+  font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-weight: 500;
+  min-width: 80px;
+}
+
+.admin-table td:nth-child(4),
+.admin-table td:nth-child(5) {
+  text-align: center;
+  min-width: 70px;
+}
+
+.admin-table td:nth-child(6) {
+  text-align: center;
+  min-width: 80px;
+}
+
+.admin-table td:nth-child(7) {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  min-width: 120px;
 }
 
 .admin-table tr:hover td {

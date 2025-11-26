@@ -255,6 +255,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/plans/manage', [PlanManagementController::class, 'index'])->name('admin.plans');
     Route::get('/admin/plans/list', [PlanManagementController::class, 'list']);
     Route::post('/admin/plans', [PlanManagementController::class, 'store']);
+    Route::put('/admin/plans/{id}', [PlanManagementController::class, 'update']);
+    Route::delete('/admin/plans/{id}', [PlanManagementController::class, 'destroy']);
 
     Route::post('/admin/pending-recordings/process', [\App\Http\Controllers\PendingRecordingController::class, 'process'])
         ->name('admin.pending-recordings.process');

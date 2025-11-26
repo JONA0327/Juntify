@@ -58,115 +58,672 @@
 
             <div id="admin-plans-alert" class="hidden"></div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="info-card">
-                    <div class="card-header">
-                        <div>
-                            <h2 class="card-title">Crear o actualizar un plan</h2>
-                            <p class="card-subtitle">Solo puedes modificar planes existentes (Free, Basic, Business o Enterprise) para mantener la información consistente.</p>
-                        </div>
-                    </div>
-
-                    <form id="plan-form" class="space-y-4" data-plan-templates='@json($planTemplates)'>
-                        <div class="form-group">
-                            <label class="form-label" for="plan-code">Selecciona el plan</label>
-                            <select id="plan-code" name="plan_code" class="modal-input" required>
-                                <option value="" disabled selected>Elige un plan existente</option>
-                                @foreach($planTemplates as $code => $template)
-                                    <option value="{{ $code }}">{{ $template['label'] }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="plan-name">Nombre del plan</label>
-                            <input id="plan-name" name="name" type="text" class="modal-input" placeholder="Plan Basic" required maxlength="255">
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="plan-description">Descripción</label>
-                            <textarea id="plan-description" name="description" class="modal-input" rows="2" placeholder="Texto breve del plan"></textarea>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="form-group">
-                                <label class="form-label" for="monthly-price">Precio mensual</label>
-                                <input id="monthly-price" name="monthly_price" type="number" step="0.01" class="modal-input" placeholder="0.00" min="0" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="yearly-price">Precio anual</label>
-                                <input id="yearly-price" name="yearly_price" type="number" step="0.01" class="modal-input" placeholder="0.00" min="0">
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="form-group">
-                                <label class="form-label" for="discount-percentage">% descuento (opcional)</label>
-                                <input id="discount-percentage" name="discount_percentage" type="number" step="0.01" class="modal-input" placeholder="0" min="0" max="95">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="free-months">Meses gratis (planes de pago)</label>
-                                <input id="free-months" name="free_months" type="number" class="modal-input" placeholder="0" min="0" max="12">
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                            <div class="form-group">
-                                <label class="form-label" for="currency">Moneda</label>
-                                <input id="currency" name="currency" type="text" class="modal-input" placeholder="MXN" maxlength="10">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="is-active">Estado</label>
-                                <div class="flex items-center gap-3">
-                                    <input id="is-active" name="is_active" type="checkbox" class="toggle-checkbox" checked>
-                                    <label for="is-active" class="text-slate-200">Habilitar plan</label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="modal-actions">
-                            <button type="submit" class="btn btn-primary">Guardar plan</button>
-                        </div>
-                    </form>
-                </div>
-
+            <div class="w-full">
                 <div class="info-card" style="padding: 0; overflow: hidden;">
-                    <div class="card-header">
+                    <div class="card-header" style="padding: 1.5rem 1.5rem 0 1.5rem;">
                         <div>
-                            <h2 class="card-title">Planes configurados</h2>
-                            <p class="card-subtitle">Precios mensuales y anuales, con descuentos y meses gratis.</p>
+                            <h2 class="card-title" style="margin-bottom: 0.5rem;">Planes configurados</h2>
+                            <p class="card-subtitle" style="margin: 0;">Precios mensuales y anuales, con descuentos y meses gratis.</p>
                         </div>
+                        <button class="action-btn create" onclick="openPlanModal()" style="margin-left: auto;">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Crear Plan
+                        </button>
                     </div>
-                    <div class="overflow-x-auto">
+                    <div class="overflow-x-auto" style="padding: 0;">
                         <table class="admin-table">
                             <thead>
                                 <tr>
-                                    <th>Plan</th>
-                                    <th>Mensual</th>
-                                    <th>Anual</th>
-                                    <th>Descuento</th>
-                                    <th>Meses gratis</th>
-                                    <th>Estado</th>
-                                    <th>Actualizado</th>
+                                    <th style="min-width: 140px;">Plan</th>
+                                    <th style="text-align: right; min-width: 100px;">Mensual</th>
+                                    <th style="text-align: right; min-width: 100px;">Anual</th>
+                                    <th style="text-align: center; min-width: 100px;">Descuento</th>
+                                    <th style="text-align: center; min-width: 110px;">Meses gratis</th>
+                                    <th style="text-align: center; min-width: 90px;">Estado</th>
+                                    <th style="min-width: 140px;">Actualizado</th>
+                                    <th style="text-align: center; min-width: 120px;">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="plans-table-body">
                                 <tr>
-                                    <td colspan="7" class="text-center py-6 text-slate-400">Cargando planes...</td>
+                                    <td colspan="8" class="text-center py-8 text-slate-400" style="font-style: italic;">
+                                        No hay planes configurados todavía
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
-            </div>
         </main>
     </div>
 
+    <!-- Modal para Crear/Editar Plan -->
+    <div id="planModal" class="modal-overlay" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 id="modalTitle" class="modal-title">Crear Plan</h3>
+                <button class="modal-close" onclick="closePlanModal()">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form id="planForm" class="modal-content">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="planCode">Código del plan</label>
+                        <select id="planCode" name="code" required>
+                            <option value="">Selecciona el plan</option>
+                            <option value="free">Free</option>
+                            <option value="basic">Basic</option>
+                            <option value="business">Business</option>
+                            <option value="enterprise">Enterprise</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="planName">Nombre del plan</label>
+                        <input type="text" id="planName" name="name" required placeholder="Ej: Free">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="planDescription">Descripción</label>
+                    <textarea id="planDescription" name="description" placeholder="Gratis para siempre" rows="3"></textarea>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="monthlyPrice">Precio mensual</label>
+                        <input type="number" id="monthlyPrice" name="monthly_price" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="yearlyPrice">Precio anual</label>
+                        <input type="number" id="yearlyPrice" name="yearly_price" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="discountPercentage">% descuento (opcional)</label>
+                        <input type="number" id="discountPercentage" name="discount_percentage" min="0" max="100" step="0.01" placeholder="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="freeMonths">Meses gratis (planes de pago)</label>
+                        <input type="number" id="freeMonths" name="free_months" min="0" max="12" placeholder="0">
+                    </div>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="currency">Moneda</label>
+                        <select id="currency" name="currency" required>
+                            <option value="MXN">MXN</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="isEnabled" name="enabled" checked>
+                            <span class="checkbox-text">Habilitar plan</span>
+                        </label>
+                    </div>
+                </div>
+            </form>
+            
+            <div class="modal-footer">
+                <button type="button" class="action-btn secondary" onclick="closePlanModal()">Cancelar</button>
+                <button type="button" class="action-btn create" onclick="savePlan()">Guardar Plan</button>
+            </div>
+        </div>
+    </div>
+
     <style>
-        .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-        .card-title { font-size: 1.25rem; font-weight: 700; color: #fff; }
-        .card-subtitle { color: #cbd5e1; opacity: 0.9; }
-        .toggle-checkbox { width: 48px; height: 24px; accent-color: #3b82f6; }
+        .card-header { 
+            display: flex; 
+            align-items: flex-start; 
+            justify-content: space-between; 
+            margin-bottom: 1rem; 
+        }
+        .card-title { 
+            font-size: 1.25rem; 
+            font-weight: 700; 
+            color: #fff; 
+            line-height: 1.3;
+        }
+        .card-subtitle { 
+            color: #cbd5e1; 
+            opacity: 0.9; 
+            font-size: 0.875rem;
+            line-height: 1.4;
+        }
+        .toggle-checkbox { 
+            width: 48px; 
+            height: 24px; 
+            accent-color: #3b82f6; 
+        }
+        
+        /* Mejoras específicas para la tabla de planes */
+        .admin-table tbody tr td:nth-child(1) {
+            font-weight: 600;
+            color: #60a5fa;
+        }
+        
+        .admin-table tbody tr td:nth-child(2),
+        .admin-table tbody tr td:nth-child(3) {
+            color: #34d399;
+            font-weight: 500;
+        }
+        
+        .admin-table tbody tr td:nth-child(4),
+        .admin-table tbody tr td:nth-child(5) {
+            color: #fbbf24;
+            font-weight: 500;
+        }
+        
+        .admin-table tbody tr td:nth-child(6) .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .admin-table tbody tr td:nth-child(6) .status-active {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        .admin-table tbody tr td:nth-child(6) .status-inactive {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .overflow-x-auto {
+            background: rgba(15, 23, 42, 0.3);
+            border-radius: 0 0 0.75rem 0.75rem;
+        }
+        
+        /* Estilos para botones de acción */
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .action-btn {
+            padding: 0.375rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        
+        .action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .action-btn.edit {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+        }
+        
+        .action-btn.edit:hover {
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+        }
+        
+        .action-btn.delete {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+        
+        .action-btn.delete:hover {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+        }
+        
+        .action-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+        
+        .action-btn.create {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        .action-btn.create:hover {
+            background: linear-gradient(135deg, #059669, #047857);
+        }
+        
+        .action-btn.secondary {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: white;
+        }
+        
+        .action-btn.secondary:hover {
+            background: linear-gradient(135deg, #4b5563, #374151);
+        }
+        
+        /* Estilos del Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        
+        .modal-container {
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            border-radius: 1rem;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlideIn 0.3s ease-out;
+        }
+        
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin: 0;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            transition: all 0.2s;
+        }
+        
+        .modal-close:hover {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+        
+        .modal-close svg {
+            width: 20px;
+            height: 20px;
+        }
+        
+        .modal-content {
+            padding: 1.5rem;
+        }
+        
+        .modal-footer {
+            padding: 1.5rem;
+            border-top: 1px solid rgba(59, 130, 246, 0.2);
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+        
+        /* Estilos del formulario */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #e2e8f0;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 0.5rem;
+            background: rgba(15, 23, 42, 0.5);
+            color: #f1f5f9;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            padding-top: 0.5rem;
+        }
+        
+        .checkbox-label input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+        
+        .checkbox-text {
+            font-weight: 500;
+            color: #cbd5e1;
+        }
+        
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .modal-container {
+                margin: 1rem;
+            }
+        }
     </style>
+
+    <script>
+        let currentEditingPlan = null;
+
+        // Función para cargar y mostrar los planes
+        function loadPlans() {
+            const tableBody = document.getElementById('plans-table-body');
+            
+            // Cargar planes desde la API
+            fetch('/admin/plans/list', {
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(plans => {
+                if (plans.length === 0) {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="8" class="text-center py-8 text-slate-400" style="font-style: italic;">
+                                No hay planes configurados todavía
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                tableBody.innerHTML = plans.map(plan => {
+                const currencySymbol = plan.currency === 'USD' ? '$' : plan.currency === 'EUR' ? '€' : '$';
+                const monthlyDisplay = plan.monthly_price > 0 ? `${currencySymbol}${plan.monthly_price}` : 'Gratis';
+                const yearlyDisplay = plan.yearly_price > 0 ? `${currencySymbol}${plan.yearly_price}` : 'Gratis';
+                const discountDisplay = plan.discount_percentage > 0 ? `${plan.discount_percentage}%` : '—';
+                const freeMonthsDisplay = plan.free_months > 0 ? `${plan.free_months}` : '—';
+                const statusText = plan.is_active ? 'Activo' : 'Deshabilitado';
+                const statusClass = plan.is_active ? 'status-active' : 'status-inactive';
+                
+                return `
+                    <tr>
+                        <td style="color: #60a5fa; font-weight: 600;">${plan.name}</td>
+                        <td style="text-align: right; color: #34d399; font-weight: 500;">${monthlyDisplay}</td>
+                        <td style="text-align: right; color: #34d399; font-weight: 500;">${yearlyDisplay}</td>
+                        <td style="text-align: center; color: #fbbf24; font-weight: 500;">${discountDisplay}</td>
+                        <td style="text-align: center; color: #fbbf24; font-weight: 500;">${freeMonthsDisplay}</td>
+                        <td style="text-align: center;">
+                            <span class="status-badge ${statusClass}">
+                                ${statusText}
+                            </span>
+                        </td>
+                        <td style="color: #94a3b8; font-size: 0.8rem;">${plan.updated_at}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-btn edit" onclick="editPlan(${plan.id})">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
+                                    Editar
+                                </button>
+                                <button class="action-btn delete" onclick="deletePlan(${plan.id}, '${plan.name}')">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                    Eliminar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            })
+            .catch(error => {
+                console.error('Error cargando planes:', error);
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-8 text-red-400" style="font-style: italic;">
+                            Error cargando planes. Inténtalo de nuevo.
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+        
+        // Función para abrir el modal (crear nuevo plan)
+        function openPlanModal() {
+            currentEditingPlan = null;
+            document.getElementById('modalTitle').textContent = 'Crear Plan';
+            document.getElementById('planForm').reset();
+            document.getElementById('planModal').style.display = 'flex';
+            
+            // Enfocar el primer campo
+            setTimeout(() => {
+                document.getElementById('planCode').focus();
+            }, 100);
+        }
+        
+        // Función para editar un plan existente
+        function editPlan(planId) {
+            console.log('Editando plan ID:', planId);
+            
+            // Cargar datos del plan desde la API
+            fetch(`/admin/plans/list`, {
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(plans => {
+                const planData = plans.find(plan => plan.id === planId);
+                
+                if (!planData) {
+                    alert('No se encontró el plan a editar');
+                    return;
+                }
+                
+                currentEditingPlan = planId;
+                document.getElementById('modalTitle').textContent = 'Editar Plan';
+                
+                // Pre-rellenar el formulario
+                document.getElementById('planCode').value = planData.code;
+                document.getElementById('planName').value = planData.name;
+                document.getElementById('planDescription').value = planData.description || '';
+                document.getElementById('monthlyPrice').value = planData.monthly_price;
+                document.getElementById('yearlyPrice').value = planData.yearly_price || '';
+                document.getElementById('discountPercentage').value = planData.discount_percentage || 0;
+                document.getElementById('freeMonths').value = planData.free_months || 0;
+                document.getElementById('currency').value = planData.currency;
+                document.getElementById('isEnabled').checked = planData.is_active;
+                
+                // Mostrar el modal
+                document.getElementById('planModal').style.display = 'flex';
+            })
+            .catch(error => {
+                console.error('Error cargando plan:', error);
+                alert('Error cargando los datos del plan');
+            });
+        }
+        
+        // Función para cerrar el modal
+        function closePlanModal() {
+            document.getElementById('planModal').style.display = 'none';
+            currentEditingPlan = null;
+        }
+        
+        // Función para guardar el plan
+        function savePlan() {
+            const planCode = document.getElementById('planCode').value;
+            const isEnabled = document.getElementById('isEnabled').checked;
+            const formData = {
+                // Para crear: plan_code, para actualizar: code
+                ...(currentEditingPlan ? { code: planCode } : { plan_code: planCode }),
+                name: document.getElementById('planName').value,
+                description: document.getElementById('planDescription').value,
+                monthly_price: parseFloat(document.getElementById('monthlyPrice').value) || 0,
+                yearly_price: parseFloat(document.getElementById('yearlyPrice').value) || 0,
+                discount_percentage: parseFloat(document.getElementById('discountPercentage').value) || 0,
+                free_months: parseInt(document.getElementById('freeMonths').value) || 0,
+                currency: document.getElementById('currency').value,
+                // Para crear: is_active, para actualizar: enabled
+                ...(currentEditingPlan ? { enabled: isEnabled } : { is_active: isEnabled })
+            };
+            
+            // Validación básica
+            const codeField = formData.code || formData.plan_code;
+            if (!codeField || !formData.name || !formData.currency) {
+                alert('Por favor completa los campos obligatorios: Código, Nombre y Moneda.');
+                return;
+            }
+            
+            console.log('Guardando plan:', formData);
+            
+            // Petición AJAX para guardar
+            const method = currentEditingPlan ? 'PUT' : 'POST';
+            const url = currentEditingPlan ? `/admin/plans/${currentEditingPlan}` : '/admin/plans';
+            
+            fetch(url, {
+                method: method,
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    closePlanModal();
+                    loadPlans(); // Recargar la tabla
+                    alert(data.message || (currentEditingPlan ? 'Plan actualizado exitosamente.' : 'Plan creado exitosamente.'));
+                } else {
+                    alert('Error: ' + (data.message || 'No se pudo guardar el plan.'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error de conexión. Inténtalo de nuevo.');
+            });
+        }
+        
+        // Función para eliminar un plan
+        function deletePlan(planId, planName) {
+            console.log('Eliminando plan ID:', planId);
+            
+            // Confirmación antes de eliminar
+            if (confirm(`¿Estás seguro de que quieres eliminar el plan "${planName}"?\n\nEsta acción no se puede deshacer.`)) {
+                // Petición AJAX para eliminar el plan
+                fetch(`/admin/plans/${planId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        loadPlans(); // Recargar la tabla
+                        alert(data.message || `Plan "${planName}" eliminado exitosamente.`);
+                    } else {
+                        alert('Error: ' + (data.message || 'No se pudo eliminar el plan.'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error de conexión. Inténtalo de nuevo.');
+                });
+            }
+        }
+        
+        // Cerrar modal con Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && document.getElementById('planModal').style.display === 'flex') {
+                closePlanModal();
+            }
+        });
+        
+        // Cerrar modal al hacer clic fuera
+        document.getElementById('planModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closePlanModal();
+            }
+        });
+        
+        // Cargar planes cuando se carga la página
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPlans();
+        });
+    </script>
+
 </body>
 </html>
