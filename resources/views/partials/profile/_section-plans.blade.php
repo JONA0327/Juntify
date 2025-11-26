@@ -56,7 +56,6 @@
                         <span class="period" data-price-period>{{ $isFreePlan ? '' : '/ mes' }}</span>
                     </div>
                     <p class="plan-description">{{ $plan->description }}</p>
-                    <p class="plan-price-detail" data-price-detail>Pago mensual</p>
                     <p class="plan-offer @if(!$hasDiscount && !$hasFreeMonths) hidden @endif" data-offer-text>
                         @if($hasDiscount || $hasFreeMonths)
                             Descuento aplicado al anual
@@ -294,12 +293,6 @@
     color: #e2e8f0;
     font-size: 0.95rem;
     opacity: 0.9;
-}
-
-.plan-price-detail {
-    color: #cbd5e1;
-    font-size: 0.95rem;
-    margin-top: 0.35rem;
 }
 
 .plan-offer {
@@ -674,7 +667,6 @@ function updatePlanCardsByPeriod() {
         const priceCurrencyEl = card.querySelector('[data-price-currency]');
         const priceNumberEl = card.querySelector('[data-price-number]');
         const pricePeriodEl = card.querySelector('[data-price-period]');
-        const priceDetailEl = card.querySelector('[data-price-detail]');
         const offerTextEl = card.querySelector('[data-offer-text]');
 
         const isFree = Number(price) === 0;
@@ -690,10 +682,6 @@ function updatePlanCardsByPeriod() {
 
         if (pricePeriodEl) {
             pricePeriodEl.textContent = isFree ? '' : isYearly ? '/ año' : '/ mes';
-        }
-
-        if (priceDetailEl) {
-            priceDetailEl.textContent = isYearly ? 'Pago anual' : 'Pago mensual';
         }
 
         if (offerTextEl) {
