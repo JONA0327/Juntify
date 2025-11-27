@@ -20,7 +20,8 @@
         'resources/css/reuniones_v2.css',
         'resources/css/organization.css',
         'resources/css/audio-processing.css',
-        'resources/js/reuniones_v2.js'
+        'resources/js/reuniones_v2.js',
+        'resources/css/mobile-navigation.css'
     ])
     @include('partials.global-vars')
 </head>
@@ -1389,6 +1390,9 @@ document.getElementById('meeting-modal').addEventListener('click', function(e) {
         <iframe id="fullPreviewFrame" class="w-full h-full mt-[40px] bg-slate-900" title="Vista previa del PDF"></iframe>
     </div>
 </div>
+
+    <!-- Navegación móvil -->
+    @include('partials.mobile-bottom-nav')
 
 </body>
 </html>

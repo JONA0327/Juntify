@@ -14,7 +14,8 @@
         'resources/css/app.css',
         'resources/js/app.js',
         'resources/css/index.css',
-        'resources/js/index.js'
+        'resources/js/index.js',
+        'resources/css/mobile-navigation.css'
     ])
 </head>
 <body class="smooth-scroll">
@@ -33,6 +34,8 @@
     @if (Auth::check())
         <!-- Include the navbar partial if the user is authenticated -->
         @include('partials.navbar')
+        <!-- Navegación móvil -->
+        @include('partials.mobile-bottom-nav')
     @endif
     <!-- Header -->
 

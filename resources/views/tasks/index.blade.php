@@ -40,7 +40,8 @@
         'resources/css/index.css',
         'resources/css/reuniones_v2.css',
         'resources/css/audio-processing.css',
-        'resources/css/tasks-index.css'
+        'resources/css/tasks-index.css',
+        'resources/css/mobile-navigation.css'
     ])
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
@@ -96,12 +97,7 @@
 
                     <div id="tasks-main-column" class="lg:col-span-2 flex flex-col gap-8 w-full mt-8 lg:mt-0">
                         <div x-data="{ open: window.innerWidth >= 1024 }" class="bg-slate-800/50 border border-slate-700/50 rounded-xl" data-task-view-targets="calendario">
-                            <button @click="open = !open" class="w-full flex justify-between items-center p-4 lg:hidden">
-                                <span class="font-semibold text-lg">Calendario</span>
-                                <svg class="w-6 h-6 transition-transform" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </button>
+
                             <div x-show="open" x-transition>
                                 @include('tasks.partials._calendar-main')
                             </div>
@@ -202,8 +198,11 @@
                         @endif
                     </div>
 
+                    <!-- Sidebar para vista Calendario -->
                     <aside class="col-span-1 w-full" data-task-view-targets="calendario">
-                        @include('tasks.partials._sidebar-details') <div id="tasks-empty" class="info-card p-6 mt-8 text-center text-slate-300">
+                        @include('tasks.partials._sidebar-details')
+
+                        <div id="tasks-empty" class="info-card p-6 mt-8 text-center text-slate-300">
                             <div class="text-xl font-semibold mb-2">Tareas de la reunión</div>
                             <div class="text-blue-400">Selecciona una conversación</div>
                         </div>
@@ -795,7 +794,62 @@
             btn.addEventListener('click', () => setTaskMainView(btn.dataset.taskViewBtn));
         });
 
-        setTaskMainView('calendario');
+        // Establecer vista por defecto según el tamaño de pantalla
+        function setDefaultView() {
+            if (window.innerWidth <= 768) {
+                // En móvil, forzar kanban disponible y usar tablero
+                showKanban(true);
+                setTaskMainView('tablero');
+            } else {
+                setTaskMainView('calendario');
+            }
+        }
+
+        // Override la función original para permitir calendario en móvil
+        const originalSetTaskMainView = setTaskMainView;
+        setTaskMainView = function(view) {
+            // Permitir ambas vistas en móvil
+            currentTaskMainView = ['calendario', 'tablero'].includes(view) ? view : 'tablero';
+
+            // Ocultar filtro cuando esté en calendario
+            const filterContainer = document.getElementById('meetingFilterContainer');
+            if (filterContainer) {
+                if (currentTaskMainView === 'calendario') {
+                    filterContainer.style.display = 'none';
+                } else {
+                    filterContainer.style.display = 'block';
+                }
+            }
+
+            // Forzar mostrar kanban board cuando esté en vista tablero
+            const kanbanBoard = document.getElementById('kanban-board');
+            if (kanbanBoard) {
+                if (currentTaskMainView === 'tablero') {
+                    kanbanBoard.classList.remove('hidden');
+                    kanbanBoard.dataset.hasKanban = '1';
+                    document.body.classList.add('kanban-active');
+                } else {
+                    kanbanBoard.classList.add('hidden');
+                    document.body.classList.remove('kanban-active');
+                }
+            }
+
+            // Ocultar/mostrar elementos de calendario explícitamente
+            document.querySelectorAll('[data-task-view-targets="calendario"]').forEach(element => {
+                if (currentTaskMainView === 'tablero') {
+                    element.style.display = 'none';
+                } else {
+                    element.style.display = 'block';
+                }
+            });
+
+            refreshTaskViewVisibility();
+        };        setDefaultView();
+
+        // Ajustar vista cuando cambie el tamaño de pantalla
+        window.addEventListener('resize', () => {
+            setDefaultView();
+        });
 
         // Event listeners para filtro de reuniones
         const meetingFilterSelect = document.getElementById('meetingFilter');
@@ -832,6 +886,9 @@
 
         kanbanReload();
     </script>
+
+    <!-- Navegación móvil -->
+    @include('partials.mobile-bottom-nav')
 
 </body>
 </html>

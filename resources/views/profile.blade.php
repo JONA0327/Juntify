@@ -18,7 +18,8 @@
         'resources/css/index.css',
         'resources/js/index.js',
         'resources/css/profile.css',
-        'resources/js/profile.js'
+        'resources/js/profile.js',
+        'resources/css/mobile-navigation.css'
     ])
 </head>
 <body>
@@ -29,6 +30,7 @@
     @include('partials.navbar')
 
     <!-- Barra de navegación móvil -->
+    @include('partials.mobile-bottom-nav')
 
 
     <!-- Botón para abrir sidebar en móvil -->

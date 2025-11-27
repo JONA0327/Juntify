@@ -18,7 +18,8 @@
     @vite([
         'resources/css/app.css',
         'resources/js/app.js',
-        'resources/css/index.css'
+        'resources/css/index.css',
+        'resources/css/mobile-navigation.css'
     ])
 
     <link rel="stylesheet" href="{{ asset('css/ai-assistant.css') }}?v={{ time() }}">
@@ -28,9 +29,9 @@
         @include('partials.navbar')
 
 
-        <main class="w-full pl-24 pt-6" style="margin-top:80px;">
+        <main class="w-full pl-0 md:pl-24 pt-0 md:pt-6" style="margin-top: 0;">
             <!-- Contenedor Centrado -->
-            <div class="container mx-auto px-4 py-2 h-screen flex flex-col">
+            <div class="w-full h-screen flex flex-col ai-main-container" style="height: calc(100vh - 90px);">
 <!-- Botón menú móvil -->
 <button class="mobile-menu-toggle" id="mobile-menu-toggle" style="display: none;">
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -204,6 +205,66 @@
                 window.location.href = '/profile';
             };
         }
+    </script>
+
+    <!-- Navegación móvil -->
+    @include('partials.mobile-bottom-nav')
+
+    <script>
+        // JavaScript para el sidebar móvil del asistente IA
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+            const sessionsSidebar = document.getElementById('sessions-sidebar');
+            const mobileOverlay = document.getElementById('mobile-sidebar-overlay');
+            const mobileCloseBtn = document.getElementById('mobile-close-btn');
+
+            // Función para abrir sidebar
+            function openMobileSidebar() {
+                if (sessionsSidebar) {
+                    sessionsSidebar.classList.add('sidebar-open');
+                    document.body.classList.add('sidebar-mobile-open');
+                }
+            }
+
+            // Función para cerrar sidebar
+            function closeMobileSidebar() {
+                if (sessionsSidebar) {
+                    sessionsSidebar.classList.remove('sidebar-open');
+                    document.body.classList.remove('sidebar-mobile-open');
+                }
+            }
+
+            // Event listeners
+            if (mobileMenuToggle) {
+                mobileMenuToggle.addEventListener('click', openMobileSidebar);
+            }
+
+            if (mobileCloseBtn) {
+                mobileCloseBtn.addEventListener('click', closeMobileSidebar);
+            }
+
+            if (mobileOverlay) {
+                mobileOverlay.addEventListener('click', closeMobileSidebar);
+            }
+
+            // Cerrar sidebar al cambiar a escritorio
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 768) {
+                    closeMobileSidebar();
+                }
+            });
+
+            // Detectar si es móvil y mostrar botón hamburguesa
+            function checkMobile() {
+                const isMobile = window.innerWidth <= 768;
+                if (mobileMenuToggle) {
+                    mobileMenuToggle.style.display = isMobile ? 'flex' : 'none';
+                }
+            }
+
+            checkMobile();
+            window.addEventListener('resize', checkMobile);
+        });
     </script>
 
     <script src="{{ asset('js/ai-assistant.js') }}?v={{ time() }}"></script>

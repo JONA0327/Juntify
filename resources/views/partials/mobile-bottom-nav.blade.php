@@ -36,7 +36,7 @@
     </div>
 
     <!-- Tareas -->
-    <div class="nav-item {{ str_contains($currentRoute, 'tasks') ? 'active' : '' }}" onclick="window.location.href='{{ route('tasks.index') }}'">
+    <div class="nav-item {{ str_contains($currentRoute, 'tareas') ? 'active' : '' }}" onclick="window.location.href='{{ route('tareas.index') }}'">
         <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
@@ -45,7 +45,7 @@
 
     <!-- Nueva Reunión - Botón Central -->
     @if($canCreate)
-    <div class="nav-item nav-center" onclick="window.location.href='{{ route('reuniones.create') }}'">
+    <div class="nav-item nav-center" onclick="window.location.href='{{ route('new-meeting') }}'">
         <div class="nav-center-bg">
             <svg class="nav-icon-center" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -65,7 +65,7 @@
     @endif
 
     <!-- Asistente IA -->
-    <div class="nav-item {{ str_contains($currentRoute, 'ai-assistant') ? 'active' : '' }}" onclick="window.location.href='{{ route('ai-assistant.index') }}'">
+    <div class="nav-item {{ str_contains($currentRoute, 'ai-assistant') ? 'active' : '' }}" onclick="window.location.href='{{ route('ai-assistant') }}'">
         <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.847a4.5 4.5 0 003.09 3.09L15.75 12l-2.847.813a4.5 4.5 0 00-3.09 3.091zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
         </svg>
@@ -123,7 +123,7 @@
 
 
 
-.nav-item {
+.nav-item:not(.nav-center) {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -135,14 +135,40 @@
     position: relative;
 }
 
-.nav-item:hover:not(.nav-disabled) {
+.nav-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    position: relative;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.nav-item:hover:not(.nav-disabled):not(.nav-center) {
     background: rgba(59, 130, 246, 0.1);
     transform: translateY(-2px);
 }
 
-.nav-item.active {
+.nav-center:hover:not(.nav-disabled) {
+    background: transparent !important;
+}
+
+.nav-item.active:not(.nav-center) {
     background: rgba(59, 130, 246, 0.2);
     border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.nav-center.active,
+.nav-center {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 .nav-item.active .nav-icon,
@@ -164,22 +190,25 @@
     transition: color 0.3s ease;
 }
 
-/* Botón central especial */
-.nav-center {
-    justify-self: center;
-    position: relative;
-}
+/* Botón central especial - sin estilos de fondo */
 
 .nav-center-bg {
     width: 56px;
     height: 56px;
     background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-    border-radius: 50%;
+    border-radius: 50% !important;
+    -webkit-border-radius: 50% !important;
+    -moz-border-radius: 50% !important;
     display: flex;
     align-items: center;
     justify-content: center;
     box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
     transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    border: none;
+    outline: none;
+    overflow: hidden;
+    box-sizing: border-box;
+    aspect-ratio: 1 / 1;
 }
 
 .nav-center-bg.disabled {

@@ -71,7 +71,7 @@
         </div>
 
         <!-- Tareas -->
-        <div onclick="window.location.href='{{ route('tasks.index') }}'" style="
+        <div onclick="window.location.href='{{ route('tareas.index') }}'" style="
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -88,7 +88,7 @@
         </div>
 
         <!-- Nueva Reunión -->
-        <div onclick="window.location.href='{{ route('reuniones.create') }}'" style="
+        <div onclick="window.location.href='{{ route('new-meeting') }}'" style="
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -98,12 +98,23 @@
             <div style="
                 width: 56px;
                 height: 56px;
+                min-width: 56px;
+                max-width: 56px;
+                min-height: 56px;
+                max-height: 56px;
                 background: linear-gradient(135deg, #3b82f6, #1d4ed8);
                 border-radius: 50%;
+                -webkit-border-radius: 50%;
+                -moz-border-radius: 50%;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+                border: none;
+                outline: none;
+                overflow: hidden;
+                box-sizing: border-box;
+                aspect-ratio: 1 / 1;
             ">
                 <svg style="width: 24px; height: 24px; color: white;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -113,7 +124,7 @@
         </div>
 
         <!-- Asistente -->
-        <div onclick="window.location.href='{{ route('ai-assistant.index') }}'" style="
+        <div onclick="window.location.href='{{ route('ai-assistant') }}'" style="
             display: flex;
             flex-direction: column;
             align-items: center;

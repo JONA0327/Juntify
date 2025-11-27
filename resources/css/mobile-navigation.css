@@ -45,6 +45,300 @@
         opacity: 1 !important;
     }
 
+    /* Eliminar completamente fondos del botón central */
+    .nav-center,
+    .nav-center.active,
+    .nav-center:hover,
+    .nav-center:focus {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+
+    /* Permitir que el contenido del calendario se muestre cuando esté activo */
+
+    /* Ajustar el contenido del calendario para móvil */
+    [data-task-view-targets="calendario"] {
+        display: block;
+    }
+
+    /* Estilos específicos para el calendario en móvil */
+    [data-task-view-targets="calendario"] .bg-slate-800\/50 {
+        margin-bottom: 1rem;
+    }
+
+    /* Hacer las reuniones más compactas en móvil */
+    .meeting-card {
+        padding: 1rem !important;
+        margin-bottom: 0.75rem !important;
+    }
+
+    .meeting-card h3 {
+        font-size: 1rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    /* Ajustar botones en móvil */
+    .meeting-card .btn {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.875rem !important;
+    }
+
+    /* Ajustar pestañas de reuniones en móvil */
+    nav ul.flex {
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+        justify-content: flex-start !important;
+    }
+
+    nav ul.flex li {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+
+    nav ul.flex li button {
+        width: 100% !important;
+        padding: 0.75rem 0.5rem !important;
+        font-size: 0.875rem !important;
+        text-align: center !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    /* Para 3 botones en una fila en móvil */
+    nav ul.flex li:nth-child(1),
+    nav ul.flex li:nth-child(2),
+    nav ul.flex li:nth-child(3) {
+        flex-basis: calc(33.333% - 0.334rem) !important;
+        max-width: calc(33.333% - 0.334rem) !important;
+    }
+
+    /* Ocultar filtro de reuniones cuando no esté en vista tablero */
+    #meetingFilterContainer[data-task-view-targets="tablero"].hidden {
+        display: none !important;
+    }
+
+    /* Mostrar tablero por defecto en móvil cuando esté activo */
+    #kanban-board[data-task-view-targets="tablero"]:not(.hidden) {
+        display: block !important;
+    }
+
+    /* Forzar visibilidad del kanban en vista tablero */
+    .kanban-active #kanban-board {
+        display: block !important;
+    }
+
+    /* En móvil, ajustar layout para mostrar solo contenido de la vista activa */
+    #tasks-layout {
+        display: block !important;
+        grid-template-columns: none !important;
+    }
+
+    #tasks-main-column {
+        width: 100% !important;
+        margin-top: 0 !important;
+    }
+
+    /* Ocultar todo el contenido de calendario cuando esté en tablero */
+    body.kanban-active [data-task-view-targets="calendario"] {
+        display: none !important;
+    }
+
+    /* Mostrar contenido de calendario solo cuando NO esté en tablero */
+    body:not(.kanban-active) [data-task-view-targets="calendario"] {
+        display: block !important;
+    }
+
+    /* Ocultar sidebar en móvil cuando esté en tablero */
+    body.kanban-active aside[data-task-view-targets="calendario"] {
+        display: none !important;
+    }
+
+    /* Estilos específicos para Asistente IA en móvil */
+
+    /* Ajustar contenedor principal */
+    .ai-assistant-container {
+        display: flex !important;
+        flex-direction: column !important;
+        height: calc(100vh - 90px) !important;
+        position: relative !important;
+    }
+
+    /* Sidebar de sesiones en móvil */
+    .sessions-sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        left: -100% !important;
+        width: 80% !important;
+        max-width: 320px !important;
+        height: 100vh !important;
+        z-index: 1000 !important;
+        transition: left 0.3s ease !important;
+        border-right: 1px solid rgba(59, 130, 246, 0.2) !important;
+    }
+
+    .sessions-sidebar.open {
+        left: 0 !important;
+    }
+
+    /* Área principal del chat en móvil */
+    .chat-main {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Header del chat responsivo */
+    .chat-header {
+        padding: 1rem !important;
+        border-bottom: 1px solid rgba(59, 130, 246, 0.2) !important;
+        flex-shrink: 0 !important;
+    }
+
+    /* Mostrar botón de menú móvil */
+    .mobile-menu-toggle {
+        display: block !important;
+        position: fixed !important;
+        top: 1rem !important;
+        left: 1rem !important;
+        z-index: 1001 !important;
+        background: rgba(59, 130, 246, 0.8) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        width: 44px !important;
+        height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    /* Overlay para cerrar sidebar */
+    .mobile-sidebar-overlay {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+        z-index: 999 !important;
+        display: none !important;
+    }
+
+    .mobile-sidebar-overlay.active {
+        display: block !important;
+    }
+
+    /* Contenedor de mensajes responsivo */
+    .messages-container {
+        flex: 1 !important;
+        overflow-y: auto !important;
+        padding: 1rem !important;
+        padding-bottom: 120px !important; /* Espacio para la navegación móvil */
+    }
+
+    /* Input de mensaje responsivo */
+    .message-input-container {
+        padding: 1rem !important;
+        border-top: 1px solid rgba(59, 130, 246, 0.2) !important;
+        flex-shrink: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    .message-input {
+        width: 100% !important;
+        min-height: 44px !important;
+        padding: 12px 48px 12px 16px !important;
+        border-radius: 12px !important;
+        resize: none !important;
+    }
+
+    /* Botones de acción más grandes en móvil */
+    .context-btn,
+    .new-chat-btn {
+        padding: 12px 16px !important;
+        font-size: 14px !important;
+        min-height: 44px !important;
+    }
+
+    /* Ajustar mensajes en móvil */
+    .message {
+        margin-bottom: 1rem !important;
+        max-width: 100% !important;
+    }
+
+    .message-content {
+        padding: 12px 16px !important;
+        font-size: 14px !important;
+        line-height: 1.5 !important;
+    }
+
+    /* Ocultar elementos no esenciales en pantallas muy pequeñas */
+    @media (max-width: 480px) {
+        .context-indicator,
+        .chat-actions button span {
+            display: none !important;
+        }
+
+        .chat-title h3 {
+            font-size: 16px !important;
+        }
+
+        .sessions-sidebar {
+            width: 90% !important;
+        }
+    }
+
+    /* Ajustar diseño del tablero en móvil */
+    #kanban-board .grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.75rem !important;
+    }
+
+    /* Ajustar columnas kanban en móvil */
+    .kanban-col {
+        margin-bottom: 1rem;
+    }
+
+    .kanban-list {
+        min-height: 150px !important;
+    }
+
+    /* Hacer las tareas más compactas en móvil */
+    .kanban-task {
+        margin-bottom: 0.5rem !important;
+        padding: 0.75rem !important;
+        font-size: 0.875rem !important;
+    }
+
+    /* Ajustar headers de columnas */
+    .kanban-col-header {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.75rem !important;
+    }
+
+    .nav-center-bg {
+        border-radius: 50% !important;
+        width: 56px !important;
+        height: 56px !important;
+        min-width: 56px !important;
+        max-width: 56px !important;
+        min-height: 56px !important;
+        max-height: 56px !important;
+        border: none !important;
+        outline: none !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+        -webkit-border-radius: 50% !important;
+        -moz-border-radius: 50% !important;
+    }
+
     /* Animaciones suaves para transiciones */
     .nav-transition {
         transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
@@ -77,10 +371,98 @@
     .nav-center-bg {
         width: 48px !important;
         height: 48px !important;
+        border-radius: 50% !important;
+        -webkit-border-radius: 50% !important;
+        -moz-border-radius: 50% !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
+        min-height: 48px !important;
+        max-height: 48px !important;
+        aspect-ratio: 1 / 1 !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
     }
 
     .nav-icon-center {
         width: 20px !important;
         height: 20px !important;
+    }
+}
+
+/* ========== AI ASSISTANT DESKTOP/MOBILE POSITIONING ========== */
+
+/* Posicionamiento correcto para desktop */
+@media (min-width: 769px) {
+    .ai-main-container {
+        padding-top: 90px !important;
+        margin-top: 0 !important;
+    }
+
+    main .ai-main-container {
+        padding-top: 90px !important;
+    }
+}
+
+/* Asegurar que en móvil no tenga padding extra y eliminar hueco superior */
+@media (max-width: 768px) {
+    .ai-main-container {
+        padding-top: 70px !important;
+        margin-top: 0 !important;
+        height: 100vh !important;
+        position: relative !important;
+        top: 0 !important;
+    }
+
+    /* Ajustar el main del asistente IA en móvil */
+    main.w-full {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+        height: 100vh !important;
+    }
+
+    /* Contenedor del asistente IA */
+    .ai-assistant-container {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+        height: 100vh !important;
+        position: relative !important;
+    }
+
+    /* Chat principal más arriba */
+    .chat-main {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+        height: calc(100vh - 90px) !important;
+    }
+
+    /* Header del chat ajustado */
+    .chat-header {
+        margin-top: 0 !important;
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+        position: relative !important;
+        top: 0 !important;
+        background: transparent !important;
+        z-index: 10 !important;
+    }
+
+    /* Área de mensajes optimizada */
+    .messages-container,
+    .chat-messages {
+        height: calc(100vh - 200px) !important;
+        overflow-y: auto !important;
+        padding-bottom: 100px !important;
+    }
+
+    /* Input del chat en la parte inferior */
+    .chat-input-container {
+        position: fixed !important;
+        bottom: 90px !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: rgba(15, 23, 42, 0.95) !important;
+        backdrop-filter: blur(10px) !important;
+        padding: 1rem !important;
+        z-index: 20 !important;
     }
 }
