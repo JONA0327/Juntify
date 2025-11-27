@@ -1,0 +1,86 @@
+/* Configuración global para la nueva navegación móvil mejorada */
+
+/* Asegurar que el body tenga espacio para la navegación móvil */
+@media (max-width: 768px) {
+    body {
+        padding-bottom: 90px !important;
+    }
+
+    /* Contenedores principales */
+    .main-content,
+    .content-wrapper,
+    .page-content,
+    .admin-content {
+        padding-bottom: 6rem !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* Ajustes para modales y overlays */
+    .modal,
+    .overlay {
+        z-index: 999 !important;
+    }
+
+    /* Asegurar que elementos fijos no interfieran */
+    .fixed-bottom,
+    .bottom-bar {
+        bottom: 90px !important;
+    }
+
+    /* Ocultar navegación antigua si existiera */
+    .mobile-navbar,
+    .old-mobile-nav {
+        display: none !important;
+    }
+
+    /* Forzar visualización de la navegación móvil nueva */
+    .mobile-bottom-nav {
+        display: grid !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 9999 !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    /* Animaciones suaves para transiciones */
+    .nav-transition {
+        transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+
+    /* Mejoras visuales para pantallas pequeñas */
+    .mobile-bottom-nav {
+        box-shadow:
+            0 -10px 30px rgba(0, 0, 0, 0.3),
+            0 -1px 0px rgba(59, 130, 246, 0.2) !important;
+    }
+}
+
+/* Configuración para pantallas muy pequeñas */
+@media (max-width: 480px) {
+    .mobile-bottom-nav {
+        padding: 0.5rem 0.75rem !important;
+    }
+
+    .nav-label,
+    .nav-label-center {
+        font-size: 0.6rem !important;
+    }
+
+    .nav-icon {
+        width: 18px !important;
+        height: 18px !important;
+    }
+
+    .nav-center-bg {
+        width: 48px !important;
+        height: 48px !important;
+    }
+
+    .nav-icon-center {
+        width: 20px !important;
+        height: 20px !important;
+    }
+}

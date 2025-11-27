@@ -25,6 +25,10 @@
         'resources/css/audio-processing.css',
         'resources/js/reuniones_v2.js'
     ])
+
+    <!-- Shepherd.js para tutorial -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/shepherd.js@13.0.3/dist/css/shepherd.css">
+    <script src="https://cdn.jsdelivr.net/npm/shepherd.js@13.0.3/dist/js/shepherd.min.js"></script>
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
 
@@ -33,7 +37,7 @@
     <div class="flex">
 
         @include('partials.navbar')
-        @include('partials.mobile-nav')
+
 
         <main class="w-full pt-20 md:pt-24 lg:pl-24 lg:mt-[130px]">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

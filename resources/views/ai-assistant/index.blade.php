@@ -26,7 +26,7 @@
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
     <div class="flex">
         @include('partials.navbar')
-        @include('partials.mobile-nav')
+
 
         <main class="w-full pl-24 pt-6" style="margin-top:80px;">
             <!-- Contenedor Centrado -->

@@ -29,7 +29,7 @@
     @include('partials.navbar')
 
     <!-- Barra de navegación móvil -->
-    @include('partials.mobile-nav')
+
 
     <!-- Botón para abrir sidebar en móvil -->
     <button class="mobile-sidebar-btn mobile-menu-btn" onclick="toggleSidebar()" aria-label="Abrir menú">

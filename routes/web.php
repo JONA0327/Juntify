@@ -95,17 +95,7 @@ Route::middleware(['auth'])->group(function () {
         return redirect()->route('reuniones.index');
     })->name('dashboard');
 
-    // Tutorial Routes
-    Route::prefix('tutorial')->name('tutorial.')->group(function () {
-        Route::get('/status', [\App\Http\Controllers\TutorialController::class, 'getStatus'])->name('status');
-        Route::post('/progress', [\App\Http\Controllers\TutorialController::class, 'updateProgress'])->name('progress');
-        Route::put('/preferences', [\App\Http\Controllers\TutorialController::class, 'updatePreferences'])->name('preferences');
-        Route::post('/reset', [\App\Http\Controllers\TutorialController::class, 'reset'])->name('reset');
-        Route::get('/config', [\App\Http\Controllers\TutorialController::class, 'getPageConfig'])->name('config');
-        Route::get('/settings', function() {
-            return view('tutorial.settings');
-        })->name('settings');
-    });
+
 
     // Reuniones - con refresh automático de token
     Route::get('/reuniones', [MeetingController::class, 'index'])
@@ -255,8 +245,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/plans/manage', [PlanManagementController::class, 'index'])->name('admin.plans');
     Route::get('/admin/plans/list', [PlanManagementController::class, 'list']);
     Route::post('/admin/plans', [PlanManagementController::class, 'store']);
-    Route::put('/admin/plans/{id}', [PlanManagementController::class, 'update']);
-    Route::delete('/admin/plans/{id}', [PlanManagementController::class, 'destroy']);
 
     Route::post('/admin/pending-recordings/process', [\App\Http\Controllers\PendingRecordingController::class, 'process'])
         ->name('admin.pending-recordings.process');

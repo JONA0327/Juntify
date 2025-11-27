@@ -2814,7 +2814,7 @@ class MeetingController extends Controller
 
             // Obtener grabaciones pendientes del usuario
             $pendingRecordings = \App\Models\PendingRecording::where('username', $user->username)
-                ->where('status', 'pending')
+                ->where('status', \App\Models\PendingRecording::STATUS_PENDING)
                 ->get();
 
             $pendingMeetings = [];
@@ -2894,11 +2894,11 @@ class MeetingController extends Controller
 
             $pendingRecording = \App\Models\PendingRecording::where('id', $id)
                 ->where('username', $user->username)
-                ->where('status', 'pending')
+                ->where('status', \App\Models\PendingRecording::STATUS_PENDING)
                 ->firstOrFail();
 
             // Cambiar status a 'processing'
-            $pendingRecording->update(['status' => 'processing']);
+            $pendingRecording->update(['status' => \App\Models\PendingRecording::STATUS_PROCESSING]);
 
             // Guardar información en memoria para el proceso
             $originalAudioName = $pendingRecording->meeting_name;
@@ -2937,7 +2937,7 @@ class MeetingController extends Controller
                     'message' => 'Audio descargado y listo para procesamiento',
                     'recording_id' => $pendingRecording->id,
                     'filename' => $originalAudioName,
-                    'status' => 'processing',
+                    'status' => \App\Models\PendingRecording::STATUS_PROCESSING,
                     'temp_file' => $tempFileName,
                     'redirect_to_processing' => true
                 ]);
@@ -2945,7 +2945,7 @@ class MeetingController extends Controller
             } catch (\Exception $e) {
                 // Si hay error en la descarga, revertir el status
                 $pendingRecording->update([
-                    'status' => 'pending',
+                    'status' => \App\Models\PendingRecording::STATUS_PENDING,
                     'error_message' => 'Error al descargar: ' . $e->getMessage()
                 ]);
                 throw $e;
@@ -3000,7 +3000,7 @@ class MeetingController extends Controller
             // Verificar que el registro esté en estado processing
             $pendingRecording = \App\Models\PendingRecording::where('id', $pendingId)
                 ->where('username', $user->username)
-                ->where('status', 'processing')
+                ->where('status', \App\Models\PendingRecording::STATUS_PROCESSING)
                 ->firstOrFail();
 
             // Recuperar información del proceso desde la session
@@ -3401,7 +3401,7 @@ class MeetingController extends Controller
 
             $pendingRecording = \App\Models\PendingRecording::where('id', $id)
                 ->where('username', $user->username)
-                ->where('status', 'processing')
+                ->where('status', \App\Models\PendingRecording::STATUS_PROCESSING)
                 ->firstOrFail();
 
             // Recuperar información del proceso
@@ -3418,7 +3418,7 @@ class MeetingController extends Controller
                 'pending_id' => $id,
                 'original_name' => $processInfo['original_name'],
                 'temp_file' => basename($processInfo['temp_file']),
-                'status' => 'processing'
+                'status' => \App\Models\PendingRecording::STATUS_PROCESSING
             ]);
 
         } catch (\Exception $e) {

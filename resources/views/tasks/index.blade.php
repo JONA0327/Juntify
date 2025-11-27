@@ -50,7 +50,7 @@
     <div class="flex">
 
         @include('partials.navbar')
-        @include('partials.mobile-nav')
+
 
         <main class="w-full pt-20 lg:pl-24 lg:pt-24 lg:mt-[130px]">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

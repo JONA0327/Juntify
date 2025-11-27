@@ -25,7 +25,7 @@
     @include('partials.navbar')
 
     <!-- Barra de navegación móvil -->
-    @include('partials.mobile-nav')
+
 
     <div class="app-container">
         <!-- Main Content -->
