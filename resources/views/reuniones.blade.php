@@ -23,7 +23,8 @@
         'resources/js/app.js', 'resources/css/index.css',
         'resources/css/reuniones_v2.css',
         'resources/css/audio-processing.css',
-        'resources/js/reuniones_v2.js'
+        'resources/js/reuniones_v2.js',
+        'resources/css/mobile-navigation.css'
     ])
 
     <!-- Shepherd.js para tutorial -->
@@ -194,6 +195,8 @@
             </form>
         </div>
     </div>
+
+    @include('partials.mobile-bottom-nav')
 
     <script>
         // Helpers simples para errores y contador (usa funciones existentes si ya están en reuniones_v2.js)
