@@ -402,10 +402,26 @@ class JuntifyTutorial {
     }
 
     getProfileSteps() {
+        const infoGif = encodeURI('/tutorial-media/perfil/Adobe Express - Informacion.gif');
+        const connectGif1 = encodeURI('/tutorial-media/perfil/Adobe Express - Conectar 1.gif');
+        const connectGif2 = encodeURI('/tutorial-media/perfil/Adobe Express - Conectar 2.gif');
+
+        const buildGifContent = (legend, gifPath) => `
+            <div class="tutorial-rich-step">
+                <p style="margin-bottom: 12px; line-height: 1.6;">${legend}</p>
+                <div style="border: 1px solid #e5e7eb; background: #0b1120; border-radius: 12px; padding: 8px;">
+                    <img src="${gifPath}" alt="Vista previa del tutorial" style="width: 100%; max-width: 480px; border-radius: 8px; display: block; margin: 0 auto;" />
+                </div>
+            </div>
+        `;
+
         return [
             {
                 title: 'Información del perfil',
-                text: 'Aquí encuentras tu nombre, usuario, correo y organización. También se muestra tu plan actual y la fecha de vencimiento para que sepas cuándo renovar.',
+                text: buildGifContent(
+                    'En la vista de perfil podrás visualizar en la opción de la sidebar de lado izquierdo la opción Información, donde podrás ver la información de tu cuenta, tu plan y eliminar permanentemente tu cuenta de Juntify.',
+                    infoGif
+                ),
                 attachTo: {
                     element: '[data-tutorial="welcome-header"], [data-tutorial="profile-info-card"]',
                     on: 'bottom'
@@ -413,78 +429,44 @@ class JuntifyTutorial {
                 beforeShowPromise: () => this.ensureProfileSection('info'),
                 buttons: [
                     {
-                        text: 'Siguiente',
-                        action: this.tour.next,
+                        text: 'Iniciar tutorial',
+                        action: () => this.tour.next(),
                         classes: 'btn btn-primary'
-                    }
-                ]
-            },
-            {
-                title: 'Plan y vigencia',
-                text: 'Consulta el plan activo, su estado y la fecha de expiración. Si tu periodo de gracia está por vencer, este panel te avisará para que actualices a tiempo.',
-                attachTo: {
-                    element: '[data-tutorial="profile-plan-card"]',
-                    on: 'top'
-                },
-                beforeShowPromise: () => this.ensureProfileSection('info'),
-                buttons: [
-                    {
-                        text: 'Anterior',
-                        action: this.tour.back,
-                        classes: 'btn btn-secondary'
                     },
                     {
-                        text: 'Siguiente',
-                        action: this.tour.next,
-                        classes: 'btn btn-primary'
-                    }
-                ]
-            },
-            {
-                title: 'Zona de peligro',
-                text: 'Eliminar la cuenta borra permanentemente todas las reuniones, tareas y archivos. Úsalo solo si estás seguro porque no se puede deshacer.',
-                attachTo: {
-                    element: '[data-tutorial="danger-zone"]',
-                    on: 'top'
-                },
-                beforeShowPromise: () => this.ensureProfileSection('info'),
-                buttons: [
-                    {
-                        text: 'Anterior',
-                        action: this.tour.back,
+                        text: 'Saltar',
+                        action: () => this.tour.complete(),
                         classes: 'btn btn-secondary'
-                    },
-                    {
-                        text: 'Siguiente',
-                        action: this.tour.next,
-                        classes: 'btn btn-primary'
                     }
                 ]
             },
             {
-                title: 'Opciones del perfil',
-                text: 'En la barra lateral administra Información, Conectar (Drive y Calendar), Planes disponibles y Mis compras. Cada botón se resalta al seleccionarlo para que ubiques rápidamente la sección.',
+                title: 'Ve a Conectar',
+                text: 'Ahora haz clic en la opción "Conectar" de la barra lateral para configurar Google Drive y Calendar.',
                 attachTo: {
-                    element: '[data-tutorial="sidebar"]',
+                    element: '[data-tutorial="connect-link"]',
                     on: 'right'
                 },
                 beforeShowPromise: () => this.ensureProfileSection('info'),
                 buttons: [
                     {
                         text: 'Anterior',
-                        action: this.tour.back,
+                        action: () => this.tour.back(),
                         classes: 'btn btn-secondary'
                     },
                     {
                         text: 'Siguiente',
-                        action: this.tour.next,
+                        action: () => this.tour.next(),
                         classes: 'btn btn-primary'
                     }
                 ]
             },
             {
-                title: 'Conecta Drive y Calendar',
-                text: 'Desde esta tarjeta enlazas Google Drive y Calendar. Haz clic en “Conectar Drive y Calendar” para sincronizar tus grabaciones y eventos en la nube.',
+                title: 'Conectar Drive y Calendar',
+                text: buildGifContent(
+                    'Para conectar tu cuenta a Drive debes tener plan Business, Enterprise o Founder. Selecciona "Conectar" y sigue los pasos que se muestran en la imagen.',
+                    connectGif1
+                ),
                 attachTo: {
                     element: '[data-tutorial="connect-card"], [data-tutorial="connect-drive-button"]',
                     on: 'top'
@@ -493,19 +475,22 @@ class JuntifyTutorial {
                 buttons: [
                     {
                         text: 'Anterior',
-                        action: this.tour.back,
+                        action: () => this.tour.back(),
                         classes: 'btn btn-secondary'
                     },
                     {
                         text: 'Siguiente',
-                        action: this.tour.next,
+                        action: () => this.tour.next(),
                         classes: 'btn btn-primary'
                     }
                 ]
             },
             {
-                title: 'Estructura automática',
-                text: 'Juntify organiza los archivos en carpetas para audios, transcripciones, pendientes y documentos. Puedes cambiar la carpeta principal y guardaremos todo de forma ordenada.',
+                title: 'Conexión completada',
+                text: buildGifContent(
+                    'Una vez conectado, te aparecerá que tu Drive y Calendar están conectados y verás la carpeta donde se guardarán las subcarpetas para almacenar las reuniones de Juntify.',
+                    connectGif2
+                ),
                 attachTo: {
                     element: '[data-tutorial="folder-config-card"], [data-tutorial="subfolder-card"]',
                     on: 'top'
@@ -514,32 +499,28 @@ class JuntifyTutorial {
                 buttons: [
                     {
                         text: 'Anterior',
-                        action: this.tour.back,
+                        action: () => this.tour.back(),
                         classes: 'btn btn-secondary'
                     },
                     {
                         text: 'Siguiente',
-                        action: this.tour.next,
+                        action: () => this.tour.next(),
                         classes: 'btn btn-primary'
                     }
                 ]
             },
             {
-                title: 'Barra de navegación',
-                text: 'Reuniones muestra las grabaciones guardadas; Nueva reunión inicia una nueva; Tareas (según tu plan) gestiona pendientes del análisis; Contactos y Organización (Enterprise) sirven para compartir y administrar; el Asistente IA responde sobre reuniones; en Perfil ves planes, cuenta y notificaciones.',
-                attachTo: {
-                    element: '[data-tutorial="navigation"]',
-                    on: 'bottom'
-                },
+                title: 'Terminar tutorial vista perfil',
+                text: 'Listo, ya conoces los pasos para revisar tu información y conectar tus herramientas. Puedes cerrar el tutorial cuando quieras.',
                 buttons: [
                     {
                         text: 'Anterior',
-                        action: this.tour.back,
+                        action: () => this.tour.back(),
                         classes: 'btn btn-secondary'
                     },
                     {
-                        text: 'Finalizar',
-                        action: this.tour.complete,
+                        text: 'Cerrar',
+                        action: () => this.tour.complete(),
                         classes: 'btn btn-primary'
                     }
                 ]
