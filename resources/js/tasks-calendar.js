@@ -1,28 +1,12 @@
 // JavaScript para el calendario de tareas
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Calendario: Iniciando...');
-
-    const titleEl = document.getElementById('cal-title');
+document.addEventListener('DOMContentLoaded', () => {const titleEl = document.getElementById('cal-title');
     const cellsContainer = document.getElementById('cal-cells');
     const cellTpl = document.getElementById('cal-cell-template');
     const taskBarsOverlay = document.getElementById('task-bars-overlay');
     const extendedTaskBarTpl = document.getElementById('extended-task-bar-template');
     const btnPrev = document.getElementById('cal-prev');
     const btnNext = document.getElementById('cal-next');
-    const btnToday = document.getElementById('cal-today');
-
-    console.log('📍 Elementos encontrados:', {
-        titleEl: !!titleEl,
-        cellsContainer: !!cellsContainer,
-        cellTpl: !!cellTpl,
-        taskBarsOverlay: !!taskBarsOverlay,
-        extendedTaskBarTpl: !!extendedTaskBarTpl,
-        btnPrev: !!btnPrev,
-        btnNext: !!btnNext,
-        btnToday: !!btnToday
-    });
-
-    if (!titleEl || !cellsContainer || !cellTpl) {
+    const btnToday = document.getElementById('cal-today');if (!titleEl || !cellsContainer || !cellTpl) {
         console.error('❌ Elementos del calendario no encontrados!');
         return;
     }
@@ -56,11 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams({ start: fmtDate(start), end: fmtDate(end) });
             const base = window.taskData?.apiTasks || '/api/tasks-laravel/calendar';
             const url = new URL(base, window.location.origin);
-            url.search = params.toString();
-
-            console.log('🌐 Fetching eventos desde:', url.toString());
-
-            const headers = {
+            url.search = params.toString();const headers = {
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': csrf
             };
@@ -71,32 +51,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(url, {
                 headers,
                 credentials: 'include'
-            });
+            });const data = await res.json();eventsByDate = {};
 
-            console.log('📡 Respuesta recibida:', res.status, res.statusText);
-
-            const data = await res.json();
-            console.log('📦 Datos recibidos:', data);
-
-            eventsByDate = {};
-
-            const events = Array.isArray(data) ? data : [];
-            console.log('📋 Procesando', events.length, 'eventos');
-
-            for (const ev of events){
+            const events = Array.isArray(data) ? data : [];for (const ev of events){
                 if (!ev.start) {
                     console.warn('⚠️ Evento sin fecha de inicio:', ev);
                     continue;
                 }
                 const day = ev.start.substring(0,10);
                 if (!eventsByDate[day]) eventsByDate[day] = [];
-                eventsByDate[day].push(ev);
-                console.log(`✅ Evento agregado para ${day}:`, ev.title || 'Sin título');
-            }
-
-            console.log('📊 Eventos organizados por fecha:', eventsByDate);
-
-        } catch (error) {
+                eventsByDate[day].push(ev);}} catch (error) {
             console.error('❌ Error fetching calendar events:', error);
         }
     }
@@ -124,9 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderCalendar(date) {
-        console.log('Renderizando calendario...', date);
-        titleEl.textContent = monthNames[date.getMonth()] + ' ' + date.getFullYear();
+    function renderCalendar(date) {titleEl.textContent = monthNames[date.getMonth()] + ' ' + date.getFullYear();
         cellsContainer.innerHTML = '';
         if (taskBarsOverlay) taskBarsOverlay.innerHTML = '';
 
@@ -135,14 +97,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const daysInMonth = new Date(date.getFullYear(), date.getMonth()+1, 0).getDate();
         const totalCells = 42;
         const todayStr = fmtDate(new Date());
-        const today = new Date();
-        console.log('📆 Fecha de HOY detectada:', todayStr);
-        const prevMonthDays = startWeekday;
-        const prevMonthLastDate = new Date(date.getFullYear(), date.getMonth(), 0).getDate();
-
-        console.log('Creando', totalCells, 'celdas...');
-
-        // Mapa para almacenar información de las celdas
+        const today = new Date();const prevMonthDays = startWeekday;
+        const prevMonthLastDate = new Date(date.getFullYear(), date.getMonth(), 0).getDate();// Mapa para almacenar información de las celdas
         const cellMap = new Map();
 
         // Crear todas las celdas del calendario
@@ -186,33 +142,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Día actual en verde
-            if (iso === todayStr){
-                console.log('🎯 Aplicando estilo de HOY a:', iso, cellDate.getDate());
-                todayBadge.classList.remove('hidden');
+            if (iso === todayStr){todayBadge.classList.remove('hidden');
                 wrapper.classList.add('ring-2', 'ring-green-400/50', 'bg-green-500/10');
                 dayNumEl.classList.remove('text-slate-300');
                 dayNumEl.classList.add('text-green-300', 'font-bold');
-            } else {
-                console.log('📅 Día normal:', iso, cellDate.getDate());
-            }
+            } else {}
 
             cellsContainer.appendChild(cell);
-        }
-
-        console.log('✅ Celdas creadas. Renderizando barras extendidas...');
-
-        // Renderizar barras extendidas para tareas
+        }// Renderizar barras extendidas para tareas
         if (taskBarsOverlay) {
             renderExtendedTaskBars(cellMap, today, todayStr);
-        }
+        }}
 
-        console.log('✅ Calendario renderizado exitosamente');
-    }
-
-    function renderExtendedTaskBars(cellMap, today, todayStr) {
-        console.log('🎨 Renderizando barras extendidas...');
-
-        // Crear un mapa de tareas por fecha para evitar duplicados
+    function renderExtendedTaskBars(cellMap, today, todayStr) {// Crear un mapa de tareas por fecha para evitar duplicados
         const processedTasks = new Set();
 
         // Contador de tareas por celda para apilar verticalmente
@@ -229,12 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const taskEndDate = new Date(event.end || event.start);
 
                 // Solo mostrar tareas que terminen HOY o en el futuro
-                if (taskEndDate < today) continue;
-
-                console.log(`📊 Procesando tarea: ${event.title}`);
-                console.log(`📅 Desde HOY (${todayStr}) hasta fecha límite: ${fmtDate(taskEndDate)}`);
-
-                // Calcular duración desde HOY hasta fecha límite
+                if (taskEndDate < today) continue;// Calcular duración desde HOY hasta fecha límite
                 const duration = calculateTaskDuration(today, taskEndDate, cellMap);
                 if (duration.isValid) {
                     // Contar tareas en la celda de inicio para apilar
@@ -262,11 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Calcular días de diferencia
         const timeDiff = endDate.getTime() - startDate.getTime();
-        const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-
-        console.log(`📏 Duración calculada: ${daysDiff} días (${startStr} -> ${endStr})`);
-
-        return {
+        const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));return {
             isValid: true,
             startRow: startCell.row,
             startCol: startCell.col,
@@ -356,30 +289,13 @@ document.addEventListener('DOMContentLoaded', () => {
         bar.style.zIndex = `${10 + taskIndex}`;
         bar.style.height = `${barHeight}px`;
         bar.style.fontSize = '11px';
-        bar.style.borderRadius = '6px';
-
-        console.log(`🎯 Barra creada: ${event.title} - Fila: ${duration.startRow}, Col: ${duration.startCol}-${duration.endCol}, Índice: ${taskIndex}`);
-
-        // Agregar al overlay
+        bar.style.borderRadius = '6px';// Agregar al overlay
         taskBarsOverlay.appendChild(barElement);
     }
 
-    function renderTaskBars() {
-        console.log('Función renderTaskBars llamada');
-        // Por ahora simplificado - mostrar tareas básicas
-        for (const [dateStr, events] of Object.entries(eventsByDate)) {
-            console.log('Procesando fecha:', dateStr, 'con', events.length, 'eventos');
-        }
+    function renderTaskBars() {// Por ahora simplificado - mostrar tareas básicas
+        for (const [dateStr, events] of Object.entries(eventsByDate)) {}
     }
 
-    async function loadAndRender(){
-        console.log('🔄 Cargando y renderizando calendario...');
-        await fetchEvents(viewDate);
-        console.log('📅 Eventos cargados:', eventsByDate);
-        renderCalendar(viewDate);
-        console.log('✅ Calendario renderizado!');
-    }
-
-    console.log('🎬 Iniciando carga inicial...');
-    loadAndRender();
+    async function loadAndRender(){await fetchEvents(viewDate);renderCalendar(viewDate);}loadAndRender();
 });

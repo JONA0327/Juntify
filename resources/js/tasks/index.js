@@ -180,9 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setTaskMainView(view){
         // Para usuarios business, solo permitir calendario
-        if (window.taskLaravel && window.taskLaravel.isBusinessPlan && view === 'tablero') {
-            console.log('🚫 Acceso al tablero bloqueado para Plan Business');
-            return;
+        if (window.taskLaravel && window.taskLaravel.isBusinessPlan && view === 'tablero') {return;
         }
 
         currentTaskMainView = ['calendario', 'tablero'].includes(view) ? view : 'calendario';
