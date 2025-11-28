@@ -48,7 +48,7 @@
                 Eliminar Cuenta
             </h3>
         </div>
-        <form method="POST" action="{{ route('account.delete') }}" onsubmit="return confirmDeleteAccount(event)">
+        <form method="POST" action="{{ route('account.delete') }}" onsubmit="return confirmDeleteAccount(event)" data-expected-username="{{ strtoupper(auth()->user()->username) }}">
             @csrf
             @method('DELETE')
             <div class="modal-body">
@@ -126,148 +126,9 @@
     </div>
 </div>
 
-<style>
-.modal-success {
-    backdrop-filter: blur(8px);
-    background: rgba(0, 0, 0, 0.5);
-}
 
-.modal-payment-success {
-    max-width: 500px;
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-}
 
-.modal-header-success {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: white;
-    text-align: center;
-    padding: 2rem 1.5rem 1.5rem;
-    border-bottom: none;
-}
 
-.success-icon {
-    width: 64px;
-    height: 64px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 1rem;
-}
-
-.checkmark {
-    width: 32px;
-    height: 32px;
-    color: white;
-}
-
-.modal-header-success .modal-title {
-    font-size: 1.5rem;
-    font-weight: 600;
-    margin: 0;
-}
-
-.payment-details {
-    background: #f8fafc;
-    border-radius: 8px;
-    padding: 1rem;
-    margin: 1rem 0;
-}
-
-.detail-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.detail-item:last-child {
-    border-bottom: none;
-}
-
-.detail-label {
-    font-weight: 500;
-    color: #64748b;
-}
-
-.detail-value {
-    font-weight: 600;
-    color: #1e293b;
-}
-
-.status-approved {
-    color: #059669 !important;
-}
-
-.simulation-badge {
-    background: #fef3c7;
-    color: #92400e;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-
-.success-message {
-    background: #ecfdf5;
-    border: 1px solid #d1fae5;
-    border-radius: 8px;
-    padding: 1rem;
-    margin-top: 1rem;
-}
-
-.success-message p {
-    margin: 0 0 0.5rem;
-    color: #065f46;
-}
-
-.success-message p:last-child {
-    margin-bottom: 0;
-}
-
-.btn-success {
-    background: linear-gradient(135deg, #10b981, #059669);
-    border: none;
-    color: white;
-    font-weight: 600;
-    padding: 0.75rem 2rem;
-    border-radius: 8px;
-    width: 100%;
-    transition: all 0.2s;
-}
-
-.btn-success:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-}
-</style>
-
-<script>
-function closePaymentSuccessModal() {
-    const modal = document.getElementById('payment-success-modal');
-    if (modal) {
-        modal.classList.remove('active');
-        setTimeout(() => {
-            modal.remove();
-        }, 300);
-    }
-}
-</script>
 @endif
 
-<script>
-function confirmDeleteAccount(e){
-    const input = e.target.querySelector('input[name="confirmation"]').value.trim().toUpperCase();
-    const expected = "{{ strtoupper(auth()->user()->username) }}";
-    if(input !== expected){
-        alert('El texto no coincide. Debes escribir exactamente tu nombre de usuario.');
-        e.preventDefault();
-        return false;
-    }
-    return true;
-}
-</script>
+

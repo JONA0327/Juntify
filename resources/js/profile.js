@@ -341,6 +341,9 @@ document.addEventListener('click', e => {
 // Inicialización general al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
   createParticles();
+  initNotifications();
+  initPlanSelection();
+  initGoogleConnectionMonitor();
 
   // Navegación del sidebar
   document.querySelectorAll('.sidebar-nav .nav-link').forEach(link => {
@@ -533,6 +536,297 @@ function showSection(sectionName) {
   }
 }
 
+/**
+ * Manejo de notificaciones del perfil
+ */
+function closeNotification(notificationId) {
+  const notification = document.getElementById(notificationId);
+  if (notification) {
+    notification.classList.add('closing');
+    setTimeout(() => {
+      notification.remove();
+    }, 300);
+  }
+}
+
+function initNotifications() {
+  const notifications = document.querySelectorAll('.notification');
+  notifications.forEach((notification) => {
+    setTimeout(() => {
+      if (notification && notification.parentNode) {
+        closeNotification(notification.id);
+      }
+    }, 5000);
+  });
+}
+
+/**
+ * Monitoriza la conexión con Google para Drive
+ */
+function initGoogleConnectionMonitor() {
+  if (typeof GoogleConnectionMonitor === 'undefined') return;
+  const monitor = new GoogleConnectionMonitor();
+  monitor.init();
+}
+
+/**
+ * Lógica de selección de planes
+ */
+const PLAN_CURRENCY_SYMBOLS = {
+  MXN: '$',
+  USD: '$',
+  EUR: '€',
+};
+
+const PLAN_CURRENCY_LOCALES = {
+  MXN: 'es-MX',
+  USD: 'en-US',
+  EUR: 'es-ES',
+};
+
+const planState = {
+  modal: null,
+  selectedPlanNameEl: null,
+  selectedPlanPriceEl: null,
+  selectedPlanCurrencyEl: null,
+  selectedPlanPeriodEl: null,
+  selectedPlanPriceContainer: null,
+  billingToggleButtons: [],
+  planCards: [],
+  selectedPlanId: null,
+  selectedPlanPeriodLabel: 'mes',
+  selectedBillingPeriod: 'monthly',
+  currentBillingPeriod: 'monthly',
+};
+
+function formatPlanPrice(value, currency) {
+  const locale = PLAN_CURRENCY_LOCALES[currency] || 'es-ES';
+  const amount = Number(value) || 0;
+  const hasDecimals = Math.abs(amount % 1) > 0;
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: hasDecimals ? 2 : 0,
+    maximumFractionDigits: hasDecimals ? 2 : 0,
+  }).format(amount);
+}
+
+function cachePlanElements() {
+  planState.modal = document.getElementById('plan-selection-modal');
+  planState.selectedPlanNameEl = document.getElementById('selected-plan-name');
+  planState.selectedPlanPriceEl = document.getElementById('selected-plan-price');
+  planState.selectedPlanCurrencyEl = document.getElementById('selected-plan-price-currency');
+  planState.selectedPlanPeriodEl = document.getElementById('selected-plan-price-period');
+  planState.selectedPlanPriceContainer = document.querySelector('.selected-plan-price');
+  planState.billingToggleButtons = Array.from(document.querySelectorAll('#billing-toggle .toggle-option'));
+  planState.planCards = Array.from(document.querySelectorAll('.plan-card'));
+}
+
+function selectPlan(planId, planName, planPrice, planCurrency, billingPeriod = 'monthly') {
+  planState.selectedPlanId = planId;
+  planState.selectedBillingPeriod = billingPeriod;
+  planState.selectedPlanPeriodLabel = billingPeriod === 'yearly' ? 'año' : 'mes';
+
+  const numericPrice = Number(planPrice) || 0;
+  const isFree = numericPrice === 0;
+  const currencySymbol = PLAN_CURRENCY_SYMBOLS[planCurrency] || planCurrency;
+
+  if (planState.selectedPlanNameEl) {
+    planState.selectedPlanNameEl.textContent = planName;
+  }
+
+  if (planState.selectedPlanPriceEl) {
+    planState.selectedPlanPriceEl.textContent = isFree
+      ? 'Gratis'
+      : formatPlanPrice(numericPrice, planCurrency);
+  }
+
+  if (planState.selectedPlanCurrencyEl) {
+    planState.selectedPlanCurrencyEl.textContent = isFree ? '' : currencySymbol;
+  }
+
+  if (planState.selectedPlanPeriodEl) {
+    planState.selectedPlanPeriodEl.textContent = isFree ? '' : `/ ${planState.selectedPlanPeriodLabel}`;
+  }
+
+  if (planState.selectedPlanPriceContainer) {
+    planState.selectedPlanPriceContainer.classList.toggle('is-free', isFree);
+  }
+
+  if (planState.modal) {
+    planState.modal.style.display = 'flex';
+  }
+}
+
+function closePlanModal() {
+  if (planState.modal) {
+    planState.modal.style.display = 'none';
+  }
+  planState.selectedPlanId = null;
+  planState.selectedPlanPeriodLabel = 'mes';
+  planState.selectedBillingPeriod = 'monthly';
+}
+
+function confirmPlanSelection() {
+  if (!planState.selectedPlanId) return;
+
+  axios.post('/subscription/create-preference', {
+    plan_id: planState.selectedPlanId,
+    billing_period: planState.selectedBillingPeriod,
+  })
+    .then((response) => {
+      const data = response.data || {};
+      if (data.success) {
+        window.location.href = data.checkout_url;
+      } else {
+        alert(`Error al crear la preferencia de pago: ${data.error || 'Error desconocido'}`);
+      }
+    })
+    .catch((error) => {
+      console.error('Error:', error);
+      alert(`Error al procesar la solicitud: ${error.message}`);
+    })
+    .finally(() => {
+      closePlanModal();
+    });
+}
+
+function updatePlanCardsByPeriod() {
+  planState.planCards.forEach((card) => {
+    const monthlyPrice = Number(card.dataset.monthlyPrice || 0);
+    const yearlyPrice = Number(card.dataset.yearlyPrice || monthlyPrice * 12);
+    const yearlyBase = Number(card.dataset.yearlyBase || yearlyPrice);
+    const discount = Number(card.dataset.discount || 0);
+    const freeMonths = Number(card.dataset.freeMonths || 0);
+    const currency = card.dataset.currency;
+
+    const isYearly = planState.currentBillingPeriod === 'yearly';
+    const price = isYearly ? yearlyPrice : monthlyPrice;
+    const priceCurrencyEl = card.querySelector('[data-price-currency]');
+    const priceNumberEl = card.querySelector('[data-price-number]');
+    const pricePeriodEl = card.querySelector('[data-price-period]');
+    const offerTextEl = card.querySelector('[data-offer-text]');
+
+    const isFree = Number(price) === 0;
+    const currencySymbol = PLAN_CURRENCY_SYMBOLS[currency] || currency;
+
+    if (priceCurrencyEl) {
+      priceCurrencyEl.textContent = isFree ? '' : currencySymbol;
+    }
+
+    if (priceNumberEl) {
+      priceNumberEl.textContent = isFree ? 'Gratis' : formatPlanPrice(price, currency);
+    }
+
+    if (pricePeriodEl) {
+      pricePeriodEl.textContent = isFree ? '' : isYearly ? '/ año' : '/ mes';
+    }
+
+    if (offerTextEl) {
+      if (isYearly && (discount > 0 || freeMonths > 0)) {
+        const details = [];
+        if (discount > 0) {
+          details.push(`Descuento ${discount}%`);
+        }
+        if (freeMonths > 0) {
+          details.push(`${freeMonths} mes(es) gratis`);
+        }
+        if (yearlyBase && yearlyBase > price) {
+          details.push(`Antes ${formatPlanPrice(yearlyBase, currency)}`);
+        }
+        offerTextEl.textContent = details.join(' · ');
+        offerTextEl.classList.remove('hidden');
+      } else {
+        offerTextEl.classList.add('hidden');
+      }
+    }
+
+    const button = card.querySelector('[data-select-plan]');
+    if (button) {
+      button.dataset.billingPeriod = planState.currentBillingPeriod;
+      button.dataset.planPrice = price;
+    }
+  });
+}
+
+function initPlanSelection() {
+  cachePlanElements();
+
+  if (!planState.modal || planState.planCards.length === 0) return;
+
+  planState.modal.addEventListener('click', (event) => {
+    if (event.target === planState.modal) {
+      closePlanModal();
+    }
+  });
+
+  planState.billingToggleButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const selectedPeriod = button.dataset.billingPeriod;
+      planState.currentBillingPeriod = selectedPeriod;
+      planState.selectedBillingPeriod = selectedPeriod;
+
+      planState.billingToggleButtons.forEach((btn) => btn.classList.toggle('active', btn === button));
+      updatePlanCardsByPeriod();
+    });
+  });
+
+  document.querySelectorAll('[data-select-plan]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const card = button.closest('.plan-card');
+      const planId = button.dataset.planId || card?.dataset.planId;
+      const planName = button.dataset.planName || card?.dataset.planName;
+      const planCurrency = button.dataset.planCurrency || card?.dataset.currency;
+      const billingPeriod = button.dataset.billingPeriod || planState.currentBillingPeriod;
+      const planPrice = Number(button.dataset.planPrice || card?.dataset.monthlyPrice || 0);
+
+      selectPlan(planId, planName, planPrice, planCurrency, billingPeriod);
+    });
+  });
+
+  updatePlanCardsByPeriod();
+}
+
+/**
+ * Recibo de compra
+ */
+function downloadReceipt(paymentId) {
+  const url = `/profile/payment/${paymentId}/receipt`;
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `recibo-pago-${paymentId}.pdf`;
+  link.target = '_blank';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+/**
+ * Modal de éxito de pago
+ */
+function closePaymentSuccessModal() {
+  const modal = document.getElementById('payment-success-modal');
+  if (modal) {
+    modal.classList.remove('active');
+    setTimeout(() => {
+      modal.remove();
+    }, 300);
+  }
+}
+
+/**
+ * Confirmación de borrado de cuenta
+ */
+function confirmDeleteAccount(event) {
+  const form = event.target;
+  const expected = form.dataset.expectedUsername;
+  const input = form.querySelector('input[name="confirmation"]')?.value?.trim().toUpperCase();
+  if (!expected || input !== expected) {
+    alert('El texto no coincide. Debes escribir exactamente tu nombre de usuario.');
+    event.preventDefault();
+    return false;
+  }
+  return true;
+}
+
 // Exponer funciones para handlers inline (si aún usas onclick en HTML)
 window.toggleSidebar       = toggleSidebar;
 window.closeSidebar        = closeSidebar;
@@ -546,3 +840,9 @@ window.addSubfolderToList = addSubfolderToList;
 window.openModal          = openModal;
 window.closeModal         = closeModal;
 window.showSection         = showSection;
+window.closeNotification   = closeNotification;
+window.closePlanModal      = closePlanModal;
+window.confirmPlanSelection = confirmPlanSelection;
+window.downloadReceipt     = downloadReceipt;
+window.closePaymentSuccessModal = closePaymentSuccessModal;
+window.confirmDeleteAccount = confirmDeleteAccount;
