@@ -186,86 +186,13 @@
 
     @include('partials.global-vars')
 
-    <script>
-        // Define fallback handlers only if the global helpers are not available
-        if (typeof window.closeUpgradeModal === 'undefined') {
-            window.closeUpgradeModal = function() {
-                const modal = document.getElementById('postpone-locked-modal');
-                if (modal) {
-                    modal.style.display = 'none';
-                    document.body.style.overflow = '';
-                }
-            };
-        }
-
-        if (typeof window.goToPlans === 'undefined') {
-            window.goToPlans = function() {
-                window.closeUpgradeModal();
-                sessionStorage.setItem('navigateToPlans', 'true');
-                window.location.href = '/profile';
-            };
-        }
-    </script>
+    <script src="{{ asset('js/ai-assistant-upgrade.js') }}?v={{ time() }}" defer></script>
+    <script src="{{ asset('js/ai-assistant-context.js') }}?v={{ time() }}" defer></script>
 
     <!-- Navegación móvil -->
     @include('partials.mobile-bottom-nav')
 
-    <script>
-        // JavaScript para el sidebar móvil del asistente IA
-        document.addEventListener('DOMContentLoaded', function() {
-            const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
-            const sessionsSidebar = document.getElementById('sessions-sidebar');
-            const mobileOverlay = document.getElementById('mobile-sidebar-overlay');
-            const mobileCloseBtn = document.getElementById('mobile-close-btn');
-
-            // Función para abrir sidebar
-            function openMobileSidebar() {
-                if (sessionsSidebar) {
-                    sessionsSidebar.classList.add('sidebar-open');
-                    document.body.classList.add('sidebar-mobile-open');
-                }
-            }
-
-            // Función para cerrar sidebar
-            function closeMobileSidebar() {
-                if (sessionsSidebar) {
-                    sessionsSidebar.classList.remove('sidebar-open');
-                    document.body.classList.remove('sidebar-mobile-open');
-                }
-            }
-
-            // Event listeners
-            if (mobileMenuToggle) {
-                mobileMenuToggle.addEventListener('click', openMobileSidebar);
-            }
-
-            if (mobileCloseBtn) {
-                mobileCloseBtn.addEventListener('click', closeMobileSidebar);
-            }
-
-            if (mobileOverlay) {
-                mobileOverlay.addEventListener('click', closeMobileSidebar);
-            }
-
-            // Cerrar sidebar al cambiar a escritorio
-            window.addEventListener('resize', function() {
-                if (window.innerWidth > 768) {
-                    closeMobileSidebar();
-                }
-            });
-
-            // Detectar si es móvil y mostrar botón hamburguesa
-            function checkMobile() {
-                const isMobile = window.innerWidth <= 768;
-                if (mobileMenuToggle) {
-                    mobileMenuToggle.style.display = isMobile ? 'flex' : 'none';
-                }
-            }
-
-            checkMobile();
-            window.addEventListener('resize', checkMobile);
-        });
-    </script>
+    <script src="{{ asset('js/ai-assistant-mobile.js') }}?v={{ time() }}" defer></script>
 
     <script src="{{ asset('js/ai-assistant.js') }}?v={{ time() }}"></script>
 </body>
