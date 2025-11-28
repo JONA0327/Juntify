@@ -1,5 +1,5 @@
 <!-- Interfaz de Grabación de Reunión -->
-<div class="meeting-interface" id="meeting-recorder" style="display: none;">
+<div class="meeting-interface is-hidden" id="meeting-recorder">
     <div class="meeting-recorder-container">
         <div class="meeting-header">
             <h3 class="meeting-title">Grabador de audio de reuniones</h3>
@@ -78,17 +78,17 @@
                 </button>
             </div>
             <div class="recorder-actions" id="meeting-recorder-actions">
-                <button class="icon-btn" id="meeting-pause" onclick="pauseRecording()" style="display: none;">
+                <button class="icon-btn is-hidden" id="meeting-pause" onclick="pauseRecording()">
                     <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
                     </svg>
                 </button>
-                <button class="icon-btn" id="meeting-resume" onclick="resumeRecording()" style="display: none;">
+                <button class="icon-btn is-hidden" id="meeting-resume" onclick="resumeRecording()">
                     <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" />
                     </svg>
                 </button>
-                <button class="icon-btn" id="meeting-discard" onclick="discardRecording()" style="display: none;">
+                <button class="icon-btn is-hidden" id="meeting-discard" onclick="discardRecording()">
                     <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>

@@ -1,11 +1,11 @@
 <!-- Interfaz de Subir Audio -->
-<div class="upload-interface" id="audio-uploader" style="display: none;">
+<div class="upload-interface is-hidden" id="audio-uploader">
     <div class="upload-area" id="upload-area">
         <x-icon name="folder" class="upload-icon" />
         <h3 class="upload-title">Arrastra y suelta tu archivo de audio aquí</h3>
         <p class="upload-subtitle">O haz clic para seleccionar un archivo de audio</p>
         <p class="upload-formats">Formatos soportados: cualquier archivo de audio (OGG, WAV, MP3, M4A, FLAC, AAC, etc.). Las copias de respaldo se descargarán en formato .ogg.</p>
-        <input type="file" id="audio-file-input" accept="audio/*" style="display: none;">
+        <input type="file" id="audio-file-input" accept="audio/*" class="hidden-input">
         <button class="btn btn-primary upload-btn">
             <x-icon name="folder" class="btn-icon" />
             Seleccionar archivo
@@ -13,7 +13,7 @@
     </div>
 
     <!-- Archivo seleccionado -->
-    <div class="selected-file" id="selected-file" style="display: none;">
+    <div class="selected-file is-hidden" id="selected-file">
         <div class="file-info">
             <x-icon name="note" class="file-icon" />
             <div class="file-details">
@@ -25,7 +25,7 @@
                 <span class="sr-only">Eliminar</span>
             </button>
         </div>
-        <div class="upload-progress" id="upload-progress" style="display: none;">
+        <div class="upload-progress is-hidden" id="upload-progress">
             <div class="progress-bar">
                 <div class="progress-fill" id="progress-fill"></div>
             </div>

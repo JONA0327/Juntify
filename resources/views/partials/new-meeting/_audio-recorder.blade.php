@@ -16,7 +16,7 @@
         </div>
     </div>
 
-    <div class="recorder-controls" style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+    <div class="recorder-controls recorder-controls-centered">
         <div class="microphone-container">
             <div class="volume-rings" id="volume-rings">
                 <div class="volume-ring ring-1"></div>
@@ -28,17 +28,17 @@
             </button>
         </div>
         <div class="recorder-actions" id="recorder-actions">
-            <button class="icon-btn" id="pause-recording" onclick="pauseRecording()" style="display: none;">
+            <button class="icon-btn is-hidden" id="pause-recording" onclick="pauseRecording()">
             <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
             </svg>
             </button>
-            <button class="icon-btn" id="resume-recording" onclick="resumeRecording()" style="display: none;">
+            <button class="icon-btn is-hidden" id="resume-recording" onclick="resumeRecording()">
             <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25l13.5 6.75-13.5 6.75V5.25z" />
             </svg>
             </button>
-            <button class="icon-btn" id="discard-recording" onclick="discardRecording()" style="display: none;">
+            <button class="icon-btn is-hidden" id="discard-recording" onclick="discardRecording()">
             <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -63,7 +63,7 @@
 </div>
 
 <!-- Modal Guardar Grabación -->
-<div class="modal" id="save-recording-modal" style="display: none;">
+<div class="modal is-hidden" id="save-recording-modal">
     <div class="modal-content">
         <div class="modal-header">
             <h2 class="modal-title">
@@ -82,7 +82,7 @@
 </div>
 
 <!-- Modal Confirmar Descarte -->
-<div class="modal" id="discard-recording-modal" style="display: none;">
+<div class="modal is-hidden" id="discard-recording-modal">
     <div class="modal-content">
         <div class="modal-header">
             <h2 class="modal-title">
@@ -101,7 +101,7 @@
 </div>
 
 <!-- Modal Confirmar cambio de vista durante grabación -->
-<div class="modal" id="recording-navigation-modal" style="display: none;">
+<div class="modal is-hidden" id="recording-navigation-modal">
     <div class="modal-content">
         <div class="modal-header">
             <h2 class="modal-title">
