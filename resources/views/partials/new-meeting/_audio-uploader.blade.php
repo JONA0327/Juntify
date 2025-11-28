@@ -1,4 +1,9 @@
 <!-- Interfaz de Subir Audio -->
+<!--
+    Espacio para quienes prefieren cargar un archivo existente en lugar de grabar.
+    Los mensajes guían sobre formatos aceptados y el JS controla los estados
+    mediante las clases `is-hidden` y los IDs especificados aquí.
+-->
 <div class="upload-interface is-hidden" id="audio-uploader">
     <div class="upload-area" id="upload-area">
         <x-icon name="folder" class="upload-icon" />

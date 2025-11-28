@@ -1,3 +1,9 @@
+/*
+ * Hoja de estilos principal para la página de Nueva Reunión.
+ * Incluye ajustes visuales para los tres modos (grabar, subir, grabar reunión)
+ * y usa nombres descriptivos para que sea sencillo ubicar cada regla.
+ */
+
 .recorder-actions {
     display: flex;               /* keep row structure always */
     flex-direction: row;

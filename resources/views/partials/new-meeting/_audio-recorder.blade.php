@@ -1,4 +1,9 @@
 <!-- Interfaz de Grabación de Audio -->
+<!--
+    Sección dedicada a la grabación directa desde el navegador. Los textos buscan
+    orientar al usuario y cada bloque tiene IDs específicos que el JS usa para
+    cambiar estados (pausa, reanudar, descartar, etc.).
+-->
 <div class="recorder-interface" id="audio-recorder">
     <div class="recorder-visual">
         <!-- Visualizador de audio -->
