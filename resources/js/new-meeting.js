@@ -1,6 +1,14 @@
 import { saveAudioBlob, loadAudioBlob, clearAllAudio } from './idb.js';
 import { showError, showSuccess } from './utils/alerts.js';
 
+/*
+ * Lógica completa de la pantalla de Nueva Reunión. Aquí se coordinan los tres
+ * modos de captura (grabación directa, carga de archivo y grabación de reunión)
+ * junto con los límites por plan, avisos al usuario y la persistencia temporal
+ * en IndexedDB. Los comentarios resaltan decisiones de UX y estados compartidos
+ * que suelen generar dudas cuando se investiga un bug.
+ */
+
 // ===== VARIABLES GLOBALES =====
 let isRecording = false;
 let isPaused = false;
@@ -50,6 +58,7 @@ let retryAttempts = 0; // Contador de intentos de resubida
 const MAX_RETRY_ATTEMPTS = 3; // Máximo número de reintentos
 let pendingNavigationUrl = null;
 
+// Obtiene una descripción amigable del plan/rol para validar límites y mensajes
 function getUserPlanInfo() {
     const planCode = (window.userPlanCode || '').toString().toLowerCase();
     const role = (window.userRole || '').toString().toLowerCase();
@@ -78,6 +87,7 @@ function getUserPlanInfo() {
     };
 }
 
+// Determina cuánto peso de audio se permite subir según el plan actual
 function getUploadLimitBytes(planInfo, hasPremium) {
     if (planInfo.isBusiness) {
         return 100 * 1024 * 1024;

@@ -1,4 +1,9 @@
 <!-- Interfaz de Grabación de Reunión -->
+<!--
+    Variante pensada para capturar audio del sistema y micrófono al mismo tiempo.
+    Se agregan controles separados por fuente para que el usuario tenga claridad
+    sobre qué se está grabando y cómo mutearlo sin detener la sesión completa.
+-->
 <div class="meeting-interface is-hidden" id="meeting-recorder">
     <div class="meeting-recorder-container">
         <div class="meeting-header">

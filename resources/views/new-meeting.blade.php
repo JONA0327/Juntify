@@ -1,4 +1,10 @@
 <!DOCTYPE html>
+{{--
+    Vista principal para crear una nueva reunión. Aquí se arma la página completa
+    y se conectan los distintos parciales de grabación, subida y configuración.
+    Los comentarios priorizan explicar decisiones y estados esperados para que
+    cualquier persona del equipo entienda el flujo sin tener que rastrear el JS.
+--}}
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
@@ -7,7 +13,7 @@
     <title>Nueva Reunión - Juntify</title>
 
     <!-- Fonts -->
-    <!-- Fonts usando directiva CORS-compatible -->
+    <!-- Cargamos la tipografía usando la directiva con CORS para evitar bloqueos en navegadores estrictos -->
     @corsFont('https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap')    <!-- Styles -->
     @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css', 'resources/css/mobile-navigation.css'])
 </head>
@@ -21,11 +27,12 @@
 >
 @php
     // Fallback defensivo: si la ruta que renderiza esta vista no pasó variables explícitas
+    // se intenta obtenerlos desde la sesión para que el JS siempre encuentre datos.
     $userRole = $userRole ?? (auth()->user()->roles ?? 'free');
     $organizationId = $organizationId ?? (auth()->user()->current_organization_id ?? null);
     $organizationName = $organizationName ?? optional(auth()->user()?->organization)->nombre_organizacion;
 @endphp
-    <!-- Animated particles background -->
+    <!-- Fondo decorativo con partículas para la estética general de la página -->
     <div class="particles" id="particles"></div>
 
     <!-- Navbar principal arriba de todo -->
@@ -45,7 +52,7 @@
                 </div>
             </div>
 
-            <!-- Status Alert - Drive dinámico -->
+            <!-- Estado de Drive: se muestra el resultado de la validación antes de grabar -->
             @php
                 $driveConnected = false;
                 if (auth()->check()) {
@@ -70,7 +77,7 @@
             </div>
             @endif
 
-            <!-- Reuniones mensuales -->
+            <!-- Resumen de uso mensual: por ahora está estático y sirve para mostrar la sección -->
             <div class="analysis-banner">
                 <div class="analysis-content">
                     <x-icon name="chart" class="analysis-icon" />
@@ -84,7 +91,7 @@
                 </div>
             </div>
 
-            <!-- Content Grid -->
+            <!-- Grid principal que contiene modos de grabación, ajustes y el área de trabajo -->
             <div class="content-grid">
                 <!-- Modo de Grabación -->
                 <div class="info-card">

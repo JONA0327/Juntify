@@ -156,6 +156,7 @@ Route::middleware(['auth'])->group(function () {
     })->name('audio-processing');
 });
 
+// Página dedicada a la experiencia "Nueva Reunión" (grabación o carga de audio)
 Route::get('/new-meeting', function () {
     $user = auth()->user();
     return view('new-meeting', [

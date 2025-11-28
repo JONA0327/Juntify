@@ -1,3 +1,10 @@
+//
+// Utilidades para hidratar el contexto global de la página de Nueva Reunión.
+// La idea es tomar los valores que vienen en data-attributes del <body> y
+// colocarlos en window, para que el resto de los módulos los use sin depender
+// directamente del DOM.
+//
+
 function normalizeValue(value) {
     if (value === undefined || value === null || value === '') {
         return null;
@@ -17,11 +24,13 @@ function normalizeNumber(value) {
 
 function hydrateNewMeetingContext() {
     if (typeof document === 'undefined') {
+        // Entorno sin DOM (tests o SSR): no hay nada que hidratar
         return;
     }
 
     const body = document.body;
     if (!body) {
+        // Si el body aún no está disponible, salir silenciosamente
         return;
     }
 
