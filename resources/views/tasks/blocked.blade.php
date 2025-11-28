@@ -16,7 +16,8 @@
         'resources/css/profile.css',
         'resources/css/new-meeting.css',
         'resources/css/index.css',
-        'resources/css/reuniones_v2.css'
+        'resources/css/reuniones_v2.css',
+        'resources/js/tasks/blocked.js'
     ])
 </head>
 <body class="bg-slate-950 text-slate-200 font-sans antialiased">
@@ -61,7 +62,7 @@
     </div>
 
     <!-- Modal de Upgrade -->
-    <div class="modal" id="postpone-locked-modal" style="display: none;">
+    <div class="modal" id="postpone-locked-modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="modal-title">
@@ -82,21 +83,6 @@
             </div>
         </div>
     </div>
-
-    <script>
-        function closeModal(modalId) {
-            const modal = document.getElementById(modalId);
-            if (modal) {
-                modal.style.display = 'none';
-                document.body.style.overflow = '';
-            }
-        }
-
-        // Mostrar modal automáticamente al cargar la página
-        document.addEventListener('DOMContentLoaded', function() {
-            showTasksLockedModal();
-        });
-    </script>
 
 </body>
 </html>

@@ -181,18 +181,8 @@
 </div>
 
 @if(!isset($success) && !isset($alreadyResponded) && !isset($needsAuth))
-<script>
-function confirmResponse(action) {
-    const reason = action === 'reject' ? document.getElementById('rejectReason')?.value || '' : '';
-    const url = new URL(window.location.href);
-
-    if (reason) {
-        url.searchParams.set('reason', reason);
-    }
-
-    // Realizar la acción
-    window.location.href = url.toString();
-}
-</script>
+    @push('scripts')
+        @vite('resources/js/tasks/email-response.js')
+    @endpush
 @endif
 @endsection
