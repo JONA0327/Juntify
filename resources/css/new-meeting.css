@@ -121,6 +121,35 @@ body {
     margin-bottom: 0.5rem;
 }
 
+.alert-drive-unconnected {
+    border: 2px solid var(--danger-color);
+    background: #2a1515;
+}
+
+.alert-icon-danger {
+    color: var(--danger-color);
+}
+
+.alert-message-danger {
+    color: var(--danger-color);
+}
+
+.is-hidden {
+    display: none !important;
+    visibility: hidden;
+}
+
+.hidden-input {
+    display: none;
+}
+
+.recorder-controls-centered {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
 /* Status Alert */
 .status-alert {
     display: flex;

@@ -11,7 +11,14 @@
     @corsFont('https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap')    <!-- Styles -->
     @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css', 'resources/css/mobile-navigation.css'])
 </head>
-<body>
+<body
+    data-user-role="{{ $userRole ?? (auth()->user()->roles ?? 'free') }}"
+    data-organization-id="{{ $organizationId ?? (auth()->user()->current_organization_id ?? '') }}"
+    data-organization-name="{{ $organizationName ?? optional(auth()->user()?->organization)->nombre_organizacion }}"
+    data-user-plan-code="{{ auth()->user()->plan_code ?? 'free' }}"
+    data-user-id="{{ auth()->id() ?? '' }}"
+    data-user-name="{{ auth()->user()->name ?? '' }}"
+>
 @php
     // Fallback defensivo: si la ruta que renderiza esta vista no pasó variables explícitas
     $userRole = $userRole ?? (auth()->user()->roles ?? 'free');
@@ -55,10 +62,10 @@
                 </div>
             </div>
             @else
-            <div class="status-alert danger" style="border:2px solid #ef4444;background:#2a1515;">
-                <x-icon name="x-circle" class="alert-icon" style="color:#ef4444;" />
+            <div class="status-alert danger alert-drive-unconnected">
+                <x-icon name="x-circle" class="alert-icon alert-icon-danger" />
                 <div class="alert-content">
-                    <span style="color:#ef4444;"><b>Parece que aún no has conectado Drive.</b> Conéctalo para guardar tus reuniones. Si no, el sistema no podrá procesar la reunión correctamente.</span>
+                    <span class="alert-message alert-message-danger"><b>Parece que aún no has conectado Drive.</b> Conéctalo para guardar tus reuniones. Si no, el sistema no podrá procesar la reunión correctamente.</span>
                 </div>
             </div>
             @endif
@@ -157,15 +164,9 @@
         </main>
     </div>
 
-    <!-- JavaScript -->
-    <script>
-        window.userRole = @json($userRole ?? null);
-        window.currentOrganizationId = @json($organizationId ?? null);
-        window.currentOrganizationName = @json($organizationName ?? null);
-    </script>
-    @vite(['resources/js/new-meeting.js'])
+    @vite(['resources/js/new-meeting-context.js', 'resources/js/new-meeting.js'])
     <!-- Modal para opción de posponer bloqueada por plan -->
-    <div class="modal" id="postpone-locked-modal" style="display: none;">
+    <div class="modal is-hidden" id="postpone-locked-modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="modal-title">
@@ -182,21 +183,6 @@
             </div>
         </div>
     </div>
-
-<script>
-    // Variables del usuario para JavaScript
-    @auth
-        window.userPlanCode = '{{ auth()->user()->plan_code ?? "free" }}';
-        window.userId = {{ auth()->user()->id }};
-        window.userName = '{{ auth()->user()->name }}';
-        window.userRole = '{{ $userRole }}';
-        window.organizationId = {{ $organizationId ?? 'null' }};
-        console.log('👤 Plan del usuario:', window.userPlanCode);
-    @else
-        window.userPlanCode = 'free';
-        window.userId = null;
-    @endauth
-</script>
 
 <!-- Global vars and functions -->
 @include('partials.global-vars')
