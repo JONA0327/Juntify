@@ -9,29 +9,28 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
-    <script>
-        window.userRole = @json($userRole);
-        window.currentOrganizationId = @json($organizationId);
-    </script>
-
-    <script>
-        window.contactsFeatures = Object.assign(window.contactsFeatures || {}, { showChat: false });
-    </script>
-
     @vite([
         'resources/css/app.css',
         'resources/js/app.js', 'resources/css/index.css',
         'resources/css/reuniones_v2.css',
         'resources/css/audio-processing.css',
         'resources/js/reuniones_v2.js',
-        'resources/css/mobile-navigation.css'
+        'resources/css/mobile-navigation.css',
+        'resources/js/reuniones-page.js',
+        'resources/css/reuniones-page.css'
     ])
 
     <!-- Shepherd.js para tutorial -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/shepherd.js@13.0.3/dist/css/shepherd.css">
     <script src="https://cdn.jsdelivr.net/npm/shepherd.js@13.0.3/dist/js/shepherd.min.js"></script>
 </head>
-<body class="bg-slate-950 text-slate-200 font-sans antialiased">
+<body class="bg-slate-950 text-slate-200 font-sans antialiased"
+    data-user-role="{{ $userRole }}"
+    data-organization-id="{{ $organizationId }}"
+    data-contacts-show-chat="false"
+    data-user-plan-code="{{ auth()->user()->plan_code ?? 'free' }}"
+    data-user-id="{{ auth()->user()->id ?? '' }}"
+    data-user-name="{{ auth()->user()->name ?? '' }}">
 
     @include('partials.global-vars')
 
@@ -65,7 +64,7 @@
                                 <span id="plan-meetings-count" class="text-xs text-slate-400 bg-slate-700/50 px-2 py-1 rounded-full">—/—</span>
                             </div>
                             <div class="w-full bg-slate-700/50 rounded-full h-2.5 overflow-hidden">
-                                <div id="plan-progress-bar" class="progress-bar bg-gradient-to-r from-yellow-400 to-yellow-500 h-2.5 rounded-full shadow-lg shadow-yellow-400/25" style="width: 0%"></div>
+                                <div id="plan-progress-bar" class="progress-bar progress-initial bg-gradient-to-r from-yellow-400 to-yellow-500 h-2.5 rounded-full shadow-lg shadow-yellow-400/25"></div>
                             </div>
                             <p class="text-xs text-slate-500 mt-2" id="plan-remaining-text">Calculando reuniones restantes…</p>
                         </div>
@@ -198,32 +197,8 @@
 
     @include('partials.mobile-bottom-nav')
 
-    <script>
-        // Helpers simples para errores y contador (usa funciones existentes si ya están en reuniones_v2.js)
-        function clearContainerErrors() {
-            const e1 = document.getElementById('error-name');
-            const e2 = document.getElementById('error-description');
-            if (e1) { e1.textContent=''; e1.classList.add('hidden'); }
-            if (e2) { e2.textContent=''; e2.classList.add('hidden'); }
-        }
-        function updateCharacterCount() {
-            const ta = document.getElementById('container-description');
-            const counter = document.getElementById('description-count');
-            if (ta && counter) counter.textContent = `${ta.value.length}/200`;
-        }
-        // Cerrar con ambos botones (principal y duplicado inferior)
-        document.addEventListener('DOMContentLoaded', () => {
-            const cancelDup = document.getElementById('cancel-modal-btn-duplicate');
-            const cancelMain = document.getElementById('cancel-modal-btn');
-            const modal = document.getElementById('container-modal');
-            function closeModalLocal(){ modal.classList.add('hidden'); }
-            if (cancelDup) cancelDup.addEventListener('click', closeModalLocal);
-            if (cancelMain) cancelMain.addEventListener('click', closeModalLocal);
-        });
-    </script>
-
     <!-- Modal para opciones bloqueadas por plan -->
-    <div class="modal" id="postpone-locked-modal" style="display: none;">
+    <div class="modal modal-hidden" id="postpone-locked-modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="modal-title">
@@ -242,72 +217,6 @@
             </div>
         </div>
     </div>
-
-    <script>
-        // Variables del usuario para JavaScript
-        @auth
-            window.userPlanCode = @json(auth()->user()->plan_code ?? 'free');
-            window.userId = @json(auth()->user()->id);
-            window.userName = @json(auth()->user()->name);
-            console.log('👤 Plan del usuario:', window.userPlanCode);
-        @else
-            window.userPlanCode = 'free';
-            window.userId = null;
-            window.userName = null;
-        @endauth
-
-        // Define fallback handlers only if the global helpers are not available
-        if (typeof window.closeUpgradeModal === 'undefined') {
-            window.closeUpgradeModal = function() {
-                console.log('🔒 Cerrando modal de upgrade...');
-
-                // Intentar múltiples IDs posibles
-                const possibleIds = ['postpone-locked-modal', 'upgrade-modal', 'container-modal'];
-                let modal = null;
-
-                for (const id of possibleIds) {
-                    modal = document.getElementById(id);
-                    if (modal) {
-                        console.log('🔍 Modal encontrado:', id);
-                        break;
-                    }
-                }
-
-                // También buscar por clase
-                if (!modal) {
-                    modal = document.querySelector('.modal[style*="display: flex"], .modal.show, .modal.active');
-                    if (modal) {
-                        console.log('🔍 Modal encontrado por clase/estilo');
-                    }
-                }
-
-                if (modal) {
-                    // Resetear todos los estilos posibles
-                    modal.style.setProperty('display', 'none', 'important');
-                    modal.style.setProperty('visibility', 'hidden', 'important');
-                    modal.style.setProperty('opacity', '0', 'important');
-                    modal.classList.remove('show', 'active');
-
-                    // Resetear scroll del body
-                    document.body.style.setProperty('overflow', '', 'important');
-                    document.body.style.setProperty('overflow-y', '', 'important');
-
-                    console.log('✅ Modal cerrado correctamente');
-                } else {
-                    console.warn('⚠️ No se encontró ningún modal para cerrar');
-                    console.log('🔍 Modales disponibles:', document.querySelectorAll('.modal, [id*="modal"]'));
-                }
-            };
-        }
-
-        if (typeof window.goToPlans === 'undefined') {
-            window.goToPlans = function() {
-                window.closeUpgradeModal();
-                sessionStorage.setItem('navigateToPlans', 'true');
-                window.location.href = '/profile';
-            };
-        }
-    </script>
 
     </body>
 </html>
