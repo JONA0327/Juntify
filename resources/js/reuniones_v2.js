@@ -5698,17 +5698,22 @@ async function loadDriveOptions() {
         return;
     }
 
-    // Allow both administrators and colaboradores to see drive optionstry {
+    // Allow both administrators and colaboradores to see drive options
+    try {
         // Clear existing options
         driveSelect.innerHTML = '';
 
-        // Load personal drive nametry {
-            const personalRes = await fetch('/drive/sync-subfolders');if (personalRes.ok) {
-                const personalData = await personalRes.json();if (personalData.root_folder) {
+        // Load personal drive name
+        try {
+            const personalRes = await fetch('/drive/sync-subfolders');
+            if (personalRes.ok) {
+                const personalData = await personalRes.json();
+                if (personalData.root_folder) {
                     const personalOpt = document.createElement('option');
                     personalOpt.value = 'personal';
                     personalOpt.textContent = `🏠 ${personalData.root_folder.name}`;
-                    driveSelect.appendChild(personalOpt);}
+                    driveSelect.appendChild(personalOpt);
+                }
             } else {
                 console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Personal drive request failed:', await personalRes.text());
             }
@@ -5718,11 +5723,14 @@ async function loadDriveOptions() {
             const personalOpt = document.createElement('option');
             personalOpt.value = 'personal';
             personalOpt.textContent = 'Personal';
-            driveSelect.appendChild(personalOpt);}
+            driveSelect.appendChild(personalOpt);
+        }
 
         // Load organization drive name (for both admin and colaborador)
-        if (organizationId) {try {
-                const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);if (orgRes.ok) {
+        if (organizationId) {
+            try {
+                const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
+                if (orgRes.ok) {
                     const orgData = await orgRes.json();if (orgData.root_folder) {
                         const orgOpt = document.createElement('option');
                         orgOpt.value = 'organization';
@@ -5781,24 +5789,34 @@ async function loadDriveFolders() {
         useOrg = driveSelect.value === 'organization';
     } else {
         useOrg = false; // default to personal
-    }const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';try {
-        const res = await fetch(endpoint);if (!res.ok) {
+    }
+
+    const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';
+
+    try {
+        const res = await fetch(endpoint);
+        if (!res.ok) {
             console.error('🔍 [reuniones_v2 - loadDriveFolders] Request failed with status:', res.status);
             return;
         }
 
-        const data = await res.json();// Don't hide drive select for colaboradores anymore - they can chooseif (rootSelect) {
+        const data = await res.json();
+
+        // Don't hide drive select for colaboradores anymore - they can choose
+        if (rootSelect) {
             rootSelect.innerHTML = '';
             if (data.root_folder) {
                 const opt = document.createElement('option');
                 opt.value = data.root_folder.google_id;
                 opt.textContent = `📁 ${data.root_folder.name}`;
-                rootSelect.appendChild(opt);} else {
+                rootSelect.appendChild(opt);
+            } else {
                 console.warn('⚠️ [reuniones_v2 - loadDriveFolders] No root folder found in response');
             }
         }
 
-        // No se requieren subcarpetas dinámicas; backend usa nombres fijos} catch (e) {
+        // No se requieren subcarpetas dinámicas; backend usa nombres fijos
+    } catch (e) {
         console.error('❌ [reuniones_v2 - loadDriveFolders] Error loading drive folders:', e);
     }
 }
@@ -5822,12 +5840,14 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('[reuniones_v2] Error applying fallback globals', e);
     }
     ////const driveSelect = document.getElementById('drive-select');
-    //if (driveSelect) {
-        driveSelect.addEventListener('change', () => {loadDriveFolders();
+    if (driveSelect) {
+        driveSelect.addEventListener('change', () => {
+            loadDriveFolders();
         });
     }
 
-    if (document.getElementById('root-folder-select')) {loadDriveFolders();
+    if (document.getElementById('root-folder-select')) {
+        loadDriveFolders();
     }
 });
 

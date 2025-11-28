@@ -470,19 +470,22 @@ function updateDetailsPanel(info) {
  * Abrir selector de contenedores
  */
 function openContainerSelector() {
-    // Esta función se implementará con el modal correspondiente}
+    // Esta función se implementará con el modal correspondiente
+}
 
 /**
  * Abrir selector de chats con contactos
  */
 function openContactChatSelector() {
-    // Esta función se implementará con el modal correspondiente}
+    // Esta función se implementará con el modal correspondiente
+}
 
 /**
  * Abrir uploader de documentos
  */
 function openDocumentUploader() {
-    // Esta función se implementará con el modal correspondiente}
+    // Esta función se implementará con el modal correspondiente
+}
 
 /**
  * Inicializar estado vacío
@@ -751,3 +754,5 @@ function updateUIBasedOnLimits() {
         }
     }
 }
+
+// EOF - End of ai-assistant.js

@@ -499,6 +499,7 @@ function addTestAudioButton() {
 
 // Función de debug para simular advertencia de tiempo (solo desarrollo)
 window.debugForceTimeWarning = function() {
+    console.log(`DEBUG - Estado actual:
         - MAX_DURATION_MS: ${MAX_DURATION_MS}
         - WARN_BEFORE_MINUTES: ${WARN_BEFORE_MINUTES}
         - limitWarningShown: ${limitWarningShown}
@@ -764,6 +765,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             MAX_DURATION_MS = minutes * 60 * 1000;
             WARN_BEFORE_MINUTES = Number(limits.warn_before_minutes || 5);
 
+            console.log(`📋 [new-meeting] Límites configurados:\n` +
                 `                - Duración máxima: ${minutes} minutos (${MAX_DURATION_MS}ms)\n` +
                 `                - Advertencia: ${WARN_BEFORE_MINUTES} minutos antes\n` +
                 `                - Umbral advertencia: ${MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000}ms`);
@@ -1811,6 +1813,7 @@ function pollPendingRecordingStatus(id) {
 
 // Funciones para manejar subidas fallidas con conversión automática a OGG
 async function storeFailedUploadData(blob, name) {
+    console.log('📁 [new-meeting] Guardando datos de subida fallida:', {
         size: (blob.size / (1024 * 1024)).toFixed(2) + ' MB',
         type: blob.type,
         name: name
@@ -1824,6 +1827,7 @@ async function storeFailedUploadData(blob, name) {
             failedAudioBlob = oggBlob;
             failedAudioName = name.replace(/\.(mp4|webm|wav|mp3|m4a)$/i, '.ogg'); // Cambiar extensión a OGG
 
+            console.log('🔄 [new-meeting] Audio convertido exitosamente:', {
                 originalSize: (blob.size / (1024 * 1024)).toFixed(2) + ' MB',
                 oggSize: (oggBlob.size / (1024 * 1024)).toFixed(2) + ' MB',
                 newName: failedAudioName
@@ -1842,6 +1846,7 @@ async function storeFailedUploadData(blob, name) {
     }
 
     retryAttempts = 0;
+    console.log('💾 [new-meeting] Datos de audio fallido listos para reintento:', {
         size: (failedAudioBlob.size / (1024 * 1024)).toFixed(2) + ' MB',
         type: failedAudioBlob.type,
         name: failedAudioName

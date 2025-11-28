@@ -2219,7 +2219,8 @@ function registerOrganizationComponent() {
                 }
             }
 
-            // Debug: verificar qué valores tenemosif (!container) {
+            // Debug: verificar qué valores tenemos
+            if (!container) {
                 throw new Error('Container no disponible');
             }
             if (!organization) {
@@ -2374,16 +2375,18 @@ function registerOrganizationComponent() {
             console.error('Error deleting container:', error);
             alert('Error al eliminar el contenedor');
         }
-        } // <- cierre del método deleteContainer
-    // FIN objeto principal organizationPage
-    }));
-        window.Alpine._orgComponentRegistered = true;
-    }; // fin initDefinition
-    if (typeof window.Alpine === 'undefined') {
-        document.addEventListener('alpine:init', initDefinition, { once: true });
-    } else {
-        initDefinition();
     }
+
+    })); // FIN objeto principal organizationPage
+
+    window.Alpine._orgComponentRegistered = true;
+  }; // fin initDefinition
+
+  if (typeof window.Alpine === 'undefined') {
+      document.addEventListener('alpine:init', initDefinition, { once: true });
+  } else {
+      initDefinition();
+  }
 }
 
 registerOrganizationComponent();

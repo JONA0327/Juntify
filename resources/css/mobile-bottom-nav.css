@@ -9,7 +9,7 @@
     backdrop-filter: blur(20px);
     border-top: 1px solid rgba(59, 130, 246, 0.2);
     padding: 12px 16px;
-    display: grid;
+    display: none; /* Oculto por defecto */
     grid-template-columns: 1fr 1fr 80px 1fr 1fr;
     align-items: center;
     gap: 8px;
@@ -178,7 +178,7 @@
     display: block;
 }
 
-/* Responsive */
+/* Responsive - Solo mostrar en móvil */
 @media screen and (max-width: 768px) {
     .mobile-navbar {
         display: grid !important;
@@ -189,8 +189,35 @@
     }
 }
 
+/* Asegurar que esté oculto en desktop */
 @media screen and (min-width: 769px) {
     .mobile-navbar {
         display: none !important;
     }
+
+    body {
+        padding-bottom: 0 !important;
+    }
+}
+
+/* Forzar ocultación en pantallas grandes */
+@media screen and (min-width: 1024px) {
+    .mobile-navbar {
+        display: none !important;
+        visibility: hidden !important;
+    }
+}
+
+/* Ajuste especial para asistente IA - ocultar dropdown completamente */
+.ai-assistant-container .dropdown-menu {
+    display: none !important;
+}
+
+.ai-assistant-container .dropdown-overlay {
+    display: none !important;
+}
+
+/* También ocultar el botón más en el asistente IA */
+.ai-assistant-container .nav-item.dropdown-container {
+    display: none !important;
 }
