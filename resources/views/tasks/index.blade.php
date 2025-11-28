@@ -19,7 +19,6 @@
         'resources/css/reuniones_v2.css',
         'resources/css/audio-processing.css',
         'resources/css/tasks-index.css',
-        'resources/css/mobile-navigation.css',
         'resources/js/tasks/index.js'
     ])
 </head>
@@ -207,12 +206,6 @@
 
     @include('tasks.partials._modal-task')
     @include('tasks.partials._task-details-modal')
-
-
-    
-
-    <!-- Navegación móvil -->
-    @include('partials.mobile-bottom-nav')
 
 </body>
 </html>

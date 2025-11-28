@@ -20,7 +20,7 @@
     <link href="https://fonts.bunny.net/css?family=inter:300,400,500,600,700&display=swap" rel="stylesheet" />
 
     <!-- Global Scripts -->
-    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/mobile-navigation.css'])
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')
     @yield('head')
 </head>
@@ -32,10 +32,6 @@
             @yield('content')
         </main>
     </div>
-
-    <!-- Nueva navegación móvil mejorada -->
-    @include('partials.mobile-bottom-nav')
-
     @yield('modals')
 
     @yield('scripts')
