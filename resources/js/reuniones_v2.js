@@ -1798,9 +1798,7 @@ function updatePendingMeetingsButton(hasPending, count = 0) {
     });
 
     if (!button) {
-        console.warn('Botón de reuniones pendientes no encontrado');
-        console.log('Botones disponibles:', buttons.map(b => b.textContent.trim()));
-        return;
+        console.warn('Botón de reuniones pendientes no encontrado');return;
     }
 
     const span = button.querySelector('span');
@@ -1818,20 +1816,14 @@ function updatePendingMeetingsButton(hasPending, count = 0) {
         if (!button.hasAttribute('data-pending-listener')) {
             button.addEventListener('click', openPendingMeetingsModal);
             button.setAttribute('data-pending-listener', 'true');
-        }
-
-        console.log(`Botón habilitado con ${count} reuniones pendientes`);
-    } else {
+        }} else {
         button.disabled = true;
         button.classList.add('opacity-50', 'cursor-not-allowed');
         span.textContent = 'No hay reuniones pendientes';
 
         // Remover event listener
         button.removeEventListener('click', openPendingMeetingsModal);
-        button.removeAttribute('data-pending-listener');
-
-        console.log('Botón deshabilitado - no hay reuniones pendientes');
-    }
+        button.removeAttribute('data-pending-listener');}
 }
 
 async function openPendingMeetingsModal() {
@@ -2721,17 +2713,7 @@ async function addMeetingToContainer(meetingId, containerId) {
         if (Number.isFinite(maxMeetings) && currentMeetingCount >= maxMeetings) {
             showNotification(`Límite alcanzado: máximo ${maxMeetings} reuniones por contenedor para tu plan`, 'error');
             return false;
-        }
-
-        console.log('🔍 Verificando límite de reuniones por contenedor:', {
-            containerId,
-            currentCount: currentMeetingCount,
-            maxAllowed: maxMeetingsRaw,
-            canAdd: currentMeetingCount < maxMeetings,
-            isOrganization: isOrganizationContainer
-        });
-
-        const response = await fetch(`/api/content-containers/${containerId}/meetings`, {
+        }const response = await fetch(`/api/content-containers/${containerId}/meetings`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -3041,11 +3023,7 @@ async function openMeetingModal(meetingId, sharedMeetingId = null) {
     }
 }
 
-function showMeetingModal(meeting) {
-    console.log('Datos de la reunión:', meeting);
-    console.log('Ruta de audio:', meeting.audio_path);
-
-    // Asegurar que summary, key_points, tasks y segmentos estén en el formato correcto
+function showMeetingModal(meeting) {// Asegurar que summary, key_points, tasks y segmentos estén en el formato correcto
     meeting.segments = normalizeMeetingSegments(meeting.segments, meeting.transcription);
     meeting.summary = meeting.summary || '';
     meeting.key_points = Array.isArray(meeting.key_points) ? meeting.key_points : [];
@@ -3087,10 +3065,7 @@ function showMeetingModal(meeting) {
                 uniqueSpeakers.add(normalizedSpeaker);
             }
         });
-        participantCount = uniqueSpeakers.size;
-        console.log('Hablantes únicos encontrados:', Array.from(uniqueSpeakers));
-        console.log('Número de participantes calculado:', participantCount);
-    }
+        participantCount = uniqueSpeakers.size;}
 
     // Si no se pudo calcular desde los segmentos, usar el valor original o 0
     if (participantCount === 0) {
@@ -3226,9 +3201,7 @@ function showMeetingModal(meeting) {
 
     // Descarga automática para usuarios BNI
     const userRole = (window.userRole || '').toString().toLowerCase();
-    if (userRole === 'bni') {
-        console.log('Usuario BNI detectado - iniciando descarga automática del archivo .ju');
-        setTimeout(() => {
+    if (userRole === 'bni') {setTimeout(() => {
             try {
                 // Construir la URL de descarga apropiada
                 let downloadUrl = `/api/meetings/${meeting.id}/download-ju`;
@@ -3236,10 +3209,7 @@ function showMeetingModal(meeting) {
                 // Si es una reunión temporal, usar la ruta de transcripciones temporales
                 if (meeting.storage_type === 'temp') {
                     downloadUrl = `/api/transcriptions-temp/${meeting.id}/download-ju`;
-                }
-
-                console.log('Descargando .ju automáticamente para usuario BNI:', downloadUrl);
-                window.location.href = downloadUrl;
+                }window.location.href = downloadUrl;
             } catch (error) {
                 console.error('Error en descarga automática BNI:', error);
             }
@@ -4589,26 +4559,8 @@ function renderContainers() {
     });
 }
 
-function openCreateContainerModal() {
-    console.log('🎯 [openCreateContainerModal] Iniciando verificación de acceso...');
-
-    // Verificar que las variables globales están disponibles
-    console.log('🔍 [openCreateContainerModal] Variables globales:', {
-        userRole: window.userRole,
-        userPlanCode: window.userPlanCode,
-        userBelongsToOrganization: window.userBelongsToOrganization,
-        canCreateContainers: typeof window.canCreateContainers
-    });
-
-    // Verificar acceso básico a contenedores
-    const canCreateContainers = window.canCreateContainers ? window.canCreateContainers() : false;
-
-    console.log('🎯 [openCreateContainerModal] Resultado de canCreateContainers:', canCreateContainers);
-
-    if (!canCreateContainers) {
-        console.log('🚫 [openCreateContainerModal] Usuario sin acceso - mostrando modal de upgrade');
-
-        // Mostrar modal específico para contenedores
+function openCreateContainerModal() {// Verificar que las variables globales están disponibles// Verificar acceso básico a contenedores
+    const canCreateContainers = window.canCreateContainers ? window.canCreateContainers() : false;if (!canCreateContainers) {// Mostrar modal específico para contenedores
         showUpgradeModal({
             title: 'Contenedores disponibles desde Plan Basic',
             message: 'La creación de contenedores está disponible para los planes: <strong>Basic</strong>, <strong>Business</strong> y <strong>Enterprise</strong>.',
@@ -4631,24 +4583,13 @@ function openCreateContainerModal() {
         ? Math.max(0, maxContainersRaw - currentContainerCount)
         : '∞';
 
-    if (!canCreateMore) {
-        console.log('📦 Límite de contenedores alcanzado');
-
-        showUpgradeModal({
+    if (!canCreateMore) {showUpgradeModal({
             title: 'Límite de contenedores alcanzado',
             message: `Has alcanzado el límite de <strong>${Number.isFinite(maxContainersRaw) ? maxContainersRaw : '∞'} contenedores</strong> para tu plan. Actualiza a un plan superior para crear más contenedores.`,
             icon: 'lock'
         });
         return;
-    }
-
-    console.log('✅ Usuario puede crear contenedores', {
-        currentCount: currentContainerCount,
-        maxAllowed: maxContainersRaw,
-        remaining: remainingContainers
-    });
-
-    isEditMode = false;
+    }isEditMode = false;
     currentContainer = null;
 
     document.getElementById('modal-title').textContent = 'Crear Contenedor';
@@ -4896,16 +4837,10 @@ function clearContainerErrors() {
 
 async function openDownloadModal(meetingId, sharedMeetingId = null) {
     // Prevenir ejecución múltiple
-    if (window.downloadModalProcessing) {
-        console.log('Modal de descarga ya en proceso...');
-        return;
+    if (window.downloadModalProcessing) {return;
     }
 
-    window.downloadModalProcessing = true;
-
-    console.log('Iniciando descarga para reunión:', meetingId);
-
-    try {
+    window.downloadModalProcessing = true;try {
         // Cerrar el modal de contenedor si está abierto
         previousContainerForDownload = currentContainerForMeetings;
         if (previousContainerForDownload) {
@@ -4921,9 +4856,7 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
         // Mostrar loading inicial
         showDownloadModalLoading(meetingId);
 
-    // Paso 1: Descargar y desencriptar el archivo .ju desde Drive (con timeout y manejo de errores)
-        console.log('Descargando y desencriptando archivo .ju...');
-        const controller = new AbortController();
+    // Paso 1: Descargar y desencriptar el archivo .ju desde Drive (con timeout y manejo de errores)const controller = new AbortController();
         const timeoutMs = 15000; // 15s para evitar esperas largas
         const timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs);
 
@@ -4986,11 +4919,7 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
 
         if (!data.success) {
             throw new Error(data.message || 'Error al procesar el archivo de la reunión');
-        }
-
-        console.log('Archivo descargado y desencriptado exitosamente');
-
-        // Paso 2: Crear y mostrar el modal de selección
+        }// Paso 2: Crear y mostrar el modal de selección
         const modalElement = createDownloadModal();
 
         // Paso 3: Guardar los datos y mostrar opciones
@@ -5008,10 +4937,7 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
             initializeDownloadModal();
 
             // Mostrar el modal con las opciones (tras inicializar Alpine)
-            showDownloadModalOptions(data.meeting);
-
-            console.log('Modal de selección mostrado para reunión:', meetingId);
-        } else {
+            showDownloadModalOptions(data.meeting);} else {
             throw new Error('No se pudo crear el modal de descarga');
         }
 
@@ -5482,10 +5408,7 @@ function initializeDownloadModal() {
                     </span>
                 `;
 
-                try {
-                    console.log('Generando PDF con secciones:', selectedItems);
-
-                    // Preparar los datos para enviar al servidor
+                try {// Preparar los datos para enviar al servidor
                     const downloadData = {
                         meeting_id: meetingId,
                         meeting_name: meetingData.meeting_name,
@@ -5512,10 +5435,7 @@ function initializeDownloadModal() {
                         body: JSON.stringify(downloadData)
                     });
 
-                    if (response.ok) {
-                        console.log('PDF generado exitosamente');
-
-                        // Si la respuesta es un blob (PDF), descargarlo
+                    if (response.ok) {// Si la respuesta es un blob (PDF), descargarlo
                         const blob = await response.blob();
                         const url = window.URL.createObjectURL(blob);
                         const a = document.createElement('a');
@@ -5698,8 +5618,7 @@ async function loadContainerMeetings(containerId) {
             }
         });
 
-        const data = await response.json();
-        console.log('Container meetings response:', data); // Debug
+        const data = await response.json();// Debug
 
         if (data.success) {
             // Verificar que container existe en la respuesta
@@ -5779,30 +5698,17 @@ async function loadDriveOptions() {
         return;
     }
 
-    // Allow both administrators and colaboradores to see drive options
-    console.log('🔍 [reuniones_v2 - loadDriveOptions] Loading drive options for role:', role);
-
-    try {
+    // Allow both administrators and colaboradores to see drive optionstry {
         // Clear existing options
         driveSelect.innerHTML = '';
 
-        // Load personal drive name
-        console.log('🔍 [reuniones_v2 - loadDriveOptions] Fetching personal drive data...');
-        try {
-            const personalRes = await fetch('/drive/sync-subfolders');
-            console.log('🔍 [reuniones_v2 - loadDriveOptions] Personal drive response status:', personalRes.status);
-
-            if (personalRes.ok) {
-                const personalData = await personalRes.json();
-                console.log('🔍 [reuniones_v2 - loadDriveOptions] Personal drive data:', personalData);
-
-                if (personalData.root_folder) {
+        // Load personal drive nametry {
+            const personalRes = await fetch('/drive/sync-subfolders');if (personalRes.ok) {
+                const personalData = await personalRes.json();if (personalData.root_folder) {
                     const personalOpt = document.createElement('option');
                     personalOpt.value = 'personal';
                     personalOpt.textContent = `🏠 ${personalData.root_folder.name}`;
-                    driveSelect.appendChild(personalOpt);
-                    console.log('✅ [reuniones_v2 - loadDriveOptions] Added personal option:', personalData.root_folder.name);
-                }
+                    driveSelect.appendChild(personalOpt);}
             } else {
                 console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Personal drive request failed:', await personalRes.text());
             }
@@ -5812,28 +5718,16 @@ async function loadDriveOptions() {
             const personalOpt = document.createElement('option');
             personalOpt.value = 'personal';
             personalOpt.textContent = 'Personal';
-            driveSelect.appendChild(personalOpt);
-            console.log('📝 [reuniones_v2 - loadDriveOptions] Added fallback personal option');
-        }
+            driveSelect.appendChild(personalOpt);}
 
         // Load organization drive name (for both admin and colaborador)
-        if (organizationId) {
-            console.log('🔍 [reuniones_v2 - loadDriveOptions] Fetching organization drive data...');
-            try {
-                const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
-                console.log('🔍 [reuniones_v2 - loadDriveOptions] Organization drive response status:', orgRes.status);
-
-                if (orgRes.ok) {
-                    const orgData = await orgRes.json();
-                    console.log('🔍 [reuniones_v2 - loadDriveOptions] Organization drive data:', orgData);
-
-                    if (orgData.root_folder) {
+        if (organizationId) {try {
+                const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);if (orgRes.ok) {
+                    const orgData = await orgRes.json();if (orgData.root_folder) {
                         const orgOpt = document.createElement('option');
                         orgOpt.value = 'organization';
                         orgOpt.textContent = `🏢 ${orgData.root_folder.name}`;
-                        driveSelect.appendChild(orgOpt);
-                        console.log('✅ [reuniones_v2 - loadDriveOptions] Added organization option:', orgData.root_folder.name);
-                    }
+                        driveSelect.appendChild(orgOpt);}
                 } else {
                     console.warn('⚠️ [reuniones_v2 - loadDriveOptions] Organization drive request failed:', await orgRes.text());
                 }
@@ -5843,42 +5737,29 @@ async function loadDriveOptions() {
                 const orgOpt = document.createElement('option');
                 orgOpt.value = 'organization';
                 orgOpt.textContent = 'Organization';
-                driveSelect.appendChild(orgOpt);
-                console.log('📝 [reuniones_v2 - loadDriveOptions] Added fallback organization option');
-            }
+                driveSelect.appendChild(orgOpt);}
         }
 
         // Set default selection based on role
         if (driveSelect.options.length > 0) {
             const saved = sessionStorage.getItem('selectedDrive');
             if (saved && driveSelect.querySelector(`option[value="${saved}"]`)) {
-                driveSelect.value = saved;
-                console.log('📄 [reuniones_v2 - loadDriveOptions] Restored saved selection:', saved);
-            } else {
+                driveSelect.value = saved;} else {
                 // For colaboradores in organizations, default to organization
                 if (role === 'colaborador' && organizationId && driveSelect.querySelector('option[value="organization"]')) {
-                    driveSelect.value = 'organization';
-                    console.log('👥 [reuniones_v2 - loadDriveOptions] Set default to organization for colaborador');
-                } else {
-                    driveSelect.selectedIndex = 0;
-                    console.log('🎯 [reuniones_v2 - loadDriveOptions] Set default to first option');
-                }
+                    driveSelect.value = 'organization';} else {
+                    driveSelect.selectedIndex = 0;}
             }
         }
 
         // Show the selector for both admin and colaborador
-        driveSelect.style.display = 'block';
-        console.log('👁️ [reuniones_v2 - loadDriveOptions] Drive selector is now visible');
-
-    } catch (e) {
+        driveSelect.style.display = 'block';} catch (e) {
         console.error('❌ [reuniones_v2 - loadDriveOptions] Error loading drive options:', e);
         // Fallback to original options
         driveSelect.innerHTML = `
             <option value="personal">Personal</option>
             <option value="organization">Organization</option>
-        `;
-        console.log('🔄 [reuniones_v2 - loadDriveOptions] Fallback to default options');
-    }
+        `;}
 }
 
 async function loadDriveFolders() {
@@ -5888,16 +5769,7 @@ async function loadDriveFolders() {
     const rootSelect = document.getElementById('root-folder-select');
     // Subcarpetas manuales eliminadas: selects ya no existen
     const transcriptionSelect = null;
-    const audioSelect = null;
-
-    console.log('🔍 [reuniones_v2 - loadDriveFolders] Starting with debug info:', {
-        role,
-        organizationId,
-        driveSelectValue: driveSelect?.value,
-        driveSelectExists: !!driveSelect
-    });
-
-    // First, load drive options with real folder names
+    const audioSelect = null;// First, load drive options with real folder names
     await loadDriveOptions();
 
     // Updated logic to allow colaboradores to choose between personal and organization
@@ -5909,57 +5781,24 @@ async function loadDriveFolders() {
         useOrg = driveSelect.value === 'organization';
     } else {
         useOrg = false; // default to personal
-    }
-
-    console.log('🔍 [reuniones_v2 - loadDriveFolders] Drive selection logic:', {
-        role,
-        useOrg,
-        driveSelectValue: driveSelect?.value,
-        reasoning: role === 'colaborador' ? 'colaborador can choose' : 'administrator choice'
-    });
-
-    const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';
-    console.log('🔍 [reuniones_v2 - loadDriveFolders] Using endpoint:', endpoint);
-    try {
-        const res = await fetch(endpoint);
-        console.log('🔍 [reuniones_v2 - loadDriveFolders] Fetch response status:', res.status);
-
-        if (!res.ok) {
+    }const endpoint = useOrg ? `/api/organizations/${organizationId}/drive/subfolders` : '/drive/sync-subfolders';try {
+        const res = await fetch(endpoint);if (!res.ok) {
             console.error('🔍 [reuniones_v2 - loadDriveFolders] Request failed with status:', res.status);
             return;
         }
 
-        const data = await res.json();
-        console.log('🔍 [reuniones_v2 - loadDriveFolders] Received data:', data);
-
-        // Don't hide drive select for colaboradores anymore - they can choose
-        console.log('🔍 [reuniones_v2 - loadDriveFolders] Drive select visibility:', {
-            role,
-            willHide: false, // Changed: don't hide for colaboradores
-            driveSelectExists: !!driveSelect
-        });
-
-        if (rootSelect) {
+        const data = await res.json();// Don't hide drive select for colaboradores anymore - they can chooseif (rootSelect) {
             rootSelect.innerHTML = '';
             if (data.root_folder) {
                 const opt = document.createElement('option');
                 opt.value = data.root_folder.google_id;
                 opt.textContent = `📁 ${data.root_folder.name}`;
-                rootSelect.appendChild(opt);
-                console.log('✅ [reuniones_v2 - loadDriveFolders] Added root folder option:', {
-                    name: data.root_folder.name,
-                    googleId: data.root_folder.google_id
-                });
-            } else {
+                rootSelect.appendChild(opt);} else {
                 console.warn('⚠️ [reuniones_v2 - loadDriveFolders] No root folder found in response');
             }
         }
 
-        // No se requieren subcarpetas dinámicas; backend usa nombres fijos
-
-        console.log('✅ [reuniones_v2 - loadDriveFolders] Successfully loaded drive folders');
-
-    } catch (e) {
+        // No se requieren subcarpetas dinámicas; backend usa nombres fijos} catch (e) {
         console.error('❌ [reuniones_v2 - loadDriveFolders] Error loading drive folders:', e);
     }
 }
@@ -5982,27 +5821,13 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e) {
         console.error('[reuniones_v2] Error applying fallback globals', e);
     }
-    // console.log('🚀 [reuniones_v2] Iniciando aplicación...');
-    // console.log('🔍 [reuniones_v2] Variables globales:', {
-    //     userRole: window.userRole || document.body.dataset.userRole,
-    //     organizationId: window.currentOrganizationId || document.body.dataset.organizationId,
-    //     bodyDatasets: Object.keys(document.body.dataset),
-    //     windowVars: Object.keys(window).filter(k => k.includes('user') || k.includes('org'))
-    // });
-
-    const driveSelect = document.getElementById('drive-select');
-    // console.log('🔍 [reuniones_v2] Drive select element found:', !!driveSelect);
-
-    if (driveSelect) {
-        driveSelect.addEventListener('change', () => {
-            console.log('🔄 [reuniones_v2] Drive selection changed to:', driveSelect.value);
-            loadDriveFolders();
+    ////const driveSelect = document.getElementById('drive-select');
+    //if (driveSelect) {
+        driveSelect.addEventListener('change', () => {loadDriveFolders();
         });
     }
 
-    if (document.getElementById('root-folder-select')) {
-        console.log('🔍 [reuniones_v2] About to call loadDriveFolders...');
-        loadDriveFolders();
+    if (document.getElementById('root-folder-select')) {loadDriveFolders();
     }
 });
 
@@ -6064,7 +5889,7 @@ window.openShareModal = openShareModal;
 window.closeShareModal = closeShareModal;
 window.confirmShare = confirmShare;
 window.toggleContact = toggleContact;
-window.forceOpenShareModal = function(id){ console.log('[shareModal] forceOpenShareModal'); openShareModal(id||0); };
+window.forceOpenShareModal = function(id){openShareModal(id||0); };
 
 // ===============================================
 // FUNCIONALIDAD DE COMPARTIR REUNIONES
@@ -6076,7 +5901,7 @@ let allContacts = [];
 
 // Abrir modal de compartir
 function openShareModal(meetingId) {
-    try { console.log('[shareModal] openShareModal called', { meetingId }); } catch(e){}
+    try {} catch(e){}
     currentShareMeetingId = meetingId;
     selectedContacts.clear();
 
@@ -6089,7 +5914,7 @@ function openShareModal(meetingId) {
     // by adding the `.show` class and removing Tailwind's `hidden`.
     modal.classList.remove('hidden');
     modal.classList.add('show');
-    try { console.log('[shareModal] modal classes after show:', modal.className); } catch(e){}
+    try {} catch(e){}
 
     // Resetear estado
     const searchInput = document.getElementById('shareModal-contactSearch');
@@ -6359,13 +6184,7 @@ async function confirmShare() {
 }
 
 // Función genérica para mostrar modal de upgrade - copia de new-meeting.js
-function showUpgradeModal(options = {}) {
-    console.log('🚀 INICIANDO showUpgradeModal...');
-
-    const modal = document.getElementById('postpone-locked-modal');
-    console.log('🔍 Modal encontrado:', !!modal);
-
-    if (!modal) {
+function showUpgradeModal(options = {}) {const modal = document.getElementById('postpone-locked-modal');if (!modal) {
         console.error('❌ Modal no encontrado!');
         alert('Esta opción requiere un plan superior.');
         return;
@@ -6398,9 +6217,7 @@ function showUpgradeModal(options = {}) {
     // Manejar el botón de cerrar si se especifica ocultarlo
     const closeButton = modal.querySelector('.btn:not(.btn-primary)'); // Botón "Cerrar"
     if (options.hideCloseButton && closeButton) {
-        closeButton.style.display = 'none';
-        console.log('🔒 Botón cerrar ocultado');
-    } else if (closeButton) {
+        closeButton.style.display = 'none';} else if (closeButton) {
         closeButton.style.display = ''; // Mostrar botón cerrar normalmente
     }
 
@@ -6416,25 +6233,17 @@ function showUpgradeModal(options = {}) {
     modal.style.setProperty('opacity', '1', 'important');
 
     // Bloquear scroll del body
-    document.body.style.setProperty('overflow', 'hidden', 'important');
-
-    console.log('✅ Modal configurado. Display:', modal.style.display);
-}
+    document.body.style.setProperty('overflow', 'hidden', 'important');}
 
 // Función global para cerrar modal
-function closeUpgradeModal() {
-    console.log('🔒 [reuniones_v2] Cerrando modal de upgrade...');
-
-    const modal = document.getElementById('postpone-locked-modal');
+function closeUpgradeModal() {const modal = document.getElementById('postpone-locked-modal');
 
     if (modal) {
         modal.style.setProperty('display', 'none', 'important');
         modal.style.setProperty('visibility', 'hidden', 'important');
         modal.style.setProperty('opacity', '0', 'important');
         modal.classList.remove('show', 'active');
-        document.body.style.setProperty('overflow', '', 'important');
-        console.log('✅ [reuniones_v2] Modal cerrado correctamente');
-    } else {
+        document.body.style.setProperty('overflow', '', 'important');} else {
         console.warn('⚠️ [reuniones_v2] Modal no encontrado para cerrar');
     }
 }

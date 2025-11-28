@@ -1,6 +1,6 @@
 const DEBUG = import.meta.env.DEV;
 
-function debugLog(...args) { /* debug deshabilitado en producción: if (DEBUG) console.log(...args); */ }
+function debugLog(...args) { /* debug deshabilitado en producción: if (DEBUG)*/ }
 
 function registerOrganizationComponent() {
   const initDefinition = () => {
@@ -130,9 +130,7 @@ function registerOrganizationComponent() {
         this.isJoining = false;
         this.isDeletingGroup = false;
 
-        if (DEBUG) console.log('Estado de organización reiniciado');
-
-        // Filtrar solo grupos donde el usuario pertenece (backend entrega users filtrado)
+        if (DEBUG)// Filtrar solo grupos donde el usuario pertenece (backend entrega users filtrado)
         if (Array.isArray(this.organizations)) {
             this.organizations = this.organizations.map(org => ({
                 ...org,
@@ -547,9 +545,7 @@ function registerOrganizationComponent() {
         this.isJoining = false;
     this.isDeletingGroup = false;
 
-        if (import.meta.env.DEV) {
-            console.log('Estado de organización reiniciado');
-        }
+        if (import.meta.env.DEV) {}
         // Restaurar comportamiento: mostrar solo los grupos donde el usuario pertenece
         // Nota: El backend carga cada grupo con 'users' filtrado al usuario actual,
         // así que pertenencia = (group.users || []).length > 0
@@ -759,9 +755,7 @@ function registerOrganizationComponent() {
             if (response.status === 401 && !triedWebFallback) {
                 console.warn('[organization.js] 401 en /api/organizations, intentando fallback /organizations (web)');
                 triedWebFallback = true;
-                response = await attempt('/organizations');
-                console.log('[organization.js] Fallback /organizations status:', response.status, 'content-type:', response.headers.get('content-type'));
-            }
+                response = await attempt('/organizations');}
             if (response.status === 401) {
                 console.warn('[organization.js] 401 aún después de fallback. Diagnosticando sesión...');
                 await this.debugAuth();
@@ -822,11 +816,7 @@ function registerOrganizationComponent() {
                 fetch('/api/debug/session-info', { credentials:'same-origin' }).then(r=>r.json().catch(()=>({parse:false}))).catch(()=>({error:true})),
                 fetch('/api/debug/request-dump', { method:'POST', credentials:'same-origin', headers }).then(r=>r.json().catch(()=>({parse:false}))).catch(()=>({error:true}))
             ]);
-            console.group('[organization.js] quickSessionDiagnostics');
-            console.log('whoami ->', whoami);
-            console.log('session-info ->', sessionInfo);
-            console.log('request-dump ->', requestDump);
-            console.groupEnd();
+            console.group('[organization.js] quickSessionDiagnostics');console.groupEnd();
             return { whoami, sessionInfo, requestDump };
         } catch(e) {
             console.error('[organization.js] quickSessionDiagnostics error', e);
@@ -835,12 +825,8 @@ function registerOrganizationComponent() {
     async debugAuth() {
         try {
             // Ver cookies visibles (solo nombres por seguridad)
-            const cookieNames = document.cookie.split(';').map(c=>c.split('=')[0].trim());
-            console.log('[organization.js][debugAuth] Cookies presentes:', cookieNames);
-            const userResp = await fetch('/api/user', {credentials:'same-origin', headers:{'Accept':'application/json'}});
-            const userData = await userResp.json().catch(()=>({}));
-            console.log('[organization.js][debugAuth] /api/user status', userResp.status, userData);
-        } catch(e) {
+            const cookieNames = document.cookie.split(';').map(c=>c.split('=')[0].trim());const userResp = await fetch('/api/user', {credentials:'same-origin', headers:{'Accept':'application/json'}});
+            const userData = await userResp.json().catch(()=>({}));} catch(e) {
             console.error('[organization.js][debugAuth] Error diagnosticando auth', e);
         }
     },
@@ -1016,25 +1002,14 @@ function registerOrganizationComponent() {
             this.isDeletingGroup = false;
         }
     },
-    async viewGroup(group) {
-        console.log('Opening group modal for:', group.nombre_grupo);
-        console.log('Current showGroupInfoModal before:', this.showGroupInfoModal);
-        console.log('Current isLoadingGroup before:', this.isLoadingGroup);
-
-        // Evitar múltiples clicks
+    async viewGroup(group) {// Evitar múltiples clicks
         if (this.isLoadingGroup) {
-            console.log('Already loading, returning');
             return;
         }
 
         this.isLoadingGroup = true;
         this.currentGroup = group;
         this.showGroupInfoModal = true;
-
-        console.log('Set showGroupInfoModal to:', this.showGroupInfoModal);
-        console.log('Set isLoadingGroup to:', this.isLoadingGroup);
-        console.log('Set currentGroup to:', this.currentGroup.nombre_grupo);
-
         try {
             // Cargar detalles del grupo con contenedores
             const response = await fetch(`/api/groups/${group.id}`);
@@ -1050,7 +1025,6 @@ function registerOrganizationComponent() {
                     this.currentGroup.user_role = this.currentGroup.user_role || 'administrador';
                 }
                 await this.loadGroupContainers(group.id);
-                console.log('Group loaded with containers:', this.currentGroup.containers?.length || 0);
             } else {
                 throw new Error('Error al cargar el grupo');
             }
@@ -1059,8 +1033,6 @@ function registerOrganizationComponent() {
             this.currentGroup = group; // Fallback al grupo original
         } finally {
             this.isLoadingGroup = false;
-            console.log('Final showGroupInfoModal:', this.showGroupInfoModal);
-            console.log('Final isLoadingGroup:', this.isLoadingGroup);
         }
     },
 
@@ -1543,22 +1515,14 @@ function registerOrganizationComponent() {
             this.closeConfirmRemoveMember();
             this.showError('Datos inválidos para remover miembro');
             return;
-        }
-
-        console.log('removeMember request', { groupId, userId });
-
-        this.isRemovingMember = true;
+        }this.isRemovingMember = true;
         try {
             const response = await fetch(`/api/groups/${groupId}/members/${userId}`, {
                 method: 'DELETE',
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
-            });
-
-            console.log('removeMember response status', response.status);
-
-            if (response.ok) {
+            });if (response.ok) {
                 // Refrescar los datos del grupo
                 await this.refreshGroupData(groupId);
                 this.closeConfirmRemoveMember();
@@ -1643,10 +1607,7 @@ function registerOrganizationComponent() {
                 if (response.ok) {
                     const data = await response.json();
 
-                    this.organizations = this.filterOrgGroups(data.organizations || []);
-                    console.log('Organizaciones recargadas:', this.organizations);
-
-                } else {
+                    this.organizations = this.filterOrgGroups(data.organizations || []);} else {
                     console.error('Error al recargar organizaciones:', response.status);
                 }
             } catch (error) {
@@ -2203,9 +2164,7 @@ function registerOrganizationComponent() {
             // Notificación visual de éxito
             if (typeof this.showStatus === 'function') {
                 this.showStatus(`Archivo "${file.name}" subido correctamente`);
-            } else {
-                console.log('[upload] Archivo subido correctamente');
-            }
+            } else {}
         } catch (e) {
             console.error(e);
             this.showError(e.message || 'Error al subir');
@@ -2260,17 +2219,7 @@ function registerOrganizationComponent() {
                 }
             }
 
-            // Debug: verificar qué valores tenemos
-            console.log('[deleteDocument] Debug context:', {
-                container: container ? { id: container.id, name: container.name, group_id: container.group_id } : null,
-                organization: organization ? { id: organization.id, name: organization.name } : null,
-                group: group ? { id: group.id, nombre_grupo: group.nombre_grupo } : null,
-                organizations: this.organizations,
-                selectedOrganization: this.selectedOrganization,
-                currentGroup: this.currentGroup
-            });
-
-            if (!container) {
+            // Debug: verificar qué valores tenemosif (!container) {
                 throw new Error('Container no disponible');
             }
             if (!organization) {
@@ -2304,9 +2253,7 @@ function registerOrganizationComponent() {
             // Notificación de éxito
             if (typeof this.showStatus === 'function') {
                 this.showStatus(`Documento "${file.name}" eliminado correctamente`);
-            } else {
-                console.log('[delete] Documento eliminado correctamente');
-            }
+            } else {}
         } catch (e) {
             console.error('[deleteDocument] Error:', e);
             if (typeof this.showError === 'function') {

@@ -236,7 +236,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof openTaskDetailsModal === 'function') {
                     openTaskDetailsModal(ev.id);
                 } else {
-                    console.log('Abriendo detalles de tarea:', ev.id);
                 }
             });
 

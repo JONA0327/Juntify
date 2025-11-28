@@ -470,25 +470,19 @@ function updateDetailsPanel(info) {
  * Abrir selector de contenedores
  */
 function openContainerSelector() {
-    // Esta función se implementará con el modal correspondiente
-    console.log('Abriendo selector de contenedores...');
-}
+    // Esta función se implementará con el modal correspondiente}
 
 /**
  * Abrir selector de chats con contactos
  */
 function openContactChatSelector() {
-    // Esta función se implementará con el modal correspondiente
-    console.log('Abriendo selector de chats...');
-}
+    // Esta función se implementará con el modal correspondiente}
 
 /**
  * Abrir uploader de documentos
  */
 function openDocumentUploader() {
-    // Esta función se implementará con el modal correspondiente
-    console.log('Abriendo uploader de documentos...');
-}
+    // Esta función se implementará con el modal correspondiente}
 
 /**
  * Inicializar estado vacío

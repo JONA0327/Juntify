@@ -458,10 +458,7 @@ function checkNavigateToPlans() {
   // Verificar si hay un modal de éxito de pago
   const paymentSuccessModal = document.getElementById('payment-success-modal');
 
-  if (shouldNavigateSession === 'true' || shouldNavigateFlash || paymentSuccessModal) {
-    console.log('🎯 Navegando automáticamente a la sección de planes...');
-
-    // Limpiar el flag de sessionStorage
+  if (shouldNavigateSession === 'true' || shouldNavigateFlash || paymentSuccessModal) {// Limpiar el flag de sessionStorage
     if (shouldNavigateSession === 'true') {
       sessionStorage.removeItem('navigateToPlans');
     }
@@ -471,15 +468,10 @@ function checkNavigateToPlans() {
       const plansLink = document.querySelector('.sidebar-nav .nav-link[data-section="plans"]');
       if (plansLink) {
         // Simular click en el enlace de planes
-        plansLink.click();
-        console.log('✅ Sección de planes activada');
-
-        // Si hay modal de éxito de pago, mostrarlo después de navegar
+        plansLink.click();// Si hay modal de éxito de pago, mostrarlo después de navegar
         if (paymentSuccessModal) {
           setTimeout(() => {
-            paymentSuccessModal.classList.add('active');
-            console.log('✅ Modal de éxito de pago mostrado');
-          }, 500);
+            paymentSuccessModal.classList.add('active');}, 500);
         }
       } else {
         console.warn('⚠️ No se encontró el enlace de la sección de planes');
