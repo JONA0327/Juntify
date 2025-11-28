@@ -111,7 +111,6 @@ function getOptimalAudioFormat() {
 
     for (const format of formats) {
         if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(format)) {
-            console.log(`🎵 [Recording] Formato seleccionado: ${format}`);
 
             // Advertir si se usa Opus para que sepas que puede haber problemas de compatibilidad
             if (format.includes('opus')) {
@@ -153,7 +152,6 @@ function downloadAudioWithCorrectFormat(blob, baseName) {
     const extension = getCorrectFileExtension(blob);
     const fileName = `${baseName}.${extension}`;
     downloadBlob(blob, fileName);
-    console.log(`💾 [Download] Descargando audio en formato ${extension}: ${fileName}`);
     return fileName;
 }
 
@@ -164,13 +162,11 @@ async function downloadAudioAsOgg(blob, baseName) {
 
         // Si no es OGG, intentar convertir
         if (!blob.type.includes('ogg')) {
-            console.log('🎵 [Download] Convirtiendo a OGG para descarga...');
             oggBlob = await convertToOgg(blob);
         }
 
         const fileName = `${baseName}.ogg`;
         downloadBlob(oggBlob, fileName);
-        console.log(`💾 [Download] Audio descargado como OGG: ${fileName}`);
         return fileName;
     } catch (error) {
         console.error('❌ [Download] Error al convertir a OGG:', error);
@@ -183,12 +179,9 @@ async function downloadAudioAsOgg(blob, baseName) {
 // Función mejorada para conversión real a OGG
 async function convertToOgg(blob) {
     try {
-        console.log(`🎵 [Convert] Iniciando conversión a OGG...`);
-        console.log(`🎵 [Convert] Blob original: ${blob.type}, Tamaño: ${(blob.size / 1024).toFixed(1)} KB`);
 
         // Si ya es OGG, devolver tal como está
         if (blob.type.includes('ogg')) {
-            console.log(`✅ [Convert] Ya es OGG, no se requiere conversión`);
             return blob;
         }
 
@@ -209,7 +202,6 @@ async function convertToOgg(blob) {
         const arrayBuffer = await blob.arrayBuffer();
         const audioBuffer = await conversionContext.decodeAudioData(arrayBuffer.slice(0));
 
-        console.log(`🎵 [Convert] Audio decodificado: ${audioBuffer.duration.toFixed(2)}s, ${audioBuffer.sampleRate}Hz`);
 
         const destination = conversionContext.createMediaStreamDestination();
         const source = conversionContext.createBufferSource();
@@ -241,7 +233,6 @@ async function convertToOgg(blob) {
                 if (!settled) {
                     settled = true;
                     const oggBlob = new Blob(recordedChunks, { type: 'audio/ogg' });
-                    console.log(`✅ [Convert] Conversión a OGG completada: ${(oggBlob.size / 1024).toFixed(1)} KB`);
                     resolve(oggBlob);
                 }
                 conversionContext.close().catch(() => {});
@@ -270,10 +261,8 @@ async function convertToOgg(blob) {
         console.error('❌ [Convert] Error en conversión a OGG:', error);
 
         // Último recurso: devolver blob original con MIME type OGG
-        console.log(`🔄 [Convert] Aplicando MIME type OGG como último recurso...`);
         const arrayBuffer = await blob.arrayBuffer();
         const fallbackBlob = new Blob([arrayBuffer], { type: 'audio/ogg' });
-        console.log(`✅ [Convert] Conversión de emergencia a OGG completada`);
         return fallbackBlob;
     }
 }
@@ -336,7 +325,6 @@ let chunkIndex = 0;
 // Función para limpiar completamente todos los datos de audio anteriores
 async function clearPreviousAudioData() {
     try {
-        console.log('🧹 Limpiando datos de audio anteriores...');
 
         // Limpiar IndexedDB
         await clearAllAudio();
@@ -357,7 +345,6 @@ async function clearPreviousAudioData() {
         pendingAudioBlob = null;
         recordedChunks = [];
 
-        console.log('✅ Datos de audio limpiados correctamente');
 
     } catch (error) {
         console.error('❌ Error al limpiar datos de audio:', error);
@@ -403,7 +390,6 @@ function playNotificationSound(soundType) {
         // Cargar el audio
         notificationAudio.load();
 
-        console.log(`🔊 Reproduciendo advertencia de tiempo: ${NOTIFICATION_SOUNDS.timeWarning}`);
 
     } catch (error) {
         console.warn('Error en sistema de audio de notificaciones, usando fallback:', error);
@@ -417,7 +403,6 @@ function playFallbackBeep() {
         // Crear contexto de audio
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-        console.log('🎵 Generando beep de advertencia de fallback (800Hz, beep doble)');
 
         // Generar beep doble para advertencia
         const frequency = 800;
@@ -449,7 +434,6 @@ function playFallbackBeep() {
     } catch (error) {
         console.error('Error generando beep de fallback:', error);
         // Último recurso: log llamativo
-        console.log('🚨🚨🚨 ADVERTENCIA: QUEDAN 5 MINUTOS PARA EL LÍMITE 🚨🚨🚨');
     }
 }
 
@@ -458,10 +442,8 @@ async function checkNotificationAudioFiles() {
     try {
         const response = await fetch(NOTIFICATION_SOUNDS.timeWarning, { method: 'HEAD' });
         const exists = response.ok;
-        console.log(`📁 Archivo de advertencia (${NOTIFICATION_SOUNDS.timeWarning}):`, exists ? '✅ Encontrado' : '❌ No encontrado');
         return { timeWarning: exists };
     } catch {
-        console.log(`📁 Archivo de advertencia (${NOTIFICATION_SOUNDS.timeWarning}): ❌ Error al verificar`);
         return { timeWarning: false };
     }
 }
@@ -495,7 +477,6 @@ function addTestAudioButton() {
 
     // Event listeners
     document.getElementById('test-warning-btn').addEventListener('click', () => {
-        console.log('🧪 Probando sonido de advertencia de tiempo...');
         playNotificationSound('timeWarning');
         showWarning('Prueba: Quedan 5 minutos para el límite de grabación');
     });
@@ -504,13 +485,10 @@ function addTestAudioButton() {
         testContainer.remove();
     });
 
-    console.log('🧪 Botón de prueba de audio agregado (desarrollo)');
 }
 
 // Función de debug para simular advertencia de tiempo (solo desarrollo)
 window.debugForceTimeWarning = function() {
-    console.log('🧪 DEBUG: Forzando advertencia de tiempo...');
-    console.log(`Variables actuales:
         - MAX_DURATION_MS: ${MAX_DURATION_MS}
         - WARN_BEFORE_MINUTES: ${WARN_BEFORE_MINUTES}
         - limitWarningShown: ${limitWarningShown}
@@ -643,7 +621,6 @@ async function rebuildDriveSelectOptions() {
 
     try {
         const response = await fetch('/drive/sync-subfolders');
-        console.log('🔍 [new-meeting] Personal drive response status:', response.status);
 
         if (response.ok) {
             const data = await response.json();
@@ -651,7 +628,6 @@ async function rebuildDriveSelectOptions() {
 
             if (personalName) {
                 personalOption.textContent = `🏠 ${personalName}`;
-                console.log('✅ [new-meeting] Added personal option:', personalName);
             }
         } else {
             console.warn('⚠️ [new-meeting] Failed to fetch personal drive label:', await response.text());
@@ -668,13 +644,11 @@ async function rebuildDriveSelectOptions() {
         const label = organizationName ? `🏢 ${organizationName}` : 'Organization';
         organizationOption.textContent = label;
         driveSelect.appendChild(organizationOption);
-        console.log('✅ [new-meeting] Added organization option:', label);
     }
 }
 
 // ===== CONFIGURACIÓN DE EVENT LISTENERS PARA MODALS =====
 function setupModalEventListeners() {
-    console.log('🔧 Configurando event listeners para modals...');
 
     // Event listeners para modal de descarte de grabación
     const discardModal = document.getElementById('discard-recording-modal');
@@ -723,14 +697,12 @@ function setupModalEventListeners() {
         }
     }
 
-    console.log('✅ Event listeners para modals configurados');
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Limpiar estado de descarte de audio al llegar a nueva reunión
     try {
         sessionStorage.removeItem('audioDiscarded');
-        console.log('✅ [new-meeting] Estado de descarte limpiado al iniciar nueva reunión');
     } catch (e) {
         console.warn('No se pudo limpiar estado de descarte:', e);
     }
@@ -769,15 +741,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Cargar límites del plan y aplicarlos a la UI/funcionalidad
     try {
-        console.log('🔄 Cargando límites del plan...');
         const resp = await fetch('/api/plan/limits', { credentials: 'include' });
         if (resp.ok) {
             const limits = await resp.json();
-            console.log('📋 Límites del plan cargados:', limits);
 
             // Actualizar allow_postpone basado en acceso premium
             limits.allow_postpone = window.hasPremiumAccess ? window.hasPremiumAccess() : false;
-            console.log('🔒 Allow postpone actualizado:', limits.allow_postpone);
 
             PLAN_LIMITS = limits;
             // Duración máxima por reunión
@@ -785,7 +754,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             MAX_DURATION_MS = minutes * 60 * 1000;
             WARN_BEFORE_MINUTES = Number(limits.warn_before_minutes || 5);
 
-            console.log('⏱️ Configuración de tiempo:\n' +
                 `                - Duración máxima: ${minutes} minutos (${MAX_DURATION_MS}ms)\n` +
                 `                - Advertencia: ${WARN_BEFORE_MINUTES} minutos antes\n` +
                 `                - Umbral advertencia: ${MAX_DURATION_MS - WARN_BEFORE_MINUTES * 60 * 1000}ms`);
@@ -859,13 +827,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Verificar archivo de audio de advertencia
     setTimeout(async () => {
-        console.log('🔊 Verificando archivo de advertencia de tiempo...');
         const audioFiles = await checkNotificationAudioFiles();
 
         if (!audioFiles.timeWarning) {
             console.warn('⚠️ Archivo de advertencia no encontrado. Se usará beep de fallback');
         } else {
-            console.log('✅ Archivo de advertencia encontrado y listo');
         }
 
         // Agregar botón de prueba temporal (solo en desarrollo)
@@ -1239,7 +1205,6 @@ async function finalizeRecording() {
     try {
         const discardedFlag = sessionStorage.getItem('audioDiscarded') === 'true';
         if (discardRequested || discardedFlag) {
-            console.log('🛑 [finalizeRecording] Cancelado por descarte del usuario');
             discardRequested = false;
             try { sessionStorage.removeItem('audioDiscarded'); } catch (_) {}
             // Limpieza mínima de UI/estado
@@ -1250,7 +1215,6 @@ async function finalizeRecording() {
         }
     } catch (_) {
         if (discardRequested) {
-            console.log('🛑 [finalizeRecording] Cancelado por descarte (sin sessionStorage)');
             discardRequested = false;
             updateRecordingUI(false);
             resetAudioVisualizer();
@@ -1286,13 +1250,8 @@ async function finalizeRecording() {
 
     // Determinar MIME real del primer chunk para registro
     const realMime = recordedChunks[0]?.type || blobType;
-    console.log('🎵 [finalizeRecording] Formato final detectado:', realMime);
     currentRecordingFormat = realMime;
 
-    console.log('🎵 [finalizeRecording] Preparando audio para procesamiento...');
-    console.log('🎵 [finalizeRecording] Using blob for processing');
-    console.log('🎵 [finalizeRecording] Blob size:', (finalBlob.size / (1024 * 1024)).toFixed(2), 'MB');
-    console.log('🎵 [finalizeRecording] Blob type:', finalBlob.type);
     const sizeMB = finalBlob.size / (1024 * 1024);
 
     const now = new Date();
@@ -1362,10 +1321,8 @@ async function finalizeRecording() {
         showSuccess('La subida continuará en segundo plano. Revisa el panel de notificaciones para el estado final.');
         handlePostActionCleanup(true);
     } else {
-        console.log('🎯 [finalizeRecording] Preparando audio para análisis inmediato...');
         pendingAudioBlob = finalBlob;
         pendingSaveContext = context;
-        console.log('🎯 [finalizeRecording] Llamando a analyzeNow()...');
         analyzeNow();
     }
 }
@@ -1512,11 +1469,9 @@ function updateTimer() {
 
     // Debug logging cada 30 segundos
     if (elapsedMinutes > 0 && elapsed % 30000 < 100) {
-        console.log(`⏱️ Timer Audio: ${elapsedMinutes}/${maxMinutes} min - Límite advertencia: ${Math.floor(warningThreshold/60000)} min`);
     }
 
     if (elapsed >= MAX_DURATION_MS) {
-        console.log('🛑 LÍMITE DE TIEMPO ALCANZADO - Deteniendo grabación automáticamente');
         // Solo usar beep de fallback para límite alcanzado
         playFallbackBeep();
         stopRecording();
@@ -1524,7 +1479,6 @@ function updateTimer() {
     }
 
     if (!limitWarningShown && elapsed >= warningThreshold) {
-        console.log(`🚨 ACTIVANDO ADVERTENCIA: ${elapsedMinutes} min transcurridos de ${maxMinutes} max`);
         showWarning(`Quedan ${WARN_BEFORE_MINUTES} minutos para el límite de grabación`);
         limitWarningShown = true;
     }
@@ -1551,7 +1505,6 @@ function showWarning(message) {
     // 🔊 Reproducir sonido para advertencias de tiempo límite
     if (message.includes('minutos') && message.includes('límite')) {
         playNotificationSound('timeWarning');
-        console.log(`🚨 ADVERTENCIA DE TIEMPO: ${message}`);
     }
 
     const notification = document.createElement('div');
@@ -1617,7 +1570,6 @@ function uploadAudioToDrive(blob, name, onProgress) {
     formData.append('meetingName', name);
     formData.append('driveType', driveType); // Send drive type to backend
 
-    console.log(`🗂️ [Upload] Subiendo a Drive tipo: ${driveType}`);
 
     // Remove the default rootFolder - let backend handle folder creation
     // formData.append('rootFolder', 'default');
@@ -1644,7 +1596,6 @@ function uploadAudioToDrive(blob, name, onProgress) {
                     response = xhr.responseText;
                 }
 
-                console.log('✅ [Upload] Audio subido exitosamente:', response);
 
                 // Mostrar mensaje específico del tipo de drive usado
                 if (response && typeof response === 'object') {
@@ -1658,7 +1609,6 @@ function uploadAudioToDrive(blob, name, onProgress) {
                 // Descarga automática para usuarios BNI después de subir a Drive
                 const userRole = (window.userRole || '').toString().toLowerCase();
                 if (userRole === 'bni' && response?.pending_recording) {
-                    console.log('Usuario BNI detectado - programando descarga automática después de procesamiento');
                     // Esperar un momento para que se procese y luego intentar descargar
                     setTimeout(() => {
                         checkAndDownloadForBNI(response.pending_recording);
@@ -1718,7 +1668,6 @@ function saveAudioTemporarily(blob, name, onProgress) {
     formData.append('description', document.getElementById('meeting-description')?.value || '');
     formData.append('duration', Math.round((blob.size / 16000) * 8)); // Estimación aproximada
 
-    console.log(`💾 [TempSave] Guardando temporalmente: ${fileName}`);
 
     const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
@@ -1742,7 +1691,6 @@ function saveAudioTemporarily(blob, name, onProgress) {
                     response = xhr.responseText;
                 }
 
-                console.log('✅ [TempSave] Audio guardado temporalmente:', response);
 
                 if (response?.success) {
                     const retentionDays = Number(response?.retention_days ?? window.tempRetentionDays ?? 7);
@@ -1770,7 +1718,6 @@ function saveAudioTemporarily(blob, name, onProgress) {
                 // Descarga automática para usuarios BNI después de guardar temporalmente
                 const userRole = (window.userRole || '').toString().toLowerCase();
                 if (userRole === 'bni' && response?.pending_recording) {
-                    console.log('Usuario BNI detectado - programando descarga automática después de procesamiento temporal');
                     // Esperar un momento para que se procese y luego intentar descargar
                     setTimeout(() => {
                         checkAndDownloadForBNI(response.pending_recording, true);
@@ -1805,16 +1752,13 @@ function uploadInBackground(blob, name, onProgress) {
     const userPlan = window.userPlanCode || 'free';
     const hasPremium = window.hasPremiumAccess ? window.hasPremiumAccess() : userPlan !== 'free';
 
-    console.log(`📋 [Upload] Plan del usuario: ${userPlan}, Premium Access: ${hasPremium}`);
 
     // Si no tiene acceso premium (plan FREE sin organización), usar guardado temporal
     if (!hasPremium) {
-        console.log('💾 [Upload] Usando guardado temporal para usuario sin acceso premium');
         return saveAudioTemporarily(blob, name, onProgress);
     }
 
     // Para usuarios con acceso premium, usar Drive
-    console.log('☁️ [Upload] Usando Drive para usuario con acceso premium');
     return uploadAudioToDrive(blob, name, onProgress);
 }
 
@@ -1857,7 +1801,6 @@ function pollPendingRecordingStatus(id) {
 
 // Funciones para manejar subidas fallidas con conversión automática a OGG
 async function storeFailedUploadData(blob, name) {
-    console.log('📦 [Failed Upload] Procesando datos para reintento:', {
         size: (blob.size / (1024 * 1024)).toFixed(2) + ' MB',
         type: blob.type,
         name: name
@@ -1866,13 +1809,11 @@ async function storeFailedUploadData(blob, name) {
     // Intentar convertir a OGG para mejorar compatibilidad en reintento
     try {
         if (!blob.type.includes('ogg')) {
-            console.log('🎵 [Failed Upload] Convirtiendo a OGG para mejorar compatibilidad...');
             const oggBlob = await convertToOgg(blob);
 
             failedAudioBlob = oggBlob;
             failedAudioName = name.replace(/\.(mp4|webm|wav|mp3|m4a)$/i, '.ogg'); // Cambiar extensión a OGG
 
-            console.log('✅ [Failed Upload] Audio convertido a OGG para reintento:', {
                 originalSize: (blob.size / (1024 * 1024)).toFixed(2) + ' MB',
                 oggSize: (oggBlob.size / (1024 * 1024)).toFixed(2) + ' MB',
                 newName: failedAudioName
@@ -1883,7 +1824,6 @@ async function storeFailedUploadData(blob, name) {
             // Ya es OGG, usar tal como está
             failedAudioBlob = blob;
             failedAudioName = name;
-            console.log('✅ [Failed Upload] Audio ya está en formato OGG');
         }
     } catch (conversionError) {
         console.warn('⚠️ [Failed Upload] Error al convertir a OGG, usando audio original:', conversionError);
@@ -1892,7 +1832,6 @@ async function storeFailedUploadData(blob, name) {
     }
 
     retryAttempts = 0;
-    console.log('📦 [Failed Upload] Datos finales almacenados para reintento:', {
         size: (failedAudioBlob.size / (1024 * 1024)).toFixed(2) + ' MB',
         type: failedAudioBlob.type,
         name: failedAudioName
@@ -1904,7 +1843,6 @@ function clearFailedUploadData() {
     failedAudioName = null;
     retryAttempts = 0;
     hideUploadRetryUI();
-    console.log('🧹 [Failed Upload] Datos de subida fallida limpiados');
 }
 
 function showUploadRetryUI() {
@@ -1969,7 +1907,6 @@ function showUploadRetryUI() {
     }
 
     retryUI.style.display = 'block';
-    console.log('🔄 [Retry UI] Interfaz de reintento mostrada');
 }
 
 function hideUploadRetryUI() {
@@ -2032,32 +1969,24 @@ function addRetryUploadStyles() {
 }
 
 async function analyzeNow() {
-    console.log('🎯 [analyzeNow] Iniciando análisis del audio...');
-    console.log('🎯 [analyzeNow] pendingAudioBlob existe:', !!pendingAudioBlob);
 
     if (!pendingAudioBlob) {
         console.error('❌ [analyzeNow] No hay audio pendiente para analizar');
         return;
     }
 
-    console.log('🎯 [analyzeNow] Tamaño del blob:', (pendingAudioBlob.size / 1024).toFixed(1), 'KB');
-    console.log('🎯 [analyzeNow] Tipo del blob:', pendingAudioBlob.type);
 
     try {
-        console.log('💾 [analyzeNow] Guardando audio en IndexedDB...');
         // Guardar el blob en IndexedDB y almacenar la clave en sessionStorage
         const key = await saveAudioBlob(pendingAudioBlob);
-        console.log('✅ [analyzeNow] Audio guardado con clave:', key);
         sessionStorage.setItem('uploadedAudioKey', key);
 
         // Verificar que la clave funcione recargando el blob
         try {
-            console.log('🔍 [analyzeNow] Verificando audio guardado...');
             const testBlob = await loadAudioBlob(key);
             if (!testBlob) {
                 throw new Error('Blob no encontrado tras guardar');
             }
-            console.log('✅ [analyzeNow] Verificación exitosa - blob encontrado');
         } catch (err) {
             console.error('❌ [analyzeNow] Error al validar audio guardado:', err);
             showError('Error al guardar el audio. Intenta nuevamente.');
@@ -2094,9 +2023,7 @@ async function analyzeNow() {
         return;
     }
 
-    console.log('🧹 [analyzeNow] Limpiando y preparando redirección...');
     handlePostActionCleanup();
-    console.log('🚀 [analyzeNow] Redirigiendo a audio-processing...');
     window.location.href = '/audio-processing';
 }
 
@@ -2336,7 +2263,6 @@ async function processAudioFile() {
     const planLimitBytes = getUploadLimitBytes(planInfo, hasPremium);
 
     if (planLimitBytes !== null && fileSize > planLimitBytes) {
-        console.log(`🚫 Archivo excede límite para el ${planInfo.planName}: ${fileSize} bytes > ${planLimitBytes} bytes`);
 
         // Mostrar modal específico para límite de tamaño
         showFileSizeLimitModal(fileSize, planLimitBytes / (1024 * 1024), planInfo.planName);
@@ -2369,7 +2295,6 @@ async function processAudioFile() {
 
         // Guardar el archivo en IndexedDB
         const audioKey = await saveAudioBlob(uploadedFile);
-        console.log('Audio guardado en IndexedDB con clave:', audioKey);
 
         // Validar que se pueda recargar el blob
         try {
@@ -2671,13 +2596,11 @@ async function startMeetingRecording() {
             try {
                 const discardedFlag = sessionStorage.getItem('audioDiscarded') === 'true';
                 if (discardRequested || discardedFlag) {
-                    console.log('🗑️ [Meeting] Grabación descartada, se omite finalizeRecording');
                     discardRequested = false;
                     return;
                 }
             } catch (_) {
                 if (discardRequested) {
-                    console.log('🗑️ [Meeting] Grabación descartada (no sessionStorage)');
                     discardRequested = false;
                     return;
                 }
@@ -2876,11 +2799,9 @@ function updateMeetingTimer() {
 
     // Debug logging cada 30 segundos
     if (elapsedMinutes > 0 && elapsed % 30000 < 100) {
-        console.log(`⏱️ Timer Reunión: ${elapsedMinutes}/${maxMinutes} min - Límite advertencia: ${Math.floor(warningThreshold/60000)} min`);
     }
 
     if (elapsed >= MAX_DURATION_MS) {
-        console.log('🛑 LÍMITE DE TIEMPO REUNIÓN ALCANZADO - Deteniendo grabación automáticamente');
         // Solo usar beep de fallback para límite alcanzado
         playFallbackBeep();
         stopMeetingRecording();
@@ -2888,7 +2809,6 @@ function updateMeetingTimer() {
     }
 
     if (!limitWarningShown && elapsed >= warningThreshold) {
-        console.log(`🚨 ACTIVANDO ADVERTENCIA REUNIÓN: ${elapsedMinutes} min transcurridos de ${maxMinutes} max`);
         showWarning(`Quedan ${WARN_BEFORE_MINUTES} minutos para el límite de grabación`);
         limitWarningShown = true;
     }
@@ -2913,10 +2833,8 @@ function updateMeetingTimer() {
 // Función simple para mostrar modal
 // Función genérica para mostrar modal de upgrade con mensaje personalizable
 function showUpgradeModal(options = {}) {
-    console.log('🚀 INICIANDO showUpgradeModal...');
 
     const modal = document.getElementById('postpone-locked-modal');
-    console.log('🔍 Modal encontrado:', !!modal);
 
     if (!modal) {
         console.error('❌ Modal no encontrado!');
@@ -2952,7 +2870,6 @@ function showUpgradeModal(options = {}) {
     const closeButton = modal.querySelector('.btn:not(.btn-primary)'); // Botón "Cerrar"
     if (options.hideCloseButton && closeButton) {
         closeButton.style.display = 'none';
-        console.log('🔒 Botón cerrar ocultado');
     } else if (closeButton) {
         closeButton.style.display = ''; // Mostrar botón cerrar normalmente
     }
@@ -2970,7 +2887,6 @@ function showUpgradeModal(options = {}) {
     // Bloquear scroll del body
     document.body.style.setProperty('overflow', 'hidden', 'important');
 
-    console.log('✅ Modal configurado. Display:', modal.style.display);
 }
 
 // Función específica para opción posponer (retrocompatibilidad)
@@ -2999,10 +2915,8 @@ window.showFileSizeLimitModal = showFileSizeLimitModal;
 
 // Función simple para cerrar modal
 window.closePostponeLockedModal = function() {
-    console.log('🔄 INICIANDO closePostponeLockedModal...');
 
     const modal = document.getElementById('postpone-locked-modal');
-    console.log('🔍 Modal para cerrar encontrado:', !!modal);
 
     if (modal) {
         // Resetear y aplicar estilos de cierre de forma forzada
@@ -3015,8 +2929,6 @@ window.closePostponeLockedModal = function() {
         document.body.removeAttribute('style');
         document.body.style.setProperty('overflow', '', 'important');
 
-        console.log('✅ Modal cerrado. Display:', modal.style.display);
-        console.log('✅ Body overflow restaurado:', document.body.style.overflow);
     } else {
         console.error('❌ No se encontró el modal para cerrar');
     }
@@ -3024,7 +2936,6 @@ window.closePostponeLockedModal = function() {
 
 // Función simple para ir a planes
 window.goToProfilePlans = function() {
-    console.log('🚀 Navegando a planes...');
 
     // Cerrar modal primero
     const modal = document.getElementById('postpone-locked-modal');
@@ -3112,7 +3023,6 @@ window.retryUpload = async function() {
     }
 
     retryAttempts++;
-    console.log(`🔄 [Retry] Intento ${retryAttempts}/${MAX_RETRY_ATTEMPTS}`);
 
     // Deshabilitar botón y mostrar progreso
     const retryBtn = document.getElementById('retry-upload-btn');
@@ -3157,7 +3067,6 @@ window.retryUpload = async function() {
         const result = await uploadInBackground(failedAudioBlob, failedAudioName, onProgress);
 
         // Éxito
-        console.log('✅ [Retry] Subida exitosa en intento', retryAttempts);
 
         // Create success notification with folder info
         const folderInfo = result?.folder_info || { root_folder: 'Grabaciones', subfolder: 'Sin clasificar' };
@@ -3202,7 +3111,6 @@ window.downloadFailedAudio = async function() {
 
     try {
         const fileName = await downloadAudioAsOgg(failedAudioBlob, failedAudioName);
-        console.log('💾 [Download] Archivo descargado:', fileName);
         showSuccess(`Archivo ${fileName} descargado correctamente como OGG`);
     } catch (error) {
         console.error('❌ [Download] Error al descargar como OGG:', error);
@@ -3215,7 +3123,6 @@ window.downloadFailedAudio = async function() {
 window.discardFailedAudio = function() {
     if (confirm('¿Estás seguro de que quieres descartar el audio? Esta acción no se puede deshacer.')) {
         clearFailedUploadData();
-        console.log('🗑️ [Discard] Audio descartado por el usuario');
         showSuccess('Audio descartado correctamente');
     }
 };
@@ -3251,7 +3158,6 @@ async function createUploadProgressNotification(filename, message) {
         }
 
         const notification = await response.json();
-        console.log('📧 [notifications] Created progress notification:', notification.id);
 
         // Refresh notifications display
         if (window.notifications) {
@@ -3292,7 +3198,6 @@ async function updateUploadProgressNotification(notificationId, message) {
             throw new Error(`Failed to update notification: ${response.status}`);
         }
 
-        console.log('📧 [notifications] Updated progress notification:', notificationId);
 
         // Refresh notifications display
         if (window.notifications) {
@@ -3337,7 +3242,6 @@ async function createUploadSuccessNotification(filename, folderInfo) {
         }
 
         const notification = await response.json();
-        console.log('📧 [notifications] Created success notification:', notification.id);
 
         // Refresh notifications display
         if (window.notifications) {
@@ -3371,7 +3275,6 @@ async function dismissNotification(notificationId) {
             throw new Error(`Failed to dismiss notification: ${response.status}`);
         }
 
-        console.log('📧 [notifications] Dismissed notification:', notificationId);
 
         // Refresh notifications display
         if (window.notifications) {
@@ -3397,13 +3300,11 @@ async function checkAndDownloadForBNI(pendingRecordingId, isTemporary = false) {
     const checkStatus = async () => {
         try {
             attempts++;
-            console.log(`Verificando estado del procesamiento BNI (intento ${attempts}/${maxAttempts})`);
 
             const response = await fetch(`/api/pending-recordings/${pendingRecordingId}/status`);
             const data = await response.json();
 
             if (data.status === 'completed') {
-                console.log('Procesamiento completado para usuario BNI - iniciando descarga automática');
 
                 // Construir URL de descarga
                 let downloadUrl = `/api/meetings/${data.meeting_id}/download-ju`;
@@ -3414,7 +3315,6 @@ async function checkAndDownloadForBNI(pendingRecordingId, isTemporary = false) {
 
                 // Iniciar descarga automática
                 setTimeout(() => {
-                    console.log('Descargando .ju automáticamente para usuario BNI:', downloadUrl);
                     window.location.href = downloadUrl;
                 }, 1000);
 
