@@ -44,7 +44,6 @@ export default defineConfig({
                 'resources/js/organization.js',
                 'resources/css/ai-assistant.css',
                 'resources/js/ai-assistant.js',
-                'resources/css/mobile-navigation.css',
                 'resources/js/admin-users.js',
                 'resources/js/admin-panels.js',
             ],

@@ -15,7 +15,6 @@
         'resources/css/reuniones_v2.css',
         'resources/css/audio-processing.css',
         'resources/js/reuniones_v2.js',
-        'resources/css/mobile-navigation.css',
         'resources/js/reuniones-page.js',
         'resources/css/reuniones-page.css'
     ])
@@ -194,8 +193,6 @@
             </form>
         </div>
     </div>
-
-    @include('partials.mobile-bottom-nav')
 
     <!-- Modal para opciones bloqueadas por plan -->
     <div class="modal modal-hidden" id="postpone-locked-modal">

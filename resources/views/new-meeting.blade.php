@@ -15,7 +15,7 @@
     <!-- Fonts -->
     <!-- Cargamos la tipografía usando la directiva con CORS para evitar bloqueos en navegadores estrictos -->
     @corsFont('https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap')    <!-- Styles -->
-    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css', 'resources/css/mobile-navigation.css'])
+    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/new-meeting.css','resources/css/index.css'])
 </head>
 <body
     data-user-role="{{ $userRole ?? (auth()->user()->roles ?? 'free') }}"
@@ -37,9 +37,6 @@
 
     <!-- Navbar principal arriba de todo -->
     @include('partials.navbar')
-
-    <!-- Barra de navegación móvil -->
-    @include('partials.mobile-bottom-nav')
 
 
     <div class="app-container">

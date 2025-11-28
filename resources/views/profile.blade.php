@@ -19,7 +19,6 @@
         'resources/js/index.js',
         'resources/css/profile.css',
         'resources/js/profile.js',
-        'resources/css/mobile-navigation.css'
     ])
 </head>
 <body>
@@ -28,10 +27,6 @@
 
     <!-- Navbar principal -->
     @include('partials.navbar')
-
-    <!-- Barra de navegación móvil -->
-    @include('partials.mobile-bottom-nav')
-
 
     <!-- Botón para abrir sidebar en móvil -->
     <button class="mobile-sidebar-btn mobile-menu-btn" onclick="toggleSidebar()" aria-label="Abrir menú">

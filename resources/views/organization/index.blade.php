@@ -21,8 +21,7 @@
         'resources/css/organization.css',
         'resources/css/audio-processing.css',
         'resources/js/reuniones_v2.js',
-        'resources/js/organization-meeting-modal.js',
-        'resources/css/mobile-navigation.css'
+        'resources/js/organization-meeting-modal.js'
     ])
     @include('partials.global-vars')
 </head>
@@ -1125,9 +1124,6 @@
         <iframe id="fullPreviewFrame" class="w-full h-full mt-[40px] bg-slate-900" title="Vista previa del PDF"></iframe>
     </div>
 </div>
-
-    <!-- Navegación móvil -->
-    @include('partials.mobile-bottom-nav')
 
 </body>
 </html>

@@ -18,8 +18,7 @@
     @vite([
         'resources/css/app.css',
         'resources/js/app.js',
-        'resources/css/index.css',
-        'resources/css/mobile-navigation.css'
+        'resources/css/index.css'
     ])
 
     <link rel="stylesheet" href="{{ asset('css/ai-assistant.css') }}?v={{ time() }}">
@@ -188,9 +187,6 @@
 
     <script src="{{ asset('js/ai-assistant-upgrade.js') }}?v={{ time() }}" defer></script>
     <script src="{{ asset('js/ai-assistant-context.js') }}?v={{ time() }}" defer></script>
-
-    <!-- Navegación móvil -->
-    @include('partials.mobile-bottom-nav')
 
     <script src="{{ asset('js/ai-assistant-mobile.js') }}?v={{ time() }}" defer></script>
 
