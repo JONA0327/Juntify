@@ -1,0 +1,196 @@
+/* Mobile Navigation Bar */
+.mobile-navbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(59, 130, 246, 0.2);
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 80px 1fr 1fr;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    color: inherit;
+}
+
+.nav-item:hover:not(.disabled):not(.nav-center) {
+    background: rgba(59, 130, 246, 0.1);
+    transform: translateY(-2px);
+}
+
+.nav-item.active:not(.nav-center) {
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.nav-item.active .nav-icon,
+.nav-item.active .nav-label {
+    color: #60a5fa;
+}
+
+.nav-icon {
+    width: 20px;
+    height: 20px;
+    color: #94a3b8;
+    transition: color 0.3s ease;
+}
+
+.nav-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #94a3b8;
+    transition: color 0.3s ease;
+}
+
+/* Centro - Nueva Reunión */
+.nav-center {
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+.center-button {
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+    transition: all 0.3s ease;
+}
+
+.center-button.disabled {
+    background: linear-gradient(135deg, #64748b, #475569);
+    box-shadow: 0 4px 10px rgba(100, 116, 139, 0.3);
+}
+
+.nav-center:hover:not(.disabled) .center-button {
+    transform: translateY(-4px) scale(1.1);
+    box-shadow: 0 12px 30px rgba(59, 130, 246, 0.6);
+}
+
+.center-icon {
+    width: 24px;
+    height: 24px;
+    color: white;
+}
+
+.center-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-top: 4px;
+}
+
+.disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Dropdown */
+.dropdown-container {
+    position: relative;
+}
+
+.dropdown-container:hover {
+    background: rgba(59, 130, 246, 0.1);
+    transform: translateY(-2px);
+}
+
+.dropdown-menu {
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    background: rgba(15, 23, 42, 0.98);
+    backdrop-filter: blur(20px);
+    border: 2px solid rgba(59, 130, 246, 0.3);
+    border-radius: 12px;
+    padding: 8px 0;
+    margin-bottom: 8px;
+    min-width: 160px;
+    display: none;
+    z-index: 10001;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.dropdown-menu.show {
+    display: block;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.dropdown-item:hover {
+    background: rgba(59, 130, 246, 0.1);
+    color: #60a5fa;
+}
+
+.dropdown-icon {
+    width: 18px;
+    height: 18px;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+.dropdown-item span {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.dropdown-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: transparent;
+    z-index: 10000;
+    display: none;
+}
+
+.dropdown-overlay.show {
+    display: block;
+}
+
+/* Responsive */
+@media screen and (max-width: 768px) {
+    .mobile-navbar {
+        display: grid !important;
+    }
+
+    body {
+        padding-bottom: 85px !important;
+    }
+}
+
+@media screen and (min-width: 769px) {
+    .mobile-navbar {
+        display: none !important;
+    }
+}
