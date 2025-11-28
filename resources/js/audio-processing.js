@@ -26,7 +26,7 @@ function clearDiscardState() {
     audioDiscarded = false;
     try {
         sessionStorage.removeItem('audioDiscarded');
-        console.log('✅ [clearDiscardState] Estado de descarte limpiado completamente');
+        /* console.log('✅ [clearDiscardState] Estado de descarte limpiado completamente'); */
     } catch (e) {
         console.warn('No se pudo limpiar el estado de descarte:', e);
     }
@@ -87,7 +87,7 @@ function detectLargeAudioFile(audioBlob) {
         const sizeMB = audioBlob.size / (1024 * 1024);
         const formatName = isOGG ? 'OGG' : isMP4 ? 'MP4' : 'Audio';
 
-        console.log(`🎵 [detectLargeAudioFile] ${formatName} file detected: ${sizeMB.toFixed(2)} MB`);
+        /* console.log(`🎵 [detectLargeAudioFile] ${formatName} file detected: ${sizeMB.toFixed(2)} MB`); */
 
         const limitMb = getPlanUploadLimitMb();
         const threshold = limitMb > 0 ? limitMb : 50;
@@ -116,7 +116,7 @@ function getPreferredAudioFormat() {
 
     for (const format of formats) {
         if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(format)) {
-            console.log(`🎵 [getPreferredAudioFormat] Formato seleccionado: ${format}`);
+            /* console.log(`🎵 [getPreferredAudioFormat] Formato seleccionado: ${format}`); */
             return format;
         }
     }
@@ -220,15 +220,15 @@ function scheduleAutomaticTranscriptionRetry(reason = '') {
         persistAutomaticTranscriptionRetryState();
 
         if (audioDiscarded) {
-            console.log('🚫 [autoRetry] Se omitió el reintento automático porque el audio fue descartado');
+            /* console.log('🚫 [autoRetry] Se omitió el reintento automático porque el audio fue descartado'); */
             return;
         }
 
-        console.log(`🔄 [autoRetry] Ejecutando reintento automático #${automaticTranscriptionRetryState.attempts} (motivo: ${reason || 'desconocido'})`);
+        /* console.log(`🔄 [autoRetry] Ejecutando reintento automático #${automaticTranscriptionRetryState.attempts} (motivo: ${reason || 'desconocido'})`); */
         startTranscription();
     }, delayMs);
 
-    console.log(`⏱️ [autoRetry] Reintento automático #${nextAttempt} programado en ${Math.round(delayMs / 1000)}s (motivo: ${reason || 'desconocido'})`);
+    /* console.log(`⏱️ [autoRetry] Reintento automático #${nextAttempt} programado en ${Math.round(delayMs / 1000)}s (motivo: ${reason || 'desconocido'})`); */
     return true;
 }
 
@@ -240,12 +240,12 @@ function cancelAutomaticTranscriptionRetry(resetAttempts = false) {
 
     if (resetAttempts) {
         resetAutomaticTranscriptionRetryState();
-        console.log('🛑 [autoRetry] Reintentos automáticos reiniciados completamente');
+        /* console.log('🛑 [autoRetry] Reintentos automáticos reiniciados completamente'); */
     } else {
         automaticTranscriptionRetryState.pendingAttempt = null;
         automaticTranscriptionRetryState.scheduledAt = null;
         persistAutomaticTranscriptionRetryState();
-        console.log('🛑 [autoRetry] Reintento automático cancelado');
+        /* console.log('🛑 [autoRetry] Reintento automático cancelado'); */
     }
 }
 
@@ -264,11 +264,11 @@ function restoreAutomaticTranscriptionRetryIfNeeded() {
         // Si ya se venció el tiempo, ejecutar inmediatamente en la siguiente cola de tareas
         setTimeout(() => {
             if (audioDiscarded) {
-                console.log('🚫 [autoRetry] Se omitió la restauración del reintento porque el audio fue descartado');
+                /* console.log('🚫 [autoRetry] Se omitió la restauración del reintento porque el audio fue descartado'); */
                 cancelAutomaticTranscriptionRetry(false);
                 return;
             }
-            console.log(`🔄 [autoRetry] Ejecutando reintento automático restaurado #${automaticTranscriptionRetryState.pendingAttempt}`);
+            /* console.log(`🔄 [autoRetry] Ejecutando reintento automático restaurado #${automaticTranscriptionRetryState.pendingAttempt}`); */
             automaticTranscriptionRetryState.attempts = automaticTranscriptionRetryState.pendingAttempt;
             automaticTranscriptionRetryState.pendingAttempt = null;
             automaticTranscriptionRetryState.scheduledAt = null;
@@ -281,11 +281,11 @@ function restoreAutomaticTranscriptionRetryIfNeeded() {
     automaticTranscriptionRetryTimeout = setTimeout(() => {
         automaticTranscriptionRetryTimeout = null;
         if (audioDiscarded) {
-            console.log('🚫 [autoRetry] Se omitió el reintento automático restaurado porque el audio fue descartado');
+            /* console.log('🚫 [autoRetry] Se omitió el reintento automático restaurado porque el audio fue descartado'); */
             cancelAutomaticTranscriptionRetry(false);
             return;
         }
-        console.log(`🔄 [autoRetry] Ejecutando reintento automático restaurado #${automaticTranscriptionRetryState.pendingAttempt}`);
+        /* console.log(`🔄 [autoRetry] Ejecutando reintento automático restaurado #${automaticTranscriptionRetryState.pendingAttempt}`); */
         automaticTranscriptionRetryState.attempts = automaticTranscriptionRetryState.pendingAttempt;
         automaticTranscriptionRetryState.pendingAttempt = null;
         automaticTranscriptionRetryState.scheduledAt = null;
@@ -293,7 +293,7 @@ function restoreAutomaticTranscriptionRetryIfNeeded() {
         startTranscription();
     }, delayMs);
 
-    console.log(`⏱️ [autoRetry] Reintento automático restaurado en ${Math.round(delayMs / 1000)}s`);
+    /* console.log(`⏱️ [autoRetry] Reintento automático restaurado en ${Math.round(delayMs / 1000)}s`); */
 }
 
 // ===== VARIABLES GLOBALES =====
@@ -310,7 +310,7 @@ try {
     const discardedStatus = sessionStorage.getItem('audioDiscarded');
     if (discardedStatus === 'true') {
         audioDiscarded = true;
-        console.log('🚫 [Init] Audio fue descartado previamente, bloqueando procesamiento');
+        /* console.log('🚫 [Init] Audio fue descartado previamente, bloqueando procesamiento'); */
     }
 } catch (e) {
     console.warn('No se pudo verificar el estado de descarte:', e);
@@ -513,7 +513,7 @@ function updateStartAnalysisButtonState() {
 async function startAudioProcessing() {
     // Verificar si el audio fue descartado
     if (audioDiscarded) {
-        console.log('🚫 [startAudioProcessing] Audio fue descartado, cancelando procesamiento');
+        /* console.log('🚫 [startAudioProcessing] Audio fue descartado, cancelando procesamiento'); */
         showNotification('El procesamiento fue cancelado porque el audio fue descartado', 'warning');
         return;
     }
@@ -588,7 +588,7 @@ async function startTranscription() {
 
     // Verificar si el audio fue descartado
     if (audioDiscarded) {
-        console.log('🚫 [startTranscription] Audio fue descartado, cancelando transcripción');
+        /* console.log('🚫 [startTranscription] Audio fue descartado, cancelando transcripción'); */
         showNotification('La transcripción fue cancelada porque el audio fue descartado', 'warning');
         return;
     }
@@ -624,13 +624,13 @@ async function startTranscription() {
 
     // Para audios grandes (>10MB), usar subida por chunks
     const audioSizeMB = audioBlob.size / (1024 * 1024);
-    console.log(`🔍 [startTranscription] Audio size: ${audioSizeMB.toFixed(2)} MB`);
+    /* console.log(`🔍 [startTranscription] Audio size: ${audioSizeMB.toFixed(2)} MB`); */
 
     if (audioSizeMB > 10) {
-        console.log('📤 [startTranscription] Using chunked upload for large audio');
+        /* console.log('📤 [startTranscription] Using chunked upload for large audio'); */
         await startChunkedTranscription(audioBlob, lang, progressBar, progressText, progressPercent);
     } else {
-        console.log('📤 [startTranscription] Using standard upload for small audio');
+        /* console.log('📤 [startTranscription] Using standard upload for small audio'); */
         await startStandardTranscription(audioBlob, lang, progressBar, progressText, progressPercent);
     }
 }
@@ -655,7 +655,7 @@ async function startStandardTranscription(audioBlob, lang, progressBar, progress
             }
         });
 
-        console.log("✅ [startStandardTranscription] Transcripción iniciada:", data);
+        /* console.log("✅ [startStandardTranscription] Transcripción iniciada:", data); */
 
         progressBar.style.width = '10%';
         progressPercent.textContent = '10%';
@@ -675,7 +675,7 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
     const RETRY_DELAY = 2000; // 2 segundos
 
     const tryWithSize = async (CHUNK_SIZE) => {
-        console.log(`🔧 [startChunkedTranscription] Intentando chunk size = ${Math.round(CHUNK_SIZE/1024/1024)}MB`);
+        /* console.log(`🔧 [startChunkedTranscription] Intentando chunk size = ${Math.round(CHUNK_SIZE/1024/1024)}MB`); */
         progressText.textContent = `Preparando subida (${Math.round(CHUNK_SIZE/1024/1024)}MB)...`;
 
         const initResponse = await axios.post('/transcription/chunked/init', {
@@ -686,7 +686,7 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
         }, { timeout: 30000 });
 
         const { upload_id, chunk_urls } = initResponse.data;
-        console.log(`✅ [startChunkedTranscription] Upload initialized with ${chunk_urls.length} chunks (size ${Math.round(CHUNK_SIZE/1024/1024)}MB)`);
+        /* console.log(`✅ [startChunkedTranscription] Upload initialized with ${chunk_urls.length} chunks (size ${Math.round(CHUNK_SIZE/1024/1024)}MB)`); */
 
         // Construir lista de chunks
         const chunks = [];
@@ -722,7 +722,7 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
                 });
 
                 completedChunks++;
-                console.log(`✅ [uploadChunk] Chunk ${chunk.index + 1}/${chunks.length} ok (${Math.round(CHUNK_SIZE/1024/1024)}MB)`);
+                /* console.log(`✅ [uploadChunk] Chunk ${chunk.index + 1}/${chunks.length} ok (${Math.round(CHUNK_SIZE/1024/1024)}MB)`); */
             } catch (error) {
                 // Si es 413 devolvemos señal para reintentar con chunk menor
                 if (error?.response?.status === 413) {
@@ -750,10 +750,10 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
             progressBar.style.width = '9%';
             progressPercent.textContent = '9%';
             progressText.textContent = 'Finalizando subida...';
-            console.log('🔧 [startChunkedTranscription] Finalizing upload');
+            /* console.log('🔧 [startChunkedTranscription] Finalizing upload'); */
             try {
                 const finalizeResponse = await axios.post('/transcription/chunked/finalize', { upload_id }, { timeout: 300000 });
-                console.log('✅ [startChunkedTranscription] Transcripción iniciada:', finalizeResponse.data);
+                /* console.log('✅ [startChunkedTranscription] Transcripción iniciada:', finalizeResponse.data); */
                 progressBar.style.width = '10%';
                 progressPercent.textContent = '10%';
                 progressText.textContent = 'En cola...';
@@ -1118,9 +1118,9 @@ function generateTranscriptionSegments() {
 
         // Debug detallado para primeros 3 segments
         if (index < 3) {
-            console.log(`🎯 [Segment ${index}] Raw times: start=${u.start}, end=${u.end}, detected_ms=${isInMilliseconds}`);
-            console.log(`🎯 [Segment ${index}] Converted: start=${startInSeconds.toFixed(2)}s, end=${endInSeconds.toFixed(2)}s`);
-            console.log(`🎯 [Segment ${index}] Speaker: ${speaker}, Text: "${u.text.substring(0, 50)}..."`);
+            /* console.log(`🎯 [Segment ${index}] Raw times: start=${u.start}, end=${u.end}, detected_ms=${isInMilliseconds}`); */
+            /* console.log(`🎯 [Segment ${index}] Converted: start=${startInSeconds.toFixed(2)}s, end=${endInSeconds.toFixed(2)}s`); */
+            /* console.log(`🎯 [Segment ${index}] Speaker: ${speaker}, Text: "${u.text.substring(0, 50)}..."`); */
         }
 
         return {
@@ -1138,16 +1138,16 @@ function generateTranscriptionSegments() {
 
     // Debug logging para detección de múltiples hablantes
     const uniqueSpeakers = [...new Set(segments.map(s => s.speaker))];
-    console.log(`🎯 [Speaker Detection] Total utterances: ${utterances.length}`);
-    console.log(`🎯 [Speaker Detection] Unique speakers detected: ${uniqueSpeakers.length}`);
-    console.log(`🎯 [Speaker Detection] Speakers:`, uniqueSpeakers);
-    console.log(`🎯 [Speaker Detection] Raw speaker data sample:`, utterances.slice(0, 5).map(u => ({ speaker: u.speaker, text: u.text.substring(0, 50) })));
+    /* console.log(`🎯 [Speaker Detection] Total utterances: ${utterances.length}`); */
+    /* console.log(`🎯 [Speaker Detection] Unique speakers detected: ${uniqueSpeakers.length}`); */
+    /* console.log(`🎯 [Speaker Detection] Speakers:`, uniqueSpeakers); */
+    /* console.log(`🎯 [Speaker Detection] Raw speaker data sample:`, utterances.slice(0, 5).map(u => ({ speaker: u.speaker, text: u.text.substring(0, 50) }))); */
 
     if (uniqueSpeakers.length === 1) {
         console.warn(`⚠️ [Speaker Detection] Only 1 speaker detected in ${utterances.length} utterances - this might indicate a detection issue`);
         showNotification(`⚠️ Solo se detectó 1 hablante en ${utterances.length} segmentos. Esto podría indicar un problema en la detección de hablantes.`, 'warning');
     } else {
-        console.log(`✅ [Speaker Detection] Successfully detected ${uniqueSpeakers.length} different speakers`);
+        /* console.log(`✅ [Speaker Detection] Successfully detected ${uniqueSpeakers.length} different speakers`); */
         showNotification(`✅ Detección completada: ${uniqueSpeakers.length} hablantes detectados en ${utterances.length} segmentos`, 'success');
     }
 
@@ -1248,7 +1248,7 @@ function initializeAudioPlayer() {
         try {
             const src = typeof audioData === 'string' ? audioData : URL.createObjectURL(audioData);
             audioPlayer.src = src;
-            console.log('🎵 [initializeAudioPlayer] Audio source set successfully');
+            /* console.log('🎵 [initializeAudioPlayer] Audio source set successfully'); */
         } catch (error) {
             console.error('🎵 [initializeAudioPlayer] Error setting audio source:', error);
             return false;
@@ -1316,12 +1316,12 @@ function playSegmentAudio(segmentIndex) {
         return;
     }
 
-    console.log(`🎵 [playSegmentAudio] Playing segment ${segmentIndex}:`, {
+    /* console.log(`🎵 [playSegmentAudio] Playing segment ${segmentIndex}:`, {
         speaker: segment.speaker,
         start: segment.start,
         end: segment.end,
         text: segment.text?.substring(0, 50) + '...'
-    });
+    }); */
 
     // Inicializar el audio player
     if (!initializeAudioPlayer()) {
@@ -1359,7 +1359,7 @@ function playSegmentAudio(segmentIndex) {
             const startTimeWithBuffer = Math.max(0, segment.start - 0.1); // 100ms antes
             const endTimeWithBuffer = segment.end + 0.1; // 100ms después
 
-            console.log(`🎵 [playSegmentAudio] Starting segment ${segmentIndex}: ${startTimeWithBuffer.toFixed(2)}s - ${endTimeWithBuffer.toFixed(2)}s (with buffer)`);
+            /* console.log(`🎵 [playSegmentAudio] Starting segment ${segmentIndex}: ${startTimeWithBuffer.toFixed(2)}s - ${endTimeWithBuffer.toFixed(2)}s (with buffer)`); */
 
             // Esperar a que el audio esté listo
             await waitForAudioReady(audioPlayer, 15000); // 15 segundos de timeout
@@ -1376,7 +1376,7 @@ function playSegmentAudio(segmentIndex) {
                     segmentEndHandler = null;
                     updateSegmentButtons(null);
                     currentSegmentIndex = null;
-                    console.log(`🎵 [playSegmentAudio] Segment ${segmentIndex} finished at ${audioPlayer.currentTime.toFixed(2)}s`);
+                    /* console.log(`🎵 [playSegmentAudio] Segment ${segmentIndex} finished at ${audioPlayer.currentTime.toFixed(2)}s`); */
                 }
             };
 
@@ -1389,7 +1389,7 @@ function playSegmentAudio(segmentIndex) {
             updateSegmentButtons(segmentIndex);
             currentSegmentIndex = segmentIndex;
 
-            console.log(`🎵 [playSegmentAudio] Successfully playing segment ${segmentIndex}`);
+            /* console.log(`🎵 [playSegmentAudio] Successfully playing segment ${segmentIndex}`); */
 
         } catch (error) {
             console.error('🎵 [playSegmentAudio] Error during playback:', error);
@@ -1589,7 +1589,7 @@ function selectAnalyzer(analyzerType) {
     selectedAnalyzer = found ? analyzerType : null;
 
     if (found) {
-        console.log('Analizador seleccionado:', analyzerType);
+        /* console.log('Analizador seleccionado:', analyzerType); */
     } else {
         console.warn('Analizador no encontrado para selección:', analyzerType);
     }
@@ -1693,7 +1693,7 @@ function updateAnalysisPreview() {
         // Debug: log the structure we got from analysis, before rendering
         try {
             console.group('%cEstructura de tareas para renderizar','color:#16a34a;font-weight:bold');
-            console.log('analysisResults.tasks (longitud):', (analysisResults.tasks || []).length);
+            /* console.log('analysisResults.tasks (longitud):', (analysisResults.tasks || []).length); */
             if ((analysisResults.tasks || []).length) {
                 console.dir((analysisResults.tasks || [])[0]);
             }
@@ -1797,11 +1797,11 @@ async function loadDriveOptions() {
     const organizationId = window.currentOrganizationId || document.body.dataset.organizationId;
     const driveSelect = document.getElementById('drive-select');
 
-    console.log('🔍 [loadDriveOptions] Debug Info:', {
+    /* console.log('🔍 [loadDriveOptions] Debug Info:', {
         role,
         organizationId,
         driveSelectExists: !!driveSelect
-    });
+    }); */
 
     if (!driveSelect) {
         console.warn('🔍 [loadDriveOptions] Drive select element not found');
@@ -1809,17 +1809,17 @@ async function loadDriveOptions() {
     }
 
     // Allow both administrators and colaboradores to see drive options
-    console.log('🔍 [loadDriveOptions] Loading drive options for role:', role);
+    /* console.log('🔍 [loadDriveOptions] Loading drive options for role:', role); */
 
     try {
         // Clear existing options
         driveSelect.innerHTML = '';
 
         // Load personal drive name
-        console.log('🔍 [loadDriveOptions] Fetching personal drive data...');
+        /* console.log('🔍 [loadDriveOptions] Fetching personal drive data...'); */
         try {
             const personalRes = await fetch('/drive/sync-subfolders');
-            console.log('🔍 [loadDriveOptions] Personal drive response status:', personalRes.status);
+            /* console.log('🔍 [loadDriveOptions] Personal drive response status:', personalRes.status); */
 
             if (personalRes.ok) {
                 let personalData;
@@ -1837,14 +1837,14 @@ async function loadDriveOptions() {
                     throw inner; // fallback handled below
                 }
 
-                console.log('🔍 [loadDriveOptions] Personal drive data:', personalData);
+                /* console.log('🔍 [loadDriveOptions] Personal drive data:', personalData); */
 
                 if (personalData && personalData.root_folder) {
                     const personalOpt = document.createElement('option');
                     personalOpt.value = 'personal';
                     personalOpt.textContent = `🏠 ${personalData.root_folder.name}`;
                     driveSelect.appendChild(personalOpt);
-                    console.log('✅ [loadDriveOptions] Added personal option:', personalData.root_folder.name);
+                    /* console.log('✅ [loadDriveOptions] Added personal option:', personalData.root_folder.name); */
                 }
             } else {
                 const failText = await personalRes.text();
@@ -1857,26 +1857,26 @@ async function loadDriveOptions() {
             personalOpt.value = 'personal';
             personalOpt.textContent = 'Personal';
             driveSelect.appendChild(personalOpt);
-            console.log('📝 [loadDriveOptions] Added fallback personal option');
+            /* console.log('📝 [loadDriveOptions] Added fallback personal option'); */
         }
 
         // Load organization drive name (for both admin and colaborador)
         if (organizationId) {
-            console.log('🔍 [loadDriveOptions] Fetching organization drive data...');
+            /* console.log('🔍 [loadDriveOptions] Fetching organization drive data...'); */
             try {
                 const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
-                console.log('🔍 [loadDriveOptions] Organization drive response status:', orgRes.status);
+                /* console.log('🔍 [loadDriveOptions] Organization drive response status:', orgRes.status); */
 
                 if (orgRes.ok) {
                     const orgData = await orgRes.json();
-                    console.log('🔍 [loadDriveOptions] Organization drive data:', orgData);
+                    /* console.log('🔍 [loadDriveOptions] Organization drive data:', orgData); */
 
                     if (orgData.root_folder) {
                         const orgOpt = document.createElement('option');
                         orgOpt.value = 'organization';
                         orgOpt.textContent = `🏢 ${orgData.root_folder.name}`;
                         driveSelect.appendChild(orgOpt);
-                        console.log('✅ [loadDriveOptions] Added organization option:', orgData.root_folder.name);
+                        /* console.log('✅ [loadDriveOptions] Added organization option:', orgData.root_folder.name); */
                     }
                 } else {
                     console.warn('⚠️ [loadDriveOptions] Organization drive request failed:', await orgRes.text());
@@ -1888,7 +1888,7 @@ async function loadDriveOptions() {
                 orgOpt.value = 'organization';
                 orgOpt.textContent = 'Organization';
                 driveSelect.appendChild(orgOpt);
-                console.log('📝 [loadDriveOptions] Added fallback organization option');
+                /* console.log('📝 [loadDriveOptions] Added fallback organization option'); */
             }
         }
 
@@ -1897,22 +1897,22 @@ async function loadDriveOptions() {
             const saved = sessionStorage.getItem('selectedDrive');
             if (saved && driveSelect.querySelector(`option[value="${saved}"]`)) {
                 driveSelect.value = saved;
-                console.log('📄 [loadDriveOptions] Restored saved selection:', saved);
+                /* console.log('📄 [loadDriveOptions] Restored saved selection:', saved); */
             } else {
                 // For colaboradores in organizations, default to organization
                 if (role === 'colaborador' && organizationId && driveSelect.querySelector('option[value="organization"]')) {
                     driveSelect.value = 'organization';
-                    console.log('👥 [loadDriveOptions] Set default to organization for colaborador');
+                    /* console.log('👥 [loadDriveOptions] Set default to organization for colaborador'); */
                 } else {
                     driveSelect.selectedIndex = 0;
-                    console.log('🎯 [loadDriveOptions] Set default to first option');
+                    /* console.log('🎯 [loadDriveOptions] Set default to first option'); */
                 }
             }
         }
 
         // Show the selector for both admin and colaborador
         driveSelect.style.display = 'block';
-        console.log('👁️ [loadDriveOptions] Drive selector is now visible');
+        /* console.log('👁️ [loadDriveOptions] Drive selector is now visible'); */
 
     } catch (e) {
         console.error('❌ [loadDriveOptions] Error loading drive options:', e);
@@ -1921,7 +1921,7 @@ async function loadDriveOptions() {
             <option value="personal">Personal</option>
             <option value="organization">Organization</option>
         `;
-        console.log('🔄 [loadDriveOptions] Fallback to default options');
+        /* console.log('🔄 [loadDriveOptions] Fallback to default options'); */
     }
 }
 
@@ -1934,19 +1934,19 @@ async function loadDriveFolders() {
     const transcriptionSelect = null;
     const audioSelect = null;
 
-    console.log('🔍 [loadDriveFolders] Starting with debug info:', {
+    /* console.log('🔍 [loadDriveFolders] Starting with debug info:', {
         role,
         organizationId,
         driveSelectValue: driveSelect?.value,
         driveSelectExists: !!driveSelect
-    });
+    }); */
 
     // First, (re)load drive options ONLY preserving current selection to avoid overriding user choice
     const previouslySelected = driveSelect ? driveSelect.value : null;
     await loadDriveOptions();
     if (previouslySelected && driveSelect && driveSelect.querySelector(`option[value="${previouslySelected}"]`)) {
         driveSelect.value = previouslySelected;
-        console.log('🔁 [loadDriveFolders] Restored user selection after options reload:', previouslySelected);
+        /* console.log('🔁 [loadDriveFolders] Restored user selection after options reload:', previouslySelected); */
     }
 
     // Updated logic to allow colaboradores to choose between personal and organization
@@ -1960,12 +1960,12 @@ async function loadDriveFolders() {
         useOrg = false; // default to personal
     }
 
-    console.log('🔍 [loadDriveFolders] Drive selection logic:', {
+    /* console.log('🔍 [loadDriveFolders] Drive selection logic:', {
         role,
         useOrg,
         driveSelectValue: driveSelect?.value,
         reasoning: role === 'colaborador' ? 'colaborador can choose' : 'administrator choice'
-    });
+    }); */
 
     // Nueva lógica unificada para obtener la root folder
     try {
@@ -1993,7 +1993,7 @@ async function loadDriveFolders() {
 
         // rootSelect eliminado: ya no se muestra la carpeta raíz al usuario, se gestiona internamente
 
-        console.log('✅ [loadDriveFolders] Finalizado (driveType actual =', useOrg ? 'organization' : 'personal', ')');
+        /* console.log('✅ [loadDriveFolders] Finalizado (driveType actual =', useOrg ? 'organization' : 'personal', ')'); */
     } catch (e) {
         console.error('❌ [loadDriveFolders] Error obteniendo root folder:', e);
         showNotification('No se pudo cargar la carpeta raíz', 'error');
@@ -2122,7 +2122,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
     const driveSelect = document.getElementById('drive-select');
     const driveType = driveSelect ? driveSelect.value : 'personal'; // Default to personal
 
-    console.log('🗂️ [processDatabaseSave] Drive type selected:', driveType);
+    /* console.log('🗂️ [processDatabaseSave] Drive type selected:', driveType); */
 
     // Si es drive organizacional, obtenemos/forzamos la carpeta raíz directamente desde el endpoint (solo para logging)
     let resolvedRootFolder = null; // solo para logging/debug
@@ -2135,7 +2135,7 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                     const data = await res.json();
                     if (data.root_folder) {
                         resolvedRootFolder = data.root_folder.google_id;
-                        console.log('🏢 [processDatabaseSave] Using organization root folder from API:', resolvedRootFolder);
+                        /* console.log('🏢 [processDatabaseSave] Using organization root folder from API:', resolvedRootFolder); */
                     } else {
                         console.warn('⚠️ [processDatabaseSave] Organization root folder not found in response');
                     }
@@ -2218,12 +2218,12 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
         if (window.pendingAudioInfo) {
             appendSaveLogMessage('Completando procesamiento de audio pendiente...');
 
-            console.log('📦 Datos a enviar (pendiente):', {
+            /* console.log('📦 Datos a enviar (pendiente):', {
                 pending_id: window.pendingAudioInfo.pendingId,
                 meeting_name: meetingName,
                 transcription_data: transcription,
                 analysis_results: analysis
-            });
+            }); */
 
             const response = await fetch('/api/pending-meetings/complete', {
                 method: 'POST',
@@ -2236,12 +2236,12 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                 })
             });
 
-            console.log('📡 Respuesta del servidor:', {
+            /* console.log('📡 Respuesta del servidor:', {
                 status: response.status,
                 statusText: response.statusText,
                 headers: response.headers,
                 ok: response.ok
-            });
+            }); */
 
             if (!response.ok) {
                 let errorMsg = 'Error al completar audio pendiente';
@@ -2315,10 +2315,10 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
             try {
                 const t = finalTasks;
                 console.group('%cTareas detectadas (post-análisis)','color:#2563eb;font-weight:bold');
-                console.log('Tipo:', Array.isArray(t) ? 'Array' : typeof t);
-                console.log('Cantidad:', Array.isArray(t) ? t.length : 0);
+                /* console.log('Tipo:', Array.isArray(t) ? 'Array' : typeof t); */
+                /* console.log('Cantidad:', Array.isArray(t) ? t.length : 0); */
                 if (Array.isArray(t) && t.length) {
-                    console.log('Ejemplo (primer elemento crudo):');
+                    /* console.log('Ejemplo (primer elemento crudo):'); */
                     console.dir(t[0]);
                     // Tabla con campos comunes si existen
                     const rows = t.slice(0, 20).map((x, i) => ({
@@ -2466,8 +2466,8 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
             try {
                 const t = finalTasks;
                 console.group('%cTareas detectadas (post-análisis - ruta alterna)','color:#2563eb;font-weight:bold');
-                console.log('Tipo:', Array.isArray(t) ? 'Array' : typeof t);
-                console.log('Cantidad:', Array.isArray(t) ? t.length : 0);
+                /* console.log('Tipo:', Array.isArray(t) ? 'Array' : typeof t); */
+                /* console.log('Cantidad:', Array.isArray(t) ? t.length : 0); */
                 if (Array.isArray(t) && t.length) {
                     console.dir(t[0]);
                     const rows = t.slice(0, 20).map((x, i) => ({
@@ -2598,7 +2598,7 @@ function showCompletion({
     audioDiscarded = false;
     try {
         sessionStorage.removeItem('audioDiscarded');
-        console.log('✅ [showCompletion] Estado de descarte limpiado - procesamiento completado exitosamente');
+        /* console.log('✅ [showCompletion] Estado de descarte limpiado - procesamiento completado exitosamente'); */
     } catch (e) {
         console.warn('No se pudo limpiar el estado de descarte:', e);
     }
@@ -2831,7 +2831,7 @@ document.addEventListener('click', e => {
 document.addEventListener('DOMContentLoaded', async function() {
     // Verificar inmediatamente si el audio fue descartado
     if (audioDiscarded) {
-        console.log('🚫 [DOMContentLoaded] Audio fue descartado, redirigiendo a nueva reunión...');
+        /* console.log('🚫 [DOMContentLoaded] Audio fue descartado, redirigiendo a nueva reunión...'); */
         showNotification('El audio fue descartado. Redirigiendo...', 'warning');
         setTimeout(() => {
             window.location.href = '/new-meeting';
@@ -2840,29 +2840,29 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // Debug inicial
-    console.log('🚀 [audio-processing] Iniciando aplicación...');
-    console.log('🔍 [audio-processing] Variables globales:', {
+    /* console.log('🚀 [audio-processing] Iniciando aplicación...'); */
+    /* console.log('🔍 [audio-processing] Variables globales:', {
         userRole: window.userRole || document.body.dataset.userRole,
         organizationId: window.currentOrganizationId || document.body.dataset.organizationId,
         bodyDatasets: Object.keys(document.body.dataset),
         windowVars: Object.keys(window).filter(k => k.includes('user') || k.includes('org'))
-    });
+    }); */
 
     createParticles();
     await loadAvailableAnalyzers();
 
     const driveSelect = document.getElementById('drive-select');
-    console.log('🔍 [audio-processing] Drive select element found:', !!driveSelect);
+    /* console.log('🔍 [audio-processing] Drive select element found:', !!driveSelect); */
 
     if (driveSelect) {
         driveSelect.addEventListener('change', () => {
-            console.log('🔄 [audio-processing] Drive selection changed to:', driveSelect.value);
+            /* console.log('🔄 [audio-processing] Drive selection changed to:', driveSelect.value); */
             sessionStorage.setItem('selectedDrive', driveSelect.value);
             loadDriveFolders();
         });
     }
 
-    console.log('🔍 [audio-processing] About to call loadDriveFolders...');
+    /* console.log('🔍 [audio-processing] About to call loadDriveFolders...'); */
     await loadDriveFolders();
 
     audioPlayer = document.getElementById('recorded-audio');
@@ -2885,7 +2885,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (pendingAudioData) {
         try {
             window.pendingAudioInfo = JSON.parse(pendingAudioData);
-            console.log("✅ Audio pendiente detectado:", window.pendingAudioInfo);
+            /* console.log("✅ Audio pendiente detectado:", window.pendingAudioInfo); */
 
             // Cargar el audio desde el servidor usando el tempFile
             if (window.pendingAudioInfo.tempFile) {
@@ -2896,7 +2896,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                     if (result.success && result.audioData) {
                         // Convertir base64 a blob
                         audioData = base64ToBlob(result.audioData, result.mimeType || 'audio/ogg');
-                        console.log("✅ Audio pendiente cargado desde servidor");
+                        /* console.log("✅ Audio pendiente cargado desde servidor"); */
 
                         // Limpiar datos temporales
                         localStorage.removeItem('pendingAudioData');
@@ -2906,7 +2906,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                             if (!audioDiscarded) {
                                 startAudioProcessing();
                             } else {
-                                console.log('🚫 [PendingAudio] Audio fue descartado, no se iniciará el procesamiento automático');
+                                /* console.log('🚫 [PendingAudio] Audio fue descartado, no se iniciará el procesamiento automático'); */
                             }
                         }, 1000);
                         return;
@@ -2967,7 +2967,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (meta) {
             try {
                 const parsed = JSON.parse(meta);
-                console.log('Segmentos grabados:', parsed.segmentCount, 'Duración:', parsed.durationMs, 'ms');
+                /* console.log('Segmentos grabados:', parsed.segmentCount, 'Duración:', parsed.durationMs, 'ms'); */
             } catch (e) {
                 console.error('Error al leer metadata de grabación', e);
                 await discardAudio();
@@ -2985,7 +2985,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (!audioDiscarded) {
             startAudioProcessing();
         } else {
-            console.log('🚫 [DOMContentLoaded] Audio fue descartado, no se iniciará el procesamiento automático');
+            /* console.log('🚫 [DOMContentLoaded] Audio fue descartado, no se iniciará el procesamiento automático'); */
         }
     }, 1000);
 });
@@ -3035,7 +3035,7 @@ window.seekAudio = seekAudio;
 
 // Función para diagnosticar problemas de sincronización
 function diagnoseSynchronizationIssues(segments, originalUtterances) {
-    console.log('🔍 [SYNC_DIAGNOSIS] Iniciando diagnóstico de sincronización...');
+    /* console.log('🔍 [SYNC_DIAGNOSIS] Iniciando diagnóstico de sincronización...'); */
 
     if (!segments || !originalUtterances) {
         console.warn('🔍 [SYNC_DIAGNOSIS] No hay datos para diagnosticar');
@@ -3076,8 +3076,8 @@ function diagnoseSynchronizationIssues(segments, originalUtterances) {
     });
 
     // Reportar hallazgos
-    console.log(`🔍 [SYNC_DIAGNOSIS] Segments analizados: ${segments.length}`);
-    console.log(`🔍 [SYNC_DIAGNOSIS] Problemas de sincronización detectados: ${potentialIssues.length}`);
+    /* console.log(`🔍 [SYNC_DIAGNOSIS] Segments analizados: ${segments.length}`); */
+    /* console.log(`🔍 [SYNC_DIAGNOSIS] Problemas de sincronización detectados: ${potentialIssues.length}`); */
 
     if (potentialIssues.length > 0) {
         console.warn('⚠️ [SYNC_DIAGNOSIS] Posibles problemas de sincronización:', potentialIssues.slice(0, 5));
@@ -3093,15 +3093,15 @@ function diagnoseSynchronizationIssues(segments, originalUtterances) {
     const totalDuration = segments.length > 0 ? segments[segments.length - 1].end : 0;
     const averageSegmentLength = totalDuration / segments.length;
 
-    console.log(`🔍 [SYNC_DIAGNOSIS] Duración total: ${totalDuration.toFixed(2)}s`);
-    console.log(`🔍 [SYNC_DIAGNOSIS] Duración promedio por segmento: ${averageSegmentLength.toFixed(2)}s`);
+    /* console.log(`🔍 [SYNC_DIAGNOSIS] Duración total: ${totalDuration.toFixed(2)}s`); */
+    /* console.log(`🔍 [SYNC_DIAGNOSIS] Duración promedio por segmento: ${averageSegmentLength.toFixed(2)}s`); */
 
     if (averageSegmentLength < 1) {
         console.warn('⚠️ [SYNC_DIAGNOSIS] Segmentos muy cortos detectados - esto puede causar problemas de reproducción');
         showNotification('⚠️ Los segmentos de audio son muy cortos, esto puede afectar la reproducción', 'info');
     }
 
-    console.log('✅ [SYNC_DIAGNOSIS] Diagnóstico completado');
+    /* console.log('✅ [SYNC_DIAGNOSIS] Diagnóstico completado'); */
 }
 window.clearDiscardState = clearDiscardState; // Función para limpiar estado de descarte
 // Hacer accesible la transcripción para otros scripts o para depuración
