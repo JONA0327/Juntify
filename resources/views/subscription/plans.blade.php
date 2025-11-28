@@ -3,7 +3,11 @@
 @section('title', 'Planes de Suscripción')
 
 @section('content')
-<div class="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-purple-900 py-12 px-4 sm:px-6 lg:px-8">
+<div id="subscription-plans-page"
+    class="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-purple-900 py-12 px-4 sm:px-6 lg:px-8"
+    data-mp-public-key="{{ config('mercadopago.public_key') }}"
+    data-preference-route="{{ route('subscription.create-preference') }}"
+    data-csrf-token="{{ csrf_token() }}">
     <div class="max-w-7xl mx-auto">
         <!-- Header -->
         <div class="text-center mb-16">
@@ -16,7 +20,7 @@
         </div>
 
         <!-- Billing Toggle -->
-        <div class="flex justify-center mb-12">
+        <div class="flex justify-center mb-12 subscription-toggle">
             <div class="bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 p-2 flex items-center">
                 <button id="monthly-btn" class="px-6 py-3 rounded-xl font-semibold transition-all duration-300 text-white bg-blue-600">
                     Mensual
@@ -142,7 +146,7 @@
 </div>
 
 <!-- Loading Modal -->
-<div id="loadingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+<div id="loadingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 subscription-overlay">
     <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
         <div class="text-center">
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -154,7 +158,7 @@
 
 <!-- Plan Expired Modal -->
 @if(session('plan_expired'))
-<div id="planExpiredModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+<div id="planExpiredModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 subscription-overlay">
     <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
         <div class="text-center">
             <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
@@ -174,88 +178,11 @@
 
 @endsection
 
+@push('styles')
+    @vite('resources/css/subscription/plans.css')
+@endpush
+
 @section('scripts')
 <script src="https://sdk.mercadopago.com/js/v2"></script>
-<script>
-// Billing Toggle functionality
-document.addEventListener('DOMContentLoaded', function() {
-    const monthlyBtn = document.getElementById('monthly-btn');
-    const annualBtn = document.getElementById('annual-btn');
-    const monthlyPrices = document.querySelectorAll('.monthly-price');
-    const annualPrices = document.querySelectorAll('.annual-price');
-
-    let isAnnual = false;
-
-    monthlyBtn.addEventListener('click', function() {
-        if (isAnnual) {
-            isAnnual = false;
-            monthlyBtn.className = 'px-6 py-3 rounded-xl font-semibold transition-all duration-300 text-white bg-blue-600';
-            annualBtn.className = 'px-6 py-3 rounded-xl font-semibold transition-all duration-300 text-blue-200 hover:text-white';
-
-            monthlyPrices.forEach(el => el.classList.remove('hidden'));
-            annualPrices.forEach(el => el.classList.add('hidden'));
-        }
-    });
-
-    annualBtn.addEventListener('click', function() {
-        if (!isAnnual) {
-            isAnnual = true;
-            annualBtn.className = 'px-6 py-3 rounded-xl font-semibold transition-all duration-300 text-white bg-blue-600';
-            monthlyBtn.className = 'px-6 py-3 rounded-xl font-semibold transition-all duration-300 text-blue-200 hover:text-white';
-
-            monthlyPrices.forEach(el => el.classList.add('hidden'));
-            annualPrices.forEach(el => el.classList.remove('hidden'));
-        }
-    });
-});
-
-// MercadoPago SDK
-const mp = new MercadoPago('{{ config("mercadopago.public_key") }}');
-
-// Seleccionar plan
-function selectPlan(planId, planName, price) {
-    // Mostrar modal de carga
-    document.getElementById('loadingModal').classList.remove('hidden');
-    document.getElementById('loadingModal').classList.add('flex');
-
-    // Crear preferencia
-    fetch('{{ route("subscription.create-preference") }}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': '{{ csrf_token() }}'
-        },
-        body: JSON.stringify({
-            plan_id: planId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Redirigir a MercadoPago
-            window.location.href = data.init_point;
-        } else {
-            alert('Error: ' + data.error);
-            document.getElementById('loadingModal').classList.add('hidden');
-            document.getElementById('loadingModal').classList.remove('flex');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error al procesar el pago');
-        document.getElementById('loadingModal').classList.add('hidden');
-        document.getElementById('loadingModal').classList.remove('flex');
-    });
-}
-
-// Contactar ventas para plan empresas
-function contactSales() {
-    alert('Por favor contacta a nuestro equipo de ventas para el plan Empresas');
-}
-
-// Cerrar modal de plan expirado
-function closePlanExpiredModal() {
-    document.getElementById('planExpiredModal').style.display = 'none';
-}
-</script>
+@vite('resources/js/subscription/plans.js')
 @endsection
