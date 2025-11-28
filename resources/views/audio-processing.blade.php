@@ -13,7 +13,7 @@
     <!-- Styles -->
     @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/audio-processing.css','resources/css/index.css'])
 </head>
-<body>
+<body data-user-role='@json($userRole)' data-current-organization-id='@json($organizationId)'>
     <!-- Animated particles background -->
     <div class="particles" id="particles"></div>
 
@@ -603,18 +603,10 @@
     </div>
 
     <!-- JavaScript -->
-    <script>
-        window.userRole = @json($userRole);
-        window.currentOrganizationId = @json($organizationId);
-    </script>
-    @vite(['resources/js/audio-processing.js'])
+    @vite(['resources/js/audio-processing-page.js', 'resources/js/audio-processing.js'])
 
     <!-- Global vars and functions -->
     @include('partials.global-vars')
 
 </body>
 </html>
-
-<?php
-Route::post('/drive/save-results', [DriveController::class, 'saveResults']);
-?>
