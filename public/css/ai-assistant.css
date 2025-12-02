@@ -1618,7 +1618,7 @@ main {
     }
 
     .chat-header {
-        padding: 5rem 0.5rem 0.75rem 4rem; /* Máximo espacio arriba para que el chat toque el fondo */
+       padding: 5.5rem 1rem 1rem;
     }
 
     .chat-title h3 {
