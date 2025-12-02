@@ -1,0 +1,556 @@
+@php
+    $user = auth()->user();
+    $belongsToAnyGroup = $user && $user->groups()->exists();
+    $hasNonGuestRole = $user && $user->groups()->wherePivot('rol', '!=', 'invitado')->exists();
+    $canCreate = (!$belongsToAnyGroup) || $hasNonGuestRole;
+    $currentRoute = request()->route()->getName();
+@endphp
+
+<nav class="mobile-navbar" id="mobileNavbar" style="display: grid !important; background: red !important; z-index: 99999 !important;">
+    <!-- Reuniones -->
+    <div class="nav-item {{ str_contains($currentRoute ?? '', 'reuniones') ? 'active' : '' }}"
+         onclick="window.location.href='{{ route('reuniones.index') }}'">
+        <div class="nav-icon-container">
+            <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+        </div>
+        <span class="nav-label">Reuniones</span>
+    </div>
+
+    <!-- Tareas -->
+    <div class="nav-item {{ str_contains($currentRoute ?? '', 'tareas') ? 'active' : '' }}"
+         onclick="window.location.href='{{ route('tareas.index') }}'">
+        <div class="nav-icon-container">
+            <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+            </svg>
+        </div>
+        <span class="nav-label">Tareas</span>
+    </div>
+
+    <!-- Nueva Reunión - Botón Central -->
+    @if($canCreate)
+    <div class="nav-item nav-center" onclick="window.location.href='{{ route('new-meeting') }}'">
+        <div class="center-button">
+            <svg class="center-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                      d="M12 4v16m8-8H4"/>
+            </svg>
+        </div>
+        <span class="center-label">Nueva</span>
+    </div>
+    @else
+    <div class="nav-item nav-center disabled">
+        <div class="center-button disabled">
+            <svg class="center-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636"/>
+            </svg>
+        </div>
+        <span class="center-label">Bloqueado</span>
+    </div>
+    @endif
+
+    <!-- Asistente IA -->
+    <div class="nav-item {{ str_contains($currentRoute ?? '', 'ai-assistant') ? 'active' : '' }}"
+         onclick="window.location.href='{{ route('ai-assistant') }}'">
+        <div class="nav-icon-container">
+            <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+        </div>
+        <span class="nav-label">Asistente</span>
+    </div>
+
+    <!-- Más opciones -->
+    <div class="nav-item dropdown-toggle" onclick="toggleMobileDropdown()">
+        <div class="nav-icon-container">
+            <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/>
+            </svg>
+        </div>
+        <span class="nav-label">Más</span>
+    </div>
+</nav>
+
+<!-- Dropdown Menu -->
+<div class="mobile-dropdown" id="mobileDropdown">
+    <div class="dropdown-content">
+        <a href="{{ route('contacts.index') }}" class="dropdown-item">
+            <div class="dropdown-icon">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                </svg>
+            </div>
+            <span>Contactos</span>
+        </a>
+
+        <a href="{{ route('organization.index') }}" class="dropdown-item">
+            <div class="dropdown-icon">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                </svg>
+            </div>
+            <span>Organización</span>
+        </a>
+
+        <a href="{{ route('profile.show') }}" class="dropdown-item">
+            <div class="dropdown-icon">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+            </div>
+            <span>Perfil</span>
+        </a>
+
+        @if(in_array($user?->roles, ['superadmin', 'developer']))
+        <a href="{{ route('admin.dashboard') }}" class="dropdown-item">
+            <div class="dropdown-icon">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+            </div>
+            <span>Admin</span>
+        </a>
+        @endif
+    </div>
+</div>
+
+<!-- Overlay para cerrar dropdown -->
+<div class="mobile-dropdown-overlay" id="mobileDropdownOverlay" onclick="closeMobileDropdown()"></div>
+
+<!-- Mobile Navbar Styles -->
+<style>
+/* ===== MODERN MOBILE NAVBAR ===== */
+
+/* Base Styles */
+.mobile-navbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: rgba(2, 6, 23, 0.95); /* slate-950 with transparency */
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-top: 1px solid rgba(59, 130, 246, 0.15);
+    padding: 16px 20px 20px;
+    display: none; /* Hidden by default */
+    grid-template-columns: 1fr 1fr 80px 1fr 1fr;
+    align-items: end;
+    gap: 12px;
+    box-shadow:
+        0 -8px 32px rgba(0, 0, 0, 0.4),
+        0 -1px 0 rgba(59, 130, 246, 0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Navigation Items */
+.nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 8px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-decoration: none;
+    color: #94a3b8; /* slate-400 */
+    position: relative;
+    overflow: hidden;
+}
+
+.nav-item:hover {
+    color: #e2e8f0; /* slate-200 */
+    background: rgba(59, 130, 246, 0.08);
+    transform: translateY(-2px);
+}
+
+.nav-item.active {
+    color: #3b82f6; /* blue-500 */
+    background: rgba(59, 130, 246, 0.12);
+}
+
+.nav-item.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 32px;
+    height: 3px;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    border-radius: 0 0 6px 6px;
+}
+
+/* Icon Containers */
+.nav-icon-container {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.nav-icon {
+    width: 24px;
+    height: 24px;
+    stroke-width: 2;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-item:hover .nav-icon {
+    transform: scale(1.1);
+    stroke-width: 2.5;
+}
+
+.nav-item.active .nav-icon {
+    transform: scale(1.15);
+    stroke-width: 2.5;
+}
+
+/* Labels */
+.nav-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 0.02em;
+    transition: all 0.3s ease;
+    text-transform: capitalize;
+}
+
+.nav-item.active .nav-label {
+    font-weight: 700;
+}
+
+/* ===== CENTER BUTTON (Nueva) ===== */
+.nav-center {
+    position: relative;
+    align-items: center;
+    padding: 0;
+}
+
+.center-button {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+        0 8px 32px rgba(59, 130, 246, 0.3),
+        0 4px 16px rgba(59, 130, 246, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.center-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+    border-radius: inherit;
+    transition: opacity 0.3s ease;
+    opacity: 0;
+}
+
+.nav-center:hover .center-button {
+    transform: translateY(-4px) scale(1.05);
+    box-shadow:
+        0 12px 40px rgba(59, 130, 246, 0.4),
+        0 8px 24px rgba(59, 130, 246, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.nav-center:hover .center-button::before {
+    opacity: 1;
+}
+
+.nav-center:active .center-button {
+    transform: translateY(-2px) scale(1.02);
+}
+
+.center-icon {
+    width: 28px;
+    height: 28px;
+    stroke: white;
+    stroke-width: 2.5;
+    transition: all 0.3s ease;
+}
+
+.center-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #3b82f6;
+    text-align: center;
+    margin-top: 8px;
+    letter-spacing: 0.02em;
+}
+
+/* Disabled State */
+.center-button.disabled {
+    background: rgba(71, 85, 105, 0.8); /* slate-600 */
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.center-button.disabled .center-icon {
+    stroke: #64748b; /* slate-500 */
+}
+
+.nav-center.disabled .center-label {
+    color: #64748b; /* slate-500 */
+}
+
+/* ===== DROPDOWN MENU ===== */
+.mobile-dropdown {
+    position: fixed;
+    bottom: 110px;
+    right: 20px;
+    z-index: 1001;
+    background: rgba(15, 23, 42, 0.95); /* slate-900 */
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 20px;
+    padding: 8px;
+    min-width: 200px;
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobile-dropdown.show {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    visibility: visible;
+}
+
+.dropdown-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 14px;
+    color: #e2e8f0; /* slate-200 */
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.dropdown-item:hover {
+    background: rgba(59, 130, 246, 0.12);
+    color: #3b82f6;
+    transform: translateX(4px);
+}
+
+.dropdown-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dropdown-icon svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+    transition: all 0.2s ease;
+}
+
+.dropdown-item:hover .dropdown-icon svg {
+    transform: scale(1.1);
+    stroke: #3b82f6;
+}
+
+/* Dropdown Overlay */
+.mobile-dropdown-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.mobile-dropdown-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* ===== RESPONSIVE BEHAVIOR ===== */
+
+/* Hide by default (Desktop) */
+@media screen and (min-width: 769px) {
+    .mobile-navbar,
+    .mobile-dropdown,
+    .mobile-dropdown-overlay {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
+    body {
+        padding-bottom: 0 !important;
+    }
+}
+
+/* Show only on Mobile */
+@media screen and (max-width: 768px) {
+    .mobile-navbar {
+        display: grid !important;
+        visibility: visible !important;
+    }
+
+    body {
+        padding-bottom: 100px !important;
+    }
+}
+
+/* Force show for testing */
+.mobile-navbar {
+    display: grid !important;
+    visibility: visible !important;
+}/* Focus states for keyboard navigation */
+.nav-item:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+.dropdown-item:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Safe area insets for devices with notch */
+@supports (padding: max(0px)) {
+    .mobile-navbar {
+        padding-bottom: max(20px, env(safe-area-inset-bottom));
+    }
+}
+</style>
+
+<!-- Mobile Navbar Script -->
+<script>
+// Mobile navbar functionality
+let mobileDropdownOpen = false;
+
+function toggleMobileDropdown() {
+    const dropdown = document.getElementById('mobileDropdown');
+    const overlay = document.getElementById('mobileDropdownOverlay');
+
+    if (!dropdown || !overlay) return;
+
+    mobileDropdownOpen = !mobileDropdownOpen;
+
+    if (mobileDropdownOpen) {
+        showMobileDropdown();
+    } else {
+        hideMobileDropdown();
+    }
+}
+
+function showMobileDropdown() {
+    const dropdown = document.getElementById('mobileDropdown');
+    const overlay = document.getElementById('mobileDropdownOverlay');
+
+    if (!dropdown || !overlay) return;
+
+    dropdown.classList.add('show');
+    overlay.classList.add('show');
+    document.body.classList.add('dropdown-open');
+    document.addEventListener('keydown', handleEscapeKey);
+}
+
+function hideMobileDropdown() {
+    const dropdown = document.getElementById('mobileDropdown');
+    const overlay = document.getElementById('mobileDropdownOverlay');
+
+    if (!dropdown || !overlay) return;
+
+    dropdown.classList.remove('show');
+    overlay.classList.remove('show');
+    document.body.classList.remove('dropdown-open');
+    document.removeEventListener('keydown', handleEscapeKey);
+
+    mobileDropdownOpen = false;
+}
+
+function closeMobileDropdown() {
+    hideMobileDropdown();
+}
+
+function handleEscapeKey(event) {
+    if (event.key === 'Escape' && mobileDropdownOpen) {
+        hideMobileDropdown();
+    }
+}
+
+// Initialize mobile navbar when DOM loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Mobile navbar initialized');
+
+    // Handle window resize
+    window.addEventListener('resize', function() {
+        if (window.innerWidth > 768 && mobileDropdownOpen) {
+            hideMobileDropdown();
+        }
+    });
+
+    // Handle clicks outside dropdown
+    document.addEventListener('click', function(event) {
+        const dropdown = document.getElementById('mobileDropdown');
+        const dropdownToggle = document.querySelector('.dropdown-toggle');
+
+        if (mobileDropdownOpen && dropdown && dropdownToggle &&
+            !dropdown.contains(event.target) &&
+            !dropdownToggle.contains(event.target)) {
+            hideMobileDropdown();
+        }
+    });
+});
+
+// Make functions global
+window.toggleMobileDropdown = toggleMobileDropdown;
+window.closeMobileDropdown = closeMobileDropdown;
+</script>

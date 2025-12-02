@@ -191,5 +191,8 @@
     <script src="{{ asset('js/ai-assistant-mobile.js') }}?v={{ time() }}" defer></script>
 
     <script src="{{ asset('js/ai-assistant.js') }}?v={{ time() }}"></script>
+
+    <!-- Modern Mobile Navbar -->
+    @include('partials.mobile-navbar')
 </body>
 </html>

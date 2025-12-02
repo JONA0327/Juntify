@@ -34,6 +34,9 @@
     </div>
     @yield('modals')
 
+    <!-- Modern Mobile Navbar -->
+    @include('partials.mobile-navbar')
+
     @yield('scripts')
     @stack('scripts')
 </body>

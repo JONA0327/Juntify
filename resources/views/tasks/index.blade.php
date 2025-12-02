@@ -207,5 +207,8 @@
     @include('tasks.partials._modal-task')
     @include('tasks.partials._task-details-modal')
 
+    <!-- Modern Mobile Navbar -->
+    @include('partials.mobile-navbar')
+
 </body>
 </html>

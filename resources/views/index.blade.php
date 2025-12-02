@@ -158,5 +158,8 @@
     <!-- Global vars and functions -->
     @include('partials.global-vars')
 
+    <!-- Modern Mobile Navbar -->
+    @include('partials.mobile-navbar')
+
 </body>
 </html>
