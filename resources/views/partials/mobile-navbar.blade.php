@@ -6,7 +6,7 @@
     $currentRoute = request()->route()->getName();
 @endphp
 
-<nav class="mobile-navbar" id="mobileNavbar" style="display: grid !important; background: red !important; z-index: 99999 !important;">
+<nav class="mobile-navbar" id="mobileNavbar">
     <!-- Reuniones -->
     <div class="nav-item {{ str_contains($currentRoute ?? '', 'reuniones') ? 'active' : '' }}"
          onclick="window.location.href='{{ route('reuniones.index') }}'">
@@ -141,58 +141,40 @@
     left: 0;
     right: 0;
     z-index: 1000;
-    background: rgba(2, 6, 23, 0.95); /* slate-950 with transparency */
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border-top: 1px solid rgba(59, 130, 246, 0.15);
-    padding: 16px 20px 20px;
+    background: rgba(15, 23, 42, 0.95); /* slate-900 */
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(59, 130, 246, 0.2);
+    padding: 16px 20px 24px;
     display: none; /* Hidden by default */
-    grid-template-columns: 1fr 1fr 80px 1fr 1fr;
-    align-items: end;
+    grid-template-columns: 1fr 1fr 64px 1fr 1fr;
+    align-items: center;
     gap: 12px;
-    box-shadow:
-        0 -8px 32px rgba(0, 0, 0, 0.4),
-        0 -1px 0 rgba(59, 130, 246, 0.1);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Navigation Items */
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+    transition: all 0.3s ease;
+}/* Navigation Items */
 .nav-item {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 6px;
     padding: 12px 8px;
-    border-radius: 16px;
+    border-radius: 12px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s ease;
     text-decoration: none;
     color: #94a3b8; /* slate-400 */
     position: relative;
-    overflow: hidden;
 }
 
 .nav-item:hover {
     color: #e2e8f0; /* slate-200 */
-    background: rgba(59, 130, 246, 0.08);
-    transform: translateY(-2px);
+    background: rgba(59, 130, 246, 0.1);
 }
 
 .nav-item.active {
     color: #3b82f6; /* blue-500 */
-    background: rgba(59, 130, 246, 0.12);
-}
-
-.nav-item.active::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 32px;
-    height: 3px;
-    background: linear-gradient(90deg, #3b82f6, #60a5fa);
-    border-radius: 0 0 6px 6px;
+    background: rgba(59, 130, 246, 0.15);
 }
 
 /* Icon Containers */
@@ -209,17 +191,15 @@
     width: 24px;
     height: 24px;
     stroke-width: 2;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s ease;
 }
 
 .nav-item:hover .nav-icon {
     transform: scale(1.1);
-    stroke-width: 2.5;
 }
 
 .nav-item.active .nav-icon {
-    transform: scale(1.15);
-    stroke-width: 2.5;
+    transform: scale(1.05);
 }
 
 /* Labels */
@@ -227,7 +207,6 @@
     font-size: 11px;
     font-weight: 600;
     text-align: center;
-    letter-spacing: 0.02em;
     transition: all 0.3s ease;
     text-transform: capitalize;
 }
@@ -244,49 +223,37 @@
 }
 
 .center-button {
-    width: 64px;
-    height: 64px;
-    border-radius: 20px;
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 64px !important;
+    height: 64px !important;
+    min-width: 64px !important;
+    min-height: 64px !important;
+    max-width: 64px !important;
+    max-height: 64px !important;
+    border-radius: 50% !important;
+    aspect-ratio: 1 / 1 !important;
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     box-shadow:
-        0 8px 32px rgba(59, 130, 246, 0.3),
-        0 4px 16px rgba(59, 130, 246, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        0 8px 24px rgba(59, 130, 246, 0.3),
+        0 4px 12px rgba(59, 130, 246, 0.2);
+    transition: all 0.3s ease;
     position: relative;
-    overflow: hidden;
-}
-
-.center-button::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-    border-radius: inherit;
-    transition: opacity 0.3s ease;
-    opacity: 0;
+    border: none !important;
+    outline: none !important;
+    box-sizing: border-box !important;
 }
 
 .nav-center:hover .center-button {
-    transform: translateY(-4px) scale(1.05);
+    transform: translateY(-2px) scale(1.02);
     box-shadow:
-        0 12px 40px rgba(59, 130, 246, 0.4),
-        0 8px 24px rgba(59, 130, 246, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.15);
-}
-
-.nav-center:hover .center-button::before {
-    opacity: 1;
+        0 12px 32px rgba(59, 130, 246, 0.4),
+        0 6px 16px rgba(59, 130, 246, 0.3);
 }
 
 .nav-center:active .center-button {
-    transform: translateY(-2px) scale(1.02);
+    transform: translateY(0) scale(1);
 }
 
 .center-icon {
@@ -303,13 +270,11 @@
     color: #3b82f6;
     text-align: center;
     margin-top: 8px;
-    letter-spacing: 0.02em;
-}
-
-/* Disabled State */
+    transition: all 0.3s ease;
+}/* Disabled State */
 .center-button.disabled {
     background: rgba(71, 85, 105, 0.8); /* slate-600 */
-    box-shadow: none;
+    box-shadow: 0 4px 12px rgba(71, 85, 105, 0.3);
     cursor: not-allowed;
 }
 
@@ -328,20 +293,17 @@
     right: 20px;
     z-index: 1001;
     background: rgba(15, 23, 42, 0.95); /* slate-900 */
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(59, 130, 246, 0.2);
-    border-radius: 20px;
+    border-radius: 16px;
     padding: 8px;
     min-width: 200px;
-    box-shadow:
-        0 20px 60px rgba(0, 0, 0, 0.5),
-        0 8px 32px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    transform: translateY(20px) scale(0.95);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    transform: translateY(16px) scale(0.95);
     opacity: 0;
     visibility: hidden;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s ease;
 }
 
 .mobile-dropdown.show {
@@ -360,24 +322,19 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 16px;
-    border-radius: 14px;
+    padding: 14px 16px;
+    border-radius: 12px;
     color: #e2e8f0; /* slate-200 */
     text-decoration: none;
     font-size: 15px;
     font-weight: 500;
-    transition: all 0.2s ease;
-    position: relative;
-    overflow: hidden;
+    transition: all 0.3s ease;
 }
 
 .dropdown-item:hover {
-    background: rgba(59, 130, 246, 0.12);
-    color: #3b82f6;
-    transform: translateX(4px);
-}
-
-.dropdown-icon {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6; /* blue-500 */
+}.dropdown-icon {
     width: 20px;
     height: 20px;
     display: flex;
@@ -390,7 +347,7 @@
     width: 20px;
     height: 20px;
     stroke-width: 2;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
 }
 
 .dropdown-item:hover .dropdown-icon svg {
@@ -445,12 +402,6 @@
     body {
         padding-bottom: 100px !important;
     }
-}
-
-/* Force show for testing */
-.mobile-navbar {
-    display: grid !important;
-    visibility: visible !important;
 }/* Focus states for keyboard navigation */
 .nav-item:focus-visible {
     outline: 2px solid #3b82f6;

@@ -74,6 +74,57 @@
     }
 }
 
+/* ===== RESPONSIVE TABS ===== */
+@media (max-width: 768px) {
+    /* Hacer las pestañas responsivas */
+    .info-card nav ul {
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+        justify-content: center !important;
+    }
+
+    .info-card nav ul li {
+        flex: 1 1 auto !important;
+        min-width: fit-content !important;
+    }
+
+    .info-card nav ul li button {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.875rem !important;
+        white-space: nowrap !important;
+        width: 100% !important;
+        text-align: center !important;
+    }
+
+    /* Ajustar el contenedor principal */
+    .info-card {
+        padding: 1rem !important;
+        margin: 0.5rem !important;
+    }
+
+    .info-card nav {
+        margin-bottom: 1rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Para pantallas muy pequeñas, hacer pestañas en columna */
+    .info-card nav ul {
+        flex-direction: column !important;
+        gap: 0.5rem !important;
+    }
+
+    .info-card nav ul li {
+        width: 100% !important;
+    }
+
+    .info-card nav ul li button {
+        padding: 0.75rem 1rem !important;
+        font-size: 0.875rem !important;
+        width: 100% !important;
+    }
+}
+
 @media (min-width: 1024px) {
     #tasks-layout.kanban-active #tasks-main-column {
         grid-column: span 3 / span 3;

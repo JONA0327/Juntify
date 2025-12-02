@@ -215,5 +215,8 @@
         </div>
     </div>
 
+    <!-- Modern Mobile Navbar -->
+    @include('partials.mobile-navbar')
+
     </body>
 </html>

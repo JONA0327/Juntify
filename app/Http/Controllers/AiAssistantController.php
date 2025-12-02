@@ -4817,4 +4817,158 @@ class AiAssistantController extends Controller
             'details' => $results
         ];
     }
+
+    /**
+     * Obtener detalles específicos de una reunión (resumen, puntos clave, tareas, transcripción)
+     */
+    public function getMeetingDetails($id)
+    {
+        try {
+            $user = Auth::user();
+
+            // Buscar la reunión en las tablas regulares
+            $meeting = TranscriptionLaravel::find($id);
+
+            if (!$meeting) {
+                // Si no se encuentra en reuniones regulares, buscar en temporales
+                $tempMeeting = \App\Models\TranscriptionTemp::where('id', $id)
+                    ->where('user_id', $user->id)
+                    ->notExpired()
+                    ->first();
+
+                if ($tempMeeting) {
+                    return $this->getTempMeetingDetails($tempMeeting);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Reunión no encontrada'
+                ], 404);
+            }
+
+            // Verificar permisos de acceso a la reunión
+            if (!$this->userCanAccessMeeting($user, $meeting)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para acceder a esta reunión'
+                ], 403);
+            }
+
+            // Intentar obtener el contenido del archivo .ju
+            $content = $this->tryDownloadJuContent($meeting);
+
+            if (!is_string($content) || $content === '') {
+                // Intentar localizar el archivo .ju
+                $containers = $meeting->containers()->with(['group', 'group.organization'])->get();
+                foreach ($containers as $container) {
+                    $found = $this->locateJuForMeeting($meeting, $container);
+                    if ($found && $found !== $meeting->transcript_drive_id) {
+                        $meeting->transcript_drive_id = $found;
+                        $meeting->save();
+                        $content = $this->tryDownloadJuContent($meeting);
+                        if (is_string($content) && $content !== '') {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!is_string($content) || $content === '') {
+                Log::warning('No se pudo obtener contenido del archivo .ju', [
+                    'meeting_id' => $meeting->id,
+                    'transcript_drive_id' => $meeting->transcript_drive_id,
+                    'meeting_name' => $meeting->meeting_name
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo obtener la información del archivo .ju. El archivo puede haber sido movido, eliminado, o no tener permisos de acceso.',
+                    'meeting' => [
+                        'id' => $meeting->id,
+                        'meeting_name' => $meeting->meeting_name,
+                        'summary' => 'Resumen reconstruido desde base de datos (segmentos históricos)',
+                        'key_points' => [],
+                        'tasks' => [],
+                        'segments' => []
+                    ]
+                ]);
+            }
+
+            // Desencriptar y procesar el contenido
+            $parsed = $this->decryptJuFile($content);
+            $data = $this->processTranscriptData($parsed['data'] ?? []);
+
+            $meetingDetails = [
+                'id' => $meeting->id,
+                'meeting_name' => $meeting->meeting_name,
+                'summary' => $data['summary'] ?? null,
+                'key_points' => $data['key_points'] ?? [],
+                'tasks' => $data['tasks'] ?? [],
+                'segments' => $data['segments'] ?? []
+            ];
+
+            return response()->json([
+                'success' => true,
+                'meeting' => $meetingDetails
+            ]);
+
+        } catch (\Throwable $e) {
+            Log::error('Error al obtener detalles de reunión', [
+                'meeting_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error interno del servidor al obtener los detalles de la reunión'
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener detalles de una reunión temporal
+     */
+    private function getTempMeetingDetails($tempMeeting)
+    {
+        try {
+            if (!$tempMeeting->transcription_path || !Storage::disk('local')->exists($tempMeeting->transcription_path)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró el archivo .ju para esta reunión temporal'
+                ]);
+            }
+
+            $content = Storage::disk('local')->get($tempMeeting->transcription_path);
+            $result = $this->decryptJuFile($content);
+            $data = $this->extractMeetingDataFromJson($result['data'] ?? []);
+
+            $meetingDetails = [
+                'id' => $tempMeeting->id,
+                'meeting_name' => $tempMeeting->name,
+                'summary' => $data['summary'] ?? null,
+                'key_points' => $data['key_points'] ?? [],
+                'tasks' => $data['tasks'] ?? [],
+                'segments' => $data['segments'] ?? []
+            ];
+
+            return response()->json([
+                'success' => true,
+                'meeting' => $meetingDetails
+            ]);
+
+        } catch (\Throwable $e) {
+            Log::error('Error al obtener detalles de reunión temporal', [
+                'temp_meeting_id' => $tempMeeting->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar la reunión temporal'
+            ]);
+        }
+    }
+
+
 }

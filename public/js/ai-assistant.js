@@ -1605,12 +1605,24 @@ async function loadMeetingDetails(meetingId) {
  */
 async function loadJuFileData(meetingId) {
     try {
-        // Esta función intentaría descargar y parsear el archivo .ju
-        // Por ahora, mostraremos mensaje de no disponible
-        showErrorInTabs('Detalles no disponibles para esta reunión');
+        const response = await fetch(`/api/ai-assistant/meeting/${meetingId}/details`);
+        const data = await response.json();
+
+        if (data.success && data.meeting) {
+            renderMeetingDetails(data.meeting);
+        } else {
+            const errorMessage = data.message || 'No se pudo obtener la información del archivo .ju';
+            showErrorInTabs(errorMessage);
+            console.warn('Meeting details not available:', data);
+
+            // Si hay información parcial, mostrarla
+            if (data.meeting) {
+                renderMeetingDetails(data.meeting);
+            }
+        }
     } catch (error) {
         console.error('Error loading .ju file:', error);
-        showErrorInTabs('Error al cargar archivo .ju');
+        showErrorInTabs('Error al conectar con el servidor para obtener los detalles de la reunión');
     }
 }
 

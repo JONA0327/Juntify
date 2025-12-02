@@ -105,14 +105,45 @@
 /* ===== CENTER BUTTON (Nueva) ===== */
 .nav-center {
     position: relative;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    padding: 0;
+    justify-content: center;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    width: auto !important;
+    height: auto !important;
+}
+
+.nav-center:hover {
+    background: transparent !important;
+    border-radius: 0 !important;
+    transform: none !important;
+}
+
+.nav-center.active {
+    background: transparent !important;
+}
+
+.nav-center:before,
+.nav-center:after {
+    display: none !important;
 }
 
 .center-button {
-    width: 64px;
-    height: 64px;
-    border-radius: 20px;
+    width: 64px !important;
+    height: 64px !important;
+    min-width: 64px !important;
+    min-height: 64px !important;
+    max-width: 64px !important;
+    max-height: 64px !important;
+    border-radius: 50% !important;
+    aspect-ratio: 1 / 1 !important;
     background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
     display: flex;
     align-items: center;
@@ -124,6 +155,9 @@
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
+    border: none !important;
+    outline: none !important;
+    box-sizing: border-box !important;
 }
 
 .center-button::before {
@@ -134,7 +168,7 @@
     right: 0;
     bottom: 0;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-    border-radius: inherit;
+    border-radius: 50%;
     transition: opacity 0.3s ease;
     opacity: 0;
 }

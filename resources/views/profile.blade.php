@@ -123,5 +123,8 @@
     <!-- Google Connection Monitor Script -->
     <script src="{{ asset('js/google-connection-monitor.js') }}"></script>
 
+    <!-- Modern Mobile Navbar -->
+    @include('partials.mobile-navbar')
+
 </body>
 </html>

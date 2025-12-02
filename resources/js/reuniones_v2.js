@@ -5839,7 +5839,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e) {
         console.error('[reuniones_v2] Error applying fallback globals', e);
     }
-    ////const driveSelect = document.getElementById('drive-select');
+    const driveSelect = document.getElementById('drive-select');
     if (driveSelect) {
         driveSelect.addEventListener('change', () => {
             loadDriveFolders();

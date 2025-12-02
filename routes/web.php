@@ -323,6 +323,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/containers/{containerId}/preload', [AiAssistantController::class, 'preloadContainer'])->name('api.ai-assistant.containers.preload');
             // Pre-cargar .ju de una reunión específica
             Route::post('/meetings/{id}/preload', [AiAssistantController::class, 'preloadMeeting'])->name('api.ai-assistant.meetings.preload');
+            // Obtener detalles específicos de una reunión (resumen, puntos clave, tareas, transcripción)
+            Route::get('/meeting/{id}/details', [AiAssistantController::class, 'getMeetingDetails'])->name('api.ai-assistant.meeting.details');
             // Importar tareas de todas las reuniones del contenedor (garantiza .ju descargado/cacheado)
             Route::post('/containers/{containerId}/import-tasks', [AiAssistantController::class, 'importContainerTasks'])->name('api.ai-assistant.containers.import-tasks');
             // Diagnóstico por contenedor

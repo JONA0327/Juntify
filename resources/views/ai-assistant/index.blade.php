@@ -31,12 +31,16 @@
         <main class="w-full pl-0 md:pl-24 pt-0 md:pt-6" style="margin-top: 0;">
             <!-- Contenedor Centrado -->
             <div class="w-full h-screen flex flex-col ai-main-container" style="height: calc(100vh - 90px);">
-<!-- Botón menú móvil -->
-<button class="mobile-menu-toggle" id="mobile-menu-toggle" style="display: none;">
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-    </svg>
-</button>
+
+<!-- Barra superior móvil (solo visible en móvil) -->
+<div class="mobile-top-bar" style="display: none;">
+    <!-- Botón menú móvil -->
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+        </svg>
+    </button>
+</div>
 
 <!-- Overlay para cerrar sidebar en móvil -->
 <div class="mobile-sidebar-overlay" id="mobile-sidebar-overlay"></div>
