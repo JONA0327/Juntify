@@ -2,6 +2,8 @@ import './bootstrap';
 import './notifications';
 import './organization';
 import './utils/auth-interceptors';
+import './mobile-navbar';
+import '../css/mobile-navbar.css';
 
 import Alpine from 'alpinejs';
 
