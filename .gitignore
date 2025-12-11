@@ -32,4 +32,8 @@ database/*.sql
 public/db/
 public/db/**
 
+# Archivos SQL de migración con datos sensibles
+juntify_migration_*.sql
+*.sql
+
 

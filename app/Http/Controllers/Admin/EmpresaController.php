@@ -59,7 +59,23 @@ class EmpresaController extends Controller
             'es_administrador' => true, // Siempre es administrador
         ]);
 
-        return redirect()->route('admin.empresas.index')->with('success', 'Empresa registrada exitosamente');
+        // Automáticamente agregar al dueño como integrante administrador
+        $permisosAdmin = [
+            'gestionar_usuarios',
+            'ver_reportes',
+            'configurar_sistema',
+            'gestionar_permisos',
+            'acceso_total'
+        ];
+
+        IntegrantesEmpresa::create([
+            'iduser' => $request->iduser,
+            'empresa_id' => $empresa->id,
+            'rol' => 'administrador',
+            'permisos' => $permisosAdmin,
+        ]);
+
+        return redirect()->route('admin.empresas.index')->with('success', 'Empresa registrada exitosamente y dueño agregado como administrador');
     }
 
     /**
