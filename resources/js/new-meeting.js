@@ -538,27 +538,54 @@ function showRecordingInterface(mode) {
     const meetingRecorder = document.getElementById('meeting-recorder');
     const recorderTitle = document.getElementById('recorder-title');
 
-    // Ocultar todas las interfaces
-    audioRecorder.style.display = 'none';
-    audioUploader.style.display = 'none';
-    meetingRecorder.style.display = 'none';
-
-    // Mostrar la interfaz correspondiente
+    // Ocultar todas las interfaces usando tanto clases como display
+    if (audioRecorder) {
+        audioRecorder.classList.add('is-hidden');
+        audioRecorder.style.display = 'none';
+    }
+    if (audioUploader) {
+        audioUploader.classList.add('is-hidden');
+        audioUploader.style.display = 'none';
+    }
+    if (meetingRecorder) {
+        meetingRecorder.classList.add('is-hidden');
+        meetingRecorder.style.display = 'none';
+    }    // Mostrar la interfaz correspondiente
     switch(mode) {
         case 'audio':
-            audioRecorder.style.display = 'block';
-            recorderTitle.innerHTML = '🎙️ Grabador de audio';
+            if (audioRecorder) {
+                audioRecorder.classList.remove('is-hidden');
+                audioRecorder.style.display = 'block';
+                console.log('✅ [showRecordingInterface] audioRecorder mostrado');
+            } else {
+                console.error('❌ [showRecordingInterface] audioRecorder no encontrado!');
+            }
+            if (recorderTitle) recorderTitle.innerHTML = '🎙️ Grabador de audio';
             break;
         case 'upload':
-            audioUploader.style.display = 'block';
-            recorderTitle.innerHTML = '📁 Subir archivo de audio';
+            if (audioUploader) {
+                audioUploader.classList.remove('is-hidden');
+                audioUploader.style.display = 'block';
+                console.log('✅ [showRecordingInterface] audioUploader mostrado');
+            } else {
+                console.error('❌ [showRecordingInterface] audioUploader no encontrado!');
+            }
+            if (recorderTitle) recorderTitle.innerHTML = '📁 Subir archivo de audio';
             break;
         case 'meeting':
-            meetingRecorder.style.display = 'block';
-            recorderTitle.innerHTML = '📹 Grabador de reunión';
+            if (meetingRecorder) {
+                meetingRecorder.classList.remove('is-hidden');
+                meetingRecorder.style.display = 'block';
+                console.log('✅ [showRecordingInterface] meetingRecorder mostrado');
+            } else {
+                console.error('❌ [showRecordingInterface] meetingRecorder no encontrado!');
+            }
+            if (recorderTitle) recorderTitle.innerHTML = '📹 Grabador de reunión';
             setupMeetingRecorder();
             break;
     }
+
+    console.log(`✅ [showRecordingInterface] Cambio a modo ${mode} completo`);
 }
 
 
@@ -566,30 +593,8 @@ function showRecordingInterface(mode) {
 function toggleRecording() {
     if (!isRecording) {
         startRecording();
-        document.getElementById('pause-recording').style.display = 'inline-block';
-        document.getElementById('discard-recording').style.display = 'inline-block';
-        document.getElementById('resume-recording').style.display = 'none';
-        const mp = document.getElementById('meeting-pause');
-        const md = document.getElementById('meeting-discard');
-        const mr = document.getElementById('meeting-resume');
-        if (mp) mp.style.display = 'inline-block';
-        if (md) md.style.display = 'inline-block';
-        if (mr) mr.style.display = 'none';
-        const postponeContainer = document.getElementById('postpone-switch');
-        const postponeToggle = document.getElementById('postpone-toggle');
-        if (postponeContainer) postponeContainer.style.display = 'none';
-        if (postponeToggle) postponeToggle.disabled = true;
     } else {
         stopRecording();
-        document.getElementById('pause-recording').style.display = 'none';
-        document.getElementById('resume-recording').style.display = 'none';
-        document.getElementById('discard-recording').style.display = 'none';
-        const mp = document.getElementById('meeting-pause');
-        const md = document.getElementById('meeting-discard');
-        const mr = document.getElementById('meeting-resume');
-        if (mp) mp.style.display = 'none';
-        if (md) md.style.display = 'none';
-        if (mr) mr.style.display = 'none';
     }
 }
 
@@ -959,12 +964,30 @@ function pauseRecording() {
         pauseStart = Date.now();
         const label = document.getElementById('timer-label');
         if (label) label.textContent = 'Grabación pausada';
-        document.getElementById('pause-recording').style.display = 'none';
-        document.getElementById('resume-recording').style.display = 'inline-block';
+
+        // Manejar botones de grabación normal
+        const pauseBtn = document.getElementById('pause-recording');
+        const resumeBtn = document.getElementById('resume-recording');
+        if (pauseBtn) {
+            pauseBtn.classList.add('is-hidden');
+            pauseBtn.style.display = 'none';
+        }
+        if (resumeBtn) {
+            resumeBtn.classList.remove('is-hidden');
+            resumeBtn.style.display = 'inline-block';
+        }
+
+        // Manejar botones de grabación de reunión
         const mp = document.getElementById('meeting-pause');
         const mr = document.getElementById('meeting-resume');
-        if (mp) mp.style.display = 'none';
-        if (mr) mr.style.display = 'inline-block';
+        if (mp) {
+            mp.classList.add('is-hidden');
+            mp.style.display = 'none';
+        }
+        if (mr) {
+            mr.classList.remove('is-hidden');
+            mr.style.display = 'inline-block';
+        }
 
         if (meetingRecording) {
             microphoneMutedBeforePause = microphoneAudioMuted;
@@ -986,12 +1009,30 @@ function resumeRecording() {
         }
         const label = document.getElementById('timer-label');
         if (label) label.textContent = 'Grabando...';
-        document.getElementById('resume-recording').style.display = 'none';
-        document.getElementById('pause-recording').style.display = 'inline-block';
+
+        // Manejar botones de grabación normal
+        const pauseBtn = document.getElementById('pause-recording');
+        const resumeBtn = document.getElementById('resume-recording');
+        if (resumeBtn) {
+            resumeBtn.classList.add('is-hidden');
+            resumeBtn.style.display = 'none';
+        }
+        if (pauseBtn) {
+            pauseBtn.classList.remove('is-hidden');
+            pauseBtn.style.display = 'inline-block';
+        }
+
+        // Manejar botones de grabación de reunión
         const mp = document.getElementById('meeting-pause');
         const mr = document.getElementById('meeting-resume');
-        if (mp) mp.style.display = 'inline-block';
-        if (mr) mr.style.display = 'none';
+        if (mr) {
+            mr.classList.add('is-hidden');
+            mr.style.display = 'none';
+        }
+        if (mp) {
+            mp.classList.remove('is-hidden');
+            mp.style.display = 'inline-block';
+        }
 
         if (meetingRecording && microphoneMutedBeforePause === false) {
             setMicrophoneMuteState(false);
@@ -1272,8 +1313,12 @@ async function finalizeRecording() {
     // Determinar contexto actual de la grabación
     const context = lastRecordingContext || (selectedMode === 'meeting' ? 'meeting' : 'recording');
     if (sizeMB > 200) {
-        showError('La grabación supera el límite de 200 MB.');
-        const upload = confirm('¿Deseas subirla en segundo plano? Cancelar para descargarla.');
+        // Descargar automáticamente el audio cuando es muy grande
+        console.log('📥 [AutoDownload] Descargando archivo grande automáticamente...');
+        downloadAudioWithCorrectFormat(finalBlob, name);
+
+        showError('La grabación supera el límite de 200 MB. El archivo se ha descargado.');
+        const upload = confirm('¿Deseas también subirla en segundo plano?');
         pendingSaveContext = context;
         if (upload) {
             uploadInBackground(finalBlob, name)
@@ -1285,20 +1330,22 @@ async function finalizeRecording() {
                 })
                 .catch(e => {
                     console.error('Error al subir la grabación', e);
-                    showError('Error al subir la grabación. Se descargará el audio');
-                    downloadAudioWithCorrectFormat(finalBlob, name);
+                    showError('Error al subir la grabación. El archivo ya fue descargado.');
                 });
 
             showSuccess('La subida continuará en segundo plano. Revisa el panel de notificaciones para el estado final.');
             handlePostActionCleanup(true);
         } else {
-            downloadAudioWithCorrectFormat(finalBlob, name);
             handlePostActionCleanup();
         }
         return;
     }
 
     if (postponeMode) {
+        // Descargar automáticamente el audio cuando se detiene en modo postpone
+        console.log('📥 [AutoDownload] Descargando audio automáticamente al detener grabación...');
+        downloadAudioWithCorrectFormat(finalBlob, name);
+
         pendingSaveContext = context;
         let key;
         try {
@@ -1306,8 +1353,7 @@ async function finalizeRecording() {
             sessionStorage.setItem('uploadedAudioKey', key);
         } catch (e) {
             console.error('Error al guardar el audio para subida en segundo plano', e);
-            showError('No se pudo guardar el audio localmente. Se descargará el archivo.');
-            downloadAudioWithCorrectFormat(finalBlob, name);
+            showError('No se pudo guardar el audio localmente. El archivo ya fue descargado.');
             handlePostActionCleanup();
             return;
         }
@@ -1333,6 +1379,10 @@ async function finalizeRecording() {
         showSuccess('La subida continuará en segundo plano. Revisa el panel de notificaciones para el estado final.');
         handlePostActionCleanup(true);
     } else {
+        // Descargar automáticamente el audio cuando se detiene en modo normal
+        console.log('📥 [AutoDownload] Descargando audio automáticamente al detener grabación...');
+        downloadAudioWithCorrectFormat(finalBlob, name);
+
         pendingAudioBlob = finalBlob;
         pendingSaveContext = context;
         analyzeNow();
@@ -1344,6 +1394,13 @@ async function finalizeRecording() {
 // Función para analizar audio en tiempo real
 function startAudioAnalysis() {
     if (!isRecording || !analyser) return;
+
+    // Si está pausado, continuar el bucle pero no procesar audio
+    if (isPaused) {
+        // Mantener el bucle activo pero sin procesar
+        animationId = requestAnimationFrame(startAudioAnalysis);
+        return;
+    }
 
     analyser.getByteFrequencyData(dataArray);
 
@@ -1436,22 +1493,59 @@ function updateRecordingUI(recording) {
     const timerLabel = document.getElementById('timer-label');
     const visualizer = document.getElementById('audio-visualizer');
     const actions = document.getElementById('recorder-actions');
+    const pauseBtn = document.getElementById('pause-recording');
+    const discardBtn = document.getElementById('discard-recording');
+    const resumeBtn = document.getElementById('resume-recording');
 
     if (recording) {
-        micCircle.classList.add('recording');
-        timerCounter.classList.add('recording');
-        timerLabel.textContent = 'Grabando...';
-        timerLabel.classList.add('recording');
-        visualizer.classList.add('active');
+        if (micCircle) micCircle.classList.add('recording');
+        if (timerCounter) timerCounter.classList.add('recording');
+        if (timerLabel) {
+            timerLabel.textContent = 'Grabando...';
+            timerLabel.classList.add('recording');
+        }
+        if (visualizer) visualizer.classList.add('active');
         if (actions) actions.classList.add('show');
+
+        // Mostrar botones de pausar y descartar durante la grabación
+        if (pauseBtn) {
+            pauseBtn.classList.remove('is-hidden');
+            pauseBtn.style.display = 'inline-block';
+        }
+        if (discardBtn) {
+            discardBtn.classList.remove('is-hidden');
+            discardBtn.style.display = 'inline-block';
+        }
+        if (resumeBtn) {
+            resumeBtn.classList.add('is-hidden');
+            resumeBtn.style.display = 'none';
+        }
     } else {
-        micCircle.classList.remove('recording');
-        timerCounter.classList.remove('recording');
-        timerLabel.textContent = 'Listo para grabar';
-        timerLabel.classList.remove('recording');
-        timerCounter.textContent = '00:00:00';
-        visualizer.classList.remove('active');
+        if (micCircle) micCircle.classList.remove('recording');
+        if (timerCounter) {
+            timerCounter.classList.remove('recording');
+            timerCounter.textContent = '00:00:00';
+        }
+        if (timerLabel) {
+            timerLabel.textContent = 'Listo para grabar';
+            timerLabel.classList.remove('recording');
+        }
+        if (visualizer) visualizer.classList.remove('active');
         if (actions) actions.classList.remove('show');
+
+        // Ocultar todos los botones de acción cuando no se está grabando
+        if (pauseBtn) {
+            pauseBtn.classList.add('is-hidden');
+            pauseBtn.style.display = 'none';
+        }
+        if (discardBtn) {
+            discardBtn.classList.add('is-hidden');
+            discardBtn.style.display = 'none';
+        }
+        if (resumeBtn) {
+            resumeBtn.classList.add('is-hidden');
+            resumeBtn.style.display = 'none';
+        }
     }
 }
 
@@ -2169,6 +2263,19 @@ async function populateMicrophoneDevices() {
 
 // Actualizar valor del slider de sensibilidad
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 [new-meeting] DOMContentLoaded - Inicializando...');
+
+    // Verificar que los elementos DOM existen
+    const audioRecorder = document.getElementById('audio-recorder');
+    const audioUploader = document.getElementById('audio-uploader');
+    const meetingRecorder = document.getElementById('meeting-recorder');
+
+    console.log('📋 [new-meeting] Elementos DOM encontrados:', {
+        audioRecorder: !!audioRecorder,
+        audioUploader: !!audioUploader,
+        meetingRecorder: !!meetingRecorder
+    });
+
     // Inicializar partículas
     createParticles();
 
@@ -2179,7 +2286,10 @@ document.addEventListener('DOMContentLoaded', function() {
     setupFileUpload();
 
     // Inicializar con modo de audio por defecto
+    console.log('🎙️ [new-meeting] Iniciando modo audio por defecto...');
     showRecordingInterface('audio');
+
+    console.log('✅ [new-meeting] Inicialización completa');
 });
 
 // ===== FUNCIONES PARA SUBIR ARCHIVO =====
@@ -2710,6 +2820,13 @@ function setupMeetingAudioAnalysis() {
 // Iniciar análisis de audio para reunión
 function startMeetingAudioAnalysis() {
     if (!meetingRecording) return;
+
+    // Si está pausado, continuar el bucle pero no procesar audio
+    if (isPaused) {
+        // Mantener el bucle activo pero sin procesar
+        meetingAnimationId = requestAnimationFrame(startMeetingAudioAnalysis);
+        return;
+    }
 
     let combinedVolume = 0;
     let hasData = false;

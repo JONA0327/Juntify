@@ -108,6 +108,28 @@
                     </div>
                 </div>
 
+                <!-- Empresas -->
+                <div class="info-card admin-card" onclick="window.location.href='/admin/empresas'">
+                    <h2 class="card-title">
+                        <svg class="card-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m2.25-18v18m13.5-18v18m2.25-18v18M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3a.75.75 0 01.75-.75h.75a.75.75 0 01.75.75v3M12 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                        </svg>
+                        Empresas
+                    </h2>
+                    <div class="info-item">
+                        <span class="info-label">Empresas registradas</span>
+                        <span class="info-value">{{ \App\Models\Empresa::count() }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Tipo Founder</span>
+                        <span class="info-value">{{ \App\Models\Empresa::where('rol', 'founder')->count() }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Tipo Enterprise</span>
+                        <span class="info-value">{{ \App\Models\Empresa::where('rol', 'enterprise')->count() }}</span>
+                    </div>
+                </div>
+
                 <!-- Feedback -->
                 <div class="info-card admin-card">
                     <h2 class="card-title">

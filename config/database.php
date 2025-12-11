@@ -93,6 +93,25 @@ return [
             // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
+        'juntify_panels' => [
+            'driver' => 'mysql',
+            'host' => env('PANELS_DB_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('PANELS_DB_PORT', env('DB_PORT', '3306')),
+            'database' => env('PANELS_DB_DATABASE', 'Juntify_Panels'),
+            'username' => env('PANELS_DB_USERNAME', env('DB_USERNAME', 'forge')),
+            'password' => env('PANELS_DB_PASSWORD', env('DB_PASSWORD', '')),
+            'unix_socket' => env('PANELS_DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
     ],
 
     /*

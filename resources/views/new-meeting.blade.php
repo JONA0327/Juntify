@@ -168,7 +168,8 @@
         </main>
     </div>
 
-    @vite(['resources/js/new-meeting-context.js', 'resources/js/new-meeting.js'])
+    @vite('resources/js/new-meeting-context.js')
+    @vite('resources/js/new-meeting.js')
     <!-- Modal para opción de posponer bloqueada por plan -->
     <div class="modal is-hidden" id="postpone-locked-modal">
         <div class="modal-content">

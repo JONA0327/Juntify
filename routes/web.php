@@ -27,6 +27,7 @@ use App\Http\Controllers\AiAssistantController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\PanelController;
 use App\Http\Controllers\Admin\PlanManagementController;
+use App\Http\Controllers\Admin\EmpresaController;
 use App\Http\Controllers\SubscriptionPaymentController;
 use App\Http\Controllers\TutorialController;
 use App\Models\Analyzer;
@@ -246,6 +247,17 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/plans/manage', [PlanManagementController::class, 'index'])->name('admin.plans');
     Route::get('/admin/plans/list', [PlanManagementController::class, 'list']);
     Route::post('/admin/plans', [PlanManagementController::class, 'store']);
+
+    // Rutas para administración de empresas
+    Route::get('/admin/empresas', [\App\Http\Controllers\Admin\EmpresaController::class, 'index'])->name('admin.empresas.index');
+    Route::post('/admin/empresas', [\App\Http\Controllers\Admin\EmpresaController::class, 'store'])->name('admin.empresas.store');
+    Route::get('/admin/empresas/{empresa}', [\App\Http\Controllers\Admin\EmpresaController::class, 'show'])->name('admin.empresas.show');
+    Route::put('/admin/empresas/{empresa}', [\App\Http\Controllers\Admin\EmpresaController::class, 'update'])->name('admin.empresas.update');
+    Route::delete('/admin/empresas/{empresa}', [\App\Http\Controllers\Admin\EmpresaController::class, 'destroy'])->name('admin.empresas.destroy');
+    Route::post('/admin/empresas/{empresa}/integrantes', [\App\Http\Controllers\Admin\EmpresaController::class, 'addIntegrante'])->name('admin.empresas.add-integrante');
+    Route::delete('/admin/empresas/integrantes/{integrante}', [\App\Http\Controllers\Admin\EmpresaController::class, 'removeIntegrante'])->name('admin.empresas.remove-integrante');
+    Route::post('/admin/update-user-role', [\App\Http\Controllers\Admin\EmpresaController::class, 'updateUserRole'])->name('admin.update-user-role');
+    Route::get('/admin/search-users', [\App\Http\Controllers\Admin\EmpresaController::class, 'searchUsers'])->name('admin.search-users');
 
     Route::post('/admin/pending-recordings/process', [\App\Http\Controllers\PendingRecordingController::class, 'process'])
         ->name('admin.pending-recordings.process');
