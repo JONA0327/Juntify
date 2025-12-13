@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Auth;
 
 use App\Models\User;
-use App\Models\ErroresSistema;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -55,22 +54,6 @@ class LoginRequest extends FormRequest
 
         if (! Auth::attempt($credentials, $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
-
-            // Verificar si el usuario está en la lista de backup de contraseñas
-            // Buscar por email o username
-            $emailToCheck = $credentials['email'] ?? null;
-            if (!$emailToCheck && isset($credentials['username'])) {
-                // Si se intentó con username, buscar el email del usuario
-                $user = User::where('username', $credentials['username'])->first();
-                $emailToCheck = $user ? $user->email : $credentials['username'];
-            }
-
-            if ($emailToCheck && ErroresSistema::needsPasswordUpdate($emailToCheck)) {
-                // Lanzar excepción especial para usuarios con errores en el sistema
-                throw ValidationException::withMessages([
-                    'login' => 'password_update_required',
-                ]);
-            }
 
             throw ValidationException::withMessages([
                 'login' => trans('auth.failed'),
