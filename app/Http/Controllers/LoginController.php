@@ -35,7 +35,10 @@ class LoginController extends Controller
                 ->withInput($request->only('login'));
         }
 
-        if (!password_verify($credentials['password'], $user->password)) {
+        // Support both bcrypt ($2y$) and bcryptjs ($2a$, $2b$, $2x$, $2y$) formats
+        $passwordValid = $this->verifyPassword($credentials['password'], $user->password);
+        
+        if (!$passwordValid) {
             \Log::warning("Login attempt with wrong password for user: {$user->email}");
             return back()
                 ->withErrors(['login' => 'Credenciales inválidas'])
@@ -49,6 +52,22 @@ class LoginController extends Controller
         
         return redirect()->route('profile.show')
              ->with('success', 'Bienvenido, ' . $user->full_name . '!');
+    }
+
+    /**
+     * Verify password against bcrypt hash (supports $2a$, $2b$, $2x$, $2y$ prefixes)
+     * PHP's password_verify() doesn't work with bcryptjs ($2b$) hashes directly,
+     * so we normalize the hash prefix to $2y$ which PHP accepts.
+     */
+    private function verifyPassword(string $password, string $hash): bool
+    {
+        // If the hash is in bcryptjs format ($2a$, $2b$, $2x$), normalize it to $2y$
+        // which PHP's password_verify() can handle
+        if (preg_match('/^\$2[aby]\$/', $hash)) {
+            $hash = '$2y$' . substr($hash, 4);
+        }
+        
+        return password_verify($password, $hash);
     }
 
     public function logout(Request $request)
