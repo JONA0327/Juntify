@@ -28,16 +28,27 @@ class LoginController extends Controller
 
         $user = User::where($field, $credentials['login'])->first();
 
-        if ($user && password_verify($credentials['password'], $user->password)) {
-            Auth::login($user);
-            $request->session()->regenerate();
-            return redirect()->route('profile.show')
-                 ->with('success', 'Bienvenido, ' . $user->full_name . '!');
+        if (!$user) {
+            \Log::warning("Login attempt with non-existent {$field}: {$credentials['login']}");
+            return back()
+                ->withErrors(['login' => 'Credenciales inválidas'])
+                ->withInput($request->only('login'));
         }
 
-        return back()
-            ->withErrors(['login' => 'Credenciales inválidas'])
-            ->withInput($request->only('login'));
+        if (!password_verify($credentials['password'], $user->password)) {
+            \Log::warning("Login attempt with wrong password for user: {$user->email}");
+            return back()
+                ->withErrors(['login' => 'Credenciales inválidas'])
+                ->withInput($request->only('login'));
+        }
+
+        Auth::login($user);
+        $request->session()->regenerate();
+        
+        \Log::info("User logged in successfully: {$user->email}");
+        
+        return redirect()->route('profile.show')
+             ->with('success', 'Bienvenido, ' . $user->full_name . '!');
     }
 
     public function logout(Request $request)
