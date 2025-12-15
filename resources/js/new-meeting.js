@@ -1228,16 +1228,38 @@ function setupRecordingNavigationGuards() {
 }
 
 function resetRecordingControls() {
-    document.getElementById('pause-recording').style.display = 'none';
-    document.getElementById('resume-recording').style.display = 'none';
-    document.getElementById('discard-recording').style.display = 'none';
+    const pauseRecording = document.getElementById('pause-recording');
+    const resumeRecording = document.getElementById('resume-recording');
+    const discardRecording = document.getElementById('discard-recording');
+    
+    if (pauseRecording) {
+        pauseRecording.classList.add('is-hidden');
+        pauseRecording.style.display = 'none';
+    }
+    if (resumeRecording) {
+        resumeRecording.classList.add('is-hidden');
+        resumeRecording.style.display = 'none';
+    }
+    if (discardRecording) {
+        discardRecording.classList.add('is-hidden');
+        discardRecording.style.display = 'none';
+    }
     const mp = document.getElementById('meeting-pause');
     const md = document.getElementById('meeting-discard');
     const mr = document.getElementById('meeting-resume');
     const meetingActions = document.getElementById('meeting-recorder-actions');
-    if (mp) mp.style.display = 'none';
-    if (md) md.style.display = 'none';
-    if (mr) mr.style.display = 'none';
+    if (mp) {
+        mp.classList.add('is-hidden');
+        mp.style.display = 'none';
+    }
+    if (md) {
+        md.classList.add('is-hidden');
+        md.style.display = 'none';
+    }
+    if (mr) {
+        mr.classList.add('is-hidden');
+        mr.style.display = 'none';
+    }
     if (meetingActions) meetingActions.classList.remove('show');
     const postponeContainer = document.getElementById('postpone-switch');
     const postponeToggle = document.getElementById('postpone-toggle');
@@ -2824,9 +2846,18 @@ async function startMeetingRecording() {
         const mp = document.getElementById('meeting-pause');
         const md = document.getElementById('meeting-discard');
         const mr = document.getElementById('meeting-resume');
-        if (mp) mp.style.display = 'inline-block';
-        if (md) md.style.display = 'inline-block';
-        if (mr) mr.style.display = 'none';
+        if (mp) {
+            mp.classList.remove('is-hidden');
+            mp.style.display = 'inline-block';
+        }
+        if (md) {
+            md.classList.remove('is-hidden');
+            md.style.display = 'inline-block';
+        }
+        if (mr) {
+            mr.classList.add('is-hidden');
+            mr.style.display = 'none';
+        }
         const postponeContainer = document.getElementById('postpone-switch');
         const postponeToggle = document.getElementById('postpone-toggle');
         if (postponeContainer) postponeContainer.style.display = 'none';
