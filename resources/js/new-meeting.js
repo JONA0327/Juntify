@@ -1547,6 +1547,28 @@ function updateRecordingUI(recording) {
             resumeBtn.classList.add('is-hidden');
             resumeBtn.style.display = 'none';
         }
+        
+        // También manejar botones de reunión
+        const meetingPause = document.getElementById('meeting-pause');
+        const meetingDiscard = document.getElementById('meeting-discard');
+        const meetingResume = document.getElementById('meeting-resume');
+        const meetingActions = document.getElementById('meeting-recorder-actions');
+        
+        if (meetingPause) {
+            meetingPause.classList.remove('is-hidden');
+            meetingPause.style.display = 'inline-block';
+        }
+        if (meetingDiscard) {
+            meetingDiscard.classList.remove('is-hidden');
+            meetingDiscard.style.display = 'inline-block';
+        }
+        if (meetingResume) {
+            meetingResume.classList.add('is-hidden');
+            meetingResume.style.display = 'none';
+        }
+        if (meetingActions) {
+            meetingActions.classList.add('show');
+        }
     } else {
         if (micCircle) micCircle.classList.remove('recording');
         if (timerCounter) {
@@ -2846,6 +2868,8 @@ async function startMeetingRecording() {
         const mp = document.getElementById('meeting-pause');
         const md = document.getElementById('meeting-discard');
         const mr = document.getElementById('meeting-resume');
+        const meetingActions = document.getElementById('meeting-recorder-actions');
+        
         if (mp) {
             mp.classList.remove('is-hidden');
             mp.style.display = 'inline-block';
@@ -2857,6 +2881,9 @@ async function startMeetingRecording() {
         if (mr) {
             mr.classList.add('is-hidden');
             mr.style.display = 'none';
+        }
+        if (meetingActions) {
+            meetingActions.classList.add('show');
         }
         const postponeContainer = document.getElementById('postpone-switch');
         const postponeToggle = document.getElementById('postpone-toggle');
@@ -3238,6 +3265,11 @@ window.muteSystemAudio = muteSystemAudio;
 window.muteMicrophoneAudio = muteMicrophoneAudio;
 window.toggleMeetingRecording = toggleMeetingRecording;
 window.setupMeetingRecorder = setupMeetingRecorder;
+
+// Funciones de control de grabación (para ambos modos)
+window.pauseRecording = pauseRecording;
+window.resumeRecording = resumeRecording;
+window.discardRecording = requestDiscardRecording;
 
 // Funciones para navbar móvil
 window.toggleMobileDropdown = function() {
