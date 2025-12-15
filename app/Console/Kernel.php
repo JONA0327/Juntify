@@ -17,6 +17,9 @@ class Kernel extends ConsoleKernel
 
         // Verificar planes vencidos cada hora
         $schedule->command('plans:update-expired')->hourly();
+        
+        // Limpiar archivos temporales diariamente a las 2 AM
+        $schedule->command('audio:cleanup-temp')->dailyAt('02:00');
 
         // $schedule->command('inspire')->hourly();
         $schedule->command('activities:cleanup')->cron('0 0 1 * *');

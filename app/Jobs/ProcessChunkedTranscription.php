@@ -18,17 +18,62 @@ class ProcessChunkedTranscription implements ShouldQueue
 
     protected string $uploadId;
     protected string $trackingId;
+    
+    /**
+     * The number of times the job may be attempted.
+     *
+     * @var int
+     */
+    public $tries = 3;
+
+    /**
+     * The maximum number of seconds the job can run.
+     *
+     * @var int
+     */
+    public $timeout = 600; // 10 minutos
+
+    /**
+     * Determine the time at which the job should timeout.
+     *
+     * @return \DateTime
+     */
+    public function retryUntil()
+    {
+        return now()->addMinutes(15);
+    }
 
     public function __construct(string $uploadId, string $trackingId)
     {
         $this->uploadId = $uploadId;
         $this->trackingId = $trackingId;
+        
+        // Configurar cola con prioridad para archivos grandes
+        $this->onQueue('audio-processing');
     }
 
     public function handle(): void
     {
+        // Configurar límites de memoria y tiempo para archivos grandes
+        ini_set('memory_limit', config('audio.process_memory_limit', '512M'));
+        set_time_limit(600); // 10 minutos
+        
+        // Configurar garbage collection más agresivo
+        ini_set('memory_get_usage', true);
+        
+        Log::info('Starting chunked transcription processing', [
+            'upload_id' => $this->uploadId,
+            'tracking_id' => $this->trackingId,
+            'memory_limit' => ini_get('memory_limit'),
+            'max_execution_time' => ini_get('max_execution_time')
+        ]);
+        
         $cacheKey = "chunked_transcription:{$this->trackingId}";
-        Cache::put($cacheKey, ['status' => 'processing']);
+        Cache::put($cacheKey, [
+            'status' => 'processing',
+            'started_at' => now()->toISOString(),
+            'memory_start' => memory_get_usage(true)
+        ]);
 
         $uploadDir = storage_path("app/temp-uploads/{$this->uploadId}");
         $metadataPath = "{$uploadDir}/metadata.json";

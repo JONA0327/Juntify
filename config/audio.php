@@ -7,7 +7,7 @@ return [
     'opus_bitrate' => env('AUDIO_OPUS_BITRATE', '96k'),
 
     // Timeout (segundos) para procesos ffmpeg largos
-    'conversion_timeout' => env('AUDIO_CONVERSION_TIMEOUT', 1800),
+    'conversion_timeout' => env('AUDIO_CONVERSION_TIMEOUT', 600),
 
     // Rutas de binarios (opcional). Útil en Windows si no están en el PATH.
     // Ejemplo en .env:
@@ -18,6 +18,23 @@ return [
 
     // Usar script Python para convertir a OGG en vez de ejecutar ffmpeg directo desde PHP
     'use_python_script' => env('AUDIO_USE_PYTHON', false),
+
+    // === NUEVAS CONFIGURACIONES PARA ARCHIVOS GRANDES ===
+    
+    // Límite de memoria para procesamiento de audio
+    'process_memory_limit' => env('AUDIO_PROCESS_MEMORY_LIMIT', '512M'),
+    
+    // Tamaño máximo de archivo (en bytes) - 50MB por defecto
+    'max_file_size' => env('AUDIO_MAX_SIZE', 52428800),
+    
+    // Modo de procesamiento para chunks: 'sync', 'async', 'queue'
+    'chunked_processing_mode' => env('AUDIO_CHUNKED_PROCESSING', 'async'),
+    
+    // Habilitar sistema de colas para audio grande
+    'queue_enabled' => env('AUDIO_QUEUE_ENABLED', true),
+    
+    // Nombre de la cola para procesamiento de audio
+    'queue_name' => env('AUDIO_QUEUE_NAME', 'audio-processing'),
     // Binario de Python
     'python_bin' => env('PYTHON_BIN', 'python3'),
 

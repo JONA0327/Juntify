@@ -605,20 +605,48 @@ class TranscriptionController extends Controller
         }
 
         $trackingId = (string) Str::uuid();
+        
+        // Calcular tamaño total del archivo para decidir estrategia de procesamiento
+        $totalSize = $metadata['total_size'] ?? 0;
+        $maxSyncSize = config('audio.max_file_size', 52428800); // 50MB
+        
         Cache::put("chunked_transcription:{$trackingId}", [
             'status' => 'queued',
+            'total_size' => $totalSize,
+            'created_at' => now()->toISOString()
         ]);
 
-        $processingMode = strtolower(config('audio.chunked_processing_mode', 'sync'));
+        // Decidir modo de procesamiento basado en tamaño y configuración
+        $processingMode = strtolower(config('audio.chunked_processing_mode', 'async'));
+        $queueEnabled = config('audio.queue_enabled', true);
+        
+        // Forzar cola para archivos grandes independientemente de la configuración
+        if ($totalSize > $maxSyncSize && $queueEnabled) {
+            $processingMode = 'queue';
+        }
 
-        if ($processingMode === 'queue') {
-            ProcessChunkedTranscription::dispatch($uploadId, $trackingId);
+        if ($processingMode === 'queue' && $queueEnabled) {
+            Log::info('Queuing chunked transcription for background processing', [
+                'upload_id' => $uploadId,
+                'tracking_id' => $trackingId,
+                'total_size' => $totalSize,
+                'chunks' => $expected
+            ]);
+            
+            ProcessChunkedTranscription::dispatch($uploadId, $trackingId)
+                ->onQueue(config('audio.queue_name', 'audio-processing'));
         } else {
             Log::info('Processing chunked transcription synchronously', [
                 'upload_id' => $uploadId,
                 'tracking_id' => $trackingId,
                 'mode' => $processingMode,
+                'total_size' => $totalSize,
+                'chunks' => $expected
             ]);
+
+            // Aumentar límites para procesamiento síncrono
+            ini_set('memory_limit', config('audio.process_memory_limit', '512M'));
+            set_time_limit(config('audio.conversion_timeout', 600));
 
             ProcessChunkedTranscription::dispatchSync($uploadId, $trackingId);
         }
