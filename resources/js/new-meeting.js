@@ -335,9 +335,11 @@ let chunkIndex = 0;
 // Función para limpiar completamente todos los datos de audio anteriores
 async function clearPreviousAudioData() {
     try {
+        console.log('🧹 [clearPreviousAudioData] Iniciando limpieza...');
 
         // Limpiar IndexedDB
         await clearAllAudio();
+        console.log('✅ [clearPreviousAudioData] IndexedDB limpiado');
 
         // Limpiar sessionStorage de audio
         sessionStorage.removeItem('uploadedAudioKey');
@@ -346,14 +348,17 @@ async function clearPreviousAudioData() {
         sessionStorage.removeItem('recordingMetadata');
         sessionStorage.removeItem('pendingAudioBlob');
         sessionStorage.removeItem('audioDiscarded');
+        console.log('✅ [clearPreviousAudioData] SessionStorage limpiado');
 
         // Limpiar localStorage de audios pendientes
         localStorage.removeItem('pendingAudioData');
+        console.log('✅ [clearPreviousAudioData] LocalStorage limpiado');
 
         // Limpiar variables locales
         uploadedFile = null;
         pendingAudioBlob = null;
         recordedChunks = [];
+        console.log('✅ [clearPreviousAudioData] Variables locales limpiadas');
 
 
     } catch (error) {
@@ -2296,12 +2301,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Configurar la funcionalidad de subir archivo
 function setupFileUpload() {
-    if (fileUploadInitialized) return;
+    if (fileUploadInitialized) {
+        console.log('⚠️ [setupFileUpload] Ya fue inicializado previamente');
+        return;
+    }
     fileUploadInitialized = true;
+    console.log('⚙️ [setupFileUpload] Inicializando sistema de carga de archivos...');
 
     const uploadArea = document.getElementById('upload-area');
     const fileInput = document.getElementById('audio-file-input');
-    const uploadButton = uploadArea.querySelector('.upload-btn');
+    const uploadButton = uploadArea ? uploadArea.querySelector('.upload-btn') : null;
+
+    console.log('⚙️ [setupFileUpload] Elementos encontrados:', {
+        uploadArea: !!uploadArea,
+        fileInput: !!fileInput,
+        uploadButton: !!uploadButton
+    });
 
     // Drag and drop
     uploadArea.addEventListener('dragover', (e) => {
@@ -2341,8 +2356,12 @@ function setupFileUpload() {
 
 // Manejar la selección de archivo
 function handleFileSelection(file) {
+    console.log('📂 [handleFileSelection] Archivo seleccionado:', file.name, 'Tamaño:', file.size);
+    
     const isAudioType = file.type && file.type.startsWith('audio/');
     const looksLikeAudio = /\.(ogg|oga|wav|mp3|m4a|aac|flac|aiff|aif|wma|opus|weba|webm)$/i.test(file.name || '');
+
+    console.log('📂 [handleFileSelection] Validación:', { isAudioType, looksLikeAudio, mimeType: file.type });
 
     if (!isAudioType && !looksLikeAudio) {
         showError('❌ Tipo de archivo no soportado. Selecciona un archivo de audio válido.');
@@ -2356,20 +2375,63 @@ function handleFileSelection(file) {
     }
 
     uploadedFile = file;
+    console.log('✅ [handleFileSelection] Archivo validado exitosamente');
 
     // Mostrar información del archivo
-    document.getElementById('file-name').textContent = file.name;
-    document.getElementById('file-size').textContent = formatFileSize(file.size);
-    document.getElementById('selected-file').style.display = 'block';
-    document.getElementById('upload-area').style.display = 'none';
+    const fileNameEl = document.getElementById('file-name');
+    const fileSizeEl = document.getElementById('file-size');
+    const selectedFileEl = document.getElementById('selected-file');
+    const uploadAreaEl = document.getElementById('upload-area');
+
+    console.log('📂 [handleFileSelection] Elementos DOM encontrados:', {
+        'file-name': !!fileNameEl,
+        'file-size': !!fileSizeEl,
+        'selected-file': !!selectedFileEl,
+        'upload-area': !!uploadAreaEl
+    });
+
+    if (fileNameEl) fileNameEl.textContent = file.name;
+    if (fileSizeEl) fileSizeEl.textContent = formatFileSize(file.size);
+    if (selectedFileEl) {
+        // Importante: .is-hidden usa display:none!important
+        selectedFileEl.classList.remove('is-hidden');
+        selectedFileEl.style.display = 'block';
+        console.log('✅ [handleFileSelection] selected-file mostrado');
+    } else {
+        console.error('❌ [handleFileSelection] No se encontró elemento selected-file');
+    }
+    if (uploadAreaEl) {
+        uploadAreaEl.classList.add('is-hidden');
+        uploadAreaEl.style.display = 'none';
+        console.log('✅ [handleFileSelection] upload-area ocultado');
+    }
 
     showSuccess('Archivo seleccionado correctamente');
 }
 
 // Remover archivo seleccionado
 function removeSelectedFile() {
-    document.getElementById('selected-file').style.display = 'none';
-    document.getElementById('upload-area').style.display = 'block';
+    const selectedFileEl = document.getElementById('selected-file');
+    const uploadAreaEl = document.getElementById('upload-area');
+    const progressEl = document.getElementById('upload-progress');
+    const progressFill = document.getElementById('progress-fill');
+    const progressText = document.getElementById('progress-text');
+
+    if (selectedFileEl) {
+        selectedFileEl.classList.add('is-hidden');
+        selectedFileEl.style.display = 'none';
+    }
+    if (uploadAreaEl) {
+        uploadAreaEl.classList.remove('is-hidden');
+        uploadAreaEl.style.display = 'block';
+    }
+    if (progressEl) {
+        progressEl.classList.add('is-hidden');
+        progressEl.style.display = 'none';
+    }
+    if (progressFill) progressFill.style.width = '0%';
+    if (progressText) progressText.textContent = '0%';
+
     document.getElementById('audio-file-input').value = '';
     uploadedFile = null;
 }
@@ -2387,6 +2449,18 @@ async function processAudioFile() {
     const planInfo = getUserPlanInfo();
     const planLimitBytes = getUploadLimitBytes(planInfo, hasPremium);
 
+    // Logging para diagnóstico
+    console.log('🎵 [processAudioFile] Iniciando procesamiento', {
+        fileName: uploadedFile.name,
+        fileSize: fileSize + ' bytes (' + (fileSize / (1024*1024)).toFixed(2) + ' MB)',
+        userRole: window.userRole,
+        userPlanCode: window.userPlanCode,
+        userCanUseDrive: window.userCanUseDrive,
+        hasPremium: hasPremium,
+        planInfo: planInfo,
+        planLimitBytes: planLimitBytes
+    });
+
     if (planLimitBytes !== null && fileSize > planLimitBytes) {
 
         // Mostrar modal específico para límite de tamaño
@@ -2401,6 +2475,8 @@ async function processAudioFile() {
         const progressText = document.getElementById('progress-text');
 
         if (progressContainer) {
+            // Importante: .is-hidden usa display:none!important
+            progressContainer.classList.remove('is-hidden');
             progressContainer.style.display = 'block';
             progressFill.style.width = '5%';
             progressText.textContent = 'Limpiando datos anteriores...';
@@ -2423,14 +2499,17 @@ async function processAudioFile() {
 
         // Validar que se pueda recargar el blob
         try {
+            console.log('🔍 [processAudioFile] Validando audio guardado en IndexedDB con clave:', audioKey);
             const testBlob = await loadAudioBlob(audioKey);
             if (!testBlob) {
                 throw new Error('Blob no encontrado tras guardar');
             }
+            console.log('✅ [processAudioFile] Audio validado correctamente. Tamaño:', testBlob.size);
         } catch (err) {
-            console.error('Error al validar audio subido:', err);
+            console.error('❌ Error al validar audio subido:', err);
             showError('Error al guardar el audio. Intenta nuevamente.');
             if (progressContainer) {
+                progressContainer.classList.add('is-hidden');
                 progressContainer.style.display = 'none';
             }
             return;
@@ -2443,6 +2522,7 @@ async function processAudioFile() {
 
         // Guardar la clave en sessionStorage para que audio-processing.js la pueda usar
         sessionStorage.setItem('uploadedAudioKey', audioKey);
+        console.log('✅ [processAudioFile] Clave de audio guardada en sessionStorage:', audioKey);
 
         const fallbackLimitBytes = planLimitBytes ?? (60 * 1024 * 1024);
         // Respaldo: guardar una copia base64 si el archivo no es demasiado grande
@@ -2462,22 +2542,26 @@ async function processAudioFile() {
             progressText.textContent = 'Redirigiendo al procesamiento...';
         }
 
+        console.log('✅ [processAudioFile] Procesamiento completado exitosamente. Redirigiendo a /audio-processing...');
+
         // Limpiar variables
         uploadedFile = null;
 
         // Pequeña pausa para que se vea el progreso
         setTimeout(() => {
+            console.log('🔄 [processAudioFile] Navegando a /audio-processing');
             // Redireccionar a audio-processing
             window.location.href = '/audio-processing';
         }, 500);
 
     } catch (error) {
-        console.error('Error al procesar archivo de audio:', error);
+        console.error('❌ Error al procesar archivo de audio:', error, error.stack);
         showError('Error al procesar el archivo de audio: ' + error.message);
 
         // Ocultar progreso en caso de error
         const progressContainer = document.getElementById('upload-progress');
         if (progressContainer) {
+            progressContainer.classList.add('is-hidden');
             progressContainer.style.display = 'none';
         }
     }

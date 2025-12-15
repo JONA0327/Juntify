@@ -30,6 +30,8 @@ class User extends Authenticatable
         'email',
         'password',
         'roles',           // ahora un string
+        'plan',           // plan del usuario
+        'plan_code',      // código del plan para la interfaz
         'current_organization_id',
         'plan_expires_at',
         'blocked_at',

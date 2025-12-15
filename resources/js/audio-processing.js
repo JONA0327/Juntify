@@ -1862,33 +1862,46 @@ async function loadDriveOptions() {
 
         // Load organization drive name (for both admin and colaborador)
         if (organizationId) {
-            /* console.log('🔍 [loadDriveOptions] Fetching organization drive data...'); */
+            /* console.log('🔍 [loadDriveOptions] Checking organization drive status first...'); */
             try {
-                const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
-                /* console.log('🔍 [loadDriveOptions] Organization drive response status:', orgRes.status); */
-
-                if (orgRes.ok) {
-                    const orgData = await orgRes.json();
-                    /* console.log('🔍 [loadDriveOptions] Organization drive data:', orgData); */
-
-                    if (orgData.root_folder) {
-                        const orgOpt = document.createElement('option');
-                        orgOpt.value = 'organization';
-                        orgOpt.textContent = `🏢 ${orgData.root_folder.name}`;
-                        driveSelect.appendChild(orgOpt);
-                        /* console.log('✅ [loadDriveOptions] Added organization option:', orgData.root_folder.name); */
+                // First check if organization has a root folder via status endpoint
+                const statusRes = await fetch(`/api/organizations/${organizationId}/drive/status`);
+                /* console.log('🔍 [loadDriveOptions] Organization drive status response:', statusRes.status); */
+                
+                if (statusRes.ok) {
+                    const statusData = await statusRes.json();
+                    /* console.log('🔍 [loadDriveOptions] Organization drive status data:', statusData); */
+                    
+                    // Only proceed if organization has a root folder configured
+                    if (statusData.connected && statusData.root_folder) {
+                        /* console.log('🔍 [loadDriveOptions] Organization has root folder, fetching subfolders...'); */
+                        try {
+                            const orgRes = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
+                            
+                            if (orgRes.ok) {
+                                const orgData = await orgRes.json();
+                                
+                                if (orgData.root_folder) {
+                                    const orgOpt = document.createElement('option');
+                                    orgOpt.value = 'organization';
+                                    orgOpt.textContent = `🏢 ${orgData.root_folder.name}`;
+                                    driveSelect.appendChild(orgOpt);
+                                    /* console.log('✅ [loadDriveOptions] Added organization option:', orgData.root_folder.name); */
+                                }
+                            } else {
+                                console.warn('⚠️ [loadDriveOptions] Organization subfolders request failed:', await orgRes.text());
+                            }
+                        } catch (e) {
+                            console.warn('⚠️ [loadDriveOptions] Error fetching organization subfolders:', e);
+                        }
+                    } else {
+                        /* console.log('ℹ️ [loadDriveOptions] Organization has no root folder or not connected, skipping drive option'); */
                     }
                 } else {
-                    console.warn('⚠️ [loadDriveOptions] Organization drive request failed:', await orgRes.text());
+                    console.warn('⚠️ [loadDriveOptions] Organization drive status request failed:', await statusRes.text());
                 }
             } catch (e) {
-                console.warn('⚠️ [loadDriveOptions] Could not load organization drive name:', e);
-                // Fallback to default
-                const orgOpt = document.createElement('option');
-                orgOpt.value = 'organization';
-                orgOpt.textContent = 'Organization';
-                driveSelect.appendChild(orgOpt);
-                /* console.log('📝 [loadDriveOptions] Added fallback organization option'); */
+                console.warn('⚠️ [loadDriveOptions] Could not check organization drive status:', e);
             }
         }
 
@@ -1972,10 +1985,31 @@ async function loadDriveFolders() {
         const rootInfo = await (async () => {
             if (useOrg) {
                 if (!organizationId) return null;
-                const r = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
-                if (!r.ok) return null;
-                const data = await r.json();
-                return data.root_folder || null;
+                
+                // First check if organization has a root folder via status endpoint
+                try {
+                    const statusRes = await fetch(`/api/organizations/${organizationId}/drive/status`);
+                    if (statusRes.ok) {
+                        const statusData = await statusRes.json();
+                        
+                        // Only proceed if organization has a root folder configured
+                        if (statusData.connected && statusData.root_folder) {
+                            const r = await fetch(`/api/organizations/${organizationId}/drive/subfolders`);
+                            if (!r.ok) return null;
+                            const data = await r.json();
+                            return data.root_folder || null;
+                        } else {
+                            /* console.log('ℹ️ [loadDriveFolders] Organization has no root folder or not connected, returning null'); */
+                            return null;
+                        }
+                    } else {
+                        console.warn('⚠️ [loadDriveFolders] Organization drive status request failed');
+                        return null;
+                    }
+                } catch (e) {
+                    console.warn('⚠️ [loadDriveFolders] Error checking organization drive status:', e);
+                    return null;
+                }
             } else {
                 const r = await fetch('/drive/sync-subfolders');
                 if (!r.ok) return null;
@@ -2302,6 +2336,9 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                 appendSaveLogMessage('�💾 El audio se guardó temporalmente en Juntify.');
                 if (finalStorageReason === 'drive_not_connected') {
                     appendSaveLogMessage('🔌 Conecta tu Google Drive desde el perfil para moverlo de forma permanente.');
+                } else if (finalStorageReason === 'service_account_missing') {
+                    appendSaveLogMessage('🛠️ El servidor no tiene configuradas las credenciales de Google (Service Account) para guardar en Drive.');
+                    appendSaveLogMessage('📌 Configura GOOGLE_APPLICATION_CREDENTIALS y vuelve a intentar si quieres guardarlo en Drive.');
                 } else {
                     appendSaveLogMessage('🚀 Actualiza tu plan para guardarlo permanentemente en Google Drive.');
                 }
@@ -2453,6 +2490,9 @@ async function processDatabaseSave(meetingName) { // rootFolder/subfolders depre
                 appendSaveLogMessage('�💾 El audio se guardó temporalmente en Juntify.');
                 if (finalStorageReason === 'drive_not_connected') {
                     appendSaveLogMessage('🔌 Conecta tu Google Drive desde el perfil para moverlo de forma permanente.');
+                } else if (finalStorageReason === 'service_account_missing') {
+                    appendSaveLogMessage('🛠️ El servidor no tiene configuradas las credenciales de Google (Service Account) para guardar en Drive.');
+                    appendSaveLogMessage('📌 Configura GOOGLE_APPLICATION_CREDENTIALS y vuelve a intentar si quieres guardarlo en Drive.');
                 } else {
                     appendSaveLogMessage('🚀 Actualiza tu plan para guardarlo permanentemente en Google Drive.');
                 }

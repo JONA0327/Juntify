@@ -1292,7 +1292,30 @@ class DriveController extends Controller
 
         // Asegurar que la cuenta de servicio tiene acceso de escritura al folder raíz antes de crear subcarpetas
         $serviceEmail = config('services.google.service_account_email');
-        $serviceAccount = app(GoogleServiceAccount::class);
+
+        // Si falta el JSON de la service account (típico en desarrollo), no bloqueamos el guardado: caemos a almacenamiento temporal.
+        try {
+            $serviceAccount = app(GoogleServiceAccount::class);
+        } catch (\Throwable $e) {
+            Log::error('saveResults: failed to init service account; falling back to temp storage', [
+                'error' => $e->getMessage(),
+                'driveType' => $driveType,
+                'username' => $user->username,
+            ]);
+            return $this->storeTemporaryResult(
+                $user,
+                $v,
+                $request,
+                $respondWithCleanup,
+                $cleanupChunkedUpload,
+                $mimeToExt,
+                $maxAudioBytes,
+                [
+                    'reason' => 'service_account_missing',
+                    'drive_type' => $driveType,
+                ]
+            );
+        }
         try {
             $serviceAccount->shareFolder($rootFolder->google_id, $serviceEmail);
         } catch (GoogleServiceException $e) {

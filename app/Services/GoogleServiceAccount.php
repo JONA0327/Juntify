@@ -22,22 +22,53 @@ class GoogleServiceAccount
     {
         $this->client = new Client();
         // Read from config to work correctly with cached configuration
-        $jsonPath = (string) config('services.google.service_account_json');
+        $rawJsonPath = (string) config('services.google.service_account_json');
+        $jsonPath = trim($rawJsonPath);
+        $jsonPath = trim($jsonPath, "\"'");
 
-        if ($jsonPath) {
-            $jsonPath = str_replace('\\', DIRECTORY_SEPARATOR, $jsonPath);
+        $resolvedFrom = [];
+
+        // Detect absolute paths across Linux/Windows.
+        // - Unix: /path
+        // - Windows: C:\path or C:/path
+        // - UNC: \\server\share
+        $isAbsolute = false;
+        if ($jsonPath !== '') {
+            $isAbsolute = Str::startsWith($jsonPath, ['/', '\\'])
+                || (bool) preg_match('/^[A-Za-z]:[\\\\\/]/', $jsonPath)
+                || Str::startsWith($jsonPath, ['\\\\\\\\', '//']);
+
+            // Normalize separators for the current OS
+            $jsonPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $jsonPath);
+        }
+
+        if ($jsonPath !== '' && $isAbsolute) {
+            $resolvedFrom[] = $jsonPath;
             $jsonPath = realpath($jsonPath) ?: $jsonPath;
         }
 
-        if ($jsonPath && ! Str::startsWith($jsonPath, ['/', '\\'])) {
-            $basePath = base_path($jsonPath);
-            $jsonPath = file_exists($basePath) ? $basePath : storage_path($jsonPath);
+        if ($jsonPath !== '' && ! $isAbsolute) {
+            // Interpret as relative path, try base_path then storage_path
+            $baseCandidate = base_path($jsonPath);
+            $storageCandidate = storage_path($jsonPath);
+            $resolvedFrom[] = $baseCandidate;
+            $resolvedFrom[] = $storageCandidate;
+
+            $jsonPath = file_exists($baseCandidate) ? $baseCandidate : $storageCandidate;
             $jsonPath = realpath($jsonPath) ?: $jsonPath;
         }
 
-        Log::debug('Service Account JSON Path', ['path' => $jsonPath, 'exists' => $jsonPath ? file_exists($jsonPath) : false]);
-        if (!file_exists($jsonPath)) {
-            throw new \RuntimeException('Service account JSON path is invalid');
+        Log::debug('Service Account JSON Path', [
+            'raw' => $rawJsonPath,
+            'trimmed' => $jsonPath,
+            'is_absolute' => $isAbsolute,
+            'candidates' => $resolvedFrom,
+            'exists' => $jsonPath !== '' ? file_exists($jsonPath) : false,
+        ]);
+
+        if ($jsonPath === '' || !file_exists($jsonPath)) {
+            $hint = "Set GOOGLE_APPLICATION_CREDENTIALS to the full path of your service account JSON file (Windows example: C:\\keys\\service-account.json).";
+            throw new RuntimeException("Service account JSON path is invalid. raw=\"{$rawJsonPath}\" resolved=\"{$jsonPath}\". {$hint}");
         }
 
         $this->client->setAuthConfig($jsonPath);
