@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use App\Jobs\ProcessChunkedTranscription;
+use Illuminate\Support\Facades\Validator;
 
 class TranscriptionController extends Controller
 {
@@ -481,15 +482,34 @@ class TranscriptionController extends Controller
         // Aumentar tiempo límite para chunks grandes
         set_time_limit(300); // 5 minutos por chunk
 
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'chunk' => 'required|file',
             'chunk_index' => 'required|integer|min:0',
+            'total_chunks' => 'required|integer|min:1',
             'upload_id' => 'required|string'
         ]);
 
-        $uploadId = $request->input('upload_id');
-        $chunkIndex = $request->input('chunk_index');
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid chunk upload payload',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $data = $validator->validated();
+
         $chunk = $request->file('chunk');
+        if (!$chunk || !$chunk->isValid()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chunk file is missing or invalid'
+            ], 422);
+        }
+
+        $uploadId = $data['upload_id'];
+        $chunkIndex = (int) $data['chunk_index'];
+        $totalChunks = (int) $data['total_chunks'];
 
         $uploadDir = storage_path("app/temp-uploads/{$uploadId}");
         $metadataPath = "{$uploadDir}/metadata.json";
@@ -498,15 +518,26 @@ class TranscriptionController extends Controller
             return response()->json(['error' => 'Upload session not found'], 404);
         }
 
+        $metadataContent = file_get_contents($metadataPath);
+        $metadata = json_decode($metadataContent, true);
+        if (!is_array($metadata)) {
+            $metadata = [];
+        }
+
         // Obtener el tamaño ANTES de mover el archivo
-        $chunkSize = $chunk->getSize();
+        $chunkSize = $chunk->getSize() ?? 0;
 
         // Guardar el chunk (sobre-escribe si se reintenta el mismo índice)
-        $chunkPath = "{$uploadDir}/chunk_{$chunkIndex}";
         $chunk->move($uploadDir, "chunk_{$chunkIndex}");
 
         // Actualizar metadatos de forma atómica para evitar condiciones de carrera
-        $this->safelyUpdateChunkMetadata($metadataPath, function (&$metadata) use ($chunkIndex) {
+        $this->safelyUpdateChunkMetadata($metadataPath, function (&$metadata) use ($chunkIndex, $totalChunks) {
+            if (!is_array($metadata)) {
+                $metadata = [];
+            }
+            if (!isset($metadata['chunks_expected']) || !is_int($metadata['chunks_expected'])) {
+                $metadata['chunks_expected'] = $totalChunks;
+            }
             if (!isset($metadata['received_indices']) || !is_array($metadata['received_indices'])) {
                 $metadata['received_indices'] = [];
             }
@@ -524,8 +555,8 @@ class TranscriptionController extends Controller
             'upload_id' => $uploadId,
             'chunk_index' => $chunkIndex,
             'chunk_size' => $chunkSize,
-            'chunks_received' => $metadata['chunks_received'],
-            'chunks_expected' => $metadata['chunks_expected'],
+            'chunks_received' => $metadata['chunks_received'] ?? null,
+            'chunks_expected' => $metadata['chunks_expected'] ?? $totalChunks,
             'received_indices' => $metadata['received_indices'] ?? []
         ]);
 
