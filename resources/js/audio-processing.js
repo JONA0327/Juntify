@@ -707,6 +707,7 @@ async function startChunkedTranscription(audioBlob, lang, progressBar, progressT
                 const formData = new FormData();
                 formData.append('chunk', chunk.blob);
                 formData.append('chunk_index', chunk.index);
+                formData.append('total_chunks', chunks.length);
                 formData.append('upload_id', upload_id);
 
                 await axios.post('/transcription/chunked/upload', formData, {
