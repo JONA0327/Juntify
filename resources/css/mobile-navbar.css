@@ -11,11 +11,11 @@
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border-top: 1px solid rgba(59, 130, 246, 0.15);
-    padding: 12px 14px 16px;
+    padding: 6px 10px 10px;
     display: none; /* Hidden by default */
     grid-template-columns: 1fr 1fr 80px 1fr 1fr;
     align-items: end;
-    gap: 12px;
+    gap: 8px;
     border-radius: 24px;
     box-shadow:
         0 -8px 32px rgba(0, 0, 0, 0.4),
@@ -28,8 +28,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    padding: 12px 8px;
+    gap: 3px;
+    padding: 4px 4px;
     border-radius: 16px;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -64,8 +64,8 @@
 
 /* Icon Containers */
 .nav-icon-container {
-    width: 28px;
-    height: 28px;
+    width: 20px;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -73,8 +73,8 @@
 }
 
 .nav-icon {
-    width: 24px;
-    height: 24px;
+    width: 18px;
+    height: 18px;
     stroke-width: 2;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -91,7 +91,7 @@
 
 /* Labels */
 .nav-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     text-align: center;
     letter-spacing: 0.02em;
@@ -137,12 +137,12 @@
 }
 
 .center-button {
-    width: 64px !important;
-    height: 64px !important;
-    min-width: 64px !important;
-    min-height: 64px !important;
-    max-width: 64px !important;
-    max-height: 64px !important;
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    max-width: 48px !important;
+    max-height: 48px !important;
     border-radius: 50% !important;
     aspect-ratio: 1 / 1 !important;
     background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
@@ -191,19 +191,19 @@
 }
 
 .center-icon {
-    width: 28px;
-    height: 28px;
+    width: 20px;
+    height: 20px;
     stroke: white;
     stroke-width: 2.5;
     transition: all 0.3s ease;
 }
 
 .center-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     color: #3b82f6;
     text-align: center;
-    margin-top: 8px;
+    margin-top: 4px;
     letter-spacing: 0.02em;
 }
 
