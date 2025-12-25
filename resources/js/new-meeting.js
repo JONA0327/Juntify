@@ -3271,23 +3271,6 @@ window.pauseRecording = pauseRecording;
 window.resumeRecording = resumeRecording;
 window.discardRecording = requestDiscardRecording;
 
-// Funciones para navbar móvil
-window.toggleMobileDropdown = function() {
-  const dropdown = document.getElementById('mobile-dropdown');
-  const overlay = document.getElementById('mobile-dropdown-overlay');
-
-  dropdown.classList.toggle('show');
-  overlay.classList.toggle('show');
-};
-
-window.closeMobileDropdown = function() {
-  const dropdown = document.getElementById('mobile-dropdown');
-  const overlay = document.getElementById('mobile-dropdown-overlay');
-
-  dropdown.classList.remove('show');
-  overlay.classList.remove('show');
-};
-
 // Funciones globales para manejar reintentos de subida
 window.retryUpload = async function() {
     if (!failedAudioBlob || !failedAudioName) {

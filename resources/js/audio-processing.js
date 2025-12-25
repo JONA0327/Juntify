@@ -2835,23 +2835,6 @@ function formatTime(ms) {
     return `${minutes}:${seconds}`;
 }
 
-// Funciones para navbar móvil
-function toggleMobileDropdown() {
-    const dropdown = document.getElementById('mobile-dropdown');
-    const overlay = document.getElementById('mobile-dropdown-overlay');
-
-    dropdown.classList.toggle('show');
-    overlay.classList.toggle('show');
-}
-
-function closeMobileDropdown() {
-    const dropdown = document.getElementById('mobile-dropdown');
-    const overlay = document.getElementById('mobile-dropdown-overlay');
-
-    dropdown.classList.remove('show');
-    overlay.classList.remove('show');
-}
-
 // ===== INICIALIZACIÓN =====
 
 document.addEventListener('keydown', e => {
@@ -3063,8 +3046,6 @@ window.saveToDatabase = saveToDatabase;
 window.viewMeetingDetails = viewMeetingDetails;
 window.goToMeetings = goToMeetings;
 window.createNewMeeting = createNewMeeting;
-window.toggleMobileDropdown = toggleMobileDropdown;
-window.closeMobileDropdown = closeMobileDropdown;
 window.playSegmentAudio = playSegmentAudio;
 window.openChangeSpeakerModal = openChangeSpeakerModal;
 window.closeChangeSpeakerModal = closeChangeSpeakerModal;

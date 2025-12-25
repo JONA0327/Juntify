@@ -1,189 +1,165 @@
-// ===== MODERN MOBILE NAVBAR JAVASCRIPT =====
-
-let mobileDropdownOpen = false;
-
 /**
- * Toggle mobile dropdown menu
+ * Mobile Navbar Module
+ * Maneja la funcionalidad de la barra de navegación móvil y su menú dropdown
  */
-function toggleMobileDropdown() {
-    const dropdown = document.getElementById('mobileDropdown');
-    const overlay = document.getElementById('mobileDropdownOverlay');
 
-    if (!dropdown || !overlay) return;
-
-    mobileDropdownOpen = !mobileDropdownOpen;
-
-    if (mobileDropdownOpen) {
-        showMobileDropdown();
-    } else {
-        hideMobileDropdown();
+class MobileNavbar {
+    constructor() {
+        this.isDropdownOpen = false;
+        this.dropdown = null;
+        this.overlay = null;
+        this.dropdownToggle = null;
+        
+        this.init();
     }
-}
 
-/**
- * Show mobile dropdown
- */
-function showMobileDropdown() {
-    const dropdown = document.getElementById('mobileDropdown');
-    const overlay = document.getElementById('mobileDropdownOverlay');
-
-    if (!dropdown || !overlay) return;
-
-    // Add show classes
-    dropdown.classList.add('show');
-    overlay.classList.add('show');
-
-    // Prevent body scroll
-    document.body.classList.add('dropdown-open');
-
-    // Add escape key listener
-    document.addEventListener('keydown', handleEscapeKey);
-}
-
-/**
- * Hide mobile dropdown
- */
-function hideMobileDropdown() {
-    const dropdown = document.getElementById('mobileDropdown');
-    const overlay = document.getElementById('mobileDropdownOverlay');
-
-    if (!dropdown || !overlay) return;
-
-    // Remove show classes
-    dropdown.classList.remove('show');
-    overlay.classList.remove('show');
-
-    // Restore body scroll
-    document.body.classList.remove('dropdown-open');
-
-    // Remove escape key listener
-    document.removeEventListener('keydown', handleEscapeKey);
-
-    mobileDropdownOpen = false;
-}
-
-/**
- * Close mobile dropdown
- */
-function closeMobileDropdown() {
-    hideMobileDropdown();
-}
-
-/**
- * Handle escape key to close dropdown
- */
-function handleEscapeKey(event) {
-    if (event.key === 'Escape' && mobileDropdownOpen) {
-        hideMobileDropdown();
-    }
-}
-
-/**
- * Handle click outside to close dropdown
- */
-function handleOutsideClick(event) {
-    const dropdown = document.getElementById('mobileDropdown');
-    const dropdownToggle = document.querySelector('.dropdown-toggle');
-
-    if (!dropdown || !dropdownToggle) return;
-
-    // If clicked outside dropdown and toggle button, close dropdown
-    if (mobileDropdownOpen &&
-        !dropdown.contains(event.target) &&
-        !dropdownToggle.contains(event.target)) {
-        hideMobileDropdown();
-    }
-}
-
-/**
- * Add smooth navigation transitions
- */
-function addNavigationTransitions() {
-    const navItems = document.querySelectorAll('.nav-item:not(.dropdown-toggle)');
-
-    navItems.forEach(item => {
-        item.addEventListener('click', function(e) {
-            // Add loading state
-            this.style.opacity = '0.6';
-            this.style.transform = 'scale(0.95)';
-
-            // Reset after navigation
-            setTimeout(() => {
-                this.style.opacity = '';
-                this.style.transform = '';
-            }, 150);
-        });
-    });
-}
-
-/**
- * Handle center button special animation
- */
-function handleCenterButtonAnimation() {
-    const centerButton = document.querySelector('.nav-center');
-
-    if (!centerButton) return;
-
-    centerButton.addEventListener('touchstart', function(e) {
-        this.style.transform = 'scale(0.95)';
-    });
-
-    centerButton.addEventListener('touchend', function(e) {
-        this.style.transform = '';
-    });
-}
-
-/**
- * Initialize mobile navbar
- */
-function initMobileNavbar() {
-    // Add event listeners
-    document.addEventListener('click', handleOutsideClick);
-
-    // Add navigation transitions
-    addNavigationTransitions();
-
-    // Handle center button animation
-    handleCenterButtonAnimation();
-
-    // Handle orientation change
-    window.addEventListener('orientationchange', function() {
-        setTimeout(() => {
-            if (mobileDropdownOpen) {
-                hideMobileDropdown();
-            }
-        }, 100);
-    });
-
-    // Handle window resize
-    window.addEventListener('resize', function() {
-        if (window.innerWidth > 768 && mobileDropdownOpen) {
-            hideMobileDropdown();
+    /**
+     * Inicializa el módulo de navbar móvil
+     */
+    init() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.setup());
+        } else {
+            this.setup();
         }
-    });
+    }
 
-    console.log('Mobile navbar initialized successfully');
+    /**
+     * Configura todos los elementos y event listeners
+     */
+    setup() {
+        this.dropdown = document.getElementById('mobileDropdown');
+        this.overlay = document.getElementById('mobileDropdownOverlay');
+        this.dropdownToggle = document.querySelector('.dropdown-toggle');
+
+        if (!this.dropdown || !this.overlay) {
+            console.warn('Mobile navbar: Elementos del dropdown no encontrados');
+            return;
+        }
+
+        this.registerEventListeners();
+        console.log('Mobile navbar inicializado');
+    }
+
+    /**
+     * Registra todos los event listeners
+     */
+    registerEventListeners() {
+        document.addEventListener('click', (e) => this.handleOutsideClick(e));
+        document.addEventListener('keydown', (e) => this.handleEscapeKey(e));
+        window.addEventListener('resize', () => this.handleResize());
+        window.addEventListener('scroll', () => this.handleScroll(), { passive: true });
+    }
+
+    /**
+     * Alterna la visibilidad del dropdown
+     */
+    toggle() {
+        if (this.isDropdownOpen) {
+            this.close();
+        } else {
+            this.open();
+        }
+    }
+
+    /**
+     * Abre el dropdown
+     */
+    open() {
+        if (!this.dropdown || !this.overlay) return;
+
+        this.isDropdownOpen = true;
+        this.dropdown.classList.add('show');
+        this.overlay.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+
+    /**
+     * Cierra el dropdown
+     */
+    close() {
+        if (!this.dropdown || !this.overlay) return;
+
+        this.isDropdownOpen = false;
+        this.dropdown.classList.remove('show');
+        this.overlay.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+
+    /**
+     * Maneja clicks fuera del dropdown
+     */
+    handleOutsideClick(event) {
+        if (!this.isDropdownOpen) return;
+
+        const isClickInside = this.dropdown.contains(event.target) || 
+                             this.dropdownToggle?.contains(event.target);
+
+        if (!isClickInside) {
+            this.close();
+        }
+    }
+
+    /**
+     * Maneja la tecla ESC
+     */
+    handleEscapeKey(event) {
+        if (event.key === 'Escape' && this.isDropdownOpen) {
+            this.close();
+        }
+    }
+
+    /**
+     * Maneja el resize de ventana
+     */
+    handleResize() {
+        if (window.innerWidth > 768 && this.isDropdownOpen) {
+            this.close();
+        }
+    }
+
+    /**
+     * Maneja el scroll de página
+     */
+    handleScroll() {
+        if (this.isDropdownOpen) {
+            this.close();
+        }
+    }
 }
 
-/**
- * Cleanup function
- */
-function cleanupMobileNavbar() {
-    document.removeEventListener('click', handleOutsideClick);
-    document.removeEventListener('keydown', handleEscapeKey);
-    document.body.classList.remove('dropdown-open');
-}
+// Instancia global
+let mobileNavbarInstance = null;
 
-// Initialize when DOM is loaded
+// Funciones globales que siempre están disponibles
+window.toggleMobileDropdown = function() {
+    console.log('toggleMobileDropdown llamado');
+    if (!mobileNavbarInstance) {
+        console.log('Creando instancia de MobileNavbar');
+        mobileNavbarInstance = new MobileNavbar();
+    }
+    mobileNavbarInstance.toggle();
+};
+
+window.closeMobileDropdown = function() {
+    console.log('closeMobileDropdown llamado');
+    if (mobileNavbarInstance) {
+        mobileNavbarInstance.close();
+    }
+};
+
+// Inicializar la instancia cuando el DOM esté listo
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initMobileNavbar);
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM cargado, inicializando MobileNavbar');
+        mobileNavbarInstance = new MobileNavbar();
+    });
 } else {
-    initMobileNavbar();
+    console.log('DOM ya está listo, inicializando MobileNavbar');
+    mobileNavbarInstance = new MobileNavbar();
 }
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', cleanupMobileNavbar);
-
-// Export functions for global access
-window.toggleMobileDropdown = toggleMobileDropdown;
-window.closeMobileDropdown = closeMobileDropdown;
+// Exportar para uso como módulo si es necesario
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = MobileNavbar;
+}
