@@ -30,6 +30,7 @@ use App\Http\Controllers\Admin\PlanManagementController;
 use App\Http\Controllers\Admin\EmpresaController;
 use App\Http\Controllers\SubscriptionPaymentController;
 use App\Http\Controllers\TutorialController;
+use App\Http\Controllers\VoiceBiometricsController;
 use App\Models\Analyzer;
 use App\Models\Plan;
 use App\Models\User;
@@ -84,6 +85,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('profile.destroy');
     Route::get('/profile/payment/{payment}/receipt', [ProfileController::class, 'downloadReceipt'])
         ->name('profile.payment.receipt');
+    Route::post('/profile/voice/enroll', [VoiceBiometricsController::class, 'storeEnrollment'])
+        ->name('profile.voice.enroll');
 
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
 
@@ -407,5 +410,4 @@ Route::middleware(['auth'])->group(function () {
 
 // Webhook de MercadoPago (sin middleware auth)
 Route::post('/webhook/mercadopago', [SubscriptionPaymentController::class, 'webhook'])->name('payment.webhook');
-
 

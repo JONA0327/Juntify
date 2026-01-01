@@ -2640,3 +2640,52 @@ body {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
 }
+
+/* Voice enrollment card */
+.voice-enrollment-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.voice-enrollment-card .card-subtitle {
+    color: #cbd5e1;
+    font-size: 0.95rem;
+}
+
+.voice-enrollment-text {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 16px;
+    padding: 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #e2e8f0;
+}
+
+.voice-enrollment-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+}
+
+.voice-recording-indicator {
+    display: none;
+    font-weight: 600;
+    color: #f87171;
+}
+
+.voice-recording-indicator.is-active {
+    display: inline-flex;
+}
+
+.voice-recording-timer {
+    font-weight: 600;
+    color: #38bdf8;
+}
+
+.voice-enrollment-status {
+    color: #cbd5e1;
+    font-size: 0.9rem;
+}

@@ -288,6 +288,146 @@ function showErrorMessage(message) {
   }, 4000);
 }
 
+function initVoiceEnrollment() {
+  const card = document.getElementById('voice-enrollment-card');
+  if (!card) return;
+
+  const startButton = document.getElementById('voice-record-start');
+  const stopButton = document.getElementById('voice-record-stop');
+  const indicator = document.getElementById('voice-recording-indicator');
+  const timer = document.getElementById('voice-recording-timer');
+  const status = document.getElementById('voice-enrollment-status');
+
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let stream = null;
+  let startTime = null;
+  let timerInterval = null;
+
+  const setStatus = (message) => {
+    if (status) status.textContent = message;
+  };
+
+  const setRecordingState = (isRecording) => {
+    if (startButton) startButton.disabled = isRecording;
+    if (stopButton) stopButton.disabled = !isRecording;
+    if (indicator) indicator.classList.toggle('is-active', isRecording);
+  };
+
+  const setUploadingState = (isUploading) => {
+    if (startButton) startButton.disabled = isUploading;
+    if (stopButton) stopButton.disabled = isUploading;
+    if (indicator) indicator.classList.toggle('is-active', false);
+  };
+
+  const resetTimer = () => {
+    if (timer) timer.textContent = '00:00';
+  };
+
+  const updateTimer = () => {
+    if (!timer || !startTime) return;
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const seconds = String(elapsed % 60).padStart(2, '0');
+    timer.textContent = `${minutes}:${seconds}`;
+  };
+
+  const stopStream = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      stream = null;
+    }
+  };
+
+  const uploadRecording = async (blob, durationSeconds) => {
+    const enrollUrl = card.dataset.enrollUrl;
+    if (!enrollUrl) {
+      showErrorMessage('No se encontró la ruta de enrolamiento.');
+      return;
+    }
+
+    if (durationSeconds < 10) {
+      setStatus('Estado: la grabación es demasiado corta.');
+      showErrorMessage('Graba al menos 10 segundos para registrar tu huella de voz.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('audio', blob, 'voice-enrollment.webm');
+
+    setStatus('Estado: procesando tu huella de voz...');
+    setUploadingState(true);
+
+    try {
+      const response = await axios.post(enrollUrl, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setStatus('Estado: huella registrada correctamente.');
+      showSuccessMessage(response?.data?.message || 'Huella de voz registrada.');
+    } catch (error) {
+      const message = error?.response?.data?.message || 'No se pudo registrar tu huella de voz.';
+      setStatus(`Estado: ${message}`);
+      showErrorMessage(message);
+    } finally {
+      setUploadingState(false);
+    }
+  };
+
+  if (startButton) {
+    startButton.addEventListener('click', async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        showErrorMessage('Tu navegador no soporta la grabación de audio.');
+        return;
+      }
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (error) {
+        setStatus('Estado: no se pudo acceder al micrófono.');
+        showErrorMessage('No se pudo acceder al micrófono. Verifica permisos.');
+        return;
+      }
+
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+      startTime = Date.now();
+      resetTimer();
+      updateTimer();
+      timerInterval = setInterval(updateTimer, 1000);
+
+      mediaRecorder.addEventListener('dataavailable', event => {
+        if (event.data && event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      });
+
+      mediaRecorder.addEventListener('stop', () => {
+        clearInterval(timerInterval);
+        timerInterval = null;
+
+        const durationSeconds = Math.floor((Date.now() - startTime) / 1000);
+        const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+        stopStream();
+        setRecordingState(false);
+        uploadRecording(blob, durationSeconds);
+      });
+
+      mediaRecorder.start();
+      setStatus('Estado: grabando...');
+      setRecordingState(true);
+    });
+  }
+
+  if (stopButton) {
+    stopButton.addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        setStatus('Estado: preparando el audio...');
+        mediaRecorder.stop();
+      }
+    });
+  }
+}
+
 // Agregar estilos de animación para las notificaciones
 const style = document.createElement('style');
 style.textContent = `
@@ -344,6 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initNotifications();
   initPlanSelection();
   initGoogleConnectionMonitor();
+  initVoiceEnrollment();
 
   // Navegación del sidebar
   document.querySelectorAll('.sidebar-nav .nav-link').forEach(link => {

@@ -50,6 +50,7 @@ class User extends Authenticatable
         'blocked_permanent' => 'boolean',
         'legal_accepted_at' => 'datetime',
         'is_role_protected' => 'boolean',
+        'voice_embedding' => 'array',
     ];
 
     protected static function boot()
