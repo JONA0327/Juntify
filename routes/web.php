@@ -87,6 +87,10 @@ Route::middleware(['auth'])->group(function () {
         ->name('profile.payment.receipt');
     Route::post('/profile/voice/enroll', [VoiceBiometricsController::class, 'storeEnrollment'])
         ->name('profile.voice.enroll');
+    Route::get('/api/voice-profile/status', [VoiceBiometricsController::class, 'status'])
+        ->name('api.voice.status');
+    Route::delete('/api/voice-profile/remove', [VoiceBiometricsController::class, 'remove'])
+        ->name('api.voice.remove');
 
     Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
 

@@ -180,5 +180,343 @@
             </div>
             @endif
         @endif
+
+        <!-- Sincronización de Voz -->
+        <div class="info-card" data-tutorial="voice-sync-card" id="voice-sync-card">
+            <h3 class="card-title">
+                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                    </svg>
+                    Sincronización de Voz
+                </span>
+            </h3>
+            <div class="info-item">
+                <span class="info-label">Estado</span>
+                <span class="status-badge" id="voice-sync-status" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">
+                    No configurado
+                </span>
+            </div>
+            <div class="info-item">
+                <span class="info-value" id="voice-sync-description">
+                    Configura tu perfil de voz para mejorar la identificación de participantes en reuniones y obtener transcripciones más precisas.
+                </span>
+            </div>
+
+            <!-- Texto para leer durante la grabación -->
+            <div class="info-item" id="voice-text-container" style="display: none; margin-top: 1rem;">
+                <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 1.5rem; line-height: 1.6;">
+                    <p style="font-style: italic; color: #e2e8f0; margin: 0;">
+                        "La voz humana es el instrumento más bello de todos, pero es el más difícil de tocar. A través de este texto, mi voz
+                        está siendo analizada para crear un mapa digital único. Al hablar con claridad, entonación y pausa, permito que el sistema
+                        registre los matices graves y agudos, el timbre y la cadencia que me identifican. Esto servirá para reconocerme automáticamente
+                        en futuras reuniones sin importar el entorno."
+                    </p>
+                </div>
+                <p style="margin-top: 0.75rem; color: #94a3b8; font-size: 0.9rem;">
+                    Lee el texto anterior en voz alta durante la grabación. Procura grabar al menos 10 segundos con claridad.
+                </p>
+            </div>
+
+            <!-- Controles de grabación -->
+            <div class="info-item" id="voice-recording-controls" style="display: none; margin-top: 1rem;">
+                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <div id="voice-recording-indicator" style="display: none; align-items: center; gap: 0.5rem;">
+                        <span style="width: 12px; height: 12px; background: #ef4444; border-radius: 50%; animation: pulse 1.5s ease-in-out infinite;"></span>
+                        <span style="color: #ef4444; font-weight: 600;">Grabando</span>
+                    </div>
+                    <span id="voice-recording-timer" style="font-family: monospace; font-size: 1.1rem; color: #3b82f6; font-weight: 600;">00:00</span>
+                </div>
+            </div>
+
+            <div class="action-buttons" data-tutorial="voice-sync-actions">
+                <button type="button" class="btn btn-primary" id="configure-voice-btn" onclick="startVoiceConfiguration()">
+                    🎙️ Configurar Perfil de Voz
+                </button>
+                <button type="button" class="btn btn-primary" id="start-recording-btn" style="display: none;" onclick="startVoiceRecording()">
+                    <svg style="width: 20px; height: 20px; margin-right: 0.5rem;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                    </svg>
+                    Iniciar Grabación
+                </button>
+                <button type="button" class="btn btn-danger" id="stop-recording-btn" style="display: none;" onclick="stopVoiceRecording()">
+                    <svg style="width: 20px; height: 20px; margin-right: 0.5rem;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z" />
+                    </svg>
+                    Detener
+                </button>
+                <button type="button" class="btn btn-secondary" id="cancel-voice-btn" style="display: none;" onclick="cancelVoiceConfiguration()">
+                    Cancelar
+                </button>
+                <button type="button" class="btn btn-danger" id="remove-voice-btn" style="display: none;" onclick="removeVoiceProfile()">
+                    🗑️ Eliminar Perfil
+                </button>
+            </div>
+
+            <p id="voice-status-message" style="margin-top: 1rem; color: #94a3b8; font-size: 0.9rem;"></p>
+        </div>
     </div>
 </div>
+
+<style>
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+}
+</style>
+
+<script>
+// Variables globales para la grabación de voz
+let voiceMediaRecorder = null;
+let voiceAudioChunks = [];
+let voiceStream = null;
+let voiceStartTime = null;
+let voiceTimerInterval = null;
+
+// Verificar estado al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    checkVoiceProfileStatus();
+});
+
+function checkVoiceProfileStatus() {
+    fetch('/api/voice-profile/status')
+        .then(response => response.json())
+        .then(data => {
+            updateVoiceUIStatus(data.configured, data.embedding_size);
+        })
+        .catch(error => {
+            console.error('Error checking voice profile:', error);
+            setVoiceStatusMessage('No se pudo verificar el estado del perfil de voz', 'error');
+        });
+}
+
+function updateVoiceUIStatus(configured, embeddingSize) {
+    const statusBadge = document.getElementById('voice-sync-status');
+    const configureBtn = document.getElementById('configure-voice-btn');
+    const removeBtn = document.getElementById('remove-voice-btn');
+    const description = document.getElementById('voice-sync-description');
+    
+    if (configured) {
+        statusBadge.style.background = 'rgba(34, 197, 94, 0.2)';
+        statusBadge.style.color = '#22c55e';
+        statusBadge.style.border = '1px solid rgba(34, 197, 94, 0.3)';
+        statusBadge.textContent = 'Configurado';
+        
+        configureBtn.innerHTML = '🔄 Reconfigurar Perfil de Voz';
+        removeBtn.style.display = 'inline-block';
+        
+        description.textContent = `Tu perfil de voz está configurado con ${embeddingSize} características biométricas. El sistema podrá identificarte en futuras reuniones.`;
+    } else {
+        statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+        statusBadge.style.color = '#ef4444';
+        statusBadge.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+        statusBadge.textContent = 'No configurado';
+        
+        configureBtn.innerHTML = '🎙️ Configurar Perfil de Voz';
+        removeBtn.style.display = 'none';
+        
+        description.textContent = 'Configura tu perfil de voz para mejorar la identificación de participantes en reuniones y obtener transcripciones más precisas.';
+    }
+}
+
+function startVoiceConfiguration() {
+    // Mostrar el texto a leer y los controles
+    document.getElementById('voice-text-container').style.display = 'block';
+    document.getElementById('voice-recording-controls').style.display = 'block';
+    document.getElementById('configure-voice-btn').style.display = 'none';
+    document.getElementById('start-recording-btn').style.display = 'inline-block';
+    document.getElementById('cancel-voice-btn').style.display = 'inline-block';
+    document.getElementById('remove-voice-btn').style.display = 'none';
+    
+    setVoiceStatusMessage('Lee el texto en voz alta cuando inicies la grabación. Mínimo 10 segundos.', 'info');
+}
+
+async function startVoiceRecording() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        setVoiceStatusMessage('Tu navegador no soporta la grabación de audio.', 'error');
+        return;
+    }
+
+    try {
+        voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (error) {
+        setVoiceStatusMessage('No se pudo acceder al micrófono. Verifica los permisos.', 'error');
+        return;
+    }
+
+    voiceMediaRecorder = new MediaRecorder(voiceStream);
+    voiceAudioChunks = [];
+    voiceStartTime = Date.now();
+    
+    // Actualizar timer
+    updateVoiceTimer();
+    voiceTimerInterval = setInterval(updateVoiceTimer, 1000);
+    
+    // Mostrar indicador de grabación
+    document.getElementById('voice-recording-indicator').style.display = 'flex';
+    document.getElementById('start-recording-btn').style.display = 'none';
+    document.getElementById('stop-recording-btn').style.display = 'inline-block';
+    
+    voiceMediaRecorder.addEventListener('dataavailable', event => {
+        if (event.data && event.data.size > 0) {
+            voiceAudioChunks.push(event.data);
+        }
+    });
+
+    voiceMediaRecorder.addEventListener('stop', () => {
+        clearInterval(voiceTimerInterval);
+        const durationSeconds = Math.floor((Date.now() - voiceStartTime) / 1000);
+        const blob = new Blob(voiceAudioChunks, { type: voiceMediaRecorder.mimeType || 'audio/webm' });
+        stopVoiceStream();
+        uploadVoiceRecording(blob, durationSeconds);
+    });
+
+    voiceMediaRecorder.start();
+    setVoiceStatusMessage('Grabando... Lee el texto en voz alta con claridad.', 'recording');
+}
+
+function stopVoiceRecording() {
+    if (voiceMediaRecorder && voiceMediaRecorder.state !== 'inactive') {
+        setVoiceStatusMessage('Procesando tu grabación...', 'info');
+        voiceMediaRecorder.stop();
+        document.getElementById('voice-recording-indicator').style.display = 'none';
+        document.getElementById('stop-recording-btn').style.display = 'none';
+    }
+}
+
+function updateVoiceTimer() {
+    const timer = document.getElementById('voice-recording-timer');
+    if (!timer || !voiceStartTime) return;
+    
+    const elapsed = Math.floor((Date.now() - voiceStartTime) / 1000);
+    const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const seconds = String(elapsed % 60).padStart(2, '0');
+    timer.textContent = `${minutes}:${seconds}`;
+}
+
+function stopVoiceStream() {
+    if (voiceStream) {
+        voiceStream.getTracks().forEach(track => track.stop());
+        voiceStream = null;
+    }
+}
+
+async function uploadVoiceRecording(blob, durationSeconds) {
+    if (durationSeconds < 10) {
+        setVoiceStatusMessage('La grabación es demasiado corta. Graba al menos 10 segundos.', 'error');
+        resetVoiceUI();
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('audio', blob, 'voice-enrollment.webm');
+
+    setVoiceStatusMessage('Procesando tu huella de voz... Esto puede tardar unos segundos.', 'processing');
+    
+    // Deshabilitar botones durante el procesamiento
+    document.getElementById('cancel-voice-btn').disabled = true;
+
+    try {
+        const response = await fetch('{{ route("profile.voice.enroll") }}', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            setVoiceStatusMessage('✅ ' + (data.message || 'Huella de voz registrada correctamente.'), 'success');
+            setTimeout(() => {
+                checkVoiceProfileStatus();
+                resetVoiceUI();
+            }, 2000);
+        } else {
+            setVoiceStatusMessage('❌ ' + (data.message || 'No se pudo procesar el audio.'), 'error');
+            resetVoiceUI();
+        }
+    } catch (error) {
+        console.error('Error uploading voice:', error);
+        setVoiceStatusMessage('❌ Error al enviar el audio. Intenta nuevamente.', 'error');
+        resetVoiceUI();
+    } finally {
+        document.getElementById('cancel-voice-btn').disabled = false;
+    }
+}
+
+function cancelVoiceConfiguration() {
+    stopVoiceStream();
+    if (voiceMediaRecorder && voiceMediaRecorder.state !== 'inactive') {
+        voiceMediaRecorder.stop();
+    }
+    clearInterval(voiceTimerInterval);
+    resetVoiceUI();
+    setVoiceStatusMessage('', '');
+}
+
+function resetVoiceUI() {
+    document.getElementById('voice-text-container').style.display = 'none';
+    document.getElementById('voice-recording-controls').style.display = 'none';
+    document.getElementById('voice-recording-indicator').style.display = 'none';
+    document.getElementById('voice-recording-timer').textContent = '00:00';
+    document.getElementById('configure-voice-btn').style.display = 'inline-block';
+    document.getElementById('start-recording-btn').style.display = 'none';
+    document.getElementById('stop-recording-btn').style.display = 'none';
+    document.getElementById('cancel-voice-btn').style.display = 'none';
+    
+    // Restaurar el botón de eliminar si existe perfil
+    checkVoiceProfileStatus();
+}
+
+function removeVoiceProfile() {
+    if (!confirm('¿Estás seguro de que deseas eliminar tu perfil de voz? Tendrás que volver a configurarlo para que el sistema te reconozca en futuras reuniones.')) {
+        return;
+    }
+
+    setVoiceStatusMessage('Eliminando perfil de voz...', 'processing');
+
+    fetch('/api/voice-profile/remove', {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            setVoiceStatusMessage('✅ Perfil de voz eliminado correctamente.', 'success');
+            setTimeout(() => {
+                checkVoiceProfileStatus();
+                setVoiceStatusMessage('', '');
+            }, 2000);
+        } else {
+            setVoiceStatusMessage('❌ No se pudo eliminar el perfil.', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error removing voice profile:', error);
+        setVoiceStatusMessage('❌ Error al eliminar el perfil.', 'error');
+    });
+}
+
+function setVoiceStatusMessage(message, type) {
+    const messageEl = document.getElementById('voice-status-message');
+    if (!messageEl) return;
+    
+    messageEl.textContent = message;
+    
+    // Colores según el tipo
+    const colors = {
+        'info': '#3b82f6',
+        'success': '#22c55e',
+        'error': '#ef4444',
+        'recording': '#f97316',
+        'processing': '#eab308'
+    };
+    
+    messageEl.style.color = colors[type] || '#94a3b8';
+}
+</script>

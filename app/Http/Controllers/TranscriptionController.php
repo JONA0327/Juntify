@@ -914,6 +914,30 @@ class TranscriptionController extends Controller
             if (isset($data['utterances']) && is_array($data['utterances'])) {
                 $speakerAnalysis = $this->analyzeSpeakers($data['utterances']);
                 $data['speaker_analysis'] = $speakerAnalysis;
+                
+                // Intentar identificar hablantes automáticamente si hay usuarios en la reunión
+                try {
+                    $recording = \App\Models\Recording::where('transcription_id', $id)->first();
+                    if ($recording && $recording->reunion) {
+                        $userIds = $recording->reunion->members()->pluck('id')->toArray();
+                        if (!empty($userIds)) {
+                            $data['utterances'] = $this->identifySpeakersAutomatically(
+                                $data['utterances'],
+                                $recording->ruta_archivo,
+                                $userIds
+                            );
+                            Log::info('Automatic speaker identification attempted', [
+                                'transcription_id' => $id,
+                                'users_checked' => count($userIds),
+                            ]);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Could not perform automatic speaker identification', [
+                        'transcription_id' => $id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
 
                 Log::info('Speaker analysis completed', [
                     'transcription_id' => $id,
@@ -981,5 +1005,191 @@ class TranscriptionController extends Controller
             'speaker_stats' => $speakerStats,
             'total_utterances' => count($utterances)
         ];
+    }
+
+    /**
+     * Identifica automáticamente a los hablantes usando perfiles de voz
+     */
+    private function identifySpeakersAutomatically(array $utterances, string $audioPath, array $userIds): array
+    {
+        try {
+            // Obtener embeddings de usuarios con perfil de voz
+            $users = \App\Models\User::whereIn('id', $userIds)
+                ->whereNotNull('voice_embedding')
+                ->get();
+            
+            if ($users->isEmpty()) {
+                Log::info('No users with voice profiles found');
+                return $utterances;
+            }
+
+            $userEmbeddings = [];
+            foreach ($users as $user) {
+                if (is_array($user->voice_embedding) && count($user->voice_embedding) === 96) {
+                    $userEmbeddings[$user->id] = [
+                        'embedding' => $user->voice_embedding,
+                        'name' => $user->name,
+                    ];
+                }
+            }
+
+            if (empty($userEmbeddings)) {
+                Log::info('No valid voice embeddings found');
+                return $utterances;
+            }
+
+            // Agrupar utterances por speaker para procesar muestras representativas
+            $speakerGroups = [];
+            foreach ($utterances as $utterance) {
+                $speaker = $utterance['speaker'] ?? 'Unknown';
+                if (!isset($speakerGroups[$speaker])) {
+                    $speakerGroups[$speaker] = [];
+                }
+                $speakerGroups[$speaker][] = $utterance;
+            }
+
+            // Para cada speaker, tomar una muestra y compararla con los perfiles
+            $speakerMatches = [];
+            $pythonPath = config('audio.python_bin', env('PYTHON_BIN', 'python'));
+            $scriptPath = base_path('tools/identify_speakers.py');
+
+            foreach ($speakerGroups as $speaker => $group) {
+                // Tomar hasta 3 muestras representativas (inicio, medio, fin)
+                $samples = $this->selectRepresentativeSamples($group, 3);
+                
+                $segments = array_map(function($utterance) use ($speaker) {
+                    return [
+                        'start' => $utterance['start'] / 1000, // Convertir a segundos
+                        'end' => $utterance['end'] / 1000,
+                        'speaker' => $speaker,
+                    ];
+                }, $samples);
+
+                $embeddings = [];
+                foreach ($userEmbeddings as $userId => $data) {
+                    $embeddings[$userId] = $data['embedding'];
+                }
+
+                $input = json_encode([
+                    'segments' => $segments,
+                    'user_embeddings' => $embeddings,
+                ]);
+
+                $process = new \Symfony\Component\Process\Process([
+                    $pythonPath,
+                    $scriptPath,
+                    storage_path('app/' . $audioPath),
+                    $input,
+                ]);
+                
+                $process->setTimeout(60);
+                $process->setEnv([
+                    'FFMPEG_BIN' => config('audio.ffmpeg_bin', env('FFMPEG_BIN', 'ffmpeg')),
+                    'PYTHONIOENCODING' => 'utf-8',
+                    'LIBROSA_CACHE_DIR' => '',
+                    'LIBROSA_CACHE_LEVEL' => '0',
+                    'JOBLIB_START_METHOD' => 'loky',
+                ]);
+                
+                $process->run();
+
+                if ($process->isSuccessful()) {
+                    $output = $process->getOutput();
+                    $results = json_decode(trim($output), true);
+                    
+                    if (is_array($results)) {
+                        // Determinar el mejor match para este speaker
+                        $userVotes = [];
+                        foreach ($results as $result) {
+                            if ($result['matched_user_id'] && $result['confidence'] >= 0.75) {
+                                $userId = $result['matched_user_id'];
+                                if (!isset($userVotes[$userId])) {
+                                    $userVotes[$userId] = ['count' => 0, 'total_confidence' => 0];
+                                }
+                                $userVotes[$userId]['count']++;
+                                $userVotes[$userId]['total_confidence'] += $result['confidence'];
+                            }
+                        }
+
+                        if (!empty($userVotes)) {
+                            // Encontrar el usuario con más votos y mejor confianza promedio
+                            $bestUserId = null;
+                            $bestScore = 0;
+                            foreach ($userVotes as $userId => $votes) {
+                                $avgConfidence = $votes['total_confidence'] / $votes['count'];
+                                $score = $votes['count'] * $avgConfidence;
+                                if ($score > $bestScore) {
+                                    $bestScore = $score;
+                                    $bestUserId = $userId;
+                                }
+                            }
+
+                            if ($bestUserId) {
+                                $speakerMatches[$speaker] = [
+                                    'user_id' => $bestUserId,
+                                    'name' => $userEmbeddings[$bestUserId]['name'],
+                                    'confidence' => $userVotes[$bestUserId]['total_confidence'] / $userVotes[$bestUserId]['count'],
+                                ];
+
+                                Log::info('Speaker matched', [
+                                    'speaker' => $speaker,
+                                    'user_id' => $bestUserId,
+                                    'name' => $userEmbeddings[$bestUserId]['name'],
+                                    'confidence' => $speakerMatches[$speaker]['confidence'],
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Asignar nombres a los utterances
+            foreach ($utterances as &$utterance) {
+                $speaker = $utterance['speaker'] ?? 'Unknown';
+                if (isset($speakerMatches[$speaker])) {
+                    $utterance['speaker_name'] = $speakerMatches[$speaker]['name'];
+                    $utterance['speaker_user_id'] = $speakerMatches[$speaker]['user_id'];
+                    $utterance['speaker_confidence'] = $speakerMatches[$speaker]['confidence'];
+                    $utterance['auto_identified'] = true;
+                } else {
+                    $utterance['speaker_name'] = "Hablante " . $speaker;
+                    $utterance['auto_identified'] = false;
+                }
+            }
+
+            return $utterances;
+
+        } catch (\Exception $e) {
+            Log::error('Error in automatic speaker identification', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return $utterances;
+        }
+    }
+
+    /**
+     * Selecciona muestras representativas de un grupo de utterances
+     */
+    private function selectRepresentativeSamples(array $utterances, int $count): array
+    {
+        if (count($utterances) <= $count) {
+            return $utterances;
+        }
+
+        $samples = [];
+        $indices = [
+            0, // Primera
+            intval(count($utterances) / 2), // Medio
+            count($utterances) - 1, // Última
+        ];
+
+        foreach ($indices as $index) {
+            if (isset($utterances[$index])) {
+                $samples[] = $utterances[$index];
+            }
+        }
+
+        return array_slice($samples, 0, $count);
     }
 }
