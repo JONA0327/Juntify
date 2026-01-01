@@ -110,18 +110,18 @@ body {
     backdrop-filter: blur(20px);
     border-right: 1px solid rgba(59, 130, 246, 0.2);
     position: fixed;
-    height: 100vh;
+    height: calc(100vh - 4.5rem);
     transition: transform 0.3s ease;
-    top: 0;
+    top: 4.5rem;
     left: 0;
-    z-index: 1002;
-    padding-top: 6rem;
+    z-index: 1000;
+    padding-top: 1.5rem;
     display: flex;
     flex-direction: column;
 }
 
 .sidebar-header {
-    padding: 1rem 2rem 2rem;
+    padding: 1.5rem 2rem;
     border-bottom: 1px solid rgba(59, 130, 246, 0.2);
     text-align: center;
     flex-shrink: 0;
@@ -145,29 +145,26 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 0;
-    padding: 0 1rem;
-}
-
-.sidebar-nav ul {
-    flex: 1;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    overflow-y: auto;      /* ya existente */
-
-    /* ---- Ocultar la barra pero permitir scroll ---- */
-    -ms-overflow-style: none;
+    padding: 1.5rem 1rem;
+    overflow-y: auto;
     scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
-.sidebar-nav ul::-webkit-scrollbar {
+.sidebar-nav::-webkit-scrollbar {
     display: none;
 }
 
+.sidebar-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
 
 .nav-item {
-    margin-bottom: 0.5rem;
 }
 
 .nav-link {
@@ -202,7 +199,7 @@ body {
 }
 
 .action-buttons {
-    margin-top: auto;
+    margin-top: 1.5rem;
     padding-top: 1.5rem;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -227,7 +224,7 @@ body {
 }
 
 .sidebar-footer {
-    margin-top: auto;
+    margin-top: 1rem;
     display: flex;
     flex-direction: column;
     padding-top: 1rem;
@@ -236,7 +233,7 @@ body {
     flex-shrink: 0;
     color: #64748b;
     font-size: 0.75rem;
-    padding: 0.5rem 0;
+    padding: 0.5rem 0 1rem 0;
 }
 
 .version-info {
