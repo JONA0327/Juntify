@@ -136,6 +136,42 @@
                         </button>
                     </div>
                 </div>
+
+                <div class="profile-card voice-enrollment-card" id="voice-enrollment-card" data-enroll-url="{{ route('profile.voice.enroll') }}">
+                    <h2 class="card-title">Configurar Huella de Voz</h2>
+                    <p class="card-subtitle">
+                        Lee el siguiente texto en voz alta para registrar tu huella vocal. Procura grabar al menos 10 segundos con claridad.
+                    </p>
+
+                    <div class="voice-enrollment-text">
+                        “La voz humana es el instrumento más bello de todos, pero es el más difícil de tocar. A través de este texto, mi voz
+                        está siendo analizada para crear un mapa digital único. Al hablar con claridad, entonación y pausa, permito que el sistema
+                        registre los matices graves y agudos, el timbre y la cadencia que me identifican. Esto servirá para reconocerme automáticamente
+                        en futuras reuniones sin importar el entorno.”
+                    </div>
+
+                    <div class="voice-enrollment-controls">
+                        <button type="button" class="btn btn-primary" id="voice-record-start">
+                            <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a4.5 4.5 0 004.5-4.5v-3a4.5 4.5 0 10-9 0v3a4.5 4.5 0 004.5 4.5z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 11.25v2.25a7.5 7.5 0 01-15 0v-2.25" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25v1.5" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 22.5h7.5" />
+                            </svg>
+                            Grabar
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="voice-record-stop" disabled>
+                            <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h12v12H6z" />
+                            </svg>
+                            Detener
+                        </button>
+                        <span class="voice-recording-indicator" id="voice-recording-indicator">● Grabando</span>
+                        <span class="voice-recording-timer" id="voice-recording-timer">00:00</span>
+                    </div>
+
+                    <p class="voice-enrollment-status" id="voice-enrollment-status">Estado: listo para grabar.</p>
+                </div>
             </div>
         </main>
     </div>
