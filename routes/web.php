@@ -81,6 +81,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])
         ->name('profile.update');
+    Route::patch('/profile/language', [ProfileController::class, 'updateLanguage'])
+        ->name('profile.language');
     Route::delete('/profile', [ProfileController::class, 'destroy'])
         ->name('profile.destroy');
     Route::get('/profile/payment/{payment}/receipt', [ProfileController::class, 'downloadReceipt'])
@@ -414,4 +416,3 @@ Route::middleware(['auth'])->group(function () {
 
 // Webhook de MercadoPago (sin middleware auth)
 Route::post('/webhook/mercadopago', [SubscriptionPaymentController::class, 'webhook'])->name('payment.webhook');
-

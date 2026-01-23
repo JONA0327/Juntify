@@ -339,6 +339,27 @@ class ProfileController extends Controller
     }
 
     /**
+     * Update the user's language preference.
+     */
+    public function updateLanguage(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'locale' => ['required', 'in:es,en'],
+        ]);
+
+        $locale = $validated['locale'];
+        $user = $request->user();
+        $user->locale = $locale;
+        $user->save();
+
+        app()->setLocale($locale);
+
+        return Redirect::back()
+            ->with('status', 'language-updated')
+            ->withCookie(cookie('locale', $locale, 60 * 24 * 365));
+    }
+
+    /**
      * Delete the user's account.
      */
     public function destroy(Request $request): RedirectResponse
@@ -366,12 +387,12 @@ class ProfileController extends Controller
     {
         // Verificar que el pago pertenece al usuario autenticado
         if ($payment->user_id !== $request->user()->id) {
-            abort(403, 'No tienes permiso para descargar este recibo.');
+            abort(403, __('profile.receipt.forbidden'));
         }
 
         // Verificar que el pago esté aprobado
         if ($payment->status !== 'approved') {
-            abort(404, 'El recibo no está disponible para pagos no aprobados.');
+            abort(404, __('profile.receipt.not_available'));
         }
 
         // Crear contenido del recibo (simple HTML para este ejemplo)
@@ -393,14 +414,15 @@ class ProfileController extends Controller
     {
         $user = $payment->user;
         $createdAt = Carbon::parse($payment->created_at)->format('d/m/Y H:i:s');
+        $locale = app()->getLocale();
 
         return "
         <!DOCTYPE html>
-        <html lang='es'>
+        <html lang='{$locale}'>
         <head>
             <meta charset='UTF-8'>
             <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-            <title>Recibo de Pago - Juntify</title>
+            <title>" . __('profile.receipt.title') . "</title>
             <style>
                 body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
                 .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; }
@@ -418,36 +440,36 @@ class ProfileController extends Controller
         <body>
             <div class='header'>
                 <div class='logo'>Juntify</div>
-                <h2>Comprobante de Pago</h2>
-                <p>Recibo #" . str_pad($payment->id, 8, '0', STR_PAD_LEFT) . "</p>
+                <h2>" . __('profile.receipt.heading') . "</h2>
+                <p>" . __('profile.receipt.receipt_number', ['number' => str_pad($payment->id, 8, '0', STR_PAD_LEFT)]) . "</p>
             </div>
 
             <div class='receipt-info'>
                 <div class='info-section'>
-                    <h3>Información del Cliente</h3>
-                    <div class='info-item'><strong>Nombre:</strong> {$user->name}</div>
-                    <div class='info-item'><strong>Email:</strong> {$user->email}</div>
-                    <div class='info-item'><strong>Usuario:</strong> {$user->username}</div>
+                    <h3>" . __('profile.receipt.client_info') . "</h3>
+                    <div class='info-item'><strong>" . __('profile.receipt.name') . ":</strong> {$user->name}</div>
+                    <div class='info-item'><strong>" . __('profile.receipt.email') . ":</strong> {$user->email}</div>
+                    <div class='info-item'><strong>" . __('profile.receipt.user') . ":</strong> {$user->username}</div>
                 </div>
 
                 <div class='info-section'>
-                    <h3>Información del Pago</h3>
-                    <div class='info-item'><strong>Fecha:</strong> {$createdAt}</div>
-                    <div class='info-item'><strong>Estado:</strong> <span class='status-approved'>Aprobado</span></div>
-                    <div class='info-item'><strong>Método:</strong> " . ucfirst($payment->payment_method ?? 'MercadoPago') . "</div>
-                    " . ($payment->external_id ? "<div class='info-item'><strong>ID Externo:</strong> {$payment->external_id}</div>" : "") . "
+                    <h3>" . __('profile.receipt.payment_info') . "</h3>
+                    <div class='info-item'><strong>" . __('profile.receipt.date') . ":</strong> {$createdAt}</div>
+                    <div class='info-item'><strong>" . __('profile.receipt.status') . ":</strong> <span class='status-approved'>" . __('profile.receipt.status_approved') . "</span></div>
+                    <div class='info-item'><strong>" . __('profile.receipt.method') . ":</strong> " . ucfirst($payment->payment_method ?? 'MercadoPago') . "</div>
+                    " . ($payment->external_id ? "<div class='info-item'><strong>" . __('profile.receipt.external_id') . ":</strong> {$payment->external_id}</div>" : "") . "
                 </div>
             </div>
 
             <div class='amount'>
-                <div class='info-item'><strong>Concepto:</strong> " . ($payment->description ?: ($payment->plan_name ?? 'Plan Enterprise')) . "</div>
+                <div class='info-item'><strong>" . __('profile.receipt.concept') . ":</strong> " . ($payment->description ?: ($payment->plan_name ?? 'Plan Enterprise')) . "</div>
                 <div class='amount-value'>$" . number_format($payment->amount, 2) . " " . ($payment->currency ?? 'MXN') . "</div>
             </div>
 
             <div class='footer'>
-                <p><strong>Juntify</strong> - Plataforma de Reuniones Virtuales</p>
-                <p>Este comprobante certifica que el pago ha sido procesado exitosamente.</p>
-                <p>Generado automáticamente el " . now()->format('d/m/Y H:i:s') . "</p>
+                <p><strong>Juntify</strong> - " . __('profile.receipt.platform') . "</p>
+                <p>" . __('profile.receipt.footer_notice') . "</p>
+                <p>" . __('profile.receipt.generated_at', ['datetime' => now()->format('d/m/Y H:i:s')]) . "</p>
             </div>
         </body>
         </html>";

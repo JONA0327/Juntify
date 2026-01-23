@@ -40,6 +40,7 @@ class User extends Authenticatable
         'blocked_reason',
         'blocked_by',
         'legal_accepted_at',
+        'locale',
         'is_role_protected',
     ];
 

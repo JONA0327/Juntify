@@ -3,6 +3,30 @@
 // Safely sets window.userRole and window.currentOrganizationId if not already defined.
 (function(){
     try {
+        if (typeof window.appLocale === 'undefined') {
+            window.appLocale = @json(app()->getLocale());
+        }
+
+        const localeStorageKey = 'juntify.locale';
+        const getCookieValue = (name) => {
+            const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return match ? decodeURIComponent(match[2]) : null;
+        };
+        const storedLocale = window.localStorage ? window.localStorage.getItem(localeStorageKey) : null;
+        const cookieLocale = getCookieValue('locale');
+
+        if (storedLocale && storedLocale !== cookieLocale) {
+            document.cookie = `locale=${encodeURIComponent(storedLocale)}; path=/; max-age=${60 * 60 * 24 * 365}`;
+            if (document.documentElement && document.documentElement.lang && document.documentElement.lang !== storedLocale) {
+                window.location.reload();
+                return;
+            }
+        }
+
+        if (window.localStorage && window.appLocale) {
+            window.localStorage.setItem(localeStorageKey, window.appLocale);
+        }
+
         if (typeof window.userRole === 'undefined' || window.userRole === null) {
             @if(isset($user))
                 window.userRole = @json($user->roles ?? null);

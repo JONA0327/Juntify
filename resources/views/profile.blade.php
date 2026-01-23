@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="navigate-to-plans" content="{{ session('navigateToPlans') ? 'true' : 'false' }}">
-    <title>Perfil - Juntify</title>
+    <title>{{ __('profile.page.title') }}</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
@@ -29,7 +29,7 @@
     @include('partials.navbar')
 
     <!-- Botón para abrir sidebar en móvil -->
-    <button class="mobile-sidebar-btn mobile-menu-btn" onclick="toggleSidebar()" aria-label="Abrir menú">
+    <button class="mobile-sidebar-btn mobile-menu-btn" onclick="toggleSidebar()" aria-label="{{ __('common.open_menu') }}">
         <svg class="icon-open" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 01-1.414-1.414L10.586 10 5.879 5.707a1 1 0 011.414-1.414l4.001 4a1 1 0 010 1.414l-4.001 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
         </svg>
@@ -44,8 +44,8 @@
             <!-- Header - Solo visible en la sección de Información -->
             <div class="content-header" id="welcome-card" data-tutorial="welcome-header">
                 <div>
-                    <h1 class="page-title">Bienvenido, {{ $user->full_name }}</h1>
-                    <p class="page-subtitle">Gestiona tu cuenta y configuraciones</p>
+                    <h1 class="page-title">{{ __('profile.page.welcome', ['name' => $user->full_name]) }}</h1>
+                    <p class="page-subtitle">{{ __('profile.page.subtitle') }}</p>
                 </div>
 
                 <!-- CÓDIGO DEL AVATAR/BADGE RESTAURADO -->
@@ -116,6 +116,48 @@
 
     <!-- Modals -->
     @include('partials.profile._modals')
+
+    <script>
+        window.profileTranslations = @json([
+            'day_singular' => __('common.day_singular'),
+            'day_plural' => __('common.day_plural'),
+            'drive_locked_message' => __('profile.drive.locked_message'),
+            'main_folder_required' => __('profile.drive.main_folder_required'),
+            'main_folder_change_confirm' => __('profile.drive.main_folder_change_confirm'),
+            'main_folder_set' => __('profile.drive.main_folder_set'),
+            'main_folder_custom_name' => __('profile.drive.main_folder_custom_name'),
+            'main_folder_id_label' => __('profile.drive.main_folder_id_label'),
+            'main_folder_error' => __('profile.drive.main_folder_error'),
+            'voice.enroll_route_missing' => __('profile.voice.enroll_route_missing'),
+            'voice.status_too_short' => __('profile.voice.status_too_short'),
+            'voice.too_short' => __('profile.voice.too_short'),
+            'voice.status_processing' => __('profile.voice.status_processing'),
+            'voice.status_registered' => __('profile.voice.status_registered'),
+            'voice.registered' => __('profile.voice.registered'),
+            'voice.register_error' => __('profile.voice.register_error'),
+            'voice.status_message' => __('profile.voice.status_message'),
+            'voice.unsupported_browser' => __('profile.voice.unsupported_browser'),
+            'voice.status_microphone_denied' => __('profile.voice.status_microphone_denied'),
+            'voice.microphone_denied' => __('profile.voice.microphone_denied'),
+            'voice.status_recording' => __('profile.voice.status_recording'),
+            'voice.status_preparing' => __('profile.voice.status_preparing'),
+            'subfolder.delete_confirm' => __('profile.subfolder.delete_confirm'),
+            'subfolder.deleted' => __('profile.subfolder.deleted'),
+            'subfolder.delete_error' => __('profile.subfolder.delete_error'),
+            'notifications.empty' => __('profile.notifications.empty'),
+            'session.expired' => __('profile.session.expired'),
+            'plan.period.month' => __('profile.plan.period.month'),
+            'plan.period.year' => __('profile.plan.period.year'),
+            'plan.free' => __('profile.plan.free'),
+            'plan.discount' => __('profile.plan.discount'),
+            'plan.free_months' => __('profile.plan.free_months'),
+            'plan.previous_price' => __('profile.plan.previous_price'),
+            'plan.preference_error' => __('profile.plan.preference_error'),
+            'plan.unknown_error' => __('profile.plan.unknown_error'),
+            'plan.request_error' => __('profile.plan.request_error'),
+            'account.delete_mismatch' => __('profile.account.delete_mismatch'),
+        ]);
+    </script>
 
     <!-- Global vars and functions -->
     @include('partials.global-vars')
