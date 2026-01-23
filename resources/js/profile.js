@@ -8,6 +8,16 @@ axios.defaults.headers.common['X-CSRF-TOKEN'] = document
   .querySelector('meta[name="csrf-token"]')
   .getAttribute('content');
 
+const profileTranslations = window.profileTranslations || {};
+const t = (key, fallback) => profileTranslations[key] ?? fallback;
+const formatMessage = (key, params = {}, fallback = '') => {
+  let message = t(key, fallback);
+  Object.entries(params).forEach(([paramKey, value]) => {
+    message = message.replaceAll(`{${paramKey}}`, value);
+  });
+  return message;
+};
+
 /**
  * Crea partículas animadas de fondo
  */
@@ -71,11 +81,11 @@ function showDriveLockedModal() {
   const days = Number(window.tempRetentionDays || 7);
 
   if (retentionEl) {
-    retentionEl.textContent = `${days} ${days === 1 ? 'día' : 'días'}`;
+    retentionEl.textContent = `${days} ${days === 1 ? t('day_singular', 'día') : t('day_plural', 'días')}`;
   }
 
   if (!modal) {
-    alert('La conexión con Drive está disponible solo para planes Business y Enterprise.');
+    alert(t('drive_locked_message', 'La conexión con Drive está disponible solo para planes Business y Enterprise.'));
     return;
   }
 
@@ -135,12 +145,15 @@ function setMainFolder() {
   const btn           = document.getElementById('set-main-folder-btn');
 
   if (!mainFolderId) {
-    return alert('Por favor ingresa el ID de la carpeta o créala primero.');
+    return alert(t('main_folder_required', 'Por favor ingresa el ID de la carpeta o créala primero.'));
   }
 
   if (currentId && currentId !== mainFolderId) {
     const confirmMsg =
-      'Al cambiar la carpeta principal, deberás mover manualmente los archivos de audio existentes a la nueva carpeta. ¿Deseas continuar?';
+      t(
+        'main_folder_change_confirm',
+        'Al cambiar la carpeta principal, deberás mover manualmente los archivos de audio existentes a la nueva carpeta. ¿Deseas continuar?'
+      );
     if (!confirm(confirmMsg)) {
       return; // Abort if user cancels
     }
@@ -149,14 +162,14 @@ function setMainFolder() {
   btn.disabled = true;
   axios.post('/drive/set-main-folder', { id: mainFolderId })
     .then((res) => {
-      const msg = res?.data?.message || 'Carpeta principal establecida.';
+      const msg = res?.data?.message || t('main_folder_set', 'Carpeta principal establecida.');
       // Actualiza nombre/ID visibles
       if (mainFolderName) {
         const nameEl = document.querySelector('#main-folder-name div:first-child');
         const idEl = document.querySelector('#main-folder-name div:last-child');
         if (nameEl && idEl) {
-          nameEl.textContent = nameEl.textContent || 'Carpeta personalizada';
-          idEl.textContent = `ID: ${mainFolderId}`;
+          nameEl.textContent = nameEl.textContent || t('main_folder_custom_name', 'Carpeta personalizada');
+          idEl.textContent = `${t('main_folder_id_label', 'ID')}: ${mainFolderId}`;
         } else {
           mainFolderName.textContent = mainFolderId;
         }
@@ -168,7 +181,7 @@ function setMainFolder() {
     .catch(err => {
       console.error('Error estableciendo carpeta principal:', err.response?.data || err.message);
       const serverMessage = err.response?.data?.message;
-      showErrorMessage(serverMessage ?? 'No se pudo establecer la carpeta principal.');
+      showErrorMessage(serverMessage ?? t('main_folder_error', 'No se pudo establecer la carpeta principal.'));
     })
     .finally(() => {
       btn.disabled = false;
@@ -340,33 +353,33 @@ function initVoiceEnrollment() {
   };
 
   const uploadRecording = async (blob, durationSeconds) => {
-    const enrollUrl = card.dataset.enrollUrl;
-    if (!enrollUrl) {
-      showErrorMessage('No se encontró la ruta de enrolamiento.');
+  const enrollUrl = card.dataset.enrollUrl;
+  if (!enrollUrl) {
+      showErrorMessage(t('voice.enroll_route_missing', 'No se encontró la ruta de enrolamiento.'));
       return;
-    }
+  }
 
-    if (durationSeconds < 10) {
-      setStatus('Estado: la grabación es demasiado corta.');
-      showErrorMessage('Graba al menos 10 segundos para registrar tu huella de voz.');
+  if (durationSeconds < 10) {
+      setStatus(t('voice.status_too_short', 'Estado: la grabación es demasiado corta.'));
+      showErrorMessage(t('voice.too_short', 'Graba al menos 10 segundos para registrar tu huella de voz.'));
       return;
-    }
+  }
 
     const formData = new FormData();
     formData.append('audio', blob, 'voice-enrollment.webm');
 
-    setStatus('Estado: procesando tu huella de voz...');
+    setStatus(t('voice.status_processing', 'Estado: procesando tu huella de voz...'));
     setUploadingState(true);
 
     try {
       const response = await axios.post(enrollUrl, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setStatus('Estado: huella registrada correctamente.');
-      showSuccessMessage(response?.data?.message || 'Huella de voz registrada.');
+      setStatus(t('voice.status_registered', 'Estado: huella registrada correctamente.'));
+      showSuccessMessage(response?.data?.message || t('voice.registered', 'Huella de voz registrada.'));
     } catch (error) {
-      const message = error?.response?.data?.message || 'No se pudo registrar tu huella de voz.';
-      setStatus(`Estado: ${message}`);
+      const message = error?.response?.data?.message || t('voice.register_error', 'No se pudo registrar tu huella de voz.');
+      setStatus(formatMessage('voice.status_message', { message }, 'Estado: {message}'));
       showErrorMessage(message);
     } finally {
       setUploadingState(false);
@@ -376,15 +389,15 @@ function initVoiceEnrollment() {
   if (startButton) {
     startButton.addEventListener('click', async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
-        showErrorMessage('Tu navegador no soporta la grabación de audio.');
+        showErrorMessage(t('voice.unsupported_browser', 'Tu navegador no soporta la grabación de audio.'));
         return;
       }
 
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch (error) {
-        setStatus('Estado: no se pudo acceder al micrófono.');
-        showErrorMessage('No se pudo acceder al micrófono. Verifica permisos.');
+        setStatus(t('voice.status_microphone_denied', 'Estado: no se pudo acceder al micrófono.'));
+        showErrorMessage(t('voice.microphone_denied', 'No se pudo acceder al micrófono. Verifica permisos.'));
         return;
       }
 
@@ -413,17 +426,17 @@ function initVoiceEnrollment() {
       });
 
       mediaRecorder.start();
-      setStatus('Estado: grabando...');
+      setStatus(t('voice.status_recording', 'Estado: grabando...'));
       setRecordingState(true);
     });
   }
 
   if (stopButton) {
     stopButton.addEventListener('click', () => {
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        setStatus('Estado: preparando el audio...');
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        setStatus(t('voice.status_preparing', 'Estado: preparando el audio...'));
         mediaRecorder.stop();
-      }
+    }
     });
   }
 }
@@ -451,14 +464,14 @@ document.addEventListener('click', e => {
     const id = folderDiv.dataset.id;
 
 
-    if (confirm(`¿Estás seguro de que quieres eliminar la subcarpeta "${folderName}"?`)) {
+    if (confirm(formatMessage('subfolder.delete_confirm', { name: folderName }, '¿Estás seguro de que quieres eliminar la subcarpeta "{name}"?'))) {
             axios.delete('/drive/subfolder/' + id)
         .then(() => {
           folderDiv.remove();
-          showSuccessMessage(`Subcarpeta "${folderName}" eliminada`);
+          showSuccessMessage(formatMessage('subfolder.deleted', { name: folderName }, 'Subcarpeta "{name}" eliminada'));
         })
         .catch(() => {
-          showErrorMessage('No se pudo eliminar la subcarpeta');
+          showErrorMessage(t('subfolder.delete_error', 'No se pudo eliminar la subcarpeta'));
         });
     }
   }
@@ -543,6 +556,19 @@ document.addEventListener('DOMContentLoaded', () => {
   if (connectBtn)    connectBtn.addEventListener('click', connectDrive);
   if (setMainBtn)    setMainBtn.addEventListener('click', setMainFolder);
 
+  const languageSelect = document.querySelector('[data-language-select]');
+  if (languageSelect) {
+    languageSelect.addEventListener('change', () => {
+      if (window.localStorage) {
+        window.localStorage.setItem('juntify.locale', languageSelect.value);
+      }
+      const languageForm = document.getElementById('language-form');
+      if (languageForm) {
+        languageForm.submit();
+      }
+    });
+  }
+
   const notificationsList = document.getElementById('notifications-list');
   if (notificationsList) {
       axios.get('/api/notifications')
@@ -550,7 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const items = res.data;
           notificationsList.innerHTML = '';
           if (items.length === 0) {
-            notificationsList.innerHTML = '<p style="color: #cbd5e1; text-align: center; padding: 2rem;">No tienes notificaciones nuevas.</p>';
+            notificationsList.innerHTML = `<p style="color: #cbd5e1; text-align: center; padding: 2rem;">${t('notifications.empty', 'No tienes notificaciones nuevas.')}</p>`;
           } else {
             items.forEach(n => {
               const div = document.createElement('div');
@@ -562,7 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(err => {
           if (err.response && err.response.status === 401) {
-            showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
+            showError(t('session.expired', 'Tu sesión ha expirado. Inicia sesión nuevamente.'));
           }
         });
 
@@ -573,15 +599,15 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(() => {
               e.target.parentElement.remove();
               if (!notificationsList.children.length) {
-                notificationsList.innerHTML = '<p style="color: #cbd5e1; text-align: center; padding: 2rem;">No tienes notificaciones nuevas.</p>';
+                notificationsList.innerHTML = `<p style="color: #cbd5e1; text-align: center; padding: 2rem;">${t('notifications.empty', 'No tienes notificaciones nuevas.')}</p>`;
               }
             })
             .catch(err => {
               if (err.response && err.response.status === 401) {
-                showError('Tu sesión ha expirado. Inicia sesión nuevamente.');
+                showError(t('session.expired', 'Tu sesión ha expirado. Inicia sesión nuevamente.'));
               }
             });
-      }
+        }
     });
   }
 });
@@ -727,13 +753,13 @@ const planState = {
   billingToggleButtons: [],
   planCards: [],
   selectedPlanId: null,
-  selectedPlanPeriodLabel: 'mes',
+  selectedPlanPeriodLabel: t('plan.period.month', 'mes'),
   selectedBillingPeriod: 'monthly',
   currentBillingPeriod: 'monthly',
 };
 
 function formatPlanPrice(value, currency) {
-  const locale = PLAN_CURRENCY_LOCALES[currency] || 'es-ES';
+  const locale = PLAN_CURRENCY_LOCALES[currency] || (window.appLocale === 'en' ? 'en-US' : 'es-ES');
   const amount = Number(value) || 0;
   const hasDecimals = Math.abs(amount % 1) > 0;
   return new Intl.NumberFormat(locale, {
@@ -756,7 +782,9 @@ function cachePlanElements() {
 function selectPlan(planId, planName, planPrice, planCurrency, billingPeriod = 'monthly') {
   planState.selectedPlanId = planId;
   planState.selectedBillingPeriod = billingPeriod;
-  planState.selectedPlanPeriodLabel = billingPeriod === 'yearly' ? 'año' : 'mes';
+  planState.selectedPlanPeriodLabel = billingPeriod === 'yearly'
+    ? t('plan.period.year', 'año')
+    : t('plan.period.month', 'mes');
 
   const numericPrice = Number(planPrice) || 0;
   const isFree = numericPrice === 0;
@@ -768,7 +796,7 @@ function selectPlan(planId, planName, planPrice, planCurrency, billingPeriod = '
 
   if (planState.selectedPlanPriceEl) {
     planState.selectedPlanPriceEl.textContent = isFree
-      ? 'Gratis'
+      ? t('plan.free', 'Gratis')
       : formatPlanPrice(numericPrice, planCurrency);
   }
 
@@ -794,7 +822,7 @@ function closePlanModal() {
     planState.modal.style.display = 'none';
   }
   planState.selectedPlanId = null;
-  planState.selectedPlanPeriodLabel = 'mes';
+    planState.selectedPlanPeriodLabel = t('plan.period.month', 'mes');
   planState.selectedBillingPeriod = 'monthly';
 }
 
@@ -810,12 +838,18 @@ function confirmPlanSelection() {
       if (data.success) {
         window.location.href = data.checkout_url;
       } else {
-        alert(`Error al crear la preferencia de pago: ${data.error || 'Error desconocido'}`);
+        alert(
+          formatMessage(
+            'plan.preference_error',
+            { error: data.error || t('plan.unknown_error', 'Error desconocido') },
+            'Error al crear la preferencia de pago: {error}'
+          )
+        );
       }
     })
     .catch((error) => {
       console.error('Error:', error);
-      alert(`Error al procesar la solicitud: ${error.message}`);
+      alert(formatMessage('plan.request_error', { error: error.message }, 'Error al procesar la solicitud: {error}'));
     })
     .finally(() => {
       closePlanModal();
@@ -846,24 +880,26 @@ function updatePlanCardsByPeriod() {
     }
 
     if (priceNumberEl) {
-      priceNumberEl.textContent = isFree ? 'Gratis' : formatPlanPrice(price, currency);
+      priceNumberEl.textContent = isFree ? t('plan.free', 'Gratis') : formatPlanPrice(price, currency);
     }
 
     if (pricePeriodEl) {
-      pricePeriodEl.textContent = isFree ? '' : isYearly ? '/ año' : '/ mes';
+      pricePeriodEl.textContent = isFree ? '' : isYearly
+        ? `/${t('plan.period.year', 'año')}`
+        : `/${t('plan.period.month', 'mes')}`;
     }
 
     if (offerTextEl) {
       if (isYearly && (discount > 0 || freeMonths > 0)) {
         const details = [];
         if (discount > 0) {
-          details.push(`Descuento ${discount}%`);
+          details.push(formatMessage('plan.discount', { percent: discount }, 'Descuento {percent}%'));
         }
         if (freeMonths > 0) {
-          details.push(`${freeMonths} mes(es) gratis`);
+          details.push(formatMessage('plan.free_months', { months: freeMonths }, '{months} mes(es) gratis'));
         }
         if (yearlyBase && yearlyBase > price) {
-          details.push(`Antes ${formatPlanPrice(yearlyBase, currency)}`);
+          details.push(formatMessage('plan.previous_price', { price: formatPlanPrice(yearlyBase, currency) }, 'Antes {price}'));
         }
         offerTextEl.textContent = details.join(' · ');
         offerTextEl.classList.remove('hidden');
@@ -953,7 +989,7 @@ function confirmDeleteAccount(event) {
   const expected = form.dataset.expectedUsername;
   const input = form.querySelector('input[name="confirmation"]')?.value?.trim().toUpperCase();
   if (!expected || input !== expected) {
-    alert('El texto no coincide. Debes escribir exactamente tu nombre de usuario.');
+    alert(t('account.delete_mismatch', 'El texto no coincide. Debes escribir exactamente tu nombre de usuario.'));
     event.preventDefault();
     return false;
   }
