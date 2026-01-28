@@ -42,7 +42,7 @@
 
             <div id="admin-plans-alert" class="hidden"></div>
 
-            <div class="w-full">
+            <div class="w-full space-y-6">
                 <div class="info-card" style="padding: 0; overflow: hidden;">
                     <div class="card-header" style="padding: 1.5rem 1.5rem 0 1.5rem;">
                         <div>
@@ -80,6 +80,47 @@
                         </table>
                     </div>
                 </div>
+                <div class="info-card" style="padding: 0; overflow: hidden;">
+                    <div class="card-header" style="padding: 1.5rem 1.5rem 0 1.5rem;">
+                        <div>
+                            <h2 class="card-title" style="margin-bottom: 0.5rem;">Límites por plan</h2>
+                            <p class="card-subtitle" style="margin: 0;">Define accesos a reuniones, contenedores y duración máxima.</p>
+                        </div>
+                        <button class="action-btn create" onclick="openPlanLimitModal()" style="margin-left: auto;">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Editar límites
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto" style="padding: 0;">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th style="min-width: 140px;">Rol</th>
+                                    <th style="text-align: center; min-width: 130px;">Reuniones/mes</th>
+                                    <th style="text-align: center; min-width: 130px;">Duración máx</th>
+                                    <th style="text-align: center; min-width: 130px;">Aviso (min)</th>
+                                    <th style="text-align: center; min-width: 110px;">Posponer</th>
+                                    <th style="text-align: center; min-width: 150px;">Contenedores (personal)</th>
+                                    <th style="text-align: center; min-width: 170px;">Reuniones/cont. (personal)</th>
+                                    <th style="text-align: center; min-width: 150px;">Contenedores (org)</th>
+                                    <th style="text-align: center; min-width: 170px;">Reuniones/cont. (org)</th>
+                                    <th style="min-width: 140px;">Actualizado</th>
+                                    <th style="text-align: center; min-width: 120px;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="plan-limits-table-body">
+                                <tr>
+                                    <td colspan="11" class="text-center py-8 text-slate-400" style="font-style: italic;">
+                                        No hay límites configurados todavía
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -95,7 +136,7 @@
                 </button>
             </div>
 
-            <form id="planForm" class="modal-content">
+            <form id="planForm" class="modal-content" data-plan-templates='@json($planTemplates)'>
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="planCode">Código del plan</label>
@@ -165,6 +206,78 @@
             <div class="modal-footer">
                 <button type="button" class="action-btn secondary" onclick="closePlanModal()">Cancelar</button>
                 <button type="button" class="action-btn create" onclick="savePlan()">Guardar Plan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para editar límites de plan -->
+    <div id="planLimitModal" class="modal-overlay" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 id="limitModalTitle" class="modal-title">Editar límites</h3>
+                <button class="modal-close" onclick="closePlanLimitModal()">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="planLimitForm" class="modal-content">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="limitRole">Rol</label>
+                        <input type="text" id="limitRole" name="role" required placeholder="free, basic, business...">
+                    </div>
+                    <div class="form-group">
+                        <label for="maxMeetingsPerMonth">Reuniones por mes</label>
+                        <input type="number" id="maxMeetingsPerMonth" name="max_meetings_per_month" min="0" placeholder="Ilimitado si se deja vacío">
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="maxDurationMinutes">Duración máxima (min)</label>
+                        <input type="number" id="maxDurationMinutes" name="max_duration_minutes" min="0" placeholder="120">
+                    </div>
+                    <div class="form-group">
+                        <label for="warnBeforeMinutes">Aviso antes de finalizar (min)</label>
+                        <input type="number" id="warnBeforeMinutes" name="warn_before_minutes" min="0" placeholder="5">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="allowPostpone" name="allow_postpone" checked>
+                        <span class="checkbox-text">Permitir posponer reuniones</span>
+                    </label>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="maxContainersPersonal">Contenedores personales</label>
+                        <input type="number" id="maxContainersPersonal" name="max_containers_personal" min="0" placeholder="Ilimitado si se deja vacío">
+                    </div>
+                    <div class="form-group">
+                        <label for="maxMeetingsPerContainerPersonal">Reuniones por contenedor personal</label>
+                        <input type="number" id="maxMeetingsPerContainerPersonal" name="max_meetings_per_container_personal" min="0" placeholder="Ilimitado si se deja vacío">
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="maxContainersOrg">Contenedores de organización</label>
+                        <input type="number" id="maxContainersOrg" name="max_containers_org" min="0" placeholder="Ilimitado si se deja vacío">
+                    </div>
+                    <div class="form-group">
+                        <label for="maxMeetingsPerContainerOrg">Reuniones por contenedor org</label>
+                        <input type="number" id="maxMeetingsPerContainerOrg" name="max_meetings_per_container_org" min="0" placeholder="Ilimitado si se deja vacío">
+                    </div>
+                </div>
+            </form>
+
+            <div class="modal-footer">
+                <button type="button" class="action-btn secondary" onclick="closePlanLimitModal()">Cancelar</button>
+                <button type="button" class="action-btn create" onclick="savePlanLimit()">Guardar límites</button>
             </div>
         </div>
     </div>

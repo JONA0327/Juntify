@@ -17,5 +17,9 @@ class PlanLimit extends Model
         'max_duration_minutes',
         'allow_postpone',
         'warn_before_minutes',
+        'max_containers_personal',
+        'max_meetings_per_container_personal',
+        'max_containers_org',
+        'max_meetings_per_container_org',
     ];
 }

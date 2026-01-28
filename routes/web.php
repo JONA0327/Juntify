@@ -256,6 +256,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/plans/manage', [PlanManagementController::class, 'index'])->name('admin.plans');
     Route::get('/admin/plans/list', [PlanManagementController::class, 'list']);
     Route::post('/admin/plans', [PlanManagementController::class, 'store']);
+    Route::get('/admin/plans/limits', [PlanManagementController::class, 'listLimits']);
+    Route::post('/admin/plans/limits', [PlanManagementController::class, 'storeLimits']);
 
     // Rutas para administración de empresas
     Route::get('/admin/empresas', [\App\Http\Controllers\Admin\EmpresaController::class, 'index'])->name('admin.empresas.index');
