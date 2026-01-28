@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Plan;
+use App\Models\PlanLimit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -89,6 +90,15 @@ class PlanManagementController extends Controller
         return response()->json($plans);
     }
 
+    public function listLimits(): JsonResponse
+    {
+        $limits = PlanLimit::orderBy('role')->get()->map(function (PlanLimit $limit) {
+            return $this->formatLimit($limit);
+        });
+
+        return response()->json($limits);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -138,6 +148,47 @@ class PlanManagementController extends Controller
         ]);
     }
 
+    public function storeLimits(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'role' => 'required|string|max:50',
+            'max_meetings_per_month' => 'nullable|integer|min:0',
+            'max_duration_minutes' => 'nullable|integer|min:0',
+            'warn_before_minutes' => 'nullable|integer|min:0',
+            'allow_postpone' => 'required|boolean',
+            'max_containers_personal' => 'nullable|integer|min:0',
+            'max_meetings_per_container_personal' => 'nullable|integer|min:0',
+            'max_containers_org' => 'nullable|integer|min:0',
+            'max_meetings_per_container_org' => 'nullable|integer|min:0',
+        ]);
+
+        $limit = PlanLimit::firstOrNew(['role' => $validated['role']]);
+        $limit->fill([
+            'max_meetings_per_month' => $validated['max_meetings_per_month'] ?? null,
+            'max_duration_minutes' => $validated['max_duration_minutes'] ?? 120,
+            'warn_before_minutes' => $validated['warn_before_minutes'] ?? 5,
+            'allow_postpone' => $validated['allow_postpone'],
+            'max_containers_personal' => $validated['max_containers_personal'] ?? null,
+            'max_meetings_per_container_personal' => $validated['max_meetings_per_container_personal'] ?? null,
+            'max_containers_org' => $validated['max_containers_org'] ?? null,
+            'max_meetings_per_container_org' => $validated['max_meetings_per_container_org'] ?? null,
+        ]);
+        $limit->save();
+
+        Log::info('Límites de plan actualizados desde panel administrativo', [
+            'role' => $limit->role,
+            'max_meetings_per_month' => $limit->max_meetings_per_month,
+            'max_duration_minutes' => $limit->max_duration_minutes,
+            'max_containers_personal' => $limit->max_containers_personal,
+            'max_containers_org' => $limit->max_containers_org,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'limit' => $this->formatLimit($limit),
+        ]);
+    }
+
     private function formatPlan(Plan $plan): array
     {
         $yearlyBreakdown = $plan->getPriceBreakdown('yearly');
@@ -156,6 +207,23 @@ class PlanManagementController extends Controller
             'free_months' => $plan->free_months,
             'features' => $plan->features,
             'updated_at' => optional($plan->updated_at)->toIso8601String(),
+        ];
+    }
+
+    private function formatLimit(PlanLimit $limit): array
+    {
+        return [
+            'id' => $limit->id,
+            'role' => $limit->role,
+            'max_meetings_per_month' => $limit->max_meetings_per_month,
+            'max_duration_minutes' => $limit->max_duration_minutes,
+            'allow_postpone' => (bool) $limit->allow_postpone,
+            'warn_before_minutes' => $limit->warn_before_minutes,
+            'max_containers_personal' => $limit->max_containers_personal,
+            'max_meetings_per_container_personal' => $limit->max_meetings_per_container_personal,
+            'max_containers_org' => $limit->max_containers_org,
+            'max_meetings_per_container_org' => $limit->max_meetings_per_container_org,
+            'updated_at' => optional($limit->updated_at)->toIso8601String(),
         ];
     }
 }

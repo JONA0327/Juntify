@@ -76,6 +76,7 @@
             $driveAllowed = auth()->check() ? $planService->userCanUseDrive(auth()->user()) : false;
             $tempRetention = auth()->check() ? $planService->getTemporaryRetentionDays(auth()->user()) : 7;
             $belongsToOrganization = auth()->check() ? $planService->userBelongsToOrganization(auth()->user()) : false;
+            $planLimits = auth()->check() ? $planService->getLimitsForUser(auth()->user()) : null;
         @endphp
 
         if (typeof window.userPlanCode === 'undefined') {
@@ -88,6 +89,10 @@
 
         if (typeof window.userBelongsToOrganization === 'undefined') {
             window.userBelongsToOrganization = @json($belongsToOrganization);
+        }
+
+        if (typeof window.userPlanLimits === 'undefined') {
+            window.userPlanLimits = @json($planLimits);
         }
 
         if (typeof window.userCanUseDrive === 'undefined') {
@@ -117,20 +122,31 @@
 
         // Función específica para verificar si el usuario puede crear contenedores
         window.canCreateContainers = function() {
-            const planCode = (window.userPlanCode || '').toString().toLowerCase();
-            const role = (window.userRole || '').toString().toLowerCase();
+            const planLimits = window.userPlanLimits || null;
 
             console.log('🚀 [canCreateContainers] Iniciando verificación:', {
-                planCode: planCode || 'UNDEFINED',
-                role: role || 'UNDEFINED',
+                planCode: (window.userPlanCode || '').toString().toLowerCase() || 'UNDEFINED',
+                role: (window.userRole || '').toString().toLowerCase() || 'UNDEFINED',
                 userBelongsToOrganization: window.userBelongsToOrganization
             });
 
             // Si pertenece a una organización, puede crear contenedores
             if (window.userBelongsToOrganization) {
+                const maxOrg = planLimits?.max_containers_org;
+                const allowed = maxOrg === null || typeof maxOrg === 'undefined' ? true : Number(maxOrg) > 0;
                 console.log('✅ [canCreateContainers] Acceso aprobado por organización');
-                return true;
+                return allowed;
             }
+
+            if (planLimits) {
+                const maxPersonal = planLimits.max_containers_personal;
+                const allowed = maxPersonal === null || typeof maxPersonal === 'undefined' ? true : Number(maxPersonal) > 0;
+                console.log('✅ [canCreateContainers] Verificación por límites de plan');
+                return allowed;
+            }
+
+            const planCode = (window.userPlanCode || '').toString().toLowerCase();
+            const role = (window.userRole || '').toString().toLowerCase();
 
             // Verificación específica para BASIC
             if (role === 'basic' || planCode === 'basic' || planCode === 'basico') {
@@ -145,15 +161,6 @@
             if (isFree) {
                 console.log('❌ [canCreateContainers] Usuario FREE - NO puede crear contenedores');
                 return false;
-            }
-
-            // Planes superiores pueden crear contenedores
-            const premiumPlans = ['negocios', 'business', 'enterprise', 'founder', 'developer', 'superadmin'];
-            const isPremium = premiumPlans.includes(role) || premiumPlans.includes(planCode);
-
-            if (isPremium) {
-                console.log('✅ [canCreateContainers] Usuario PREMIUM - PUEDE crear contenedores');
-                return true;
             }
 
             // Por defecto, denegar acceso
@@ -171,6 +178,21 @@
             const isCompany = typeof options.isCompany === 'boolean'
                 ? options.isCompany
                 : (options.scope === 'organization');
+
+            const planLimits = window.userPlanLimits || null;
+            if (planLimits) {
+                if (isCompany) {
+                    return {
+                        maxContainers: planLimits.max_containers_org,
+                        maxMeetingsPerContainer: planLimits.max_meetings_per_container_org,
+                    };
+                }
+
+                return {
+                    maxContainers: planLimits.max_containers_personal,
+                    maxMeetingsPerContainer: planLimits.max_meetings_per_container_personal,
+                };
+            }
 
             const matchAny = (value, targets) => targets.some(target => target && (value === target || value.includes(target)));
             const isPlanType = (targets) => matchAny(planCode, targets) || matchAny(role, targets);

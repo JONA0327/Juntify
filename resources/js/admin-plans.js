@@ -1,17 +1,29 @@
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 const alertBox = document.getElementById('admin-plans-alert');
-const planForm = document.getElementById('plan-form');
+const planForm = document.getElementById('planForm');
 const planTemplates = planForm ? JSON.parse(planForm.dataset.planTemplates || '{}') : {};
-const planCodeSelect = document.getElementById('plan-code');
-const planNameInput = document.getElementById('plan-name');
-const planDescriptionInput = document.getElementById('plan-description');
-const monthlyPriceInput = document.getElementById('monthly-price');
-const yearlyPriceInput = document.getElementById('yearly-price');
-const discountInput = document.getElementById('discount-percentage');
-const freeMonthsInput = document.getElementById('free-months');
+const planCodeSelect = document.getElementById('planCode');
+const planNameInput = document.getElementById('planName');
+const planDescriptionInput = document.getElementById('planDescription');
+const monthlyPriceInput = document.getElementById('monthlyPrice');
+const yearlyPriceInput = document.getElementById('yearlyPrice');
+const discountInput = document.getElementById('discountPercentage');
+const freeMonthsInput = document.getElementById('freeMonths');
 const currencyInput = document.getElementById('currency');
-const isActiveInput = document.getElementById('is-active');
+const isActiveInput = document.getElementById('isEnabled');
 const plansTableBody = document.getElementById('plans-table-body');
+const planLimitModal = document.getElementById('planLimitModal');
+const planLimitForm = document.getElementById('planLimitForm');
+const planLimitsTableBody = document.getElementById('plan-limits-table-body');
+const limitRoleInput = document.getElementById('limitRole');
+const maxMeetingsPerMonthInput = document.getElementById('maxMeetingsPerMonth');
+const maxDurationMinutesInput = document.getElementById('maxDurationMinutes');
+const warnBeforeMinutesInput = document.getElementById('warnBeforeMinutes');
+const allowPostponeInput = document.getElementById('allowPostpone');
+const maxContainersPersonalInput = document.getElementById('maxContainersPersonal');
+const maxMeetingsPerContainerPersonalInput = document.getElementById('maxMeetingsPerContainerPersonal');
+const maxContainersOrgInput = document.getElementById('maxContainersOrg');
+const maxMeetingsPerContainerOrgInput = document.getElementById('maxMeetingsPerContainerOrg');
 
 const showAlert = (type, message) => {
     if (!alertBox) return;
@@ -63,7 +75,7 @@ const renderPlans = (plans = []) => {
     if (!plans.length) {
         plansTableBody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center py-6 text-slate-400">No hay planes configurados todavía</td>
+                <td colspan="8" class="text-center py-6 text-slate-400">No hay planes configurados todavía</td>
             </tr>
         `;
         return;
@@ -111,6 +123,20 @@ const renderPlans = (plans = []) => {
         updatedCell.className = 'px-4 py-3 text-slate-300';
         updatedCell.textContent = formatDateTime(plan.updated_at);
 
+        const actionsCell = document.createElement('td');
+        actionsCell.className = 'px-4 py-3 text-center';
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'action-btn edit';
+        editButton.innerHTML = `
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M4 13v7h7l9.878-9.878a2.5 2.5 0 00-3.536-3.536L7.464 16.464H4z"></path>
+            </svg>
+            Editar
+        `;
+        editButton.addEventListener('click', () => openPlanModal(plan));
+        actionsCell.appendChild(editButton);
+
         row.appendChild(planCell);
         row.appendChild(monthlyCell);
         row.appendChild(yearlyCell);
@@ -118,6 +144,7 @@ const renderPlans = (plans = []) => {
         row.appendChild(freeMonthsCell);
         row.appendChild(statusCell);
         row.appendChild(updatedCell);
+        row.appendChild(actionsCell);
 
         fragment.appendChild(row);
     });
@@ -163,6 +190,38 @@ const serializeForm = () => {
     };
 };
 
+const openPlanModal = (plan = null) => {
+    if (!planForm) return;
+    hideAlert();
+    planForm.reset();
+    if (plan) {
+        planCodeSelect.value = plan.code || '';
+        planNameInput.value = plan.name || '';
+        planDescriptionInput.value = plan.description || '';
+        monthlyPriceInput.value = plan.monthly_price ?? '';
+        yearlyPriceInput.value = plan.yearly_price ?? '';
+        discountInput.value = plan.discount_percentage ?? '';
+        freeMonthsInput.value = plan.free_months ?? '';
+        currencyInput.value = plan.currency || 'MXN';
+        isActiveInput.checked = !!plan.is_active;
+    } else if (planCodeSelect.value) {
+        fillTemplateDefaults(planCodeSelect.value);
+    }
+
+    const modal = document.getElementById('planModal');
+    if (modal) modal.style.display = 'flex';
+};
+
+const closePlanModal = () => {
+    const modal = document.getElementById('planModal');
+    if (modal) modal.style.display = 'none';
+};
+
+const savePlan = () => {
+    if (!planForm) return;
+    planForm.requestSubmit();
+};
+
 const handleSubmit = async (event) => {
     event.preventDefault();
     hideAlert();
@@ -190,7 +249,188 @@ const handleSubmit = async (event) => {
         showAlert('success', 'Plan guardado correctamente');
         if (data.plan) {
             fetchPlans();
+            closePlanModal();
         }
+    } catch (error) {
+        showAlert('error', error.message || 'Error desconocido');
+    }
+};
+
+const formatLimitValue = (value) => {
+    if (value === null || typeof value === 'undefined') return '∞';
+    return Number.isFinite(Number(value)) ? value : '—';
+};
+
+const renderPlanLimits = (limits = []) => {
+    if (!planLimitsTableBody) return;
+
+    if (!limits.length) {
+        planLimitsTableBody.innerHTML = `
+            <tr>
+                <td colspan="11" class="text-center py-6 text-slate-400">No hay límites configurados todavía</td>
+            </tr>
+        `;
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    limits.forEach((limit) => {
+        const row = document.createElement('tr');
+        row.dataset.limitRole = limit.role;
+
+        const roleCell = document.createElement('td');
+        roleCell.className = 'px-4 py-3 text-slate-200 font-semibold';
+        roleCell.textContent = limit.role;
+
+        const meetingsCell = document.createElement('td');
+        meetingsCell.className = 'px-4 py-3 text-center text-slate-300';
+        meetingsCell.textContent = formatLimitValue(limit.max_meetings_per_month);
+
+        const durationCell = document.createElement('td');
+        durationCell.className = 'px-4 py-3 text-center text-slate-300';
+        durationCell.textContent = formatLimitValue(limit.max_duration_minutes);
+
+        const warnCell = document.createElement('td');
+        warnCell.className = 'px-4 py-3 text-center text-slate-300';
+        warnCell.textContent = formatLimitValue(limit.warn_before_minutes);
+
+        const postponeCell = document.createElement('td');
+        postponeCell.className = 'px-4 py-3 text-center text-slate-300';
+        postponeCell.textContent = limit.allow_postpone ? 'Sí' : 'No';
+
+        const containersPersonalCell = document.createElement('td');
+        containersPersonalCell.className = 'px-4 py-3 text-center text-slate-300';
+        containersPersonalCell.textContent = formatLimitValue(limit.max_containers_personal);
+
+        const meetingsPerContainerPersonalCell = document.createElement('td');
+        meetingsPerContainerPersonalCell.className = 'px-4 py-3 text-center text-slate-300';
+        meetingsPerContainerPersonalCell.textContent = formatLimitValue(limit.max_meetings_per_container_personal);
+
+        const containersOrgCell = document.createElement('td');
+        containersOrgCell.className = 'px-4 py-3 text-center text-slate-300';
+        containersOrgCell.textContent = formatLimitValue(limit.max_containers_org);
+
+        const meetingsPerContainerOrgCell = document.createElement('td');
+        meetingsPerContainerOrgCell.className = 'px-4 py-3 text-center text-slate-300';
+        meetingsPerContainerOrgCell.textContent = formatLimitValue(limit.max_meetings_per_container_org);
+
+        const updatedCell = document.createElement('td');
+        updatedCell.className = 'px-4 py-3 text-slate-300';
+        updatedCell.textContent = formatDateTime(limit.updated_at);
+
+        const actionsCell = document.createElement('td');
+        actionsCell.className = 'px-4 py-3 text-center';
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'action-btn edit';
+        editButton.innerHTML = `
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M4 13v7h7l9.878-9.878a2.5 2.5 0 00-3.536-3.536L7.464 16.464H4z"></path>
+            </svg>
+            Editar
+        `;
+        editButton.addEventListener('click', () => openPlanLimitModal(limit));
+        actionsCell.appendChild(editButton);
+
+        row.appendChild(roleCell);
+        row.appendChild(meetingsCell);
+        row.appendChild(durationCell);
+        row.appendChild(warnCell);
+        row.appendChild(postponeCell);
+        row.appendChild(containersPersonalCell);
+        row.appendChild(meetingsPerContainerPersonalCell);
+        row.appendChild(containersOrgCell);
+        row.appendChild(meetingsPerContainerOrgCell);
+        row.appendChild(updatedCell);
+        row.appendChild(actionsCell);
+
+        fragment.appendChild(row);
+    });
+
+    planLimitsTableBody.innerHTML = '';
+    planLimitsTableBody.appendChild(fragment);
+};
+
+const fetchPlanLimits = async () => {
+    try {
+        const response = await fetch('/admin/plans/limits', { headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error('No se pudieron cargar los límites');
+        const limits = await response.json();
+        renderPlanLimits(limits);
+    } catch (error) {
+        showAlert('error', error.message || 'Ocurrió un error al cargar los límites');
+    }
+};
+
+const openPlanLimitModal = (limit = null) => {
+    if (!planLimitForm || !planLimitModal) return;
+    hideAlert();
+    planLimitForm.reset();
+    if (limit) {
+        limitRoleInput.value = limit.role || '';
+        maxMeetingsPerMonthInput.value = limit.max_meetings_per_month ?? '';
+        maxDurationMinutesInput.value = limit.max_duration_minutes ?? '';
+        warnBeforeMinutesInput.value = limit.warn_before_minutes ?? '';
+        allowPostponeInput.checked = !!limit.allow_postpone;
+        maxContainersPersonalInput.value = limit.max_containers_personal ?? '';
+        maxMeetingsPerContainerPersonalInput.value = limit.max_meetings_per_container_personal ?? '';
+        maxContainersOrgInput.value = limit.max_containers_org ?? '';
+        maxMeetingsPerContainerOrgInput.value = limit.max_meetings_per_container_org ?? '';
+    }
+
+    planLimitModal.style.display = 'flex';
+};
+
+const closePlanLimitModal = () => {
+    if (planLimitModal) planLimitModal.style.display = 'none';
+};
+
+const parseOptionalNumber = (value) => {
+    if (value === '' || value === null || typeof value === 'undefined') return null;
+    const numeric = Number(value);
+    return Number.isNaN(numeric) ? null : numeric;
+};
+
+const serializeLimitForm = () => ({
+    role: limitRoleInput.value.trim(),
+    max_meetings_per_month: parseOptionalNumber(maxMeetingsPerMonthInput.value),
+    max_duration_minutes: parseOptionalNumber(maxDurationMinutesInput.value),
+    warn_before_minutes: parseOptionalNumber(warnBeforeMinutesInput.value),
+    allow_postpone: allowPostponeInput.checked ? 1 : 0,
+    max_containers_personal: parseOptionalNumber(maxContainersPersonalInput.value),
+    max_meetings_per_container_personal: parseOptionalNumber(maxMeetingsPerContainerPersonalInput.value),
+    max_containers_org: parseOptionalNumber(maxContainersOrgInput.value),
+    max_meetings_per_container_org: parseOptionalNumber(maxMeetingsPerContainerOrgInput.value),
+});
+
+const savePlanLimit = async () => {
+    if (!planLimitForm) return;
+    hideAlert();
+
+    const payload = serializeLimitForm();
+
+    try {
+        const response = await fetch('/admin/plans/limits', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                Accept: 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            const message = data.message || 'No se pudieron guardar los límites';
+            throw new Error(message);
+        }
+
+        await response.json();
+        showAlert('success', 'Límites actualizados correctamente');
+        fetchPlanLimits();
+        closePlanLimitModal();
     } catch (error) {
         showAlert('error', error.message || 'Error desconocido');
     }
@@ -204,4 +444,19 @@ if (planForm) {
     planForm.addEventListener('submit', handleSubmit);
 }
 
+if (planLimitForm) {
+    planLimitForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        savePlanLimit();
+    });
+}
+
 fetchPlans();
+fetchPlanLimits();
+
+window.openPlanModal = openPlanModal;
+window.closePlanModal = closePlanModal;
+window.savePlan = savePlan;
+window.openPlanLimitModal = openPlanLimitModal;
+window.closePlanLimitModal = closePlanLimitModal;
+window.savePlanLimit = savePlanLimit;

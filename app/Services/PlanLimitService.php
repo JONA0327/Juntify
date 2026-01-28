@@ -42,6 +42,10 @@ class PlanLimitService
         $maxMinutes  = $plan?->max_duration_minutes ?? 120;
         $allowPost   = $plan?->allow_postpone ?? true;
         $warnBefore  = $plan?->warn_before_minutes ?? 5;
+        $maxContainersPersonal = $plan?->max_containers_personal;
+        $maxMeetingsPerContainerPersonal = $plan?->max_meetings_per_container_personal;
+        $maxContainersOrg = $plan?->max_containers_org;
+        $maxMeetingsPerContainerOrg = $plan?->max_meetings_per_container_org;
 
         // Use the new monthly usage tracking system
         $used = MonthlyMeetingUsage::getCurrentMonthCount($user->id);
@@ -62,9 +66,25 @@ class PlanLimitService
                     $maxMeetings = $ownerMaxMeetings; // share owner's monthly cap
                 }
 
+                $maxContainersOrg = $ownerPlan?->max_containers_org ?? $maxContainersOrg;
+                $maxMeetingsPerContainerOrg = $ownerPlan?->max_meetings_per_container_org ?? $maxMeetingsPerContainerOrg;
+
+                if ($this->isUnlimitedRole($owner->roles)) {
+                    $maxContainersOrg = null;
+                    $maxMeetingsPerContainerOrg = null;
+                }
+
                 // Use organization-level usage tracking
                 $used = MonthlyMeetingUsage::getCurrentMonthCount($user->id, $user->current_organization_id);
             }
+        }
+
+        if ($this->isUnlimitedRole($role)) {
+            $maxMeetings = null;
+            $maxContainersPersonal = null;
+            $maxMeetingsPerContainerPersonal = null;
+            $maxContainersOrg = null;
+            $maxMeetingsPerContainerOrg = null;
         }
 
         return [
@@ -75,6 +95,10 @@ class PlanLimitService
             'max_duration_minutes' => $maxMinutes,
             'allow_postpone' => (bool)$allowPost,
             'warn_before_minutes' => $warnBefore,
+            'max_containers_personal' => $maxContainersPersonal,
+            'max_meetings_per_container_personal' => $maxMeetingsPerContainerPersonal,
+            'max_containers_org' => $maxContainersOrg,
+            'max_meetings_per_container_org' => $maxMeetingsPerContainerOrg,
         ];
     }
 
