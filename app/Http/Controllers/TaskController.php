@@ -39,6 +39,16 @@ class TaskController extends Controller
                          str_contains($role, 'business') || str_contains($planCode, 'business') ||
                          str_contains($role, 'negocio') || str_contains($planCode, 'negocio');
 
+        $planLimits = $planService->getLimitsForUser($user);
+        $defaultViews = $isBusinessPlan ? ['calendario'] : ['calendario', 'tablero'];
+        $taskViewAccess = array_values(array_intersect(
+            ['calendario', 'tablero'],
+            $planLimits['task_views'] ?? $defaultViews
+        ));
+        if (empty($taskViewAccess)) {
+            $taskViewAccess = ['calendario'];
+        }
+
         $username = $this->getValidatedUsername();
 
         // Obtener tareas del usuario autenticado o asignadas a él
@@ -85,7 +95,7 @@ class TaskController extends Controller
             })->overdue()->count(),
         ];
 
-        return view('tasks.index', compact('tasks', 'stats', 'isBusinessPlan'));
+        return view('tasks.index', compact('tasks', 'stats', 'isBusinessPlan', 'taskViewAccess'));
     }
 
     /**

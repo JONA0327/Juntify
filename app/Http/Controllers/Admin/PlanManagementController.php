@@ -156,11 +156,18 @@ class PlanManagementController extends Controller
             'max_duration_minutes' => 'nullable|integer|min:0',
             'warn_before_minutes' => 'nullable|integer|min:0',
             'allow_postpone' => 'required|boolean',
+            'task_views' => 'nullable|array',
+            'task_views.*' => 'string|in:calendario,tablero',
             'max_containers_personal' => 'nullable|integer|min:0',
             'max_meetings_per_container_personal' => 'nullable|integer|min:0',
             'max_containers_org' => 'nullable|integer|min:0',
             'max_meetings_per_container_org' => 'nullable|integer|min:0',
         ]);
+
+        $taskViews = $validated['task_views'] ?? null;
+        if (is_array($taskViews) && empty($taskViews)) {
+            $taskViews = ['calendario'];
+        }
 
         $limit = PlanLimit::firstOrNew(['role' => $validated['role']]);
         $limit->fill([
@@ -168,6 +175,7 @@ class PlanManagementController extends Controller
             'max_duration_minutes' => $validated['max_duration_minutes'] ?? 120,
             'warn_before_minutes' => $validated['warn_before_minutes'] ?? 5,
             'allow_postpone' => $validated['allow_postpone'],
+            'task_views' => $taskViews,
             'max_containers_personal' => $validated['max_containers_personal'] ?? null,
             'max_meetings_per_container_personal' => $validated['max_meetings_per_container_personal'] ?? null,
             'max_containers_org' => $validated['max_containers_org'] ?? null,
@@ -219,6 +227,7 @@ class PlanManagementController extends Controller
             'max_duration_minutes' => $limit->max_duration_minutes,
             'allow_postpone' => (bool) $limit->allow_postpone,
             'warn_before_minutes' => $limit->warn_before_minutes,
+            'task_views' => $limit->task_views,
             'max_containers_personal' => $limit->max_containers_personal,
             'max_meetings_per_container_personal' => $limit->max_meetings_per_container_personal,
             'max_containers_org' => $limit->max_containers_org,

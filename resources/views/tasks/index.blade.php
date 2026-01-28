@@ -22,7 +22,9 @@
         'resources/js/tasks/index.js'
     ])
 </head>
-<body class="bg-slate-950 text-slate-200 font-sans antialiased" data-is-business-plan="{{ ($isBusinessPlan ?? false) ? '1' : '0' }}">
+<body class="bg-slate-950 text-slate-200 font-sans antialiased"
+      data-is-business-plan="{{ ($isBusinessPlan ?? false) ? '1' : '0' }}"
+      data-task-view-access="{{ isset($taskViewAccess) ? implode(',', $taskViewAccess) : '' }}">
 
     @include('partials.global-vars')
 
@@ -65,8 +67,10 @@
                 </div>
 
                 <div class="mt-6 flex flex-wrap gap-2" role="tablist" aria-label="Vistas de tareas">
-                    <button type="button" data-task-view-btn="calendario" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-800/70 text-sm font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500">Calendario</button>
-                    @if(!($isBusinessPlan ?? false))
+                    @if(in_array('calendario', $taskViewAccess ?? ['calendario'], true))
+                        <button type="button" data-task-view-btn="calendario" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-800/70 text-sm font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500">Calendario</button>
+                    @endif
+                    @if(in_array('tablero', $taskViewAccess ?? [], true))
                         <button type="button" data-task-view-btn="tablero" class="task-view-tab-btn px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/40 text-sm font-medium text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">Tablero</button>
                     @endif
                 </div>
@@ -84,7 +88,7 @@
                             @include('tasks.partials._tabs-reuniones')
                         </div>
                         <!-- Kanban simple por reunión -->
-                        @if(!($isBusinessPlan ?? false))
+                        @if(in_array('tablero', $taskViewAccess ?? [], true))
                             <div id="kanban-board" class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 hidden" data-task-view-targets="tablero" data-task-view-requires-kanban="1">
                                 <div class="flex flex-col gap-6">
                                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

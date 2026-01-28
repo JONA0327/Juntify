@@ -42,6 +42,7 @@ class PlanLimitService
         $maxMinutes  = $plan?->max_duration_minutes ?? 120;
         $allowPost   = $plan?->allow_postpone ?? true;
         $warnBefore  = $plan?->warn_before_minutes ?? 5;
+        $taskViews = $plan?->task_views;
         $maxContainersPersonal = $plan?->max_containers_personal;
         $maxMeetingsPerContainerPersonal = $plan?->max_meetings_per_container_personal;
         $maxContainersOrg = $plan?->max_containers_org;
@@ -85,6 +86,7 @@ class PlanLimitService
             $maxMeetingsPerContainerPersonal = null;
             $maxContainersOrg = null;
             $maxMeetingsPerContainerOrg = null;
+            $taskViews = ['calendario', 'tablero'];
         }
 
         return [
@@ -95,6 +97,7 @@ class PlanLimitService
             'max_duration_minutes' => $maxMinutes,
             'allow_postpone' => (bool)$allowPost,
             'warn_before_minutes' => $warnBefore,
+            'task_views' => $taskViews,
             'max_containers_personal' => $maxContainersPersonal,
             'max_meetings_per_container_personal' => $maxMeetingsPerContainerPersonal,
             'max_containers_org' => $maxContainersOrg,
