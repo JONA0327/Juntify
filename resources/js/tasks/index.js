@@ -1,5 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
     const isBusinessPlan = document.body.dataset.isBusinessPlan === '1';
+    const taskViewAccess = (document.body.dataset.taskViewAccess || '')
+        .split(',')
+        .map(view => view.trim().toLowerCase())
+        .filter(Boolean);
+    const allowedTaskViews = taskViewAccess.length ? taskViewAccess : ['calendario', 'tablero'];
 
     window.taskLaravel = {
         csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
@@ -9,7 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
         apiTasksDestroy: (id) => `/api/tasks-laravel/tasks/${id}`,
         apiExists: '/api/tasks-laravel/exists',
         apiImport: (meetingId) => `/api/tasks-laravel/import/${meetingId}`,
-        isBusinessPlan: isBusinessPlan
+        isBusinessPlan: isBusinessPlan,
+        taskViewAccess: allowedTaskViews
     };
 
     // Helper opcional para mostrar/ocultar el panel de tareas lateral
@@ -24,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const csrfToken = (window.taskLaravel?.csrf || document.querySelector('meta[name="csrf-token"]').content || '');
     let currentKanbanTab = 'board';
     let currentKanbanTasks = [];
-    let currentTaskMainView = 'calendario';
+    let currentTaskMainView = allowedTaskViews[0] || 'calendario';
     let availableMeetings = [];
     let currentMeetingFilter = null; // null = todas, number = meeting_id específico
 
@@ -179,11 +185,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setTaskMainView(view){
-        // Para usuarios business, solo permitir calendario
-        if (window.taskLaravel && window.taskLaravel.isBusinessPlan && view === 'tablero') {return;
+        if (!allowedTaskViews.includes(view)) {
+            return;
         }
-
-        currentTaskMainView = ['calendario', 'tablero'].includes(view) ? view : 'calendario';
+        currentTaskMainView = view;
         refreshTaskViewVisibility();
     }
 
@@ -583,20 +588,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Establecer vista por defecto según el tamaño de pantalla
     function setDefaultView() {
-        if (window.innerWidth <= 768) {
+        if (window.innerWidth <= 768 && allowedTaskViews.includes('tablero')) {
             // En móvil, forzar kanban disponible y usar tablero
             showKanban(true);
             setTaskMainView('tablero');
-        } else {
+        } else if (allowedTaskViews.includes('calendario')) {
             setTaskMainView('calendario');
+        } else if (allowedTaskViews[0]) {
+            setTaskMainView(allowedTaskViews[0]);
         }
     }
 
     // Override la función original para permitir calendario en móvil
     const originalSetTaskMainView = setTaskMainView;
     setTaskMainView = function(view) {
-        // Permitir ambas vistas en móvil
-        currentTaskMainView = ['calendario', 'tablero'].includes(view) ? view : 'tablero';
+        if (!allowedTaskViews.includes(view)) {
+            return;
+        }
+        currentTaskMainView = view;
 
         // Ocultar filtro cuando esté en calendario
         const filterContainer = document.getElementById('meetingFilterContainer');
@@ -631,7 +640,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         refreshTaskViewVisibility();
-    };        setDefaultView();
+    };
+    setDefaultView();
 
     // Ajustar vista cuando cambie el tamaño de pantalla
     window.addEventListener('resize', () => {

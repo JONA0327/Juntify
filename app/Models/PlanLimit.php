@@ -17,9 +17,14 @@ class PlanLimit extends Model
         'max_duration_minutes',
         'allow_postpone',
         'warn_before_minutes',
+        'task_views',
         'max_containers_personal',
         'max_meetings_per_container_personal',
         'max_containers_org',
         'max_meetings_per_container_org',
+    ];
+
+    protected $casts = [
+        'task_views' => 'array',
     ];
 }

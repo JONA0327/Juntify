@@ -20,6 +20,8 @@ const maxMeetingsPerMonthInput = document.getElementById('maxMeetingsPerMonth');
 const maxDurationMinutesInput = document.getElementById('maxDurationMinutes');
 const warnBeforeMinutesInput = document.getElementById('warnBeforeMinutes');
 const allowPostponeInput = document.getElementById('allowPostpone');
+const taskViewCalendarInput = document.getElementById('taskViewCalendar');
+const taskViewBoardInput = document.getElementById('taskViewBoard');
 const maxContainersPersonalInput = document.getElementById('maxContainersPersonal');
 const maxMeetingsPerContainerPersonalInput = document.getElementById('maxMeetingsPerContainerPersonal');
 const maxContainersOrgInput = document.getElementById('maxContainersOrg');
@@ -261,13 +263,20 @@ const formatLimitValue = (value) => {
     return Number.isFinite(Number(value)) ? value : '—';
 };
 
+const formatTaskViews = (views = []) => {
+    if (!Array.isArray(views) || !views.length) return '—';
+    return views
+        .map((view) => (view === 'tablero' ? 'Tablero' : 'Calendario'))
+        .join(', ');
+};
+
 const renderPlanLimits = (limits = []) => {
     if (!planLimitsTableBody) return;
 
     if (!limits.length) {
         planLimitsTableBody.innerHTML = `
             <tr>
-                <td colspan="11" class="text-center py-6 text-slate-400">No hay límites configurados todavía</td>
+                <td colspan="12" class="text-center py-6 text-slate-400">No hay límites configurados todavía</td>
             </tr>
         `;
         return;
@@ -298,6 +307,10 @@ const renderPlanLimits = (limits = []) => {
         const postponeCell = document.createElement('td');
         postponeCell.className = 'px-4 py-3 text-center text-slate-300';
         postponeCell.textContent = limit.allow_postpone ? 'Sí' : 'No';
+
+        const taskViewsCell = document.createElement('td');
+        taskViewsCell.className = 'px-4 py-3 text-center text-slate-300';
+        taskViewsCell.textContent = formatTaskViews(limit.task_views);
 
         const containersPersonalCell = document.createElement('td');
         containersPersonalCell.className = 'px-4 py-3 text-center text-slate-300';
@@ -338,6 +351,7 @@ const renderPlanLimits = (limits = []) => {
         row.appendChild(durationCell);
         row.appendChild(warnCell);
         row.appendChild(postponeCell);
+        row.appendChild(taskViewsCell);
         row.appendChild(containersPersonalCell);
         row.appendChild(meetingsPerContainerPersonalCell);
         row.appendChild(containersOrgCell);
@@ -367,16 +381,25 @@ const openPlanLimitModal = (limit = null) => {
     if (!planLimitForm || !planLimitModal) return;
     hideAlert();
     planLimitForm.reset();
+    const viewDefaults = ['calendario', 'tablero'];
     if (limit) {
         limitRoleInput.value = limit.role || '';
         maxMeetingsPerMonthInput.value = limit.max_meetings_per_month ?? '';
         maxDurationMinutesInput.value = limit.max_duration_minutes ?? '';
         warnBeforeMinutesInput.value = limit.warn_before_minutes ?? '';
         allowPostponeInput.checked = !!limit.allow_postpone;
+        const taskViews = Array.isArray(limit.task_views) && limit.task_views.length
+            ? limit.task_views
+            : viewDefaults;
+        if (taskViewCalendarInput) taskViewCalendarInput.checked = taskViews.includes('calendario');
+        if (taskViewBoardInput) taskViewBoardInput.checked = taskViews.includes('tablero');
         maxContainersPersonalInput.value = limit.max_containers_personal ?? '';
         maxMeetingsPerContainerPersonalInput.value = limit.max_meetings_per_container_personal ?? '';
         maxContainersOrgInput.value = limit.max_containers_org ?? '';
         maxMeetingsPerContainerOrgInput.value = limit.max_meetings_per_container_org ?? '';
+    } else {
+        if (taskViewCalendarInput) taskViewCalendarInput.checked = true;
+        if (taskViewBoardInput) taskViewBoardInput.checked = true;
     }
 
     planLimitModal.style.display = 'flex';
@@ -392,12 +415,20 @@ const parseOptionalNumber = (value) => {
     return Number.isNaN(numeric) ? null : numeric;
 };
 
+const collectTaskViews = () => {
+    const views = [];
+    if (taskViewCalendarInput?.checked) views.push('calendario');
+    if (taskViewBoardInput?.checked) views.push('tablero');
+    return views;
+};
+
 const serializeLimitForm = () => ({
     role: limitRoleInput.value.trim(),
     max_meetings_per_month: parseOptionalNumber(maxMeetingsPerMonthInput.value),
     max_duration_minutes: parseOptionalNumber(maxDurationMinutesInput.value),
     warn_before_minutes: parseOptionalNumber(warnBeforeMinutesInput.value),
     allow_postpone: allowPostponeInput.checked ? 1 : 0,
+    task_views: collectTaskViews(),
     max_containers_personal: parseOptionalNumber(maxContainersPersonalInput.value),
     max_meetings_per_container_personal: parseOptionalNumber(maxMeetingsPerContainerPersonalInput.value),
     max_containers_org: parseOptionalNumber(maxContainersOrgInput.value),

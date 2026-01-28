@@ -102,6 +102,7 @@
                                     <th style="text-align: center; min-width: 130px;">Duración máx</th>
                                     <th style="text-align: center; min-width: 130px;">Aviso (min)</th>
                                     <th style="text-align: center; min-width: 110px;">Posponer</th>
+                                    <th style="text-align: center; min-width: 160px;">Vistas tareas</th>
                                     <th style="text-align: center; min-width: 150px;">Contenedores (personal)</th>
                                     <th style="text-align: center; min-width: 170px;">Reuniones/cont. (personal)</th>
                                     <th style="text-align: center; min-width: 150px;">Contenedores (org)</th>
@@ -112,7 +113,7 @@
                             </thead>
                             <tbody id="plan-limits-table-body">
                                 <tr>
-                                    <td colspan="11" class="text-center py-8 text-slate-400" style="font-style: italic;">
+                                    <td colspan="12" class="text-center py-8 text-slate-400" style="font-style: italic;">
                                         No hay límites configurados todavía
                                     </td>
                                 </tr>
@@ -250,6 +251,20 @@
                         <input type="checkbox" id="allowPostpone" name="allow_postpone" checked>
                         <span class="checkbox-text">Permitir posponer reuniones</span>
                     </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="mb-2 block text-sm font-medium text-slate-200">Vistas de tareas permitidas</label>
+                    <div class="flex flex-wrap gap-4 text-sm text-slate-200">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="taskViewCalendar" name="task_views" value="calendario">
+                            <span class="checkbox-text">Calendario</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="taskViewBoard" name="task_views" value="tablero">
+                            <span class="checkbox-text">Tablero</span>
+                        </label>
+                    </div>
                 </div>
 
                 <div class="form-grid">
