@@ -21,6 +21,11 @@ yarn-error.log
 /.idea
 /.vscode
 
+# FFmpeg portable
+/ffmpeg-portable
+/ffmpeg.zip
+/temp
+
 # Certificados SSL
 /cert
 /certs

@@ -47,12 +47,24 @@ def extract_voice_features_from_segment(audio_path, start_time, end_time):
     # Convertir audio a WAV usando ffmpeg
     temp_wav = None
     try:
-        temp_fd, temp_wav = tempfile.mkstemp(suffix='.wav')
+        # Usar directorio temporal del proyecto si existe
+        temp_dir = os.environ.get('TEMP', tempfile.gettempdir())
+        temp_fd, temp_wav = tempfile.mkstemp(suffix='.wav', dir=temp_dir)
         os.close(temp_fd)
         
-        ffmpeg_path = os.environ.get('FFMPEG_BIN', 'ffmpeg')
-        if ffmpeg_path.startswith('"') and ffmpeg_path.endswith('"'):
-            ffmpeg_path = ffmpeg_path[1:-1]
+        # Usar ffmpeg portable del proyecto primero
+        project_ffmpeg = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ffmpeg-portable', 'bin', 'ffmpeg.exe')
+        if os.path.exists(project_ffmpeg):
+            ffmpeg_path = project_ffmpeg
+        else:
+            ffmpeg_path = os.environ.get('FFMPEG_BIN', 'ffmpeg')
+            if ffmpeg_path.startswith('"') and ffmpeg_path.endswith('"'):
+                ffmpeg_path = ffmpeg_path[1:-1]
+        
+        # Flags para evitar bloqueo de Windows
+        creation_flags = 0
+        if sys.platform == 'win32':
+            creation_flags = 0x08000000  # CREATE_NO_WINDOW
         
         # Extraer solo el segmento necesario
         result = subprocess.run([
@@ -65,7 +77,7 @@ def extract_voice_features_from_segment(audio_path, start_time, end_time):
             '-f', 'wav',
             '-y',
             temp_wav
-        ], capture_output=True, text=True, timeout=30)
+        ], capture_output=True, text=True, timeout=30, creationflags=creation_flags)
         
         if result.returncode != 0:
             print(f'Error en ffmpeg: {result.stderr}', file=sys.stderr)
