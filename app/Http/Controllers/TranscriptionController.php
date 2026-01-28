@@ -1083,11 +1083,15 @@ class TranscriptionController extends Controller
 
             $userEmbeddings = [];
             foreach ($users as $user) {
-                // Aceptar embeddings de 76 o 96 dimensiones (script Python genera 76)
+                // Aceptar embeddings de 76 o más dimensiones (normalizar a 76 para consistencia)
                 if (is_array($user->voice_embedding) && count($user->voice_embedding) >= 76) {
+                    $embedding = array_values($user->voice_embedding);
+                    if (count($embedding) > 76) {
+                        $embedding = array_slice($embedding, 0, 76);
+                    }
                     $userEmbeddings[$user->id] = [
-                        'embedding' => $user->voice_embedding,
-                        'name' => $user->full_name ?? $user->username ?? 'Usuario',
+                        'embedding' => $embedding,
+                        'name' => $this->resolveVoiceDisplayName($user),
                     ];
                 }
             }
@@ -1177,7 +1181,7 @@ class TranscriptionController extends Controller
                         // Determinar el mejor match para este speaker
                         $userVotes = [];
                         foreach ($results as $result) {
-                            if ($result['matched_user_id'] && $result['confidence'] >= 0.80) {
+                            if ($result['matched_user_id'] && $result['confidence'] >= 0.75) {
                                 $userId = $result['matched_user_id'];
                                 if (!isset($userVotes[$userId])) {
                                     $userVotes[$userId] = ['count' => 0, 'total_confidence' => 0];
@@ -1274,6 +1278,15 @@ class TranscriptionController extends Controller
         }
 
         return array_slice($samples, 0, $count);
+    }
+
+    private function resolveVoiceDisplayName(\App\Models\User $user): string
+    {
+        return $user->full_name
+            ?? $user->name
+            ?? $user->username
+            ?? $user->email
+            ?? 'Usuario';
     }
 
     /**

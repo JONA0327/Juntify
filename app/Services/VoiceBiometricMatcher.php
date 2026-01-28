@@ -10,7 +10,7 @@ class VoiceBiometricMatcher
     /**
      * Compara un embedding de voz con los perfiles de usuarios de la reunión
      * 
-     * @param array $audioEmbedding Embedding extraído del audio de la reunión (96 dimensiones)
+     * @param array $audioEmbedding Embedding extraído del audio de la reunión (76 o 96 dimensiones)
      * @param array $userIds IDs de usuarios participantes de la reunión
      * @param float $threshold Umbral de similitud (0-1, default 0.75)
      * @return array|null ['user_id' => int, 'confidence' => float, 'user_name' => string] o null
@@ -30,9 +30,9 @@ class VoiceBiometricMatcher
             ->get();
 
         foreach ($usersWithVoice as $user) {
-            $userEmbedding = $user->voice_embedding;
+            $userEmbedding = $this->normalizeEmbedding($user->voice_embedding);
             
-            if (!is_array($userEmbedding) || count($userEmbedding) !== 96) {
+            if (!is_array($userEmbedding) || count($userEmbedding) < 76) {
                 Log::warning('Invalid voice embedding for user', [
                     'user_id' => $user->id,
                     'embedding_type' => gettype($userEmbedding),
@@ -42,7 +42,12 @@ class VoiceBiometricMatcher
             }
 
             // Calcular similitud coseno
-            $similarity = $this->cosineSimilarity($audioEmbedding, $userEmbedding);
+            $audioEmbeddingNormalized = $this->normalizeEmbedding($audioEmbedding);
+            if (!is_array($audioEmbeddingNormalized)) {
+                continue;
+            }
+
+            $similarity = $this->cosineSimilarity($audioEmbeddingNormalized, $userEmbedding);
 
             Log::debug('Voice similarity calculated', [
                 'user_id' => $user->id,
@@ -84,7 +89,9 @@ class VoiceBiometricMatcher
     private function cosineSimilarity(array $vec1, array $vec2): float
     {
         if (count($vec1) !== count($vec2)) {
-            return 0.0;
+            $min = min(count($vec1), count($vec2));
+            $vec1 = array_slice($vec1, 0, $min);
+            $vec2 = array_slice($vec2, 0, $min);
         }
 
         $dotProduct = 0;
@@ -105,6 +112,37 @@ class VoiceBiometricMatcher
         }
 
         return $dotProduct / ($magnitude1 * $magnitude2);
+    }
+
+    private function normalizeEmbedding($embedding): ?array
+    {
+        if (!is_array($embedding)) {
+            return null;
+        }
+
+        $embedding = array_values($embedding);
+        $embedding = array_map(static fn ($value) => (float) $value, $embedding);
+
+        if (count($embedding) < 76) {
+            return null;
+        }
+
+        if (count($embedding) > 96) {
+            $embedding = array_slice($embedding, 0, 96);
+        }
+
+        $mean = array_sum($embedding) / count($embedding);
+        $variance = 0.0;
+        foreach ($embedding as $value) {
+            $variance += ($value - $mean) ** 2;
+        }
+        $std = sqrt($variance / count($embedding));
+
+        if ($std <= 0) {
+            return $embedding;
+        }
+
+        return array_map(static fn ($value) => ($value - $mean) / $std, $embedding);
     }
 
     /**
