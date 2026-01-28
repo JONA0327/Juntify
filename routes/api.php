@@ -385,5 +385,8 @@ Route::middleware(['web', 'auth'])->group(function () {
 
                 // Plan limits
                 Route::get('/plan/limits', [PlanController::class, 'limits'])->name('api.plan.limits');
+
+        // Identificación de speakers antes de guardar
+        Route::post('/transcriptions/identify-speakers', [\App\Http\Controllers\TranscriptionController::class, 'identifySpeakersBeforeSave'])->name('api.transcriptions.identify-speakers');
     });
 

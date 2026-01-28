@@ -821,11 +821,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const subtitle = document.querySelector('.analysis-subtitle');
                 const used = Number(limits.used_this_month || 0);
                 const max = limits.max_meetings_per_month;
+                
+                // Si el máximo es 999999 o mayor, tratarlo como infinito
+                const isUnlimited = max === null || max >= 999999;
+                
                 if (countEl) {
-                    countEl.textContent = `${used}/${max ?? '∞'}`;
+                    countEl.textContent = isUnlimited ? `${used}/∞` : `${used}/${max}`;
                 }
                 if (subtitle) {
-                    if (max !== null && used >= max) {
+                    if (!isUnlimited && used >= max) {
                         subtitle.textContent = 'Has alcanzado el límite de reuniones para este mes.';
                         // Deshabilitar inicio de nuevas grabaciones
                         const micBtn = document.getElementById('mic-circle');
@@ -834,7 +838,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         if (meetBtn) { meetBtn.disabled = true; meetBtn.classList.add('disabled'); }
                         // Mensaje visual rápido
                         showWarning('Has alcanzado tu límite mensual de reuniones. Actualiza tu plan para continuar.');
-                    } else if (max !== null) {
+                    } else if (!isUnlimited) {
                         const remaining = Math.max(0, max - used);
                         subtitle.textContent = `Te quedan ${remaining} reuniones este mes.`;
                     } else {

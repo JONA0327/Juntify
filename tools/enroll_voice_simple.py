@@ -119,26 +119,59 @@ def extract_voice_features(audio_path):
     # Estas características capturan el "timbre" único de la voz
     
     try:
-        # 1. MFCCs (Mel-frequency cepstral coefficients) - 20 coeficientes
-        mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)
+        # MFCCs - 13 coeficientes estándar para reconocimiento de voz
+        mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_fft=2048, hop_length=512)
         mfcc_mean = np.mean(mfccs, axis=1)
         mfcc_std = np.std(mfccs, axis=1)
         
-        # 2. Espectro de frecuencias
-        spectral_centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
-        spectral_rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
-        spectral_bandwidth = np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr))
+        # Delta y Delta-Delta MFCCs (cambios temporales)
+        mfcc_delta = librosa.feature.delta(mfccs)
+        mfcc_delta2 = librosa.feature.delta(mfccs, order=2)
+        mfcc_delta_mean = np.mean(mfcc_delta, axis=1)
+        mfcc_delta2_mean = np.mean(mfcc_delta2, axis=1)
         
-        # 3. Zero Crossing Rate (características del timbre)
-        zcr = np.mean(librosa.feature.zero_crossing_rate(y))
+        # Características espectrales (timbre)
+        spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)
+        spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)
+        spectral_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)
+        spectral_contrast = librosa.feature.spectral_contrast(y=y, sr=sr, n_bands=6)
         
-        # 4. Chroma features (contenido tonal)
+        spectral_centroid_mean = np.mean(spectral_centroid)
+        spectral_centroid_std = np.std(spectral_centroid)
+        spectral_rolloff_mean = np.mean(spectral_rolloff)
+        spectral_bandwidth_mean = np.mean(spectral_bandwidth)
+        spectral_contrast_mean = np.mean(spectral_contrast, axis=1)
+        
+        zcr = librosa.feature.zero_crossing_rate(y)
+        zcr_mean = np.mean(zcr)
+        zcr_std = np.std(zcr)
+        
+        # Pitch robusto
+        pitches, magnitudes = librosa.piptrack(y=y, sr=sr, fmin=75, fmax=400)
+        pitch_values = []
+        for t in range(pitches.shape[1]):
+            index = magnitudes[:, t].argmax()
+            pitch = pitches[index, t]
+            if pitch > 0:
+                pitch_values.append(pitch)
+        
+        if len(pitch_values) > 0:
+            pitch_mean = np.mean(pitch_values)
+            pitch_std = np.std(pitch_values)
+            pitch_median = np.median(pitch_values)
+        else:
+            pitch_mean = 0
+            pitch_std = 0
+            pitch_median = 0
+        
+        # Energía RMS
+        rms_energy = librosa.feature.rms(y=y)
+        rms_mean = np.mean(rms_energy)
+        rms_std = np.std(rms_energy)
+        
+        # Chroma (características tonales) - 6 dimensiones
         chroma = librosa.feature.chroma_stft(y=y, sr=sr)
-        chroma_mean = np.mean(chroma, axis=1)
-        
-        # 5. Mel spectrogram
-        mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=40)
-        mel_mean = np.mean(mel_spec, axis=1)
+        chroma_mean = np.mean(chroma, axis=1)[:6]  # Solo primeras 6 de 12
         
     except OSError as e:
         if 'WinError 10106' in str(e):
@@ -150,19 +183,34 @@ def extract_voice_features(audio_path):
         print(f'Error al extraer características: {e}', file=sys.stderr)
         return None
     
-    # Combinar todas las características en un vector de embedding
+    # Combinar todas las características (76 dimensiones)
     embedding = np.concatenate([
-        mfcc_mean,           # 20 valores
-        mfcc_std,            # 20 valores
-        [spectral_centroid], # 1 valor
-        [spectral_rolloff],  # 1 valor
-        [spectral_bandwidth],# 1 valor
-        [zcr],              # 1 valor
-        chroma_mean,        # 12 valores
-        mel_mean[:20]       # 20 valores (primeros 20 mels)
+        mfcc_mean,                      # 13
+        mfcc_std,                       # 13
+        mfcc_delta_mean,                # 13
+        mfcc_delta2_mean,               # 13
+        spectral_contrast_mean,         # 7
+        chroma_mean,                    # 6
+        [spectral_centroid_mean],       # 1
+        [spectral_centroid_std],        # 1
+        [spectral_rolloff_mean],        # 1
+        [spectral_bandwidth_mean],      # 1
+        [zcr_mean],                     # 1
+        [zcr_std],                      # 1
+        [pitch_mean],                   # 1
+        [pitch_std],                    # 1
+        [pitch_median],                 # 1
+        [rms_mean],                     # 1
+        [rms_std],                      # 1
     ])
     
-    # Total: 96 características que representan la voz única de la persona
+    # Normalizar el embedding (media 0, desviación estándar 1)
+    mean = np.mean(embedding)
+    std = np.std(embedding)
+    if std > 0:
+        embedding = (embedding - mean) / std
+    
+    # Total: 76 características que representan la voz única de la persona
     
     return embedding.tolist()
 

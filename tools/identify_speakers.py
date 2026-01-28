@@ -110,20 +110,59 @@ def extract_voice_features_from_segment(audio_path, start_time, end_time):
     
     # Extraer características
     try:
-        mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)
+        # MFCCs - 13 coeficientes estándar para reconocimiento de voz
+        mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_fft=2048, hop_length=512)
         mfcc_mean = np.mean(mfccs, axis=1)
         mfcc_std = np.std(mfccs, axis=1)
         
-        spectral_centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
-        spectral_rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
-        spectral_bandwidth = np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr))
-        zcr = np.mean(librosa.feature.zero_crossing_rate(y))
+        # Delta y Delta-Delta MFCCs (cambios temporales)
+        mfcc_delta = librosa.feature.delta(mfccs)
+        mfcc_delta2 = librosa.feature.delta(mfccs, order=2)
+        mfcc_delta_mean = np.mean(mfcc_delta, axis=1)
+        mfcc_delta2_mean = np.mean(mfcc_delta2, axis=1)
         
+        # Características espectrales (timbre)
+        spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)
+        spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)
+        spectral_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)
+        spectral_contrast = librosa.feature.spectral_contrast(y=y, sr=sr, n_bands=6)
+        
+        spectral_centroid_mean = np.mean(spectral_centroid)
+        spectral_centroid_std = np.std(spectral_centroid)
+        spectral_rolloff_mean = np.mean(spectral_rolloff)
+        spectral_bandwidth_mean = np.mean(spectral_bandwidth)
+        spectral_contrast_mean = np.mean(spectral_contrast, axis=1)
+        
+        zcr = librosa.feature.zero_crossing_rate(y)
+        zcr_mean = np.mean(zcr)
+        zcr_std = np.std(zcr)
+        
+        # Pitch robusto
+        pitches, magnitudes = librosa.piptrack(y=y, sr=sr, fmin=75, fmax=400)
+        pitch_values = []
+        for t in range(pitches.shape[1]):
+            index = magnitudes[:, t].argmax()
+            pitch = pitches[index, t]
+            if pitch > 0:
+                pitch_values.append(pitch)
+        
+        if len(pitch_values) > 0:
+            pitch_mean = np.mean(pitch_values)
+            pitch_std = np.std(pitch_values)
+            pitch_median = np.median(pitch_values)
+        else:
+            pitch_mean = 0
+            pitch_std = 0
+            pitch_median = 0
+        
+        # Energía RMS
+        rms_energy = librosa.feature.rms(y=y)
+        rms_mean = np.mean(rms_energy)
+        rms_std = np.std(rms_energy)
+        
+        # Chroma (características tonales) - 6 dimensiones
         chroma = librosa.feature.chroma_stft(y=y, sr=sr)
-        chroma_mean = np.mean(chroma, axis=1)
-        
-        mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=40)
-        mel_mean = np.mean(mel_spec, axis=1)
+        chroma_mean = np.mean(chroma, axis=1)[:6]  # Solo primeras 6 de 12
         
     except OSError as e:
         if 'WinError 10106' in str(e):
@@ -135,23 +174,51 @@ def extract_voice_features_from_segment(audio_path, start_time, end_time):
         print(f'Error al extraer características: {e}', file=sys.stderr)
         return None
     
-    # Combinar características
+    # Combinar características (76 dimensiones)
     embedding = np.concatenate([
-        mfcc_mean,
-        mfcc_std,
-        [spectral_centroid],
-        [spectral_rolloff],
-        [spectral_bandwidth],
-        [zcr],
-        chroma_mean,
-        mel_mean[:20]
+        mfcc_mean,                      # 13
+        mfcc_std,                       # 13
+        mfcc_delta_mean,                # 13
+        mfcc_delta2_mean,               # 13
+        spectral_contrast_mean,         # 7
+        chroma_mean,                    # 6
+        [spectral_centroid_mean],       # 1
+        [spectral_centroid_std],        # 1
+        [spectral_rolloff_mean],        # 1
+        [spectral_bandwidth_mean],      # 1
+        [zcr_mean],                     # 1
+        [zcr_std],                      # 1
+        [pitch_mean],                   # 1
+        [pitch_std],                    # 1
+        [pitch_median],                 # 1
+        [rms_mean],                     # 1
+        [rms_std],                      # 1
     ])
+    
+    # Verificar dimensiones
+    if len(embedding) != 76:
+        print(f'Advertencia: embedding tiene {len(embedding)} dimensiones, esperadas 76', file=sys.stderr)
+    
+    # Normalizar el embedding
+    embedding = normalize_embedding(embedding)
     
     return embedding.tolist()
 
 
+def normalize_embedding(vec):
+    """Normaliza un embedding para que tenga media 0 y desviación estándar 1"""
+    vec = np.array(vec)
+    mean = np.mean(vec)
+    std = np.std(vec)
+    if std == 0:
+        return vec
+    return (vec - mean) / std
+
+
 def cosine_similarity(vec1, vec2):
-    """Calcula similitud coseno entre dos vectores"""
+    """Calcula similitud coseno entre dos vectores.
+    IMPORTANTE: No normalizar aquí porque vec2 (de BD) ya está normalizado.
+    Solo vec1 (del audio) debe normalizarse antes de llamar a esta función."""
     vec1 = np.array(vec1)
     vec2 = np.array(vec2)
     
@@ -210,16 +277,48 @@ def main():
         # Comparar con embeddings de usuarios
         best_match = None
         best_similarity = 0
+        similarities = {}
         
         for user_id, user_embedding in user_embeddings.items():
-            if not isinstance(user_embedding, list) or len(user_embedding) != 96:
+            # Aceptar embeddings de 76 o 96 dimensiones
+            if not isinstance(user_embedding, list):
+                print(f'Usuario {user_id}: embedding no es lista', file=sys.stderr)
                 continue
             
-            similarity = cosine_similarity(segment_embedding, user_embedding)
+            emb_len = len(user_embedding)
+            if emb_len not in [76, 96]:
+                print(f'Usuario {user_id}: embedding con {emb_len} dimensiones (esperadas 76 o 96)', file=sys.stderr)
+                continue
+            
+            # Normalizar embeddings viejos (detectar si NO están normalizados)
+            usr_emb = np.array(user_embedding)
+            usr_mean = np.mean(usr_emb)
+            usr_std = np.std(usr_emb)
+            
+            # Si el embedding no está normalizado (mean >> 0 o std >> 1), normalizarlo
+            if abs(usr_mean) > 1.0 or abs(usr_std - 1.0) > 0.5:
+                print(f'Usuario {user_id}: normalizando embedding viejo (mean={usr_mean:.2f}, std={usr_std:.2f})', file=sys.stderr)
+                usr_emb = normalize_embedding(usr_emb)
+            
+            # Si las dimensiones no coinciden, ajustar
+            seg_emb = segment_embedding
+            usr_emb = usr_emb.tolist() if isinstance(usr_emb, np.ndarray) else usr_emb
+            
+            if len(seg_emb) != len(usr_emb):
+                min_len = min(len(seg_emb), len(usr_emb))
+                seg_emb = seg_emb[:min_len]
+                usr_emb = usr_emb[:min_len]
+                print(f'Ajustando embeddings a {min_len} dimensiones para comparación', file=sys.stderr)
+            
+            similarity = cosine_similarity(seg_emb, usr_emb)
+            similarities[user_id] = similarity
             
             if similarity > best_similarity:
                 best_similarity = similarity
                 best_match = user_id
+        
+        # Log de similitudes para debugging
+        print(f'Segmento {start}-{end}s: similitudes = {similarities}, mejor = {best_match} ({best_similarity:.3f})', file=sys.stderr)
         
         results.append({
             'start': start,

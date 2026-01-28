@@ -327,7 +327,28 @@ class TranscriptionController extends Controller
         $transcriptId = $transcription->json('id');
         Log::info('Transcription started successfully', ['transcript_id' => $transcriptId]);
 
-        return response()->json(['id' => $transcriptId]);
+        // Guardar temporalmente el audio para identificación de speakers
+        $tempAudioPath = null;
+        try {
+            $extension = pathinfo($fileName, PATHINFO_EXTENSION) ?: 'ogg';
+            $tempFilename = "temp-transcription/{$transcriptId}.{$extension}";
+            Storage::put($tempFilename, file_get_contents($filePath));
+            $tempAudioPath = $tempFilename;
+            Log::info('Audio saved temporarily for speaker identification', [
+                'transcript_id' => $transcriptId,
+                'temp_path' => $tempAudioPath
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('Failed to save temporary audio', [
+                'transcript_id' => $transcriptId,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return response()->json([
+            'id' => $transcriptId,
+            'temp_audio_path' => $tempAudioPath
+        ]);
     }
 
     private function saveFailedAudio(string $filePath): ?string
@@ -341,6 +362,18 @@ class TranscriptionController extends Controller
         } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    private function guessExtensionFromAudio(string $transcriptId): string
+    {
+        // Intentar encontrar el archivo temporal con diferentes extensiones
+        $extensions = ['ogg', 'webm', 'mp3', 'wav', 'm4a', 'mp4'];
+        foreach ($extensions as $ext) {
+            if (Storage::exists("temp-transcription/{$transcriptId}.{$ext}")) {
+                return $ext;
+            }
+        }
+        return 'ogg'; // Default
     }
 
     public function show(string $id)
@@ -383,7 +416,17 @@ class TranscriptionController extends Controller
                 ], 500);
             }
 
-            return $response->json();
+            $transcriptionData = $response->json();
+            
+            // Si la transcripción está completada, agregar temp_audio_path si existe
+            if ($transcriptionData['status'] === 'completed') {
+                $tempAudioPath = "temp-transcription/{$id}." . $this->guessExtensionFromAudio($id);
+                if (Storage::exists($tempAudioPath)) {
+                    $transcriptionData['temp_audio_path'] = $tempAudioPath;
+                }
+            }
+
+            return $transcriptionData;
 
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             Log::error('AssemblyAI connection timeout', [
@@ -915,22 +958,37 @@ class TranscriptionController extends Controller
                 $speakerAnalysis = $this->analyzeSpeakers($data['utterances']);
                 $data['speaker_analysis'] = $speakerAnalysis;
                 
-                // Intentar identificar hablantes automáticamente si hay usuarios en la reunión
+                // Intentar identificar hablantes automáticamente
                 try {
+                    $userIds = [];
+                    
+                    // 1. Si hay una reunión con miembros, usar esos usuarios
                     $recording = \App\Models\Recording::where('transcription_id', $id)->first();
                     if ($recording && $recording->reunion) {
                         $userIds = $recording->reunion->members()->pluck('id')->toArray();
-                        if (!empty($userIds)) {
-                            $data['utterances'] = $this->identifySpeakersAutomatically(
-                                $data['utterances'],
-                                $recording->ruta_archivo,
-                                $userIds
-                            );
-                            Log::info('Automatic speaker identification attempted', [
-                                'transcription_id' => $id,
-                                'users_checked' => count($userIds),
-                            ]);
+                    }
+                    
+                    // 2. Si no hay miembros de reunión, agregar al propietario de la transcripción
+                    if (empty($userIds)) {
+                        $transcription = \App\Models\Transcription::find($id);
+                        if ($transcription && $transcription->user_id) {
+                            $userIds[] = $transcription->user_id;
+                        } elseif ($recording && $recording->user_id) {
+                            $userIds[] = $recording->user_id;
                         }
+                    }
+                    
+                    // 3. Intentar identificar si hay usuarios con perfil de voz
+                    if (!empty($userIds) && $recording && $recording->ruta_archivo) {
+                        $data['utterances'] = $this->identifySpeakersAutomatically(
+                            $data['utterances'],
+                            $recording->ruta_archivo,
+                            $userIds
+                        );
+                        Log::info('Automatic speaker identification attempted', [
+                            'transcription_id' => $id,
+                            'users_checked' => count($userIds),
+                        ]);
                     }
                 } catch (\Exception $e) {
                     Log::warning('Could not perform automatic speaker identification', [
@@ -1025,18 +1083,27 @@ class TranscriptionController extends Controller
 
             $userEmbeddings = [];
             foreach ($users as $user) {
-                if (is_array($user->voice_embedding) && count($user->voice_embedding) === 96) {
+                // Aceptar embeddings de 76 o 96 dimensiones (script Python genera 76)
+                if (is_array($user->voice_embedding) && count($user->voice_embedding) >= 76) {
                     $userEmbeddings[$user->id] = [
                         'embedding' => $user->voice_embedding,
-                        'name' => $user->name,
+                        'name' => $user->full_name ?? $user->username ?? 'Usuario',
                     ];
                 }
             }
 
             if (empty($userEmbeddings)) {
-                Log::info('No valid voice embeddings found');
+                Log::info('No valid voice embeddings found', [
+                    'users_checked' => $users->count(),
+                    'user_ids' => $userIds
+                ]);
                 return $utterances;
             }
+
+            Log::info('Valid voice embeddings found', [
+                'count' => count($userEmbeddings),
+                'user_ids' => array_keys($userEmbeddings)
+            ]);
 
             // Agrupar utterances por speaker para procesar muestras representativas
             $speakerGroups = [];
@@ -1095,13 +1162,22 @@ class TranscriptionController extends Controller
 
                 if ($process->isSuccessful()) {
                     $output = $process->getOutput();
+                    $errorOutput = $process->getErrorOutput();
+                    
+                    if ($errorOutput) {
+                        Log::info('Python script debug output', [
+                            'speaker' => $speaker,
+                            'stderr' => $errorOutput
+                        ]);
+                    }
+                    
                     $results = json_decode(trim($output), true);
                     
                     if (is_array($results)) {
                         // Determinar el mejor match para este speaker
                         $userVotes = [];
                         foreach ($results as $result) {
-                            if ($result['matched_user_id'] && $result['confidence'] >= 0.75) {
+                            if ($result['matched_user_id'] && $result['confidence'] >= 0.80) {
                                 $userId = $result['matched_user_id'];
                                 if (!isset($userVotes[$userId])) {
                                     $userVotes[$userId] = ['count' => 0, 'total_confidence' => 0];
@@ -1140,6 +1216,13 @@ class TranscriptionController extends Controller
                             }
                         }
                     }
+                } else {
+                    Log::warning('Python speaker identification failed', [
+                        'speaker' => $speaker,
+                        'exit_code' => $process->getExitCode(),
+                        'stderr' => $process->getErrorOutput(),
+                        'stdout' => $process->getOutput()
+                    ]);
                 }
             }
 
@@ -1191,5 +1274,124 @@ class TranscriptionController extends Controller
         }
 
         return array_slice($samples, 0, $count);
+    }
+
+    /**
+     * Identifica speakers en una transcripción antes de guardar
+     * Endpoint para llamar desde el frontend con audio local y transcripción
+     */
+    public function identifySpeakersBeforeSave(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'audio_path' => 'required|string',
+                'utterances' => 'required|array',
+                'reunion_id' => 'nullable|integer',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'error' => 'Validation failed',
+                    'details' => $validator->errors()
+                ], 400);
+            }
+
+            $audioPath = $request->input('audio_path');
+            $utterances = $request->input('utterances');
+            $reunionId = $request->input('reunion_id');
+
+            Log::info('identifySpeakersBeforeSave called', [
+                'audio_path' => $audioPath,
+                'utterances_count' => count($utterances),
+                'reunion_id' => $reunionId,
+                'user_id' => auth()->id()
+            ]);
+
+            // Verificar que el archivo existe
+            $fullPath = storage_path('app/' . $audioPath);
+            if (!file_exists($fullPath)) {
+                Log::error('Audio file not found for speaker identification', [
+                    'audio_path' => $audioPath,
+                    'full_path' => $fullPath,
+                    'storage_path' => storage_path('app/')
+                ]);
+                return response()->json([
+                    'error' => 'Audio file not found',
+                    'path' => $audioPath,
+                    'full_path' => $fullPath
+                ], 404);
+            }
+
+            Log::info('Audio file found', [
+                'full_path' => $fullPath,
+                'size' => filesize($fullPath)
+            ]);
+
+            // Obtener IDs de usuarios para identificación
+            $userIds = [];
+
+            // 1. Si hay reunión, agregar miembros
+            if ($reunionId) {
+                $reunion = \App\Models\Reunion::find($reunionId);
+                if ($reunion) {
+                    $members = $reunion->miembros()->pluck('user_id')->toArray();
+                    $userIds = array_merge($userIds, $members);
+                }
+            }
+
+            // 2. Siempre agregar al usuario autenticado
+            if (auth()->check()) {
+                $userIds[] = auth()->id();
+            }
+
+            // Eliminar duplicados
+            $userIds = array_unique($userIds);
+
+            Log::info('Users for speaker identification', [
+                'user_ids' => $userIds,
+                'count' => count($userIds)
+            ]);
+
+            if (empty($userIds)) {
+                Log::warning('No user IDs found for speaker identification');
+                return response()->json([
+                    'utterances' => $utterances,
+                    'identified' => false,
+                    'message' => 'No users with voice profiles found'
+                ]);
+            }
+
+            // Ejecutar identificación
+            Log::info('Calling identifySpeakersAutomatically');
+            $identifiedUtterances = $this->identifySpeakersAutomatically(
+                $utterances,
+                $audioPath,
+                $userIds
+            );
+
+            Log::info('Speaker identification completed', [
+                'utterances_count' => count($identifiedUtterances),
+                'sample_speaker' => $identifiedUtterances[0]['speaker'] ?? null,
+                'sample_speaker_name' => $identifiedUtterances[0]['speaker_name'] ?? null,
+                'sample_auto_identified' => $identifiedUtterances[0]['auto_identified'] ?? null
+            ]);
+
+            return response()->json([
+                'utterances' => $identifiedUtterances,
+                'identified' => true,
+                'user_count' => count($userIds)
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error identifying speakers before save', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to identify speakers',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 }

@@ -178,6 +178,22 @@ class ProcessChunkedTranscription implements ShouldQueue
 
             $transcriptionId = $this->uploadToAssemblyAI($processedPath, $metadata['language'], $isWebM);
 
+            // Guardar temporalmente el audio para identificación de speakers
+            try {
+                $extension = pathinfo($processedPath, PATHINFO_EXTENSION) ?: 'ogg';
+                $tempFilename = "temp-transcription/{$transcriptionId}.{$extension}";
+                \Illuminate\Support\Facades\Storage::put($tempFilename, file_get_contents($processedPath));
+                Log::info('Audio saved temporarily for speaker identification', [
+                    'transcription_id' => $transcriptionId,
+                    'temp_path' => $tempFilename
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Failed to save temporary audio', [
+                    'transcription_id' => $transcriptionId,
+                    'error' => $e->getMessage()
+                ]);
+            }
+
             Cache::put($cacheKey, [
                 'status' => 'processing',
                 'transcription_id' => $transcriptionId,

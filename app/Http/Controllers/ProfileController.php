@@ -341,7 +341,7 @@ class ProfileController extends Controller
     /**
      * Update the user's language preference.
      */
-    public function updateLanguage(Request $request): RedirectResponse
+    public function updateLanguage(Request $request)
     {
         $validated = $request->validate([
             'locale' => ['required', 'in:es,en'],
@@ -354,6 +354,15 @@ class ProfileController extends Controller
 
         app()->setLocale($locale);
 
+        // Si es una petición AJAX, devolver JSON
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'locale' => $locale
+            ])->withCookie(cookie('locale', $locale, 60 * 24 * 365));
+        }
+
+        // Si es una petición normal, redirigir
         return Redirect::back()
             ->with('status', 'language-updated')
             ->withCookie(cookie('locale', $locale, 60 * 24 * 365));

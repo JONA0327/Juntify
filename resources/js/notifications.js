@@ -13,16 +13,15 @@ const Notifications = (() => {
                 list.appendChild(li);
                 return;
             }
-                const header = document.createElement('div');
-                header.className = 'notifications-header flex items-center justify-between mb-2 px-1';
-                header.innerHTML = '<span class="text-xs uppercase tracking-wide text-slate-400">Notificaciones</span>' +
-                    '<button type="button" class="notif-clear-all text-[10px] font-medium text-slate-500 hover:text-red-400 transition ml-auto px-2 py-1 rounded-md hover:bg-red-500/10" title="Eliminar todas">Limpiar</button>';
-                list.appendChild(header);
-
+            const header = document.createElement('div');
+            header.className = 'notifications-header flex items-center justify-between mb-2 px-1';
+            header.innerHTML = '<span class="text-xs uppercase tracking-wide text-slate-400">Notificaciones</span>' +
+                '<button type="button" class="notif-clear-all text-[10px] font-medium text-slate-500 hover:text-red-400 transition ml-auto px-2 py-1 rounded-md hover:bg-red-500/10" title="Eliminar todas">Limpiar</button>';
+            list.appendChild(header);
 
             notifications.forEach(n => {
                 const li = document.createElement('li');
-        if (n.type === 'group_invitation') {
+                if (n.type === 'group_invitation') {
                     li.className = 'invitation-item p-3 bg-slate-700/50 rounded-lg mb-2';
                     li.innerHTML = `
                         <div class="message text-sm text-slate-200">${n.message}</div>
@@ -125,61 +124,45 @@ const Notifications = (() => {
 
     function attachListeners() {
         document.querySelectorAll('.accept-btn').forEach(btn => {
-            btn.addEventListener('click', e => {
-                const id = e.target.dataset.id;
-                respondToInvitation(id, 'accept');
-            });
+            btn.addEventListener('click', e => respondToInvitation(e.target.dataset.id, 'accept'));
         });
         document.querySelectorAll('.reject-btn').forEach(btn => {
-            btn.addEventListener('click', e => {
-                const id = e.target.dataset.id;
-                respondToInvitation(id, 'reject');
-            });
+            btn.addEventListener('click', e => respondToInvitation(e.target.dataset.id, 'reject'));
         });
         document.querySelectorAll('.accept-share-btn').forEach(btn => {
             btn.addEventListener('click', e => {
-                const sharedMeetingId = e.target.dataset.sharedMeetingId;
-                const notificationId = e.target.dataset.id;
-                respondToMeetingShareInvitation(sharedMeetingId, 'accept', notificationId);
+                respondToMeetingShareInvitation(e.target.dataset.sharedMeetingId, 'accept', e.target.dataset.id);
             });
         });
         document.querySelectorAll('.reject-share-btn').forEach(btn => {
             btn.addEventListener('click', e => {
-                const sharedMeetingId = e.target.dataset.sharedMeetingId;
-                const notificationId = e.target.dataset.id;
-                respondToMeetingShareInvitation(sharedMeetingId, 'reject', notificationId);
+                respondToMeetingShareInvitation(e.target.dataset.sharedMeetingId, 'reject', e.target.dataset.id);
             });
         });
         document.querySelectorAll('.accept-contact-btn').forEach(btn => {
-            btn.addEventListener('click', e => {
-                const id = e.target.dataset.id;
-                respondToContactRequest(id, 'accept');
-            });
+            btn.addEventListener('click', e => respondToContactRequest(e.target.dataset.id, 'accept'));
         });
         document.querySelectorAll('.reject-contact-btn').forEach(btn => {
-            btn.addEventListener('click', e => {
-                const id = e.target.dataset.id;
-                respondToContactRequest(id, 'reject');
-            });
+            btn.addEventListener('click', e => respondToContactRequest(e.target.dataset.id, 'reject'));
         });
         document.querySelectorAll('.dismiss-btn').forEach(btn => {
-            btn.addEventListener('click', e => {
-                const id = e.target.dataset.id;
-                dismissNotification(id);
+            btn.addEventListener('click', e => dismissNotification(e.target.dataset.id));
+        });
+        document.querySelectorAll('.notifications-list .notif-clear-all').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                try {
+                    const res = await fetch('/api/notifications/clear-all', { 
+                        method: 'DELETE', 
+                        headers: { 'Accept': 'application/json' } 
+                    });
+                    if (!res.ok) throw new Error('Error limpiando');
+                    notifications = [];
+                    render();
+                } catch (err) {
+                    console.error('Error al limpiar todas las notificaciones', err);
+                }
             });
         });
-            document.querySelectorAll('.notifications-list .notif-clear-all').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    try {
-                        const res = await fetch('/api/notifications/clear-all', { method: 'DELETE', headers: { 'Accept': 'application/json' } });
-                        if (!res.ok) throw new Error('Error limpiando');
-                        notifications = [];
-                        render();
-                    } catch (err) {
-                        console.error('Error al limpiar todas las notificaciones', err);
-                    }
-                });
-            });
     }
 
     async function respondToInvitation(id, action) {
@@ -201,20 +184,14 @@ const Notifications = (() => {
                 try {
                     const data = await response.json();
                     if (data.message) message = data.message;
-                } catch (_) { /* ignore */ }
-                            const header = document.createElement('div');
-                            header.className = 'notifications-header flex items-center justify-between';
-                            header.innerHTML = '<span>Notificaciones</span><button type="button" class="notif-clear-all text-[11px] font-medium text-slate-400 hover:text-red-400 transition" title="Eliminar todas">Limpiar</button>';
-                            list.appendChild(header);
+                } catch (_) { }
                 showError(message);
                 return;
             }
             notifications = notifications.filter(n => n.id != id);
             render();
         } catch (error) {
-            if (import.meta.env.DEV) {
-                console.debug('Error responding to invitation:', error);
-            }
+            if (import.meta.env.DEV) console.debug('Error responding to invitation:', error);
             showError('Error de conexión al responder la invitación.');
         }
     }
@@ -246,26 +223,21 @@ const Notifications = (() => {
                     if (data.errors?.shared_meeting_id) message = data.errors.shared_meeting_id[0];
                     else if (data.errors?.action) message = data.errors.action[0];
                     else if (data.message) message = data.message;
-                } catch (_) { /* ignore */ }
+                } catch (_) { }
                 showError(message);
                 return;
             }
 
             const data = await response.json();
             if (data.success) {
-                // Remover notificación de la lista
                 if (notificationId) {
                     notifications = notifications.filter(n => n.id != notificationId);
                 } else {
                     notifications = notifications.filter(n => n.data?.shared_meeting_id != sharedMeetingId);
                 }
                 render();
-
-                // Mostrar mensaje de éxito
                 const actionText = action === 'accept' ? 'aceptado' : 'rechazado';
                 showSuccess(`Has ${actionText} la invitación exitosamente.`);
-
-                // Si se aceptó, refrescar las reuniones compartidas
                 if (action === 'accept' && typeof loadSharedMeetings === 'function') {
                     loadSharedMeetings();
                 }
@@ -273,9 +245,7 @@ const Notifications = (() => {
                 showError(data.message || 'Error al responder la invitación.');
             }
         } catch (error) {
-            if (import.meta.env.DEV) {
-                console.debug('Error responding to meeting share invitation:', error);
-            }
+            if (import.meta.env.DEV) console.debug('Error responding to meeting share invitation:', error);
             showError('Error de conexión al responder la invitación.');
         }
     }
@@ -302,22 +272,17 @@ const Notifications = (() => {
                 try {
                     const data = await response.json();
                     if (data.message) message = data.message;
-                } catch (_) { /* ignore */ }
+                } catch (_) { }
                 showError(message);
                 return;
             }
 
             const data = await response.json();
             if (data.success) {
-                // Remover notificación de la lista
                 notifications = notifications.filter(n => n.id != id);
                 render();
-
-                // Mostrar mensaje de éxito
                 const actionText = action === 'accept' ? 'aceptada' : 'rechazada';
                 showSuccess(`Solicitud de contacto ${actionText} exitosamente.`);
-
-                // Si se aceptó, refrescar la lista de contactos si existe
                 if (action === 'accept' && typeof loadContacts === 'function') {
                     loadContacts();
                 }
@@ -325,9 +290,7 @@ const Notifications = (() => {
                 showError(data.message || 'Error al responder la solicitud de contacto.');
             }
         } catch (error) {
-            if (import.meta.env.DEV) {
-                console.debug('Error responding to contact request:', error);
-            }
+            if (import.meta.env.DEV) console.debug('Error responding to contact request:', error);
             showError('Error de conexión al responder la solicitud de contacto.');
         }
     }
@@ -349,16 +312,14 @@ const Notifications = (() => {
                 try {
                     const data = await response.json();
                     if (data.message) message = data.message;
-                } catch (_) { /* ignore */ }
+                } catch (_) { }
                 showError(message);
                 return;
             }
             notifications = notifications.filter(n => n.id != id);
             render();
         } catch (error) {
-            if (import.meta.env.DEV) {
-                console.debug('Error dismissing notification:', error);
-            }
+            if (import.meta.env.DEV) console.debug('Error dismissing notification:', error);
             showError('Error de conexión al descartar la notificación.');
         }
     }
@@ -394,7 +355,7 @@ const Notifications = (() => {
                 try {
                     const data = await response.json();
                     if (data.message) message = data.message;
-                } catch (_) { /* ignore */ }
+                } catch (_) { }
                 showError(message);
                 notifFailures++;
                 notifInterval = Math.min(30000, 30000 * notifFailures);
@@ -404,20 +365,18 @@ const Notifications = (() => {
             const payload = await response.json();
             if (payload.no_changes) {
                 notifFailures = 0;
-                notifInterval = 30000; // mantener
+                notifInterval = 30000;
             } else {
                 const list = Array.isArray(payload) ? payload : (payload.notifications || []);
                 notifications = list;
                 render();
                 notifFailures = 0;
-                notifInterval = 30000; // reset
+                notifInterval = 30000;
             }
             notifLastIso = payload.last_updated || notifLastIso;
             scheduleNotifFetch();
         } catch (error) {
-            if (import.meta.env.DEV) {
-                console.debug('Error loading notifications:', error);
-            }
+            if (import.meta.env.DEV) console.debug('Error loading notifications:', error);
             showError('Error de conexión al cargar notificaciones.');
             notifFailures++;
             notifInterval = Math.min(60000, 30000 * notifFailures);
@@ -425,52 +384,37 @@ const Notifications = (() => {
         }
     }
 
+    function closePanel() {
+        const panel = document.querySelector('.notifications-panel');
+        if (panel) {
+            panel.classList.add('hidden');
+            panel.dataset.open = 'false';
+        }
+    }
+
+    function openPanel() {
+        const panel = document.querySelector('.notifications-panel');
+        const toggleBtn = document.querySelector('.notifications-toggle');
+        if (panel && toggleBtn) {
+            panel.classList.remove('hidden');
+            panel.dataset.open = 'true';
+            positionNotificationsPanel(panel, toggleBtn);
+        }
+    }
+
+    function togglePanel() {
+        const panel = document.querySelector('.notifications-panel');
+        if (panel && panel.dataset.open === 'true') {
+            closePanel();
+        } else {
+            openPanel();
+        }
+    }
+
     function init() {
-        // Toggle panel al hacer clic en el botón
-        document.querySelectorAll('.notifications-toggle').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const panel = btn.closest('.notifications').querySelector('.notifications-panel');
-
-                // Cerrar todos los otros paneles primero
-                document.querySelectorAll('.notifications-panel').forEach(p => {
-                    if (p !== panel) {
-                        p.classList.add('hidden');
-                    }
-                });
-
-                // Toggle el panel actual
-                if (panel.classList.contains('hidden')) {
-                    panel.classList.remove('hidden');
-                    positionNotificationsPanel(panel, btn);
-                } else {
-                    panel.classList.add('hidden');
-                }
-            });
-        });
-
-        // Cerrar al hacer click fuera del panel
-        document.addEventListener('click', (e) => {
-            const notificationsContainer = e.target.closest('.notifications');
-            if (!notificationsContainer) {
-                document.querySelectorAll('.notifications-panel').forEach(panel => {
-                    panel.classList.add('hidden');
-                });
-            }
-        });
-
-        // Reposicionar en resize si está visible
-        window.addEventListener('resize', () => {
-            const toggle = document.querySelector('.notifications-toggle');
-            if (!toggle) return;
-            document.querySelectorAll('.notifications-panel').forEach(panel => {
-                if (!panel.classList.contains('hidden')) {
-                    positionNotificationsPanel(panel, toggle);
-                }
-            });
-        });
-
-    fetchNotifications();
+        // NO manejar el toggle aquí - se maneja en el componente Blade
+        // Solo inicializar el fetch de notificaciones
+        fetchNotifications();
     }
 
     if (document.readyState === 'loading') {
@@ -485,43 +429,36 @@ const Notifications = (() => {
     };
 })();
 
-// Posicionamiento dinámico del panel para alinearlo con el botón y evitar que quede demasiado lejos en páginas (ej. perfil)
 function positionNotificationsPanel(panel, toggle) {
     try {
-        // Asegurar estilos base
         panel.style.position = 'fixed';
-        panel.style.zIndex = panel.style.zIndex || '5000';
-    panel.style.maxWidth = '360px';
-    panel.classList.add('notifications-panel--styled');
+        panel.style.zIndex = '5000';
+        panel.style.maxWidth = '360px';
+        panel.classList.add('notifications-panel--styled');
 
-        // Calcular ancho disponible
         const viewportWidth = window.innerWidth;
-        const desiredWidth = Math.min(360, viewportWidth - 16); // 8px margen lateral
+        const desiredWidth = Math.min(360, viewportWidth - 16);
         panel.style.width = desiredWidth + 'px';
 
-        // Para medir la altura real si estaba hidden antes
         const prevVisibility = panel.style.visibility;
         panel.style.visibility = 'hidden';
         panel.style.display = 'block';
 
         const rect = toggle.getBoundingClientRect();
-        const panelRect = panel.getBoundingClientRect(); // altura tras forzar display
+        const panelRect = panel.getBoundingClientRect();
 
-        // Preferimos debajo del botón
         let top = rect.bottom + 8;
         if (top + panelRect.height > window.innerHeight - 8) {
-            // Colocarlo arriba si no cabe
             top = Math.max(8, rect.top - panelRect.height - 8);
         }
 
-        // Alinear borde derecho del panel con el borde derecho del botón
         let left = rect.right - desiredWidth;
-        if (left < 8) left = 8; // no salir por la izquierda
-        if (left + desiredWidth > viewportWidth - 8) left = viewportWidth - desiredWidth - 8; // no salir por la derecha
+        if (left < 8) left = 8;
+        if (left + desiredWidth > viewportWidth - 8) left = viewportWidth - desiredWidth - 8;
 
         panel.style.top = `${Math.round(top)}px`;
         panel.style.left = `${Math.round(left)}px`;
-        panel.style.right = 'auto'; // neutralizar right del CSS
+        panel.style.right = 'auto';
         panel.style.visibility = prevVisibility || '';
     } catch (err) {
         if (import.meta.env?.DEV) console.debug('positionNotificationsPanel error', err);

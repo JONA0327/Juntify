@@ -1048,11 +1048,24 @@ function pollTranscription(id) {
                     percent = Math.min(95, percent + 5);
                 }
             } else if (data.status === 'completed') {
-                progressText.textContent = 'Transcripción completada';
-                percent = 100;
+                progressText.textContent = 'Identificando hablantes...';
+                percent = 95;
                 clearInterval(interval);
                 clearInterval(typingInterval);
-                transcriptionData = data;
+                
+                // Identificar speakers antes de mostrar
+                try {
+                    const identifyResult = await identifySpeakersBeforeDisplay(data);
+                    console.log('Identity result:', identifyResult);
+                    transcriptionData = identifyResult.utterances || identifyResult || data;
+                    console.log('Transcription data set to:', transcriptionData);
+                } catch (err) {
+                    console.warn('Speaker identification failed, using original transcription:', err);
+                    transcriptionData = data;
+                }
+                
+                progressText.textContent = 'Transcripción completada';
+                percent = 100;
                 showTranscriptionEditor();
             } else if (data.status === 'error') {
                 progressText.textContent = 'Error en transcripción';
@@ -1081,6 +1094,56 @@ function pollTranscription(id) {
     }, 4000);
 }
 
+// Función para identificar speakers antes de mostrar la transcripción
+async function identifySpeakersBeforeDisplay(transcriptionData) {
+    try {
+        // Verificar que tenemos audio_path del store
+        const tempAudioPath = transcriptionData.temp_audio_path;
+        if (!tempAudioPath) {
+            console.log('No temp audio path available for speaker identification');
+            return transcriptionData;
+        }
+
+        // Obtener utterances de la transcripción
+        const utterances = Array.isArray(transcriptionData)
+            ? transcriptionData
+            : (transcriptionData.utterances || []);
+
+        if (!utterances.length) {
+            console.log('No utterances to identify');
+            return transcriptionData;
+        }
+
+        // Llamar al endpoint de identificación
+        const response = await axios.post('/api/transcriptions/identify-speakers', {
+            audio_path: tempAudioPath,
+            utterances: utterances,
+            reunion_id: sessionStorage.getItem('current_reunion_id') || null
+        });
+
+        console.log('Full identification response:', response.data);
+
+        if (response.data.identified && response.data.utterances) {
+            console.log('Speakers identified successfully');
+            console.log('Sample identified utterance:', response.data.utterances[0]);
+            // Si la transcripción original era un objeto con utterances, mantener estructura
+            if (!Array.isArray(transcriptionData) && transcriptionData.utterances) {
+                return {
+                    ...transcriptionData,
+                    utterances: response.data.utterances
+                };
+            }
+            return response.data.utterances;
+        }
+
+        console.log('Speakers NOT identified, returning original');
+        return transcriptionData;
+    } catch (error) {
+        console.error('Error identifying speakers:', error);
+        return transcriptionData;
+    }
+}
+
 // ===== PASO 3: EDITOR DE TRANSCRIPCIÓN =====
 
 function showTranscriptionEditor() {
@@ -1102,11 +1165,14 @@ function generateTranscriptionSegments() {
     }
 
     const segments = utterances.map((u, index) => {
-        const hasSpeaker = u.speaker !== undefined && u.speaker !== null;
-        const speaker = hasSpeaker ? u.speaker : `Hablante ${u.speaker}`;
-        const avatar = hasSpeaker
-            ? u.speaker.toString().slice(0, 2).toUpperCase()
-            : `H${u.speaker}`;
+        // Priorizar speaker_name (identificado) sobre speaker (etiqueta original)
+        const identifiedName = u.speaker_name || u.speaker;
+        const hasSpeaker = identifiedName !== undefined && identifiedName !== null;
+        const speaker = hasSpeaker ? identifiedName : `Hablante ${u.speaker || 'Desconocido'}`;
+        
+        // Usar speaker_name para avatar si existe, sino speaker
+        const nameForAvatar = u.speaker_name || u.speaker || 'H';
+        const avatar = nameForAvatar.toString().slice(0, 2).toUpperCase();
 
         // Mejorar detección de formato de tiempo
         // AssemblyAI siempre devuelve tiempo en milisegundos

@@ -290,24 +290,27 @@ async function updatePlanLimitsBanner() {
 
         const used = Number(limits.used_this_month || 0);
         const max = limits.max_meetings_per_month; // puede ser null (ilimitado)
-        const remaining = max === null ? null : Math.max(0, max - used);
+        
+        // Si el máximo es 999999 o mayor, tratarlo como infinito
+        const isUnlimited = max === null || max >= 999999;
+        const remaining = isUnlimited ? null : Math.max(0, max - used);
 
         const countEl = document.getElementById('plan-meetings-count');
         const remainingEl = document.getElementById('plan-remaining-text');
         const progressBar = document.getElementById('plan-progress-bar');
 
         if (countEl) {
-            countEl.textContent = `${used}/${max ?? '∞'}`;
+            countEl.textContent = isUnlimited ? `${used}/∞` : `${used}/${max}`;
         }
         if (remainingEl) {
-            if (max === null) {
+            if (isUnlimited) {
                 remainingEl.textContent = 'Reuniones ilimitadas este mes';
             } else {
                 remainingEl.textContent = `${remaining} reuniones restantes este mes`;
             }
         }
         if (progressBar) {
-            const pct = max === null || max === 0 ? 0 : Math.min(100, Math.round((used / max) * 100));
+            const pct = isUnlimited || max === 0 ? 0 : Math.min(100, Math.round((used / max) * 100));
             progressBar.style.width = `${pct}%`;
         }
     } catch (e) {

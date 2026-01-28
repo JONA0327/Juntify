@@ -117,8 +117,8 @@
     <!-- Modals -->
     @include('partials.profile._modals')
 
-    <script>
-        window.profileTranslations = @json([
+    @php
+        $profileTranslations = [
             'day_singular' => __('common.day_singular'),
             'day_plural' => __('common.day_plural'),
             'drive_locked_message' => __('profile.drive.locked_message'),
@@ -156,7 +156,11 @@
             'plan.unknown_error' => __('profile.plan.unknown_error'),
             'plan.request_error' => __('profile.plan.request_error'),
             'account.delete_mismatch' => __('profile.account.delete_mismatch'),
-        ]);
+        ];
+    @endphp
+
+    <script>
+        window.profileTranslations = @json($profileTranslations);
     </script>
 
     <!-- Global vars and functions -->

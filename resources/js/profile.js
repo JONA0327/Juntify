@@ -997,6 +997,80 @@ function confirmDeleteAccount(event) {
 }
 
 // Exponer funciones para handlers inline (si aún usas onclick en HTML)
+/**
+ * Cambia el idioma del usuario sin recargar la página
+ */
+let isChangingLanguage = false;
+async function changeLanguage() {
+  // Prevenir ejecuciones múltiples
+  if (isChangingLanguage) {
+    console.log('Ya se está cambiando el idioma...');
+    return;
+  }
+  
+  const btn = document.getElementById('language-toggle-btn');
+  const buttonText = document.getElementById('language-button-text');
+  const currentDisplay = document.getElementById('current-language-display');
+  
+  if (!btn || !buttonText || !currentDisplay) return;
+  
+  isChangingLanguage = true;
+  
+  // El botón muestra el idioma AL QUE se puede cambiar, no el actual
+  const newLocale = buttonText.textContent.trim() === 'English' ? 'en' : 'es';
+  
+  console.log('Cambiando idioma a:', newLocale);
+  
+  // Deshabilitar botón durante la petición
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  
+  try {
+    const response = await fetch('/profile/language', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ locale: newLocale })
+    });
+    
+    if (!response.ok) throw new Error('Error al cambiar idioma');
+    
+    const data = await response.json();
+    console.log('Respuesta del servidor:', data);
+    
+    // Actualizar la interfaz sin recargar
+    currentDisplay.textContent = newLocale === 'en' ? 'English' : 'Español';
+    buttonText.textContent = newLocale === 'en' ? 'Español' : 'English';
+    
+    // Re-habilitar botón
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    
+    // Mostrar mensaje de éxito temporal
+    const successMsg = document.createElement('span');
+    successMsg.textContent = '✓';
+    successMsg.style.color = '#10b981';
+    successMsg.style.marginLeft = '0.5rem';
+    successMsg.style.fontSize = '1.2rem';
+    btn.parentElement.appendChild(successMsg);
+    
+    setTimeout(() => {
+      successMsg.remove();
+      isChangingLanguage = false;
+    }, 2000);
+    
+  } catch (error) {
+    console.error('Error:', error);
+    showError('Error al cambiar el idioma');
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    isChangingLanguage = false;
+  }
+}
+
 window.toggleSidebar       = toggleSidebar;
 window.closeSidebar        = closeSidebar;
 window.toggleMobileNavbar = toggleMobileNavbar;
@@ -1014,4 +1088,4 @@ window.closePlanModal      = closePlanModal;
 window.confirmPlanSelection = confirmPlanSelection;
 window.downloadReceipt     = downloadReceipt;
 window.closePaymentSuccessModal = closePaymentSuccessModal;
-window.confirmDeleteAccount = confirmDeleteAccount;
+window.confirmDeleteAccount = confirmDeleteAccount;window.changeLanguage      = changeLanguage;

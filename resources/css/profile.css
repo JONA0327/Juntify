@@ -914,6 +914,15 @@ body {
     color: #3b82f6;
 }
 
+/* Small button variant */
+.btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
 /* Danger button (Perfil) */
 .btn-danger {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
