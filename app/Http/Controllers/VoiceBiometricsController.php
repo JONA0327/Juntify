@@ -70,13 +70,22 @@ class VoiceBiometricsController extends Controller
                 return response()->json(['message' => 'La respuesta del procesador de voz es inválida.'], 422);
             }
 
-            $user->voice_embedding = $embedding;
+            $normalizedEmbedding = $this->normalizeEmbedding($embedding);
+            if ($normalizedEmbedding === null) {
+                \Log::error('Invalid embedding size returned', [
+                    'user_id' => $user->id,
+                    'embedding_count' => is_array($embedding) ? count($embedding) : 0,
+                ]);
+                return response()->json(['message' => 'La huella de voz no tiene el formato esperado.'], 422);
+            }
+
+            $user->voice_embedding = $normalizedEmbedding;
             $saved = $user->save();
             
             \Log::info('Voice embedding saved', [
                 'user_id' => $user->id,
                 'saved' => $saved,
-                'embedding_size' => count($embedding),
+                'embedding_size' => count($normalizedEmbedding),
             ]);
 
             return response()->json(['message' => 'Huella de voz guardada correctamente.']);
@@ -85,6 +94,33 @@ class VoiceBiometricsController extends Controller
                 Storage::delete($tempPath);
             }
         }
+    }
+
+    private function normalizeEmbedding(array $embedding): ?array
+    {
+        $embedding = array_values($embedding);
+        $embedding = array_map(static fn ($value) => (float) $value, $embedding);
+
+        if (count($embedding) < 76) {
+            return null;
+        }
+
+        if (count($embedding) > 76) {
+            $embedding = array_slice($embedding, 0, 76);
+        }
+
+        $mean = array_sum($embedding) / count($embedding);
+        $variance = 0.0;
+        foreach ($embedding as $value) {
+            $variance += ($value - $mean) ** 2;
+        }
+        $std = sqrt($variance / count($embedding));
+
+        if ($std <= 0) {
+            return $embedding;
+        }
+
+        return array_map(static fn ($value) => ($value - $mean) / $std, $embedding);
     }
 
     public function status(Request $request)
