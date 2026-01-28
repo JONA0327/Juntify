@@ -1490,9 +1490,16 @@ function playSegmentAudio(segmentIndex) {
 
 let selectedSegmentIndex = null;
 
+function getUtteranceDisplayName(utterance) {
+    if (!utterance) {
+        return '';
+    }
+    return utterance.speaker_name || utterance.speaker || '';
+}
+
 function openChangeSpeakerModal(segmentIndex) {
     selectedSegmentIndex = segmentIndex;
-    const currentName = transcriptionData[segmentIndex].speaker;
+    const currentName = getUtteranceDisplayName(transcriptionData[segmentIndex]);
     document.getElementById('speaker-name-input').value = currentName;
     document.getElementById('change-speaker-modal').classList.add('show');
 }
@@ -1509,7 +1516,12 @@ function confirmSpeakerChange() {
         return;
     }
 
-    transcriptionData[selectedSegmentIndex].speaker = newName;
+    const segment = transcriptionData[selectedSegmentIndex];
+    segment.speaker = newName;
+    segment.speaker_name = newName;
+    segment.auto_identified = false;
+    segment.speaker_user_id = null;
+    segment.speaker_confidence = null;
     const element = document.querySelector(`[data-segment="${selectedSegmentIndex}"] .speaker-name`);
     if (element) {
         element.textContent = newName;
@@ -1521,7 +1533,7 @@ function confirmSpeakerChange() {
 
 function openGlobalSpeakerModal(segmentIndex) {
     selectedSegmentIndex = segmentIndex;
-    const currentName = transcriptionData[segmentIndex].speaker;
+    const currentName = getUtteranceDisplayName(transcriptionData[segmentIndex]);
     document.getElementById('current-speaker-name').value = currentName;
     document.getElementById('global-speaker-name-input').value = '';
     document.getElementById('change-global-speaker-modal').classList.add('show');
@@ -1540,8 +1552,13 @@ function confirmGlobalSpeakerChange() {
     }
 
     transcriptionData.forEach((segment, idx) => {
-        if (segment.speaker === currentName) {
+        const segmentDisplayName = getUtteranceDisplayName(segment);
+        if (segmentDisplayName === currentName) {
             segment.speaker = newName;
+            segment.speaker_name = newName;
+            segment.auto_identified = false;
+            segment.speaker_user_id = null;
+            segment.speaker_confidence = null;
             const el = document.querySelector(`[data-segment="${idx}"] .speaker-name`);
             if (el) {
                 el.textContent = newName;
@@ -1626,6 +1643,10 @@ function saveTranscriptionAndContinue() {
         const transcriptText = textEl ? textEl.value : transcriptionData[index].text;
 
         transcriptionData[index].speaker = speakerName;
+        transcriptionData[index].speaker_name = speakerName;
+        transcriptionData[index].auto_identified = false;
+        transcriptionData[index].speaker_user_id = null;
+        transcriptionData[index].speaker_confidence = null;
         transcriptionData[index].text = transcriptText;
     });
 
