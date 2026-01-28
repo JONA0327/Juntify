@@ -223,7 +223,7 @@
                 </button>
             </div>
 
-            <form id="planLimitForm" class="modal-content">
+            <form id="planLimitForm" class="modal-body">
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="limitRole">Rol</label>
@@ -286,6 +286,19 @@
                     <div class="form-group">
                         <label for="maxMeetingsPerContainerOrg">Reuniones por contenedor org</label>
                         <input type="number" id="maxMeetingsPerContainerOrg" name="max_meetings_per_container_org" min="0" placeholder="Ilimitado si se deja vacío">
+                    </div>
+                </div>
+
+                <div class="form-section-title">Límites del Asistente IA</div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="maxAiDocuments">Documentos IA permitidos</label>
+                        <input type="number" id="maxAiDocuments" name="max_ai_documents" min="0" placeholder="Ilimitado si se deja vacío">
+                    </div>
+                    <div class="form-group">
+                        <label for="maxAiQuestionsPerMonth">Preguntas IA por mes</label>
+                        <input type="number" id="maxAiQuestionsPerMonth" name="max_ai_questions_per_month" min="0" placeholder="Ilimitado si se deja vacío">
                     </div>
                 </div>
             </form>
@@ -455,10 +468,11 @@
             border-radius: 1rem;
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
             border: 1px solid rgba(59, 130, 246, 0.2);
-            max-width: 600px;
+            max-width: 650px;
             width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
+            max-height: 95vh;
+            display: flex;
+            flex-direction: column;
             animation: modalSlideIn 0.3s ease-out;
         }
 
@@ -508,8 +522,10 @@
             height: 20px;
         }
 
-        .modal-content {
+        .modal-body {
             padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
         }
 
         .modal-footer {
@@ -518,6 +534,7 @@
             display: flex;
             gap: 1rem;
             justify-content: flex-end;
+            flex-shrink: 0;
         }
 
         /* Estilos del formulario */
@@ -525,6 +542,16 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
+        }
+
+        .form-section-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #60a5fa;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.3);
         }
 
         .form-group {
