@@ -1071,6 +1071,8 @@ class TranscriptionController extends Controller
     private function identifySpeakersAutomatically(array $utterances, string $audioPath, array $userIds): array
     {
         try {
+            $threshold = (float) config('audio.speaker_match_threshold', 0.75);
+
             // Obtener embeddings de usuarios con perfil de voz
             $users = \App\Models\User::whereIn('id', $userIds)
                 ->whereNotNull('voice_embedding')
@@ -1127,6 +1129,7 @@ class TranscriptionController extends Controller
             foreach ($speakerGroups as $speaker => $group) {
                 // Tomar hasta 3 muestras representativas (inicio, medio, fin)
                 $samples = $this->selectRepresentativeSamples($group, 3);
+                $totalSamples = count($samples);
                 
                 $segments = array_map(function($utterance) use ($speaker) {
                     return [
@@ -1181,7 +1184,7 @@ class TranscriptionController extends Controller
                         // Determinar el mejor match para este speaker
                         $userVotes = [];
                         foreach ($results as $result) {
-                            if ($result['matched_user_id'] && $result['confidence'] >= 0.75) {
+                            if ($result['matched_user_id'] && $result['confidence'] >= $threshold) {
                                 $userId = $result['matched_user_id'];
                                 if (!isset($userVotes[$userId])) {
                                     $userVotes[$userId] = ['count' => 0, 'total_confidence' => 0];
@@ -1205,10 +1208,25 @@ class TranscriptionController extends Controller
                             }
 
                             if ($bestUserId) {
+                                $minVotes = $totalSamples > 1 ? max(2, (int) ceil($totalSamples * 0.6)) : 1;
+                                $matchedCount = $userVotes[$bestUserId]['count'];
+                                $avgConfidence = $userVotes[$bestUserId]['total_confidence'] / $matchedCount;
+
+                                if ($matchedCount < $minVotes) {
+                                    Log::info('Speaker match discarded due to low vote count', [
+                                        'speaker' => $speaker,
+                                        'matched_user_id' => $bestUserId,
+                                        'matched_count' => $matchedCount,
+                                        'required_votes' => $minVotes,
+                                        'total_samples' => $totalSamples,
+                                    ]);
+                                    continue;
+                                }
+
                                 $speakerMatches[$speaker] = [
                                     'user_id' => $bestUserId,
                                     'name' => $userEmbeddings[$bestUserId]['name'],
-                                    'confidence' => $userVotes[$bestUserId]['total_confidence'] / $userVotes[$bestUserId]['count'],
+                                    'confidence' => $avgConfidence,
                                 ];
 
                                 Log::info('Speaker matched', [
@@ -1230,6 +1248,25 @@ class TranscriptionController extends Controller
                 }
             }
 
+            // Evitar asignar el mismo usuario a varios speakers (mantener el mejor)
+            $bestSpeakerPerUser = [];
+            foreach ($speakerMatches as $speaker => $match) {
+                $userId = $match['user_id'];
+                if (!isset($bestSpeakerPerUser[$userId]) || $match['confidence'] > $bestSpeakerPerUser[$userId]['confidence']) {
+                    $bestSpeakerPerUser[$userId] = [
+                        'speaker' => $speaker,
+                        'confidence' => $match['confidence'],
+                    ];
+                }
+            }
+
+            foreach ($speakerMatches as $speaker => $match) {
+                $userId = $match['user_id'];
+                if ($bestSpeakerPerUser[$userId]['speaker'] !== $speaker) {
+                    unset($speakerMatches[$speaker]);
+                }
+            }
+
             // Asignar nombres a los utterances
             foreach ($utterances as &$utterance) {
                 $speaker = $utterance['speaker'] ?? 'Unknown';
@@ -1239,7 +1276,7 @@ class TranscriptionController extends Controller
                     $utterance['speaker_confidence'] = $speakerMatches[$speaker]['confidence'];
                     $utterance['auto_identified'] = true;
                 } else {
-                    $utterance['speaker_name'] = "Hablante " . $speaker;
+                    $utterance['speaker_name'] = $this->formatFallbackSpeakerName($speaker);
                     $utterance['auto_identified'] = false;
                 }
             }
@@ -1278,6 +1315,27 @@ class TranscriptionController extends Controller
         }
 
         return array_slice($samples, 0, $count);
+    }
+
+    private function formatFallbackSpeakerName($speaker): string
+    {
+        if (is_numeric($speaker)) {
+            $index = (int) $speaker;
+            $alphabetIndex = max(0, $index);
+            $letter = chr(ord('A') + ($alphabetIndex % 26));
+            return "Hablante {$letter}";
+        }
+
+        if (is_string($speaker) && strlen($speaker) === 1) {
+            return "Hablante " . strtoupper($speaker);
+        }
+
+        $label = trim((string) $speaker);
+        if ($label === '') {
+            return 'Hablante';
+        }
+
+        return "Hablante {$label}";
     }
 
     private function resolveVoiceDisplayName(\App\Models\User $user): string
@@ -1340,25 +1398,10 @@ class TranscriptionController extends Controller
                 'size' => filesize($fullPath)
             ]);
 
-            // Obtener IDs de usuarios para identificación
-            $userIds = [];
-
-            // 1. Si hay reunión, agregar miembros
-            if ($reunionId) {
-                $reunion = \App\Models\Reunion::find($reunionId);
-                if ($reunion) {
-                    $members = $reunion->miembros()->pluck('user_id')->toArray();
-                    $userIds = array_merge($userIds, $members);
-                }
-            }
-
-            // 2. Siempre agregar al usuario autenticado
-            if (auth()->check()) {
-                $userIds[] = auth()->id();
-            }
-
-            // Eliminar duplicados
-            $userIds = array_unique($userIds);
+            // Obtener IDs de usuarios para identificación (todos los registrados con voz)
+            $userIds = \App\Models\User::whereNotNull('voice_embedding')
+                ->pluck('id')
+                ->toArray();
 
             Log::info('Users for speaker identification', [
                 'user_ids' => $userIds,
