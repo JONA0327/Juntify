@@ -41,6 +41,9 @@ class GoogleDriveService
 
         $this->client->setScopes([Drive::DRIVE, Calendar::CALENDAR]);
         $this->client->setAccessType('offline');
+        
+        // Deshabilitar el uso de archivos temporales para descargas
+        $this->client->setDefer(false);
 
         $this->drive = new Drive($this->client);
     }
@@ -319,39 +322,36 @@ class GoogleDriveService
                 'client_has_token' => $this->client->getAccessToken() !== null
             ]);
 
-            $response = $this->drive->files->get($fileId, [
-                'alt' => 'media',
-                'supportsAllDrives' => true,
+            // Obtener el token de acceso actual
+            $token = $this->client->getAccessToken();
+            $accessToken = is_array($token) ? $token['access_token'] : $token;
+
+            // Usar Guzzle directamente para descargar el archivo
+            $httpClient = new \GuzzleHttp\Client();
+            $response = $httpClient->get("https://www.googleapis.com/drive/v3/files/{$fileId}?alt=media&supportsAllDrives=true", [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $accessToken,
+                ],
+                'stream' => false, // Importante: no usar streaming
             ]);
 
-            Log::info('Google Drive API response received', [
+            $contents = $response->getBody()->getContents();
+
+            Log::info('Content downloaded directly via Guzzle', [
                 'file_id' => $fileId,
-                'type' => gettype($response),
-                'class' => is_object($response) ? get_class($response) : 'not_object'
+                'content_length' => strlen($contents),
+                'status_code' => $response->getStatusCode()
             ]);
 
-            if ($response instanceof \Psr\Http\Message\ResponseInterface) {
-                $body = $response->getBody();
-                $contents = $body->getContents();
+            return $contents;
 
-                Log::info('Content extracted from PSR response', [
-                    'file_id' => $fileId,
-                    'content_length' => strlen($contents)
-                ]);
-
-                return $contents;
-            }
-
-            // Si es string directo
-            $stringResponse = (string) $response;
-
-            Log::info('Content converted to string', [
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            Log::error('Guzzle Request Exception during download', [
                 'file_id' => $fileId,
-                'content_length' => strlen($stringResponse)
+                'code' => $e->getCode(),
+                'message' => $e->getMessage()
             ]);
-
-            return $stringResponse;
-
+            return null;
         } catch (GoogleServiceException $e) {
             Log::error('Google Service Exception during download', [
                 'file_id' => $fileId,

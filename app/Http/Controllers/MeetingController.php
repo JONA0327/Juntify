@@ -1296,18 +1296,20 @@ class MeetingController extends Controller
     {
         $path = 'temp/' . $filename;
         Storage::disk('public')->put($path, $content);
-    $fullPath = storage_path('app/public/' . $path);
+        
+        // Generar URL pública accesible
+        $publicUrl = asset('storage/' . $path);
 
         // Log para debuggear
         Log::info('Archivo temporal guardado', [
             'filename' => $filename,
             'path' => $path,
-            'full_path' => $fullPath,
+            'public_url' => $publicUrl,
             'exists' => Storage::disk('public')->exists($path),
             'size' => Storage::disk('public')->size($path)
         ]);
 
-        return $fullPath;
+        return $publicUrl;
     }
 
     private function streamLocalAudioFile(string $audioPath, ?string $mimeType = null): BinaryFileResponse
@@ -1630,7 +1632,54 @@ class MeetingController extends Controller
     private function getAudioPath($meeting): ?string
     {
         try {
-            // Si ya tenemos una URL de descarga directa, verificar que sea válida
+            // Si tenemos audio_drive_id, intentar descargar con OAuth usando el servicio ya configurado
+            if (!empty($meeting->audio_drive_id)) {
+                Log::info('getAudioPath: Intentando descargar con OAuth', [
+                    'meeting_id' => $meeting->id,
+                    'username' => $meeting->username,
+                    'audio_drive_id' => $meeting->audio_drive_id
+                ]);
+                
+                try {
+                    // El token ya está configurado en $this->googleDriveService desde streamAudio
+                    // No necesitamos buscar al usuario ni reconfigurar el token
+                    
+                    // Obtener información del archivo
+                    $fileInfo = $this->googleDriveService->getFileInfo($meeting->audio_drive_id);
+                    $fileName = $fileInfo->getName();
+                    $mimeType = $fileInfo->getMimeType();
+                    $extension = $this->detectAudioExtension($fileName, $mimeType);
+
+                    Log::info('Descargando audio con OAuth (servicio ya configurado)', [
+                        'meeting_id' => $meeting->id,
+                        'file_name' => $fileName,
+                        'mime_type' => $mimeType,
+                        'extension' => $extension
+                    ]);
+
+                    // Descargar usando el token OAuth ya configurado
+                    $audioContent = $this->googleDriveService->downloadFileContent($meeting->audio_drive_id);
+                    
+                    // Guardar temporalmente
+                    $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meeting->meeting_name);
+                    $audioFileName = $sanitizedName . '_' . $meeting->id . '.' . $extension;
+                    
+                    Log::info('Audio descargado exitosamente con OAuth', [
+                        'meeting_id' => $meeting->id,
+                        'size' => strlen($audioContent)
+                    ]);
+                    
+                    return $this->storeTemporaryFile($audioContent, $audioFileName);
+                } catch (\Throwable $oauthError) {
+                    Log::warning('Descarga OAuth falló, continuando con otros métodos', [
+                        'meeting_id' => $meeting->id,
+                        'error' => $oauthError->getMessage(),
+                        'trace' => $oauthError->getTraceAsString()
+                    ]);
+                }
+            }
+
+            // Fallback: si ya tenemos una URL de descarga directa, usarla
             if (!empty($meeting->audio_download_url)) {
                 // Normalizar y devolver directamente; dejar que el navegador siga redirecciones de Drive
                 $normalized = $this->normalizeDriveUrl($meeting->audio_download_url);
@@ -1641,7 +1690,7 @@ class MeetingController extends Controller
                 return $normalized;
             }
 
-            // Si no hay URL directa, descargar desde Drive
+            // Si no hay URL directa ni OAuth funcionó, intentar con Service Account
             if (empty($meeting->audio_drive_id)) {
                 Log::warning('No hay audio_drive_id para la reunión', [
                     'meeting_id' => $meeting->id
@@ -1649,12 +1698,10 @@ class MeetingController extends Controller
                 return null;
             }
 
-            // Obtener información del archivo para detectar formato
+            // Fallback final: intentar con googleDriveService (Service Account o configuración por defecto)
             $fileInfo = $this->googleDriveService->getFileInfo($meeting->audio_drive_id);
             $fileName = $fileInfo->getName();
             $mimeType = $fileInfo->getMimeType();
-
-            // Detectar extensión del archivo
             $extension = $this->detectAudioExtension($fileName, $mimeType);
 
             Log::info('Información del archivo de audio', [
