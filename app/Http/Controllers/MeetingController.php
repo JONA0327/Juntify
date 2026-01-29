@@ -2396,6 +2396,24 @@ class MeetingController extends Controller
                     $token = $sa->getClient()->fetchAccessTokenWithAssertion();
                     $this->googleDriveService->setAccessToken($token);
                     $dbg['impersonated'] = $sharedMeeting->sharedBy->email;
+                } elseif (!$sharedAccess) {
+                    try {
+                        /** @var \App\Services\GoogleServiceAccount $sa */
+                        $sa = app(\App\Services\GoogleServiceAccount::class);
+                        $token = $sa->getClient()->fetchAccessTokenWithAssertion();
+                        $this->googleDriveService->setAccessToken($token);
+                        $dbg['service_account_fallback'] = true;
+                        Log::info('streamAudio: Usando Service Account como fallback para acceso propietario', [
+                            'meeting_id' => $meeting,
+                            'username' => $user->username,
+                        ]);
+                    } catch (\Throwable $saError) {
+                        Log::warning('streamAudio: Fallo fallback Service Account para propietario', [
+                            'meeting_id' => $meeting,
+                            'error' => $saError->getMessage(),
+                        ]);
+                        throw $e;
+                    }
                 } else {
                     throw $e;
                 }
