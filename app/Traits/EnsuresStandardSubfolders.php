@@ -8,6 +8,7 @@ use App\Models\OrganizationSubfolder;
 use App\Models\Subfolder;
 use App\Models\GoogleToken;
 use App\Models\User;
+use App\Services\GoogleDriveService;
 use App\Services\GoogleServiceAccount;
 use Google\Service\Exception as GoogleServiceException;
 use Illuminate\Support\Facades\Log;
@@ -199,6 +200,61 @@ trait EnsuresStandardSubfolders
         return $result;
     }
 
+    protected function ensureStandardSubfoldersWithOAuth($rootFolder, GoogleDriveService $drive): array
+    {
+        $parentId = $rootFolder->google_id ?? null;
+        if (empty($parentId)) {
+            Log::error('ensureStandardSubfoldersWithOAuth: root folder has no google_id', [
+                'root_model_id' => $rootFolder->id ?? null,
+            ]);
+            return [];
+        }
+
+        $names = [
+            'audio'         => 'Audios',
+            'transcription' => 'Transcripciones',
+            'pending'       => 'Audios Pospuestos',
+            'documents'     => 'Documentos',
+        ];
+
+        $result = [];
+
+        foreach ($names as $key => $folderName) {
+            try {
+                $model = Subfolder::where('folder_id', $rootFolder->id)
+                    ->where('name', $folderName)
+                    ->first();
+
+                if (!$model) {
+                    $existingId = $this->findExistingSubfolderIdWithOAuth($drive, $parentId, $folderName);
+                    if ($existingId) {
+                        $model = Subfolder::firstOrCreate([
+                            'folder_id' => $rootFolder->id,
+                            'google_id' => $existingId,
+                        ], ['name' => $folderName]);
+                    } else {
+                        $googleId = $drive->createFolder($folderName, $parentId);
+                        $model = Subfolder::create([
+                            'folder_id' => $rootFolder->id,
+                            'google_id' => $googleId,
+                            'name'      => $folderName,
+                        ]);
+                    }
+                }
+
+                $result[$key] = $model;
+            } catch (\Throwable $e) {
+                Log::warning('ensureStandardSubfoldersWithOAuth failure', [
+                    'folder' => $folderName,
+                    'root_folder_id' => $rootFolder->id ?? null,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $result;
+    }
+
     protected function findExistingSubfolderIdInDrive(GoogleServiceAccount $serviceAccount, string $parentId, string $name): ?string
     {
         try {
@@ -224,6 +280,35 @@ trait EnsuresStandardSubfolders
                 'error' => $e->getMessage(),
             ]);
         }
+        return null;
+    }
+
+    protected function findExistingSubfolderIdWithOAuth(GoogleDriveService $drive, string $parentId, string $name): ?string
+    {
+        try {
+            $client = $drive->getDrive();
+            $results = $client->files->listFiles([
+                'q' => sprintf(
+                    "mimeType='application/vnd.google-apps.folder' and name='%s' and '%s' in parents and trashed=false",
+                    addslashes($name),
+                    $parentId
+                ),
+                'fields' => 'files(id,name,parents)',
+                'supportsAllDrives' => true,
+                'includeItemsFromAllDrives' => true,
+            ]);
+            $files = $results->getFiles();
+            if (!empty($files)) {
+                return $files[0]->getId();
+            }
+        } catch (\Throwable $e) {
+            Log::debug('findExistingSubfolderIdWithOAuth failed', [
+                'parentId' => $parentId,
+                'name' => $name,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return null;
     }
 
