@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             PlansSeeder::class,
+            DeveloperUserSeeder::class,
         ]);
 
         TranscriptionLaravel::factory(10)->create();

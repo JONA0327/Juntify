@@ -1,0 +1,23 @@
+# Dependencias principales para procesamiento de audio y machine learning
+librosa>=0.10.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Para bases de datos MySQL
+PyMySQL>=1.0.0
+
+# Para variables de entorno
+python-dotenv>=1.0.0
+
+# Para multiprocesamiento y paralelización
+joblib>=1.2.0
+loky>=3.4.0
+
+# Para análisis numérico adicional
+scikit-learn>=1.3.0
+
+# Para manejo de audio WAV
+soundfile>=0.12.0
+
+# Dependencias adicionales útiles
+requests>=2.28.0
