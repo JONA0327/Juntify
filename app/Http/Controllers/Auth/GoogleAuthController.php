@@ -106,9 +106,92 @@ class GoogleAuthController extends Controller
                 ]
             );
 
-            // Auto-setup: create default root + subfolders if not present
+            // Auto-setup: create default root + subfolders if not present, or share existing ones
             try {
                 $googleToken = \App\Models\GoogleToken::where('username', $user->username)->first();
+                $serviceEmail = config('services.google.service_account_email');
+                
+                // Si ya existe una carpeta raíz, asegurar que esté compartida con la cuenta de servicio
+                if ($googleToken && !empty($googleToken->recordings_folder_id)) {
+                    try {
+                        $existingFolder = \App\Models\Folder::where('google_token_id', $googleToken->id)
+                            ->where('google_id', $googleToken->recordings_folder_id)
+                            ->whereNull('parent_id')
+                            ->first();
+                            
+                        if ($existingFolder && $serviceEmail) {
+                            /** @var \App\Services\GoogleServiceAccount $serviceAccount */
+                            $serviceAccount = app(\App\Services\GoogleServiceAccount::class);
+                            /** @var \App\Services\GoogleDriveService $driveService */
+                            $driveService = app(\App\Services\GoogleDriveService::class);
+                            
+                            // Configurar el driveService con el token del usuario
+                            if ($googleToken->access_token) {
+                                $driveService->setAccessToken([
+                                    'access_token' => $googleToken->access_token,
+                                    'refresh_token' => $googleToken->refresh_token,
+                                    'expiry_date' => $googleToken->expiry_date,
+                                ]);
+                            }
+                            
+                            $shared = false;
+                            
+                            // Intentar compartir con OAuth del usuario (más probable que funcione)
+                            try {
+                                $driveService->shareFolder($existingFolder->google_id, $serviceEmail);
+                                $shared = true;
+                                Log::info('Carpeta raíz existente compartida con cuenta de servicio vía OAuth', [
+                                    'folder_id' => $existingFolder->google_id,
+                                    'user' => $user->username
+                                ]);
+                            } catch (\Throwable $e1) {
+                                Log::debug('Falló compartir carpeta raíz existente vía OAuth', ['error' => $e1->getMessage()]);
+                                
+                                // Fallback: intentar con Service Account directo
+                                try {
+                                    $serviceAccount->shareFolder($existingFolder->google_id, $serviceEmail);
+                                    $shared = true;
+                                    Log::info('Carpeta raíz existente compartida con cuenta de servicio vía SA directo');
+                                } catch (\Throwable $e2) {
+                                    Log::debug('Falló compartir carpeta raíz existente vía SA directo', ['error' => $e2->getMessage()]);
+                                    
+                                    // Fallback: intentar con impersonación
+                                    if ($user->email && !GoogleServiceAccount::impersonationDisabled()) {
+                                        try {
+                                            $serviceAccount->impersonate($user->email);
+                                            $serviceAccount->shareFolder($existingFolder->google_id, $serviceEmail);
+                                            $shared = true;
+                                            Log::info('Carpeta raíz existente compartida vía impersonación');
+                                        } catch (\Throwable $e3) {
+                                            Log::warning('Falló compartir carpeta raíz existente (todos los métodos)', ['error' => $e3->getMessage()]);
+                                        } finally {
+                                            try { $serviceAccount->impersonate(null); } catch (\Throwable $e) { /* ignore */ }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Compartir subcarpetas existentes también
+                            if ($shared) {
+                                $subfolders = \App\Models\Subfolder::where('folder_id', $existingFolder->id)->get();
+                                foreach ($subfolders as $subfolder) {
+                                    try {
+                                        $driveService->shareFolder($subfolder->google_id, $serviceEmail);
+                                        Log::info('Subcarpeta existente compartida', ['name' => $subfolder->name]);
+                                    } catch (\Throwable $e) {
+                                        Log::debug('No se pudo compartir subcarpeta existente', [
+                                            'name' => $subfolder->name,
+                                            'error' => $e->getMessage()
+                                        ]);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('Error al intentar compartir carpeta raíz existente', ['error' => $e->getMessage()]);
+                    }
+                }
+                
                 if ($googleToken && empty($googleToken->recordings_folder_id)) {
                     // Create default root under configured parent (if any) and ensure subfolders
                     /** @var \App\Services\GoogleServiceAccount $serviceAccount */
@@ -130,6 +213,7 @@ class GoogleAuthController extends Controller
 
                     $folderId = null;
                     $impersonated = false;
+                    $createdWithOAuth = false;
                     try {
                         if (!empty($parentRootId)) {
                             // Create under a configured parent using Service Account
@@ -141,19 +225,42 @@ class GoogleAuthController extends Controller
                                 $serviceAccount->impersonate($ownerEmail);
                                 $impersonated = true;
                                 $folderId = $serviceAccount->createFolder($defaultRootName);
-                                // Give SA access for future automation
-                                $serviceEmail = config('services.google.service_account_email');
-                                if ($serviceEmail) {
-                                    try { $serviceAccount->shareFolder($folderId, $serviceEmail); } catch (\Throwable $e) { /* ignore */ }
-                                }
                             }
                         }
                     } catch (\Throwable $e) {
                         // Fallback: try OAuth client if SA creation fails
-                        try { $folderId = $driveService->createFolder($defaultRootName, $parentRootId ?: null); } catch (\Throwable $e2) { /* keep null */ }
+                        try { 
+                            $folderId = $driveService->createFolder($defaultRootName, $parentRootId ?: null); 
+                            $createdWithOAuth = true;
+                        } catch (\Throwable $e2) { /* keep null */ }
                     } finally {
                         if ($impersonated) {
                             try { $serviceAccount->impersonate(null); } catch (\Throwable $e) { /* ignore */ }
+                        }
+                    }
+
+                    // Siempre compartir la carpeta raíz con la cuenta de servicio
+                    if ($folderId) {
+                        $serviceEmail = config('services.google.service_account_email');
+                        if ($serviceEmail) {
+                            try {
+                                if ($createdWithOAuth) {
+                                    // Si se creó con OAuth, usar el driveService para compartir
+                                    $driveService->shareFolder($folderId, $serviceEmail);
+                                } else {
+                                    // Si se creó con Service Account, usar serviceAccount para compartir
+                                    $serviceAccount->shareFolder($folderId, $serviceEmail);
+                                }
+                                Log::info('Carpeta raíz compartida automáticamente con cuenta de servicio', [
+                                    'folder_id' => $folderId,
+                                    'service_email' => $serviceEmail
+                                ]);
+                            } catch (\Throwable $e) {
+                                Log::warning('No se pudo compartir la carpeta raíz con la cuenta de servicio', [
+                                    'folder_id' => $folderId,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
                         }
                     }
 

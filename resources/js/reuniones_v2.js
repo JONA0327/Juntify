@@ -4840,10 +4840,13 @@ function clearContainerErrors() {
 
 async function openDownloadModal(meetingId, sharedMeetingId = null) {
     // Prevenir ejecución múltiple
-    if (window.downloadModalProcessing) {return;
+    if (window.downloadModalProcessing) {
+        return;
     }
 
-    window.downloadModalProcessing = true;try {
+    window.downloadModalProcessing = true;
+    
+    try {
         // Cerrar el modal de contenedor si está abierto
         previousContainerForDownload = currentContainerForMeetings;
         if (previousContainerForDownload) {
@@ -4859,13 +4862,17 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
         // Mostrar loading inicial
         showDownloadModalLoading(meetingId);
 
-    // Paso 1: Descargar y desencriptar el archivo .ju desde Drive (con timeout y manejo de errores)const controller = new AbortController();
-        const timeoutMs = 15000; // 15s para evitar esperas largas
+        // Paso 1: Descargar y desencriptar el archivo .ju desde Drive (con timeout y manejo de errores)
+        const controller = new AbortController();
+        const timeoutMs = 30000; // 30s para permitir descarga y refresh de tokens
         const timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs);
+
+        console.log('Iniciando descarga de reunión', meetingId, 'timeout:', timeoutMs);
 
         let data = null;
         let response = null;
         try {
+            console.log('Haciendo fetch a /api/meetings/' + meetingId);
             response = await fetch(`/api/meetings/${meetingId}`, {
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
@@ -4875,16 +4882,27 @@ async function openDownloadModal(meetingId, sharedMeetingId = null) {
             });
         } catch (netErr) {
             console.error('Fallo de red al obtener reunión:', netErr);
+            console.error('Error name:', netErr.name);
+            console.error('Error message:', netErr.message);
             clearTimeout(timeoutId);
+            
+            // Determinar el mensaje de error específico
+            let errorMsg = 'No se pudo conectar para preparar la descarga.';
+            if (netErr.name === 'AbortError' || netErr.message === 'timeout') {
+                errorMsg = 'La descarga está tardando más de lo esperado. Intenta usar los botones de descarga directa abajo.';
+            } else if (netErr.message && netErr.message.includes('NetworkError')) {
+                errorMsg = 'Error de conexión. Verifica tu conexión a internet.';
+            }
+            
             // Intentar resolver enlaces directos si es compartida
             if (sharedMeetingId) {
                 const links = await tryResolveSharedDriveLinks(sharedMeetingId);
                 if (links) {
-                    showDownloadFallbackModal(meetingId, 'No se pudo preparar la descarga automáticamente.', links);
+                    showDownloadFallbackModal(meetingId, errorMsg, links);
                     return;
                 }
             }
-            showDownloadFallbackModal(meetingId, 'No se pudo conectar para preparar la descarga.');
+            showDownloadFallbackModal(meetingId, errorMsg);
             return;
         } finally {
             clearTimeout(timeoutId);

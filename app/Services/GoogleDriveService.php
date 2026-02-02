@@ -102,7 +102,7 @@ class GoogleDriveService
         return $this->drive;
     }
 
-    public function createFolder(string $name, ?string $parentId = null): string
+    public function createFolder(string $name, ?string $parentId = null, bool $autoShare = true): string
     {
         $fileMetadata = new DriveFile([
             'name'     => $name,
@@ -117,7 +117,30 @@ class GoogleDriveService
             'supportsAllDrives' => true,
         ]);
 
-        return $folder->getId();
+        $folderId = $folder->getId();
+
+        // Compartir automáticamente con la cuenta de servicio si está configurada
+        if ($autoShare) {
+            $serviceEmail = config('services.google.service_account_email');
+            if ($serviceEmail) {
+                try {
+                    $this->shareFolder($folderId, $serviceEmail);
+                    Log::info('GoogleDriveService.createFolder: auto-shared with service account', [
+                        'folderId' => $folderId,
+                        'email' => $serviceEmail,
+                    ]);
+                } catch (\Throwable $e) {
+                    // No falla si no se puede compartir, solo logueamos
+                    Log::warning('GoogleDriveService.createFolder: failed to auto-share', [
+                        'folderId' => $folderId,
+                        'email' => $serviceEmail,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        return $folderId;
     }
 
     /**
@@ -255,7 +278,6 @@ class GoogleDriveService
             'mimeType'     => $mimeType,
             'uploadType'   => 'multipart',
             'fields'       => 'id',
-            'supportsAllDrives' => true,
         ]);
 
         if (! $file->id) {
@@ -328,7 +350,7 @@ class GoogleDriveService
 
             // Usar Guzzle directamente para descargar el archivo
             $httpClient = new \GuzzleHttp\Client();
-            $response = $httpClient->get("https://www.googleapis.com/drive/v3/files/{$fileId}?alt=media&supportsAllDrives=true", [
+            $response = $httpClient->get("https://www.googleapis.com/drive/v3/files/{$fileId}?alt=media", [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $accessToken,
                 ],
@@ -336,6 +358,16 @@ class GoogleDriveService
             ]);
 
             $contents = $response->getBody()->getContents();
+
+            // Verificar si el contenido parece ser HTML (error)
+            if (strlen($contents) < 100 && strpos($contents, '<') !== false) {
+                Log::error('Downloaded content appears to be HTML error page', [
+                    'file_id' => $fileId,
+                    'content_length' => strlen($contents),
+                    'content_preview' => substr($contents, 0, 200)
+                ]);
+                return null;
+            }
 
             Log::info('Content downloaded directly via Guzzle', [
                 'file_id' => $fileId,

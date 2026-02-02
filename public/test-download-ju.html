@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Descarga JU</title>
+</head>
+<body>
+    <h1>Test de descarga de archivo .ju</h1>
+    <p>Meeting ID: <input type="text" id="meetingId" value="5"></p>
+    <button onclick="testDownload()">Probar descarga</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testDownload() {
+            const meetingId = document.getElementById('meetingId').value;
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = 'Iniciando descarga...\n';
+            
+            try {
+                const response = await fetch(`/api/meetings/${meetingId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    }
+                });
+                
+                resultDiv.textContent += `Status: ${response.status}\n`;
+                resultDiv.textContent += `OK: ${response.ok}\n`;
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.textContent += 'Datos recibidos:\n';
+                    resultDiv.textContent += JSON.stringify(data, null, 2);
+                } else {
+                    const text = await response.text();
+                    resultDiv.textContent += `Error: ${text}`;
+                }
+            } catch (error) {
+                resultDiv.textContent += `Error: ${error.message}\n`;
+                resultDiv.textContent += `Stack: ${error.stack}`;
+            }
+        }
+    </script>
+</body>
+</html>

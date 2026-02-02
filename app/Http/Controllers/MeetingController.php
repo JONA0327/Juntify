@@ -607,7 +607,7 @@ class MeetingController extends Controller
                     if ($transcriptContent === null && !empty($share?->sharedBy)) {
                         try {
                             $this->setGoogleDriveToken($share->sharedBy);
-                            $transcriptContent = $this->downloadFromDrive($normalizedJuId);
+                            $transcriptContent = $this->googleDriveService->downloadFileContent($normalizedJuId);
                             Log::info('show(): .ju descargado con token del dueño', ['meeting_id' => $legacyMeeting->id]);
                         } catch (\Throwable $e3) {
                             Log::error('show(): fallo token del dueño al descargar .ju', [
@@ -621,7 +621,7 @@ class MeetingController extends Controller
                     if ($transcriptContent === null) {
                         try {
                             $this->setGoogleDriveToken($user);
-                            $transcriptContent = $this->downloadFromDrive($normalizedJuId);
+                            $transcriptContent = $this->googleDriveService->downloadFileContent($normalizedJuId);
                             Log::info('show(): .ju descargado con token del usuario', ['meeting_id' => $legacyMeeting->id]);
                         } catch (\Throwable $e4) {
                             Log::error('show(): no fue posible descargar el .ju con ningún método en flujo compartido', [
@@ -635,7 +635,7 @@ class MeetingController extends Controller
                     // No compartida: token del usuario
                     try {
                         $this->setGoogleDriveToken($user);
-                        $transcriptContent = $this->downloadFromDrive($normalizedJuId);
+                        $transcriptContent = $this->googleDriveService->downloadFileContent($normalizedJuId);
                         Log::info('show(): .ju descargado con token del usuario (no compartida)', ['meeting_id' => $legacyMeeting->id]);
                     } catch (\Throwable $e) {
                         Log::error('show(): no fue posible descargar el .ju (no compartida)', [
@@ -1712,7 +1712,7 @@ class MeetingController extends Controller
             ]);
 
             // Descargar el contenido del archivo
-            $audioContent = $this->downloadFromDrive($meeting->audio_drive_id);
+            $audioContent = $this->googleDriveService->downloadFileContent($meeting->audio_drive_id);
 
             // Generar nombre de archivo temporal con la extensión correcta
             $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $meeting->meeting_name);

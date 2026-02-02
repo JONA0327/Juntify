@@ -128,11 +128,12 @@ class GoogleServiceAccount
         ]);
     }
 
-    public function createFolder(string $name, ?string $parentId = null): string
+    public function createFolder(string $name, ?string $parentId = null, bool $autoShare = true): string
     {
         Log::info('GoogleServiceAccount.createFolder: start', [
             'name' => $name,
             'parentId' => $parentId,
+            'autoShare' => $autoShare,
         ]);
         $fileMetadata = new DriveFile([
             'name'     => $name,
@@ -147,12 +148,37 @@ class GoogleServiceAccount
             'fields' => 'id',
             'supportsAllDrives' => true,
         ]);
+        
+        $folderId = $folder->getId();
+        
         Log::info('GoogleServiceAccount.createFolder: created', [
             'name' => $name,
             'parentId' => $parentId,
-            'id' => $folder->getId(),
+            'id' => $folderId,
         ]);
-        return $folder->getId();
+
+        // Compartir automáticamente con la cuenta de servicio si está configurada
+        if ($autoShare) {
+            $serviceEmail = config('services.google.service_account_email');
+            if ($serviceEmail) {
+                try {
+                    $this->shareFolder($folderId, $serviceEmail);
+                    Log::info('GoogleServiceAccount.createFolder: auto-shared with service account', [
+                        'folderId' => $folderId,
+                        'email' => $serviceEmail,
+                    ]);
+                } catch (\Throwable $e) {
+                    // No falla si no se puede compartir, solo logueamos
+                    Log::warning('GoogleServiceAccount.createFolder: failed to auto-share', [
+                        'folderId' => $folderId,
+                        'email' => $serviceEmail,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+        
+        return $folderId;
     }
 
     public function shareFolder(string $folderId, string $email): void
@@ -262,7 +288,6 @@ class GoogleServiceAccount
             'mimeType'   => $mimeType,
             'uploadType' => 'media',
             'fields'     => 'id',
-            'supportsAllDrives' => true,
         ]);
 
         if (! $file->id) {

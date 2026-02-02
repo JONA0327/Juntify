@@ -117,7 +117,7 @@ class OrganizationDriveController extends Controller
         try {
             if (!empty($parentFolderId)) {
                 // Create under provided parent with SA
-                $folderId = $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId);
+                $folderId = $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId, false);
             } else {
                 // Create at admin's My Drive root via impersonation
                 $ownerEmail = optional($organization->admin)->email;
@@ -125,14 +125,31 @@ class OrganizationDriveController extends Controller
                     $serviceAccount->impersonate($ownerEmail);
                     $impersonated = true;
                     $createdViaImpersonation = true;
-                    $folderId = $serviceAccount->createFolder($organization->nombre_organizacion);
-                    // While impersonating (admin owns the folder), grant SA access now
-                    $serviceEmail = config('services.google.service_account_email');
-                    if ($serviceEmail) {
-                        try { $serviceAccount->shareFolder($folderId, $serviceEmail); $sharedWithSA = true; } catch (\Throwable $e) { /* ignore */ }
-                    }
+                    $folderId = $serviceAccount->createFolder($organization->nombre_organizacion, null, false);
                 } else {
                     throw new \RuntimeException('No se pudo determinar el email del administrador de la organización');
+                }
+            }
+            
+            // Siempre compartir con la cuenta de servicio después de crear
+            if ($folderId) {
+                $serviceEmail = config('services.google.service_account_email');
+                if ($serviceEmail) {
+                    try { 
+                        $serviceAccount->shareFolder($folderId, $serviceEmail); 
+                        $sharedWithSA = true;
+                        Log::info('Carpeta raíz de organización compartida con cuenta de servicio', [
+                            'org' => $organization->id,
+                            'folder_id' => $folderId,
+                            'service_email' => $serviceEmail
+                        ]);
+                    } catch (\Throwable $e) { 
+                        Log::warning('No se pudo compartir carpeta raíz de organización con cuenta de servicio', [
+                            'org' => $organization->id,
+                            'folder_id' => $folderId,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
                 }
             }
         } catch (\Throwable $e) {
@@ -146,11 +163,25 @@ class OrganizationDriveController extends Controller
                         $impersonated = true;
                         $createdViaImpersonation = true;
                         $folderId = !empty($parentFolderId)
-                            ? $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId)
-                            : $serviceAccount->createFolder($organization->nombre_organizacion);
+                            ? $serviceAccount->createFolder($organization->nombre_organizacion, $parentFolderId, false)
+                            : $serviceAccount->createFolder($organization->nombre_organizacion, null, false);
                         // Share with SA while impersonating
                         $serviceEmail = config('services.google.service_account_email');
-                        if ($serviceEmail) { try { $serviceAccount->shareFolder($folderId, $serviceEmail); $sharedWithSA = true; } catch (\Throwable $e2) { /* ignore */ } }
+                        if ($serviceEmail) { 
+                            try { 
+                                $serviceAccount->shareFolder($folderId, $serviceEmail); 
+                                $sharedWithSA = true; 
+                                Log::info('Carpeta raíz de organización (impersonación fallback) compartida con cuenta de servicio', [
+                                    'org' => $organization->id,
+                                    'folder_id' => $folderId
+                                ]);
+                            } catch (\Throwable $e2) { 
+                                Log::warning('No se pudo compartir carpeta raíz (impersonación fallback) con cuenta de servicio', [
+                                    'org' => $organization->id,
+                                    'error' => $e2->getMessage()
+                                ]);
+                            } 
+                        }
                     } catch (\Throwable $impersonationError) {
                         $serviceAccountError = $impersonationError;
                     }
@@ -171,8 +202,25 @@ class OrganizationDriveController extends Controller
             ]);
 
             try {
-                $folderId = $this->drive->createFolder($organization->nombre_organizacion, $parentFolderId);
+                $folderId = $this->drive->createFolder($organization->nombre_organizacion, $parentFolderId, false);
                 $usedOAuthFallback = true;
+                
+                // Compartir con la cuenta de servicio usando OAuth
+                $serviceEmail = config('services.google.service_account_email');
+                if ($serviceEmail) {
+                    try {
+                        $this->drive->shareFolder($folderId, $serviceEmail);
+                        Log::info('Carpeta raíz de organización (OAuth fallback) compartida con cuenta de servicio', [
+                            'org' => $organization->id,
+                            'folder_id' => $folderId
+                        ]);
+                    } catch (\Throwable $shareError) {
+                        Log::warning('No se pudo compartir carpeta raíz (OAuth fallback) con cuenta de servicio', [
+                            'org' => $organization->id,
+                            'error' => $shareError->getMessage()
+                        ]);
+                    }
+                }
             } catch (\Throwable $oauthException) {
                 Log::error('createRootFolder (org) failed even with OAuth fallback', [
                     'org' => $organization->id,
@@ -193,32 +241,23 @@ class OrganizationDriveController extends Controller
             'name'            => $organization->nombre_organizacion,
         ]);
 
-        $serviceEmail = config('services.google.service_account_email');
+        // Asegurar permisos del admin sobre la carpeta raíz
         $adminEmail = optional($organization->admin)->email;
-        if ($usedOAuthFallback) {
-            if ($serviceEmail) {
-                try {
-                    // Root was created with OAuth client → grant SA access via OAuth
-                    $this->drive->shareFolder($folderId, $serviceEmail);
-                } catch (\Throwable $shareError) {
-                    Log::warning('createRootFolder (org) failed to share SA via OAuth fallback', [
-                        'org' => $organization->id,
-                        'error' => $shareError->getMessage(),
-                    ]);
+        if ($adminEmail && !$createdViaImpersonation) {
+            try { 
+                if ($usedOAuthFallback) {
+                    $this->drive->shareFolder($folderId, $adminEmail); 
+                } else {
+                    $serviceAccount->shareItem($folderId, $adminEmail, 'writer'); 
                 }
-            }
-            if ($adminEmail) {
-                try { $this->drive->shareFolder($folderId, $adminEmail); } catch (\Throwable $e) { /* ignore */ }
-            }
-        } else {
-            if ($createdViaImpersonation) {
-                // Already shared with SA while impersonating; nothing else required. Optionally ensure admin has access (owner).
-            } else {
-                // Root created by SA under a parent → grant admin access
-                try { if ($serviceEmail && !$sharedWithSA) { $serviceAccount->shareFolder($folderId, $serviceEmail); } } catch (\Throwable $e) { /* ignore */ }
-                try { if ($adminEmail) { $serviceAccount->shareItem($folderId, $adminEmail, 'writer'); } } catch (\Throwable $e) { /* ignore */ }
+            } catch (\Throwable $e) { 
+                Log::warning('No se pudo compartir carpeta raíz con admin', [
+                    'org' => $organization->id,
+                    'error' => $e->getMessage()
+                ]);
             }
         }
+        
         // Ensure standard subfolders exist for organization root (multi strategy)
         try {
             $serviceEmail = config('services.google.service_account_email');
