@@ -42,7 +42,22 @@ class UserManagementController extends Controller
             ->get()
             ->map(fn (User $user) => $this->transformUser($user));
 
-        return response()->json($users);
+        // Definir todos los roles disponibles del sistema
+        $allRoles = [
+            'free',
+            'basic',
+            'business',
+            'enterprise',
+            'founder',
+            'bni',
+            'developer',
+            'superadmin'
+        ];
+
+        return response()->json([
+            'users' => $users,
+            'available_roles' => $allRoles
+        ]);
     }
 
     public function updateRole(Request $request, User $user): JsonResponse
@@ -53,12 +68,47 @@ class UserManagementController extends Controller
             'role' => ['required', 'string', 'max:200'],
         ]);
 
-        $oldRole = $user->roles;
-        $user->roles = $data['role'];
-        $user->save();
-        $user = $user->fresh(['blockedBy']);
+        // Prevenir cambio de rol en usuarios superadmin y developer
+        if (in_array($user->roles, ['superadmin', 'developer'])) {
+            return response()->json([
+                'message' => 'No se puede cambiar el rol de usuarios con roles protegidos (superadmin, developer).'
+            ], 403);
+        }
 
-        Mail::to($user->email)->send(new UserRoleChangedMail($user, $oldRole, $user->roles, $admin));
+        $oldRole = $user->roles;
+        
+        // Configurar expiración y protección según el tipo de rol
+        $protectedRoles = ['bni', 'developer', 'founder', 'superadmin'];
+        $planExpiresAt = null;
+        $isProtected = false;
+        
+        if (in_array($data['role'], $protectedRoles)) {
+            $planExpiresAt = null;
+            $isProtected = true;
+        } elseif ($data['role'] === 'free') {
+            $planExpiresAt = null;
+            $isProtected = false;
+        } else {
+            // Para basic, business, enterprise
+            $planExpiresAt = now()->addMonth();
+            $isProtected = false;
+        }
+        
+        // Primero desactivar la protección para evitar el trigger de la base de datos
+        if ($user->is_role_protected) {
+            $user->updateQuietly(['is_role_protected' => false]);
+        }
+        
+        // Ahora actualizar todos los campos incluyendo el rol
+        $user->updateQuietly([
+            'roles' => $data['role'],
+            'plan' => $data['role'],
+            'plan_code' => $data['role'],
+            'plan_expires_at' => $planExpiresAt,
+            'is_role_protected' => $isProtected
+        ]);
+        
+        $user = $user->fresh(['blockedBy']);
 
         return response()->json($this->transformUser($user));
     }

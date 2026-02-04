@@ -961,6 +961,7 @@ class TranscriptionController extends Controller
                 // Intentar identificar hablantes automáticamente
                 try {
                     $userIds = [];
+                    $currentUser = auth()->user();
                     
                     // 1. Si hay una reunión con miembros, usar esos usuarios
                     $recording = \App\Models\Recording::where('transcription_id', $id)->first();
@@ -968,14 +969,27 @@ class TranscriptionController extends Controller
                         $userIds = $recording->reunion->members()->pluck('id')->toArray();
                     }
                     
-                    // 2. Si no hay miembros de reunión, agregar al propietario de la transcripción
-                    if (empty($userIds)) {
-                        $transcription = \App\Models\Transcription::find($id);
-                        if ($transcription && $transcription->user_id) {
-                            $userIds[] = $transcription->user_id;
-                        } elseif ($recording && $recording->user_id) {
-                            $userIds[] = $recording->user_id;
+                    // 2. Si no hay miembros de reunión, usar contactos del usuario actual
+                    if (empty($userIds) && $currentUser) {
+                        // Incluir al usuario actual si tiene voice_embedding
+                        if ($currentUser->voice_embedding) {
+                            $userIds[] = $currentUser->id;
                         }
+                        
+                        // Agregar contactos con voice_embedding
+                        $contactIds = \App\Models\Contact::where('user_id', $currentUser->id)
+                            ->pluck('contact_id')
+                            ->toArray();
+                        
+                        if (!empty($contactIds)) {
+                            $contactsWithVoice = \App\Models\User::whereIn('id', $contactIds)
+                                ->whereNotNull('voice_embedding')
+                                ->pluck('id')
+                                ->toArray();
+                            $userIds = array_merge($userIds, $contactsWithVoice);
+                        }
+                        
+                        $userIds = array_unique($userIds);
                     }
                     
                     // 3. Intentar identificar si hay usuarios con perfil de voz
@@ -1398,22 +1412,56 @@ class TranscriptionController extends Controller
                 'size' => filesize($fullPath)
             ]);
 
-            // Obtener IDs de usuarios para identificación (todos los registrados con voz)
-            $userIds = \App\Models\User::whereNotNull('voice_embedding')
-                ->pluck('id')
-                ->toArray();
+            // Obtener IDs de usuarios para identificación:
+            // Solo buscar en contactos del usuario actual + el usuario mismo
+            $currentUser = auth()->user();
+            $userIds = [];
+            
+            if ($currentUser) {
+                // Incluir al usuario actual
+                $userIds[] = $currentUser->id;
+                
+                // Agregar solo los contactos del usuario que tengan voice_embedding
+                $contactIds = \App\Models\Contact::where('user_id', $currentUser->id)
+                    ->pluck('contact_id')
+                    ->toArray();
+                
+                if (!empty($contactIds)) {
+                    $contactsWithVoice = \App\Models\User::whereIn('id', $contactIds)
+                        ->whereNotNull('voice_embedding')
+                        ->pluck('id')
+                        ->toArray();
+                    $userIds = array_merge($userIds, $contactsWithVoice);
+                }
+                
+                // Si el usuario actual tiene voice_embedding, mantenerlo; si no, solo buscar en contactos
+                if (empty($currentUser->voice_embedding)) {
+                    $userIds = array_filter($userIds, fn($id) => $id !== $currentUser->id);
+                }
+                
+                $userIds = array_unique($userIds);
+            }
 
-            Log::info('Users for speaker identification', [
+            Log::info('Users for speaker identification (contacts only)', [
                 'user_ids' => $userIds,
-                'count' => count($userIds)
+                'count' => count($userIds),
+                'current_user' => $currentUser?->id
             ]);
 
             if (empty($userIds)) {
-                Log::warning('No user IDs found for speaker identification');
+                Log::info('No contacts with voice profiles found - keeping default speaker names');
+                
+                // Mantener los nombres de hablante por defecto (Hablante A, Hablante B, etc.)
+                foreach ($utterances as &$utterance) {
+                    $speaker = $utterance['speaker'] ?? 'Unknown';
+                    $utterance['speaker_name'] = $this->formatFallbackSpeakerName($speaker);
+                    $utterance['auto_identified'] = false;
+                }
+                
                 return response()->json([
                     'utterances' => $utterances,
                     'identified' => false,
-                    'message' => 'No users with voice profiles found'
+                    'message' => 'No hay contactos con perfil de voz grabado'
                 ]);
             }
 

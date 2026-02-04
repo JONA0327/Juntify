@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Exceptions\GoogleDriveFileException;
 use Google\Client;
-use Google\Service\Calendar;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
 use Google\Service\Drive\Permission;
@@ -39,7 +38,7 @@ class GoogleDriveService
             ]);
         }
 
-        $this->client->setScopes([Drive::DRIVE, Calendar::CALENDAR]);
+        $this->client->setScopes([Drive::DRIVE]);
         $this->client->setAccessType('offline');
         
         // Deshabilitar el uso de archivos temporales para descargas

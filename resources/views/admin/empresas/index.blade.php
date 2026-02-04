@@ -65,14 +65,38 @@
                             <label for="new_role">Nuevo Rol</label>
                             <select id="new_role">
                                 <option value="">Seleccionar rol...</option>
-                                <option value="free">🆓 Free</option>
-                                <option value="basic">⭐ Basic (1 mes)</option>
-                                <option value="business">💼 Business (1 mes)</option>
-                                <option value="enterprise">🏢 Enterprise (1 mes)</option>
-                                <option value="founder">👑 Founder (sin expiración)</option>
-                                <option value="bni">🤝 BNI (sin expiración)</option>
-                                <option value="developer">💻 Developer (sin expiración)</option>
-                                <option value="superadmin">🔐 Superadmin (sin expiración)</option>
+                                @foreach($rolesDisponibles as $rol)
+                                    <option value="{{ $rol }}">
+                                        @switch($rol)
+                                            @case('free')
+                                                🆓 Free
+                                                @break
+                                            @case('basic')
+                                                ⭐ Basic
+                                                @break
+                                            @case('business')
+                                                💼 Business
+                                                @break
+                                            @case('enterprise')
+                                                🏢 Enterprise
+                                                @break
+                                            @case('founder')
+                                                👑 Founder
+                                                @break
+                                            @case('bni')
+                                                🤝 BNI
+                                                @break
+                                            @case('developer')
+                                                💻 Developer
+                                                @break
+                                            @case('superadmin')
+                                                🔐 Superadmin
+                                                @break
+                                            @default
+                                                {{ ucfirst($rol) }}
+                                        @endswitch
+                                    </option>
+                                @endforeach
                             </select>
                         </div>
 

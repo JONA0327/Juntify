@@ -8,6 +8,7 @@ const blockDurationSelect = document.getElementById('block-duration');
 const deleteModal = document.getElementById('delete-user-modal');
 
 let usersMap = new Map();
+let availableRoles = [];
 let blockTargetUserId = null;
 let deleteTargetUserId = null;
 
@@ -81,7 +82,7 @@ const renderUsers = () => {
         return;
     }
 
-    const roles = Array.from(new Set(Array.from(usersMap.values()).map((user) => user.roles).filter(Boolean))).sort();
+    const roles = availableRoles.length > 0 ? availableRoles : Array.from(new Set(Array.from(usersMap.values()).map((user) => user.roles).filter(Boolean))).sort();
     const fragment = document.createDocumentFragment();
 
     usersMap.forEach((user) => {
@@ -102,40 +103,42 @@ const renderUsers = () => {
 
         const roleCell = document.createElement('td');
         roleCell.className = 'px-4 py-3';
-        const roleSelect = document.createElement('select');
-        roleSelect.className = 'modal-input text-sm bg-slate-800/60 border border-slate-600/60';
+        
+        // Verificar si el usuario tiene un rol protegido
+        const isProtectedRole = ['superadmin', 'developer'].includes(user.roles);
+        
+        if (isProtectedRole) {
+            // Mostrar el rol como texto sin permitir edición
+            const roleText = document.createElement('span');
+            roleText.className = 'px-3 py-2 bg-slate-700/50 text-slate-300 rounded text-sm';
+            roleText.textContent = user.roles;
+            roleCell.appendChild(roleText);
+        } else {
+            // Mostrar dropdown normal para otros roles
+            const roleSelect = document.createElement('select');
+            roleSelect.className = 'modal-input text-sm bg-slate-800/60 border border-slate-600/60';
 
-        const addOption = (value, label) => {
-            const option = document.createElement('option');
-            option.value = value;
-            option.textContent = label;
-            roleSelect.appendChild(option);
-        };
+            const addOption = (value, label) => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = label;
+                roleSelect.appendChild(option);
+            };
 
-        roles.forEach((role) => addOption(role, role));
+            roles.forEach((role) => addOption(role, role));
 
-        if (!roles.includes(user.roles)) {
-            addOption(user.roles, user.roles);
-        }
-
-        addOption('__custom', 'Otro rol…');
-
-        roleSelect.value = user.roles;
-        roleSelect.addEventListener('change', (event) => {
-            const selectedValue = event.target.value;
-            if (selectedValue === '__custom') {
-                const customValue = window.prompt('Ingresa el nuevo rol para el usuario:', user.roles || '');
-                if (!customValue) {
-                    roleSelect.value = user.roles;
-                    return;
-                }
-                updateUserRole(user.id, customValue.trim());
-                return;
+            if (!roles.includes(user.roles)) {
+                addOption(user.roles, user.roles);
             }
-            updateUserRole(user.id, selectedValue);
-        });
 
-        roleCell.appendChild(roleSelect);
+            roleSelect.value = user.roles;
+            roleSelect.addEventListener('change', (event) => {
+                const selectedValue = event.target.value;
+                updateUserRole(user.id, selectedValue);
+            });
+
+            roleCell.appendChild(roleSelect);
+        }
 
         const actionsCell = document.createElement('td');
         actionsCell.className = 'px-4 py-3';
@@ -191,8 +194,17 @@ const fetchUsers = async () => {
             throw new Error('No se pudieron obtener los usuarios');
         }
 
-        const users = await response.json();
-        usersMap = new Map(users.map((user) => [user.id, user]));
+        const data = await response.json();
+        
+        // Si la respuesta incluye available_roles, usarlos
+        if (data.available_roles) {
+            availableRoles = data.available_roles;
+            usersMap = new Map(data.users.map((user) => [user.id, user]));
+        } else {
+            // Retrocompatibilidad: si el backend devuelve solo el array de usuarios
+            usersMap = new Map(data.map((user) => [user.id, user]));
+        }
+        
         renderUsers();
     } catch (error) {
         showAlert('error', error.message || 'Ocurrió un error al cargar los usuarios');

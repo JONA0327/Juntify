@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;     // ← Importa el controlador base
 use Google\Client;
 use Google\Service\Oauth2;
 use Google\Service\Drive;
-use Google\Service\Calendar;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -23,7 +22,7 @@ class GoogleAuthController extends Controller
         $client->setRedirectUri(config('services.google.redirect'));
         $client->setAccessType('offline');
         $client->setPrompt('select_account consent');
-        $client->setScopes([Oauth2::USERINFO_EMAIL, Drive::DRIVE, Calendar::CALENDAR]);
+        $client->setScopes([Oauth2::USERINFO_EMAIL, Drive::DRIVE]);
 
         return $client;
     }

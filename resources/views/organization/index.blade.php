@@ -739,9 +739,9 @@
                 </div>
                 <!-- Modal ver reuniones del contenedor -->
                 <div x-show="showContainerMeetingsModal" id="container-meetings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[75]" x-cloak>
-                    <div class="bg-slate-950 rounded-xl border border-slate-700/50 shadow-2xl shadow-black/20 w-full max-w-6xl max-h-[90vh] overflow-hidden">
+                    <div class="!bg-slate-950 rounded-xl border border-slate-700/50 shadow-2xl shadow-black/20 w-full max-w-6xl max-h-[90vh] overflow-hidden">
                         <!-- Header del modal -->
-                        <div class="flex items-center justify-between p-6 border-b border-slate-700/50">
+                        <div class="flex items-center justify-between p-6 border-b border-slate-700/50 bg-slate-900/50">
                             <div>
                                 <h2 class="text-2xl font-bold text-white" x-text="selectedContainer?.name || 'Contenedor'"></h2>
                                 <p class="text-slate-400 mt-1" x-text="selectedContainer?.description || 'Reuniones del contenedor'"></p>
@@ -754,7 +754,7 @@
                         </div>
 
                         <!-- Contenido del modal -->
-                        <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                        <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)] bg-slate-950">
                             <!-- Loading state mientras se cargan las reuniones -->
                             <div x-show="selectedContainer && selectedContainer._isLoading" class="flex justify-center items-center py-20">
                                 <svg class="animate-spin h-8 w-8 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

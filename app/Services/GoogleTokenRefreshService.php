@@ -120,7 +120,6 @@ class GoogleTokenRefreshService
         if (!$token || !$token->hasValidAccessToken()) {
             return [
                 'drive_connected' => false,
-                'calendar_connected' => false,
                 'needs_reconnection' => true,
                 'message' => 'No hay token de Google configurado'
             ];
@@ -131,7 +130,6 @@ class GoogleTokenRefreshService
             if (!$this->refreshToken($token)) {
                 return [
                     'drive_connected' => false,
-                    'calendar_connected' => false,
                     'needs_reconnection' => true,
                     'message' => 'Token expirado y no se pudo renovar'
                 ];
@@ -141,13 +139,9 @@ class GoogleTokenRefreshService
         // Verificar conexión a Drive
         $driveConnected = $this->testDriveConnection($token);
 
-        // Verificar conexión a Calendar
-        $calendarConnected = $this->testCalendarConnection($token);
-
         return [
             'drive_connected' => $driveConnected,
-            'calendar_connected' => $calendarConnected,
-            'needs_reconnection' => !$driveConnected && !$calendarConnected,
+            'needs_reconnection' => !$driveConnected,
             'message' => $driveConnected ? 'Conexión activa' : 'Problemas de conexión'
         ];
     }
@@ -175,31 +169,6 @@ class GoogleTokenRefreshService
             return true;
         } catch (\Exception $e) {
             Log::warning("Falló test de conexión a Drive para {$token->username}: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Probar conexión a Google Calendar
-     */
-    private function testCalendarConnection(GoogleToken $token): bool
-    {
-        try {
-            $calendarService = new GoogleCalendarService();
-            $client = $calendarService->getClient();
-
-            // Usar el método del modelo para obtener el token como array completo
-            $tokenArray = $token->getTokenArray();
-            if (empty($tokenArray['access_token'])) {
-                return false;
-            }
-
-            $client->setAccessToken($tokenArray);
-
-            $calendarService->getCalendar()->calendarList->get('primary');
-            return true;
-        } catch (\Exception $e) {
-            Log::warning("Falló test de conexión a Calendar para {$token->username}: " . $e->getMessage());
             return false;
         }
     }

@@ -5523,25 +5523,25 @@ async function openContainerMeetingsModal(containerId) {
                 // Inyectar estructura mínima del modal si no existe
                 const wrapper = document.createElement('div');
                 wrapper.innerHTML = `
-                <div id="container-meetings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center px-4" aria-hidden="true" style="background: rgba(0,0,0,0.45);">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-4xl p-6 relative transform transition-all">
-        <div class="flex items-start justify-between mb-4">
+                <div id="container-meetings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center px-4" aria-hidden="true" style="background: rgba(0,0,0,0.5);">
+                    <div class="bg-slate-950 rounded-lg shadow-lg w-full max-w-4xl p-6 relative transform transition-all border border-slate-700/50">
+        <div class="flex items-start justify-between mb-4 pb-4 border-b border-slate-700/50">
             <div>
-                <h2 id="container-meetings-title" class="text-xl font-semibold text-gray-800 dark:text-gray-100">Reuniones del Contenedor</h2>
-                <p id="container-meetings-subtitle" class="text-sm text-gray-500 dark:text-gray-400"></p>
+                <h2 id="container-meetings-title" class="text-xl font-semibold text-white">Reuniones del Contenedor</h2>
+                <p id="container-meetings-subtitle" class="text-sm text-slate-400"></p>
             </div>
-            <button type="button" onclick="closeContainerMeetingsModal()" class="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white">&times;</button>
+            <button type="button" onclick="closeContainerMeetingsModal()" class="text-slate-400 hover:text-white text-3xl leading-none">&times;</button>
         </div>
         <div id="container-meetings-loading" class="py-10 text-center">
-            <div class="animate-spin h-8 w-8 mx-auto mb-3 border-4 border-blue-500 border-t-transparent rounded-full"></div>
-            <p class="text-sm text-gray-600 dark:text-gray-300">Cargando reuniones...</p>
+            <div class="animate-spin h-8 w-8 mx-auto mb-3 border-4 border-yellow-400 border-t-transparent rounded-full"></div>
+            <p class="text-sm text-slate-300">Cargando reuniones...</p>
         </div>
         <div id="container-meetings-error" class="hidden py-10 text-center">
-            <p id="container-meetings-error-message" class="text-red-600 dark:text-red-400 font-medium mb-4">Error</p>
+            <p id="container-meetings-error-message" class="text-red-400 font-medium mb-4">Error</p>
             <button onclick="retryLoadContainerMeetings()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Reintentar</button>
         </div>
         <div id="container-meetings-empty" class="hidden py-10 text-center">
-            <p class="text-gray-600 dark:text-gray-300">No hay reuniones en este contenedor todavía.</p>
+            <p class="text-slate-400">No hay reuniones en este contenedor todavía.</p>
         </div>
         <div id="container-meetings-list" class="hidden grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3"></div>
     </div>

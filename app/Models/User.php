@@ -218,6 +218,11 @@ class User extends Authenticatable
             return null;
         }
 
+        // Asegurar que siempre retornamos Carbon
+        if ($this->blocked_until instanceof \DateTime && !$this->blocked_until instanceof Carbon) {
+            return Carbon::instance($this->blocked_until);
+        }
+
         return $this->blocked_until;
     }
 

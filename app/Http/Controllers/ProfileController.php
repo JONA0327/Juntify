@@ -9,7 +9,6 @@ use App\Models\GoogleToken;
 use App\Models\Plan;
 use App\Models\Payment;
 use App\Services\GoogleDriveService;
-use App\Services\GoogleCalendarService;
 use App\Services\GoogleTokenRefreshService;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Services\PlanLimitService;
@@ -49,9 +48,8 @@ class ProfileController extends Controller
         }
 
         // Si no hay conexión válida
-        if (!$connectionStatus['drive_connected'] && !$connectionStatus['calendar_connected']) {
+        if (!$connectionStatus['drive_connected']) {
             $driveConnected = false;
-            $calendarConnected = false;
             $folderMessage = $connectionStatus['needs_reconnection']
                 ? 'Token expirado. Se intentó renovar automáticamente pero falló. Necesitas reconectarte.'
                 : $connectionStatus['message'];
@@ -67,11 +65,10 @@ class ProfileController extends Controller
                                  ->take(10)
                                  ->get();
 
-            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans', 'driveLocked', 'tempRetentionDays', 'userPayments'));
+            return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans', 'driveLocked', 'tempRetentionDays', 'userPayments'));
         }
 
         $driveConnected = $connectionStatus['drive_connected'];
-        $calendarConnected = $connectionStatus['calendar_connected'];
 
         // Si hay token válido, obtener información de la carpeta
         if ($token && $token->recordings_folder_id) {
@@ -309,7 +306,7 @@ class ProfileController extends Controller
                              ->take(10)
                              ->get();
 
-            return view('profile', compact('user', 'driveConnected', 'calendarConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans', 'driveLocked', 'tempRetentionDays', 'userPayments'));
+            return view('profile', compact('user', 'driveConnected', 'folder', 'subfolders', 'lastSync', 'folderMessage', 'plans', 'driveLocked', 'tempRetentionDays', 'userPayments'));
     }
 
     /**

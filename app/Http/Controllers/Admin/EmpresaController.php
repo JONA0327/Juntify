@@ -22,7 +22,15 @@ class EmpresaController extends Controller
         // Obtener usuarios con roles founder y enterprise de la BD principal
         $usuariosFounderEnterprise = User::whereIn('roles', ['founder', 'enterprise'])->get();
 
-        return view('admin.empresas.index', compact('empresas', 'usuariosFounderEnterprise'));
+        // Obtener todos los roles únicos que existen en el sistema
+        $rolesDisponibles = User::distinct()
+            ->pluck('roles')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        return view('admin.empresas.index', compact('empresas', 'usuariosFounderEnterprise', 'rolesDisponibles'));
     }
 
     /**
@@ -55,7 +63,7 @@ class EmpresaController extends Controller
         $empresa = Empresa::create([
             'iduser' => $request->iduser,
             'nombre_empresa' => $request->nombre_empresa,
-            'rol' => 'administrador', // Rol automático
+            'rol' => $user->roles, // Usar el rol del usuario (founder o enterprise)
             'es_administrador' => true, // Siempre es administrador
         ]);
 
@@ -193,7 +201,7 @@ class EmpresaController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'user_id' => 'required|exists:users,id',
-            'new_role' => 'required|in:free,basic,business,enterprise,founder,bni,developer,superadmin'
+            'new_role' => 'required|string'
         ]);
 
         if ($validator->fails()) {
@@ -208,54 +216,38 @@ class EmpresaController extends Controller
         $newRole = $request->new_role;
         $oldRole = $user->roles;
 
-        // Roles protegidos que no deben cambiar
+        // Roles protegidos que no expiran
         $protectedRoles = ['bni', 'developer', 'founder', 'superadmin'];
 
-        // Si es un rol protegido, solo cambiar el rol sin afectar plan ni expiración
-        if (in_array($newRole, $protectedRoles)) {
-            $user->update([
-                'roles' => $newRole,
-                'plan' => $newRole,
-                'plan_code' => $newRole,
-                'plan_expires_at' => null, // Sin expiración para roles protegidos
-                'is_role_protected' => true
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => "Rol cambiado a {$newRole} (sin expiración)",
-                'user' => $user->fresh()
-            ]);
-        }
-
-        // Para roles de plan (basic, business, enterprise)
-        $planMapping = [
-            'free' => ['plan' => 'free', 'plan_code' => 'free', 'expires' => null],
-            'basic' => ['plan' => 'basic', 'plan_code' => 'basic', 'expires' => now()->addMonth()],
-            'business' => ['plan' => 'business', 'plan_code' => 'business', 'expires' => now()->addMonth()],
-            'enterprise' => ['plan' => 'enterprise', 'plan_code' => 'enterprise', 'expires' => now()->addMonth()],
+        // SIEMPRE actualizar roles, plan y plan_code al mismo valor del rol
+        // Para mantener la consistencia en el sistema
+        $updateData = [
+            'roles' => $newRole,
+            'plan' => $newRole,
+            'plan_code' => $newRole,
         ];
 
-        if (!array_key_exists($newRole, $planMapping)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Rol no válido para asignación de plan'
-            ], 400);
+        // Si es un rol protegido, sin expiración
+        if (in_array($newRole, $protectedRoles)) {
+            $updateData['plan_expires_at'] = null;
+            $updateData['is_role_protected'] = true;
+        } else {
+            // Para roles de plan (free, basic, business, enterprise)
+            $planExpirations = [
+                'free' => null,
+                'basic' => now()->addMonth(),
+                'business' => now()->addMonth(),
+                'enterprise' => now()->addMonth(),
+            ];
+
+            $updateData['plan_expires_at'] = $planExpirations[$newRole] ?? now()->addMonth();
+            $updateData['is_role_protected'] = false;
         }
 
-        $planData = $planMapping[$newRole];
+        $user->update($updateData);
 
-        // Actualizar usuario con nuevo rol y plan
-        $user->update([
-            'roles' => $newRole,
-            'plan' => $planData['plan'],
-            'plan_code' => $planData['plan_code'],
-            'plan_expires_at' => $planData['expires'],
-            'is_role_protected' => false
-        ]);
-
-        // Crear registro en UserPlan si no es free
-        if ($newRole !== 'free' && $planData['expires']) {
+        // Crear registro en UserPlan si no es free y tiene expiración
+        if ($newRole !== 'free' && !in_array($newRole, $protectedRoles)) {
             // Expirar planes activos anteriores
             $user->plans()->where('status', 'active')->update([
                 'status' => 'expired',
@@ -264,26 +256,23 @@ class EmpresaController extends Controller
 
             // Crear nuevo plan
             $user->plans()->create([
-                'plan_id' => $planData['plan_code'],
+                'plan_id' => $newRole,
                 'role' => $newRole,
                 'starts_at' => now(),
-                'expires_at' => $planData['expires'],
+                'expires_at' => $updateData['plan_expires_at'],
                 'status' => 'active',
                 'has_unlimited_roles' => false
             ]);
         }
 
-        $message = $newRole === 'free' ?
-            "Usuario cambiado a plan {$newRole}" :
-            "Usuario cambiado a plan {$newRole} por 1 mes (expira el {$planData['expires']->format('d/m/Y')})";
+        $expirationMessage = in_array($newRole, $protectedRoles) || $newRole === 'free'
+            ? 'sin expiración'
+            : "expira el {$updateData['plan_expires_at']->format('d/m/Y')}";
 
         return response()->json([
             'success' => true,
-            'message' => $message,
-            'user' => $user->fresh(),
-            'old_role' => $oldRole,
-            'new_role' => $newRole,
-            'expires_at' => $planData['expires'] ? $planData['expires']->format('Y-m-d H:i:s') : null
+            'message' => "Rol y plan actualizados a '{$newRole}' ({$expirationMessage})",
+            'user' => $user->fresh()
         ]);
     }
 

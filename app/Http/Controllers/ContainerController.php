@@ -415,20 +415,22 @@ class ContainerController extends Controller
             'meeting_id' => $meeting->id,
         ]);
 
+        // Obtener el grupo si el contenedor está asociado a uno
+        $group = null;
+        $organizationId = null;
+        if ($container->group_id) {
+            $group = Group::find($container->group_id);
+            $organizationId = $group ? $group->id_organizacion : null;
+        }
+
         // Notificaciones
         $this->notifyContainerMeetingAction(
             action: 'added',
             actor: $user,
             container: $container,
             meeting: $meeting,
-            group: isset($group) ? $group : ($container->group_id ? Group::find($container->group_id) : null)
+            group: $group
         );
-
-        $organizationId = null;
-        if ($container->group_id) {
-            $group = Group::find($container->group_id);
-            $organizationId = $group ? $group->id_organizacion : null;
-        }
 
         OrganizationActivity::create([
             'organization_id' => $organizationId,

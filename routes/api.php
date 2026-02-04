@@ -22,6 +22,14 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\SharedMeetingController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\Api\AuthValidationController;
+use App\Http\Controllers\Api\UserApiController;
+use App\Http\Controllers\Api\MeetingDetailsController;
+use App\Http\Controllers\Api\CompanyMembersController;
+use App\Http\Controllers\Api\UserMeetingsController;
+use App\Http\Controllers\Api\MeetingDownloadController;
+use App\Http\Controllers\Api\MeetingTypeController;
+use App\Http\Controllers\Api\GrupoEmpresaController;
 use App\Services\AudioConversionService;
 use App\Exceptions\FfmpegUnavailableException;
 
@@ -43,6 +51,77 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::get('/public/groups/{group}', [GroupController::class, 'publicShow']);
     Route::get('/public/meetings', [MeetingController::class, 'publicIndex']);
     Route::get('/public/meetings/{meeting}', [MeetingController::class, 'publicShow']);
+    
+    // Endpoints de validación de usuario y empresa (para proyectos externos)
+    Route::post('/auth/validate-user', [AuthValidationController::class, 'validateUser']);
+    Route::post('/auth/check-company-membership', [AuthValidationController::class, 'checkCompanyMembership']);
+    
+    // Endpoints para Panel DDU - Gestión de Usuarios
+    Route::get('/users/list', [UserApiController::class, 'listUsers']);
+    Route::post('/users/add-to-company', [UserApiController::class, 'addToCompany']);
+    Route::get('/users/{user_id}/contacts', [UserApiController::class, 'getContacts']);
+    
+    // Endpoints para Panel DDU - Reuniones del Usuario
+    Route::get('/users/{user_id}/meetings', [UserMeetingsController::class, 'getUserMeetings']);
+    Route::get('/users/{user_id}/meetings/all', [UserMeetingsController::class, 'getAllAccessibleMeetings']);
+    Route::get('/users/{user_id}/meeting-groups', [UserMeetingsController::class, 'getUserMeetingGroups']);
+    
+    // Endpoints para Panel DDU - Descargar Archivos de Reunión
+    Route::get('/meetings/{meeting_id}/download/{file_type}', [MeetingDownloadController::class, 'downloadFile'])
+        ->where('file_type', 'transcript|audio|both');
+    
+    Route::get('/meetings/{meeting_id}', [UserMeetingsController::class, 'getMeetingDetails']);
+    
+    // Endpoints para Panel DDU - Tipo de Reunión (etiqueta: personal/organizacional/compartida)
+    Route::get('/meetings/{meeting_id}/type', [MeetingTypeController::class, 'getMeetingType']);
+    Route::post('/meetings/types', [MeetingTypeController::class, 'getMeetingTypes']);
+    
+    // Endpoints para Panel DDU - Detalles de Reuniones
+    Route::get('/meetings/{meeting_id}/details', [MeetingDetailsController::class, 'getDetails']);
+    
+    // Endpoints para Panel DDU - Miembros de Empresa
+    Route::get('/companies/{empresa_id}/members', [CompanyMembersController::class, 'getMembers']);
+    Route::patch('/companies/{empresa_id}/members/{user_id}/role', [CompanyMembersController::class, 'updateMemberRole']);
+    Route::delete('/companies/{empresa_id}/members/{user_id}', [CompanyMembersController::class, 'removeMember']);
+    
+    // Endpoints para Panel DDU - Grupos de Empresa
+    Route::get('/companies/{empresa_id}/groups', [GrupoEmpresaController::class, 'index']);
+    Route::post('/companies/{empresa_id}/groups', [GrupoEmpresaController::class, 'store']);
+    Route::get('/companies/{empresa_id}/groups/{grupo_id}', [GrupoEmpresaController::class, 'show']);
+    Route::patch('/companies/{empresa_id}/groups/{grupo_id}', [GrupoEmpresaController::class, 'update']);
+    Route::delete('/companies/{empresa_id}/groups/{grupo_id}', [GrupoEmpresaController::class, 'destroy']);
+    
+    // Endpoints para Panel DDU - Miembros de Grupo (rutas simplificadas sin empresa_id)
+    Route::post('/groups/{grupo_id}/members', [GrupoEmpresaController::class, 'addMemberSimple']);
+    Route::put('/groups/{grupo_id}/members/{member_id}', [GrupoEmpresaController::class, 'updateMemberRoleSimple']);
+    Route::delete('/groups/{grupo_id}/members/{member_id}', [GrupoEmpresaController::class, 'removeMemberSimple']);
+    
+    // Endpoints para Panel DDU - Compartir Reuniones con Grupo (rutas simplificadas sin empresa_id)
+    Route::post('/groups/{grupo_id}/share-meeting', [GrupoEmpresaController::class, 'shareMeetingSimple']);
+    Route::get('/groups/{grupo_id}/shared-meetings', [GrupoEmpresaController::class, 'getSharedMeetingsSimple']);
+    Route::delete('/groups/{grupo_id}/shared-meetings/{meeting_id}', [GrupoEmpresaController::class, 'unshareMeetingSimple']);
+    Route::get('/companies/{empresa_id}/groups/{grupo_id}/shared-meetings/{meeting_id}/files', [GrupoEmpresaController::class, 'getSharedMeetingFiles']);
+    
+    // Endpoints para Panel DDU - Grupos del Usuario
+    Route::get('/users/{user_id}/company-groups', [GrupoEmpresaController::class, 'getUserGroups']);
+    
+    // Endpoints para Panel DDU - Configuración del Asistente
+    Route::get('/ddu/assistant-settings/{userId}', [\App\Http\Controllers\Api\DduAssistantSettingsController::class, 'show']);
+    Route::post('/ddu/assistant-settings', [\App\Http\Controllers\Api\DduAssistantSettingsController::class, 'store']);
+    Route::get('/ddu/assistant-settings/{userId}/api-key', [\App\Http\Controllers\Api\DduAssistantSettingsController::class, 'getApiKey']);
+    Route::delete('/ddu/assistant-settings/{userId}/api-key', [\App\Http\Controllers\Api\DduAssistantSettingsController::class, 'deleteApiKey']);
+    
+    // Endpoints para Panel DDU - Asistente (Conversaciones, Mensajes, Documentos)
+    Route::get('/ddu/assistant/conversations', [\App\Http\Controllers\Api\DduAssistantController::class, 'listConversations']);
+    Route::post('/ddu/assistant/conversations', [\App\Http\Controllers\Api\DduAssistantController::class, 'createConversation']);
+    Route::get('/ddu/assistant/conversations/{id}', [\App\Http\Controllers\Api\DduAssistantController::class, 'getConversation']);
+    Route::put('/ddu/assistant/conversations/{id}', [\App\Http\Controllers\Api\DduAssistantController::class, 'updateConversation']);
+    Route::delete('/ddu/assistant/conversations/{id}', [\App\Http\Controllers\Api\DduAssistantController::class, 'deleteConversation']);
+    Route::get('/ddu/assistant/conversations/{id}/messages', [\App\Http\Controllers\Api\DduAssistantController::class, 'getMessages']);
+    Route::post('/ddu/assistant/conversations/{id}/messages', [\App\Http\Controllers\Api\DduAssistantController::class, 'addMessage']);
+    Route::get('/ddu/assistant/conversations/{id}/documents', [\App\Http\Controllers\Api\DduAssistantController::class, 'getDocuments']);
+    Route::post('/ddu/assistant/conversations/{id}/documents', [\App\Http\Controllers\Api\DduAssistantController::class, 'uploadDocument']);
+    Route::delete('/ddu/assistant/conversations/{id}/documents/{docId}', [\App\Http\Controllers\Api\DduAssistantController::class, 'deleteDocument']);
 });
 
 Route::middleware('auth')->get('/user', function (Request $request) {
